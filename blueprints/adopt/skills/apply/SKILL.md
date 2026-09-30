@@ -24,8 +24,10 @@ folder: the findings there today are not reported again; new ones are. Tell the 
 ## 3. The workflow — only when `ci` is 「GitHub の PR に指摘を出すワークフローを作る」
 
 Copy `<usecase pack>/templates/chaff.yml` to `.github/workflows/chaff.yml`, replacing `{{PATHS}}` with the places
-separated by spaces. Keep its `permissions:` as they are: the workflow reads the documents (`contents: read`) and
-uploads findings (`security-events: write`), nothing more. When `ci` is 「作らない」, add nothing under `.github/`.
+separated by spaces, and change nothing else: the check compares the file with the template filled in that way, line
+for line. Its `permissions:` let the workflow read the documents (`contents: read`) and upload findings
+(`security-events: write`), nothing more. A place whose name has a space or a character a shell reads (`$`, `;`, `*`,
+quotes…) cannot go into the workflow: the interview refuses it, so ask the person to name a folder above it instead. When `ci` is 「作らない」, add nothing under `.github/`.
 
 ## 4. The report
 

@@ -112,7 +112,7 @@ describeSh("adopt: the setup", () => {
     setUpChaff(2);
     expect(node("adopt.mjs", ["apply"]).stderr).toContain(".github/workflows/chaff.yml is missing");
     workflow(TEMPLATE.replace("{{PATHS}}", "login.md export.md").replace("contents: read\n\njobs:", "contents: write\n\njobs:"));
-    expect(node("adopt.mjs", ["apply"]).stderr).toContain("it does not grant only contents: read at the top");
+    expect(node("adopt.mjs", ["apply"]).stderr).toContain("it is not the pack's template filled in with the places (first difference at line 9)");
   });
 
   it("adds no workflow when the person chose none", () => {

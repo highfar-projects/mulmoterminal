@@ -56,10 +56,11 @@ const recorded = () => {
 };
 
 const workflowSide = (checked) => {
-  if (answers.ci === WITH_CI)
-    return existsSync(WORKFLOW)
-      ? workflowProblems(readFileSync(WORKFLOW, "utf8"), places).map((problem) => `${WORKFLOW}: ${problem}`)
-      : [`${WORKFLOW} is missing`];
+  if (answers.ci === WITH_CI) {
+    if (!existsSync(WORKFLOW)) return [`${WORKFLOW} is missing`];
+    const template = readFileSync(join(process.env.BLUEPRINT_USECASE, "templates", "chaff.yml"), "utf8");
+    return workflowProblems(readFileSync(WORKFLOW, "utf8"), template, places).map((problem) => `${WORKFLOW}: ${problem}`);
+  }
   return !checked.workflow && existsSync(WORKFLOW) ? [`${WORKFLOW} was added, but the person chose no workflow`] : [];
 };
 
