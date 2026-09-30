@@ -133,7 +133,9 @@ comes from the server itself. So say it, in the **server's** `~/.mulmoterminal/c
 Then the actions in the table above that would act on the server's screen are withheld: the path
 menu's *Insert a file path* and *Reveal in the file manager* and the launch form's folder button
 are hidden, the same actions from a header button, a key or the Files pane say why instead, and a
-dropped file is always uploaded rather than inserted as your laptop's path. Restart the server
+dropped file is always uploaded rather than inserted as your laptop's path. The launcher opens no
+browser on the server even when it was not started over SSH (a service, say), and Settings' Google
+sign-in says to run `npx mulmoterminal google login` on the server instead. Restart the server
 after editing the file. This is an experiment — say how it went on
 [issue #2669](https://github.com/receptron/mulmoterminal/issues/2669).
 

@@ -428,7 +428,10 @@ through a tunnel the browser's connection comes from loopback exactly as a local
   the launch form's folder button (hidden); the file dialog, file manager and OS-app actions from a
   header button, a key or the Files pane (they say why).
 - A dropped file is always uploaded, never inserted as a path from the browser's machine.
-- Write it in the SERVER's `~/.mulmoterminal/config.json`. No Settings switch yet.
+- The launcher opens no browser on the server (also without SSH), and Settings' Google sign-in
+  points to `npx mulmoterminal google login` on the server instead.
+- Write it in the SERVER's `~/.mulmoterminal/config.json`, then restart the server (a hand edit is
+  not picked up live). No Settings switch yet.
 
 ### `playfulEffects` — the occasional theatre on a terminal
 

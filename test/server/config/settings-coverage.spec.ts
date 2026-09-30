@@ -87,7 +87,7 @@ const REACHABLE_BY: Record<string, Reachable> = {
   // Beside the load average in Settings → Grid header read-outs (#2569).
   paletteSearchBox: { ui: true, skill: CONFIG_SKILL },
   // Experimental (#2669), no Settings switch yet: the config skill documents it.
-  remoteServer: { ui: false, skill: CONFIG_SKILL },
+  remoteServer: { skill: CONFIG_SKILL },
   toolbarPins: { ui: true, skill: CONFIG_SKILL },
   // On/off only in Settings, worded so it does not advertise: which pictures exist is left to find.
   playfulEffects: { ui: true, skill: CONFIG_SKILL },

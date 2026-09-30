@@ -9,16 +9,23 @@ export function inSshSession(env) {
   return Boolean(env.SSH_CONNECTION || env.SSH_CLIENT);
 }
 
+/** The experimental `remoteServer` out of a parsed `~/.mulmoterminal/config.json`: true only for a
+ *  literal `true`, like the server's own reading of it (common/remoteServer.ts). */
+export const configuredRemoteServer = (config) => config !== null && typeof config === "object" && config.remoteServer === true;
+
 /**
- * The lines that tell someone on the other end of the SSH connection how to open this server, or
- * null when this is not an SSH login. The host is left for them to fill in: SSH_CONNECTION names the
- * address THIS side answered on, which behind NAT or a container is not one their machine can reach.
+ * The lines that tell someone on another machine how to open this server, or null when the browser
+ * is expected here: not an SSH login, and `remoteServer` not set. The host is left for them to fill
+ * in: SSH_CONNECTION names the address THIS side answered on, which behind NAT or a container is not
+ * one their machine can reach.
  */
-export function sshTunnelHintLines(env, port) {
-  if (!inSshSession(env)) return null;
+export function sshTunnelHintLines(env, port, remoteServer = false) {
+  const ssh = inSshSession(env);
+  if (!ssh && !remoteServer) return null;
   const user = env.USER || env.LOGNAME || "<user>";
+  const why = ssh ? "Started over SSH" : "remoteServer is set in config.json";
   return [
-    "Started over SSH, so no browser is opened here. On your own machine, run:",
+    `${why}, so no browser is opened here. On your own machine, run:`,
     `  ssh -N -L ${port}:127.0.0.1:${port} ${user}@<this-host>`,
     `then open http://localhost:${port} there.`,
   ];

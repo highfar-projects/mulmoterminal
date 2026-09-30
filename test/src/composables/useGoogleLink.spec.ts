@@ -2,6 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 import { useGoogleLink } from "../../../src/composables/useGoogleLink";
+import { setRemoteServer } from "../../../src/composables/remoteServer";
 
 const jsonResponse = (body: unknown, ok = true, status = 200) => ({ ok, status, json: async () => body }) as Response;
 
@@ -209,5 +210,20 @@ describe("useGoogleLink", () => {
       expect(link.error.value).toMatch(/Couldn't unlink/);
       link.dispose();
     });
+  });
+
+  // #2669 (experimental): with the server elsewhere, consent cannot finish from this browser.
+  it("does not start the sign-in when remoteServer is on, and says to use the CLI", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse(LINKED));
+    vi.stubGlobal("fetch", fetchMock);
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    setRemoteServer(true);
+    const link = useGoogleLink();
+    await link.connect();
+    expect(open).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(link.error.value).toContain("google login");
+    setRemoteServer(false);
+    link.dispose();
   });
 });
