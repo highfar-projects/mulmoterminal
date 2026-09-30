@@ -106,7 +106,7 @@ Start from one of MulmoTerminal's collections and build an app you own as code, 
 
 ### Documents {#documents}
 
-Choose the base 文書のフォルダ (a folder of documents) and the blueprint works on documents instead of an app. It checks writing with chaff, which it fetches by itself, so there is nothing to install. Make the folder that holds your documents inside a trusted parent, and choose one of these as the kind:
+Choose a document task as the kind (the ones listed under 文書のフォルダ, a folder of documents) and the blueprint works on documents instead of an app. Document tasks run only on that base, so no base is asked for (the base is asked for only for an app that can be built on more than one). It checks writing with chaff, which it fetches by itself, so there is nothing to install. Make the folder that holds your documents inside a trusted parent, and choose one of these as the kind:
 
 | Kind | What it does |
 |---|---|
@@ -117,6 +117,7 @@ Choose the base 文書のフォルダ (a folder of documents) and the blueprint 
 | 文書を確かめる (verify) | Finds wrong dates, weekdays, order and totals in an itinerary or an estimate, by machine |
 | 要約する (summarize) | Summarizes long documents to the length you choose; every sentence carries a quotation, and the machine checks the quotations, that no part was dropped silently, and that every number is in a quotation |
 | 用語をそろえる (glossary) | Collects the terms the documents define, terms defined twice and words spelled more than one way into a glossary; if you choose, the spellings to use go into the folder's chaff.yaml, so chaff reports the others from then on |
+| 文書のフォルダに chaff を入れる (adopt) | Sets chaff up in an existing folder of documents: a chaff.yaml for their kind, today's findings shelved so only new ones are reported, and, if you choose, a GitHub workflow that puts new findings on a pull request's lines |
 | 版を比べる (compare) | Pairs the articles of an old and a new version of a contract or a policy, and makes a comparison table of what changed, was added or was removed; whether an article changed is decided by comparing its text by machine |
 | 文書に尋ねる (ask) | Answers your questions about a document, saying where in it the answer is written |
 
@@ -124,7 +125,7 @@ Clicking the **Project folder** field offers the folders of your earlier builds 
 
 When a build stops with 「承認が必要です」 (approval needed), open the files under **Read these before approving** (the findings, the brief, the outline and so on), and press **Approve** once you have checked them.
 
-You can try them without documents of your own. 「例から始める」 (Start from an example) has document examples, under the 文書のフォルダ heading: review a service contract, verify an itinerary, compare a revised service contract, ask an expense manual, summarize an expense manual, align the terms of a telework policy and guide, polish a notice, polish a report as a report, polish a blog post as a blog post, make a style from model texts, and write a first-day guide. Choosing one fills in a new folder, and starting places its sample documents there. If you pick an existing folder instead, a different file of the same name in it stops the start. When it finishes, the report (what was found, what was checked, what was left) is shown in the blueprint screen. The files the build changed are listed too; clicking one opens it.
+You can try them without documents of your own. 「例から始める」 (Start from an example) has document examples, under the 文書のフォルダ heading: review a service contract, verify an itinerary, compare a revised service contract, ask an expense manual, summarize an expense manual, align the terms of a telework policy and guide, set chaff up on help pages, polish a notice, polish a report as a report, polish a blog post as a blog post, make a style from model texts, and write a first-day guide. Choosing one fills in a new folder, and starting places its sample documents there. If you pick an existing folder instead, a different file of the same name in it stops the start. When it finishes, the report (what was found, what was checked, what was left) is shown in the blueprint screen. The files the build changed are listed too; clicking one opens it.
 
 In a folder where you made a style, the finished build's **What to do next** offers writing and polishing with it. Choosing one opens the new-build form with the same folder and 「このフォルダの規約」 (this folder's style) already chosen; read the questions and press **Start**. After writing, it offers polishing, with the documents just written, the same style, and 「手引き（STYLE.md）の決まりにも合わせる」 (follow the guide too) filled in: chaff already checked every part while it was written, so polishing against the guide is what is left.
 

@@ -17,6 +17,8 @@ import {
   answerLines,
   toggleLine,
   runGroups,
+  basesFor,
+  usecaseGroups,
   RUN_GROUPS,
   fitsOnALine,
 } from "../../../../src/components/blueprints/blueprintView";
@@ -251,6 +253,49 @@ describe("runGroups", () => {
     expect(runGroups(runs).map((entry) => [entry.group, entry.runs.map((summary) => summary.id)])).toEqual([
       ["waiting", ["w1"]],
       ["archived", ["a1", "a2", "a3"]],
+    ]);
+  });
+});
+
+describe("the tasks and the bases they run on", () => {
+  const base = (slug: string): PackChoice => ({
+    slug,
+    manifest: { kind: "base", slug, title: slug.toUpperCase(), version: "1", description: "", platform: "local", requires: [], credentials: [] },
+  });
+  const usecase = (slug: string, bases: string[]): PackChoice => ({
+    slug,
+    manifest: { kind: "usecase", slug, title: slug, version: "1", description: "", bases, next: [] },
+  });
+  const PACKS = [
+    base("docs"),
+    base("local"),
+    base("firebase"),
+    usecase("review", ["docs"]),
+    usecase("product", ["local", "firebase", "supabase"]),
+    usecase("internal", ["firebase"]),
+  ];
+
+  it("offers a task only the installed bases it can be built on, in the selector's order", () => {
+    expect(basesFor(PACKS, "product").map((pack) => pack.slug)).toEqual(["local", "firebase"]);
+    expect(basesFor(PACKS, "review").map((pack) => pack.slug)).toEqual(["docs"]);
+    expect(basesFor(PACKS, "unknown")).toEqual([]);
+    expect(basesFor(PACKS, "docs")).toEqual([]);
+  });
+
+  it("groups tasks under their one base, with those of several bases second", () => {
+    expect(usecaseGroups(PACKS).map((group) => [group.base, group.usecases.map((pack) => pack.slug)])).toEqual([
+      ["docs", ["review"]],
+      [null, ["product"]],
+      ["firebase", ["internal"]],
+    ]);
+    expect(usecaseGroups([base("docs")])).toEqual([]);
+    // Built only on bases that are not installed: nothing to build it on, so not offered — and a multi-base app with
+    // one installed base is that base's alone.
+    const partly = [...PACKS, usecase("orphan", ["missing-a", "missing-b"]), usecase("lone", ["firebase", "supabase"])];
+    expect(usecaseGroups(partly).map((group) => [group.base, group.usecases.map((pack) => pack.slug)])).toEqual([
+      ["docs", ["review"]],
+      [null, ["product"]],
+      ["firebase", ["internal", "lone"]],
     ]);
   });
 });

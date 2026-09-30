@@ -25,6 +25,7 @@ import { PUBLIC_VIEW_DOC } from "./publicView.js";
 import type { SharedAppFailure } from "./context.js";
 import { runWrites } from "./writes.js";
 import { setSlugPublished } from "./slug.js";
+import { SIGN_IN_STEP } from "./signInStep.js";
 
 export interface UnpublishSuccess {
   ok: true;
@@ -42,7 +43,7 @@ export type UnpublishResult = UnpublishSuccess | SharedAppFailure;
 export async function unpublishSharedApp(root: string): Promise<UnpublishResult> {
   const handle = firestoreHandle();
   if (!handle) {
-    return { ok: false, partial: false, problems: ["unpublish needs a signed-in Firestore session: connect remote-host first."] };
+    return { ok: false, partial: false, problems: [`unpublish needs a signed-in Firestore session: ${SIGN_IN_STEP}`] };
   }
   const manifest = loadAppManifest(root);
   if (!manifest.ok) return { ok: false, partial: false, problems: [appManifestReason(manifest, root)] };

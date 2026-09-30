@@ -36,6 +36,7 @@ import { presenceOf, suggestFolder } from "./folderSuggestion.js";
 import { recordFolderIsReal } from "./answersFile.js";
 import { listProjectFiles } from "./projectFiles.js";
 import { changedFiles } from "../../common/blueprint/changedFiles.js";
+import { SIGN_IN_STEP } from "../backends/sharedApp/signInStep.js";
 
 // More than the changed-files list shows: this is for choosing among them, not for glancing at what moved.
 const PICKABLE_FILES_MAX = 200;
@@ -300,7 +301,7 @@ function snapshotRefusal(slug: string, snapshot: Exclude<Snapshot, { kind: "ok" 
     case "too-large":
       return refused(400, tooLargeReason(sourceLabel(slug), snapshot.bytes));
     case "signed-out":
-      return refused(409, "a shared app's records are read with your own sign-in: connect to the shared apps first, or start without the records");
+      return refused(409, `a shared app's records are read with your own sign-in: ${SIGN_IN_STEP} Or start without the records.`);
     case "not-a-reader":
       return refused(
         409,

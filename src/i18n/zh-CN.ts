@@ -535,6 +535,7 @@ export const zhCN: Messages = {
   },
 
   launch: {
+    mcpGroupsNextStart: "从此目录下次启动的终端开始生效。已打开的单元仍使用启动时的工具，请重新启动它。",
     agentUnavailable: {
       missing: "此计算机上未安装 {agent}，因此无法在此启动。",
       noSuchPath: "{agent} 的命令覆盖设置指向的文件不存在，因此无法启动。",

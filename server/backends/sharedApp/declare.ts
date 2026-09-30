@@ -25,6 +25,7 @@ import { viewFilesReport } from "./publicView.js";
 import { strandedApp } from "./recovery.js";
 import { scanRecords, type RecordScan } from "./records.js";
 import { rosterRemovals, type RosterRemoval } from "./rosterRemovals.js";
+import { SIGN_IN_STEP } from "./signInStep.js";
 
 /** The roster key that means "every collection". A member's roles map is keyed by cid, with this
  *  as the fallback the rules drop to (`role()` reads `cid` first, then this). */
@@ -75,7 +76,7 @@ export async function initSharedApp(root: string, name: string | undefined, slug
       ok: false,
       partial: false,
       problems: [
-        "starting an app needs a signed-in session: connect remote-host first.",
+        `starting an app needs a signed-in session: ${SIGN_IN_STEP}`,
         "The declaration names its owner by EMAIL, and it has to be the address this machine is signed in with — guessing it produces an app nobody can publish.",
       ],
     };
@@ -228,7 +229,7 @@ export async function forkSharedApp(root: string, name: string | undefined, slug
       ok: false,
       partial: false,
       problems: [
-        "forking an app needs a signed-in session: connect remote-host first.",
+        `forking an app needs a signed-in session: ${SIGN_IN_STEP}`,
         "The new declaration names its owner by EMAIL, and it has to be the address this machine is signed in with — guessing it produces an app nobody can publish.",
       ],
     };

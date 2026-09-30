@@ -25,7 +25,7 @@ import {
   type HearingAnswer,
   type HearingAnswers,
 } from "../../../common/blueprint/hearing";
-import { basePacks, presetGroups, usecasesFor } from "./blueprintView";
+import { basePacks, basesFor, presetGroups, usecaseGroups, usecasesFor } from "./blueprintView";
 import { latestOnly } from "./latestOnly";
 import { failureText } from "./refusalText";
 import { keepFormFill, takeFormFill, type FormFill } from "../../composables/useBlueprintsView";
@@ -67,6 +67,10 @@ const personalData = ref<Extract<Refusal, { code: "personal-data" }> | null>(nul
 
 const bases = computed(() => basePacks(packs.value));
 const usecases = computed(() => usecasesFor(packs.value, base.value));
+// The task is chosen first, from every task; the base only among those the task can be built on, and not at all when
+// there is one — a document task is never offered a cloud platform.
+const groups = computed(() => usecaseGroups(packs.value));
+const usecaseBases = computed(() => basesFor(packs.value, usecase.value));
 const exampleGroups = computed(() => presetGroups(presets.value, packs.value));
 const questions = computed(() => (preview.value ? askedQuestions(preview.value.hearing, answers.value) : []));
 const ready = computed(
@@ -97,9 +101,15 @@ onMounted(async () => {
   if (!base.value) base.value = bases.value[0]?.slug ?? "";
 });
 
+// Each follows the other only when the pair would not fit: an example, a follow-up or a kept form sets both at once.
 watch(base, (baseSlug) => {
+  if (usecases.value.some((pack) => pack.slug === usecase.value)) return;
   const waiting = pendingPreset.value ?? pendingFill.value;
   usecase.value = waiting?.base === baseSlug ? waiting.usecase : (usecases.value[0]?.slug ?? "");
+});
+watch(usecase, () => {
+  if (usecaseBases.value.some((pack) => pack.slug === base.value)) return;
+  base.value = usecaseBases.value[0]?.slug ?? base.value;
 });
 
 function usePreset(preset: PresetListing): void {
@@ -308,23 +318,25 @@ function openToTrust(): void {
 
       <div class="flex flex-wrap gap-4">
         <label class="flex flex-col gap-1 font-sans text-[13px] text-fg">
-          {{ t("blueprints.form.base") }}
-          <select v-model="base" data-testid="blueprint-base" class="min-w-[200px] rounded-[4px] border border-border bg-input px-2 py-1.5 text-[12px] text-fg">
-            <option v-for="pack in bases" :key="pack.slug" :value="pack.slug">{{ pack.manifest.title }}</option>
-          </select>
-        </label>
-        <label class="flex flex-col gap-1 font-sans text-[13px] text-fg">
           {{ t("blueprints.form.usecase") }}
           <select
             v-model="usecase"
             data-testid="blueprint-usecase"
             class="min-w-[200px] rounded-[4px] border border-border bg-input px-2 py-1.5 text-[12px] text-fg"
           >
-            <option v-for="pack in usecases" :key="pack.slug" :value="pack.slug">{{ pack.manifest.title }}</option>
+            <optgroup v-for="group in groups" :key="group.base ?? 'apps'" :label="group.title ?? t('blueprints.form.usecaseGroupApps')">
+              <option v-for="pack in group.usecases" :key="pack.slug" :value="pack.slug">{{ pack.manifest.title }}</option>
+            </optgroup>
+          </select>
+        </label>
+        <label v-if="usecaseBases.length > 1" class="flex flex-col gap-1 font-sans text-[13px] text-fg">
+          {{ t("blueprints.form.base") }}
+          <select v-model="base" data-testid="blueprint-base" class="min-w-[200px] rounded-[4px] border border-border bg-input px-2 py-1.5 text-[12px] text-fg">
+            <option v-for="pack in usecaseBases" :key="pack.slug" :value="pack.slug">{{ pack.manifest.title }}</option>
           </select>
         </label>
       </div>
-      <p v-if="base && !usecases.length" class="m-0 font-sans text-[12px] text-dim">{{ t("blueprints.form.noUsecase") }}</p>
+      <p v-if="packs.length > 0 && groups.length === 0" class="m-0 font-sans text-[12px] text-dim">{{ t("blueprints.form.noUsecase") }}</p>
 
       <template v-if="preview">
         <fieldset class="m-0 flex flex-col gap-4 border-0 p-0">

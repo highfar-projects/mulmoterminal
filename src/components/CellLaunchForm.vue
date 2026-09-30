@@ -892,6 +892,11 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
             />
           </span>
         </label>
+        <!-- A switch writes the directory's registration; a running agent was handed its tools when it
+             started, so without this the toggle looks like it did nothing. -->
+        <p data-testid="cell-mcp-next-start" class="m-0 font-sans text-[11px] leading-snug text-secondary" :class="LAUNCH_ROW">
+          {{ t("launch.mcpGroupsNextStart") }}
+        </p>
       </template>
     </template>
     <!-- Everything below is per-directory and is dropped the moment the field changes, so without
