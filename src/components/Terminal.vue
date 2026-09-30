@@ -500,9 +500,12 @@ function onDrop(e: DragEvent) {
   const dt = e.dataTransfer;
   if (!dt || !dragCarriesFiles(dt.types)) return; // not a file drop — leave text drags alone
   e.preventDefault();
-  const files = Array.from(dt.files);
   const text = dropTextFromUriList(dt.getData("text/uri-list") || dt.getData("text/plain"));
-  const plan = dropPlan({ pathText: text, fileCount: files.length, remoteServer: isRemoteServer() });
+  // The files are only read when the plan can use them: a path the browser gave settles a local drop,
+  // as it always did (#2669).
+  const remote = isRemoteServer();
+  const files = text && !remote ? [] : Array.from(dt.files);
+  const plan = dropPlan({ pathText: text, fileCount: files.length, remoteServer: remote });
   if (plan === "insert-path") insertText(text);
   else if (plan === "upload") enqueueDrop(files);
   else showDropHint();
