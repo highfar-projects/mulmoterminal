@@ -14,6 +14,7 @@ import { setAppendSystemPrompt } from "../../../../src/composables/appendSystemP
 import { setDecisionDigest } from "../../../../src/composables/decisionDigest";
 import { setWorklogEnabled, setWorklogIntervalHours } from "../../../../src/composables/worklog";
 import { setFeedRefreshEnabled, setCalendarSyncEnabled } from "../../../../src/composables/systemTasks";
+import { setRemoteServer } from "../../../../src/composables/remoteServer";
 import { setGlobalFontFamily } from "../../../../src/composables/terminalFontFamily";
 import { useAppConfig } from "../../../../src/composables/useAppConfig";
 import { reloadLaunchOptions } from "../../../../src/composables/useLaunchOptions";
@@ -159,6 +160,16 @@ describe("SessionSection", () => {
     const wrapper = mount(SessionSection);
     await toggleAt(wrapper, 4, false);
     expect(posts).toEqual([{ calendarSyncEnabled: false }]);
+  });
+
+  // #2669 (experimental): off unless the config says true, and the box writes exactly that key.
+  it("shows the experimental remoteServer box unticked by default, and posts remoteServer when ticked", async () => {
+    setRemoteServer(undefined);
+    const wrapper = mount(SessionSection);
+    expect((wrapper.find('[data-testid="settings-remote-server"]').element as HTMLInputElement).checked).toBe(false);
+    await toggleAt(wrapper, 5, true);
+    expect(posts).toEqual([{ remoteServer: true }]);
+    setRemoteServer(false);
   });
 
   // These two are the only default-ON boxes in this section. The risk is `createGlobalFlag`'s

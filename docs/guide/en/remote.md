@@ -80,21 +80,42 @@ on the server.
 | **Claude Code** | Run `claude` once — in a Shell cell, or over SSH. With no browser on the server it prints a sign-in URL ("Browser didn't open? Use the url below to sign in") and waits for a code: open the URL on your laptop, sign in, and paste the code back. On Linux the login is kept in a file under `~/.claude`, so it lasts. |
 | **GitHub (`gh`)** | `gh auth login`, choose the web browser, and enter the one-time code it shows at `github.com/login/device` on your laptop. MulmoTerminal's own PR and issue views use this login too. |
 | **`git push`** | `ssh -A` from your laptop (above — a trusted server only), or keys / a credential helper set up on the server. |
-| **Codex** | `codex` on the server, with its own login. *Not tried yet.* |
+| **Codex** | Run `codex` once and choose **Sign in with Device Code**: open `https://auth.openai.com/codex/device` on your laptop, sign in, and enter the one-time code it shows (it expires in 15 minutes). |
 
-Only the Claude Code sign-in URL was seen in the trial run — the sign-in was not completed there.
+In the trial runs the Claude Code sign-in URL and the Codex device code were seen on a headless
+Linux box; neither sign-in was completed there.
 
 ## In Docker
 
-Run the server in a container, published on your machine's `127.0.0.1` only:
+There is no official image yet. This `Dockerfile` is an example — it was built and run for this
+guide (Node 22, `git`, `gh`, `tmux`, Claude Code; add the other agents you use):
 
-```bash
-docker run -p 127.0.0.1:34567:34567 -e MULMOTERMINAL_HOST=0.0.0.0 \
-  -v "$HOME/work:/home/dev/work" <an image with Node, git, gh and your agents> \
-  npx mulmoterminal@latest --no-open
+```dockerfile
+FROM node:22-bookworm
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends git tmux curl ca-certificates \
+ && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o /usr/share/keyrings/githubcli-archive-keyring.gpg \
+ && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
+ && apt-get update && apt-get install -y --no-install-recommends gh \
+ && rm -rf /var/lib/apt/lists/*
+RUN npm install -g mulmoterminal @anthropic-ai/claude-code
+RUN useradd -m dev && mkdir -p /home/dev/work && chown -R dev:dev /home/dev
+USER dev
+WORKDIR /home/dev/work
+# Published on the host's 127.0.0.1 only (see `docker run` below); the bind has to be wide inside.
+ENV MULMOTERMINAL_HOST=0.0.0.0
+EXPOSE 34567
+CMD ["mulmoterminal", "--no-open"]
 ```
 
-- `MULMOTERMINAL_HOST=0.0.0.0` is needed so the published port reaches the server inside the
+Build it, and run it published on your machine's `127.0.0.1` only:
+
+```bash
+docker build -t mulmoterminal-server .
+docker run -p 127.0.0.1:34567:34567 -v "$HOME/work:/home/dev/work" mulmoterminal-server
+```
+
+- `MULMOTERMINAL_HOST=0.0.0.0` (set in the `Dockerfile` above) is needed so the published port reaches the server inside the
   container. It prints a `[security]` warning — expected: the port is published on `127.0.0.1`
   only, so it is still reachable from your machine alone. See
   [Configuration](config.html) for what that setting allows.
@@ -103,8 +124,6 @@ docker run -p 127.0.0.1:34567:34567 -e MULMOTERMINAL_HOST=0.0.0.0 \
   MulmoTerminal's own state.
 - On a remote Docker host, combine the two: publish on the host's `127.0.0.1`, and tunnel to the
   host with `ssh -L`.
-
-There is no official image yet.
 
 ## What works differently
 
@@ -124,7 +143,9 @@ server). A few actions act on **the server's machine**, not yours:
 ## Experimental: tell it the server is remote
 
 Nothing can tell from the server that your browser is elsewhere — through a tunnel the connection
-comes from the server itself. So say it, in the **server's** `~/.mulmoterminal/config.json`:
+comes from the server itself. So say it: tick **Settings → Sessions and background tasks →
+Experimental: the server runs on another machine**, or write it in the **server's**
+`~/.mulmoterminal/config.json`:
 
 ```json
 { "remoteServer": true }
@@ -135,12 +156,13 @@ menu's *Insert a file path* and *Reveal in the file manager* and the launch form
 are hidden, the same actions from a header button, a key or the Files pane say why instead, and a
 dropped file is always uploaded rather than inserted as your laptop's path. The launcher opens no
 browser on the server even when it was not started over SSH (a service, say), and Settings' Google
-sign-in says to run `npx mulmoterminal google login` on the server instead. Restart the server
-after editing the file. This is an experiment — say how it went on
+sign-in says to run `npx mulmoterminal google login` on the server instead. The Settings box takes
+effect at once; after editing the file by hand, restart the server. This is an experiment — say how it went on
 [issue #2669](https://github.com/receptron/mulmoterminal/issues/2669).
 
 ## Developing MulmoTerminal against a remote server
 
 The server and the page can also be run apart: `yarn dev:server` on the server (Express only), and
 `yarn dev:client` on your laptop (Vite only), with the tunnel on `34567` open — Vite forwards
-`/api` and `/ws` to `localhost:34567`, which the tunnel carries to the server. *Not tried yet.*
+`/api` and `/ws` to `localhost:34567`, which the tunnel carries to the server. If the server listens
+on another port, give the client the same one: `PORT=<port> yarn dev:client`.

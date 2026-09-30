@@ -12,9 +12,10 @@ vi.mock("../../../src/composables/useTerminalConnections", async (importOriginal
   ...(await importOriginal<typeof import("../../../src/composables/useTerminalConnections")>()),
   attach: () => {},
   detach: () => {},
+  submitText: spies.submitText,
 }));
 
-const spies = vi.hoisted(() => ({ runHeaderButton: vi.fn() }));
+const spies = vi.hoisted(() => ({ runHeaderButton: vi.fn(), submitText: vi.fn() }));
 vi.mock("../../../src/composables/useHeaderAction", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../src/composables/useHeaderAction")>()),
   runHeaderButton: spies.runHeaderButton,
@@ -43,6 +44,8 @@ afterEach(() => {
   wrapper?.unmount();
   wrapper = null;
   spies.runHeaderButton.mockClear();
+  spies.submitText.mockClear();
+  vi.unstubAllGlobals();
 });
 
 describe("a terminal's entries for the command palette", () => {
@@ -81,5 +84,27 @@ describe("a terminal's entries for the command palette", () => {
     const entries = paletteHeaderEntriesFor("cell-9");
     expect(entries?.buttons()).toEqual([]);
     expect(entries?.commands()).toEqual([]);
+  });
+
+  // #2697. The Run and Skill menus' entries, from a terminal that shows those menus.
+  it("offers its menus' directory, runs a script as a run and a skill in its own session", () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("{}")),
+    );
+    const w = mount(Terminal, { props: { persistKey: "cell-9", sessionId: "s1", connectKey: 0, cwd: "/work/proj", agent: "codex", runMenu: true } });
+    wrapper = w;
+    const menus = paletteHeaderEntriesFor("cell-9")?.menus?.();
+    expect(menus?.cwd).toBe("/work/proj");
+    const script = { source: "script" as const, index: 1, label: "dev", cwd: "/work/proj" };
+    menus?.runScript(script);
+    expect(w.emitted("run")?.[0]?.[0]).toEqual(script);
+    menus?.runSkill("review");
+    expect(spies.submitText).toHaveBeenCalledWith("cell-9", 'Use the "review" skill.');
+  });
+
+  it("offers no menus from a terminal that does not show them", () => {
+    wrapper = mount(Terminal, { props: { persistKey: "cell-9", sessionId: "s1", connectKey: 0, cwd: "/work/proj" } });
+    expect(paletteHeaderEntriesFor("cell-9")?.menus?.()).toBeNull();
   });
 });

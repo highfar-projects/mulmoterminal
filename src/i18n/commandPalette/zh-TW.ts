@@ -30,6 +30,8 @@ export const commandPaletteZhTW = {
   githubIssue: "Issue #{number}: {title}",
   promptLabel: "提示詞: {text}",
   promptDetail: "放回終端機輸入，不送出",
+  runScript: "執行: {label}",
+  runSkill: "技能: /{slug}",
   findFilesNamed: "尋找名為「{query}」的檔案",
   searchFilesFor: "在檔案內容中搜尋「{query}」",
   rowActions: {

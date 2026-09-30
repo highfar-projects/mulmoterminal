@@ -215,6 +215,9 @@ export const zhTW: Messages = {
       feedRefreshHint: "抓取你的 RSS/JSON 訂閱來源，並派送由 skill 支撐的集合更新，涵蓋工作區和每個存過的專案目錄。一個訂閱來源都沒註冊時它什麼也不做。",
       calendarSync: "同步 Google 日曆",
       calendarSyncHint: "把有變動的行程拉進任何宣告了 Google 日曆的集合。在你連結帳號之前它什麼也不做。",
+      remoteServer: "實驗功能：伺服器執行在另一台機器上",
+      remoteServerHint:
+        "用於透過 SSH 通道連線的伺服器。隱藏或說明會在伺服器畫面上執行的操作（檔案對話框、檔案管理器、應用程式、Google 登入），並一律上傳拖放的檔案。立即生效；啟動指令碼會在下次啟動時讀取。",
     },
 
     launchers: {
