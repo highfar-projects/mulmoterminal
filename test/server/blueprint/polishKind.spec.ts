@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { CHAFF_DEFAULT_STYLE, genreArgs, genreOf, readKinds } from "../../../blueprints/polish/checks/kind.mjs";
 import { PACKS } from "./docsPackHarness";
 
-// `npx chaffjs@0.15 genres`. A kind naming a genre chaff lacks stops every chaff run of the build (0.15 refuses an
+// `npx chaffjs@0.16 genres`. A kind naming a genre chaff lacks stops every chaff run of the build (chaff refuses an
 // unknown genre), so a genre renamed upstream shows here first.
 const CHAFF_GENRES = [
   "technical/spec",
@@ -20,6 +20,20 @@ const CHAFF_GENRES = [
   "business/email",
   "business/press-release",
   "business/meeting-notes",
+  "legal/contract",
+  "legal/statute",
+  "legal/judgment",
+  "legal/patent",
+  "docs/manual",
+  "docs/faq",
+  "docs/glossary",
+  "academic/paper",
+  "literature/fiction",
+  "literature/essay",
+  "literature/poetry",
+  "literature/play",
+  "speech/address",
+  "speech/transcript",
 ];
 
 const kinds = readKinds(join(PACKS, "polish"));
