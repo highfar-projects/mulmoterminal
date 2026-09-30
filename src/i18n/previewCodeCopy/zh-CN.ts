@@ -12,5 +12,6 @@ export const previewCodeCopyZhCN = {
     failed: "无法读取文件。",
     lines: "{count} 行",
     hidden: "此代码块中有 {count} 个无法直接看到的字符（不可见字符、控制字符或改变书写方向的字符），此处以 <U+…> 显示。复制时，剪贴板中是文件中的原样字符。",
+    manualMarked: "已选中，请用常用的快捷键复制。<U+…> 标记会按写出的文本复制，而不是它所代表的字符。",
   },
 };

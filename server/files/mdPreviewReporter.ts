@@ -93,6 +93,8 @@ const CODE_COPY = [
   `  button.innerHTML = ${JSON.stringify(COPY_ICON)};`,
   `  button.setAttribute('style', ${JSON.stringify(COPY_BUTTON_STYLE)});`,
   "  pre.style.position = 'relative';",
+  // Room for the button, so it does not sit over the end of the first line.
+  "  pre.style.paddingRight = '2.5em';",
   "  button.addEventListener('click', (event) => {",
   "    event.preventDefault();",
   // A block inside a link: the press is the button's, not the link's.

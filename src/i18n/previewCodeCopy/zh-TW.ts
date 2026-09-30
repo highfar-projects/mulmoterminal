@@ -13,5 +13,6 @@ export const previewCodeCopyZhTW = {
     lines: "{count} 行",
     hidden:
       "此程式碼區塊中有 {count} 個無法直接看到的字元（不可見字元、控制字元或改變書寫方向的字元），此處以 <U+…> 顯示。複製時，剪貼簿中是檔案中的原樣字元。",
+    manualMarked: "已選取，請用慣用的快捷鍵複製。<U+…> 標記會按寫出的文字複製，而不是它所代表的字元。",
   },
 };

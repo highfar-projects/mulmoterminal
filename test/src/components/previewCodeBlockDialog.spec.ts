@@ -71,6 +71,26 @@ describe("PreviewCodeBlockDialog", () => {
     expect(inBody("preview-code-block-copy")).toBeNull();
   });
 
+  it("gives the keyboard back to where the press came from when it closes", async () => {
+    const opener = document.createElement("button");
+    document.body.append(opener);
+    opener.focus();
+    const w = dialogFor({ status: "found", block: BLOCK });
+    await flushPromises();
+    expect(document.activeElement).not.toBe(opener);
+    w.unmount();
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it("says the markers are what a hand copy takes, when there are hidden characters and no clipboard", async () => {
+    vi.stubGlobal("navigator", {});
+    dialogFor({ status: "found", block: { lang: "", text: "a\u200Bb" } });
+    await flushPromises();
+    inBody("preview-code-block-copy")?.click();
+    await flushPromises();
+    expect(inBody("preview-code-block")?.textContent).toContain("markers are copied as written");
+  });
+
   it("closes on Escape", async () => {
     const w = dialogFor({ status: "found", block: BLOCK });
     await flushPromises();

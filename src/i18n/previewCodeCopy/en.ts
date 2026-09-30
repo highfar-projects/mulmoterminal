@@ -7,11 +7,12 @@ export const previewCodeCopyEn = {
     copy: "Copy",
     close: "Close",
     copied: "Copied",
-    manual: "Select it and copy with your usual key.",
+    manual: "It is selected — copy it with your usual key.",
     missing: "That code block is no longer in the file — it changed since the Preview was drawn.",
     failed: "Could not read the file.",
     lines: "Lines: {count}",
     hidden:
       "This block has {count} character(s) a text box does not show as themselves — invisible, control or direction-changing — written here as <U+…>. Copy puts them on the clipboard as they are in the file.",
+    manualMarked: "Selected — copy it with your usual key. The <U+…> markers are copied as written, not as the characters they stand for.",
   },
 };

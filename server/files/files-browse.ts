@@ -309,16 +309,19 @@ function mountSearchRoute(app: Express, defaultCwd: string): void {
   });
 }
 
-/** A 1-based line number off the query string, or null for anything that is not one.
+/** A whole number of at least `min` off the query string, or null for anything that is not one.
  *
  *  Digits only, so `"1e3"`, `"1.5"` and a leading `+` are all refused rather than coerced into a
- *  line that was never asked for — and `Number.isSafeInteger` catches the run of digits too long to
+ *  number that was never asked for — and `Number.isSafeInteger` catches the run of digits too long to
  *  survive being a number at all. */
-const lineParam = (value: unknown): number | null => {
+const wholeNumberParam = (value: unknown, min: number): number | null => {
   if (typeof value !== "string" || !/^\d+$/.test(value)) return null;
-  const line = Number(value);
-  return Number.isSafeInteger(line) && line > 0 ? line : null;
+  const whole = Number(value);
+  return Number.isSafeInteger(whole) && whole >= min ? whole : null;
 };
+
+const FIRST_LINE = 1;
+const FIRST_BLOCK = 0;
 
 /** The lines around one line of a file, for the search panel's peek at a result (#2159).
  *
@@ -333,7 +336,7 @@ function mountLinesRoute(app: Express, defaultCwd: string): void {
   app.get("/api/files/browse/lines", (req, res) => {
     const abs = containedFor(req, res, defaultCwd);
     if (!abs) return;
-    const around = lineParam(req.query.line);
+    const around = wholeNumberParam(req.query.line, FIRST_LINE);
     if (around === null) return res.status(400).json({ error: "line must be a positive integer" });
     const text = readTextOr4xx(res, abs);
     if (text === null) return;
@@ -347,8 +350,8 @@ function mountCodeBlockRoute(app: Express, defaultCwd: string): void {
   app.get("/api/files/browse/code-block", (req, res) => {
     const abs = containedFor(req, res, defaultCwd);
     if (!abs) return;
-    const index = typeof req.query.index === "string" && /^\d+$/.test(req.query.index) ? Number(req.query.index) : null;
-    if (index === null || !Number.isSafeInteger(index)) return res.status(400).json({ error: "index must be a whole number" });
+    const index = wholeNumberParam(req.query.index, FIRST_BLOCK);
+    if (index === null) return res.status(400).json({ error: "index must be a whole number" });
     const text = readTextOr4xx(res, abs);
     if (text === null) return;
     const block = previewCodeBlocks(text)[index];

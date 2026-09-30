@@ -23,9 +23,18 @@ let noteTimer: ReturnType<typeof setTimeout> | undefined;
 const block = computed(() => (props.lookup.status === "found" ? props.lookup.block : null));
 // What the box shows: the file's text, with anything a text box would not draw written out.
 const revealed = computed(() => revealHidden(block.value?.text ?? ""));
-const lineCount = computed(() => (block.value ? block.value.text.split("\n").length : 0));
+// Counted as the box draws them: a CR alone is a line break there too.
+const lineCount = computed(() => (block.value ? block.value.text.split(/\r\n|\r|\n/).length : 0));
+
+// Selecting by hand copies the box — with its `<U+XXXX>` markers, not the characters they stand for.
+const noteText = computed(() => {
+  if (note.value === "manual" && revealed.value.hidden > 0) return t("previewCodeCopy.manualMarked");
+  return note.value ? t(`previewCodeCopy.${note.value}`) : "";
+});
 
 const onKeydown = modalKeydownHandler({ modalEl, onClose: () => emit("close"), trapSelector: MODAL_FOCUSABLE });
+// Where the press came from (the Preview's frame, for a button in it): the keyboard goes back there.
+const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 onMounted(async () => {
   document.addEventListener("keydown", onKeydown);
   await nextTick();
@@ -34,6 +43,7 @@ onMounted(async () => {
 });
 onUnmounted(() => {
   document.removeEventListener("keydown", onKeydown);
+  opener?.focus();
   if (noteTimer) clearTimeout(noteTimer);
 });
 
@@ -87,7 +97,7 @@ async function copy(): Promise<void> {
           :value="revealed.shown"
         />
         <div class="flex items-center justify-end gap-2">
-          <span role="status" class="mr-auto text-[12px] text-muted">{{ note ? t(`previewCodeCopy.${note}`) : "" }}</span>
+          <span role="status" class="mr-auto text-[12px] text-muted">{{ noteText }}</span>
           <button
             v-if="block"
             type="button"
