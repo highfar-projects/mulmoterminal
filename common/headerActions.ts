@@ -9,7 +9,18 @@ import { APP_ACTIONS, isAppAction, type AppAction } from "./appActions.js";
 export const PANE_ACTIONS = ["pane-files", "pane-prompts", "pane-transcript", "pane-tools", "pane-canvas", "pane-collections"] as const;
 
 // What the cell itself does, with no help from the grid: TerminalCell registers a handler for these.
-export const CELL_SELF_ACTIONS = ["terminal-restart", "terminal-timeline", "terminal-talk", "terminal-park"] as const;
+export const CELL_SELF_ACTIONS = [
+  "terminal-restart",
+  "terminal-timeline",
+  "terminal-talk",
+  "terminal-park",
+  "terminal-copy-code",
+  "terminal-insert-path",
+  "terminal-reveal",
+  "terminal-voice",
+  "terminal-diff",
+  "terminal-note",
+] as const;
 
 export const CELL_ACTIONS = [
   "zoom-toggle",

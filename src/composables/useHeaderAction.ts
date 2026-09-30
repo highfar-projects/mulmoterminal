@@ -46,7 +46,7 @@ function openUrl(url: string): void {
 // Reveal a directory in the OS file manager. The route answers only once the opener has actually
 // started, so a host that has none (a bare Linux box with no `xdg-open`) reports it rather than
 // leaving the button looking broken (#1447).
-async function revealDir(dirPath: string, report: ReportProblem): Promise<void> {
+export async function revealDir(dirPath: string, report: ReportProblem): Promise<void> {
   try {
     const res = await fetchWithTimeout("/api/open-dir", {
       method: "POST",
@@ -88,6 +88,12 @@ const DECLINED_EN: Partial<Record<CellAction, string>> = {
   "terminal-timeline": "The activity timeline is only for a Claude session.",
   "terminal-talk": "There is no other terminal to talk to.",
   "terminal-park": "Only a running agent terminal can be set aside.",
+  "terminal-copy-code": "There is no session in this terminal to copy from yet.",
+  "terminal-insert-path": "This terminal has not started yet.",
+  "terminal-reveal": "This terminal has not started yet.",
+  "terminal-voice": "Voice input is not available here.",
+  "terminal-diff": "This terminal has no changes to show.",
+  "terminal-note": "A note needs a running session in this terminal.",
   "terminal-move-prev": "Moving a terminal needs manual order.",
   "terminal-move-next": "Moving a terminal needs manual order.",
 };
