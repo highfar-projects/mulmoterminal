@@ -402,7 +402,7 @@ describeSh("polish: a report is read for what a report needs", () => {
   });
 
   it("asks nothing more of a kind that has no viewpoints, or of the folder's own style", () => {
-    write(".blueprint/answers.json", { ...REPORT_KIND, kind: "手順書・README" });
+    write(".blueprint/answers.json", { ...REPORT_KIND, kind: "README・技術文書" });
     expect(node("targets.mjs", ["verify"]).code).toBe(0);
     write(".blueprint/answers.json", { ...REPORT_KIND, style: "このフォルダの規約（STYLE.md と chaff.yaml）" });
     expect(node("targets.mjs", ["verify"]).code).toBe(0);

@@ -57,6 +57,9 @@ describe("polish: the kinds of document", () => {
   it("picks the genre only with chaff's own style", () => {
     expect(genreOf({ style: CHAFF_DEFAULT_STYLE, kind: "報告書" }, kinds)).toBe("business/report");
     expect(genreOf({ style: CHAFF_DEFAULT_STYLE, kind: "議事録" }, kinds)).toBe("business/meeting-notes");
+    expect(genreOf({ style: CHAFF_DEFAULT_STYLE, kind: "契約書・利用規約" }, kinds)).toBe("legal/contract");
+    expect(genreOf({ style: CHAFF_DEFAULT_STYLE, kind: "規程・社内規則" }, kinds)).toBe("legal/statute");
+    expect(genreOf({ style: CHAFF_DEFAULT_STYLE, kind: "マニュアル・手順書" }, kinds)).toBe("docs/manual");
     expect(genreOf({ style: "このフォルダの規約（STYLE.md と chaff.yaml）", kind: "報告書" }, kinds)).toBeNull();
   });
 

@@ -35,10 +35,14 @@ describe("the viewpoint catalog", () => {
     });
   });
 
-  it("reads a report and a blog for different things, and a manual for none yet", () => {
+  it("reads a report, a blog, a manual and a contract for different things, and a README for none yet", () => {
     expect(viewpointsFor(catalog, "business/report")).toContain("actionable-ask");
     expect(viewpointsFor(catalog, "blog/tech")).toContain("padded-intro");
     expect(viewpointsFor(catalog, "blog/tech")).not.toContain("actionable-ask");
+    expect(viewpointsFor(catalog, "docs/manual")).toContain("steps-one-action");
+    expect(viewpointsFor(catalog, "legal/contract")).toContain("duty-owner-deadline");
+    expect(viewpointsFor(catalog, "legal/contract")).not.toContain("scope-stated");
+    expect(viewpointsFor(catalog, "legal/statute")).toContain("scope-stated");
     expect(viewpointsFor(catalog, "technical/readme")).toEqual([]);
     expect(viewpointsFor(catalog, null)).toEqual([]);
   });
