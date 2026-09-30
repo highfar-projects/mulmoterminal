@@ -106,7 +106,10 @@ export function freeTrashName(name: string, taken: (candidate: string) => boolea
   const ext = path.extname(name);
   // An extension too long to keep beside a numbered stem is cut with the rest of the name: the entry
   // is trashed under a shorter name rather than not at all (its `.trashinfo` keeps the original).
-  const keepsExt = ext && ext !== name && Buffer.byteLength(`x ${MAX_TRASH_NAME_TRIES}${ext}`, "utf8") <= TRASH_NAME_BYTES;
+  // Measured with the name's own first character, the least of the stem `fitted` keeps — it may be
+  // several bytes.
+  const shortestStem = [...name][0] ?? "";
+  const keepsExt = ext && ext !== name && Buffer.byteLength(`${shortestStem} ${MAX_TRASH_NAME_TRIES}${ext}`, "utf8") <= TRASH_NAME_BYTES;
   const stem = keepsExt ? name.slice(0, -ext.length) : name;
   const suffix = keepsExt ? ext : "";
   for (let n = 1; n <= MAX_TRASH_NAME_TRIES; n++) {

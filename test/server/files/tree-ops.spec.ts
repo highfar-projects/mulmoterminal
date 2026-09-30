@@ -3,7 +3,17 @@ import { describe, it, expect, afterEach } from "vitest";
 import { mkdirSync, writeFileSync, symlinkSync, existsSync, readFileSync, rmSync, realpathSync, lstatSync } from "node:fs";
 import path from "node:path";
 import { makeTempDir } from "../../support/tempDir.js";
-import { createEntry, entryUnder, freeTrashName, moveToTrash, renameEntry, trashInfo, trashLayout, validEntryName } from "../../../server/files/tree-ops";
+import {
+  createEntry,
+  entryUnder,
+  freeTrashName,
+  MAX_TRASH_NAME_TRIES,
+  moveToTrash,
+  renameEntry,
+  trashInfo,
+  trashLayout,
+  validEntryName,
+} from "../../../server/files/tree-ops";
 
 // #2578. The tree's own file operations: every one acts on the entry the tree shows, inside the root.
 const dirs: string[] = [];
@@ -147,6 +157,22 @@ describe("freeTrashName — bounded", () => {
     [first, second].forEach((candidate) => expect(Buffer.byteLength(`${candidate}.trashinfo`)).toBeLessThanOrEqual(255));
     expect(second).not.toBe(first);
     expect(second.endsWith(" 2")).toBe(true);
+  });
+
+  // The stem is never cut below one character, and that character can be four bytes.
+  it.each([
+    ["a four-byte first character", `\u{1F600}.${"e".repeat(238)}`],
+    ["a two-byte first character", `\u00E9.${"e".repeat(239)}`],
+    ["a three-byte first character", `\u3042.${"e".repeat(238)}`],
+  ])("keeps every numbered name within 255 bytes with its .trashinfo, for %s", (_, name) => {
+    const taken = new Set<string>();
+    for (let tries = 0; tries < MAX_TRASH_NAME_TRIES; tries++) {
+      const next = freeTrashName(name, (n) => taken.has(n));
+      expect(next).not.toBeNull();
+      if (next === null) return;
+      expect(Buffer.byteLength(`${next}.trashinfo`), next).toBeLessThanOrEqual(255);
+      taken.add(next);
+    }
   });
 
   it("keeps each name, its number and a .trashinfo within 255 bytes", () => {
