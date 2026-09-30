@@ -8,10 +8,90 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
-- ([#2647](https://github.com/receptron/mulmoterminal/issues/2647)) — after an upgrade, a **What's new** dialog shows the
-  dated setup guide of every version since the one last seen, in Japanese or English. From this release on, each dated
-  guide sorts its content under New features / What looks different / Under the hood and mentions every PR the
-  changelog lists.
+## mulmoterminal@7.2.0 — 2026-09-30
+
+> **Setup guide:** [7.2.0 — Change settings in Settings instead of asking the agent](https://receptron.github.io/mulmoterminal/guide/en/v7.2.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v7.2.0.html))
+
+Most of this release is [#2616](https://github.com/receptron/mulmoterminal/issues/2616): settings that only a skill could write now have a control in
+Settings, lists are changed one entry at a time against the file on disk (so a change made elsewhere since
+the page loaded is not overwritten), and more changes apply without a restart.
+
+### Settings
+
+- [#2632](https://github.com/receptron/mulmoterminal/pull/2632) ([#2617](https://github.com/receptron/mulmoterminal/issues/2617)) — **Default agent**, the header's **status colour** mode and **Playful effects** are selects /
+  a checkbox in Settings.
+- [#2640](https://github.com/receptron/mulmoterminal/pull/2640) ([#2618](https://github.com/receptron/mulmoterminal/issues/2618)) — **Header colour per status**: a background and text colour for working / done / needs input,
+  with a live sample and **Back to the theme**.
+- [#2649](https://github.com/receptron/mulmoterminal/pull/2649) ([#2620](https://github.com/receptron/mulmoterminal/issues/2620)) — **Custom agents** and **accounts** are added and removed in Settings → Models and backends.
+- [#2665](https://github.com/receptron/mulmoterminal/pull/2665) ([#2621](https://github.com/receptron/mulmoterminal/issues/2621)) — **Backends (providers)** are added and removed there too; the form refuses a `/v1` base URL,
+  a URL carrying credentials, a pasted key where the environment variable's name belongs, and a key-like model id.
+- [#2668](https://github.com/receptron/mulmoterminal/pull/2668) ([#2619](https://github.com/receptron/mulmoterminal/issues/2619)) — **Keyboard shortcuts** are set by pressing the key (**Change** / **Clear** per action), saved
+  as one keymap entry; a key that would clash is refused with the reason.
+- [#2642](https://github.com/receptron/mulmoterminal/pull/2642) ([#2581](https://github.com/receptron/mulmoterminal/issues/2581)) — **Recommended keys** per platform, listed before they are added with one button.
+- [#2657](https://github.com/receptron/mulmoterminal/pull/2657) ([#2650](https://github.com/receptron/mulmoterminal/issues/2650)) — a config write no longer drops `keymap` entries this version does not recognise.
+- [#2672](https://github.com/receptron/mulmoterminal/pull/2672) ([#2622](https://github.com/receptron/mulmoterminal/issues/2622)) — the header's **chips**: add a built-in or your own, remove, move, back to the default set;
+  open terminals update at once.
+- [#2680](https://github.com/receptron/mulmoterminal/pull/2680) ([#2622](https://github.com/receptron/mulmoterminal/issues/2622)) — the header's **buttons**: add one that runs a command in a new cell or types text into the
+  agent (icon and `when` optional), remove or move any top-level entry, back to the built-in button.
+- [#2673](https://github.com/receptron/mulmoterminal/pull/2673) ([#2623](https://github.com/receptron/mulmoterminal/issues/2623)) — **Your own theme**: copy the theme in use and change its colours with a picker; a change is
+  painted at once, kept on Save, and undone when Settings closes unsaved.
+- [#2663](https://github.com/receptron/mulmoterminal/pull/2663) ([#2627](https://github.com/receptron/mulmoterminal/issues/2627)) — **Reload config file** re-reads `~/.mulmoterminal/config.json` without a restart, and refuses
+  (keeping the running config) when the file does not parse or its keymap would stop the server.
+- [#2645](https://github.com/receptron/mulmoterminal/pull/2645) ([#2626](https://github.com/receptron/mulmoterminal/issues/2626)) and [#2666](https://github.com/receptron/mulmoterminal/pull/2666) ([#2626](https://github.com/receptron/mulmoterminal/issues/2626)) — the work log, feed refresh and calendar sync switches, and the idle-session
+  sweep cadence, apply without a restart.
+
+### Files
+
+- [#2659](https://github.com/receptron/mulmoterminal/pull/2659) ([#2624](https://github.com/receptron/mulmoterminal/issues/2624)) — saving `.mulmoterminal.json` / `.mulmoterminal.local.json` in the Files pane applies it at once
+  and reports whether it is JSON and which keys did not take.
+- [#2670](https://github.com/receptron/mulmoterminal/pull/2670) ([#2625](https://github.com/receptron/mulmoterminal/issues/2625)) — editing those files offers their keys and marks values the server would reject (new dependency
+  `codemirror-json-schema`, loaded only for them).
+- [#2676](https://github.com/receptron/mulmoterminal/pull/2676) ([#2624](https://github.com/receptron/mulmoterminal/issues/2624)) — Settings → Directory settings opens a directory's config in Files, or creates an empty one
+  first. A write to a directory that is gone is now refused instead of landing in the default workspace.
+- [#2637](https://github.com/receptron/mulmoterminal/pull/2637) ([#2578](https://github.com/receptron/mulmoterminal/issues/2578)) — **New file**, **New folder**, **Rename** and **Move to Trash** from the Files tree's row menu;
+  [#2646](https://github.com/receptron/mulmoterminal/pull/2646) says how a trashed entry comes back on each OS.
+- [#2629](https://github.com/receptron/mulmoterminal/pull/2629) ([#2577](https://github.com/receptron/mulmoterminal/issues/2577)) — a Markdown file's editor and Preview **side by side**, the Preview following the heading
+  the editor is under.
+- [#2613](https://github.com/receptron/mulmoterminal/pull/2613) ([#2579](https://github.com/receptron/mulmoterminal/issues/2579)) — code blocks in the Markdown Preview are **coloured** with the editor's grammars.
+- [#2664](https://github.com/receptron/mulmoterminal/pull/2664) ([#2615](https://github.com/receptron/mulmoterminal/issues/2615)) — a Preview code block is **copied** from a dialog that shows the file's own text;
+  [#2678](https://github.com/receptron/mulmoterminal/pull/2678) ([#2677](https://github.com/receptron/mulmoterminal/issues/2677)) renames the dialog's state type.
+- [#2662](https://github.com/receptron/mulmoterminal/pull/2662) ([#2655](https://github.com/receptron/mulmoterminal/issues/2655)) — the `files-*` shortcuts and the palette's `/` and `#` work on the full-screen Files view.
+
+### One name per operation
+
+- [#2614](https://github.com/receptron/mulmoterminal/pull/2614) ([#2611](https://github.com/receptron/mulmoterminal/issues/2611)), [#2636](https://github.com/receptron/mulmoterminal/pull/2636) ([#2635](https://github.com/receptron/mulmoterminal/issues/2635)), [#2656](https://github.com/receptron/mulmoterminal/pull/2656) ([#2653](https://github.com/receptron/mulmoterminal/issues/2653)) — the cell's operations (files, prompts, transcript,
+  timeline, tools, canvas, collections, talk, park, copy code, insert path, reveal, voice, diff, note, …) each have
+  one name that works as a header button (`run: "action"`), a `keymap` shortcut and a command-palette row.
+- [#2648](https://github.com/receptron/mulmoterminal/pull/2648) ([#2639](https://github.com/receptron/mulmoterminal/issues/2639)) and [#2660](https://github.com/receptron/mulmoterminal/pull/2660) ([#2654](https://github.com/receptron/mulmoterminal/issues/2654)) — the toolbar's operations and the grid's page tabs get the same.
+- [#2630](https://github.com/receptron/mulmoterminal/pull/2630) ([#2603](https://github.com/receptron/mulmoterminal/issues/2603)) — a **+** on a terminal's second header row opens the launch panel on its directory.
+
+### Remote server (experimental)
+
+- [#2671](https://github.com/receptron/mulmoterminal/pull/2671) ([#2669](https://github.com/receptron/mulmoterminal/issues/2669)) — run the server on another machine over an SSH tunnel; the launcher prints the tunnel command
+  when started inside an SSH login, and a new guide page covers the setup.
+- [#2675](https://github.com/receptron/mulmoterminal/pull/2675) ([#2669](https://github.com/receptron/mulmoterminal/issues/2669)) — `remoteServer: true` withholds what would act on the server's own screen (file dialogs,
+  reveal) and always uploads a dropped file. Off by default.
+
+### What's new
+
+- [#2661](https://github.com/receptron/mulmoterminal/pull/2661) ([#2647](https://github.com/receptron/mulmoterminal/issues/2647)) — after an upgrade, a **What's new** dialog shows the dated setup guide of every version since
+  the one last seen, in Japanese or English. Each dated guide now sorts its content under New features / What looks
+  different / Under the hood and mentions every PR the changelog lists.
+
+### Blueprints
+
+- [#2589](https://github.com/receptron/mulmoterminal/pull/2589) ([#2555](https://github.com/receptron/mulmoterminal/issues/2555)) — a **Supabase** base (Postgres, row level security, Vue served from Cloudflare);
+  [#2679](https://github.com/receptron/mulmoterminal/pull/2679) ([#2555](https://github.com/receptron/mulmoterminal/issues/2555)) adds from-collection on it (records to Postgres, files to Storage).
+- [#2628](https://github.com/receptron/mulmoterminal/pull/2628) — a build can be **put away** from the list and brought back; nothing is deleted.
+- [#2638](https://github.com/receptron/mulmoterminal/pull/2638) — the agent writes reports and questions in the language of the person's screen;
+  [#2633](https://github.com/receptron/mulmoterminal/pull/2633) quotes an English document's headings in English.
+- [#2652](https://github.com/receptron/mulmoterminal/pull/2652) ([#2643](https://github.com/receptron/mulmoterminal/issues/2643)) — polish measures a document as the kind the person names; [#2667](https://github.com/receptron/mulmoterminal/pull/2667) lets polish end when
+  there is nothing to polish; [#2644](https://github.com/receptron/mulmoterminal/pull/2644) moves the document packs to chaffjs 0.15.
+- [#2572](https://github.com/receptron/mulmoterminal/pull/2572) — a page-render check no longer fails on its own clean-up.
+
+### Tests
+
+- [#2658](https://github.com/receptron/mulmoterminal/pull/2658) ([#2609](https://github.com/receptron/mulmoterminal/issues/2609)) — the dev-server spec no longer leaves its stub backend running.
 
 ## mulmoterminal@7.1.0 — 2026-09-30
 
