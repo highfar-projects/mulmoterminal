@@ -18,9 +18,10 @@ measure is what they will measure. Below it is written `chaff …` for short.
 
 ## 1. Measure
 
-- **Genre**: `chaff genres` lists them. Pick the nearest to the answer `kind`. For contracts,
-  rules, papers or books there is no dedicated genre yet: pick the closest (`technical/spec` for rules and
-  contracts, `blog/essay` for long prose) and say so in the report.
+- **Genre**: `chaff genres` lists them, each with what it is for. Pick the one for the answer `kind` —
+  contracts (`legal/contract`), rules and regulations (`legal/statute`), manuals (`docs/manual`), FAQs,
+  glossaries, papers and literature have genres of their own. Only when none fits, pick the closest and say so in
+  the report. A genre chaff does not know stops every run, so copy it from the list.
 - **Language**: from the answer, or what chaff detects on the sources.
 - **Thresholds**: `chaff eval .blueprint/sources` sweeps each rule's limits over the models and
   recommends one. Read it rule by rule.
