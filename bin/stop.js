@@ -14,7 +14,7 @@
 // Windows user find or kill anything.
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { stopCommandFor } from "./cli-args.js";
+import { parsePortArg, stopCommandFor } from "./cli-args.js";
 import { isProcessAlive, liveInstances } from "./instances.js";
 import { portOwners } from "./port-owner.js";
 
@@ -140,10 +140,11 @@ export function stopReport({ stopped, stubborn, unconfirmed }, platform = proces
 export const stopExitCode = ({ stubborn, unconfirmed }) => (stubborn.length + unconfirmed.length ? 1 : 0);
 
 export const STOP_USAGE = [
-  "Usage: mulmoterminal stop [--force]",
+  "Usage: mulmoterminal stop [--port <port>] [--force]",
   "",
   "Stops every running MulmoTerminal server on this machine, from any terminal.",
   "",
+  "  --port    Stop only the server on that port (the one at http://localhost:<port>).",
   "  --force   Also stop a registered server that is no longer answering. Off by default:",
   "            a server that crashed leaves its entry behind, and that pid may since have",
   "            been given to an unrelated program.",
@@ -153,9 +154,26 @@ export const STOP_USAGE = [
  *  argument handling is testable — and so `stop --help` can never be read as "stop everything". */
 export function parseStopArgs(args) {
   if (args.includes("--help") || args.includes("-h")) return { help: true };
-  const unknown = args.filter((a) => a !== "--force");
+  const portAt = args.indexOf("--port");
+  const portArgs = portAt === -1 ? [] : [portAt, portAt + 1];
+  const unknown = args.filter((a, i) => a !== "--force" && !portArgs.includes(i));
   if (unknown.length) return { error: `Unknown argument for stop: ${unknown.join(" ")}` };
-  return { force: args.includes("--force") };
+  const force = args.includes("--force");
+  if (portAt === -1) return { force, port: null };
+  // The launcher's own reading of --port, so the two accept the same values. The environment's
+  // PORT is not consulted: a `stop` narrowed by a variable nobody typed here would surprise.
+  const parsed = parsePortArg(args, {}, null);
+  return "error" in parsed ? { error: parsed.error } : { force, port: parsed.port };
+}
+
+/** The servers a `stop` is about: all of them, or only the one on `port` (#2683). */
+export const selectByPort = (instances, port) => (port === null ? instances : instances.filter((i) => i.port === port));
+
+/** What `stop --port` says when nothing is registered there — and what IS running, since a wrong
+ *  port is the likeliest reason. */
+export function noServerOnPortReport(port, instances) {
+  const running = instances.map(describeInstance);
+  return [`No MulmoTerminal server is running on port ${port}.`, running.length ? `Running: ${running.join(", ")}` : "MulmoTerminal is not running."];
 }
 
 export async function runStop(args = []) {
@@ -169,7 +187,16 @@ export async function runStop(args = []) {
     console.error(STOP_USAGE);
     process.exit(2);
   }
-  const result = await stopInstances(liveInstances(), { force: parsed.force });
-  stopReport(result).forEach((line) => console.log(line));
+  const all = liveInstances();
+  const targets = selectByPort(all, parsed.port);
+  // Nothing on that port is the state asked for, like "nothing was running": not a failure.
+  if (parsed.port !== null && !targets.length) {
+    noServerOnPortReport(parsed.port, all).forEach((line) => console.log(line));
+    process.exit(0);
+  }
+  const result = await stopInstances(targets, { force: parsed.force });
+  // A retry must name the same server, or `--force` would stop every one.
+  const stopCommand = parsed.port === null ? selfStopCommand() : `${selfStopCommand()} --port ${parsed.port}`;
+  stopReport(result, process.platform, stopCommand).forEach((line) => console.log(line));
   process.exit(stopExitCode(result));
 }

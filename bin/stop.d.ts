@@ -16,10 +16,12 @@ export interface StopResult {
   stubborn: StubbornInstance[];
   unconfirmed: InstanceEntry[];
 }
-export type StopArgs = { help: true } | { error: string } | { force: boolean };
+export type StopArgs = { help: true } | { error: string } | { force: boolean; port: number | null };
 
 export declare const STOP_USAGE: string;
 export declare function parseStopArgs(args: readonly string[]): StopArgs;
+export declare function selectByPort(instances: readonly InstanceEntry[], port: number | null): InstanceEntry[];
+export declare function noServerOnPortReport(port: number, instances: readonly InstanceEntry[]): string[];
 export interface ConfirmDeps {
   owners?: (port: number) => Promise<number[] | null>;
 }

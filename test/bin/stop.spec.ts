@@ -1,7 +1,17 @@
 // @vitest-environment node
 import { describe, it, expect, vi } from "vitest";
 
-import { stopInstances, stopReport, stopExitCode, describeInstance, manualStopCommand, parseStopArgs, confirmInstance } from "../../bin/stop.js";
+import {
+  stopInstances,
+  stopReport,
+  stopExitCode,
+  describeInstance,
+  manualStopCommand,
+  parseStopArgs,
+  confirmInstance,
+  selectByPort,
+  noServerOnPortReport,
+} from "../../bin/stop.js";
 
 const instance = (pid: number, port: number | null = 34567) => ({ pid, port, startedAt: 1 });
 
@@ -224,8 +234,20 @@ describe("parseStopArgs", () => {
   });
 
   it("accepts --force", () => {
-    expect(parseStopArgs(["--force"])).toEqual({ force: true });
-    expect(parseStopArgs([])).toEqual({ force: false });
+    expect(parseStopArgs(["--force"])).toEqual({ force: true, port: null });
+    expect(parseStopArgs([])).toEqual({ force: false, port: null });
+  });
+
+  // #2683: one server out of several.
+  it("accepts --port, alone or with --force, in either order", () => {
+    expect(parseStopArgs(["--port", "34599"])).toEqual({ force: false, port: 34599 });
+    expect(parseStopArgs(["--force", "--port", "34599"])).toEqual({ force: true, port: 34599 });
+    expect(parseStopArgs(["--port", "34599", "--force"])).toEqual({ force: true, port: 34599 });
+  });
+
+  it("refuses a --port it cannot read rather than stopping every server", () => {
+    ["0", "70000", "abc", "3456.7"].forEach((raw) => expect(parseStopArgs(["--port", raw]), raw).toMatchObject({ error: expect.stringContaining("--port") }));
+    expect(parseStopArgs(["--port"])).toMatchObject({ error: expect.stringContaining("--port") });
   });
 
   it("refuses what it does not understand rather than stopping servers anyway", () => {
@@ -263,5 +285,40 @@ describe("confirmInstance", () => {
     const owners = vi.fn(async () => [4242]);
     expect(await confirmInstance({ pid: 4242, port: null, startedAt: 1 }, { owners })).toBe(false);
     expect(owners).not.toHaveBeenCalled();
+  });
+});
+
+// #2683. `stop --port` picks one registered server; a port with none says what IS running.
+describe("selectByPort", () => {
+  const a = { pid: 1, port: 34567, startedAt: 1 };
+  const b = { pid: 2, port: 34599, startedAt: 2 };
+  const unknown = { pid: 3, port: null, startedAt: 3 };
+
+  it("keeps every server with no port asked for", () => {
+    expect(selectByPort([a, b, unknown], null)).toEqual([a, b, unknown]);
+  });
+
+  it("keeps only the one on the port asked for", () => {
+    expect(selectByPort([a, b, unknown], 34599)).toEqual([b]);
+    expect(selectByPort([a, b], 40000)).toEqual([]);
+  });
+});
+
+describe("noServerOnPortReport", () => {
+  it("names the port and lists what is running instead", () => {
+    const lines = noServerOnPortReport(40000, [{ pid: 1, port: 34567, startedAt: 1 }]);
+    expect(lines[0]).toContain("40000");
+    expect(lines[1]).toContain("http://localhost:34567 (pid 1)");
+  });
+
+  it("says nothing is running when nothing is", () => {
+    expect(noServerOnPortReport(40000, [])).toEqual(["No MulmoTerminal server is running on port 40000.", "MulmoTerminal is not running."]);
+  });
+});
+
+describe("the --force hint after stop --port", () => {
+  it("keeps the port, so a retry cannot stop every server", () => {
+    const result = { stopped: [], stubborn: [], unconfirmed: [{ pid: 7, port: 34599, startedAt: 1 }] };
+    expect(stopReport(result, "darwin", "mulmoterminal stop --port 34599").join("\n")).toContain("mulmoterminal stop --port 34599 --force");
   });
 });
