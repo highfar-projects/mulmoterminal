@@ -48,6 +48,7 @@ import { currentFirestore } from "../../remoteHost/session.js";
 import { itemsPath } from "../itemWrites.js";
 import { refused } from "../refused.js";
 import type { SharedAppHandle } from "../context.js";
+import { SIGN_IN_STEP } from "../signInStep.js";
 
 /** The tiers, widest first. An intent is offered to each in turn and the first that carries it
  *  wins — see `judgeTiers` in `intent.ts` for why that is not a permission decision. */
@@ -180,7 +181,7 @@ const readable = (doc: Record<string, unknown> | null): boolean => {
 const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
 const NO_SESSION =
-  "this needs a signed-in session: connect remote-host first. A shared app answers to `request.auth` and nothing else — " +
+  `this needs a signed-in session: ${SIGN_IN_STEP} A shared app answers to \`request.auth\` and nothing else — ` +
   "everything here is read and written as YOU, which is the whole point of this tool.";
 
 /** Read a document: the document, or null for absent-or-refused.

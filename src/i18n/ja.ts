@@ -552,6 +552,7 @@ export const ja: Messages = {
   },
 
   launch: {
+    mcpGroupsNextStart: "このフォルダで次に起動するターミナルから効きます。いま開いているセルは起動したときのツールのままなので、開き直してください。",
     agentUnavailable: {
       missing: "{agent} はこのマシンにインストールされていないため、ここでは起動できません。",
       noSuchPath: "{agent} のコマンドの指定先にファイルがないため、起動できません。",
