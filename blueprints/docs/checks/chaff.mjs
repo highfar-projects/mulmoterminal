@@ -14,7 +14,7 @@ export const runChaff = (args) => {
 };
 
 /**
- * Every finding chaff reports for `target`, as { rule, level, file, line }. `extra` adds arguments (such as
+ * Every finding chaff reports for `target`, as { rule, level, file, line, message }. `extra` adds arguments (such as
  * `--experimental`). Throws when chaff did not produce SARIF.
  */
 export const findingsIn = (target, extra = []) => {
@@ -34,6 +34,7 @@ export const findingsIn = (target, extra = []) => {
         level: String(result.level ?? "warning"),
         file: String(result.locations?.[0]?.physicalLocation?.artifactLocation?.uri ?? ""),
         line: Number(result.locations?.[0]?.physicalLocation?.region?.startLine ?? 0),
+        message: String(result.message?.text ?? ""),
       })),
     );
   } finally {

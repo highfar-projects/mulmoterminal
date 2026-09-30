@@ -1,0 +1,11 @@
+{
+  "presets": [
+    {
+      "id": "shanai-yogo",
+      "title": "テレワークの規程と手引きの用語をそろえる",
+      "description": "見本のテレワーク規程（kitei.txt）と手引き（tebiki.md）から用語集をつくる。「社員」が二つの文書で違う意味に定義されていること、「サーバー／サーバ」「ユーザー／ユーザ」の揺れを見つけ、使う書き方をフォルダの chaff.yaml に入れて、以後は chaff が揺れを指摘するようにする。原本は変えない。",
+      "base": "docs",
+      "answers": { "documents": "kitei.txt\ntebiki.md", "write": "このフォルダの chaff.yaml に入れる" }
+    }
+  ]
+}
