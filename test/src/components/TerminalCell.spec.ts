@@ -2913,6 +2913,8 @@ describe("TerminalCell", () => {
     expect(w.find('[data-testid="cell-mcp-toggle-media"]').exists()).toBe(true);
     // And it reads the same registration claude's rows do.
     expect((w.find('[data-testid="cell-mcp-toggle-render"]').element as HTMLInputElement).checked).toBe(true);
+    // #1927: a switch changes the NEXT start, and says so — a cell already running keeps its tools.
+    expect(w.find('[data-testid="cell-mcp-next-start"]').text()).toContain("restart it");
   });
 
   // `data` and `external` were routed, gated and pre-approved on the server from the day the

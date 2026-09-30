@@ -17,6 +17,7 @@ import type { CollectionSchema } from "@mulmoclaude/core/collection";
 import { isRecord } from "../../../common/isRecord.js";
 import { publicInputProblems } from "./publicForm.js";
 import { scopedFieldProblems } from "./scopedFields.js";
+import { SIGN_IN_STEP } from "./signInStep.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -183,7 +184,7 @@ export async function sharedAppContext(root: string): Promise<SharedAppContext |
       ok: false,
       partial: false,
       problems: [
-        "this needs a signed-in Firestore session: connect remote-host first. Shared-app writes go out as the app's owner, which is an authenticated write, " +
+        `this needs a signed-in Firestore session: ${SIGN_IN_STEP} Shared-app writes go out as the app's owner, which is an authenticated write, ` +
           "and the roster is keyed by your VERIFIED address — an unverified one is not a weaker identity to the rules, it is no identity at all.",
       ],
     };

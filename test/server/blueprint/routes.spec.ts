@@ -541,7 +541,7 @@ describe("POST /api/blueprints/runs from a collection", () => {
   });
 
   it.each([
-    ["app:signed-out", "connect to the shared apps first, or start without the records"],
+    ["app:signed-out", "press Connect to sign in with Google"],
     ["app:partial", "does not read every record of ballots, topics"],
   ])("refuses to copy %s's records, and says what to do", async (source, message) => {
     const project = await emptyTrusted();

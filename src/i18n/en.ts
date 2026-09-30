@@ -570,6 +570,8 @@ export const en = {
   },
 
   launch: {
+    mcpGroupsNextStart:
+      "Takes effect for the next terminal started in this directory — a cell already open here keeps the tools it started with, so restart it.",
     agentUnavailable: {
       missing: "{agent} is not installed on this machine, so it cannot be started here.",
       noSuchPath: "{agent}'s command override points at a file that is not there, so it cannot be started.",

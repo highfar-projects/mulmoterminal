@@ -540,6 +540,7 @@ export const zhTW: Messages = {
   },
 
   launch: {
+    mcpGroupsNextStart: "從此目錄下次啟動的終端機開始生效。已開啟的儲存格仍使用啟動時的工具，請重新啟動它。",
     agentUnavailable: {
       missing: "此電腦上未安裝 {agent}，因此無法在此啟動。",
       noSuchPath: "{agent} 的命令覆寫設定指向的檔案不存在，因此無法啟動。",
