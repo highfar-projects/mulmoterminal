@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseFileUris, toShellArg, toInsertText, dropTextFromUriList, dragCarriesFiles } from "../../../src/components/dropPaths.js";
+import { parseFileUris, toShellArg, toInsertText, dropTextFromUriList, dragCarriesFiles, dropPlan } from "../../../src/components/dropPaths.js";
 
 describe("parseFileUris", () => {
   it("parses a single file:// URI into an absolute path", () => {
@@ -91,5 +91,34 @@ describe("dragCarriesFiles", () => {
     expect(dragCarriesFiles(["text/plain"])).toBe(false);
     expect(dragCarriesFiles(["application/x-cell-reorder"])).toBe(false);
     expect(dragCarriesFiles([])).toBe(false);
+  });
+});
+
+// #2669. With the server on another machine, a path from this browser's machine names nothing, so
+// the bytes go up whenever there are any. With the setting off the plan is the one onDrop always
+// followed — compared against that logic, kept here as the reference, over every input shape.
+describe("dropPlan", () => {
+  // onDrop before #2669: a path wins, then files, then the hint.
+  const before = (pathText: string, fileCount: number): string => {
+    if (pathText) return "insert-path";
+    if (fileCount > 0) return "upload";
+    return "hint";
+  };
+  const shapes = ["", "/Users/me/a.png", "'/tmp/b c.txt' /tmp/d"].flatMap((pathText) => [0, 1, 3].map((fileCount) => ({ pathText, fileCount })));
+
+  it("is exactly the old rule when the server is local", () => {
+    shapes.forEach(({ pathText, fileCount }) =>
+      expect(dropPlan({ pathText, fileCount, remoteServer: false }), `${pathText}/${fileCount}`).toBe(before(pathText, fileCount)),
+    );
+  });
+
+  it("uploads whenever there are files when the server is remote, even with a path", () => {
+    expect(dropPlan({ pathText: "/Users/me/a.png", fileCount: 1, remoteServer: true })).toBe("upload");
+    expect(dropPlan({ pathText: "", fileCount: 2, remoteServer: true })).toBe("upload");
+  });
+
+  it("still inserts a path with no files behind it, and hints with neither, when remote", () => {
+    expect(dropPlan({ pathText: "/tmp/x", fileCount: 0, remoteServer: true })).toBe("insert-path");
+    expect(dropPlan({ pathText: "", fileCount: 0, remoteServer: true })).toBe("hint");
   });
 });

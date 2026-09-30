@@ -2,8 +2,9 @@
 import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch, nextTick } from "vue";
 import { type ITheme } from "@xterm/xterm";
 import { FLIP_MS, shouldRefocusOnZoomChange } from "./cellFlip";
+import { isRemoteServer } from "../composables/remoteServer";
 import { terminalManagesAttention, terminalViewActive } from "./terminalViewActive";
-import { dragCarriesFiles, dropTextFromUriList, toInsertText } from "./dropPaths";
+import { dragCarriesFiles, dropPlan, dropTextFromUriList, toInsertText } from "./dropPaths";
 import { dropUploadErrorMessage, uploadDropBatch } from "./dropUpload";
 import { createImagePasteHandler } from "../composables/usePasteImage";
 import { translateUiSentence } from "../utils/translateUi";
@@ -499,10 +500,11 @@ function onDrop(e: DragEvent) {
   const dt = e.dataTransfer;
   if (!dt || !dragCarriesFiles(dt.types)) return; // not a file drop — leave text drags alone
   e.preventDefault();
-  const text = dropTextFromUriList(dt.getData("text/uri-list") || dt.getData("text/plain"));
-  if (text) return insertText(text);
   const files = Array.from(dt.files);
-  if (files.length) enqueueDrop(files);
+  const text = dropTextFromUriList(dt.getData("text/uri-list") || dt.getData("text/plain"));
+  const plan = dropPlan({ pathText: text, fileCount: files.length, remoteServer: isRemoteServer() });
+  if (plan === "insert-path") insertText(text);
+  else if (plan === "upload") enqueueDrop(files);
   else showDropHint();
 }
 

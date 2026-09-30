@@ -6,6 +6,7 @@
 // the store refuses, an opener a host does not have. Those are the outcomes that matter most and
 // were the hardest to arrange; here each is one call and one assertion.
 import { jsonBody } from "../jsonBody";
+import { isRemoteServer, REMOTE_SERVER_DECLINE_EN } from "../composables/remoteServer";
 import { isRecord } from "../../common/isRecord";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { readDirConfigSaveReport, type DirConfigSaveReport } from "../../common/dirConfigSaveReport";
@@ -71,6 +72,8 @@ export async function bankText(query: string, text: string, keepalive = false): 
  *  Linux box, WSL with interop off — used to look exactly like a successful one, and nothing
  *  appeared (#1447), so the caller is given something to say either way. */
 export async function askTheMachine(route: string, pathAbs: string, failure: string): Promise<string | null> {
+  // Both callers open something on the server's screen, which is not this one (#2669).
+  if (isRemoteServer()) return REMOTE_SERVER_DECLINE_EN;
   try {
     const res = await fetchWithTimeout(route, {
       method: "POST",

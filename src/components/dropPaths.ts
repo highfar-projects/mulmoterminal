@@ -60,3 +60,13 @@ export function dropTextFromUriList(uriList: string): string {
 export function dragCarriesFiles(types: readonly string[]): boolean {
   return types.includes("Files");
 }
+
+/** What a file drop does: insert the path the browser gave, upload the bytes, or explain (the drag
+ *  carried neither). A path from this browser's machine names nothing when the server runs on
+ *  another one (#2669), so there the bytes are sent whenever there are any. */
+export type DropPlan = "insert-path" | "upload" | "hint";
+export function dropPlan(input: { pathText: string; fileCount: number; remoteServer: boolean }): DropPlan {
+  if (input.remoteServer && input.fileCount > 0) return "upload";
+  if (input.pathText) return "insert-path";
+  return input.fileCount > 0 ? "upload" : "hint";
+}
