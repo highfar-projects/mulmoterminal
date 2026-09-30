@@ -63,6 +63,19 @@ const truth = (row, olds, news) => {
   return null;
 };
 
+// A provision removed from the old version and added to the new one word for word is one that moved: a pair missed.
+const missedPairs = (rows, olds, news) => {
+  const bodyOf = (articles, address) => articles.find((article) => article.address === address)?.body;
+  const added = rows.filter((row) => row.change === "added").map((row) => row.new);
+  return rows
+    .filter((row) => row.change === "removed")
+    .flatMap((row) => {
+      const body = bodyOf(olds, row.old);
+      const twin = added.find((address) => body !== undefined && bodyOf(news, address) === body);
+      return twin === undefined ? [] : [`${labelOf(olds, row.old)} (removed) and ${labelOf(news, twin)} (added) read the same: pair them as "same"`];
+    });
+};
+
 /** What is wrong with `rows` (the pairing) for the articles `olds` and `news`. */
 export const comparisonProblems = (rows, olds, news) => {
   if (!Array.isArray(rows)) return ['the pairing needs a "rows" list'];
@@ -72,6 +85,7 @@ export const comparisonProblems = (rows, olds, news) => {
     ...coverage(rows, olds, "old", "the old version"),
     ...coverage(rows, news, "new", "the new version"),
     ...rows.map((row) => truth(row, olds, news)).filter((problem) => problem !== null),
+    ...missedPairs(rows, olds, news),
   ];
 };
 
@@ -81,3 +95,19 @@ export const mentions = (text, name) =>
     .split(name)
     .slice(1)
     .some((after) => !/^[0-9０-９]/u.test(after));
+
+const headingLevel = (line) => /^(#{1,6}) /u.exec(line)?.[1].length ?? 0;
+
+/**
+ * The text under the first `##` or `###` heading starting with one of `names` (the depths a report's sections may
+ * have), up to the next heading at the same depth or above. Empty when there is none.
+ */
+export const sectionText = (markdown, names) => {
+  const lines = String(markdown).split("\n");
+  const start = lines.findIndex((line) => [2, 3].includes(headingLevel(line)) && names.some((name) => line.replace(/^#+ /u, "").trim().startsWith(name)));
+  if (start < 0) return "";
+  const depth = headingLevel(lines[start] ?? "");
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((line) => headingLevel(line) > 0 && headingLevel(line) <= depth);
+  return rest.slice(0, end < 0 ? rest.length : end).join("\n");
+};

@@ -109,6 +109,19 @@ describeSh("compare: the table", () => {
     expect(node("report.mjs").stderr).toContain("changed since the pair step checked it");
   });
 
+  it("reads the table under a ### heading, and still not an article named only outside it", () => {
+    write(".blueprint/compare-report.md", `# 新旧対照\n\n### 新旧対照表\n\n${TABLE}\n### 確かめたこと\n\n機械で比べた。\n`);
+    expect(node("report.mjs")).toEqual({ code: 0, stderr: "" });
+    write(".blueprint/compare-report.md", `### 新旧対照表\n\n${TABLE.replace("| 第8条 | （なし） | 消えた |\n", "")}\n### 確かめたこと\n\n第8条は消えた。\n`);
+    expect(node("report.mjs").stderr).toContain("removed 第8条");
+  });
+
+  it("stops with a plain word when the pair step's record is missing or broken", () => {
+    report(TABLE);
+    write(".blueprint/.comparison-checked", "{ not json");
+    expect(node("report.mjs")).toMatchObject({ code: 1, stderr: expect.stringContaining("the pair step's record is missing: run that step again") });
+  });
+
   it("refuses a report without its sections", () => {
     write(".blueprint/compare-report.md", "## 新旧対照表\n\n" + TABLE);
     expect(node("report.mjs").stderr).toContain("lacks sections: 確かめたこと / What was checked");

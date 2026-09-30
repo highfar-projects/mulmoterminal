@@ -2,7 +2,7 @@
 // Two versions of a document, article by article. Whether an article changed is decided here by comparing text, so
 // these are the rules that stop a comparison table from calling a changed article unchanged, or the reverse.
 import { describe, expect, it } from "vitest";
-import { articlesIn, comparisonProblems, mentions, type Article } from "../../../blueprints/compare/checks/articles.mjs";
+import { articlesIn, comparisonProblems, mentions, sectionText, type Article } from "../../../blueprints/compare/checks/articles.mjs";
 import { comparisonText } from "../../../blueprints/compare/checks/comparisonView.mjs";
 import { articleTree } from "./articleTree";
 
@@ -89,5 +89,32 @@ describe("an article named in the table", () => {
     expect(mentions("第１２条", "第１")).toBe(false);
     expect(mentions("第18条", "第8条")).toBe(false);
     expect(mentions("", "第8条")).toBe(false);
+  });
+});
+
+describe("a provision removed and added again", () => {
+  it("is refused as a missed pair when the two read the same", () => {
+    const rows = [GOOD[0], GOOD[1], GOOD[2], { old: "3", new: null, change: "removed" }, { old: null, new: "4", change: "added" }];
+    expect(comparisonProblems(rows, olds, news)).toEqual(['第3条 (removed) and 第4条 (added) read the same: pair them as "same"']);
+  });
+
+  it("passes when the removed and the added provisions differ", () => {
+    const rows = [GOOD[0], { old: "2", new: null, change: "removed" }, { old: null, new: "2", change: "added" }, GOOD[2], GOOD[3]];
+    expect(comparisonProblems(rows, olds, news)).toEqual([]);
+  });
+});
+
+describe("the table's section of a report", () => {
+  const NAMES = ["新旧対照表", "Comparison table"];
+
+  it("is found under a ## or a ### heading, up to the next heading at its depth or above", () => {
+    expect(sectionText("## 新旧対照表\n| 第2条 |\n### 補足\n第3条\n## 確かめたこと\n第4条", NAMES)).toBe("| 第2条 |\n### 補足\n第3条");
+    expect(sectionText("# 報告\n### 新旧対照表\n| 第2条 |\n### 確かめたこと\n第4条", NAMES)).toBe("| 第2条 |");
+    expect(sectionText("### Comparison table\n| Article 2 |\n## What was checked\n", NAMES)).toBe("| Article 2 |");
+  });
+
+  it("is empty when the report has no such section, and a # title does not count", () => {
+    expect(sectionText("# 新旧対照表\n| 第2条 |", NAMES)).toBe("");
+    expect(sectionText("", NAMES)).toBe("");
   });
 });

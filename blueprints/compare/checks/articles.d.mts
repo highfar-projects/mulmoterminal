@@ -4,5 +4,6 @@ export type Row = { readonly old?: string | null; readonly new?: string | null; 
 
 export declare const CHANGES: readonly string[];
 export declare const articlesIn: (tree: unknown, text: string) => Article[];
+export declare const sectionText: (markdown: string, names: readonly string[]) => string;
 export declare const mentions: (text: string, name: string) => boolean;
 export declare const comparisonProblems: (rows: unknown, olds: readonly Article[], news: readonly Article[]) => string[];

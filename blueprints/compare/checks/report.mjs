@@ -2,7 +2,7 @@
 // and the pairing are as the pair step checked them, and it says what was checked.
 import { existsSync, readFileSync } from "node:fs";
 import { fromBase } from "./base.mjs";
-import { mentions } from "./articles.mjs";
+import { mentions, sectionText } from "./articles.mjs";
 import { readVersions } from "./versions.mjs";
 const { fail, readJson } = await import(fromBase("chaff.mjs"));
 const { missingSections } = await import(fromBase("markdown.mjs"));
@@ -15,7 +15,16 @@ const TABLE = ["新旧対照表", "Comparison table"];
 const SECTIONS = [TABLE, ["確かめたこと", "What was checked"]];
 
 const versions = readVersions();
-const checked = existsSync(CHECKED) ? JSON.parse(readFileSync(CHECKED, "utf8")) : null;
+// What the pair step recorded; anything else (missing, not JSON) means that step has to run again.
+const recorded = () => {
+  try {
+    return JSON.parse(readFileSync(CHECKED, "utf8"));
+  } catch {
+    return null;
+  }
+};
+const checked = existsSync(CHECKED) ? recorded() : null;
+if (checked === null || typeof checked !== "object") fail("the pair step's record is missing: run that step again");
 if (checked?.old !== versions.old.print || checked?.new !== versions.new.print) fail("a version changed since the pair step checked it: run that step again");
 if (checked.pairing !== fingerprint(PAIRING)) fail(`${PAIRING} changed since the pair step checked it: run that step again`);
 const rows = readJson(PAIRING, "the pairing").rows;
@@ -25,12 +34,7 @@ const text = readFileSync(REPORT, "utf8");
 const missing = missingSections(text, SECTIONS);
 if (missing.length > 0) fail(`${REPORT} lacks sections: ${missing.join(", ")}`);
 
-// The table's part of the report: from its heading to the next.
-const lines = text.split("\n");
-const start = lines.findIndex((line) => line.startsWith("## ") && TABLE.some((name) => line.slice(3).trim().startsWith(name)));
-const rest = lines.slice(start + 1);
-const end = rest.findIndex((line) => /^#{1,2} /u.test(line));
-const table = rest.slice(0, end < 0 ? rest.length : end).join("\n");
+const table = sectionText(text, TABLE);
 
 const labelOf = (articles, address) => articles.find((article) => article.address === address)?.label ?? address;
 const absent = rows
