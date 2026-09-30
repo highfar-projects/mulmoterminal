@@ -102,4 +102,3 @@ describe("POST /api/config/keymap/binding", () => {
     expect(res.body.warnings).toEqual([]);
   });
 });
-

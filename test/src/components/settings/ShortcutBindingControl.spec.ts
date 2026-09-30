@@ -139,4 +139,3 @@ describe("ShortcutBindingControl", () => {
     wrapper.unmount();
   });
 });
-
