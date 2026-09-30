@@ -81,6 +81,12 @@ describeSh("summarize: the summary", () => {
     expect(node("summary.mjs").stderr).toContain("6 sentences, more than the 5 agreed");
   });
 
+  it("refuses a document with no headings or articles, since nothing could show it was covered", () => {
+    writeFake("tree.json", { "keihi.md": { kind: "doc", address: "", children: [] } });
+    summary({ sentences: SENTENCES, omitted: OMITTED });
+    expect(node("summary.mjs").stderr).toContain("keihi.md has no headings or articles chaff reads");
+  });
+
   it("refuses a quotation from a file that is not one of the documents", () => {
     summary({
       sentences: [...SENTENCES.slice(0, 2), { ...SENTENCES[2], citations: [...SENTENCES[2].citations, { ...cite("h1.3", "x"), source: "other.md" }] }],
@@ -109,7 +115,7 @@ describeSh("summarize: the report", () => {
   });
 
   it("refuses a part left out that the report does not name, and asks for the section only when something was left out", () => {
-    report(GOOD_REPORT.replace("「領収書が無いとき」", "例外"));
+    report(GOOD_REPORT.replace("「領収書が無いとき」", "「領収書が無いときの例外」"));
     expect(node("report.mjs").stderr).toContain("not named under 省いた部分 / Left out: 領収書が無いとき");
     report(GOOD_REPORT.replace(/## 省いた部分[\s\S]*$/u, ""));
     expect(node("report.mjs").stderr).toContain("lacks sections: 省いた部分 / Left out");

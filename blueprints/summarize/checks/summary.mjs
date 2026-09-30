@@ -20,7 +20,10 @@ const files = documentsNamed(answers.documents);
 const documents = files.map((source) => {
   const tree = treeOf(source);
   if (tree === null) fail(`chaff could not read ${source}`);
-  return { source, parts: partsIn(tree), names: placeNamesIn(tree) };
+  const parts = partsIn(tree);
+  // With no parts, "nothing was dropped" could not be checked at all: refused rather than passed.
+  if (parts.length === 0) fail(`${source} has no headings or articles chaff reads, so a summary of it cannot be shown to leave nothing out`);
+  return { source, parts, names: placeNamesIn(tree) };
 });
 const nameOf = (source, address) => documents.find((document) => document.source === source)?.names.get(String(address));
 const maxSentences = LENGTHS[answers.length] ?? null;

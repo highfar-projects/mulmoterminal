@@ -14,8 +14,9 @@ their language and in plain words:
 - `## 出どころ` / `## Sources` — for each sentence, the document and the place it comes from, named as the
   document does (第4条, a section's heading in 「」 — "…" in an English report — never chaff's `h1.3`), with the
   quotation.
-- `## 省いた部分` / `## Left out` — when anything was left out: each part by its name, with the reason. The check
-  looks for each name.
+- `## 省いた部分` / `## Left out` — when anything was left out: each part by its name, with the reason. Write the
+  name in 「」 ("…" in an English report) or set off by punctuation (「支払い」: 理由, 第4条（委託料）): the check looks
+  for each name as a whole word, so 「支払いは」 or a name inside a longer word is not counted.
 - A line saying what was checked by machine (every quotation is in its document, no part was dropped silently,
   every number is in a quotation) and what was not (whether each quotation really supports its sentence is a
   reading, which the person approved).

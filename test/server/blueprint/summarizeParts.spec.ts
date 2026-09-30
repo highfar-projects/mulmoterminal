@@ -2,7 +2,7 @@
 // What a summary answers for and may not invent: the parts it may not drop silently, and the numbers it may only
 // copy from the quotations backing each sentence.
 import { describe, expect, it } from "vitest";
-import { numbersIn, partsIn, summaryProblems, within } from "../../../blueprints/summarize/checks/parts.mjs";
+import { namedIn, numbersIn, partsIn, summaryProblems, within } from "../../../blueprints/summarize/checks/parts.mjs";
 
 const section = (address: string, heading: string, children: unknown[] = []) => ({ kind: "section", address, attrs: { heading }, children });
 const MANUAL = {
@@ -133,5 +133,24 @@ describe("a summary", () => {
   it("counts a quotation under a part as citing it", () => {
     const deep = { sentences: [{ text: "細目がある。", citations: [cite("h1.1.1", "細目")] }, GOOD.sentences[1]] };
     expect(problemsOf(deep)).toEqual([]);
+  });
+});
+
+describe("a part named in the report", () => {
+  it("is found as a whole name, quoted or set off by punctuation", () => {
+    expect(namedIn("- 「支払い」: 例外のため", "支払い")).toBe(true);
+    expect(namedIn("- 支払い（例外のため）", "支払い")).toBe(true);
+    expect(namedIn('- "Payments" was left out', "Payments")).toBe(true);
+    // Run into the next word it is not set off: the report is asked to quote the name.
+    expect(namedIn("第4条は省いた", "第4条")).toBe(false);
+    expect(namedIn("第4条、第5条", "第4条")).toBe(true);
+  });
+
+  it("is not found inside a longer word", () => {
+    expect(namedIn("- 支払い方法", "支払い")).toBe(false);
+    expect(namedIn("- 前払い支払い", "支払い")).toBe(false);
+    expect(namedIn("- 第4条の2", "第4条")).toBe(false);
+    expect(namedIn("- Payments due", "Payment")).toBe(false);
+    expect(namedIn("", "支払い")).toBe(false);
   });
 });
