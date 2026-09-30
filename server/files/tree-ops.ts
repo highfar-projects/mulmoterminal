@@ -12,6 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { containedPath, namesAWindowsDevice, realContainedWithin } from "./pathContainment.js";
 import { isSamePath } from "../infra/path-within.js";
+import { hasErrnoCode } from "../errors.js";
 
 /** The longest name a new entry may have: what the common filesystems allow, in bytes. */
 const MAX_NAME_BYTES = 255;
@@ -65,7 +66,31 @@ export function createEntry(abs: string, kind: EntryKind): void {
 export function renameEntry(from: string, to: string): "renamed" | "exists" {
   const sameEntry = from.toLowerCase() === to.toLowerCase() && entryExists(to) && fs.lstatSync(from).ino === fs.lstatSync(to).ino;
   if (entryExists(to) && !sameEntry) return "exists";
-  fs.renameSync(from, to);
+  if (sameEntry || !fs.lstatSync(from).isFile()) {
+    fs.renameSync(from, to);
+    return "renamed";
+  }
+  return renameFileNoReplace(from, to);
+}
+
+// A disk that cannot hard-link (FAT, exFAT, some network shares) says so with one of these.
+const NO_HARD_LINKS = ["EPERM", "ENOTSUP", "EOPNOTSUPP", "EMLINK", "ENOSYS"];
+
+/** A file renamed without replacing one that appeared at `to` after the check above: `rename` would
+ *  replace it, a hard link refuses an existing name. Where the disk cannot link, `rename` it is — the
+ *  check above is then all there is, as before. A folder cannot be replaced by `rename` unless empty,
+ *  and a symlink is not linked (macOS's `link` follows it), so both keep `rename`. */
+function renameFileNoReplace(from: string, to: string): "renamed" | "exists" {
+  try {
+    fs.linkSync(from, to);
+  } catch (err) {
+    const code = hasErrnoCode(err) ? err.code : undefined;
+    if (code === "EEXIST") return "exists";
+    if (code === undefined || !NO_HARD_LINKS.includes(code)) throw err;
+    fs.renameSync(from, to);
+    return "renamed";
+  }
+  fs.unlinkSync(from);
   return "renamed";
 }
 
@@ -99,8 +124,11 @@ function fitted(stem: string, suffix: string, maxBytes: number): string {
  *  each kept short enough for its `.trashinfo` beside it. Null when none is free within the tries. */
 export function freeTrashName(name: string, taken: (candidate: string) => boolean): string | null {
   const ext = path.extname(name);
-  const stem = ext && ext !== name ? name.slice(0, -ext.length) : name;
-  const suffix = ext && ext !== name ? ext : "";
+  // An extension too long to keep beside a numbered stem is cut with the rest of the name: the entry
+  // is trashed under a shorter name rather than not at all (its `.trashinfo` keeps the original).
+  const keepsExt = ext && ext !== name && Buffer.byteLength(`x ${MAX_TRASH_NAME_TRIES}${ext}`, "utf8") <= TRASH_NAME_BYTES;
+  const stem = keepsExt ? name.slice(0, -ext.length) : name;
+  const suffix = keepsExt ? ext : "";
   for (let n = 1; n <= MAX_TRASH_NAME_TRIES; n++) {
     const candidate = fitted(stem, n === 1 ? suffix : ` ${n}${suffix}`, TRASH_NAME_BYTES);
     if (!taken(candidate)) return candidate;

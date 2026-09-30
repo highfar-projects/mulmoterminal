@@ -127,13 +127,18 @@ export function containForWatching(roots: Iterable<string>, candidatePath: strin
 //
 // Windows only: `con` is a perfectly ordinary filename on POSIX, and refusing it there would
 // break a real file for no reason.
+// COM0/LPT0 and the superscript digits ¹²³ are reserved too, and so are the console's CONIN$/CONOUT$
+// (Microsoft's "Naming Files, Paths, and Namespaces"). A name Windows maps to a device is no file.
+const DEVICE_DIGITS = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "\u00B9", "\u00B2", "\u00B3"];
 const WINDOWS_DEVICE_NAMES = new Set([
   "CON",
   "PRN",
   "AUX",
   "NUL",
-  ...Array.from({ length: 9 }, (_, i) => `COM${i + 1}`),
-  ...Array.from({ length: 9 }, (_, i) => `LPT${i + 1}`),
+  "CONIN$",
+  "CONOUT$",
+  ...DEVICE_DIGITS.map((digit) => `COM${digit}`),
+  ...DEVICE_DIGITS.map((digit) => `LPT${digit}`),
 ]);
 
 // Counted rather than matched: an anchored `[. ]+$` backtracks over a long run.

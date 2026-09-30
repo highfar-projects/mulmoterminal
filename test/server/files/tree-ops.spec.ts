@@ -1,6 +1,6 @@
 // @vitest-environment node
-import { describe, it, expect, afterEach } from "vitest";
-import { mkdirSync, writeFileSync, symlinkSync, existsSync, readFileSync, rmSync, realpathSync, lstatSync } from "node:fs";
+import { describe, it, expect, afterEach, vi } from "vitest";
+import fs, { mkdirSync, writeFileSync, symlinkSync, existsSync, readFileSync, rmSync, realpathSync, lstatSync } from "node:fs";
 import path from "node:path";
 import { makeTempDir } from "../../support/tempDir.js";
 import { createEntry, entryUnder, freeTrashName, moveToTrash, renameEntry, trashInfo, trashLayout, validEntryName } from "../../../server/files/tree-ops";
@@ -99,6 +99,57 @@ describe("renameEntry", () => {
     expect(readFileSync(path.join(root, "c.md"), "utf8")).toBe("a");
   });
 
+  // #2694. A file that appears at the new name after the check is not replaced: the rename goes through
+  // a hard link, which refuses an existing name (a plain `rename` would overwrite it).
+  it("does not replace a file that appeared at the new name after the check", () => {
+    const root = tmp();
+    const [from, to] = [path.join(root, "a.md"), path.join(root, "b.md")];
+    writeFileSync(from, "a");
+    const realLink = fs.linkSync.bind(fs);
+    const racing = vi.spyOn(fs, "linkSync").mockImplementation((existing, target) => {
+      writeFileSync(to, "someone else's");
+      realLink(existing, target);
+    });
+    try {
+      expect(renameEntry(from, to)).toBe("exists");
+    } finally {
+      racing.mockRestore();
+    }
+    expect(readFileSync(to, "utf8")).toBe("someone else's");
+    expect(readFileSync(from, "utf8")).toBe("a");
+  });
+
+  it("leaves one name for the file after renaming it", () => {
+    const root = tmp();
+    writeFileSync(path.join(root, "a.md"), "a");
+    expect(renameEntry(path.join(root, "a.md"), path.join(root, "c.md"))).toBe("renamed");
+    expect(existsSync(path.join(root, "a.md"))).toBe(false);
+    expect(lstatSync(path.join(root, "c.md")).nlink).toBe(1);
+  });
+
+  // FAT, exFAT and some shares cannot hard-link; the rename still happens, as before.
+  it.each(["EPERM", "ENOTSUP", "EOPNOTSUPP"])("renames anyway on a disk that answers %s to a link", (code) => {
+    const root = tmp();
+    writeFileSync(path.join(root, "a.md"), "a");
+    const noLinks = vi.spyOn(fs, "linkSync").mockImplementation(() => {
+      throw Object.assign(new Error(code), { code });
+    });
+    try {
+      expect(renameEntry(path.join(root, "a.md"), path.join(root, "c.md"))).toBe("renamed");
+    } finally {
+      noLinks.mockRestore();
+    }
+    expect(readFileSync(path.join(root, "c.md"), "utf8")).toBe("a");
+  });
+
+  it("renames a folder", () => {
+    const root = tmp();
+    mkdirSync(path.join(root, "d"));
+    writeFileSync(path.join(root, "d", "x.md"), "x");
+    expect(renameEntry(path.join(root, "d"), path.join(root, "e"))).toBe("renamed");
+    expect(readFileSync(path.join(root, "e", "x.md"), "utf8")).toBe("x");
+  });
+
   it("renames a link without touching what it points to", () => {
     const root = tmp();
     const outside = tmp();
@@ -128,6 +179,17 @@ describe("trashLayout", () => {
 describe("freeTrashName — bounded", () => {
   it("gives up when every name is taken", () => {
     expect(freeTrashName("a.txt", () => true)).toBeNull();
+  });
+
+  // #2694. An extension too long to keep beside a numbered stem: the whole name is cut instead of the
+  // entry not being trashed at all.
+  it("finds a name for an entry whose extension alone is too long to keep", () => {
+    const name = `a.${"e".repeat(250)}`;
+    const first = freeTrashName(name, () => false) ?? "";
+    const second = freeTrashName(name, (n) => n === first) ?? "";
+    [first, second].forEach((candidate) => expect(Buffer.byteLength(`${candidate}.trashinfo`)).toBeLessThanOrEqual(255));
+    expect(second).not.toBe(first);
+    expect(second.endsWith(" 2")).toBe(true);
   });
 
   it("keeps each name, its number and a .trashinfo within 255 bytes", () => {
