@@ -20,7 +20,8 @@ import { useFilesTabs } from "../composables/useFilesTabs";
 import { tabLabels } from "./filesTabs";
 import { nextTabIndex } from "./tabKeys";
 import { previewLinkTarget } from "./previewLinkTarget";
-import { isRasterImage, previewFollowsAppTheme } from "./filePreviewKind";
+import { fileMediaKind, previewFollowsAppTheme } from "./filePreviewKind";
+import FilesMediaView from "./FilesMediaView.vue";
 import { GIT_LETTER, gitDecorations } from "./filesGitDecorations";
 import type { FileGitState } from "../../common/fileGitStatus";
 import { useFilesGitStatus } from "../composables/useFilesGitStatus";
@@ -78,8 +79,9 @@ const tree = useFilesTree(() => props.cwd);
 // every way it is written back. Destructured because the template names these directly.
 const file = useOpenFile(() => props.cwd);
 const { openPath, openName, dirty, editSeq, saving, fileError, unpreviewable, conflict, showPreview, previewKind, previewSrc, dirConfigReport } = file;
-// A PNG or JPEG: no text to edit, so the "not text" panel shows the picture itself (#2269).
-const rasterSrc = computed(() => (openPath.value && isRasterImage(openPath.value) ? rawFileSrc(props.cwd, openPath.value, file.baseVersion.value) : null));
+// A picture, PDF, video or sound: no text to edit, so the "not text" panel shows the file itself (#2269, #2674).
+const mediaKind = computed(() => (openPath.value ? fileMediaKind(openPath.value) : null));
+const mediaSrc = computed(() => (openPath.value && mediaKind.value ? rawFileSrc(props.cwd, openPath.value, file.baseVersion.value) : ""));
 const { flush, save, overwrite, discardAndReload, openInOs } = file;
 // Which files are open as tabs, and which is in front (#2267). Every open below goes through it, so
 // a path that already has a tab is brought forward rather than opened twice.
@@ -705,14 +707,13 @@ defineExpose({
         <p v-if="!openPath" class="m-auto p-4 text-[13px] text-muted">Select a file to view or edit.</p>
         <!-- Not text. The editor is hidden rather than shown empty: an empty buffer over a file
              that has content is an invitation to save, and saving is what destroyed it (#2038). -->
-        <div v-else-if="unpreviewable" class="m-auto flex flex-col items-center gap-2 p-4 text-center" data-testid="files-unpreviewable">
-          <img
-            v-if="rasterSrc"
-            :src="rasterSrc"
-            :alt="openName"
-            data-testid="files-image"
-            class="max-h-[70vh] max-w-full rounded border border-border bg-[var(--bg-base)] object-contain"
-          />
+        <div
+          v-else-if="unpreviewable"
+          class="flex flex-col items-center gap-2 p-4 text-center"
+          :class="mediaKind === 'pdf' ? 'min-h-0 flex-auto self-stretch' : 'm-auto'"
+          data-testid="files-unpreviewable"
+        >
+          <FilesMediaView v-if="mediaKind" :kind="mediaKind" :src="mediaSrc" :name="openName" />
           <template v-else>
             <span class="material-symbols-outlined text-[28px] text-muted" aria-hidden="true">draft</span>
             <p class="text-[13px] text-muted">{{ unpreviewable }}</p>

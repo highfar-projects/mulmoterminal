@@ -183,18 +183,19 @@ than as bytes (files within the session's working directory only):
 **A line after the path is followed.** `src/a.ts:42`, `src/a.ts:42:7` (gcc, clang, `eslint -f unix`,
 stack traces) and `src/a.ts(12,5)` (tsc) are one link. In the pane, and in the Files view, the file
 opens as text with the caret on that line and column — an HTML page, an SVG or a table included, and a
-tab reading in Preview switches to Edit. A route that renders the file in a new tab (`.md`, `.json`,
+tab reading in Preview switches to Edit. An image, a PDF, a video or an audio file has no line to go
+to and simply opens as itself. A route that renders the file in a new tab (`.md`, `.json`,
 `.csv`, `.html` with no cell enlarged) ignores the line. When the pane beside an enlarged cell takes
 the click, the keyboard stays in the terminal; the full-screen Files view, with no terminal beside it,
 puts it in the editor. (ESLint's default output puts the path on a line of its own, with no line number to follow.)
 
 **While a grid cell is enlarged, the [Files pane](#files-view-browse--edit) takes the click first** — every
-row above except PDF, video and audio, since the pane is the same editor with a Preview for
-Markdown, HTML and SVG, and shows an image as a picture. The file opens *beside* the terminal
+row above, since the pane is the same editor with a Preview for Markdown, HTML and SVG, shows an
+image as a picture and a PDF in a frame, and plays a video or an audio file with the browser's own
+controls (seeking included, whatever the file's size). The file opens *beside* the terminal
 that printed it, and the pane opens itself if it was closed. It declines, leaving the routing
-above untouched, when nothing is enlarged, when the path is not under that cell's own directory
-(the pane cannot walk above its root), or for a PDF, a video or an audio file, which only a
-browser tab can play.
+above untouched, when nothing is enlarged, or when the path is not under that cell's own directory
+(the pane cannot walk above its root). A file too large to edit as text still offers **Open in OS**.
 
 Highlighting in the Files view covers the JS/TS family, JSON and Markdown (the modes
 `cmEditor.ts` bundles); other languages open as plain text.
@@ -1342,11 +1343,13 @@ or changed (amber), and a notch where lines were removed, as VS Code's gutter sh
 to date as you type. **Changes** in the header also shows the removed lines in place, as a unified
 diff. Nothing is marked for a file outside git or one not yet committed.
 
-**HTML pages and images show in the pane too.** An `.html` file has a **Preview** like a Markdown
+**HTML pages, images, PDFs, video and audio show in the pane too.** An `.html` file has a **Preview** like a Markdown
 file: the page itself, sandboxed as presentHtml pages are — its scripts run on an opaque origin with
 no fetch/XHR; images and the curated CDN list still load, and so does an image it links beside it,
-while a relative stylesheet or script does not. An `.svg` previews as the picture it draws, and a PNG, JPEG, GIF or WebP opens as the image
-rather than as "not text". A path to any of these clicked in terminal output opens in the pane when
+while a relative stylesheet or script does not. An `.svg` previews as the picture it draws, a PNG, JPEG, GIF or WebP opens as the image
+rather than as "not text", a PDF opens in a frame, and a video or audio file plays with the
+browser's controls, seeking by range rather than fetching the whole file. A text file too large to edit
+says so and still offers **Open in OS**. A path to any of these clicked in terminal output opens in the pane when
 it is up, so a chart an agent just wrote stays in the grid. They are served only under the workspace
 or a terminal's directory, like every other file the app hands to the browser.
 

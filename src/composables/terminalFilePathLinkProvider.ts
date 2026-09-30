@@ -21,7 +21,7 @@ import { browserDisplays } from "../../common/rawContentType";
 import { findFilePathLinks } from "./terminalFilePathLinks";
 import type { FileLocation } from "./filePathLocation";
 import { pathWithinCwd, rebaseOutsideCwd } from "./pathWithinCwd";
-import { filePreviewKind, isRasterImage } from "../components/filePreviewKind";
+import { fileMediaKind, filePreviewKind } from "../components/filePreviewKind";
 import { HTML_FILE_NAME, filesPageUrl } from "../../common/filesPage";
 
 export interface TerminalCell {
@@ -131,10 +131,9 @@ export function fileLinkTarget(filePath: string, cwd: string): FileLinkTarget {
 }
 
 /** Whether the Files pane beside a zoomed cell can show this path: anything the app renders
- *  as text or as Markdown, an HTML page, an image. Derived from the tables above rather than
- *  being another one, so a new extension row reaches the pane without a second edit. What is left
- *  out is what only a browser tab can answer — a PDF, a video — where a new tab is still the
- *  right place. */
+ *  as text or as Markdown, an HTML page, an image, a PDF, a video or a sound. Derived from the
+ *  tables above rather than being another one, so a new extension row reaches the pane without a
+ *  second edit. With no pane open the click still goes to a tab. */
 export function isPaneViewable(filePath: string): boolean {
   const ext = fileExtension(filePath);
   // Indexed like fileViewerRoute does, not `in`: the table is a plain object, so `in` also
@@ -142,9 +141,9 @@ export function isPaneViewable(filePath: string): boolean {
   // inherited one does, which makes it safe today and needlessly load-bearing tomorrow.
   if (IN_APP_EXTENSIONS.has(ext) || ROUTE_BY_EXTENSION[ext] !== undefined) return true;
   // What the pane now shows beside its text (#2269): an HTML page or an SVG in its Preview, and a
-  // picture where a PNG or JPEG would have said "not text". A chart an agent just wrote stays in
-  // the grid rather than leaving it for a browser tab.
-  if (filePreviewKind(filePath) !== null || isRasterImage(filePath)) return true;
+  // picture, PDF, video or sound where it would have said "not text" (#2674). A chart an agent just
+  // wrote stays in the grid rather than leaving it for a browser tab.
+  if (filePreviewKind(filePath) !== null || fileMediaKind(filePath) !== null) return true;
   // And anything a TAB cannot display, because there the tab is not a view — it is a download
   // starting with no warning, which is the half of #2038 the user actually notices. The pane can
   // at least name the file and offer to open it in the app that owns it. Asked of the same table

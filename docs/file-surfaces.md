@@ -75,12 +75,14 @@ query string with the machinery built for a file an agent named. Adding diagrams
 instead keeps the isolation and costs a second rendering path that will drift again the next time
 the plugin gains a feature. Both are defensible; neither is a refactor.
 
-## An HTML page or an image in the pane serves bytes, so it takes the raw route's base
+## An HTML page, an image, a PDF or media in the pane serves bytes, so it takes the raw route's base
 
 The pane READS text through the browse routes, whose base is whatever `?cwd=` says. Showing an
-image or rendering an HTML page (#2269) is different: it serves the file's bytes to the browser,
+image, a PDF, a video or an audio file, or rendering an HTML page (#2269, #2674), is different: it serves the file's bytes to the browser,
 which the raw route deliberately allows only under the workspace or a live session's directory
-(`authorizedServingBase`). So a picture is fetched from `/api/files/raw`, and an HTML page from
+(`authorizedServingBase`). So a picture, a PDF, a video or a sound is fetched from `/api/files/raw` (a PDF there is
+the one type served without the CSP sandbox, since WebKit draws nothing in an opaque frame, and the
+pane's frame adds no `sandbox` attribute for the same reason), and an HTML page from
 `/api/files/page/<cwd>/<path>` (`server/backends/filesPage.ts`), which authorises its base the same
 way and hands anything but the page itself back to the raw route. Neither reaches a file the raw
 route would refuse. The page goes out under presentHtml's CSP — an opaque origin and no fetch/XHR,
@@ -102,7 +104,7 @@ stamps it on every message, and the pane hears only messages carrying the token 
 asked for (#2515). A page the frame was navigated to never had it.
 
 A consequence: in the full-screen view on a base that is not a session directory, the text still
-opens and the picture or page does not — the same answer the raw route has always given there.
+opens and the picture, PDF, player or page does not — the same answer the raw route has always given there.
 
 A CSV / TSV table Preview (#2559) is on the other side of this line. Like Markdown it is a document
 the server renders from the file's text — `/api/files/browse/table`, escaped cells under a bare
