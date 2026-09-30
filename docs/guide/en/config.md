@@ -1738,6 +1738,11 @@ Claude Code can talk to any Anthropic-compatible backend. The backend goes in `p
 `config.json`, the **key in the server's environment** (never in a config file), and the default model
 in a project's `.mulmoterminal.json` — with a per-session override at launch.
 
+**Settings → Models and backends** adds and removes a backend without editing the file: a name, the
+base URL, the name of the environment variable holding the key, the model ids and the output budget.
+It refuses a base URL ending in `/v1` and anything that looks like a key where the variable's name
+belongs.
+
 ```json
 {
   "providers": [

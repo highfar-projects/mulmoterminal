@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n";
-import { useLaunchOptions } from "../../composables/useLaunchOptions";
-import { isOfferable, notOfferedReason } from "../launchOffer";
 import SkillLaunchButton from "../SkillLaunchButton.vue";
-import { SETTINGS_LIST } from "./sectionClasses";
 import CustomAgentsEditor from "./CustomAgentsEditor.vue";
 import AccountsEditor from "./AccountsEditor.vue";
+import ProvidersEditor from "./ProvidersEditor.vue";
 import { computed, ref } from "vue";
 import { defaultAgentRef, saveDefaultAgent } from "../../composables/defaultAgent";
 import { useAgentAvailability } from "../../composables/useAgentAvailability";
@@ -13,11 +11,6 @@ import { agentFromChoiceValue, choiceValue, defaultAgentChoices, type DefaultAge
 
 const { t } = useI18n();
 import type { BundledSkillName } from "../../../common/bundledSkills";
-
-// Providers are listed read-only here (#2621 is their editor), and come from /api/launch-options
-// rather than the config, because that route RESOLVES them — it reports `ready`, which the raw
-// config cannot. Custom agents and accounts have their own editors below.
-const { launchOptions } = useLaunchOptions();
 
 defineEmits<{ (e: "launch-skill", skill: BundledSkillName): void }>();
 
@@ -71,24 +64,7 @@ async function onDefaultAgentChange(e: Event) {
     <template #modelKey><code>model</code></template>
     <template #dirFile><code>.mulmoterminal.json</code></template>
   </i18n-t>
-  <ul v-if="launchOptions.providers.length" :class="SETTINGS_LIST">
-    <li v-for="p in launchOptions.providers" :key="p.id" class="flex items-baseline gap-2 rounded-md bg-elevated px-2 py-1.5">
-      <span class="font-mono text-[12px] text-secondary">{{ p.label }}</span>
-      <span class="text-[11px] text-dim">
-        {{ t("settings.models.modelCount", { count: p.models.length }, p.models.length) }} · {{ t("settings.models.keyIn", { env: p.tokenEnv }) }}
-      </span>
-      <span class="flex-auto" />
-      <span v-if="!p.ready" class="text-[11px] text-err-text" :data-tip="p.reason">{{ t("settings.models.notReady") }}</span>
-      <!-- Reachable, and still not a choice: a session cannot be started on a provider without a
-           model, so the launch picker leaves it out. Said here because "ready · 0 models" reads
-           like it works (#1432). -->
-      <span v-else-if="!isOfferable(p)" class="text-[11px] text-err-text" :data-tip="notOfferedReason(p) ?? ''">
-        {{ t("settings.models.notInPicker") }}
-      </span>
-      <span v-else class="text-[11px] text-dim">{{ t("settings.models.ready") }}</span>
-    </li>
-  </ul>
-  <p v-else class="mb-2 text-[12px] text-dim">{{ t("settings.models.noProviders") }}</p>
+  <ProvidersEditor />
 
   <p class="mb-1.5 mt-3 text-[12px] text-dim">
     <strong class="text-fg">{{ t("settings.models.customTitle") }}</strong> (<code>customAgents</code>) {{ t("settings.models.customIntro") }}
