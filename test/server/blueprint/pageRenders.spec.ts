@@ -5,12 +5,15 @@
 // printing anything must not be reported as the app failing to start.
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
 const PACKS = path.join(import.meta.dirname, "..", "..", "..", "blueprints");
-const COPIES = ["firebase", "cloudflare"].map((pack) => path.join(PACKS, pack, "checks", "page-renders.sh"));
+// Every pack that ships the render check: packs.spec.ts holds them identical, and each is run here.
+const COPIES = readdirSync(PACKS)
+  .map((pack) => path.join(PACKS, pack, "checks", "page-renders.sh"))
+  .filter((file) => existsSync(file));
 const describeSh = describe.skipIf(process.platform === "win32");
 
 // Prints the page, then leaves a folder in its profile that cannot be deleted.
