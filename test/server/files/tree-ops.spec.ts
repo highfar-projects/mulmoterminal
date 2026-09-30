@@ -88,6 +88,9 @@ describe("createEntry", () => {
   });
 });
 
+// The link path is not taken on Windows (see renameEntry); these pin it wherever the spec runs.
+const LINKING: NodeJS.Platform = "linux";
+
 describe("renameEntry", () => {
   it("renames in place and refuses an existing name", () => {
     const root = tmp();
@@ -111,7 +114,7 @@ describe("renameEntry", () => {
       realLink(existing, target);
     });
     try {
-      expect(renameEntry(from, to)).toBe("exists");
+      expect(renameEntry(from, to, LINKING)).toBe("exists");
     } finally {
       racing.mockRestore();
     }
@@ -122,7 +125,7 @@ describe("renameEntry", () => {
   it("leaves one name for the file after renaming it", () => {
     const root = tmp();
     writeFileSync(path.join(root, "a.md"), "a");
-    expect(renameEntry(path.join(root, "a.md"), path.join(root, "c.md"))).toBe("renamed");
+    expect(renameEntry(path.join(root, "a.md"), path.join(root, "c.md"), LINKING)).toBe("renamed");
     expect(existsSync(path.join(root, "a.md"))).toBe(false);
     expect(lstatSync(path.join(root, "c.md")).nlink).toBe(1);
   });
@@ -135,7 +138,7 @@ describe("renameEntry", () => {
       throw Object.assign(new Error(code), { code });
     });
     try {
-      expect(renameEntry(path.join(root, "a.md"), path.join(root, "c.md"))).toBe("renamed");
+      expect(renameEntry(path.join(root, "a.md"), path.join(root, "c.md"), LINKING)).toBe("renamed");
     } finally {
       noLinks.mockRestore();
     }
@@ -147,16 +150,54 @@ describe("renameEntry", () => {
   it("leaves the file under its old name alone when the old name cannot be removed", () => {
     const root = tmp();
     writeFileSync(path.join(root, "a.md"), "a");
-    const busy = vi.spyOn(fs, "unlinkSync").mockImplementation(() => {
-      throw Object.assign(new Error("EBUSY"), { code: "EBUSY" });
+    const realUnlink = fs.unlinkSync.bind(fs);
+    const busy = vi.spyOn(fs, "unlinkSync").mockImplementation((target) => {
+      if (String(target).endsWith("a.md")) throw Object.assign(new Error("EBUSY"), { code: "EBUSY" });
+      realUnlink(target);
     });
     try {
-      expect(() => renameEntry(path.join(root, "a.md"), path.join(root, "c.md"))).toThrow("EBUSY");
+      expect(() => renameEntry(path.join(root, "a.md"), path.join(root, "c.md"), LINKING)).toThrow("EBUSY");
     } finally {
       busy.mockRestore();
     }
     expect(readFileSync(path.join(root, "a.md"), "utf8")).toBe("a");
     expect(existsSync(path.join(root, "c.md"))).toBe(false);
+  });
+
+  // Another writer put its own file at the new name between the link and the take-back: it is theirs,
+  // and stays; the reported error is still the one that stopped the rename.
+  it("takes back only its own link, and still reports why the rename failed", () => {
+    const root = tmp();
+    const [from, to] = [path.join(root, "a.md"), path.join(root, "c.md")];
+    writeFileSync(from, "a");
+    const busy = vi.spyOn(fs, "unlinkSync").mockImplementation((target) => {
+      if (String(target) === from) {
+        rmSync(to);
+        writeFileSync(to, "someone else's");
+        throw Object.assign(new Error("EBUSY"), { code: "EBUSY" });
+      }
+    });
+    try {
+      expect(() => renameEntry(from, to, LINKING)).toThrow("EBUSY");
+    } finally {
+      busy.mockRestore();
+    }
+    expect(readFileSync(to, "utf8")).toBe("someone else's");
+    expect(readFileSync(from, "utf8")).toBe("a");
+  });
+
+  // Windows refuses to remove a file held open through any of its names, so there it is `rename`.
+  it("renames with rename on Windows, not a link", () => {
+    const root = tmp();
+    writeFileSync(path.join(root, "a.md"), "a");
+    const link = vi.spyOn(fs, "linkSync");
+    try {
+      expect(renameEntry(path.join(root, "a.md"), path.join(root, "c.md"), "win32")).toBe("renamed");
+      expect(link).not.toHaveBeenCalled();
+    } finally {
+      link.mockRestore();
+    }
+    expect(readFileSync(path.join(root, "c.md"), "utf8")).toBe("a");
   });
 
   it("renames a folder", () => {

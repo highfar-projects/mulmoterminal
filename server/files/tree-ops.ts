@@ -63,10 +63,13 @@ export function createEntry(abs: string, kind: EntryKind): void {
 
 /** Rename in place. A name that differs only in case is the same entry on a case-insensitive disk,
  *  so that one is allowed through; any other existing name is refused. */
-export function renameEntry(from: string, to: string): "renamed" | "exists" {
+export function renameEntry(from: string, to: string, platform: NodeJS.Platform = process.platform): "renamed" | "exists" {
   const sameEntry = from.toLowerCase() === to.toLowerCase() && entryExists(to) && fs.lstatSync(from).ino === fs.lstatSync(to).ino;
   if (entryExists(to) && !sameEntry) return "exists";
-  if (sameEntry || !fs.lstatSync(from).isFile()) {
+  // Not on Windows: a file held open without delete sharing refuses removal through EVERY name, so the
+  // old name could not go after the link and neither could the link — two names where `rename` would
+  // have failed cleanly. The check above is all there is there, as before.
+  if (sameEntry || platform === "win32" || !fs.lstatSync(from).isFile()) {
     fs.renameSync(from, to);
     return "renamed";
   }
@@ -89,12 +92,22 @@ function renameFileNoReplace(from: string, to: string): "renamed" | "exists" {
   try {
     fs.unlinkSync(from);
   } catch (err) {
-    // The old name could not go (a file held open without delete sharing on Windows): take the new one
-    // back — the same file, so nothing is lost — and fail as a plain rename would have.
-    fs.rmSync(to, { force: true });
+    // The old name could not go (a sticky folder, a file someone else owns): take the new one back —
+    // the same file, so nothing is lost — and fail as a plain rename would have.
+    takeBackLink(from, to);
     throw err;
   }
   return "renamed";
+}
+
+/** Remove `to` only if it is still the link just made (another writer may have replaced it since), and
+ *  never a folder; a failure here must not hide the error the caller is about to report. */
+function takeBackLink(from: string, to: string): void {
+  try {
+    if (fs.lstatSync(to).ino === fs.lstatSync(from).ino) fs.unlinkSync(to);
+  } catch {
+    // Left as it is: the caller's own error is the one worth reporting.
+  }
 }
 
 /** Where deleted entries go on this machine, or null where it is not known. */
