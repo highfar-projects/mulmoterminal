@@ -41,6 +41,21 @@ describe("whats-new state", () => {
     expect(await readLastSeenVersion()).toBe("7.2.0");
   });
 
+  it("keeps the newest version when writers race", async () => {
+    const RACES = 20;
+    const race = async (): Promise<string | null> => {
+      rmSync(stateFile(), { force: true });
+      await Promise.all([recordSeenVersion("7.2.0"), recordSeenVersion("7.1.0"), recordSeenVersion("7.0.0")]);
+      return readLastSeenVersion();
+    };
+    // One race at a time, each from an empty file.
+    const outcomes = await Array.from({ length: RACES }).reduce<Promise<Array<string | null>>>(
+      async (done) => [...(await done), await race()],
+      Promise.resolve([]),
+    );
+    expect(new Set(outcomes)).toEqual(new Set(["7.2.0"]));
+  });
+
   it.each([["not json"], ["[]"], ['{"lastSeenVersion": 7}'], ["null"]])("treats %j as nothing recorded", async (content) => {
     writeFileSync(stateFile(), content);
     expect(await readLastSeenVersion()).toBeNull();

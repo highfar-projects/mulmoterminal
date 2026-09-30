@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { isRecord } from "../../common/isRecord.js";
 import { compareVersions } from "../../common/whatsNew.js";
+import { withConfigLock } from "../config/config-lock.js";
 import { writeFileAtomic } from "../files/atomic-write.js";
 import { mulmoterminalHome } from "../infra/mulmoterminal-home.js";
 
@@ -25,9 +26,14 @@ export async function readLastSeenVersion(): Promise<string | null> {
 }
 
 /** Records `version` unless a newer one is already recorded — a tab left open on an old server
- *  must not re-open everything a newer server has already shown. */
+ *  must not re-open everything a newer server has already shown. Locked across processes because
+ *  several checkouts on one machine share this file, and an unlocked read-compare-write lets the
+ *  older version land last. */
 export async function recordSeenVersion(version: string): Promise<void> {
-  const known = await readLastSeenVersion();
-  if (known !== null && compareVersions(known, version) >= 0) return;
-  await writeFileAtomic(stateFile(), `${JSON.stringify({ lastSeenVersion: version }, null, 2)}\n`);
+  const file = stateFile();
+  await withConfigLock(file, async () => {
+    const known = await readLastSeenVersion();
+    if (known !== null && compareVersions(known, version) >= 0) return;
+    await writeFileAtomic(file, `${JSON.stringify({ lastSeenVersion: version }, null, 2)}\n`);
+  });
 }
