@@ -6,7 +6,7 @@ import { computed, nextTick, onMounted, ref, useTemplateRef, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { isPersonLanguage } from "../../../common/blueprint/personLanguage";
 import {
-  folderPresentFiles,
+  folderPresentPaths,
   listKnownFolders,
   listPacks,
   listPresets,
@@ -23,7 +23,7 @@ import {
   askedQuestions,
   defaultAnswers,
   folderAnswers,
-  neededFiles,
+  neededPaths,
   offeredOptions,
   settledAnswers,
   unansweredQuestions,
@@ -77,19 +77,19 @@ const usecases = computed(() => usecasesFor(packs.value, base.value));
 const groups = computed(() => usecaseGroups(packs.value));
 const usecaseBases = computed(() => basesFor(packs.value, usecase.value));
 const exampleGroups = computed(() => presetGroups(presets.value, packs.value));
-// The files some option needs that the folder has; null while unknown, and then every option is offered — the server
-// still refuses one whose file is missing.
-const presentFiles = ref<ReadonlySet<string> | null>(null);
+// The paths some option needs that the folder has; null while unknown, and then every option is offered — the server
+// still refuses one whose path is missing.
+const presentPaths = ref<ReadonlySet<string> | null>(null);
 const presence = latestOnly();
-const hasFile = (file: string): boolean => presentFiles.value === null || presentFiles.value.has(file);
-const formAnswers = computed(() => (preview.value ? folderAnswers(preview.value.hearing, answers.value, hasFile) : answers.value));
-const settled = computed(() => (preview.value ? settledAnswers(preview.value.hearing, hasFile) : {}));
+const hasPath = (relative: string): boolean => presentPaths.value === null || presentPaths.value.has(relative);
+const formAnswers = computed(() => (preview.value ? folderAnswers(preview.value.hearing, answers.value, hasPath) : answers.value));
+const settled = computed(() => (preview.value ? settledAnswers(preview.value.hearing, hasPath) : {}));
 // A question the folder settles is not asked, and one it narrows offers only what can work there.
 const questions = computed(() =>
   preview.value
     ? askedQuestions(preview.value.hearing, formAnswers.value)
         .filter((question) => settled.value[question.id] === undefined)
-        .map((question) => (question.needsFile ? { ...question, options: offeredOptions(question, hasFile) } : question))
+        .map((question) => (question.needsPath ? { ...question, options: offeredOptions(question, hasPath) } : question))
     : [],
 );
 const ready = computed(
@@ -194,16 +194,16 @@ let presenceTimer: ReturnType<typeof setTimeout> | undefined;
 watch([projectDir, preview], () => {
   clearTimeout(presenceTimer);
   const ticket = presence.take();
-  presentFiles.value = null;
-  const files = preview.value ? neededFiles(preview.value.hearing) : [];
+  presentPaths.value = null;
+  const paths = preview.value ? neededPaths(preview.value.hearing) : [];
   const dir = projectDir.value.trim();
-  if (files.length === 0 || dir === "") return;
-  presenceTimer = setTimeout(() => void askPresence(dir, files, ticket), PRESENCE_WAIT_MS);
+  if (paths.length === 0 || dir === "") return;
+  presenceTimer = setTimeout(() => void askPresence(dir, paths, ticket), PRESENCE_WAIT_MS);
 });
 
-async function askPresence(dir: string, files: string[], ticket: number): Promise<void> {
-  const result = await folderPresentFiles(dir, files);
-  if (presence.isLatest(ticket)) presentFiles.value = result.ok ? new Set(result.value.present) : null;
+async function askPresence(dir: string, paths: string[], ticket: number): Promise<void> {
+  const result = await folderPresentPaths(dir, paths);
+  if (presence.isLatest(ticket)) presentPaths.value = result.ok ? new Set(result.value.present) : null;
 }
 // A refusal names the folder it was about; another folder typed since is not the one to trust.
 watch(projectDir, () => {

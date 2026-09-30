@@ -14,7 +14,7 @@
       "why": "このフォルダに「規約をつくる」で作った STYLE.md と chaff.yaml があれば、それに合わせる",
       "kind": "select",
       "options": ["このフォルダの規約（STYLE.md と chaff.yaml）", "chaff の既定のまま"],
-      "needsFile": { "このフォルダの規約（STYLE.md と chaff.yaml）": "chaff.yaml" }
+      "needsPath": { "このフォルダの規約（STYLE.md と chaff.yaml）": "chaff.yaml" }
     },
     {
       "id": "kind",
@@ -49,7 +49,7 @@
       "why": "機械が見つけた所だけか、手引きの決まり（語調・表記など）にも合わせるか",
       "kind": "select",
       "options": ["chaff が指摘した所だけ", "手引き（STYLE.md）の決まりにも合わせる"],
-      "needsFile": { "手引き（STYLE.md）の決まりにも合わせる": "STYLE.md" },
+      "needsPath": { "手引き（STYLE.md）の決まりにも合わせる": "STYLE.md" },
       "showIf": {
         "id": "style",
         "equals": "このフォルダの規約（STYLE.md と chaff.yaml）"
