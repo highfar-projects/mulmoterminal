@@ -32,7 +32,7 @@ const CONFIG_SKILL = "mulmoterminal-config";
 
 const REACHABLE_BY: Record<string, Reachable> = {
   cwdPresets: { ui: true, skill: "mulmoterminal-dirs" },
-  providers: { skill: "mulmoterminal-model" },
+  providers: { ui: true, skill: "mulmoterminal-model" },
   soundFile: { ui: true, skill: "mulmoterminal-notify" },
   soundKinds: { ui: true, skill: "mulmoterminal-notify" },
   sounds: { ui: true, skill: "mulmoterminal-notify" },
@@ -99,7 +99,7 @@ const REACHABLE_BY: Record<string, Reachable> = {
 // Each has a section that displays its current state and
 // launches the owning skill, which is what the aria-label assertions in SettingsModal.spec pin.
 // Listed here so that moving one into the UI is a deliberate edit rather than a quiet lapse.
-const DISPLAY_ONLY = ["keymap", "themes", "providers", "buttons", "chips"];
+const DISPLAY_ONLY = ["keymap", "themes", "buttons", "chips"];
 
 const readAll = (dir: string, ext: string): string => {
   const entries = readdirSync(dir, { withFileTypes: true, recursive: true });
@@ -120,7 +120,11 @@ const skillSource = (skill: string): string => readAll(path.join(SKILLS_DIR, ski
 // Four forms, named rather than pattern-guessed. A fifth way to write config should have to be
 // added here — there is no reason for there to be many. The fourth is a list changed one entry at a
 // time on the server (#2620), so a tab never sends a copy that drops what it had not seen.
-const ONE_ENTRY_ROUTES: Partial<Record<string, string>> = { customAgents: "/api/config/custom-agents/", accounts: "/api/config/accounts/" };
+const ONE_ENTRY_ROUTES: Partial<Record<string, string>> = {
+  customAgents: "/api/config/custom-agents/",
+  accounts: "/api/config/accounts/",
+  providers: "/api/config/providers/",
+};
 const writesKey = (source: string, key: string): boolean => {
   const route = ONE_ENTRY_ROUTES[key];
   return (

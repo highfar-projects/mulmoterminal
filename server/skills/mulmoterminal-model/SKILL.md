@@ -1,13 +1,15 @@
 ---
 name: mulmoterminal-model
-description: Run MulmoTerminal sessions on something other than Anthropic's default, three ways — register an Anthropic-compatible backend (OpenRouter, Moonshot, a local Ollama bridge, a company gateway) as a `providers` entry in `~/.mulmoterminal/config.json`, which has no Settings UI; pin a `provider` / `model` per project in its `.mulmoterminal.json`; or add a `customAgents` entry, your OWN command line for starting Claude Code (`ollama launch claude --model … --`, a wrapper script, a pinned binary), which then appears in the Agent Picker beside Claude / Codex / Antigravity / Grok / Shell and gets Claude Code's own arguments appended. Knows the measured pass rates of the built-in model list, and the misconfigurations that break a session in ways that are hard to diagnose from inside it (a trailing `/v1`, too small an output budget, an API key written to disk, a provider named but never registered, a custom agent that swallows the arguments it is handed). Use when the user wants to use OpenRouter, Kimi, GLM, DeepSeek, Qwen, a local or self-hosted model, a cheaper model, a different Anthropic model for one project, or to launch Claude Code through a command of their own, or to run some cells on a second Claude Code / Codex subscription (`accounts`) — or when a session refuses to start, returns empty replies, or 404s after they changed models.
+description: Run MulmoTerminal sessions on something other than Anthropic's default, three ways — register an Anthropic-compatible backend (OpenRouter, Moonshot, a local Ollama bridge, a company gateway) as a `providers` entry in `~/.mulmoterminal/config.json` (also added in Settings → Models and backends); pin a `provider` / `model` per project in its `.mulmoterminal.json`; or add a `customAgents` entry, your OWN command line for starting Claude Code (`ollama launch claude --model … --`, a wrapper script, a pinned binary), which then appears in the Agent Picker beside Claude / Codex / Antigravity / Grok / Shell and gets Claude Code's own arguments appended. Knows the measured pass rates of the built-in model list, and the misconfigurations that break a session in ways that are hard to diagnose from inside it (a trailing `/v1`, too small an output budget, an API key written to disk, a provider named but never registered, a custom agent that swallows the arguments it is handed). Use when the user wants to use OpenRouter, Kimi, GLM, DeepSeek, Qwen, a local or self-hosted model, a cheaper model, a different Anthropic model for one project, or to launch Claude Code through a command of their own, or to run some cells on a second Claude Code / Codex subscription (`accounts`) — or when a session refuses to start, returns empty replies, or 404s after they changed models.
 ---
 
 # Run on another model
 
 The keys, and the job each one does:
 
-- **`~/.mulmoterminal/config.json` → `providers`** — register a backend once. No Settings UI.
+- **`~/.mulmoterminal/config.json` → `providers`** — register a backend once. Also added and
+  removed in Settings → Models and backends, which refuses a `/v1` base URL and a key in place of the
+  variable's name.
 - **`<project>/.mulmoterminal.json` → `provider` / `model`** — what this project launches on.
   Both are defaults; the launch form can override them for a single session.
 - **`~/.mulmoterminal/config.json` → `customAgents`** — the user's own COMMAND for starting Claude

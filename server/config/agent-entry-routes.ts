@@ -5,6 +5,7 @@
 import type { Express, Response } from "express";
 import { buildAccount, buildCustomAgent } from "../../common/agentEntries.js";
 import { isAccountAgent } from "../../common/agentAccounts.js";
+import { buildProvider } from "../../common/providerEntries.js";
 import type { AppConfig } from "./app-config.js";
 import { requestBody } from "../routes/requestBody.js";
 
@@ -75,6 +76,48 @@ export function mountAgentEntryRoutes(app: Express, mutate: MutateOnDisk, onAcco
     return void mutate(res, {
       update: (base) => ({ accounts: base.accounts.filter((entry) => entry.id !== id) }),
       answer: (next) => res.json({ accounts: next.accounts }),
+    });
+  });
+
+  mountProviderRoutes(app, mutate);
+}
+
+// A backend (#2621), built against the providers ON DISK so its id is free there. The key itself
+// never passes through here: `tokenEnv` is the name of the variable the server reads it from.
+function mountProviderRoutes(app: Express, mutate: MutateOnDisk): void {
+  app.post("/api/config/providers/add", (req, res) => {
+    const body = requestBody(req.body);
+    const draft = {
+      label: text(body.label),
+      baseUrl: text(body.baseUrl),
+      tokenEnv: text(body.tokenEnv),
+      models: text(body.models),
+      maxOutputTokens: text(body.maxOutputTokens),
+    };
+    const build = (base: AppConfig) =>
+      buildProvider(
+        draft,
+        base.providers.map((provider) => provider.id),
+      );
+    return void mutate(res, {
+      refuse: (base) => {
+        const built = build(base);
+        return "problem" in built ? built.problem : null;
+      },
+      update: (base) => {
+        const built = build(base);
+        return { providers: "entry" in built ? [...base.providers, built.entry] : base.providers };
+      },
+      answer: (next) => res.json({ providers: next.providers }),
+    });
+  });
+
+  app.post("/api/config/providers/remove", (req, res) => {
+    const id = text(requestBody(req.body).id);
+    if (!id) return res.status(400).json({ error: "id is required" });
+    return void mutate(res, {
+      update: (base) => ({ providers: base.providers.filter((provider) => provider.id !== id) }),
+      answer: (next) => res.json({ providers: next.providers }),
     });
   });
 }
