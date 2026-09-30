@@ -21,6 +21,12 @@ Write `.blueprint/polish-report.md` for the person, in their language and in pla
   line per dismissal with its rule, line number and `why`); files over the agreed number, for another
   run.
 
+When `.blueprint/viewpoints.json` records a `writer` verdict for a polished file, add
+`## 書いた人に確かめてほしいこと` / `## For the writer`: one item per verdict, giving the file, what was read
+for (the viewpoint's `title` in `<usecase pack>/viewpoints.json`), the `quote` word for word, and the `note` as
+the question. The check looks for every quotation. Under `## 整えたもの` / `## What was polished`, name the
+viewpoints you fixed in the same way as the other changes.
+
 ## Drafts for chaff
 
 First run `node <usecase pack>/checks/feedback.mjs` (with `BLUEPRINT_BASE` and `BLUEPRINT_USECASE` set). It

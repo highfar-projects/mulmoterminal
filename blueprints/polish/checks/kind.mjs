@@ -20,6 +20,8 @@ const ANSWERS = ".blueprint/answers.json";
 /** The kinds in the pack at `usecaseDir`. */
 export const readKinds = (usecaseDir) => JSON.parse(readFileSync(join(usecaseDir, "kinds.json"), "utf8")).kinds;
 
-/** The arguments every chaff run of this build takes for its kind, from the folder's answers (BLUEPRINT_USECASE is the pack). */
-export const kindArgs = () =>
-  existsSync(ANSWERS) ? genreArgs(genreOf(JSON.parse(readFileSync(ANSWERS, "utf8")), readKinds(process.env.BLUEPRINT_USECASE))) : [];
+/** This build's genre, from the folder's answers (BLUEPRINT_USECASE is the pack); null when its kind has none. */
+export const kindGenre = () => (existsSync(ANSWERS) ? genreOf(JSON.parse(readFileSync(ANSWERS, "utf8")), readKinds(process.env.BLUEPRINT_USECASE)) : null);
+
+/** The arguments every chaff run of this build takes for its kind. */
+export const kindArgs = () => genreArgs(kindGenre());

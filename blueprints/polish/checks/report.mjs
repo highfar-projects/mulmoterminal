@@ -1,12 +1,14 @@
 // The report says what was polished, what was checked, and what was left as it was — naming every file.
 import { existsSync, readFileSync } from "node:fs";
 import { fromBase } from "./base.mjs";
+import { readRecord, sectionText, unreportedWriterItems, writerItems } from "./viewpoints.mjs";
 const { fail, readJson } = await import(fromBase("chaff.mjs"));
 const { missingSections } = await import(fromBase("markdown.mjs"));
 const { unreportedDismissals, wrongCases } = await import(fromBase("dismissals.mjs"));
 const { draftsProblems } = await import(fromBase("drafts.mjs"));
 
 const REPORT = ".blueprint/polish-report.md";
+const WRITER_SECTION = [["書いた人に確かめてほしいこと", "For the writer"]];
 const SECTIONS = [
   ["整えたもの", "What was polished"],
   ["確かめたこと", "What was checked"],
@@ -32,3 +34,13 @@ if (unexplained.length > 0) fail(`${REPORT} does not give the rule and the reaso
 const cases = wrongCases(targets.map((target, index) => ({ key: String(index + 1), file: target.file, dismissed: target.dismissed })));
 const draftsLeft = draftsProblems(cases, text, REPORT);
 if (draftsLeft.length > 0) fail(draftsLeft.join("\n"));
+
+// The questions the polish left for the writer are the person's to answer, so the report carries each, quoted.
+const polished = new Set(targets.filter((target) => target.status === "done").map((target) => target.file));
+const questions = writerItems(Object.fromEntries(Object.entries(readRecord()).filter(([file]) => polished.has(file))));
+if (questions.length > 0) {
+  const lacking = missingSections(text, WRITER_SECTION);
+  if (lacking.length > 0) fail(`${REPORT} lacks the section ${lacking.join(", ")}: ${questions.length} question(s) for the writer`);
+  const unasked = unreportedWriterItems(questions, sectionText(text, WRITER_SECTION[0]));
+  if (unasked.length > 0) fail(`${REPORT}: its part for the writer does not name the file and quote, word for word, the place of: ${unasked.join(", ")}`);
+}

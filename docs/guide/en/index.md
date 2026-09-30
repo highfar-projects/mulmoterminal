@@ -8,8 +8,8 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **7.1.0 is out.** The Files pane keeps a file's history, outlines Markdown, previews CSV as a table and hands
-> the agent the lines you selected; a focus mode gives the browser's tab keys to your keymap. [Setup guide](v7.1.0.html)
+> **7.2.0 is out.** Settings now edits the header's buttons and chips, your agents, backends and keys (press the key),
+> and a copy of any theme; a directory's config opens, checks and applies from the Files pane. [Setup guide](v7.2.0.html)
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching
