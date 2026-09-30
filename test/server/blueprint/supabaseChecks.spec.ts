@@ -409,6 +409,13 @@ describe("supabase: advisors.mjs", { timeout: CHECK_TIMEOUT_MS }, () => {
     expect(result.stderr).toContain("- ERROR rls_disabled_in_public: Table `public.books` is public");
   });
 
+  // The seed declares books' insert for signed-in people, and nothing else.
+  it.each(Object.entries({ INSERT: 0, UPDATE: 1 }))("sets aside an always-true %s policy only when the spec declared it (exit %i)", async (command, status) => {
+    const metadata = { name: "books", schema: "public", command, roles: ["authenticated"] };
+    answers.advisors = { status: 1, stdout: JSON.stringify({ results: [{ level: "WARN", name: "rls_policy_always_true", metadata }] }) };
+    expect((await node("advisors.mjs", "--local")).status).toBe(status);
+  });
+
   it("fails when the linter does not answer", async () => {
     answers.advisors = { status: 1, stderr: "not logged in" };
     expect((await node("advisors.mjs", "--linked")).stderr).toContain("did not answer: not logged in");
