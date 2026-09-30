@@ -57,6 +57,16 @@ export const settingsControlsEn = {
     full: "The list is full (8 entries). Remove one first.",
     refused: "The server did not save that. Nothing changed.",
   },
+  shortcuts: {
+    change: "Change",
+    clear: "Clear",
+    recording: "Press the keys… (Esc cancels)",
+    whitespace: "The space bar and other blank keys cannot be bound.",
+    unidentified: "The browser could not name that key. Try another.",
+    plus: "The + key cannot be written in a binding. Use another key.",
+    numpad: "A numpad key cannot be told apart from the same key on the main keyboard. Use another key.",
+    refused: "Not saved — {problems}",
+  },
   providers: {
     labelPlaceholder: "Name, e.g. OpenRouter",
     labelField: "Backend name",

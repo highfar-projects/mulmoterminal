@@ -24,6 +24,7 @@ import {
 import { MAX_WORKTREE_ENV_VARS } from "../../../common/worktreeEnv.js";
 import { TERMINAL_FONT_SIZE_MAX, TERMINAL_FONT_SIZE_MIN } from "../../../common/terminalFontSize.js";
 import { TERMINAL_FONT_FAMILY_MAX_CHARS } from "../../../common/terminalFontFamily.js";
+import { DIR_CONFIG_KEYS } from "../../../common/dirConfigSource";
 
 describe("dirNameField", () => {
   it("trims and caps at NAME_MAX_CHARS", () => {
@@ -156,6 +157,15 @@ describe("dirOrderPriorityField", () => {
 });
 
 describe("dirConfigJsonSchema", () => {
+  // The class the key-by-key cases below each caught one instance of (provider/model, fontSize,
+  // backgroundImage in #2625): a key the loader honours but the schema omits is one the config skill
+  // refuses to write and the Files pane's editor marks as unknown. So the two lists are held equal.
+  it("covers exactly the keys a directory's config is read for", () => {
+    const schema = dirConfigJsonSchema();
+    const props = isRecord(schema.properties) ? Object.keys(schema.properties) : [];
+    expect(props.sort()).toEqual([...DIR_CONFIG_KEYS].sort());
+  });
+
   it("emits an object schema with every writable property", () => {
     const schema = dirConfigJsonSchema();
     expect(schema.type).toBe("object");

@@ -19,6 +19,7 @@ import BlueprintsOverlay from "./components/blueprints/BlueprintsOverlay.vue";
 import FilesOverlay from "./components/FilesOverlay.vue";
 import HoverTip from "./components/HoverTip.vue";
 import ServerStoppedOverlay from "./components/ServerStoppedOverlay.vue";
+import WhatsNewDialog from "./components/WhatsNewDialog.vue";
 import GridView from "./components/GridView.vue";
 import { useSessions } from "./composables/useSessions";
 import { useAppConfig } from "./composables/useAppConfig";
@@ -29,6 +30,8 @@ import { useUnloadGuard } from "./composables/useUnloadGuard";
 import { usePubSub } from "./composables/usePubSub";
 import { openTerminalAt } from "./composables/useNewTerminal";
 import { installDataTips } from "./composables/useDataTips";
+import { useWhatsNew } from "./composables/useWhatsNew";
+import { useI18n } from "vue-i18n";
 import { LAUNCH_TERMINAL_CHANNEL, isLaunchAgent, type LaunchAgent } from "../common/launchAgent";
 import { isRecord } from "../common/isRecord";
 
@@ -74,6 +77,9 @@ useAttentionSound(soundEnabled, soundConfig);
 
 // Reflect session activity in the tab's favicon (idle / working / attention).
 useFaviconState(sessions);
+
+// After an upgrade, the release guides for every version since the dialog was last closed.
+const { whatsNew, dismiss: dismissWhatsNew } = useWhatsNew(useI18n().locale.value);
 </script>
 
 <template>
@@ -104,6 +110,7 @@ useFaviconState(sessions);
        document can never hold two — it teleports to <body> and positions itself against whichever
        chip the pointer is on. -->
   <HoverTip />
+  <WhatsNewDialog v-if="whatsNew" :whats-new="whatsNew" @close="dismissWhatsNew" />
   <!-- Over everything, including the settings modal it was pressed in: once the server is gone
        nothing behind it works, and a live-looking pane underneath would say otherwise (#1820). -->
   <ServerStoppedOverlay />

@@ -65,7 +65,7 @@ const REACHABLE_BY: Record<string, Reachable> = {
   // opened config.json — the argument for a control rather than against one.
   sessionReapIntervalHours: { ui: true, skill: CONFIG_SKILL },
   terminalSubmit: { ui: true, skill: "mulmoterminal-keys" },
-  keymap: { skill: "mulmoterminal-keys" },
+  keymap: { ui: true, skill: "mulmoterminal-keys" },
   // Beside keymap: both decide what reaches an action, and neither has a control (#2540).
   paletteAliases: { skill: "mulmoterminal-keys" },
   // No Settings control: the palette's own panel adds one at a time (#2546), through its own route.
@@ -99,7 +99,7 @@ const REACHABLE_BY: Record<string, Reachable> = {
 // Each has a section that displays its current state and
 // launches the owning skill, which is what the aria-label assertions in SettingsModal.spec pin.
 // Listed here so that moving one into the UI is a deliberate edit rather than a quiet lapse.
-const DISPLAY_ONLY = ["keymap", "buttons", "chips"];
+const DISPLAY_ONLY = ["buttons", "chips"];
 
 const readAll = (dir: string, ext: string): string => {
   const entries = readdirSync(dir, { withFileTypes: true, recursive: true });
@@ -124,6 +124,7 @@ const ONE_ENTRY_ROUTES: Partial<Record<string, string>> = {
   customAgents: "/api/config/custom-agents/",
   accounts: "/api/config/accounts/",
   providers: "/api/config/providers/",
+  keymap: "/api/config/keymap/binding",
   themes: "/api/config/themes/",
 };
 const writesKey = (source: string, key: string): boolean => {
