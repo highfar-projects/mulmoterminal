@@ -293,6 +293,16 @@ const hangsOnText = (body: string, wires: boolean): string => {
 
 const page = (id: string, html: string): HeadlessPageInput => ({ id, audience: "public", html, datasets, submit });
 
+/** A run, started once more if, and only if, the BROWSER would not load the harness page while node
+ *  fetched it fine. That is the runner, not the code: a starved Windows runner's Chrome misses the
+ *  navigation budget with other specs timing out beside it (#2588). Any other failure, and this one
+ *  a second time, comes back as it came. */
+async function runHeadless(...args: Parameters<typeof runPagesHeadless>): ReturnType<typeof runPagesHeadless> {
+  const first = await runPagesHeadless(...args);
+  const browserMissedIt = !first.ok && first.problems.some((problem) => /the harness page at .* would not load \(.*; node fetched it: 200\)/.test(problem));
+  return browserMissedIt ? runPagesHeadless(...args) : first;
+}
+
 describe.skipIf(!chromeReady)("a headless run, in a real browser", () => {
   // ONE run for the three assertions below. Chrome is started once and the three pages are driven
   // once, because the cost is the browser rather than the checking — and split across three `it`s
@@ -300,7 +310,7 @@ describe.skipIf(!chromeReady)("a headless run, in a real browser", () => {
   let pages: HeadlessPageReport[] = [];
 
   beforeAll(async () => {
-    const run = await runPagesHeadless([
+    const run = await runHeadless([
       page("works", WORKS),
       page("shipped", SHIPPED),
       page("unreachable", UNREACHABLE),
@@ -402,7 +412,7 @@ describe.skipIf(!chromeReady)("a headless run, in a real browser", () => {
     // the documentation must warn about — an author whose save silently does nothing in preview
     // needs to be told this is the reason, not left to conclude the button is broken.
     const wrote: string[] = [];
-    const run = await runPagesHeadless([page("micro", AWAITS_A_MICROTASK), page("real", AWAITS_REAL_WORK)], {
+    const run = await runHeadless([page("micro", AWAITS_A_MICROTASK), page("real", AWAITS_REAL_WORK)], {
       write: async (_cid, values) => {
         wrote.push(values.name ?? "");
         return { ok: true, token: `t${wrote.length}` };
@@ -434,7 +444,7 @@ describe.skipIf(!chromeReady)("a headless run, in a real browser", () => {
     // marking — which is the failure no unit test in this repo can see, because the mark can only
     // be produced by a browser dispatching a real click.
     const wrote: string[] = [];
-    const run = await runPagesHeadless(
+    const run = await runHeadless(
       [page("works", WORKS), page("onload", SUBMITS_ON_LOAD), page("resubmits", RESUBMITS_ON_DECLINE), page("timer", SUBMITS_ON_A_TIMER)],
       {
         write: async (_cid, values) => {
@@ -461,7 +471,7 @@ describe.skipIf(!chromeReady)("a headless run, in a real browser", () => {
   it("writes nothing when it is given no writer, which is every run a test drives", async () => {
     // The invariant that keeps every other test in this file honest: the default has to be the
     // behaviour this action had before it could write at all.
-    const run = await runPagesHeadless([page("works", WORKS)]);
+    const run = await runHeadless([page("works", WORKS)]);
     if (!run.ok) throw new Error(run.problems.join(" "));
     expect(run.wrote).toBe(false);
     expect(run.pages[0]?.presses[0]?.submitted).toEqual({ cid: "orders", fields: ["name"] });
@@ -478,7 +488,7 @@ describe.skipIf(!chromeReady)("a headless run, in a real browser", () => {
     // The page REPORTS WHAT IT FOUND onto its own screen rather than the test inferring it from a
     // write that did not happen: with the click mark not yet set by any runtime, nothing is written
     // either way, so "no record appeared" would prove nothing at all.
-    const run = await runPagesHeadless([
+    const run = await runHeadless([
       page(
         "greedy",
         `
@@ -501,7 +511,7 @@ describe.skipIf(!chromeReady)("a headless run, in a real browser", () => {
   it("photographs each page, and names where the picture went", async () => {
     // The pane's last advantage handed over: a person looking at the screen. The file has to
     // EXIST — a path in a report that opens nothing is worse than no path.
-    const run = await runPagesHeadless([page("works", WORKS)]);
+    const run = await runHeadless([page("works", WORKS)]);
     if (!run.ok) throw new Error(run.problems.join(" "));
     const shot = run.pages[0]?.screenshot;
     expect(shot).not.toBeNull();
@@ -516,7 +526,7 @@ describe.skipIf(!chromeReady)("a document that breaks the questions put to it", 
   // Its own run rather than a seventh page in the shared one: `LIMITS.pages` is 6, and a seventh
   // is dropped — reported, but dropped, so the assertions below would have read `undefined`.
   it("says a question could not be put, rather than reporting an empty page", async () => {
-    const run = await runPagesHeadless([page("poisoned", POISONED)]);
+    const run = await runHeadless([page("poisoned", POISONED)]);
     expect(run.ok).toBe(true);
     if (!run.ok) return;
     const poisoned = run.pages[0];
@@ -551,7 +561,7 @@ describe.skipIf(!chromeReady)("a document that breaks the questions put to it", 
       };
       window.__MC_APP_VIEW.onState(() => {});
       window.__MC_APP_VIEW.ready();${close}`;
-    const run = await runPagesHeadless([page("refuses", refuses)]);
+    const run = await runHeadless([page("refuses", refuses)]);
     expect(run.ok).toBe(true);
     if (!run.ok) return;
     const press = run.pages[0]?.presses[0];
@@ -570,7 +580,7 @@ describe.skipIf(!chromeReady)("a document that stops answering", () => {
     // stops waiting before the page stops spinning, and answers.
     const close = "</scr" + "ipt>";
     const spin = `<div id="x">loading…</div><script>const end = Date.now() + 6000; while (Date.now() < end) {}${close}`;
-    const run = await runPagesHeadless([page("spins", spin)]);
+    const run = await runHeadless([page("spins", spin)]);
     expect(run.ok).toBe(true);
     if (!run.ok) return;
     expect(run.pages[0]?.unresponsive).toBe(true);
@@ -581,7 +591,7 @@ describe.skipIf(!chromeReady)("a document that stops answering", () => {
     // normally: its button is found, pressed, and reaches the parent. The flag is cleared by every
     // mount, and every press mounts again, so read at the end it answers for the last press alone:
     // this page came back with an empty screen, no reason given, and a clean bill.
-    const run = await runPagesHeadless([page("hangs", hangsOnText(`<button type="button" id="go">Order</button>`, true))]);
+    const run = await runHeadless([page("hangs", hangsOnText(`<button type="button" id="go">Order</button>`, true))]);
     expect(run.ok).toBe(true);
     if (!run.ok) return;
     const hung = run.pages[0];
@@ -596,7 +606,7 @@ describe.skipIf(!chromeReady)("a document that stops answering", () => {
     // of the NEXT page. Recorded against whatever is current at that moment, the hung page's
     // failure is filed under the healthy one, and the author is sent to fix a page nothing is
     // wrong with.
-    const run = await runPagesHeadless([page("hangs", hangsOnText("<div>nothing to press</div>", false)), page("works", WORKS)]);
+    const run = await runHeadless([page("hangs", hangsOnText("<div>nothing to press</div>", false)), page("works", WORKS)]);
     expect(run.ok).toBe(true);
     if (!run.ok) return;
     expect(run.pages[0]?.unresponsive).toBe(true);
@@ -609,7 +619,7 @@ describe.skipIf(!chromeReady)("a document that stops answering", () => {
 
 describe.skipIf(chromeReady)("without a browser", () => {
   it("says so, and says what to do instead, rather than pretending to have run", async () => {
-    const run = await runPagesHeadless([page("works", WORKS)]);
+    const run = await runHeadless([page("works", WORKS)]);
     expect(run.ok).toBe(false);
     if (run.ok) return;
     expect(run.problems.join(" ")).toContain("real browser");
