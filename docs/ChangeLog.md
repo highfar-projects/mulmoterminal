@@ -8,6 +8,41 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@8.1.0 — 2026-10-01
+
+> **Setup guide:** [8.1.0 — See what a document task changed, and more examples to try](https://receptron.github.io/mulmoterminal/guide/en/v8.1.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v8.1.0.html))
+
+### Blueprints: seeing and continuing the work
+
+- [#2793](https://github.com/receptron/mulmoterminal/pull/2793) ([#2792](https://github.com/receptron/mulmoterminal/issues/2792)) — the finished screen shows each document a build kept an original of, compared with the file now.
+- [#2795](https://github.com/receptron/mulmoterminal/pull/2795) ([#2794](https://github.com/receptron/mulmoterminal/issues/2794)) — it also compares a review's proposed copies (`<name>.proposed<ext>`) with their documents.
+- [#2797](https://github.com/receptron/mulmoterminal/pull/2797) ([#2796](https://github.com/receptron/mulmoterminal/issues/2796)) — that comparison follows the app's theme, custom themes included.
+- [#2781](https://github.com/receptron/mulmoterminal/pull/2781) ([#2780](https://github.com/receptron/mulmoterminal/issues/2780)) — polish can work through the findings adopt shelved: it asks whether to fix the shelved ones too.
+- [#2783](https://github.com/receptron/mulmoterminal/pull/2783) ([#2782](https://github.com/receptron/mulmoterminal/issues/2782)) — after adopting chaff, the finished screen offers polish on the same places, to work through the shelved findings.
+- [#2765](https://github.com/receptron/mulmoterminal/pull/2765) ([#2764](https://github.com/receptron/mulmoterminal/issues/2764)) — after aligning terms, the finished screen offers polish on the same documents.
+- [#2779](https://github.com/receptron/mulmoterminal/pull/2779) ([#2778](https://github.com/receptron/mulmoterminal/issues/2778)) — polish reads specifications and READMEs for what their readers need.
+- [#2763](https://github.com/receptron/mulmoterminal/pull/2763) ([#2762](https://github.com/receptron/mulmoterminal/issues/2762)) — verify checks unit price × quantity and tax, not only totals.
+
+### Blueprints: examples
+
+- [#2755](https://github.com/receptron/mulmoterminal/pull/2755) ([#2754](https://github.com/receptron/mulmoterminal/issues/2754)) — a polish example for a regulation.
+- [#2773](https://github.com/receptron/mulmoterminal/pull/2773) ([#2772](https://github.com/receptron/mulmoterminal/issues/2772)) — a polish example for an English blog post.
+- [#2757](https://github.com/receptron/mulmoterminal/pull/2757) ([#2756](https://github.com/receptron/mulmoterminal/issues/2756)) — a compare example for a regulation revision.
+- [#2759](https://github.com/receptron/mulmoterminal/pull/2759) ([#2758](https://github.com/receptron/mulmoterminal/issues/2758)) — a summarize example for a report, written for a named reader.
+- [#2761](https://github.com/receptron/mulmoterminal/pull/2761) ([#2760](https://github.com/receptron/mulmoterminal/issues/2760)) — a verify example for an estimate.
+- [#2767](https://github.com/receptron/mulmoterminal/pull/2767) ([#2766](https://github.com/receptron/mulmoterminal/issues/2766)) — a review example for terms of service.
+- [#2769](https://github.com/receptron/mulmoterminal/pull/2769) ([#2768](https://github.com/receptron/mulmoterminal/issues/2768)) — an ask example across two documents that disagree.
+
+### Blueprints: fixes
+
+- [#2785](https://github.com/receptron/mulmoterminal/pull/2785) ([#2784](https://github.com/receptron/mulmoterminal/issues/2784)) — the new-build form shows one example per task, the rest one click away.
+- [#2787](https://github.com/receptron/mulmoterminal/pull/2787) ([#2786](https://github.com/receptron/mulmoterminal/issues/2786)) — document tasks are listed most-used first.
+- [#2789](https://github.com/receptron/mulmoterminal/pull/2789) ([#2788](https://github.com/receptron/mulmoterminal/issues/2788)) — polish's report puts the writer's questions right after what was polished.
+- [#2771](https://github.com/receptron/mulmoterminal/pull/2771) ([#2770](https://github.com/receptron/mulmoterminal/issues/2770)) — style starts with the usual answers for language and strictness.
+- [#2775](https://github.com/receptron/mulmoterminal/pull/2775) ([#2774](https://github.com/receptron/mulmoterminal/issues/2774)) — glossary gives each kind of document its own genre (`by_path`).
+- [#2777](https://github.com/receptron/mulmoterminal/pull/2777) ([#2776](https://github.com/receptron/mulmoterminal/issues/2776)) — polish no longer reports a missing STYLE.md when only chaff.yaml is needed.
+- [#2791](https://github.com/receptron/mulmoterminal/pull/2791) ([#2790](https://github.com/receptron/mulmoterminal/issues/2790)) — the document tasks run chaffjs 0.17.
+
 ## mulmoterminal@8.0.0 — 2026-09-30
 
 > **Setup guide:** [8.0.0 — Every directory setting in a form, one click from its terminal](https://receptron.github.io/mulmoterminal/guide/en/v8.0.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v8.0.0.html))
