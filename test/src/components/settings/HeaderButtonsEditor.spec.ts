@@ -35,6 +35,13 @@ const row = (id: string, ordered = false) => ({
   detail: `run ${id}`,
   ordered,
   draft: { label: id.toUpperCase(), icon: "", run: "shell", payload: `run ${id}`, target: "url", when: "" },
+  folder: null,
+});
+const folderRow = (id: string, children: ReturnType<typeof row>[]) => ({
+  ...row(id),
+  kind: "folder",
+  draft: null,
+  folder: { children, fields: { label: id.toUpperCase(), icon: "", when: "" } },
 });
 
 describe("HeaderButtonsEditor", () => {
@@ -87,9 +94,9 @@ describe("HeaderButtonsEditor", () => {
   });
 
   it("fills the form from a row, saves it as an edit of that id, and can be left", async () => {
-    rows.value = [row("a"), { ...row("f"), kind: "folder", draft: null }];
+    rows.value = [row("a"), folderRow("f", [])];
     const w = mountEditor();
-    expect(w.findAll('[data-testid="header-button-edit"]')).toHaveLength(1);
+    expect(w.findAll('[data-testid="header-button-edit"]')).toHaveLength(2);
     await w.find('[data-testid="header-button-edit"]').trigger("click");
     expect(w.find('[data-testid="header-button-editing"]').exists()).toBe(true);
     expect((field(w, "header-button-label").element as HTMLInputElement).value).toBe("A");
@@ -112,7 +119,7 @@ describe("HeaderButtonsEditor", () => {
     expect(w.find('[data-testid="header-button-editing"]').exists()).toBe(false);
     expect((field(w, "header-button-label").element as HTMLInputElement).value).toBe("");
     await w.findAll('[data-testid="header-button-edit"]')[0].trigger("click");
-    rows.value = [{ ...row("b"), kind: "folder", draft: null }];
+    rows.value = [folderRow("b", [])];
     await flushPromises();
     expect(w.find('[data-testid="header-button-editing"]').exists()).toBe(false);
   });
@@ -128,12 +135,50 @@ describe("HeaderButtonsEditor", () => {
     expect((field(w, "header-button-payload").element as HTMLInputElement).value).toBe("typed");
   });
 
+  it("puts a button into a new or an existing folder", async () => {
+    rows.value = [row("a"), folderRow("f", [row("x")])];
+    const w = mountEditor();
+    await w.find('[data-testid="header-button-into-folder"]').trigger("click");
+    await field(w, "folder-picker-label").setValue("Tools");
+    await w.find('[data-testid="folder-picker-ok"]').trigger("click");
+    await flushPromises();
+    await w.find('[data-testid="header-button-into-folder"]').trigger("click");
+    await w.find('[data-testid="folder-picker-choice"]').setValue("f");
+    expect(w.find('[data-testid="folder-picker-label"]').exists()).toBe(false);
+    await w.find('[data-testid="folder-picker-ok"]').trigger("click");
+    await flushPromises();
+    expect(state.sent).toEqual([
+      ["into-folder", { id: "a", folderLabel: "Tools", folderIcon: "" }],
+      ["into-folder", { id: "a", folderId: "f" }],
+    ]);
+  });
+
+  it("lists a folder's buttons under it, to edit, take out or remove, and edits the folder itself", async () => {
+    rows.value = [folderRow("f", [row("x")])];
+    const w = mountEditor();
+    const child = w.find('[data-testid="header-button-child"]');
+    expect(child.text()).toContain("X");
+    await child.find('[data-testid="header-button-out-of-folder"]').trigger("click");
+    await flushPromises();
+    await child.findAll("button").at(-1)?.trigger("click");
+    await flushPromises();
+    await w.findAll('[data-testid="header-button-edit"]')[0].trigger("click");
+    await field(w, "folder-fields-label").setValue("More");
+    await w.find('[data-testid="folder-fields-save"]').trigger("click");
+    await flushPromises();
+    expect(state.sent).toEqual([
+      ["out-of-folder", { id: "x" }],
+      ["remove", { id: "x" }],
+      ["folder-edit", { id: "f", label: "More", icon: "", when: "" }],
+    ]);
+  });
+
   it("moves and removes by id, and offers no move at an end or on an ordered entry", async () => {
     rows.value = [row("a"), row("b"), row("c", true)];
     const w = mountEditor();
     const items = w.findAll('[data-testid="settings-header-buttons"] li');
-    // Each row: edit, up, down, remove.
-    const buttons = (i: number) => items[i].findAll("button").slice(1);
+    // Each row: edit, into a folder, up, down, remove.
+    const buttons = (i: number) => items[i].findAll("button").slice(2);
     expect(buttons(0)[0].attributes("disabled")).toBeDefined();
     expect(buttons(2)[0].attributes("disabled")).toBeDefined();
     expect(buttons(2)[1].attributes("disabled")).toBeDefined();

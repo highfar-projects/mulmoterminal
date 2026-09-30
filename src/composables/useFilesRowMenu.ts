@@ -54,6 +54,16 @@ export interface FilesRowMenu<TRow> {
   pick: (action: FilesRowAction) => void;
 }
 
+const ownEvent = (event: Event): boolean => event.target === event.currentTarget;
+
+/** What makes an element that is not a row open `row`'s menu — the tree's empty space (#2694):
+ *  focusable, so the keyboard can open it and be given back to it, and only for its OWN events. */
+export const menuAttrsFor = <TRow>(menu: Pick<FilesRowMenu<TRow>, "open" | "onRowKeydown">, row: TRow) => ({
+  tabindex: 0,
+  onContextmenu: (event: MouseEvent) => (ownEvent(event) ? menu.open(row, event) : undefined),
+  onKeydown: (event: KeyboardEvent) => (ownEvent(event) ? menu.onRowKeydown(row, event) : undefined),
+});
+
 export function useFilesRowMenu<TRow>(deps: FilesRowMenuDeps<TRow>): FilesRowMenu<TRow> {
   const menu = ref<OpenRowMenu | null>(null);
   // Where the keyboard goes back to when the menu is DISMISSED rather than clicked past: its items

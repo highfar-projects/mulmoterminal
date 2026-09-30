@@ -67,6 +67,19 @@ describe("header buttons, one entry at a time", () => {
     expect((await post("/api/config/buttons/edit", { run: "shell", label: "x", payload: "y" })).status).toBe(400);
   });
 
+  it("makes a folder from a button, takes it out again, and the empty folder goes", async () => {
+    const test = { ...build, id: "test", label: "Test", cmd: "yarn test" };
+    const { post, onDisk } = await mountWith({ buttons: [build, test] });
+    expect((await post("/api/config/buttons/into-folder", { id: "build", folderLabel: "Tools", folderIcon: "build" })).status).toBe(200);
+    expect((await post("/api/config/buttons/into-folder", { id: "test", folderId: "tools" })).status).toBe(200);
+    expect(onDisk().buttons).toEqual([{ id: "tools", label: "Tools", icon: "build", items: [build, test] }]);
+    expect((await post("/api/config/buttons/folder-edit", { id: "tools", label: "More", icon: "", when: "isGitRepo" })).status).toBe(200);
+    expect((await post("/api/config/buttons/out-of-folder", { id: "build" })).status).toBe(200);
+    expect((await post("/api/config/buttons/remove", { id: "test" })).status).toBe(200);
+    expect(onDisk().buttons).toEqual([build]);
+    expect((await post("/api/config/buttons/into-folder", {})).status).toBe(400);
+  });
+
   it("keeps the built-in PR button when the first button is added", async () => {
     const { post, onDisk } = await mountWith({});
     expect((await post("/api/config/buttons/add", { run: "shell", label: "Build", payload: "yarn build" })).status).toBe(200);

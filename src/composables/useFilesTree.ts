@@ -23,6 +23,9 @@ export interface TreeNode {
   children: TreeNode[];
 }
 
+/** The tree's root as if it were a row — what a menu opened on no row, or in an empty folder, acts on. */
+export const ROOT_ROW: TreeNode = { name: "", path: "", dir: true, size: 0, expanded: true, loaded: true, children: [] };
+
 /** One visible row: a node and how deep it sits, so the template renders a flat list rather than a
  *  recursive component. */
 export interface TreeRow {

@@ -10,7 +10,7 @@
 import { onBeforeUnmount, onMounted, ref, shallowRef, computed, nextTick, useTemplateRef, watch } from "vue";
 import type { FilesPanelSeed } from "../composables/filesPanelSeed";
 import { expandedPaths, restoreLevels } from "./filesTreeState";
-import { useFilesTree, type TreeNode } from "../composables/useFilesTree";
+import { ROOT_ROW, useFilesTree, type TreeNode } from "../composables/useFilesTree";
 import { useOpenFile } from "../composables/useOpenFile";
 import { useFilesReveal } from "../composables/useFilesReveal";
 import { useFilesPreviewWire } from "../composables/useFilesPreviewWire";
@@ -27,6 +27,7 @@ import { useFilesGitStatus } from "../composables/useFilesGitStatus";
 import { useFileHeadText } from "../composables/useFileHeadText";
 import { rawFileSrc } from "./filesPreviewSrc";
 import FileFinder from "./FileFinder.vue";
+import FilesTreeEmpty from "./FilesTreeEmpty.vue";
 import DirConfigSaveNote from "./DirConfigSaveNote.vue";
 import FileSearch from "./FileSearch.vue";
 import { useFileSearchPanel } from "../composables/useFileSearchPanel";
@@ -35,7 +36,7 @@ import { clippedNameTip } from "./fileTreeWidth";
 import FilesToolbarButton from "./FilesToolbarButton.vue";
 import { canOpenInCanvas, absoluteUnder, type StoriesRoots } from "../composables/canvasOpenFile";
 import { filesRowActions, type FilesRowAction } from "./filesRowActions";
-import { useFilesRowMenu } from "../composables/useFilesRowMenu";
+import { menuAttrsFor, useFilesRowMenu } from "../composables/useFilesRowMenu";
 import { isTreeOpAction, useTreeFileOps } from "../composables/useTreeFileOps";
 import { focusTreeRow } from "./treeRowFocus";
 import { askTheMachine } from "./filesPaneApi";
@@ -141,6 +142,7 @@ const rowActionsFor = (node: TreeNode): FilesRowAction[] =>
     // is selected inside its own (#2039).
     isDir: node.dir,
     cwd: props.cwd,
+    rootListed: tree.roots.value !== null && !tree.error.value,
     terminal: insertTerminal.value,
     // The same pair the header's Canvas button is drawn from, so a row can never offer what that
     // button would refuse — `canvasTarget` is "there is a cell to put a Canvas beside" and the
@@ -175,6 +177,8 @@ const focusRow = (p: string) => focusTreeRow(treeEl.value, p);
 const fileOps = useTreeFileOps({ cwd: () => props.cwd, tree, tabs, file, t, focusRow, changed: () => void gitStatus.refresh() });
 
 const { menu: rowMenu, ...rowMenuApi } = useFilesRowMenu<TreeNode>({ menuEl: rowMenuEl, actionsFor: rowActionsFor, run: runRowAction });
+// The menu on the tree's empty space and in an empty folder: the root as a row (#2694).
+const rootMenu = menuAttrsFor(rowMenuApi, ROOT_ROW);
 
 // Cmd/Ctrl+click asks for a tab of its own, as it asks a browser for one; a plain click replaces
 // the front tab, as it replaced the one open file before tabs.
@@ -610,10 +614,10 @@ defineExpose({
       @stop="head.stopComparing()"
     />
     <div class="flex min-h-0 flex-auto">
-      <nav ref="treeEl" class="shrink-0 grow-0 overflow-auto py-1.5" :style="treeStyle()" :aria-label="t('tips.panes.fileTree')">
+      <nav ref="treeEl" class="shrink-0 grow-0 overflow-auto py-1.5" :style="treeStyle()" :aria-label="t('tips.panes.fileTree')" v-bind="rootMenu">
         <p v-if="tree.error.value" class="p-4 text-[13px] text-err">{{ tree.error.value }}</p>
         <p v-else-if="tree.roots.value === null" data-testid="files-tree-loading" class="p-4 text-[13px] text-muted">Loading…</p>
-        <p v-else-if="tree.roots.value.length === 0" data-testid="files-tree-empty" class="p-4 text-[13px] text-muted">Empty directory.</p>
+        <FilesTreeEmpty v-else-if="tree.roots.value.length === 0" :actions="rowActionsFor(ROOT_ROW)" @run="runRowAction" @menu="rootMenu.onContextmenu" />
         <button
           v-for="{ node, depth } in tree.rows.value"
           :key="node.path"
@@ -771,7 +775,7 @@ defineExpose({
           class="flex w-full cursor-pointer items-center gap-2 whitespace-nowrap rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left text-[13px] text-secondary hover:bg-hover hover:text-fg"
           @click="rowMenuApi.pick(action)"
         >
-          <span class="material-symbols-outlined text-[15px]" aria-hidden="true">{{ action.icon }}</span> {{ action.label }}
+          <span class="material-symbols-outlined text-[15px]" aria-hidden="true">{{ action.icon }}</span> {{ t(action.labelKey) }}
         </button>
       </div>
     </Teleport>

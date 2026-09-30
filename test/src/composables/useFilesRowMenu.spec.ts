@@ -18,7 +18,7 @@ import type { FilesRowAction } from "../../../src/components/filesRowActions";
 // Only the COUNT matters here — the clamp reads `actions.length` and nothing else — so these are
 // real `insert-relative` entries rather than a cast-shaped stand-in.
 const actions = (n: number): FilesRowAction[] =>
-  Array.from({ length: n }, (_, i) => ({ id: "insert-relative", label: `a${i}`, icon: "content_paste", text: `a${i}` }));
+  Array.from({ length: n }, (_, i) => ({ id: "insert-relative", labelKey: `a${i}`, icon: "content_paste", text: `a${i}` }));
 
 const heightOf = (count: number): number => count * MENU_METRICS.rowPx + MENU_METRICS.padPx;
 

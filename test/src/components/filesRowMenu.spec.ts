@@ -230,4 +230,57 @@ describe("the files tree's row menu", () => {
     await flushPromises();
     expect(fakeEditor.setDoc).toHaveBeenCalledWith("# hello", "README.md");
   });
+
+  // #2694. The tree's empty space is the root: its menu offers a new file or folder there, and only that.
+  it("opens a root menu on the tree's empty space", async () => {
+    const w = await mountPane();
+    const event = rightClick(w.get("nav").element);
+    await flushPromises();
+    expect(event.defaultPrevented).toBe(true);
+    expect(allLabels()).toEqual(["New file…", "New folder…"]);
+  });
+
+  // The keyboard reaches it too, and gets the empty space back when the menu is dismissed.
+  it("opens the root menu from the keyboard, and gives the keyboard back", async () => {
+    const w = await mountPane();
+    const nav = w.get("nav").element;
+    if (!(nav instanceof HTMLElement)) throw new Error("no tree");
+    nav.focus();
+    nav.dispatchEvent(new KeyboardEvent("keydown", { key: "F10", shiftKey: true, bubbles: true }));
+    await flushPromises();
+    expect(allLabels()).toEqual(["New file…", "New folder…"]);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await flushPromises();
+    expect(document.activeElement).toBe(nav);
+  });
+
+  // Nothing new goes on a root that could not be listed.
+  it("offers no root menu while the tree could not be read", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ error: "unreadable" }), { status: 500 })),
+    );
+    const w = await mountPane();
+    rightClick(w.get("nav").element);
+    await flushPromises();
+    expect(menu()).toBeNull();
+    vi.unstubAllGlobals();
+  });
+
+  // An empty folder has no row to right-click, so what the menu would offer is right there.
+  it("offers a new file or folder in an empty folder, from the keyboard too", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => new Response(JSON.stringify(String(input).includes("/list") ? { entries: [] } : { ok: true }))),
+    );
+    const prompt = vi.spyOn(window, "prompt").mockReturnValue(null);
+    const w = await mountPane();
+    const button = w.get('[data-testid="files-empty-new-file"]');
+    expect(button.text()).toBe("New file…");
+    await button.trigger("click");
+    await flushPromises();
+    expect(prompt).toHaveBeenCalledWith("Name of the new file", "");
+    prompt.mockRestore();
+    vi.unstubAllGlobals();
+  });
 });
