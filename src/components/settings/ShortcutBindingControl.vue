@@ -4,7 +4,8 @@ import { useI18n } from "vue-i18n";
 import { bindingFromEvent } from "../../../common/keyRecording";
 import { isBareEscape, type KeymapAction } from "../../../common/keymap";
 import { setKeymapBinding } from "../../composables/keymapEditing";
-import { setShortcutRecording } from "../../composables/shortcutRecording";
+import { claimShortcutRecording, releaseShortcutRecording } from "../../composables/shortcutRecording";
+import { isImeConfirming } from "../../composables/imeComposition";
 
 // Change or clear one shortcut by pressing the keys (#2619). While recording, the key goes to the
 // recorder and nowhere else: the app's own shortcut handlers stand down (shortcutRecording), and this
@@ -17,7 +18,7 @@ const message = ref<{ text: string; problem: boolean } | null>(null);
 
 function stop() {
   recording.value = false;
-  setShortcutRecording(false);
+  releaseShortcutRecording(stop);
   window.removeEventListener("keydown", onKey, true);
 }
 
@@ -30,8 +31,10 @@ async function save(binding: string | null) {
 }
 
 function onKey(e: KeyboardEvent) {
+  // An IME candidate being confirmed is not a shortcut; let the input method have it.
+  if (e.isComposing || isImeConfirming(e)) return;
   e.preventDefault();
-  e.stopPropagation();
+  e.stopImmediatePropagation();
   if (isBareEscape(e)) return stop();
   const recorded = bindingFromEvent(e);
   if ("pending" in recorded) return;
@@ -46,7 +49,7 @@ function onKey(e: KeyboardEvent) {
 function start() {
   message.value = null;
   recording.value = true;
-  setShortcutRecording(true);
+  claimShortcutRecording(stop);
   window.addEventListener("keydown", onKey, true);
 }
 
@@ -64,6 +67,7 @@ const BUTTON =
     :disabled="saving"
     :aria-pressed="recording"
     @click="recording ? stop() : start()"
+    @blur="recording && stop()"
   >
     {{ recording ? t("settingsControls.shortcuts.recording") : t("settingsControls.shortcuts.change") }}
   </button>
@@ -72,6 +76,7 @@ const BUTTON =
   </button>
   <p
     v-if="message"
+    :role="message.problem ? 'alert' : 'status'"
     class="m-0 basis-full text-[11px]"
     :class="message.problem ? 'text-err-text' : 'text-[var(--warn-text,#e0a030)]'"
     data-testid="shortcut-message"

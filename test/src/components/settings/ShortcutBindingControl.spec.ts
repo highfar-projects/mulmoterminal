@@ -89,4 +89,54 @@ describe("ShortcutBindingControl", () => {
     await flushPromises();
     expect(state.sent).toEqual([]);
   });
+
+  it("lets only one row record: starting a second stops the first", async () => {
+    const first = mountControl();
+    const second = mount(ShortcutBindingControl, { props: { action: "zoom-prev", bound: false }, global: { plugins: [i18n] } });
+    await first.find('[data-testid="shortcut-change"]').trigger("click");
+    await second.find('[data-testid="shortcut-change"]').trigger("click");
+    expect(first.find('[data-testid="shortcut-change"]').attributes("aria-pressed")).toBe("false");
+    press({ key: "PageDown" });
+    await flushPromises();
+    expect(state.sent).toEqual([["zoom-prev", "PageDown"]]);
+    first.unmount();
+    second.unmount();
+  });
+
+  it("stops recording when focus leaves the button — another tab, or the modal closing", async () => {
+    const wrapper = mountControl();
+    await wrapper.find('[data-testid="shortcut-change"]').trigger("click");
+    await wrapper.find('[data-testid="shortcut-change"]').trigger("blur");
+    expect(shortcutRecording.value).toBe(false);
+    press({ key: "PageDown" });
+    await flushPromises();
+    expect(state.sent).toEqual([]);
+    wrapper.unmount();
+  });
+
+  it("leaves a key alone while an input method is composing", async () => {
+    const wrapper = mountControl();
+    await wrapper.find('[data-testid="shortcut-change"]').trigger("click");
+    const e = press({ key: "Enter", isComposing: true });
+    await flushPromises();
+    expect(e.defaultPrevented).toBe(false);
+    expect(state.sent).toEqual([]);
+    expect(shortcutRecording.value).toBe(true);
+    wrapper.unmount();
+  });
+
+  it("announces a refusal as an alert and a warning as a status", async () => {
+    const wrapper = mountControl();
+    await wrapper.find('[data-testid="shortcut-change"]').trigger("click");
+    press({ key: " " });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="shortcut-message"]').attributes("role")).toBe("alert");
+    state.outcome = { ok: true, warnings: ["the browser keeps it"] };
+    await wrapper.find('[data-testid="shortcut-change"]').trigger("click");
+    press({ key: "PageDown" });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="shortcut-message"]').attributes("role")).toBe("status");
+    wrapper.unmount();
+  });
 });
+

@@ -86,4 +86,20 @@ describe("POST /api/config/keymap/binding", () => {
     expect((await set("zoom-next", 42)).status).toBe(400);
     expect((await set("zoom-next", "  ")).status).toBe(400);
   });
+
+  // Codex on #2668: a duplicate is reported on the action that LOSES, and a key that starts a bound
+  // sequence on the sequence — neither is the edited action, and both have to reach the person.
+  it("warns about the binding this key takes over, not only about the edited action", async () => {
+    const { set } = await mountWith({ keymap: { "zoom-prev": "PageUp" } });
+    const res = await set("zoom-next", "PageUp");
+    expect(res.status).toBe(200);
+    expect(JSON.stringify(res.body.warnings)).toContain("zoom-prev");
+  });
+
+  it("does not repeat a warning the keymap already had", async () => {
+    const { set } = await mountWith({ keymap: { "zoom-prev": "PageUp", "zoom-next": "PageUp" } });
+    const res = await set("focus-mode", "Ctrl+Shift+f");
+    expect(res.body.warnings).toEqual([]);
+  });
 });
+

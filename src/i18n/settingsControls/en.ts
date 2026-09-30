@@ -64,6 +64,7 @@ export const settingsControlsEn = {
     whitespace: "The space bar and other blank keys cannot be bound.",
     unidentified: "The browser could not name that key. Try another.",
     plus: "The + key cannot be written in a binding. Use another key.",
+    numpad: "A numpad key cannot be told apart from the same key on the main keyboard. Use another key.",
     refused: "Not saved — {problems}",
   },
   playful: {

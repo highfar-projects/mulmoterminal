@@ -64,6 +64,7 @@ export const settingsControlsKo = {
     whitespace: "스페이스 등 빈 키는 지정할 수 없습니다.",
     unidentified: "브라우저가 그 키를 알아보지 못했습니다. 다른 키를 쓰세요.",
     plus: "+ 키는 지정에 쓸 수 없습니다. 다른 키를 쓰세요.",
+    numpad: "숫자 패드 키는 메인 키보드의 같은 키와 구별할 수 없습니다. 다른 키를 쓰세요.",
     refused: "저장하지 않았습니다 — {problems}",
   },
   playful: {

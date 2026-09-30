@@ -64,6 +64,7 @@ export const settingsControlsZhCN = {
     whitespace: "空格等空白键无法绑定。",
     unidentified: "浏览器无法识别该键，请换一个。",
     plus: "+ 键无法写进绑定，请换一个键。",
+    numpad: "小键盘上的键无法与主键盘上的同一键区分，请换一个键。",
     refused: "未保存 — {problems}",
   },
   playful: {

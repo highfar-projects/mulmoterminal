@@ -48,6 +48,9 @@ describe("bindingFromEvent", () => {
     expect(bindingFromEvent(eventOf("Dead", 4))).toEqual({ unusable: "unidentified" });
     // The separator itself: a binding naming it would parse as nothing and never fire.
     expect(bindingFromEvent(eventOf("+", 8))).toEqual({ unusable: "plus" });
+    // A numpad key would also fire for the same key on the main row.
+    expect(bindingFromEvent({ ...eventOf("1", 0), location: 3 })).toEqual({ unusable: "numpad" });
+    expect(bindingFromEvent({ ...eventOf("1", 0), location: 0 })).toEqual({ binding: "1" });
     expect(parseKeyBinding("Shift++")).toBeNull();
   });
 });

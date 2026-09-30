@@ -19,7 +19,14 @@ function bindingOf(value: unknown): string | null | undefined {
   return typeof value === "string" ? value.trim() : undefined;
 }
 
-const problemsFor = (keymap: Record<string, unknown>, action: string) => validateKeymap(keymap).filter((problem) => problem.action === action);
+// What this change BROUGHT, across the whole keymap: a duplicate is reported on the action that
+// LOSES, and a key that starts an existing sequence on the sequence — neither is the edited action,
+// and both are exactly what the person pressing the key needs to hear.
+const describe = (problem: { action: string; reason: string }) => `${problem.action}: ${problem.reason}`;
+function problemsIntroduced(before: Keymap, after: Record<string, unknown>) {
+  const existing = new Set(validateKeymap(before).map(describe));
+  return validateKeymap(after).filter((problem) => !existing.has(describe(problem)));
+}
 
 export function mountKeymapBindingRoute(app: Express, mutate: MutateOnDisk): void {
   app.post("/api/config/keymap/binding", (req, res) => {
@@ -29,13 +36,17 @@ export function mountKeymapBindingRoute(app: Express, mutate: MutateOnDisk): voi
     if (!isKeymapAction(action) || binding === undefined || binding === "")
       return res.status(400).json({ error: "action and binding (string or null) required" });
     const next = (base: AppConfig) => keymapWithBinding(base.keymap, action, binding);
+    let introduced: ReturnType<typeof problemsIntroduced> = [];
     return void mutate(res, {
       refuse: (base) => {
-        const fatal = problemsFor(next(base), action).filter((problem) => problem.fatal);
-        return fatal.length ? { error: "fatal", problems: fatal.map((problem) => problem.reason) } : null;
+        const fatal = problemsIntroduced(base.keymap, next(base)).filter((problem) => problem.fatal);
+        return fatal.length ? { error: "fatal", problems: fatal.map(describe) } : null;
       },
-      update: (base) => ({ keymap: next(base) }),
-      answer: (saved) => res.json({ keymap: saved.keymap, warnings: problemsFor(saved.keymap, action).map((problem) => problem.reason) }),
+      update: (base) => {
+        introduced = problemsIntroduced(base.keymap, next(base));
+        return { keymap: next(base) };
+      },
+      answer: (saved) => res.json({ keymap: saved.keymap, warnings: introduced.filter((problem) => !problem.fatal).map(describe) }),
     });
   });
 }

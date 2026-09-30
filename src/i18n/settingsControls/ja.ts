@@ -64,6 +64,7 @@ export const settingsControlsJa = {
     whitespace: "スペースなどの空白のキーは割り当てられません。",
     unidentified: "ブラウザがそのキーを識別できませんでした。別のキーにしてください。",
     plus: "+ のキーは割り当てに書けません。別のキーにしてください。",
+    numpad: "テンキーは、メインのキーボードの同じキーと区別できません。別のキーにしてください。",
     refused: "保存していません — {problems}",
   },
   playful: {

@@ -64,6 +64,7 @@ export const settingsControlsZhTW = {
     whitespace: "空白鍵等空白按鍵無法綁定。",
     unidentified: "瀏覽器無法識別該按鍵，請換一個。",
     plus: "+ 鍵無法寫進綁定，請換一個鍵。",
+    numpad: "數字鍵盤上的鍵無法與主鍵盤上的同一鍵區分，請換一個鍵。",
     refused: "未儲存 — {problems}",
   },
   playful: {
