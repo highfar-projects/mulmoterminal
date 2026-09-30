@@ -14,8 +14,12 @@ const { t } = useI18n();
 
 // Keys held by entries this version does not know (a newer release's actions): taken, like any other.
 const reserved = ref<string[]>([]);
+// An apply's answer is newer than a fetch that set out before it, and wins.
+let answersHeard = 0;
 onMounted(async () => {
-  reserved.value = await fetchPresetReserved();
+  const heardBefore = answersHeard;
+  const fetched = await fetchPresetReserved();
+  if (answersHeard === heardBefore) reserved.value = fetched;
 });
 const changes = computed(() => presetChanges(activeKeymap.value, KEYMAP_PRESETS[props.platform], reserved.value));
 const additions = computed(() => changes.value.filter((change) => change.kind === "add" || change.kind === "add-send"));
@@ -46,6 +50,7 @@ async function apply(): Promise<void> {
   saving.value = false;
   outcome.value = result.status;
   if (result.status !== "failed") {
+    answersHeard += 1;
     reserved.value = result.reserved;
     setActiveKeymap(result.keymap);
   }

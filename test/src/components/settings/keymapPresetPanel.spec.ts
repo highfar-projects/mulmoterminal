@@ -83,6 +83,18 @@ describe("KeymapPresetPanel", () => {
     expect(kinds(w)).toEqual(["add", "add", "taken", "add"]);
   });
 
+  // The held keys fetched when the panel opened must not undo what an apply that answered first said.
+  it("keeps the held keys from an apply's answer over a fetch that set out before it", async () => {
+    let fetched: (value: string[]) => void = () => {};
+    fetchPresetReserved.mockReturnValue(new Promise((resolve) => (fetched = resolve)));
+    applyKeymapPreset.mockResolvedValue({ status: "changed", keymap: {}, reserved: ["Alt+ArrowUp"] });
+    const w = panelFor({});
+    await press(w);
+    fetched([]);
+    await flushPromises();
+    expect(kinds(w)[0]).toBe("taken");
+  });
+
   it("sends one request however fast the button is pressed", async () => {
     let answer: (value: unknown) => void = () => {};
     applyKeymapPreset.mockReturnValue(new Promise((resolve) => (answer = resolve)));

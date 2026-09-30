@@ -125,6 +125,11 @@ describe("isPresetChangeList", () => {
     [[{ kind: "remove", binding: "F8" }]],
     [[{ kind: "add", action: "not-an-action", binding: "F8" }]],
     [[{ kind: "add", action: "zoom-toggle", binding: 8 }]],
+    [[{ kind: "add", binding: "a" }]],
+    [[{ kind: "kept", action: "zoom-toggle", binding: "a" }]],
+    [[{ kind: "add-send", binding: "Cmd+ArrowLeft" }]],
+    [[{ kind: "taken", binding: "F8" }]],
+    [[{ kind: "toString", binding: "F8" }]],
   ])("refuses %j", (value) => {
     expect(isPresetChangeList(value)).toBe(false);
   });

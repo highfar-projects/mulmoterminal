@@ -104,20 +104,23 @@ export function presetChanges(keymap: Keymap, preset: KeymapPreset, reserved: re
   return [...actions, ...preset.send.map((entry) => sendChange(keymap, claimed, entry))];
 }
 
-const CHANGE_KINDS = new Set(["add", "add-send", "kept", "kept-send", "taken"]);
+const isText = (value: unknown): value is string => typeof value === "string";
+
+/** Each kind's own fields, as `presetChanges` draws them. */
+const CHANGE_SHAPES: Record<PresetChange["kind"], (change: Record<string, unknown>) => boolean> = {
+  add: (change) => isKeymapAction(change.action),
+  "add-send": (change) => isText(change.bytes),
+  kept: (change) => isKeymapAction(change.action) && isText(change.current),
+  "kept-send": () => true,
+  taken: (change) => change.action === "send" || isKeymapAction(change.action),
+};
+const isChangeKind = (kind: unknown): kind is PresetChange["kind"] => isText(kind) && Object.hasOwn(CHANGE_SHAPES, kind);
 
 /** A list of changes as the Settings panel sends it back — its shape only; whether it is the RIGHT list
  *  is the route's comparison with the one it works out. */
 export const isPresetChangeList = (value: unknown): value is PresetChange[] =>
   Array.isArray(value) &&
-  value.every(
-    (change) =>
-      isRecord(change) &&
-      typeof change.kind === "string" &&
-      CHANGE_KINDS.has(change.kind) &&
-      typeof change.binding === "string" &&
-      (change.action === undefined || change.action === "send" || isKeymapAction(change.action)),
-  );
+  value.every((change) => isRecord(change) && isChangeKind(change.kind) && isText(change.binding) && CHANGE_SHAPES[change.kind](change));
 
 /** The whole keymap after the preset's additions — what is written to the config. */
 export function withPreset(keymap: Keymap, changes: PresetChange[]): Keymap {
