@@ -62,6 +62,10 @@ const settingLines = (text) =>
     .filter((line) => line.trim() !== "" && !line.trim().startsWith("#"));
 
 const stillWrites = (file, pair) => writesOnItsOwn(readFileSync(file, "utf8"), pair);
+// A preferred-term finding for this pair names both spellings (「サーバ」は「サーバー」と書きます): one for another pair
+// in the same file is not proof that this one is in chaff.yaml.
+const reportsPair = (finding, { avoided, preferred }) =>
+  finding.rule === "preferred-term" && finding.message.includes(avoided) && finding.message.includes(preferred);
 
 const appliedProblems = (before) => {
   if (!existsSync(CONFIG)) return [`${CONFIG} is missing, but the person asked for the spellings to go into it`];
@@ -74,7 +78,7 @@ const appliedProblems = (before) => {
   const unreported = avoided.flatMap((pair) =>
     files
       .filter((file) => stillWrites(file, pair))
-      .filter((file) => !findingsIn(file).some((finding) => finding.rule === "preferred-term"))
+      .filter((file) => !findingsIn(file).some((finding) => reportsPair(finding, pair)))
       .map((file) => `${file} still writes 「${pair.avoided}」, but chaff does not report it`),
   );
   return [

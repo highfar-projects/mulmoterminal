@@ -47,10 +47,14 @@ const RULES = (level: string) => ({
   detected: { genre: "technical/readme", language: "ja" },
   rules: [{ id: "preferred-term", now: { level } }],
 });
-const PREFERRED_FOUND = {
-  "kitei.txt": [{ rule: "preferred-term", level: "warning", file: "kitei.txt", line: 13 }],
-  "tebiki.md": [{ rule: "preferred-term", level: "warning", file: "tebiki.md", line: 15 }],
-};
+const found = (file: string, line: number, avoided: string, preferred: string) => ({
+  rule: "preferred-term",
+  level: "warning",
+  file,
+  line,
+  message: `「${avoided}」は「${preferred}」と書きます`,
+});
+const PREFERRED_FOUND = { "kitei.txt": [found("kitei.txt", 13, "サーバ", "サーバー")], "tebiki.md": [found("tebiki.md", 15, "サーバ", "サーバー")] };
 const CONFIG = "language: ja\ngenre: technical/readme\nprefer:\n  サーバ: サーバー\nrules:\n  preferred-term: normal\n";
 
 beforeEach(() => {
@@ -101,6 +105,25 @@ describeSh("glossary: apply", () => {
     writeFake("rules.json", RULES("off"));
     writeFake("findings.json", PREFERRED_FOUND);
     expect(node("glossary.mjs", ["apply"]).stderr).toContain("preferred-term is off");
+  });
+
+  it("wants each spelling reported for itself: another pair's finding in the same file is no proof", () => {
+    const userName = {
+      term: "ユーザー名",
+      spellings: [
+        { spelling: "ユーザー名", citations: [cite("tebiki.md", "h1.2", "ユーザー名とパスワード")] },
+        { spelling: "ユーザ名", citations: [cite("tebiki.md", "h1.3", "ユーザ名を忘れた")] },
+      ],
+      preferred: "ユーザー名",
+    };
+    write(".blueprint/glossary.json", { terms: [...GLOSSARY.terms, userName] });
+    expect(node("glossary.mjs", ["collect"]).code).toBe(0);
+    write("chaff.yaml", CONFIG);
+    writeFake("rules.json", RULES("normal"));
+    writeFake("findings.json", PREFERRED_FOUND);
+    expect(node("glossary.mjs", ["apply"]).stderr).toContain("tebiki.md still writes 「ユーザ名」, but chaff does not report it");
+    writeFake("findings.json", { ...PREFERRED_FOUND, "tebiki.md": [...PREFERRED_FOUND["tebiki.md"], found("tebiki.md", 15, "ユーザ名", "ユーザー名")] });
+    expect(node("glossary.mjs", ["apply"])).toEqual({ code: 0, stderr: "" });
   });
 
   it("asks no report of a document that writes the avoided spelling only inside the preferred one", () => {
