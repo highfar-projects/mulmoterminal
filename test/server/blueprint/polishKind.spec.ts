@@ -4,7 +4,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { CHAFF_DEFAULT_STYLE, genreArgs, genreOf, readKinds } from "../../../blueprints/polish/checks/kind.mjs";
+import { CHAFF_DEFAULT_STYLE, FIX_SHELVED, FOLDER_STYLE, genreArgs, genreOf, readKinds, shelvedArgs } from "../../../blueprints/polish/checks/kind.mjs";
 import { PACKS } from "./docsPackHarness";
 
 // `npx chaffjs@0.16 genres`. A kind naming a genre chaff lacks stops every chaff run of the build (chaff refuses an
@@ -96,5 +96,23 @@ describe("polish: the kinds of document", () => {
   it("turns a genre into chaff's argument, and none into nothing", () => {
     expect(genreArgs("blog/tech")).toEqual(["--genre", "blog/tech"]);
     expect(genreArgs(null)).toEqual([]);
+  });
+});
+
+describe("polish: the findings a baseline shelved", () => {
+  it("are shown only when the folder's style is used and the person asked for them", () => {
+    expect(shelvedArgs({ style: FOLDER_STYLE, shelved: FIX_SHELVED })).toEqual(["--show-baseline"]);
+    expect(shelvedArgs({ style: FOLDER_STYLE, shelved: "新しい指摘だけ" })).toEqual([]);
+    expect(shelvedArgs({ style: FOLDER_STYLE })).toEqual([]);
+    expect(shelvedArgs({ style: CHAFF_DEFAULT_STYLE, shelved: FIX_SHELVED })).toEqual([]);
+    expect(shelvedArgs(null)).toEqual([]);
+  });
+
+  it("name the interview's own option and style", () => {
+    const question = hearing.questions.find((entry: { id: string }) => entry.id === "shelved");
+    expect(question.options).toContain(FIX_SHELVED);
+    expect(question.showIf).toEqual({ id: "style", equals: FOLDER_STYLE });
+    expect(question.needsPath).toEqual({ [FIX_SHELVED]: ".chaff-baseline.json" });
+    expect(hearing.questions.find((entry: { id: string }) => entry.id === "style").options).toContain(FOLDER_STYLE);
   });
 });

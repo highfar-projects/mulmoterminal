@@ -33,7 +33,8 @@ Follow `STYLE.md` when the answer `scope` includes the guide; otherwise, and whe
 ## Check it
 
 `sh <base pack>/checks/chaff.sh <the file>` — with the same `--genre` as the survey when the answer `kind`
-gives one (see `<usecase pack>/kinds.json`) — must report no warning or error, except the ones you set aside.
+gives one (see `<usecase pack>/kinds.json`), and `--show-baseline` when the answer `shelved` asks for the shelved
+findings too — must report no warning or error, except the ones you set aside.
 Set a finding aside — never change the meaning to satisfy a rule — in one of two cases, by adding it to the
 file's entry in `.blueprint/polish.json`:
 

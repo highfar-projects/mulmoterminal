@@ -21,6 +21,10 @@ Write `.blueprint/polish-report.md` for the person, in their language and in pla
   line per dismissal with its rule, line number and `why`); files over the agreed number, for another
   run.
 
+When the answer `shelved` asked for the shelved findings too, say under `## 整えたもの` / `## What was polished`
+that the counts include them. Their entries stay in `.chaff-baseline.json`; a fixed sentence no longer matches one,
+so there is nothing to clean up.
+
 With the folder's style, the style is its `chaff.yaml`. `STYLE.md` belongs to the answer `scope` only, so when
 `scope` did not ask for the guide, a folder without `STYLE.md` lacks nothing: do not mention it.
 

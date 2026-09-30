@@ -2,7 +2,7 @@
 // The polish pack's checks decide when a document was polished without changing what it says. They run here
 // for real against a stand-in chaff (see docsPackHarness): the originals are kept, and the check compares
 // headings, code blocks, link targets and chaff's tree addresses, and asks chaff for findings.
-import { mkdirSync, readFileSync, symlinkSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { docsPackHarness } from "./docsPackHarness";
@@ -262,6 +262,18 @@ describeSh("polish: the kind of document decides chaff's genre", () => {
     list([target("docs/setup.md", "todo", 0)]);
     expect(node("targets.mjs", ["survey"]).code).toBe(0);
     expect(lintLog().some((line) => line.includes("--genre"))).toBe(false);
+  });
+
+  it("measures the shelved findings too when the person asked for them, and only then", () => {
+    answers({ style: "このフォルダの規約（STYLE.md と chaff.yaml）", shelved: "棚上げした指摘も直す" });
+    list([target("docs/setup.md", "todo", 0)]);
+    expect(node("targets.mjs", ["survey"]).code).toBe(0);
+    expect(lintLog().length).toBeGreaterThan(0);
+    lintLog().forEach((line) => expect(line).toContain("--show-baseline"));
+    rmSync(join(harness.fake(), "lint.log"));
+    answers({ style: "このフォルダの規約（STYLE.md と chaff.yaml）", shelved: "新しい指摘だけ" });
+    expect(node("targets.mjs", ["survey"]).code).toBe(0);
+    expect(lintLog().some((line) => line.includes("--show-baseline"))).toBe(false);
   });
 
   it("drafts a report to chaff under the same genre", () => {
