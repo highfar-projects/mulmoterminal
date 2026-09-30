@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { filesRowActions, menuFocusMove } from "../../../src/components/filesRowActions";
+import { filesTreeEn } from "../../../src/i18n/filesTree/en";
+import { filesTreeJa } from "../../../src/i18n/filesTree/ja";
+import { filesTreeKo } from "../../../src/i18n/filesTree/ko";
+import { filesTreeZhCN } from "../../../src/i18n/filesTree/zh-CN";
+import { filesTreeZhTW } from "../../../src/i18n/filesTree/zh-TW";
 
 // What a tree row offers when it is right-clicked (#1859). Every rule here is about a path
 // meaning something DIFFERENT at the other end than it does in the tree, which is why it is a
@@ -40,7 +45,7 @@ describe("filesRowActions — the Canvas entry", () => {
   // receiver resolves it against the pane's cwd — an absolute one would be resolved twice.
   it("carries the row's path relative to the tree root", () => {
     const action = call({ ...inProject, pathRel: "notes/talk.md" }).find((a) => a.id === "open-canvas");
-    expect(action).toEqual({ id: "open-canvas", label: "Open in the Canvas", icon: "space_dashboard", pathRel: "notes/talk.md" });
+    expect(action).toEqual({ id: "open-canvas", labelKey: "filesRowMenu.openCanvas", icon: "space_dashboard", pathRel: "notes/talk.md" });
   });
 
   it("offers nothing extra on a file no plugin renders", () => {
@@ -193,7 +198,7 @@ describe("filesRowActions — showing a row in the OS file manager", () => {
   it("carries the row's absolute path", () => {
     expect(reveal({ ...here, pathRel: "reports/2026-08.pdf" })).toEqual({
       id: "reveal",
-      label: "Show in folder",
+      labelKey: "filesRowMenu.showInFolder",
       icon: "folder_open",
       pathAbs: "/proj/reports/2026-08.pdf",
     });
@@ -203,7 +208,7 @@ describe("filesRowActions — showing a row in the OS file manager", () => {
   // so — "Show in folder" would promise its parent.
   it("says something different on a folder row", () => {
     const action = reveal({ ...here, pathRel: "reports", isDir: true });
-    expect(action?.label).toBe("Open this folder");
+    expect(action?.labelKey).toBe("filesRowMenu.openFolder");
     expect(action).toMatchObject({ pathAbs: "/proj/reports" });
   });
 
@@ -238,7 +243,7 @@ describe("filesRowActions — opening a file in a new tab (#2267)", () => {
 
   it("leads a file row's menu, carrying the row's relative path", () => {
     const actions = call({ ...here, pathRel: "src/index.ts" });
-    expect(actions[0]).toEqual({ id: "open-tab", label: "Open in a new tab", icon: "tab", pathRel: "src/index.ts" });
+    expect(actions[0]).toEqual({ id: "open-tab", labelKey: "filesRowMenu.openTab", icon: "tab", pathRel: "src/index.ts" });
   });
 
   it("is offered with no terminal beside the pane — reading a file needs none", () => {
@@ -285,5 +290,28 @@ describe("filesRowActions — the tree's file operations (#2578)", () => {
 
   it("offers nothing without a root to resolve against", () => {
     expect(opsOf({ ...row, cwd: null, pathRel: "a.ts", trash: true })).toEqual([]);
+  });
+
+  // #2694. The root itself (the tree's empty space, an empty folder): something new, and nothing else.
+  it("offers only a new file or folder at the root", () => {
+    expect(call({ ...row, pathRel: "", isDir: true, trash: true })).toEqual([
+      { id: "new-file", labelKey: "filesRowMenu.newFile", icon: "note_add", dirRel: "", rowRel: "" },
+      { id: "new-folder", labelKey: "filesRowMenu.newFolder", icon: "create_new_folder", dirRel: "", rowRel: "" },
+    ]);
+  });
+});
+
+// Every item's words exist in every language the app ships.
+describe("filesRowActions — words", () => {
+  it("names each item by a key every locale has", () => {
+    const locales: Record<string, unknown>[] = [filesTreeEn, filesTreeJa, filesTreeKo, filesTreeZhCN, filesTreeZhTW].map((locale) => locale.filesRowMenu);
+    const all = [
+      ...call({ pathRel: "src/a.ts", cwd: "/proj", terminal: { cwd: "/proj" }, canvas: null, trash: true }),
+      ...call({ pathRel: "src", isDir: true, cwd: "/proj", terminal: null, canvas: null }),
+    ];
+    all.forEach((action) => {
+      const key = action.labelKey.replace("filesRowMenu.", "");
+      locales.forEach((strings) => expect(typeof strings[key], action.labelKey).toBe("string"));
+    });
   });
 });

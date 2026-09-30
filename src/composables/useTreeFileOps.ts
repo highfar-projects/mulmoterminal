@@ -88,12 +88,14 @@ async function releaseFront(ctx: Ctx, entry: string): Promise<boolean> {
   return front === null || !isUnder(front, entry) || ctx.file.close();
 }
 
-/** The strip after the operation, shown. When the front file moved it is reopened from the strip as
- *  it was; otherwise the change is applied to the strip as it is NOW, so a tab opened while the
- *  request was out is kept. */
+/** The strip after the operation, shown: the change applied to the strip as it is NOW, so a tab opened
+ *  while the request was out is kept. The front file is reopened only when it moved AND the reader is
+ *  still on it — a file they turned to meanwhile stays in front (#2694). */
 async function settle(ctx: Ctx, before: TabStrip, change: (strip: TabStrip) => TabStrip, frontMoved: boolean): Promise<void> {
-  if (frontMoved) await ctx.tabs.restore(change(before), () => true);
-  else ctx.tabs.strip.value = change(ctx.tabs.strip.value);
+  const now = ctx.tabs.current();
+  const stillOnIt = now.activePath === null || now.activePath === before.activePath;
+  if (frontMoved && stillOnIt) await ctx.tabs.restore(change(now), () => true);
+  else ctx.tabs.strip.value = change(now);
 }
 
 interface EntryMove {
