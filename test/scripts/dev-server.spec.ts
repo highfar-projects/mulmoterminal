@@ -26,12 +26,15 @@ async function waitFor(done: () => boolean, limitMs: number): Promise<void> {
 
 // SIGTERM, not SIGKILL: the supervisor stops its backend only from its signal handler, and a
 // SIGKILL skips it — which left one live stub per run behind, parented to init (#2609).
-async function stopSupervisor(supervisor: ChildProcess): Promise<void> {
-  if (supervisor.exitCode !== null || supervisor.signalCode !== null) return;
+/** Whether it had to be SIGKILLed — the one case where its backend may be left running. */
+async function stopSupervisor(supervisor: ChildProcess): Promise<boolean> {
+  if (supervisor.exitCode !== null || supervisor.signalCode !== null) return false;
   const exited = new Promise((resolve) => supervisor.once("exit", resolve));
   supervisor.kill("SIGTERM");
   await Promise.race([exited, wait(SUPERVISOR_EXIT_MS)]);
-  if (supervisor.exitCode === null && supervisor.signalCode === null) supervisor.kill("SIGKILL");
+  const stuck = supervisor.exitCode === null && supervisor.signalCode === null;
+  if (stuck) supervisor.kill("SIGKILL");
+  return stuck;
 }
 
 const bootedPids = (boots: string): number[] => (existsSync(boots) ? readFileSync(boots, "utf8").trim().split("\n").filter(Boolean).map(Number) : []);
@@ -45,18 +48,18 @@ const isAlive = (pid: number): boolean => {
   }
 };
 
-// Whatever the supervisor did, the backend it started last does not outlive the test. Only the last:
-// the supervisor runs one at a time, and an earlier pid is dead by design — alive again, it is a reused
-// pid belonging to someone else. Not on Windows, which reuses pids fast and runs no long-lived stub.
+// A supervisor that had to be SIGKILLed passed nothing on, so the backend it started last is stopped
+// here. Only then, and only the last: an earlier pid is dead by design — alive again, it is a reused pid
+// belonging to someone else. Not on Windows, which reuses pids fast and runs no long-lived stub.
 const stopBackends = (boots: string): void => {
   const last = bootedPids(boots).at(-1);
   if (process.platform !== "win32" && last !== undefined && isAlive(last)) process.kill(last, "SIGKILL");
 };
 
 afterEach(async () => {
-  if (child) await stopSupervisor(child);
+  const escalated = child ? await stopSupervisor(child) : false;
   child = null;
-  if (dir) stopBackends(path.join(dir, "boots.log"));
+  if (dir && escalated) stopBackends(path.join(dir, "boots.log"));
   if (dir && existsSync(dir)) rmSync(dir, { recursive: true, force: true });
   dir = null;
 });
@@ -106,6 +109,7 @@ describe("dev-server supervisor", () => {
       child = spawn(process.execPath, [SUPERVISOR], { env: { ...process.env, DEV_SERVER_ENTRY: stub, DEV_SERVER_WATCH: watchDir }, stdio: "ignore" });
       await waitFor(() => bootedPids(boots).length > 0, BOOT_WAIT_MS);
       const [backend] = bootedPids(boots);
+      expect(backend, "the backend never booted").toBeDefined();
       expect(isAlive(backend)).toBe(true);
 
       await stopSupervisor(child);
