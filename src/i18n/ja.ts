@@ -4,6 +4,7 @@ import { tipsJa } from "./tips/ja";
 import { commandPaletteJa } from "./commandPalette/ja";
 import { focusModeJa } from "./focusMode/ja";
 import { fileHistoryJa } from "./fileHistory/ja";
+import { dirConfigSaveJa } from "./dirConfigSave/ja";
 import { settingsControlsJa } from "./settingsControls/ja";
 import { shortcutsJa } from "./shortcuts/ja";
 import { filesTreeJa } from "./filesTree/ja";
@@ -192,7 +193,7 @@ export const ja: Messages = {
       prFooterHint: "本文の最後に {line} の 1 行を足します。横に並んだ複数のクローンのどれで作業したかが PR から分かります。",
       gitlabTitle: "セルフホストの GitLab",
       gitlabHint:
-        "URL を見てもそのホストがどの forge かは分からないので、ここで宣言すると {glab} でリポジトリを読みます。{authCommand} が必要です。次のサーバ起動から有効になります。",
+        "URL を見てもそのホストがどの forge かは分からないので、ここで宣言すると {glab} でリポジトリを読みます。{authCommand} が必要です。すぐに有効になります。",
       gitlabField: "セルフホストの GitLab ホストを追加",
     },
 
@@ -209,7 +210,7 @@ export const ja: Messages = {
       worklogInterval: "実行間隔:",
       worklogStepper: "開発作業ログの間隔",
       systemTasks: "組み込みの定期タスク",
-      systemTasksHint: "どちらも 1 時間ごとに実行され、切らない限り有効です。切り替えはサーバの次回起動から反映されます。",
+      systemTasksHint: "どちらも 1 時間ごとに実行され、切らない限り有効です。切り替えはすぐに反映されます。",
       feedRefresh: "コレクションとフィードを更新する",
       feedRefreshHint:
         "RSS/JSON フィードを取得し、スキル連動のコレクション更新を発行します。対象はワークスペースと保存済みの各プロジェクトディレクトリです。フィードを 1 つも登録していなければ何もしません。",
@@ -614,6 +615,7 @@ export const ja: Messages = {
     close: "わかった",
   },
   fileHistory: fileHistoryJa,
+  dirConfigSave: dirConfigSaveJa,
   focusMode: focusModeJa,
   settingsControls: settingsControlsJa,
   ...filesTreeJa,
