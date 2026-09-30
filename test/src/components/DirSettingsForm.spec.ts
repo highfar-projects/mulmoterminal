@@ -12,9 +12,36 @@ const detail = (formValues: Record<string, unknown>, local: string[] = []) =>
 let sent: unknown[] = [];
 let answer: () => Response = () => new Response("{}");
 
+// What /api/launch-options answers: a backend a session can start on, and one it cannot (no key).
+const LAUNCH_OPTIONS = {
+  anyReady: true,
+  providers: [
+    {
+      id: "router",
+      label: "Router",
+      ready: true,
+      tokenEnv: "ROUTER_KEY",
+      models: [
+        { provider: "router", id: "vendor/big", label: "Big", contextLength: 200000, pricePerMTok: { input: 1, output: 2 }, trials: { status: "unmeasured" } },
+      ],
+    },
+    {
+      id: "nokey",
+      label: "No key",
+      ready: false,
+      reason: "provider 'nokey' needs NOKEY_KEY in the server's environment",
+      tokenEnv: "NOKEY_KEY",
+      models: [
+        { provider: "nokey", id: "vendor/small", label: "Small", contextLength: 8000, pricePerMTok: { input: 1, output: 1 }, trials: { status: "unmeasured" } },
+      ],
+    },
+  ],
+};
+
 beforeEach(() => {
   sent = [];
-  vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+    if (String(url).includes("/api/launch-options")) return new Response(JSON.stringify(LAUNCH_OPTIONS));
     sent.push(JSON.parse(String(init?.body)));
     return answer();
   });
@@ -169,5 +196,56 @@ describe("DirSettingsForm", () => {
     await wrapper.find('[data-testid="dir-palette-input-blue"]').setValue("#0000ff");
     await flushPromises();
     expect(sent).toEqual([{ cwd: "/p", set: { colors: { red: "#ff0000", blue: "#0000ff" } }, unset: [] }]);
+  });
+
+  // A provider the server cannot start a session on is not a choice: as this directory's default,
+  // every cell here would refuse to start. The launch picker leaves it out for the same reason.
+  it("offers the configured models of the providers that can start a session, and writes the backend and the model together", async () => {
+    const wrapper = mountForm({});
+    await flushPromises();
+    const select = wrapper.find('[data-testid="dir-form-model-select"]');
+    expect(select.findAll("option").map((option) => option.attributes("value"))).toEqual(["", "router|vendor/big"]);
+    await select.setValue("router|vendor/big");
+    await flushPromises();
+    expect(sent).toEqual([{ cwd: "/p", set: { provider: "router", model: "vendor/big" }, unset: [] }]);
+  });
+
+  it("still shows a file's choice on a provider that is not ready", async () => {
+    const wrapper = mountForm({ provider: "nokey", model: "vendor/small" });
+    await flushPromises();
+    const values = wrapper.findAll('[data-testid="dir-form-model-select"] option').map((option) => option.attributes("value"));
+    expect(values).toEqual(["", "nokey|vendor/small", "router|vendor/big"]);
+  });
+
+  it("keeps showing a model choice the list does not hold, and 'Use global' takes both keys out", async () => {
+    const wrapper = mountForm({ provider: "gone", model: "old/model" });
+    await flushPromises();
+    const select = wrapper.find('[data-testid="dir-form-model-select"]');
+    expect(select.element instanceof HTMLSelectElement ? select.element.value : "").toBe("gone|old/model");
+    await wrapper.find('[data-testid="dir-form-clear-model"]').trigger("click");
+    await flushPromises();
+    expect(sent).toEqual([{ cwd: "/p", set: {}, unset: ["provider", "model"] }]);
+  });
+
+  it("saves the closing-summary switch as a boolean", async () => {
+    const wrapper = mountForm({ appendSystemPrompt: true });
+    await wrapper.find("#dir-form-appendSystemPrompt").setValue("false");
+    await flushPromises();
+    expect(sent).toEqual([{ cwd: "/p", set: { appendSystemPrompt: false }, unset: [] }]);
+  });
+
+  it("adds, rewrites and removes an extra directory, and removing the last takes the key out", async () => {
+    const wrapper = mountForm({ addDirs: ["../shared", 7] });
+    expect(wrapper.findAll('[data-testid^="dir-add-dirs-entry-"]')).toHaveLength(1);
+    await wrapper.find('[data-testid="dir-add-dirs-new"]').setValue(" ../docs ");
+    await wrapper.find('[data-testid="dir-add-dirs-add"]').trigger("click");
+    await flushPromises();
+    expect(sent.at(-1)).toEqual({ cwd: "/p", set: { addDirs: ["../shared", "../docs"] }, unset: [] });
+    await wrapper.find('[data-testid="dir-add-dirs-entry-0"]').setValue("../common");
+    await flushPromises();
+    expect(sent.at(-1)).toEqual({ cwd: "/p", set: { addDirs: ["../common"] }, unset: [] });
+    await wrapper.find('[data-testid="dir-add-dirs-remove-0"]').trigger("click");
+    await flushPromises();
+    expect(sent.at(-1)).toEqual({ cwd: "/p", set: {}, unset: ["addDirs"] });
   });
 });

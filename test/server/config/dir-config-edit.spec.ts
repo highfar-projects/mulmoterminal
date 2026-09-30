@@ -67,6 +67,14 @@ describe("isWritableDirConfigValue on the form's keys", () => {
     ["headerStatusColors", { idle: "#111111" }, false],
     ["colors", { background: "#000", red: "#ff000080" }, true],
     ["colors", { background: "black" }, false],
+    ["provider", "router", true],
+    ["provider", "", false],
+    ["model", "vendor/big", true],
+    ["appendSystemPrompt", false, true],
+    ["appendSystemPrompt", "false", false],
+    ["addDirs", ["../shared", "/abs/dir"], true],
+    ["addDirs", [""], false],
+    ["addDirs", "../shared", false],
   ] as const)("%s = %j -> %s", (key, value, expected) => {
     expect(isWritableDirConfigValue(key, value)).toBe(expected);
   });

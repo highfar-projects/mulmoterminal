@@ -1061,8 +1061,9 @@ what tells "I never set that" apart from "I set it and it didn't take".
 
 **Changing it there.** Under the values, **Change here** is a form for the name, the seven chrome
 colors, how the header shows a running session (`headerStatusTint`) and its colour per status
-(`headerStatusColors`), the terminal theme and palette (`colors`), font size, font family and grid
-priority. Each change is written to
+(`headerStatusColors`), the terminal theme and palette (`colors`), font size, font family, grid priority, the model its
+sessions start on (`provider` / `model`), the closing summary (`appendSystemPrompt`) and extra
+directories (`addDirs`). Each change is written to
 the directory's file at once and applies without a restart; **Use global** takes the key out
 again. A key `.mulmoterminal.local.json` already holds is written there. Keys the form doesn't
 show are left as they are, and a file that isn't a JSON object is not touched — fix it in Files.

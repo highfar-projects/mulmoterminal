@@ -11,7 +11,17 @@ import { HEADER_STATUS_TINTS, headerStatusColorsForFile, sanitizeHeaderStatusCol
 import type { DirConfigDetailView } from "../dirConfigDetail";
 import { saveDirConfigEdit, type DirConfigSaveFailure } from "../dirConfigEditApi";
 import { paletteFromValue, type DirPalette } from "../dirPalette";
-import { DIR_FORM_FIELDS, UNSET_COLOR_PICKER_START, editForInput, editForSet, inputText, type DirFormField } from "../dirSettingsFormFields";
+import {
+  DIR_FORM_FIELDS,
+  UNSET_COLOR_PICKER_START,
+  editForInput,
+  editForModelChoice,
+  editForSet,
+  inputText,
+  type DirFormField,
+} from "../dirSettingsFormFields";
+import DirAddDirsEditor from "./DirAddDirsEditor.vue";
+import DirModelSelect from "./DirModelSelect.vue";
 import DirFormKeyActions from "./DirFormKeyActions.vue";
 import DirPaletteEditor from "./DirPaletteEditor.vue";
 import HeaderStatusColorsEditor from "./HeaderStatusColorsEditor.vue";
@@ -64,6 +74,13 @@ const statusColors = computed(() => sanitizeHeaderStatusColors(props.detail.form
 const palette = computed(() => paletteFromValue(props.detail.formValues.colors));
 const onStatusColors = (next: HeaderStatusColors) => void save(editForSet("headerStatusColors", headerStatusColorsForFile(next)));
 const onPalette = (next: DirPalette) => void save(editForSet("colors", next));
+const addDirs = computed(() => {
+  const value = props.detail.formValues.addDirs;
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+});
+const onAddDirs = (next: string[]) => void save(editForSet("addDirs", next));
+const modelIsSet = computed(() => isSet("provider") || isSet("model"));
+const modelIsLocal = computed(() => isLocal("provider") || isLocal("model"));
 
 // Enter commits a text field the way leaving it does, which is what fires `change`.
 function commitOnEnter(e: KeyboardEvent): void {
@@ -115,6 +132,18 @@ const INPUT = "min-w-0 rounded border border-border bg-elevated px-1.5 py-0.5 fo
             <option value="">{{ t("dirSettingsForm.themeGlobal") }}</option>
             <option v-for="mode in HEADER_STATUS_TINTS" :key="mode" :value="mode">{{ t(`settingsControls.headerTint.tints.${mode}`) }}</option>
           </select>
+          <select
+            v-else-if="field.kind === 'bool'"
+            :id="`dir-form-${field.key}`"
+            :class="INPUT"
+            :value="valueOf(field)"
+            :disabled="saving"
+            @change="onInput(field, $event)"
+          >
+            <option value="">{{ t("dirSettingsForm.themeGlobal") }}</option>
+            <option value="true">{{ t("dirSettingsForm.boolOn") }}</option>
+            <option value="false">{{ t("dirSettingsForm.boolOff") }}</option>
+          </select>
           <input
             v-else
             :id="`dir-form-${field.key}`"
@@ -135,6 +164,31 @@ const INPUT = "min-w-0 rounded border border-border bg-elevated px-1.5 py-0.5 fo
           />
         </div>
       </template>
+      <label for="dir-form-model" class="text-[12px] text-dim">{{ t("dirSettingsForm.fields.model") }}</label>
+      <div :key="`model-${redraw}`" class="flex min-w-0 items-center gap-1.5" data-testid="dir-form-row-model">
+        <DirModelSelect :values="detail.formValues" :saving="saving" @choose="(choice) => void save(editForModelChoice(choice))" />
+        <DirFormKeyActions
+          form-key="model"
+          :is-set="modelIsSet"
+          :is-local="modelIsLocal"
+          :saving="saving"
+          @clear="save({ set: {}, unset: ['provider', 'model'] })"
+        />
+      </div>
+    </div>
+    <div class="mt-2" data-testid="dir-form-row-addDirs">
+      <div class="flex items-center gap-1.5">
+        <span class="text-[12px] text-dim">{{ t("dirSettingsForm.fields.addDirs") }}</span>
+        <DirFormKeyActions
+          form-key="addDirs"
+          :is-set="isSet('addDirs')"
+          :is-local="isLocal('addDirs')"
+          :saving="saving"
+          @clear="save({ set: {}, unset: ['addDirs'] })"
+        />
+      </div>
+      <p class="m-0 text-[11px] text-dim">{{ t("dirSettingsForm.addDirs.hint") }}</p>
+      <DirAddDirsEditor :key="`add-dirs-${redraw}`" :dirs="addDirs" :saving="saving" @change="onAddDirs" />
     </div>
     <div class="mt-2" data-testid="dir-form-row-headerStatusColors">
       <div class="flex items-center gap-1.5">
