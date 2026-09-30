@@ -59,7 +59,6 @@ describe("the Preview's code-block buttons", () => {
       preview.window.dispatchEvent(
         new preview.window.MessageEvent("message", { data: { source: MD_PREVIEW_FROM_HOST, codeCopyLabel }, source: preview.window }),
       );
-    rename("Copy this code block");
     rename("このコードブロックをコピー");
     expect(preview.buttons()[0]?.getAttribute("aria-label")).toBe("このコードブロックをコピー");
     expect(preview.buttons()[0]?.getAttribute("title")).toBe("このコードブロックをコピー");

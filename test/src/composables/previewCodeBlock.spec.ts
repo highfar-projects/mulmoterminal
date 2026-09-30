@@ -11,7 +11,7 @@ import { previewCodeBlocks } from "../../../common/previewCodeBlocks";
 const TOKEN = "0123456789abcdef-wire";
 const FILE = "# Doc\n\n```ts\nconst first = 1;\n```\n\n```sh\necho second\n```\n";
 
-function mountHost(openPath = ref<string | null>("a.md"), cwd = ref("/proj"), label = ref("Copy this code block")) {
+function mountHost(openPath = ref<string | null>("a.md"), cwd = ref("/proj"), label = ref("Copy this code block"), markdownShown = ref(true)) {
   const frame = document.createElement("iframe");
   document.body.append(frame);
   let api: MdPreviewScroll | null = null;
@@ -19,7 +19,8 @@ function mountHost(openPath = ref<string | null>("a.md"), cwd = ref("/proj"), la
     defineComponent({
       setup() {
         api = useMdPreviewScroll(
-          () => frame,
+          // The pane hands over the frame only while a Markdown document is in it.
+          () => (markdownShown.value ? frame : null),
           ref(0),
           () => {},
           () => TOKEN,
@@ -138,6 +139,18 @@ describe("a Preview code block's copy button", () => {
     label.value = "このコードブロックをコピー";
     await flushPromises();
     expect(sent).toHaveBeenCalledWith({ source: MD_PREVIEW_FROM_HOST, codeCopyLabel: "このコードブロックをコピー" }, "*");
+  });
+
+  // An HTML page runs its own scripts; nothing is posted into its frame (#2269).
+  it("posts no new name while the frame holds something other than Markdown", async () => {
+    const label = ref("Copy this code block");
+    const host = mountHost(ref("a.md"), ref("/proj"), label, ref(false));
+    const target = host.frame.contentWindow;
+    if (!target) throw new Error("the frame has no window");
+    const sent = vi.spyOn(target, "postMessage");
+    label.value = "このコードブロックをコピー";
+    await flushPromises();
+    expect(sent).not.toHaveBeenCalled();
   });
 
   it("names the buttons when it answers a fresh document", () => {
