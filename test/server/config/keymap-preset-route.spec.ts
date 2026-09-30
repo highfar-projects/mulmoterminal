@@ -30,9 +30,10 @@ async function mountAgainstTempHome(initial: Record<string, unknown>) {
   mountConfigRoutes(app, dir, vi.fn());
   const onDisk = () => JSON.parse(readFileSync(file, "utf8"));
   const writeDisk = (config: Record<string, unknown>) => writeFileSync(file, JSON.stringify(config));
-  return { app, onDisk, writeDisk };
+  const writeRaw = (text: string) => writeFileSync(file, text);
+  return { app, dir, onDisk, writeDisk, writeRaw };
 }
-const shown = (keymap: Keymap) => presetChanges(keymap, KEYMAP_PRESETS.other);
+const shown = (keymap: Keymap, reserved: string[] = []) => presetChanges(keymap, KEYMAP_PRESETS.other, reserved);
 const post = (app: express.Express, body: unknown) => routeCall(app)("/api/config/keymap-preset", jsonPost(body));
 
 describe("POST /api/config/keymap-preset", () => {
@@ -47,7 +48,7 @@ describe("POST /api/config/keymap-preset", () => {
       "zoom-toggle": "Alt+ArrowUp",
       "next-attention": "Alt+ArrowDown",
     });
-    expect(res.body).toEqual({ keymap: onDisk().keymap });
+    expect(res.body).toEqual({ keymap: onDisk().keymap, reserved: [] });
   });
 
   // Written to the file after this process read it — by another mulmoterminal, the keys skill, a hand
@@ -80,7 +81,55 @@ describe("POST /api/config/keymap-preset", () => {
     expect(onDisk().keymap).toEqual({ "zoom-toggle": "F8" });
   });
 
-  it.each([[{}], [{ platform: "win" }], [{ platform: 1, expected: [] }]])("refuses %j and writes nothing", async (body) => {
+  // #2693. A key an entry this version does not know already holds is taken: the newer version that
+  // wrote the entry would otherwise find two actions on one key.
+  it("leaves a key held by an unknown action's entry, and lists it as taken", async () => {
+    const { app, onDisk } = await mountAgainstTempHome({ keymap: { "future-left": "Alt+ArrowLeft" } });
+    expect((await routeCall(app)("/api/config/keymap-preset")).body.reserved).toEqual(["Alt+ArrowLeft"]);
+    const list = shown({}, ["Alt+ArrowLeft"]);
+    expect(list).toContainEqual({ kind: "taken", action: "zoom-prev", binding: "Alt+ArrowLeft" });
+    const res = await post(app, { platform: "other", expected: list });
+    expect(res.status).toBe(200);
+    expect(res.body.reserved).toEqual(["Alt+ArrowLeft"]);
+    expect(onDisk().keymap).toMatchObject({ "future-left": "Alt+ArrowLeft", "zoom-toggle": "Alt+ArrowUp" });
+    expect(onDisk().keymap["zoom-prev"]).toBeUndefined();
+  });
+
+  // A tab that drew its list before it knew the held keys is told, and nothing is written.
+  it("refuses a list drawn without the held keys, and answers with them", async () => {
+    const { app, onDisk } = await mountAgainstTempHome({ keymap: { "future-left": "Alt+ArrowLeft" } });
+    const res = await post(app, { platform: "other", expected: shown({}) });
+    expect(res.status).toBe(409);
+    expect(res.body).toMatchObject({ keymap: {}, reserved: ["Alt+ArrowLeft"] });
+    expect(onDisk().keymap).toEqual({ "future-left": "Alt+ArrowLeft" });
+  });
+
+  it("answers no held keys for a missing or unreadable config", async () => {
+    const { app, writeRaw } = await mountAgainstTempHome({});
+    writeRaw("{ not json");
+    expect((await routeCall(app)("/api/config/keymap-preset")).body).toEqual({ reserved: [] });
+  });
+
+  // A corrupt file is never written over: no keymap comes back for the tab to adopt.
+  it("writes nothing to an unreadable config, and answers without a keymap", async () => {
+    const { app, dir, writeRaw } = await mountAgainstTempHome({});
+    writeRaw("{ not json");
+    const res = await post(app, { platform: "other", expected: shown({}) });
+    expect(res.status).toBe(409);
+    expect(res.body.keymap).toBeUndefined();
+    expect(readFileSync(path.join(dir, ".mulmoterminal", "config.json"), "utf8")).toBe("{ not json");
+  });
+
+  it.each([
+    [{}],
+    [{ platform: "win" }],
+    [{ platform: 1, expected: [] }],
+    [{ platform: "other" }],
+    [{ platform: "other", expected: "x" }],
+    [{ platform: "other", expected: [{ kind: "add" }] }],
+    [{ platform: "other", expected: [{ kind: "remove", binding: "F8" }] }],
+    [{ platform: "other", expected: [{ kind: "add", action: "not-an-action", binding: "F8" }] }],
+  ])("refuses %j and writes nothing", async (body) => {
     const { app, onDisk } = await mountAgainstTempHome({ keymap: { "files-find": "F2" } });
     expect((await post(app, body)).status).toBe(400);
     expect(onDisk().keymap).toEqual({ "files-find": "F2" });

@@ -6,7 +6,17 @@
 // Pure: a keymap and a platform in, the keymap with the set added and a list of what changed out.
 // A preset only ADDS: an action the user has bound keeps its key, and a key already claimed by any
 // binding (as a whole keystroke or as the first of two) is not claimed again.
-import { KEYMAP_ACTIONS, parseKeySequence, type Keymap, type KeymapAction, type KeyBinding, type ReservedPlatform, type SendBinding } from "./keymap.js";
+import {
+  KEYMAP_ACTIONS,
+  isKeymapAction,
+  parseKeySequence,
+  type Keymap,
+  type KeymapAction,
+  type KeyBinding,
+  type ReservedPlatform,
+  type SendBinding,
+} from "./keymap.js";
+import { isRecord } from "./isRecord.js";
 
 export interface KeymapPreset {
   actions: Partial<Record<KeymapAction, string>>;
@@ -40,9 +50,15 @@ const strokeId = (stroke: KeyBinding): string => `${stroke.meta}|${stroke.ctrl}|
 
 /** The first keystroke of every binding in `keymap`: a new single key there would never fire (a
  *  sequence starting with it waits, or the binding on it wins). */
-function claimedStrokes(keymap: Keymap): Set<string> {
-  return new Set([...actionBindings(keymap), ...(keymap.send ?? []).map((entry) => entry.key)].flatMap((binding) => firstStroke(binding) ?? []));
+function claimedStrokes(keymap: Keymap, reserved: readonly string[]): Set<string> {
+  const bindings = [...actionBindings(keymap), ...(keymap.send ?? []).map((entry) => entry.key), ...reserved];
+  return new Set(bindings.flatMap((binding) => firstStroke(binding) ?? []));
 }
+
+/** The keys held by keymap entries this version does not know (a newer release's actions), which the
+ *  file keeps (#2650): a preset must not take them, or the newer version finds two actions on one key. */
+export const reservedBindings = (unrecognised: unknown): string[] =>
+  isRecord(unrecognised) ? Object.values(unrecognised).filter((binding): binding is string => typeof binding === "string") : [];
 
 const actionBindings = (keymap: Keymap): string[] =>
   Object.entries(keymap).flatMap(([name, value]) => (name !== "send" && typeof value === "string" ? [value] : []));
@@ -79,14 +95,29 @@ function sendFires(keymap: Keymap, stroke: string | null, bytes: string): boolea
 
 /** What applying `preset` to `keymap` would do: its actions in the keymap's action order, then its
  *  `send` entries. */
-export function presetChanges(keymap: Keymap, preset: KeymapPreset): PresetChange[] {
-  const claimed = claimedStrokes(keymap);
+export function presetChanges(keymap: Keymap, preset: KeymapPreset, reserved: readonly string[] = []): PresetChange[] {
+  const claimed = claimedStrokes(keymap, reserved);
   const actions = KEYMAP_ACTIONS.flatMap((action) => {
     const binding = preset.actions[action];
     return binding === undefined ? [] : [actionChange(keymap, claimed, action, binding)];
   });
   return [...actions, ...preset.send.map((entry) => sendChange(keymap, claimed, entry))];
 }
+
+const CHANGE_KINDS = new Set(["add", "add-send", "kept", "kept-send", "taken"]);
+
+/** A list of changes as the Settings panel sends it back — its shape only; whether it is the RIGHT list
+ *  is the route's comparison with the one it works out. */
+export const isPresetChangeList = (value: unknown): value is PresetChange[] =>
+  Array.isArray(value) &&
+  value.every(
+    (change) =>
+      isRecord(change) &&
+      typeof change.kind === "string" &&
+      CHANGE_KINDS.has(change.kind) &&
+      typeof change.binding === "string" &&
+      (change.action === undefined || change.action === "send" || isKeymapAction(change.action)),
+  );
 
 /** The whole keymap after the preset's additions — what is written to the config. */
 export function withPreset(keymap: Keymap, changes: PresetChange[]): Keymap {

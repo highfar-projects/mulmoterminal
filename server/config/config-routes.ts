@@ -9,7 +9,7 @@ import path from "node:path";
 import { existsSync, statSync } from "node:fs";
 import type { Express, Request, Response } from "express";
 import { MAX_PALETTE_FAVORITES, MAX_PALETTE_KEY_CHARS } from "../../common/paletteConfig.js";
-import { KEYMAP_PRESETS, presetChanges, withPreset } from "../../common/keymapPresets.js";
+import { isPresetChangeList, KEYMAP_PRESETS, presetChanges, reservedBindings, withPreset } from "../../common/keymapPresets.js";
 import {
   loadAppConfig,
   loadAppConfigResult,
@@ -417,10 +417,11 @@ async function mutateConfigOnDisk(res: Response, onCwdPresetsChanged: CwdPresets
         return res.status(409).json({ error: `config.json is unreadable and was NOT overwritten${backupNote}. Fix or remove it, then retry.` });
       }
       const base = loaded.status === "ok" ? loaded.config : emptyConfig();
-      const refusal = refuse?.(base) ?? null;
+      const unknownKeys = unknownKeysOf(loaded);
+      const refusal = refuse?.(base, unknownKeys) ?? null;
       if (refusal !== null) return res.status(409).json(typeof refusal === "string" ? { error: refusal } : refusal);
-      const next = mergeConfigUpdate(base, update(base));
-      if (!saveAppConfig(CONFIG_FILE, next, unknownKeysOf(loaded))) return res.status(500).json({ error: "failed to persist config" });
+      const next = mergeConfigUpdate(base, update(base, unknownKeys));
+      if (!saveAppConfig(CONFIG_FILE, next, unknownKeys)) return res.status(500).json({ error: "failed to persist config" });
       // Compared against what THIS PROCESS was serving, not against what was on disk. The two differ
       // exactly when another mulmoterminal wrote the file since we booted — whatever field this change
       // was about: adopting `next` silently takes over that instance's directories, and the collection
@@ -456,16 +457,31 @@ function mountOneEntryRoutes(app: Express, onCwdPresetsChanged: CwdPresetsChange
 // missing a binding another mulmoterminal, the keys skill or a hand edit wrote since, and writing it
 // back would erase that. `expected` is the list the reader was shown: if the file makes it different,
 // nothing is written and the 409 carries the file's keymap for the list to be drawn again.
+//
+// The keys held by entries this version does not know (a newer release's actions) count as taken: the
+// file keeps those entries (#2650), and a preset key on one would leave the newer version two actions
+// on one key. The tab cannot see them, so it asks for them (GET) and gets them back with every answer.
 function mountKeymapPresetRoute(app: Express, onCwdPresetsChanged?: CwdPresetsChanged): void {
+  app.get("/api/config/keymap-preset", (_req, res) => {
+    res.json({ reserved: reservedBindings(unknownKeysOf(loadAppConfigResult(CONFIG_FILE)).keymap) });
+  });
   app.post("/api/config/keymap-preset", (req, res) => {
     const { platform, expected } = requestBody(req.body);
     if (platform !== "mac" && platform !== "other") return res.status(400).json({ error: "platform (mac|other) required" });
-    const changesOn = (base: AppConfig) => presetChanges(base.keymap, KEYMAP_PRESETS[platform]);
+    // A list of another shape is not one this build drew (an old tab after an upgrade): say so, rather
+    // than "the keymap changed", which a reload of the list would never fix.
+    if (!isPresetChangeList(expected)) return res.status(400).json({ error: "expected must be the list of changes shown" });
+    const changesOn = (base: AppConfig, reserved: string[]) => presetChanges(base.keymap, KEYMAP_PRESETS[platform], reserved);
+    // Counted from the file under the lock, then carried to the write and the answer (the write keeps them).
+    let reserved: string[] = [];
     return void mutateConfigOnDisk(res, onCwdPresetsChanged, {
-      refuse: (base) =>
-        JSON.stringify(changesOn(base)) === JSON.stringify(expected) ? null : { error: "the keymap changed since the list was shown", keymap: base.keymap },
-      update: (base) => ({ keymap: withPreset(base.keymap, changesOn(base)) }),
-      answer: (next) => res.json({ keymap: next.keymap }),
+      refuse: (base, unknownKeys) => {
+        reserved = reservedBindings(unknownKeys.keymap);
+        if (JSON.stringify(changesOn(base, reserved)) === JSON.stringify(expected)) return null;
+        return { error: "the keymap changed since the list was shown", keymap: base.keymap, reserved };
+      },
+      update: (base) => ({ keymap: withPreset(base.keymap, changesOn(base, reserved)) }),
+      answer: (next) => res.json({ keymap: next.keymap, reserved }),
     });
   });
 }
