@@ -57,6 +57,16 @@ describe("header buttons, one entry at a time", () => {
     expect((await post("/api/config/buttons/add", { run: "action", payload: "nope", label: "X" })).body).toMatchObject({ error: "action" });
   });
 
+  it("edits a button in place by id, keeping its order, and refuses a folder", async () => {
+    const folder = { id: "tools", label: "Tools", items: [{ ...build, id: "inner" }] };
+    const { post, onDisk } = await mountWith({ buttons: [{ ...build, order: 2 }, folder] });
+    const res = await post("/api/config/buttons/edit", { id: "build", run: "input", label: "Compact", payload: "/compact" });
+    expect(res.status).toBe(200);
+    expect(onDisk().buttons[0]).toEqual({ id: "build", label: "Compact", run: "input", text: "/compact", order: 2 });
+    expect((await post("/api/config/buttons/edit", { id: "tools", run: "shell", label: "x", payload: "y" })).body).toMatchObject({ error: "folder" });
+    expect((await post("/api/config/buttons/edit", { run: "shell", label: "x", payload: "y" })).status).toBe(400);
+  });
+
   it("keeps the built-in PR button when the first button is added", async () => {
     const { post, onDisk } = await mountWith({});
     expect((await post("/api/config/buttons/add", { run: "shell", label: "Build", payload: "yarn build" })).status).toBe(200);

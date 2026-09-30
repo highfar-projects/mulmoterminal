@@ -1,5 +1,5 @@
 import { ref } from "vue";
-import { isButtonProblem, type ButtonProblem } from "../../common/headerButtonEntries";
+import { draftOfEntry, isButtonProblem, type ButtonDraft, type ButtonProblem } from "../../common/headerButtonEntries";
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { postEntryChange, type EntryChange } from "./configEntryChange";
@@ -19,6 +19,9 @@ export interface ButtonRow {
   detail: string;
   /** Placed by its `order` number rather than by where it sits, so it is not moved from here. */
   ordered: boolean;
+  /** The entry as the form shows it for editing, or null when the form cannot (a folder, or an
+   *  `open` naming more than one target). */
+  draft: ButtonDraft | null;
 }
 
 const KINDS: readonly ButtonKind[] = ["shell", "input", "open", "action"];
@@ -39,9 +42,9 @@ function detailOf(entry: Record<string, unknown>): string {
 function rowOf(entry: unknown): ButtonRow | null {
   if (!isRecord(entry) || typeof entry.id !== "string" || typeof entry.label !== "string") return null;
   const ordered = typeof entry.order === "number";
-  if (isUnknownArray(entry.items)) return { id: entry.id, label: entry.label, kind: "folder", detail: String(entry.items.length), ordered };
+  if (isUnknownArray(entry.items)) return { id: entry.id, label: entry.label, kind: "folder", detail: String(entry.items.length), ordered, draft: null };
   if (!isKind(entry.run)) return null;
-  return { id: entry.id, label: entry.label, kind: entry.run, detail: detailOf(entry), ordered };
+  return { id: entry.id, label: entry.label, kind: entry.run, detail: detailOf(entry), ordered, draft: draftOfEntry(entry) };
 }
 
 export const globalHeaderButtons = ref<ButtonRow[] | null>(null);
@@ -50,7 +53,7 @@ export function setGlobalHeaderButtons(value: unknown): void {
   globalHeaderButtons.value = isUnknownArray(value) ? value.map(rowOf).filter((row): row is ButtonRow => row !== null) : null;
 }
 
-export type ButtonAction = "add" | "remove" | "move" | "reset";
+export type ButtonAction = "add" | "edit" | "remove" | "move" | "reset";
 
 export async function changeHeaderButtons(action: ButtonAction, payload: Record<string, unknown>): Promise<EntryChange<ButtonProblem>> {
   const change = await postEntryChange(`/api/config/buttons/${action}`, payload, isButtonProblem);

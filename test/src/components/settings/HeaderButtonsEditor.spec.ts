@@ -28,7 +28,14 @@ afterEach(() => {
 
 const mountEditor = () => mount(HeaderButtonsEditor, { global: { plugins: [i18n] } });
 const field = (w: ReturnType<typeof mountEditor>, id: string) => w.find(`input[data-testid="${id}"], [data-testid="${id}"] input`);
-const row = (id: string, ordered = false) => ({ id, label: id.toUpperCase(), kind: "shell", detail: `run ${id}`, ordered });
+const row = (id: string, ordered = false) => ({
+  id,
+  label: id.toUpperCase(),
+  kind: "shell",
+  detail: `run ${id}`,
+  ordered,
+  draft: { label: id.toUpperCase(), icon: "", run: "shell", payload: `run ${id}`, target: "url", when: "" },
+});
 
 describe("HeaderButtonsEditor", () => {
   it("says the built-in button applies when nothing is set, and offers no reset", () => {
@@ -79,11 +86,29 @@ describe("HeaderButtonsEditor", () => {
     ]);
   });
 
+  it("fills the form from a row, saves it as an edit of that id, and can be left", async () => {
+    rows.value = [row("a"), { ...row("f"), kind: "folder", draft: null }];
+    const w = mountEditor();
+    expect(w.findAll('[data-testid="header-button-edit"]')).toHaveLength(1);
+    await w.find('[data-testid="header-button-edit"]').trigger("click");
+    expect(w.find('[data-testid="header-button-editing"]').exists()).toBe(true);
+    expect((field(w, "header-button-label").element as HTMLInputElement).value).toBe("A");
+    await field(w, "header-button-payload").setValue("run a2");
+    await w.find('[data-testid="header-button-add"]').trigger("click");
+    await flushPromises();
+    expect(state.sent).toEqual([["edit", { id: "a", run: "shell", label: "A", icon: "", payload: "run a2", target: "url", when: "" }]]);
+    expect(w.find('[data-testid="header-button-editing"]').exists()).toBe(false);
+    await w.find('[data-testid="header-button-edit"]').trigger("click");
+    await w.find('[data-testid="header-button-cancel"]').trigger("click");
+    expect((field(w, "header-button-label").element as HTMLInputElement).value).toBe("");
+  });
+
   it("moves and removes by id, and offers no move at an end or on an ordered entry", async () => {
     rows.value = [row("a"), row("b"), row("c", true)];
     const w = mountEditor();
     const items = w.findAll('[data-testid="settings-header-buttons"] li');
-    const buttons = (i: number) => items[i].findAll("button");
+    // Each row: edit, up, down, remove.
+    const buttons = (i: number) => items[i].findAll("button").slice(1);
     expect(buttons(0)[0].attributes("disabled")).toBeDefined();
     expect(buttons(2)[0].attributes("disabled")).toBeDefined();
     expect(buttons(2)[1].attributes("disabled")).toBeDefined();

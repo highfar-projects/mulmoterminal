@@ -5,6 +5,8 @@ import {
   BUTTON_LABEL_MAX,
   MAX_HEADER_BUTTONS,
   buttonFromDraft,
+  draftOfEntry,
+  entriesWithEdited,
   entriesMoved,
   entriesWithAdded,
   entriesWithout,
@@ -116,5 +118,52 @@ describe("entriesWithout / entriesMoved", () => {
     expect(isEditableRun("shell")).toBe(true);
     expect(isEditableRun("open")).toBe(true);
     expect(isEditableRun("folder")).toBe(false);
+  });
+});
+
+describe("draftOfEntry", () => {
+  it("reads each kind back into the form's fields", () => {
+    expect(draftOfEntry({ id: "b", label: "Build", run: "shell", cmd: "yarn build", icon: "build", when: "isGitRepo" })).toEqual({
+      label: "Build",
+      icon: "build",
+      when: "isGitRepo",
+      run: "shell",
+      target: "url",
+      payload: "yarn build",
+    });
+    expect(draftOfEntry({ id: "c", label: "C", run: "input", text: "/compact" })).toMatchObject({ run: "input", payload: "/compact" });
+    expect(draftOfEntry({ id: "a", label: "A", run: "action", action: "pane-files" })).toMatchObject({ run: "action", payload: "pane-files" });
+    expect(draftOfEntry({ id: "w", label: "W", run: "open", open: { view: "wiki" } })).toMatchObject({ run: "open", target: "view", payload: "wiki" });
+    expect(draftOfEntry({ id: "p", label: "P", run: "open", open: { pr: true } })).toMatchObject({ run: "open", target: "pr", payload: "" });
+  });
+
+  it("gives nothing for what the form cannot show", () => {
+    expect(draftOfEntry({ id: "f", label: "F", items: [] })).toBeNull();
+    expect(draftOfEntry({ id: "o", label: "O", run: "open", open: { url: "x", files: "y" } })).toBeNull();
+    expect(draftOfEntry({ id: "o", label: "O", run: "open", open: { nope: "x" } })).toBeNull();
+    expect(draftOfEntry({ id: "x", label: "X", run: "nope" })).toBeNull();
+    expect(draftOfEntry({ id: "x", run: "shell", cmd: "y" })).toBeNull();
+    expect(draftOfEntry(null)).toBeNull();
+  });
+});
+
+describe("entriesWithEdited", () => {
+  const build = { id: "build", label: "Build", run: "shell", cmd: "yarn build", order: 5, emoji: "b" };
+  const other = { id: "test", label: "Test", run: "shell", cmd: "yarn test" };
+
+  it("replaces that entry's fields in place, keeping its id, order and emoji", () => {
+    expect(entriesWithEdited<EntryLike>([build, other], defaults, "build", draft({ label: "Lint", payload: "yarn lint", icon: "rule" }))).toEqual({
+      entries: [{ id: "build", label: "Lint", run: "shell", cmd: "yarn lint", icon: "rule", order: 5, emoji: "b" }, other],
+    });
+    expect(entriesWithEdited<EntryLike>([other], defaults, "test", draft({ run: "input", payload: "/compact" }))).toEqual({
+      entries: [{ id: "test", label: "Build", run: "input", text: "/compact" }],
+    });
+  });
+
+  it("starts from the built-in set, and refuses a missing id, a folder, or a bad draft", () => {
+    expect(entriesWithEdited<EntryLike>(null, defaults, "pr", draft({}))).toMatchObject({ entries: [{ id: "pr", run: "shell" }] });
+    expect(entriesWithEdited<EntryLike>([other], defaults, "gone", draft({}))).toEqual({ problem: "missing" });
+    expect(entriesWithEdited<EntryLike>([{ id: "f", items: [{ id: "x" }] }], defaults, "f", draft({}))).toEqual({ problem: "folder" });
+    expect(entriesWithEdited<EntryLike>([other], defaults, "test", draft({ payload: " " }))).toEqual({ problem: "payload" });
   });
 });

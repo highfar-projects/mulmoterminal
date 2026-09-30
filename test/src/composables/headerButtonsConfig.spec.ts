@@ -28,13 +28,13 @@ describe("setGlobalHeaderButtons", () => {
       { id: "bad", label: "Bad", run: "nope" },
       "junk",
     ]);
-    expect(globalHeaderButtons.value).toEqual([
-      { id: "b", label: "Build", kind: "shell", detail: "yarn build", ordered: false },
-      { id: "c", label: "Compact", kind: "input", detail: "/compact", ordered: true },
-      { id: "o", label: "Docs", kind: "open", detail: "url: x", ordered: false },
-      { id: "f", label: "Tools", kind: "folder", detail: "2", ordered: false },
-      { id: "p", label: "PR", kind: "open", detail: "pr", ordered: false },
-      { id: "a", label: "Files", kind: "action", detail: "pane-files", ordered: false },
+    expect(globalHeaderButtons.value?.map(({ draft, ...row }) => ({ ...row, editable: draft !== null }))).toEqual([
+      { id: "b", label: "Build", kind: "shell", detail: "yarn build", ordered: false, editable: true },
+      { id: "c", label: "Compact", kind: "input", detail: "/compact", ordered: true, editable: true },
+      { id: "o", label: "Docs", kind: "open", detail: "url: x", ordered: false, editable: true },
+      { id: "f", label: "Tools", kind: "folder", detail: "2", ordered: false, editable: false },
+      { id: "p", label: "PR", kind: "open", detail: "pr", ordered: false, editable: true },
+      { id: "a", label: "Files", kind: "action", detail: "pane-files", ordered: false, editable: true },
     ]);
   });
 });
@@ -51,7 +51,7 @@ describe("changeHeaderButtons", () => {
   it("shows the saved list a refusal carries, without asking the cells again", async () => {
     answering(409, { error: "missing", buttons: [{ id: "b", label: "Build", run: "shell", cmd: "x" }] });
     expect(await changeHeaderButtons("remove", { id: "gone" })).toMatchObject({ ok: false, problem: "missing" });
-    expect(globalHeaderButtons.value).toEqual([{ id: "b", label: "Build", kind: "shell", detail: "x", ordered: false }]);
+    expect(globalHeaderButtons.value).toMatchObject([{ id: "b", label: "Build", kind: "shell", detail: "x", ordered: false }]);
     expect(headerConfigRevision.value).toBe(0);
   });
 

@@ -65,8 +65,8 @@ button too, write it yourself in [`buttons`](#run) and you get both.
 **Without writing JSON:** Settings → **Header buttons and chips** adds a button to every terminal —
 one that runs a command in a new cell, types text into the agent, opens something (a URL, a folder, a
 view of the app, this branch's PR, a file picker) or runs one of the app's named operations — with an
-optional icon and condition, and removes or moves the ones there. Folders are written as below (or by
-the header skill).
+optional icon and condition. The pencil on a row edits that button in place (its id and place stay),
+and the others there remove or move it. Folders are written as below (or by the header skill).
 
 ### Which file to write in {#where}
 

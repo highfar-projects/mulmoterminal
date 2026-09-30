@@ -6,8 +6,8 @@ import SettingsField from "../SettingsField.vue";
 import SettingsListRow from "./SettingsListRow.vue";
 import ButtonPayloadFields from "./ButtonPayloadFields.vue";
 import { SETTINGS_LIST } from "./sectionClasses";
-import { EDITABLE_RUNS, isEditableRun, type ButtonProblem, type EditableRun } from "../../../common/headerButtonEntries";
-import { changeHeaderButtons, globalHeaderButtons, type ButtonAction } from "../../composables/headerButtonsConfig";
+import { EDITABLE_RUNS, isEditableRun, type ButtonDraft, type ButtonProblem, type EditableRun } from "../../../common/headerButtonEntries";
+import { changeHeaderButtons, globalHeaderButtons, type ButtonAction, type ButtonRow } from "../../composables/headerButtonsConfig";
 
 // The global header buttons, one change at a time against the list on disk (#2622). A command, text
 // for the agent, something to open or a named operation can be added here; folders are listed,
@@ -33,13 +33,45 @@ async function apply(action: ButtonAction, body: Record<string, unknown>): Promi
   return change.ok;
 }
 
-async function add() {
+// The entry the form is changing, or null when it adds a new one.
+const editing = ref<ButtonRow | null>(null);
+
+function fill(draft: ButtonDraft | null) {
+  run.value = draft?.run ?? "shell";
+  label.value = draft?.label ?? "";
+  icon.value = draft?.icon ?? "";
+  payload.value = draft?.payload ?? "";
+  target.value = draft?.target ?? "url";
+  when.value = draft?.when ?? "";
+}
+
+async function submit() {
   if (saving.value) return;
-  if (!(await apply("add", { run: run.value, label: label.value, icon: icon.value, payload: payload.value, target: target.value, when: when.value }))) return;
+  const fields = { run: run.value, label: label.value, icon: icon.value, payload: payload.value, target: target.value, when: when.value };
+  const wasEditing = editing.value !== null;
+  const ok = editing.value ? await apply("edit", { id: editing.value.id, ...fields }) : await apply("add", fields);
+  if (!ok) return;
+  editing.value = null;
+  // After an add the kind stays chosen, for the next button of the same kind; an edit empties the form.
+  if (wasEditing) fill(null);
+  else clearValues();
+}
+
+function clearValues() {
   label.value = "";
   icon.value = "";
   payload.value = "";
   when.value = "";
+}
+
+function edit(row: ButtonRow) {
+  editing.value = row;
+  problem.value = null;
+  fill(row.draft);
+}
+function cancelEdit() {
+  editing.value = null;
+  fill(null);
 }
 
 function remove(id: string) {
@@ -76,6 +108,19 @@ function onRun(event: Event) {
       <span class="shrink-0 text-[11px] text-dim">{{ t(`headerButtons.kinds.${row.kind}`) }}</span>
       <code class="min-w-0 flex-auto truncate font-mono text-[11px] text-dim" :data-tip="row.detail">{{ row.detail }}</code>
       <button
+        v-if="row.draft"
+        type="button"
+        class="cursor-pointer rounded-md border-0 bg-transparent px-1 py-1 text-[14px] text-muted hover:bg-hover hover:text-fg disabled:cursor-default disabled:opacity-40"
+        :class="editing?.id === row.id ? 'text-accent' : ''"
+        data-testid="header-button-edit"
+        :disabled="saving"
+        :data-tip="t('headerButtons.edit', { name: row.label })"
+        :aria-label="t('headerButtons.edit', { name: row.label })"
+        @click="edit(row)"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+      </button>
+      <button
         v-for="step in [-1, 1] as const"
         :key="step"
         type="button"
@@ -90,6 +135,7 @@ function onRun(event: Event) {
     </SettingsListRow>
   </ul>
   <p v-else class="mb-2 text-[12px] text-dim" data-testid="header-buttons-none">{{ t("headerButtons.none") }}</p>
+  <p v-if="editing" class="mb-1 text-[11px] text-accent" data-testid="header-button-editing">{{ t("headerButtons.editing", { name: editing.label }) }}</p>
   <div class="flex flex-wrap items-center gap-2">
     <select
       class="cursor-pointer rounded-lg border border-border bg-elevated px-2 py-1.5 text-[12px] text-fg"
@@ -107,7 +153,7 @@ function onRun(event: Event) {
       :placeholder="t('headerButtons.labelPlaceholder')"
       :aria-label="t('headerButtons.labelField')"
       spellcheck="false"
-      @keydown.enter="add"
+      @keydown.enter="submit"
     />
     <SettingsField
       v-model="icon"
@@ -116,11 +162,11 @@ function onRun(event: Event) {
       placeholder="build"
       :aria-label="t('headerButtons.iconField')"
       spellcheck="false"
-      @keydown.enter="add"
+      @keydown.enter="submit"
     />
   </div>
   <div class="mt-2 flex flex-wrap items-center gap-2">
-    <ButtonPayloadFields v-model:target="target" v-model:payload="payload" :run="run" @submit="add" />
+    <ButtonPayloadFields v-model:target="target" v-model:payload="payload" :run="run" @submit="submit" />
     <SettingsField
       v-model="when"
       class="min-w-0 shrink grow basis-[20%] font-mono"
@@ -128,9 +174,14 @@ function onRun(event: Event) {
       placeholder="isGitRepo"
       :aria-label="t('headerButtons.whenField')"
       spellcheck="false"
-      @keydown.enter="add"
+      @keydown.enter="submit"
     />
-    <SettingsButton data-testid="header-button-add" :disabled="saving" @click="add">{{ t("settings.common.add") }}</SettingsButton>
+    <SettingsButton data-testid="header-button-add" :disabled="saving" @click="submit">{{
+      editing ? t("headerButtons.saveEdit") : t("settings.common.add")
+    }}</SettingsButton>
+    <SettingsButton v-if="editing" data-testid="header-button-cancel" :disabled="saving" @click="cancelEdit">{{
+      t("headerButtons.cancelEdit")
+    }}</SettingsButton>
   </div>
   <p v-if="problem" class="mt-1 text-[11px] text-err-text" role="alert" data-testid="header-button-problem">{{ t(`headerButtons.problems.${problem}`) }}</p>
   <p v-if="refused" class="mt-1 text-[11px] text-err-text" role="alert" data-testid="header-button-refused">
