@@ -220,6 +220,23 @@ describe("collectionSource with records", () => {
     expect(files.filter((file) => file.path === ".blueprint/source/files/shared.png")).toHaveLength(1);
   });
 
+  it("names the record fields that may hold personal data, of the start and what it links to, only when the records come", async () => {
+    const people = await collection("people", { email: field({ type: "email", label: "Email" }), fullName: field({ type: "string", label: "Full name" }) });
+    const books = await collection("books", { title: field({ type: "string" }), lender: field({ type: "ref", to: "people" }) });
+    const personalOf = async (withRecords: boolean) => {
+      const snapshot = await sourceOf([books, people]).snapshot("books", TAKEN_AT_MS, withRecords);
+      return snapshot.kind === "ok" ? snapshot.personal : null;
+    };
+    expect(await personalOf(true)).toEqual({
+      fields: [
+        { collection: "people", field: "email", label: "Email" },
+        { collection: "people", field: "fullName", label: "Full name" },
+      ],
+      members: 0,
+    });
+    expect(await personalOf(false)).toEqual({ fields: [], members: 0 });
+  });
+
   it("refuses a copy heavier than the limit, and names its weight; the shape alone still fits", async () => {
     const books = await collection("books", {});
     const LIMIT_BYTES = 1000;
@@ -270,9 +287,9 @@ describe("collectionSource with a shared app", () => {
     });
   });
 
-  it("copies the shape without anyone signed in", async () => {
+  it("copies the shape without anyone signed in, counting the roster's addresses as personal data it carries", async () => {
     apps = { f00d: await openApp() };
-    expect((await sourceOf([]).snapshot("app:f00d", TAKEN_AT_MS, false)).kind).toBe("ok");
+    expect(await sourceOf([]).snapshot("app:f00d", TAKEN_AT_MS, false)).toMatchObject({ kind: "ok", personal: { fields: [], members: 2 } });
   });
 
   it("refuses the records to someone not signed in", async () => {

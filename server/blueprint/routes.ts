@@ -22,6 +22,7 @@ import {
 import { placeSnapshot, type CollectionSource, type Snapshot, type SnapshotFile } from "./collectionSnapshot.js";
 import { appIdOf } from "../../common/blueprint/sharedAppSource.js";
 import { MAX_SOURCE_BYTES } from "../../common/blueprint/collectionSource.js";
+import { carriesPersonalData } from "../../common/blueprint/personalData.js";
 import { BlueprintRefusal, type BlueprintExecutor, type HumanEvent } from "./executor.js";
 import { BLUEPRINT_SLUG_RE } from "../../common/blueprint/manifest.js";
 import type { Refusal } from "../../common/blueprint/refusal.js";
@@ -65,6 +66,8 @@ const createSchema = z.object({
   preset: z.string().regex(BLUEPRINT_SLUG_RE).optional(),
   /** The language of the screen the person starts from: what the agent writes for them is in it. */
   language: personLanguageSchema.optional(),
+  /** The person has seen what personal data the copy of the source carries, and it may be copied. */
+  personalDataConfirmed: z.boolean().optional(),
 });
 
 const eventSchema = z.discriminatedUnion("type", [
@@ -226,7 +229,7 @@ async function checkCreate(deps: BlueprintRouteDeps, body: unknown): Promise<Che
     return refused(400, `${usecase} has no example "${preset}" on ${base}`);
   }
   const samples = preset === undefined ? [] : await readSamples(pair.usecasePackDir, preset);
-  const source = await copyOfSource(deps, pair, asked);
+  const source = await copyOfSource(deps, pair, asked, parsed.data.personalDataConfirmed === true);
   if (!source.ok) return source.refusal;
   return { ok: true, request: { projectDir, create: plan.create, answers: source.answers, language, pair, samples, source: source.files } };
 }
@@ -234,13 +237,21 @@ async function checkCreate(deps: BlueprintRouteDeps, body: unknown): Promise<Che
 type SourceCopy = { ok: true; files: readonly SnapshotFile[]; answers: HearingAnswers } | { ok: false; refusal: Checked };
 
 /** The copy of the collection the answers name, if the usecase starts from one; none when it does not. */
-async function copyOfSource(deps: BlueprintRouteDeps, pair: Extract<PackPair, { ok: true }>, asked: HearingAnswers): Promise<SourceCopy> {
+async function copyOfSource(
+  deps: BlueprintRouteDeps,
+  pair: Extract<PackPair, { ok: true }>,
+  asked: HearingAnswers,
+  personalDataConfirmed: boolean,
+): Promise<SourceCopy> {
   const picked = sourceQuestion(pair.hearing);
   const answer = picked === undefined ? undefined : asked[picked.id];
   if (picked === undefined || typeof answer !== "string") return { ok: true, files: [], answers: asked };
   const slug = answer.trim();
   const snapshot = await deps.collections.snapshot(slug, deps.now(), recordsWanted(pair.hearing, asked));
   if (snapshot.kind !== "ok") return { ok: false, refusal: snapshotRefusal(slug, snapshot) };
+  if (carriesPersonalData(snapshot.personal) && !personalDataConfirmed) {
+    return { ok: false, refusal: refused(409, { code: "personal-data", ...snapshot.personal }) };
+  }
   // The recorded answer names exactly what was copied, so the spec step reads the same slug as `source.json`.
   return { ok: true, files: snapshot.files, answers: { ...asked, [picked.id]: slug } };
 }
