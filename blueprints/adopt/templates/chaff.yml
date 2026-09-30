@@ -1,0 +1,29 @@
+# Checks the documents with chaff on every pull request, and puts each new finding on the line it is about.
+# The findings already in the documents are shelved in .chaff-baseline.json, so only new ones appear.
+name: chaff
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  chaff:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: npx -y chaffjs@0.16 {{PATHS}} --sarif chaff.sarif
+        continue-on-error: true
+      - uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        with:
+          sarif_file: chaff.sarif
+          category: chaff

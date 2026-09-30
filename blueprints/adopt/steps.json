@@ -1,0 +1,20 @@
+{
+  "steps": [
+    {
+      "id": "survey",
+      "title": "今の指摘を測る",
+      "description": "選んだ種類で、文書に今どれだけ指摘があるかを測り、入れる設定の案を書く。まだ何も変えない。",
+      "skill": "skills/survey",
+      "check": "node \"$BLUEPRINT_USECASE/checks/adopt.mjs\" survey"
+    },
+    {
+      "id": "apply",
+      "title": "chaff を入れる",
+      "description": "chaff.yaml を置き、今の指摘を .chaff-baseline.json に棚上げし、望めば PR に指摘を出すワークフローを足す。以後は新しい指摘だけが出ることを機械で確かめる。",
+      "skill": "skills/apply",
+      "check": "node \"$BLUEPRINT_USECASE/checks/adopt.mjs\" apply && node \"$BLUEPRINT_USECASE/checks/report.mjs\"",
+      "gates": ["review"],
+      "reads": [".blueprint/adopt.txt"]
+    }
+  ]
+}

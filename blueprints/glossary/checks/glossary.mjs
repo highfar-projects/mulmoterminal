@@ -9,6 +9,7 @@ import { avoidedSpellings, citationsOf, definedTermsIn, definedTwice, glossaryPr
 const { fail, findingsIn, quotationProblems, readJson, runChaff } = await import(fromBase("chaff.mjs"));
 const { documentSource, documentsNamed, fingerprint } = await import(fromBase("documents.mjs"));
 const { treeOf } = await import(fromBase("places.mjs"));
+const { lostLines } = await import(fromBase("config.mjs"));
 
 const GLOSSARY = ".blueprint/glossary.json";
 const READABLE = ".blueprint/glossary.txt";
@@ -54,13 +55,6 @@ const recorded = () => {
   }
 };
 
-// A line of chaff.yaml that says something, as it was: what the team had must still be there.
-const settingLines = (text) =>
-  String(text)
-    .split("\n")
-    .map((line) => line.trimEnd())
-    .filter((line) => line.trim() !== "" && !line.trim().startsWith("#"));
-
 const stillWrites = (file, pair) => writesOnItsOwn(readFileSync(file, "utf8"), pair);
 // A preferred-term finding for this pair names both spellings (「サーバ」は「サーバー」と書きます): one for another pair
 // in the same file is not proof that this one is in chaff.yaml.
@@ -70,7 +64,7 @@ const reportsPair = (finding, { avoided, preferred }) =>
 const appliedProblems = (before) => {
   if (!existsSync(CONFIG)) return [`${CONFIG} is missing, but the person asked for the spellings to go into it`];
   const now = readFileSync(CONFIG, "utf8");
-  const lost = before === null ? [] : settingLines(before).filter((line) => !settingLines(now).includes(line));
+  const lost = lostLines(before, now);
   const run = runChaff(["rules", "--json"]);
   if (run.code !== 0) return [`chaff could not load ${CONFIG}:\n${run.stderr}`];
   const preferredTerm = JSON.parse(run.stdout).rules?.find((rule) => rule.id === "preferred-term");
