@@ -359,8 +359,8 @@ now, newest first. It is the same text as each release's setup guide, sorted int
 - **Under the hood** — changes you cannot see but may notice, such as speed or a fixed bug
 
 Pictures load from the published guide site, so without a network connection only the pictures
-are missing. Close it with **Got it** or the × in the corner and that version is not shown again
-(in any browser). If you skipped several versions, all of them are shown; when there are too
+are missing. Close it with **Got it** or the × in the corner. A version is shown once: with several
+tabs or browsers opening at the same time, only the first one to open gets it. If you skipped several versions, all of them are shown; when there are too
 many, the newest are shown and the rest are a link to the
 [changelog](https://github.com/receptron/mulmoterminal/blob/main/docs/ChangeLog.md). It is in Japanese when the
 app's language is Japanese, and in English otherwise. To read it again after closing it, open the

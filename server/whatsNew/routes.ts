@@ -1,33 +1,32 @@
-// GET /api/whats-new — the dated guides for the versions this user has not been shown yet.
-// POST /api/whats-new/seen — the dialog was closed on `version`.
+// POST /api/whats-new — the dated guides for the versions this user has not been shown yet.
 //
-// Decided here rather than in the browser because the remembered version is per machine, not per
-// tab or per browser: two browsers on one server must not each announce the same release.
+// Answering IS showing: the running version is recorded as seen in the same step, so of several
+// tabs or browsers opening after an upgrade only the first gets the guides. Decided here rather
+// than in the browser because the record is per machine, not per tab. A POST because it writes
+// that record, and only state-changing methods pass the same-origin guard.
 import type { Express } from "express";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { compareVersions, guideLanguageFor, versionsToShow, type GuideLanguage, type WhatsNewEntry } from "../../common/whatsNew.js";
+import { guideLanguageFor, versionsToShow, type GuideLanguage, type WhatsNewEntry } from "../../common/whatsNew.js";
 import { getUpdateStatus } from "../config/update-status.js";
 import { requestBody } from "../routes/requestBody.js";
 import { toWhatsNewEntry } from "./guidePage.js";
-import { readLastSeenVersion, recordSeenVersion } from "./state.js";
+import { claimSeenVersion } from "./state.js";
 
 const GUIDE_FILE = /^v(\d+\.\d+\.\d+)\.md$/;
-const RELEASE_VERSION = /^\d+\.\d+\.\d+$/;
 const DEFAULT_GUIDE_DIR = path.join(import.meta.dirname, "..", "..", "docs", "guide");
 
 export interface WhatsNewDeps {
   guideDir: string;
   currentVersion: () => string;
-  readLastSeen: () => Promise<string | null>;
-  recordSeen: (version: string) => Promise<void>;
+  /** Records `version` as seen and answers what was recorded before; see claimSeenVersion. */
+  claimSeen: (version: string) => Promise<string | null>;
 }
 
 const defaultDeps: WhatsNewDeps = {
   guideDir: DEFAULT_GUIDE_DIR,
   currentVersion: () => getUpdateStatus().version,
-  readLastSeen: readLastSeenVersion,
-  recordSeen: recordSeenVersion,
+  claimSeen: claimSeenVersion,
 };
 
 // The English directory is the list of releases: every release writes both pages, and English is
@@ -46,33 +45,19 @@ async function readEntry(guideDir: string, language: GuideLanguage, version: str
 }
 
 export function mountWhatsNewRoutes(app: Express, deps: WhatsNewDeps = defaultDeps): void {
-  app.get("/api/whats-new", async (req, res) => {
-    const language = guideLanguageFor(typeof req.query.lang === "string" ? req.query.lang : "");
+  app.post("/api/whats-new", async (req, res) => {
+    const { lang } = requestBody(req.body);
+    const language = guideLanguageFor(typeof lang === "string" ? lang : "");
     const current = deps.currentVersion();
     try {
-      const lastSeen = await deps.readLastSeen();
-      // The first run that remembers anything shows nothing and starts the record, so the NEXT
-      // upgrade has a version to count from.
-      if (lastSeen === null) await deps.recordSeen(current);
+      // With nothing recorded before (a fresh install, or the first run with this feature) the
+      // claim starts the record and versionsToShow answers nothing.
+      const lastSeen = await deps.claimSeen(current);
       const { versions, truncated } = versionsToShow(await releasedVersions(deps.guideDir), lastSeen, current);
       const entries = (await Promise.all(versions.map((version) => readEntry(deps.guideDir, language, version)))).flat();
       res.json({ version: current, entries, truncated });
     } catch (err) {
       res.status(500).json({ error: `could not read the release guides in ${deps.guideDir}: ${err instanceof Error ? err.message : String(err)}` });
-    }
-  });
-
-  app.post("/api/whats-new/seen", async (req, res) => {
-    const { version } = requestBody(req.body);
-    if (typeof version !== "string" || !RELEASE_VERSION.test(version) || compareVersions(version, deps.currentVersion()) > 0) {
-      res.status(400).json({ error: "version must be a released version no newer than the running one" });
-      return;
-    }
-    try {
-      await deps.recordSeen(version);
-      res.json({ ok: true });
-    } catch (err) {
-      res.status(500).json({ error: `could not record the seen version: ${err instanceof Error ? err.message : String(err)}` });
     }
   });
 }

@@ -25,15 +25,19 @@ export async function readLastSeenVersion(): Promise<string | null> {
   return raw === null ? null : lastSeenOf(raw);
 }
 
-/** Records `version` unless a newer one is already recorded — a tab left open on an old server
- *  must not re-open everything a newer server has already shown. Locked across processes because
- *  several checkouts on one machine share this file, and an unlocked read-compare-write lets the
- *  older version land last. */
-export async function recordSeenVersion(version: string): Promise<void> {
+/** Claims the announcement of `version` and answers the version recorded before it.
+ *
+ *  Reading and recording happen under one lock, so of several tabs or browsers opening at once
+ *  exactly one is answered with the older version and shows the dialog; the rest see `version`.
+ *  The lock is cross-process because several checkouts on one machine share this file. The record
+ *  never moves backwards, so an older server running beside a newer one cannot re-open anything. */
+export async function claimSeenVersion(version: string): Promise<string | null> {
   const file = stateFile();
-  await withConfigLock(file, async () => {
+  return withConfigLock(file, async () => {
     const known = await readLastSeenVersion();
-    if (known !== null && compareVersions(known, version) >= 0) return;
-    await writeFileAtomic(file, `${JSON.stringify({ lastSeenVersion: version }, null, 2)}\n`);
+    if (known === null || compareVersions(known, version) < 0) {
+      await writeFileAtomic(file, `${JSON.stringify({ lastSeenVersion: version }, null, 2)}\n`);
+    }
+    return known;
   });
 }

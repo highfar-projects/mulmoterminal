@@ -9,7 +9,7 @@ import { mountWhatsNewRoutes, type WhatsNewDeps } from "../../../server/whatsNew
 
 let guideDir: string;
 let lastSeen: string | null;
-let recorded: string[];
+let claimed: string[];
 
 const page = (title: string) => `---\ntitle: ${title}\n---\n\n# ${title}\n\nBody of ${title}\n`;
 
@@ -24,9 +24,9 @@ const appWith = (overrides: Partial<WhatsNewDeps> = {}) => {
   mountWhatsNewRoutes(app, {
     guideDir,
     currentVersion: () => "7.1.0",
-    readLastSeen: async () => lastSeen,
-    recordSeen: async (version) => {
-      recorded.push(version);
+    claimSeen: async (version) => {
+      claimed.push(version);
+      return lastSeen;
     },
     ...overrides,
   });
@@ -36,7 +36,7 @@ const appWith = (overrides: Partial<WhatsNewDeps> = {}) => {
 beforeEach(() => {
   guideDir = mkdtempSync(path.join(os.tmpdir(), "whats-new-"));
   lastSeen = "7.0.0";
-  recorded = [];
+  claimed = [];
   writeGuide("en", "7.0.0", "Seven");
   writeGuide("en", "7.0.1", "Seven one");
   writeGuide("en", "7.1.0", "Seven point one");
@@ -48,9 +48,9 @@ afterEach(() => {
   rmSync(guideDir, { recursive: true, force: true });
 });
 
-describe("GET /api/whats-new", () => {
+describe("POST /api/whats-new", () => {
   it("answers the unseen releases in the asked language, falling back to English", async () => {
-    const res = await routeCall(appWith())("/api/whats-new?lang=ja");
+    const res = await routeCall(appWith())("/api/whats-new", jsonPost({ lang: "ja" }));
     expect(res.status).toBe(200);
     expect(res.body.version).toBe("7.1.0");
     expect(res.body.truncated).toBe(false);
@@ -61,68 +61,54 @@ describe("GET /api/whats-new", () => {
   });
 
   it("reads English for any other language", async () => {
-    const res = await routeCall(appWith())("/api/whats-new?lang=ko");
+    const res = await routeCall(appWith())("/api/whats-new", jsonPost({ lang: "ko" }));
     expect(res.body.entries).toEqual([expect.objectContaining({ title: "Seven point one" }), expect.objectContaining({ title: "Seven one" })]);
   });
 
   it("answers no entries when the running version was seen", async () => {
     lastSeen = "7.1.0";
-    const res = await routeCall(appWith())("/api/whats-new?lang=en");
+    const res = await routeCall(appWith())("/api/whats-new", jsonPost({ lang: "en" }));
     expect(res.body.entries).toEqual([]);
   });
 
-  it("shows nothing on the first run and records the running version", async () => {
+  it("claims the running version on every answer", async () => {
+    await routeCall(appWith())("/api/whats-new", jsonPost({ lang: "ja" }));
+    expect(claimed).toEqual(["7.1.0"]);
+  });
+
+  it("shows nothing on the first run", async () => {
     lastSeen = null;
-    const res = await routeCall(appWith())("/api/whats-new?lang=ja");
+    const res = await routeCall(appWith())("/api/whats-new", jsonPost({ lang: "ja" }));
     expect(res.body.entries).toEqual([]);
-    expect(recorded).toEqual(["7.1.0"]);
+    expect(claimed).toEqual(["7.1.0"]);
   });
 
-  it("records nothing when a version was already remembered", async () => {
-    await routeCall(appWith())("/api/whats-new?lang=ja");
-    expect(recorded).toEqual([]);
+  it("reads English when no language is sent", async () => {
+    const res = await routeCall(appWith())("/api/whats-new", jsonPost({ lang: 7 }));
+    expect(res.body.entries).toEqual([expect.objectContaining({ title: "Seven point one" }), expect.objectContaining({ title: "Seven one" })]);
+  });
+
+  it("does not answer a GET", async () => {
+    const res = await routeCall(appWith())("/api/whats-new");
+    expect(res.status).toBe(404);
+    expect(claimed).toEqual([]);
   });
 
   it("answers no entries when the guides are not there", async () => {
-    const res = await routeCall(appWith({ guideDir: path.join(guideDir, "missing") }))("/api/whats-new");
+    const res = await routeCall(appWith({ guideDir: path.join(guideDir, "missing") }))("/api/whats-new", jsonPost({}));
     expect(res.status).toBe(200);
     expect(res.body.entries).toEqual([]);
   });
 
-  it("reports a state read that fails", async () => {
+  it("reports a state claim that fails", async () => {
     const res = await routeCall(
       appWith({
-        readLastSeen: async () => {
+        claimSeen: async () => {
           throw new Error("disk");
         },
       }),
-    )("/api/whats-new");
+    )("/api/whats-new", jsonPost({ lang: "en" }));
     expect(res.status).toBe(500);
     expect(String(res.body.error)).toContain("disk");
-  });
-});
-
-describe("POST /api/whats-new/seen", () => {
-  it("records the version the dialog showed", async () => {
-    const res = await routeCall(appWith())("/api/whats-new/seen", jsonPost({ version: "7.1.0" }));
-    expect(res.status).toBe(200);
-    expect(recorded).toEqual(["7.1.0"]);
-  });
-
-  it.each([[{}], [{ version: 7 }], [{ version: "latest" }], [{ version: "7.2.0" }], [{ version: "7.1.0-beta" }]])("refuses %j", async (body) => {
-    const res = await routeCall(appWith())("/api/whats-new/seen", jsonPost(body));
-    expect(res.status).toBe(400);
-    expect(recorded).toEqual([]);
-  });
-
-  it("reports a write that fails", async () => {
-    const res = await routeCall(
-      appWith({
-        recordSeen: async () => {
-          throw new Error("read-only");
-        },
-      }),
-    )("/api/whats-new/seen", jsonPost({ version: "7.1.0" }));
-    expect(res.status).toBe(500);
   });
 });

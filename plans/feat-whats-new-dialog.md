@@ -19,8 +19,10 @@ they cannot see.
   When capped, the dialog links to the full changelog.
 - **No state yet** (a fresh install, or the first run with this feature): show nothing and record
   the running version, so the next upgrade has a version to count from.
-- **Marking seen**: closing the dialog POSTs the version it showed. The server records that, not
-  "whatever is current now", so a server upgraded while the dialog was open still shows the rest.
+- **Marking seen**: answering is showing. `POST /api/whats-new` records the running version under a
+  cross-process lock in the same step as it reads the old one, so of several tabs or browsers
+  opening at once only the first gets the guides (the user's choice over showing it in every tab).
+  A POST because it writes, and only state-changing methods pass the same-origin guard.
 - **Screenshots**: loaded from the published guide site. `renderMarkdownProse` turns remote images
   into links (#2115) because agent-written prose can point anywhere; the dialog passes one trusted
   origin, the guide site, and only that origin is let through. Agent prose is unchanged.
@@ -34,8 +36,8 @@ they cannot see.
 - `server/whatsNew/guidePage.ts` — pure: front matter stripped, title read, duplicate H1 removed,
   relative links rewritten.
 - `server/whatsNew/state.ts` — `~/.mulmoterminal/whats-new.json` (`{ lastSeenVersion }`), read
-  tolerant of a missing or corrupt file, written atomically.
-- `server/whatsNew/routes.ts` — `GET /api/whats-new?lang=` and `POST /api/whats-new/seen`.
+  tolerant of a missing or corrupt file, claimed under `withConfigLock`, written atomically.
+- `server/whatsNew/routes.ts` — `POST /api/whats-new` with `{ lang }`.
 - `src/components/WhatsNewDialog.vue` + `src/composables/useWhatsNew.ts`, mounted in `App.vue`.
 - i18n keys in all five locales.
 

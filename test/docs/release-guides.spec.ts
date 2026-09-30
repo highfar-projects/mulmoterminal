@@ -6,24 +6,26 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
-import { compareVersions } from "../../common/whatsNew";
+import { compareVersions, type GuideLanguage } from "../../common/whatsNew";
 import { toWhatsNewEntry } from "../../server/whatsNew/guidePage.js";
 
 // Pages up to this version were written before the rule and are dated snapshots; they are not rewritten.
 const LAST_GUIDE_BEFORE_RULE = "7.1.0";
 
-const REQUIRED_HEADINGS = {
+const GUIDE_LANGUAGES: readonly GuideLanguage[] = ["en", "ja"];
+
+const REQUIRED_HEADINGS: Record<GuideLanguage, readonly string[]> = {
   en: ["## New features", "## What looks different", "## Under the hood"],
   ja: ["## 新機能", "## 画面の変化", "## 見えない変化"],
-} as const;
+};
 
 const GUIDE_ROOT = path.join(process.cwd(), "docs", "guide");
 const GUIDE_FILE = /^v(\d+\.\d+\.\d+)\.md$/;
 
-const releasedVersions = (language: "en" | "ja"): string[] =>
+const releasedVersions = (language: GuideLanguage): string[] =>
   readdirSync(path.join(GUIDE_ROOT, language)).flatMap((name) => GUIDE_FILE.exec(name)?.slice(1, 2) ?? []);
 
-const readGuide = (language: "en" | "ja", version: string): string => readFileSync(path.join(GUIDE_ROOT, language, `v${version}.md`), "utf-8");
+const readGuide = (language: GuideLanguage, version: string): string => readFileSync(path.join(GUIDE_ROOT, language, `v${version}.md`), "utf-8");
 
 const changelog = readFileSync(path.join(process.cwd(), "docs", "ChangeLog.md"), "utf-8");
 
@@ -37,7 +39,7 @@ function changelogPullRequests(version: string): string[] {
 }
 
 /** What a page breaks of the rule: missing headings, and changelog PRs it never mentions. */
-function ruleViolations(language: "en" | "ja", page: string, pullRequests: readonly string[]): string[] {
+function ruleViolations(language: GuideLanguage, page: string, pullRequests: readonly string[]): string[] {
   const lines = page.split("\n");
   const missingHeadings = REQUIRED_HEADINGS[language].filter((heading) => !lines.includes(heading)).map((heading) => `missing "${heading}"`);
   const unmentioned = pullRequests.filter((number) => !page.includes(`#${number}`)).map((number) => `never mentions #${number}`);
@@ -48,7 +50,7 @@ const ruledVersions = releasedVersions("en").filter((version) => compareVersions
 
 describe("dated setup guides", () => {
   it("every release page has a title the dialog can show", () => {
-    (["en", "ja"] as const).forEach((language) => {
+    GUIDE_LANGUAGES.forEach((language) => {
       releasedVersions(language).forEach((version) => {
         const entry = toWhatsNewEntry(readGuide(language, version), language, version);
         expect(entry.title, `${language}/v${version}.md has no front-matter title`).not.toBe(version);
@@ -61,7 +63,7 @@ describe("dated setup guides", () => {
     ruledVersions.forEach((version) => {
       expect(releasedVersions("ja"), `docs/guide/ja/v${version}.md is missing`).toContain(version);
       const pullRequests = changelogPullRequests(version);
-      (["en", "ja"] as const).forEach((language) => {
+      GUIDE_LANGUAGES.forEach((language) => {
         expect(ruleViolations(language, readGuide(language, version), pullRequests), `${language}/v${version}.md`).toEqual([]);
       });
     });

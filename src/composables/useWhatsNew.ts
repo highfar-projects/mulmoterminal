@@ -10,28 +10,23 @@ let asked = false;
 
 async function load(locale: string): Promise<void> {
   try {
-    const res = await fetchWithTimeout(`/api/whats-new?lang=${guideLanguageFor(locale)}`);
+    const res = await fetchWithTimeout("/api/whats-new", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lang: guideLanguageFor(locale) }),
+    });
     if (!res.ok) return;
     const answer = parseWhatsNew(await jsonBody(res));
     whatsNew.value = answer && answer.entries.length > 0 ? answer : null;
   } catch {
-    // best-effort — a missed announcement is shown again on the next load
+    // best-effort: the server may already have recorded the release as seen, so a lost answer
+    // means no dialog for this release rather than a retry.
   }
 }
 
-async function dismiss(): Promise<void> {
-  const shown = whatsNew.value;
+// The server recorded the release as seen when it answered, so closing is only local.
+function dismiss(): void {
   whatsNew.value = null;
-  if (!shown) return;
-  try {
-    await fetchWithTimeout("/api/whats-new/seen", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ version: shown.version }),
-    });
-  } catch {
-    // Not recorded means shown once more next time, which is the safe side to fail on.
-  }
 }
 
 export function useWhatsNew(locale: string) {

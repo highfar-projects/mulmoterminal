@@ -286,8 +286,8 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
   // project and what they chose, read back out of Claude's own transcripts. Writes nothing.
   mountDecisionRoutes(app);
 
-  // The dated release guides a user has not been shown since their last upgrade (GET
-  // /api/whats-new) and the version the dialog was closed on (POST /api/whats-new/seen).
+  // The dated release guides a user has not been shown since their last upgrade, recorded as
+  // seen as they are answered (POST /api/whats-new).
   mountWhatsNewRoutes(app);
 
   // Local voice input (POST /api/transcribe + model status/download) — macOS only,

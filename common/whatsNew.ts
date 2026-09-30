@@ -14,7 +14,7 @@ export interface WhatsNewEntry {
 }
 
 export interface WhatsNewResponse {
-  /** The running version; what POST /api/whats-new/seen records once the dialog is closed. */
+  /** The running version, recorded as seen by the request that answered this. */
   version: string;
   /** Newest first. Empty when there is nothing new to show. */
   entries: WhatsNewEntry[];
