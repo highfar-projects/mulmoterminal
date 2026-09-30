@@ -167,6 +167,7 @@ binding you add is a key the program inside the terminal (Claude Code, `vim`, `l
 | `screen-terminals` … `screen-worklog` (terminals, collections, feeds, accounting, files, wiki, prs, rooms, blueprints, worklog) | Go to that screen, like the toolbar's doors; prs / rooms / worklog do nothing until set up. Works on every screen (single keys; sequences only on the grid) | no |
 | `settings-open` / `sound-toggle` / `view-toggle` | Open Settings / sound on-off / enlarged view roster-strip | no |
 | `order-auto` / `order-manual` / `order-priority` | Set the cell order | no |
+| `page-next` / `page-prev` | Next / previous page of the tiled grid; no wrap. Also a palette row | no |
 | `copy` | Copy the terminal's selection. Acts **only** when something is selected, so `Ctrl+C` stays usable as interrupt — with no selection the key reaches the program untouched | no |
 | `paste` | Paste into the terminal | no |
 

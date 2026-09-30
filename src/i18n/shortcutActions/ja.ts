@@ -55,6 +55,8 @@ export const shortcutActionsJa = {
   orderAuto: "並び順を自動にする（注目度順）",
   orderManual: "並び順を手動にする",
   orderPriority: "並び順を優先度順にする",
+  pageNext: "ターミナルの次のページへ",
+  pagePrev: "ターミナルの前のページへ",
   copy: "ターミナルの選択範囲をコピー",
   paste: "ターミナルにペースト",
 };

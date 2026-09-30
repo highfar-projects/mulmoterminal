@@ -55,6 +55,8 @@ export const shortcutActionsZhTW = {
   orderAuto: "終端機依自動順序排列（關注優先）",
   orderManual: "終端機依手動順序排列",
   orderPriority: "終端機依專案優先順序排列",
+  pageNext: "前往終端機的下一頁",
+  pagePrev: "前往終端機的上一頁",
   copy: "複製終端機裡選取的內容",
   paste: "貼到終端機",
 };

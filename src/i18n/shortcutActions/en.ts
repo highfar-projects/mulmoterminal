@@ -55,6 +55,8 @@ export const shortcutActionsEn = {
   orderAuto: "Order terminals automatically (attention first)",
   orderManual: "Order terminals by hand",
   orderPriority: "Order terminals by project priority",
+  pageNext: "Go to the next page of terminals",
+  pagePrev: "Go to the previous page of terminals",
   copy: "Copy the terminal selection",
   paste: "Paste into the terminal",
 };

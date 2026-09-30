@@ -78,6 +78,8 @@ export const commandPaletteEn = {
     terminalRestart: "Restarts the agent in the current terminal, resuming the same conversation.",
     terminalMovePrev: "Moves the current terminal one place earlier in manual order — left in the grid and the strip, up in the roster.",
     terminalMoveNext: "Moves the current terminal one place later in manual order — right in the grid and the strip, down in the roster.",
+    pageNext: "Shows the next page of the tiled grid (9 terminals a page); nothing past the last.",
+    pagePrev: "Shows the previous page of the tiled grid; nothing before the first.",
     terminalTimeline: "Opens the activity timeline of the current terminal (Claude sessions only).",
     terminalTalk: "Opens the list of other terminals to hand a question to, from the current terminal.",
     terminalPark: "Sets the current terminal aside, or wakes it if it already is.",
