@@ -5,6 +5,7 @@ import { commandPaletteZhCN } from "./commandPalette/zh-CN";
 import { focusModeZhCN } from "./focusMode/zh-CN";
 import { fileHistoryZhCN } from "./fileHistory/zh-CN";
 import { dirConfigSaveZhCN } from "./dirConfigSave/zh-CN";
+import { dirConfigOpenZhCN } from "./dirConfigOpen/zh-CN";
 import { themeEditorZhCN } from "./themeEditor/zh-CN";
 import { headerChipsZhCN } from "./headerChips/zh-CN";
 import { settingsControlsZhCN } from "./settingsControls/zh-CN";
@@ -602,6 +603,7 @@ export const zhCN: Messages = {
   },
   fileHistory: fileHistoryZhCN,
   dirConfigSave: dirConfigSaveZhCN,
+  dirConfigOpen: dirConfigOpenZhCN,
   themeEditor: themeEditorZhCN,
   headerChips: headerChipsZhCN,
   focusMode: focusModeZhCN,

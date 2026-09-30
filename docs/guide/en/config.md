@@ -173,6 +173,8 @@ Place this at the project root to change the appearance, sound, and header of **
 
 Open it in the Files pane and the editor knows this file's keys: it offers them as you type (`Ctrl+Space` asks) and underlines a value the server would reject — a misspelt key or a colour it cannot read — before you save.
 
+To get to it from Settings: **Settings → Directory settings**, expand a directory, and press **Open in Files** beside its file — or, where it has none yet, **Create .mulmoterminal.json and open it**, which writes an empty `{}` first. Either one closes Settings and opens the file in the full-screen Files view.
+
 ### Which model to use
 
 ```json

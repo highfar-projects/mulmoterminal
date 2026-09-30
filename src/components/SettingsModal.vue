@@ -59,6 +59,7 @@ import type { NotifyKind } from "../../common/notifyKinds";
 import type { SoundMap } from "../composables/soundSettings";
 import type { SoundEmits } from "./settings/soundEmits";
 import type { BundledSkillName } from "../../common/bundledSkills";
+import { filesGotoFile } from "../composables/useFilesView";
 
 defineProps<{
   soundFile?: string | null;
@@ -203,6 +204,13 @@ function dismissConfirm() {
 
 // Escape's layered answer: the confirmation is what it dismisses while one is open, and only a
 // second press reaches the modal.
+// A directory's config opened from Directory settings (#2624): the full-screen Files view is where a
+// path that is not the enlarged cell's can be opened, and it sits under this modal, so the modal goes.
+function openInFiles(dir: string, name: string) {
+  emit("close");
+  filesGotoFile(dir, name);
+}
+
 function closeTopmost() {
   if (pendingSkill.value === null) {
     emit("close");
@@ -337,7 +345,7 @@ useModalKeyboard({
             <DirAppearanceSection @launch-skill="askBeforeLaunch" />
           </div>
           <div v-if="visitedTabs.has('dirSettings')" v-show="activeTab === 'dirSettings'" data-testid="settings-pane-dirSettings">
-            <DirSettingsSection :dir-paths="dirPaths" @launch-skill="askBeforeLaunch" />
+            <DirSettingsSection :dir-paths="dirPaths" @launch-skill="askBeforeLaunch" @open-file="openInFiles" />
           </div>
           <div v-if="visitedTabs.has('launchers')" v-show="activeTab === 'launchers'" data-testid="settings-pane-launchers">
             <LaunchersSection :launchers="launchers" @update-launchers="emit('update-launchers', $event)" />

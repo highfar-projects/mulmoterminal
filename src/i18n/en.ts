@@ -18,6 +18,7 @@ import { commandPaletteEn } from "./commandPalette/en";
 import { focusModeEn } from "./focusMode/en";
 import { fileHistoryEn } from "./fileHistory/en";
 import { dirConfigSaveEn } from "./dirConfigSave/en";
+import { dirConfigOpenEn } from "./dirConfigOpen/en";
 import { themeEditorEn } from "./themeEditor/en";
 import { headerChipsEn } from "./headerChips/en";
 import { settingsControlsEn } from "./settingsControls/en";
@@ -638,6 +639,7 @@ export const en = {
   },
   fileHistory: fileHistoryEn,
   dirConfigSave: dirConfigSaveEn,
+  dirConfigOpen: dirConfigOpenEn,
   themeEditor: themeEditorEn,
   headerChips: headerChipsEn,
   focusMode: focusModeEn,

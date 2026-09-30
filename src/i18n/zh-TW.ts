@@ -5,6 +5,7 @@ import { commandPaletteZhTW } from "./commandPalette/zh-TW";
 import { focusModeZhTW } from "./focusMode/zh-TW";
 import { fileHistoryZhTW } from "./fileHistory/zh-TW";
 import { dirConfigSaveZhTW } from "./dirConfigSave/zh-TW";
+import { dirConfigOpenZhTW } from "./dirConfigOpen/zh-TW";
 import { themeEditorZhTW } from "./themeEditor/zh-TW";
 import { headerChipsZhTW } from "./headerChips/zh-TW";
 import { settingsControlsZhTW } from "./settingsControls/zh-TW";
@@ -607,6 +608,7 @@ export const zhTW: Messages = {
   },
   fileHistory: fileHistoryZhTW,
   dirConfigSave: dirConfigSaveZhTW,
+  dirConfigOpen: dirConfigOpenZhTW,
   themeEditor: themeEditorZhTW,
   headerChips: headerChipsZhTW,
   focusMode: focusModeZhTW,

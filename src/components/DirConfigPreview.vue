@@ -9,8 +9,27 @@ import { computed, ref, watch } from "vue";
 import { parseDirConfigDetail, sortDirPathsByName, type DirConfigDetailView } from "./dirConfigDetail";
 import { presetLabel } from "./presets";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
+import { useI18n } from "vue-i18n";
+import { lastSegment } from "../../common/pathSegments";
+import { DIR_CONFIG_FILE, ensureDirConfigFile } from "./dirConfigOpen";
 
 const props = defineProps<{ paths: string[] }>();
+// Asks the host to open `name` in `dir` in the Files view; Settings closes itself to show it.
+const emit = defineEmits<{ (e: "open-file", dir: string, name: string): void }>();
+const { t } = useI18n();
+
+const OPEN_BUTTON =
+  "ml-2 cursor-pointer rounded border border-border bg-elevated px-2 py-0.5 font-sans text-[11px] text-secondary hover:bg-hover hover:text-fg disabled:opacity-60";
+
+const creating = ref<string | null>(null);
+const createFailed = ref<string | null>(null);
+async function createAndOpen(dir: string) {
+  creating.value = dir;
+  const made = await ensureDirConfigFile(dir);
+  creating.value = null;
+  createFailed.value = made ? null : dir;
+  if (made) emit("open-file", dir, DIR_CONFIG_FILE);
+}
 
 const listed = computed(() => sortDirPathsByName(props.paths));
 
@@ -60,9 +79,13 @@ watch(
             <p v-if="!details[path].exists" data-testid="dir-preview-gone" class="m-0 text-[var(--warn-text,#e0a030)]">
               This directory no longer exists — the entry is left over from a project that was moved or deleted.
             </p>
-            <p v-else-if="!details[path].file && !details[path].localFile && !details[path].repoFile" class="m-0 text-dim">
-              No <code>.mulmoterminal.json</code> here — this directory uses the global settings.
-            </p>
+            <template v-else-if="!details[path].file && !details[path].localFile && !details[path].repoFile">
+              <p class="m-0 text-dim">No <code>.mulmoterminal.json</code> here — this directory uses the global settings.</p>
+              <button type="button" :class="OPEN_BUTTON" data-testid="dir-preview-create" :disabled="creating === path" @click="createAndOpen(path)">
+                {{ t("dirConfigOpen.create") }}
+              </button>
+              <p v-if="createFailed === path" class="m-0 mt-1 text-[11px] text-err-text" role="alert">{{ t("dirConfigOpen.failed") }}</p>
+            </template>
             <template v-else>
               <!-- Listed in the order they are applied, weakest first, so the panel reads the way
                    the merge runs. `repo.json` is the open file every tool can read; the two below
@@ -72,6 +95,9 @@ watch(
               </p>
               <p v-if="details[path].file" class="m-0 font-mono text-[11px] text-dim">
                 {{ details[path].file }}
+                <button type="button" :class="OPEN_BUTTON" data-testid="dir-preview-open" @click="emit('open-file', path, lastSegment(details[path].file))">
+                  {{ t("dirConfigOpen.open") }}
+                </button>
               </p>
               <!-- Named separately, and second, because that is the order they are applied in.
                    A reader looking for why a value is not what their file says needs to see that
@@ -82,6 +108,14 @@ watch(
               <p v-if="details[path].localFile" data-testid="dir-preview-local-file" class="m-0 font-mono text-[11px] text-dim">
                 {{ details[path].localFile }}
                 <span class="font-sans">{{ details[path].file ? "(this checkout only — wins over the file above)" : "(this checkout only)" }}</span>
+                <button
+                  type="button"
+                  :class="OPEN_BUTTON"
+                  data-testid="dir-preview-open-local"
+                  @click="emit('open-file', path, lastSegment(details[path].localFile))"
+                >
+                  {{ t("dirConfigOpen.open") }}
+                </button>
               </p>
               <p class="m-0 mb-2 mt-2 text-[11px] text-dim">
                 Everything below comes from {{ details[path].file && details[path].localFile ? "those files" : "that file" }} — no global setting or default is
