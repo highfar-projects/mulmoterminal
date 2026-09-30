@@ -83,7 +83,7 @@ D1 は SQLite なので、項目の型と「表と列の名前」は local と�
 
 ## Supabase（Postgres と Storage）
 
-表と列の名前は local と同じ（表は slug の `-` を `_` に、列はキーのまま）。値は Postgres の型で持つ。
+表と列の名前は local と同じ（表は slug の `-` を `_` に、列はキーのまま）。値は Postgres の型で持つ。Postgres は引用符の無い名前を小文字にするので、大文字を含むキー（`startedOn`）の列は、マイグレーションでも移し替えの SQL でも `"startedOn"` と二重引用符で囲む（囲まないと `startedon` という列になり、読み直しが見つけられない）。
 
 | コレクション | Supabase での持ち方 |
 |---|---|
@@ -92,7 +92,7 @@ D1 は SQLite なので、項目の型と「表と列の名前」は local と�
 | boolean | boolean |
 | date / datetime | date / timestamptz（読み直しは同じ時刻かで比べる） |
 | ref | 参照先の主キー（外部キー） |
-| image / file | Storage のバケットの、記録と同じパスをキーにして置く。列はそのパス。バケットはマイグレーションで作り（`insert into storage.buckets …`）、その名前を `.blueprint/supabase-bucket` に書く。読み書きの方針（storage.objects の RLS）も表と同じく仕様どおりに書く |
+| image / file | Storage のバケットの、記録と同じパスをキーにして置く。列はそのパス。バケットはマイグレーションで作り（`insert into storage.buckets …`）、その名前を `.blueprint/supabase-bucket` に書く。読み書きの方針（storage.objects の RLS）も表と同じく仕様どおりに書く。CLI で移したオブジェクトは `owner` が空なので、`owner = auth.uid()` の方針では持ち主も読めない。「そのパスを指す行を読める人が読める」（`bucket_id = '<バケット>' and exists (select 1 from public.<表> t where t.<列> = storage.objects.name)`、表の RLS がそのまま効く。表に `name` という列があると素の `name` はそちらを指すので、必ず `storage.objects.name` と書く）の形で書く |
 | table | 子の表（親への外部キー） |
 
 記録の移し替えは、Supabase の CLI で Postgres と Storage を読み直して、この約束で突き合わせる（手元ではデータベースを作り直してから 2 回移し、2 回目で行が増えないことも見る）。

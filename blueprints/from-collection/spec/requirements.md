@@ -17,7 +17,7 @@
 
 ## 扱うもの（元の項目から）
 
-コレクションごとに表（Firebase ならコレクション）を一つ。名前は `spec/conversion.md` の約束（local は「表と列の名前」、Firebase は「Firebase（Firestore）」）に従う（記録の移し替えがこの名前で突き合わせる）。項目ごとに一行で、元の項目名（`` `books.lentTo` `` の形）、ラベル、元の型、この土台での持ち方、必須かを書く。`derived` / `embed` / `toggle` / `flag` のような保存しない項目も、どう計算して見せるかを書いて残す。
+コレクションごとに表（Firebase ならコレクション）を一つ。名前は `spec/conversion.md` の約束（local は「表と列の名前」、Firebase は「Firebase（Firestore）」、Cloudflare は「Cloudflare（D1 と R2）」、Supabase は「Supabase（Postgres と Storage）」）に従う（記録の移し替えがこの名前で突き合わせる）。項目ごとに一行で、元の項目名（`` `books.lentTo` `` の形）、ラベル、元の型、この土台での持ち方、必須かを書く。`derived` / `embed` / `toggle` / `flag` のような保存しない項目も、どう計算して見せるかを書いて残す。
 
 ## 画面（元のビューから）
 
@@ -27,7 +27,7 @@
 
 元の `actions`・`collectionActions` をアクションの `id` ごとに（`` `books.actions.tidy` `` の形で）、`ingest` は `` `books.ingest` `` として書く。それぞれ、何をしていたか（`chat` / `agent` と `ingest` はテンプレートを読んで）と、新しいアプリでどう扱うかを書く。扱いは三つのどれか。
 
-- **機能にする**（`feature`）: `mutate` は API の操作と画面のボタン。`chat` / `agent` はテンプレートの手順をアプリの処理にする。AI が要る手順は、サーバー側から Claude API を呼ぶ機能にする（鍵は `.env`）。宣言による取り込み（rss / atom / http-json）は定期実行の処理にする。
+- **機能にする**（`feature`）: `mutate` は API の操作と画面のボタン。`chat` / `agent` はテンプレートの手順をアプリの処理にする。AI が要る手順は、サーバー側から Claude API を呼ぶ機能にする（鍵の置き場所は土台ごとに違う。local は `.env`、Firebase は Secret Manager、Cloudflare は `.dev.vars`、Supabase は `supabase/functions/.env`。どれも、この土台の「アクションを機能にする」工程のスキルに従う）。宣言による取り込み（rss / atom / http-json）は定期実行の処理にする。
 - **人が手で行う**（`manual`）: README に手順を書く。
 - **やめる**（`drop`）: 仕様書に理由を書く。
 
