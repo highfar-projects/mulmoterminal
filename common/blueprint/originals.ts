@@ -25,13 +25,14 @@ const PROPOSED = ".proposed";
 
 /**
  * The document a proposed copy was made from: `contract.proposed.txt` → `contract.txt`, `docs/a.proposed.md` →
- * `docs/a.md`, `notes.proposed` → `notes`. Null for a name that is not a proposed copy of anything.
+ * `docs/a.md`, `notes.proposed` → `notes`. Null for a name that is not a proposed copy of anything, and for a hidden
+ * file: the project walk lists none (the rule the changed files follow), and a review's documents are not dotfiles.
  */
 export const proposedBase = (file: string): string | null => {
   const slash = file.lastIndexOf("/");
   const [folder, name] = [file.slice(0, slash + 1), file.slice(slash + 1)];
   const at = name.lastIndexOf(PROPOSED);
-  if (at <= 0) return null;
+  if (at <= 0 || name.startsWith(".")) return null;
   const extension = name.slice(at + PROPOSED.length);
   const isExtension = extension === "" || (extension.startsWith(".") && extension.length > 1 && !extension.slice(1).includes("."));
   return isExtension ? `${folder}${name.slice(0, at)}${extension}` : null;

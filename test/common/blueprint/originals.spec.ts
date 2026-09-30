@@ -35,10 +35,17 @@ describe("proposedBase", () => {
     expect(proposedBase(file)).toBe(base);
   });
 
-  it.each(["contract.txt", ".proposed.md", "docs/.proposed.md", "a.proposed.tar.gz", "a.proposed.", "a.proposedx.md", "proposed.md"])(
-    "finds none for %s",
-    (file) => {
-      expect(proposedBase(file)).toBeNull();
-    },
-  );
+  it.each([
+    "contract.txt",
+    ".proposed.md",
+    "docs/.proposed.md",
+    "a.proposed.tar.gz",
+    "a.proposed.",
+    "a.proposedx.md",
+    "proposed.md",
+    ".env.proposed",
+    "docs/.notes.proposed.md",
+  ])("finds none for %s", (file) => {
+    expect(proposedBase(file)).toBeNull();
+  });
 });
