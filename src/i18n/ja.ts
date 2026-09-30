@@ -10,6 +10,7 @@ import { headerChipsJa } from "./headerChips/ja";
 import { settingsControlsJa } from "./settingsControls/ja";
 import { shortcutsJa } from "./shortcuts/ja";
 import { filesTreeJa } from "./filesTree/ja";
+import { previewCodeCopyJa } from "./previewCodeCopy/ja";
 
 // 日本語。`Messages` は en.ts の形そのものなので、キーを一つ落とすと型エラーになる — 実行時に
 // 英語へフォールバックして気づかない、という状態にはならない。
@@ -623,6 +624,7 @@ export const ja: Messages = {
   focusMode: focusModeJa,
   settingsControls: settingsControlsJa,
   ...filesTreeJa,
+  ...previewCodeCopyJa,
   tips: tipsJa,
   blueprints: blueprintsJa,
 };
