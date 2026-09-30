@@ -11,8 +11,8 @@ shelved is 「文書を整える」's work, later.
 ## 1. chaff.yaml
 
 Write the folder's `chaff.yaml` with the genre from `.blueprint/adopt.json` and the documents' `language`
-(`npx chaffjs init --genre <genre>` writes a commented one). If the folder already has one, **keep every line it
-has** and change only `genre` if it was absent — the check refuses a line of the old file that is gone. Add the rule
+(`npx chaffjs init --genre <genre>` writes a commented one). If the folder already has one, set its `genre` to the
+chosen one and **keep every other line it has** — the check refuses any other line of the old file that is gone. Add the rule
 levels the person agreed to at the gate, nothing else.
 
 ## 2. Shelve today's findings

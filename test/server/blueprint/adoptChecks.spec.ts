@@ -108,6 +108,16 @@ describeSh("adopt: the setup", () => {
     expect(refused).toContain("chaff.yaml lost a line it had: サーバ: サーバー");
   });
 
+  it("replaces the genre of a chaff.yaml the folder had, keeping its other lines", () => {
+    write("chaff.yaml", "genre: blog/tech\nprefer:\n  サーバ: サーバー\n");
+    write(".blueprint/adopt.json", { genre: "docs/manual", findings: 2 });
+    expect(node("adopt.mjs", ["survey"]).code).toBe(0);
+    setUpChaff(2);
+    write("chaff.yaml", "genre: docs/manual\nlanguage: ja\nprefer:\n  サーバ: サーバー\n");
+    workflow();
+    expect(node("adopt.mjs", ["apply"])).toEqual({ code: 0, stderr: "" });
+  });
+
   it("refuses a workflow that takes more than it needs, and one that is missing when asked for", () => {
     setUpChaff(2);
     expect(node("adopt.mjs", ["apply"]).stderr).toContain(".github/workflows/chaff.yml is missing");

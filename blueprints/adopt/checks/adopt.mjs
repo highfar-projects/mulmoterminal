@@ -77,7 +77,7 @@ const apply = () => {
   const shelved = findingsNow(["--show-baseline"]);
   const problems = [
     ...(detected === genre ? [] : [`${CONFIG} gives genre ${detected}, not ${genre}`]),
-    ...lostLines(checked.config, readFileSync(CONFIG, "utf8")).map((line) => `${CONFIG} lost a line it had: ${line.trim()}`),
+    ...lostLines(checked.config, readFileSync(CONFIG, "utf8"), ["genre"]).map((line) => `${CONFIG} lost a line it had: ${line.trim()}`),
     ...(baseline === null ? [`${BASELINE} is missing: run chaff baseline on the places`] : []),
     ...(baseline !== null && (baseline.entries?.length ?? 0) < checked.findings
       ? [`${BASELINE} shelves ${baseline.entries?.length ?? 0} finding(s), fewer than the ${checked.findings} measured`]

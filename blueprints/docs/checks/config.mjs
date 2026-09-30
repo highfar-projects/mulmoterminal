@@ -7,5 +7,12 @@ export const settingLines = (text) =>
     .map((line) => line.trimEnd())
     .filter((line) => line.trim() !== "" && !line.trim().startsWith("#"));
 
-/** The lines `before` had that `after` no longer has: a change that was meant to add must lose none. */
-export const lostLines = (before, after) => (before === null ? [] : settingLines(before).filter((line) => !settingLines(after).includes(line)));
+// A top-level `key:` line of chaff.yaml, as its key.
+const topKey = (line) => (/^\S/u.test(line) ? line.split(":")[0].trim() : null);
+
+/**
+ * The lines `before` had that `after` no longer has: a change that was meant to add must lose none — except the
+ * top-level keys in `replaceable`, which the change sets on purpose (adopting a folder sets its `genre`).
+ */
+export const lostLines = (before, after, replaceable = []) =>
+  before === null ? [] : settingLines(before).filter((line) => !replaceable.includes(topKey(line)) && !settingLines(after).includes(line));
