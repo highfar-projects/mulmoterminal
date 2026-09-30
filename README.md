@@ -183,7 +183,8 @@ than as bytes (files within the session's working directory only):
 **A line after the path is followed.** `src/a.ts:42`, `src/a.ts:42:7` (gcc, clang, `eslint -f unix`,
 stack traces) and `src/a.ts(12,5)` (tsc) are one link. In the pane, and in the Files view, the file
 opens as text with the caret on that line and column — an HTML page, an SVG or a table included, and a
-tab reading in Preview switches to Edit. A route that renders the file in a new tab (`.md`, `.json`,
+tab reading in Preview switches to Edit. An image, a PDF, a video or an audio file has no line to go
+to and simply opens as itself. A route that renders the file in a new tab (`.md`, `.json`,
 `.csv`, `.html` with no cell enlarged) ignores the line. When the pane beside an enlarged cell takes
 the click, the keyboard stays in the terminal; the full-screen Files view, with no terminal beside it,
 puts it in the editor. (ESLint's default output puts the path on a line of its own, with no line number to follow.)
