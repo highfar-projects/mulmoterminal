@@ -415,8 +415,16 @@ async function narrateInvite(root: string, body: Record<string, unknown>): Promi
   if (!result.ok) return result.problems.join("\n");
   const where = cid === "*" ? "the whole app" : `'${cid}'`;
   const what = role === null ? `Removed ${email} from ${where}.` : `${email} is now ${role} of ${where}.`;
-  return [what, "It takes effect at the next publish — nothing has changed in the app yet."].join("\n");
+  const lines = [what, "It takes effect at the next publish — nothing has changed in the app yet."];
+  // The roster must hold the plain address (the rules compare `email() in members`), and app.json
+  // is committed — so the one person told is the one who can still decide before sharing the repo.
+  if (result.addedAddress) lines.push(COMMITTED_ADDRESS_NOTE);
+  return lines.join("\n");
 }
+
+const COMMITTED_ADDRESS_NOTE =
+  "The address is written into app.json, a file this project commits — so it will enter the repository's history once committed, and stay there. " +
+  "If you plan to publish or hand over this repository, that is worth knowing before you do.";
 
 const str = (value: unknown): string | undefined => (typeof value === "string" && value.length > 0 ? value : undefined);
 
