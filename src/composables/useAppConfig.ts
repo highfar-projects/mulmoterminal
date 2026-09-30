@@ -39,6 +39,7 @@ import { setSessionIdleReapDays, setSessionReapIntervalHours } from "./sessionRe
 import { setHeaderConfigSummary } from "./headerConfigSummary";
 import { postConfigField } from "./postConfigField";
 import { postEntryChange, type EntryChange } from "./configEntryChange";
+import { isEntryProblem } from "../../common/agentEntries";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { configRetryDelayMs } from "./configRetryPolicy";
 
@@ -566,12 +567,12 @@ async function saveLaunchers(next: Launcher[]): Promise<boolean> {
 // Add or remove ONE custom agent or account (#2620), against the list on disk — a tab sending its
 // whole list would drop an entry added elsewhere since it loaded, as the palette favorites below say.
 async function changeCustomAgents(action: "add" | "remove", payload: Record<string, unknown>): Promise<EntryChange> {
-  const change = await postEntryChange(`/api/config/custom-agents/${action}`, payload);
+  const change = await postEntryChange(`/api/config/custom-agents/${action}`, payload, isEntryProblem);
   if (change.ok) customAgents.value = listOf(change.body.customAgents, isCustomAgent);
   return change;
 }
 async function changeAccounts(action: "add" | "remove", payload: Record<string, unknown>): Promise<EntryChange> {
-  const change = await postEntryChange(`/api/config/accounts/${action}`, payload);
+  const change = await postEntryChange(`/api/config/accounts/${action}`, payload, isEntryProblem);
   if (change.ok) accounts.value = listOf(change.body.accounts, isAgentAccount);
   return change;
 }

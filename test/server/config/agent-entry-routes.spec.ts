@@ -114,3 +114,46 @@ describe("accounts, one entry at a time", () => {
     expect(onDisk().accounts).toEqual([both[0]]);
   });
 });
+
+describe("providers, one entry at a time", () => {
+  const draft = { label: "Moonshot", baseUrl: "https://api.moonshot.ai/anthropic", tokenEnv: "MOONSHOT_API_KEY", models: "kimi-k3", maxOutputTokens: "16000" };
+  const openrouter = { id: "openrouter", label: "OpenRouter", baseUrl: "https://openrouter.ai/api", tokenEnv: "OPENROUTER_API_KEY", models: [] };
+
+  it("adds to the list on disk and keeps what was written there since boot", async () => {
+    const { post, onDisk, writeOnDisk } = await mountWith({});
+    writeOnDisk({ providers: [openrouter] });
+    const res = await post("/api/config/providers/add", draft);
+    expect(res.status).toBe(200);
+    expect(onDisk().providers).toEqual([
+      openrouter,
+      {
+        id: "moonshot",
+        label: "Moonshot",
+        baseUrl: "https://api.moonshot.ai/anthropic",
+        tokenEnv: "MOONSHOT_API_KEY",
+        maxOutputTokens: 16000,
+        models: ["kimi-k3"],
+      },
+    ]);
+  });
+
+  it("refuses a key where the variable's name belongs, and a /v1 base URL, writing nothing", async () => {
+    const { post, onDisk } = await mountWith({ providers: [openrouter] });
+    const key = await post("/api/config/providers/add", { ...draft, tokenEnv: "sk-ant-api03-secret" });
+    expect([key.status, key.body.error]).toEqual([409, "tokenEnv"]);
+    const v1 = await post("/api/config/providers/add", { ...draft, baseUrl: "https://api.moonshot.ai/v1" });
+    expect([v1.status, v1.body.error]).toEqual([409, "baseUrlV1"]);
+    const inUrl = await post("/api/config/providers/add", { ...draft, baseUrl: "https://u:sk-ant-in-url@api.moonshot.ai/anthropic" });
+    expect([inUrl.status, inUrl.body.error]).toEqual([409, "baseUrl"]);
+    const inModels = await post("/api/config/providers/add", { ...draft, models: "sk-ant-in-models" });
+    expect([inModels.status, inModels.body.error]).toEqual([409, "models"]);
+    expect(JSON.stringify(onDisk())).not.toContain("sk-ant");
+    expect(onDisk().providers).toEqual([openrouter]);
+  });
+
+  it("removes only the one named", async () => {
+    const { post, onDisk } = await mountWith({ providers: [openrouter, { ...openrouter, id: "other", label: "Other", models: ["m"] }] });
+    await post("/api/config/providers/remove", { id: "openrouter" });
+    expect(onDisk().providers.map((provider: { id: string }) => provider.id)).toEqual(["other"]);
+  });
+});
