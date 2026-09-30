@@ -569,6 +569,7 @@ export const ja: Messages = {
     insertFilePath: "ファイルのパスを挿入",
     reveal: "ファイルマネージャで開く",
     browseFiles: "アプリでファイルを見る",
+    dirSettings: "このディレクトリの設定",
     newTerminal: "ここで新しいターミナル",
   },
   prefixKeys: {

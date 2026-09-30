@@ -566,6 +566,7 @@ export const ko: Messages = {
     insertFilePath: "파일 경로 삽입",
     reveal: "파일 관리자에서 열기",
     browseFiles: "앱에서 파일 보기",
+    dirSettings: "이 디렉터리의 설정",
     newTerminal: "여기서 새 터미널",
   },
   prefixKeys: {

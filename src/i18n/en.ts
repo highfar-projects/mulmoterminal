@@ -588,6 +588,7 @@ export const en = {
     insertFilePath: "Insert a file path",
     reveal: "Reveal in the file manager",
     browseFiles: "Browse files in the app",
+    dirSettings: "This directory's settings",
     newTerminal: "New terminal here",
   },
   prefixKeys: {
