@@ -10,6 +10,7 @@ import { markdown } from "@codemirror/lang-markdown";
 import { javascript } from "@codemirror/lang-javascript";
 import { json } from "@codemirror/lang-json";
 import { oneDark } from "@codemirror/theme-one-dark";
+import { dirConfigSchemaExtension, isDirConfigFile } from "./cmDirConfigSchema";
 
 export type LangKind = keyof typeof LANG_EXTENSIONS | "text";
 
@@ -79,6 +80,12 @@ const LANG_EXTENSIONS = {
   php: () => import("@codemirror/lang-php").then((m) => m.php()),
   sql: () => import("@codemirror/lang-sql").then((m) => m.sql()),
 } satisfies Record<keyof typeof EXTENSIONS_BY_KIND, () => Extension | Promise<Extension>>;
+
+// A directory's config: plain JSON at once, then the schema's completion and marks once they load
+// (#2625). The JSON mode is bundled, so the file is coloured from the first frame either way.
+function withDirConfigSchema(): Extension | Promise<Extension> {
+  return dirConfigSchemaExtension().then((extension) => extension ?? json());
+}
 
 /** Exported for the spec: which modes cost a round trip is a decision worth pinning. */
 export function langExtensionForKind(kind: LangKind): Extension | Promise<Extension> {
@@ -243,7 +250,7 @@ export function createEditor(parent: HTMLElement, onChange: () => void): CmEdito
   return {
     setDoc(text, filename) {
       const seq = ++docSeq;
-      const mode = langExtensionForKind(langKindForFilename(filename));
+      const mode = isDirConfigFile(filename) ? withDirConfigSchema() : langExtensionForKind(langKindForFilename(filename));
       // A bundled mode is applied with the text. A lazy one starts as no highlighting and arrives
       // below — the file is readable either way, it just goes from plain to coloured.
       view.setState(stateFor(text, mode instanceof Promise ? [] : mode));

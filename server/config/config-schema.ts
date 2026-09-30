@@ -11,6 +11,7 @@
 //   2. The `sound` path confinement (a filesystem realpath check) stays in dir-config.ts — it
 //      touches the disk, which does not belong in a pure schema.
 import path from "node:path";
+import { DIR_BACKGROUND_FITS } from "../../common/dirBackground.js";
 import { z } from "zod";
 // Shared with the client dir-config parser so the two can't drift — see common/themeColors.ts.
 import { THEME_COLOR_KEYS, PALETTE_COLOR_RE } from "../../common/themeColors.js";
@@ -529,6 +530,18 @@ const writableDirConfigSchema = z.object({
   // `false` means "no icon here" and, unlike omitting the key, stops MulmoTerminal looking for
   // the favicon the repository already ships (#1428).
   icon: z.union([nonEmptyText.max(DIR_ICON_MAX_CHARS), z.literal(false)]).optional(),
+  // A picture drawn faintly behind this directory's terminals: a path relative to this file, an
+  // http(s) URL or a data: image — alone, or with how strongly and how it fills the cell.
+  backgroundImage: z
+    .union([
+      nonEmptyText,
+      z.object({
+        image: nonEmptyText,
+        opacity: z.number().gt(0).max(1).optional(),
+        fit: z.enum(DIR_BACKGROUND_FITS).optional(),
+      }),
+    ])
+    .optional(),
   badgeColor: z.string().regex(HEX_COLOR_RE).optional(),
   headerColor: z.string().regex(HEX_COLOR_RE).optional(),
   headerTextColor: z.string().regex(HEX_COLOR_RE).optional(),
