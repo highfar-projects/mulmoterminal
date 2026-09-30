@@ -186,6 +186,25 @@ describe("renameEntry", () => {
     expect(readFileSync(from, "utf8")).toBe("a");
   });
 
+  // The old name vanished between the link and its removal: the file is under the new name, so the
+  // rename did happen and says so.
+  it("says renamed when the old name was removed by someone else in between", () => {
+    const root = tmp();
+    const [from, to] = [path.join(root, "a.md"), path.join(root, "c.md")];
+    writeFileSync(from, "a");
+    const realUnlink = fs.unlinkSync.bind(fs);
+    const gone = vi.spyOn(fs, "unlinkSync").mockImplementation((target) => {
+      realUnlink(target);
+      throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
+    });
+    try {
+      expect(renameEntry(from, to, LINKING)).toBe("renamed");
+    } finally {
+      gone.mockRestore();
+    }
+    expect(readFileSync(to, "utf8")).toBe("a");
+  });
+
   // Windows refuses to remove a file held open through any of its names, so there it is `rename`.
   it("renames with rename on Windows, not a link", () => {
     const root = tmp();

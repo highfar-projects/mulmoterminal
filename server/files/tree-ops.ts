@@ -92,6 +92,8 @@ function renameFileNoReplace(from: string, to: string): "renamed" | "exists" {
   try {
     fs.unlinkSync(from);
   } catch (err) {
+    // Already gone (removed by another writer since the link): the file is under its new name only.
+    if (hasErrnoCode(err) && err.code === "ENOENT") return "renamed";
     // The old name could not go (a sticky folder, a file someone else owns): take the new one back —
     // the same file, so nothing is lost — and fail as a plain rename would have.
     takeBackLink(from, to);
