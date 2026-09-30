@@ -3,11 +3,21 @@
 // exactly the path a click on the header takes — a shell command included.
 import { onUnmounted, shallowReactive } from "vue";
 import type { HeaderButton, HeaderEntry } from "./useHeaderButtons";
+import type { RunCommand } from "../components/runCommand";
+
+/** The Run and Skill menus of a terminal (#2697): the directory they read and how a pick runs. */
+export interface PaletteMenus {
+  cwd: string | null;
+  runScript: (command: RunCommand) => void;
+  runSkill: (slug: string) => void;
+}
 
 export interface PaletteHeaderEntries {
   buttons: () => readonly HeaderEntry[];
   commands: () => readonly HeaderEntry[];
   run: (button: HeaderButton) => void;
+  /** Null, or absent, for a terminal that shows neither menu. */
+  menus?: () => PaletteMenus | null;
 }
 
 const bySlot = shallowReactive(new Map<string, PaletteHeaderEntries>());

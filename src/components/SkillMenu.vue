@@ -2,8 +2,8 @@
 import { ref, watch, useTemplateRef } from "vue";
 import { useAnchoredMenu } from "../composables/useAnchoredMenu";
 import { LIST_MENU_ITEM_CLASS, LIST_MENU_PANEL_CLASS } from "./anchoredMenuClasses";
-import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
+import { isDiscoveredSkill, type DiscoveredSkill } from "../composables/useDirLists";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { useI18n } from "vue-i18n";
@@ -16,10 +16,6 @@ const { t } = useI18n();
 // button only appears when there's something to run — no skills, no button.
 // Mirrors RunMenu, but a skill runs in the agent (parent types its /<slug>), not a
 // spare shell cell.
-interface DiscoveredSkill {
-  slug: string;
-  description: string;
-}
 const props = defineProps<{ cwd: string | null }>();
 const emit = defineEmits<{ (e: "skill", slug: string): void }>();
 
@@ -53,10 +49,7 @@ async function loadSkills() {
     const res = await fetchWithTimeout(`/api/skills?cwd=${encodeURIComponent(dir)}`);
     const data = res.ok ? await jsonBody(res) : {};
     if (reqId !== req) return;
-    // A skill with no slug cannot be launched, and one with no description renders a blank row.
-    skills.value = isUnknownArray(data.skills)
-      ? data.skills.filter((skill): skill is DiscoveredSkill => isRecord(skill) && typeof skill.slug === "string" && typeof skill.description === "string")
-      : [];
+    skills.value = isUnknownArray(data.skills) ? data.skills.filter(isDiscoveredSkill) : [];
   } catch {
     if (reqId === req) skills.value = [];
   }

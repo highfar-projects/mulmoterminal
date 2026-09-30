@@ -42,6 +42,7 @@ import { paletteLaunchAgent } from "../composables/paletteLaunchDirs";
 import { paletteCollectionActionList } from "../composables/paletteCollectionActionList";
 import { paletteHeaderEntriesFor } from "../composables/paletteHeaderEntries";
 import { findHeaderButton, paletteCommandList } from "../composables/paletteCommandList";
+import { usePaletteMenuEntries } from "../composables/usePaletteMenuEntries";
 import IconGlyph from "./IconGlyph.vue";
 import { keymapLabelKey, paletteDescriptionKey } from "./keymapLabels";
 
@@ -138,6 +139,8 @@ function runCommand(id: string): void {
   const button = entries ? findHeaderButton([...entries.commands(), ...entries.buttons()], id) : null;
   if (entries && button) entries.run(button);
 }
+// The same terminal's Run-menu scripts and Skill-menu skills, where it shows those menus (#2697).
+const menuEntries = usePaletteMenuEntries(() => targetEntries.value?.menus?.() ?? null);
 // Settings hides its Voice section on a machine that cannot transcribe, so the palette does too —
 // asked the same way Settings asks, once per opening.
 const voiceCapable = ref(false);
@@ -180,6 +183,8 @@ const paletteText = (): PaletteText => ({
   currentChoice: t("commandPalette.choices.current"),
   switchChoice: t("commandPalette.choices.switch"),
   scopeLabel: (kind) => t(`commandPalette.scopes.${kind}`),
+  runScript: (label) => t("commandPalette.runScript", { label }),
+  runSkill: (slug) => t("commandPalette.runSkill", { slug }),
 });
 
 // Everything the rows are listed from, besides the grid's actions.
@@ -197,6 +202,8 @@ const paletteSources = (): PaletteSources => ({
   wikiPages: wikiPages.value,
   githubItems: githubItems.value,
   prompts: prompts.value,
+  scripts: menuEntries.scripts.value,
+  skills: menuEntries.skills.value,
   frecency: frecency.scoreOf,
   aliases: appConfig.paletteAliases.value,
   favorites: appConfig.paletteFavorites.value,
@@ -272,6 +279,8 @@ function runClosingRow(row: Exclude<PaletteRow, { kind: "prefix" | "collection" 
   else if (row.kind === "prompt") putPromptBack(row.prompt);
   else if (row.kind === "github") window.open(row.item.url, "_blank", "noopener,noreferrer");
   else if (row.kind === "handoff") handOff(row.action, row.query);
+  else if (row.kind === "script") menuEntries.runScript(row.script);
+  else if (row.kind === "skill") menuEntries.runSkill(row.slug);
   else runAction(row.action);
 }
 

@@ -30,6 +30,8 @@ export const commandPaletteZhCN = {
   githubIssue: "Issue #{number}: {title}",
   promptLabel: "提示词: {text}",
   promptDetail: "放回终端输入，不发送",
+  runScript: "运行: {label}",
+  runSkill: "技能: /{slug}",
   findFilesNamed: "查找名为“{query}”的文件",
   searchFilesFor: "在文件内容中搜索“{query}”",
   rowActions: {

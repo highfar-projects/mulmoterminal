@@ -44,6 +44,8 @@ const TEXT: PaletteText = {
   githubItem: (kind, number, title) => `${kind} #${number}: ${title}`,
   handoff: (action, query) => `${action} ${query}`,
   resumeDetail: (resume) => `at ${resume.mtime}`,
+  runScript: (label) => `Run ${label}`,
+  runSkill: (slug) => `Skill /${slug}`,
 };
 const NONE = {
   screens: [],
@@ -59,6 +61,8 @@ const NONE = {
   wikiPages: [],
   githubItems: [],
   prompts: [],
+  scripts: [],
+  skills: [],
   frecency: () => 0,
   aliases: {},
   favorites: [],

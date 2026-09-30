@@ -3,7 +3,7 @@ import { watch, useTemplateRef } from "vue";
 import { useAnchoredMenu } from "../composables/useAnchoredMenu";
 import { LIST_MENU_ITEM_CLASS, LIST_MENU_PANEL_CLASS } from "./anchoredMenuClasses";
 import { useDirScripts, type RunnableScript } from "../composables/useDirLists";
-import type { RunCommand } from "./runCommand";
+import { scriptRunCommand, type RunCommand } from "./runCommand";
 import { useI18n } from "vue-i18n";
 
 const { t } = useI18n();
@@ -44,7 +44,7 @@ watch(
 );
 
 function pick(s: RunnableScript) {
-  emit("run", { source: "script", index: s.index, label: s.label, cwd: scriptList.value.cwd ?? props.cwd });
+  emit("run", scriptRunCommand(s, scriptList.value.cwd ?? props.cwd));
   leave();
 }
 </script>
