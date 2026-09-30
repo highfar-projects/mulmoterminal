@@ -66,7 +66,9 @@ terminals keep running on the server, and the page reattaches to them.
 - If `34567` is taken on your laptop (a local MulmoTerminal, say), forward another local port:
   `ssh -N -L 34599:127.0.0.1:34567 you@server`, then open `http://localhost:34599`.
 - Add **`-A`** (`ssh -A -N -L …`) to let the agents `git push` with the keys on your laptop,
-  without copying them to the server.
+  without copying them to the server. **Only to a server you trust**: while the connection is open,
+  anyone with root on it — or your own account there — can use your laptop's keys to sign in
+  wherever they work. On a shared or untrusted box, give the server its own deploy key instead.
 
 ## Logging the agents in on the server
 
@@ -77,7 +79,7 @@ on the server.
 |---|---|
 | **Claude Code** | Run `claude` once — in a Shell cell, or over SSH. With no browser on the server it prints a sign-in URL ("Browser didn't open? Use the url below to sign in") and waits for a code: open the URL on your laptop, sign in, and paste the code back. On Linux the login is kept in a file under `~/.claude`, so it lasts. |
 | **GitHub (`gh`)** | `gh auth login`, choose the web browser, and enter the one-time code it shows at `github.com/login/device` on your laptop. MulmoTerminal's own PR and issue views use this login too. |
-| **`git push`** | `ssh -A` from your laptop (above), or keys / a credential helper set up on the server. |
+| **`git push`** | `ssh -A` from your laptop (above — a trusted server only), or keys / a credential helper set up on the server. |
 | **Codex** | `codex` on the server, with its own login. *Not tried yet.* |
 
 Only the Claude Code sign-in URL was seen in the trial run — the sign-in was not completed there.
