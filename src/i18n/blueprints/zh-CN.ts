@@ -74,6 +74,7 @@ export const blueprintsZhCN: Messages["blueprints"] = {
     starting: "正在开始…",
   },
   run: {
+    sourceChanged: "来源在复制之后（{takenAt}）已有变化。此构建仍按那份副本继续。要使用新内容，请从同一来源重新开始一个构建。",
     starting: "正在启动代理…",
     elapsed: "已用 {minutes} 分 {seconds} 秒",
     steps: "步骤",

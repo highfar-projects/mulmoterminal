@@ -7,11 +7,11 @@ import type { LoadedCollection } from "@mulmoclaude/core/collection/server";
 import type { CollectionItem } from "@mulmoclaude/core/collection";
 import { appIdOf, appSourceValue, collectionsNotFullyReadable } from "../../common/blueprint/sharedAppSource.js";
 import { personalDataOf, type PersonalData } from "../../common/blueprint/personalData.js";
+import { SOURCE_RECORD_PATH, sourceFingerprint } from "./sourceFingerprint.js";
 import {
   APP_MANIFEST_COPY,
   MAX_SOURCE_BYTES,
   RECORDS_FILE,
-  SOURCE_DIR,
   SOURCE_FILES_DIR,
   collectionClosure,
   declaredSkillFiles,
@@ -29,7 +29,7 @@ export type Snapshot =
   | { kind: "too-large"; bytes: number }
   | { kind: "signed-out" }
   | { kind: "not-a-reader"; collections: string[] }
-  | { kind: "ok"; files: SnapshotFile[]; personal: PersonalData };
+  | { kind: "ok"; files: SnapshotFile[]; personal: PersonalData; fingerprint: string };
 
 /** Where builds find their source: every collection the workspace discovers, and every shared app in a known folder. */
 export interface CollectionSource {
@@ -105,6 +105,8 @@ const onceEach = (files: readonly SnapshotFile[]): SnapshotFile[] => [...new Map
 type Taken = {
   from: "collection" | "app";
   start: string;
+  /** The answer that named the source: a collection's slug, or `app:<id>`. */
+  source: string;
   collections: LoadedCollection[];
   missing: string[];
   root: string;
@@ -119,11 +121,17 @@ async function copyOf(taken: Taken, options: SourceOptions, records: boolean, no
     records ? Promise.all(taken.collections.map((collection) => recordFilesOf(collection, options.reader, taken.root))) : Promise.resolve([]),
   ]);
   const closure = { slugs: taken.collections.map((collection) => collection.slug), missing: taken.missing };
-  const record = { path: `${SOURCE_DIR}/source.json`, content: `${JSON.stringify(sourceRecord(taken.from, taken.start, closure, records, nowMs), null, 2)}\n` };
-  const files = onceEach([record, ...taken.extra, ...skills.flat(), ...data.flat()]);
+  const copied = onceEach([...taken.extra, ...skills.flat(), ...data.flat()]);
+  const fingerprint = sourceFingerprint(copied);
+  const identity = { source: taken.source, fingerprint };
+  const record = {
+    path: SOURCE_RECORD_PATH,
+    content: `${JSON.stringify(sourceRecord(taken.from, taken.start, closure, records, nowMs, identity), null, 2)}\n`,
+  };
+  const files = [record, ...copied];
   const bytes = bytesOf(files);
   if (bytes > (options.maxBytes ?? MAX_SOURCE_BYTES)) return { kind: "too-large", bytes };
-  return { kind: "ok", files, personal: personalDataOf(taken.collections, records, taken.manifest) };
+  return { kind: "ok", files, personal: personalDataOf(taken.collections, records, taken.manifest), fingerprint };
 }
 
 async function collectionSnapshot(slug: string, options: SourceOptions, records: boolean, nowMs: number): Promise<Snapshot> {
@@ -132,7 +140,7 @@ async function collectionSnapshot(slug: string, options: SourceOptions, records:
   const closure = collectionClosure(slug, (linked) => collections.get(linked)?.schema ?? null);
   const linked = closure.slugs.flatMap((linkedSlug) => collections.get(linkedSlug) ?? []);
   return copyOf(
-    { from: "collection", start: slug, collections: linked, missing: closure.missing, root: options.workspaceRoot, extra: [], manifest: null },
+    { from: "collection", start: slug, source: slug, collections: linked, missing: closure.missing, root: options.workspaceRoot, extra: [], manifest: null },
     options,
     records,
     nowMs,
@@ -160,6 +168,7 @@ async function appSnapshot(id: string, options: SourceOptions, records: boolean,
   const taken: Taken = {
     from: "app",
     start: app.title,
+    source: appSourceValue(id),
     collections: app.collections,
     missing: [],
     root: app.root,

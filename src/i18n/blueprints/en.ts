@@ -77,6 +77,8 @@ export const blueprintsEn = {
     starting: "Starting…",
   },
   run: {
+    sourceChanged:
+      "The source has changed since its copy was taken ({takenAt}). This build keeps working from that copy. To use the newer data, start a new build from the same source.",
     starting: "Starting the agent…",
     elapsed: "{minutes}m {seconds}s so far",
     steps: "Steps",

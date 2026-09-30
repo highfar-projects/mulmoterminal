@@ -121,10 +121,12 @@ describe("collectionSource", () => {
     expect(record).toEqual({
       from: "collection",
       start: "books",
+      source: "books",
       collections: ["books", "authors"],
       missing: ["missing"],
       records: false,
       takenAt: "2026-09-29T00:00:00.000Z",
+      fingerprint: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
     });
   });
 
@@ -237,6 +239,19 @@ describe("collectionSource with records", () => {
     expect(await personalOf(false)).toEqual({ fields: [], members: 0 });
   });
 
+  it("records what it copied from and its fingerprint in source.json, and the same copy taken again has the same one", async () => {
+    const books = await collection("books", { title: field({ type: "string" }) });
+    records = { books: [{ id: "1", title: "One" }] };
+    const first = await sourceOf([books]).snapshot("books", TAKEN_AT_MS, true);
+    const again = await sourceOf([books]).snapshot("books", TAKEN_AT_MS + 1, true);
+    if (first.kind !== "ok" || again.kind !== "ok") throw new Error("expected copies");
+    expect(JSON.parse(text(first.files.find((file) => file.path.endsWith("source.json"))))).toMatchObject({ source: "books", fingerprint: first.fingerprint });
+    expect(again.fingerprint).toBe(first.fingerprint);
+    records = { books: [{ id: "1", title: "One, edited" }] };
+    const changed = await sourceOf([books]).snapshot("books", TAKEN_AT_MS, true);
+    expect(changed.kind === "ok" && changed.fingerprint).not.toBe(first.fingerprint);
+  });
+
   it("refuses a copy heavier than the limit, and names its weight; the shape alone still fits", async () => {
     const books = await collection("books", {});
     const LIMIT_BYTES = 1000;
@@ -282,6 +297,7 @@ describe("collectionSource with a shared app", () => {
     expect(JSON.parse(text(files.find((file) => file.path.endsWith("source.json"))))).toMatchObject({
       from: "app",
       start: "Votes",
+      source: "app:f00d",
       collections: ["ballots", "topics"],
       records: false,
     });

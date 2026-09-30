@@ -2,10 +2,10 @@
 // through /events; /ask is the route the step's agent is told to use. The split is what each is FOR,
 // not an authorisation: both sit behind the same-origin guard, and any local process can call either.
 import path from "node:path";
-import { mkdir, rmdir } from "node:fs/promises";
+import { mkdir, readFile, rmdir, stat } from "node:fs/promises";
 import type { Express, Response } from "express";
 import { z } from "zod";
-import { listPacks, listPresets, loadPackPair, readPresets, type PackPair, type PackRoot } from "./packs.js";
+import { listPacks, listPresets, loadPackPair, readHearing, readPresets, type PackPair, type PackRoot } from "./packs.js";
 import { placeSamples, readSamples } from "./samples.js";
 import type { Sample } from "../../common/blueprint/samples.js";
 import { personLanguageSchema, type PersonLanguage } from "../../common/blueprint/personLanguage.js";
@@ -23,6 +23,9 @@ import { placeSnapshot, type CollectionSource, type Snapshot, type SnapshotFile 
 import { appIdOf } from "../../common/blueprint/sharedAppSource.js";
 import { MAX_SOURCE_BYTES } from "../../common/blueprint/collectionSource.js";
 import { carriesPersonalData } from "../../common/blueprint/personalData.js";
+import type { SourceStatus } from "../../common/blueprint/sourceStatus.js";
+import { SOURCE_RECORD_PATH } from "./sourceFingerprint.js";
+import { compareSource, retakeTarget, storedSource } from "./sourceStatus.js";
 import { BlueprintRefusal, type BlueprintExecutor, type HumanEvent } from "./executor.js";
 import { BLUEPRINT_SLUG_RE } from "../../common/blueprint/manifest.js";
 import type { Refusal } from "../../common/blueprint/refusal.js";
@@ -168,6 +171,36 @@ function mountReadRoutes(app: Express, deps: BlueprintRouteDeps): void {
       fail(res, err);
     }
   });
+}
+
+function mountSourceRoute(app: Express, deps: BlueprintRouteDeps): void {
+  // Whether the source the build copied has changed since: taken again now, in memory, and compared. Asked once when the
+  // run is opened, never polled, since a shared app's records are read from Firestore.
+  app.get("/api/blueprints/runs/:id/source", async (req, res) => {
+    try {
+      const { run } = await deps.executor.view(req.params.id);
+      const stored = storedSource(await readSourceRecord(run.projectDir));
+      const hearing = stored === null ? null : await readHearing(run.usecasePackDir).catch(() => null);
+      const target = stored === null || hearing === null ? null : retakeTarget(stored, hearing, run.answers);
+      if (stored === null || target === null) return res.json({ status: "unknown" } satisfies SourceStatus);
+      return res.json(compareSource(stored, await deps.collections.snapshot(target.source, deps.now(), target.records)));
+    } catch (err) {
+      return fail(res, err);
+    }
+  });
+}
+
+// source.json is ours and small; one grown past this was not written by the copy, and nothing is compared against it.
+const SOURCE_RECORD_MAX_BYTES = 64 * 1024;
+
+async function readSourceRecord(projectDir: string): Promise<string | null> {
+  const file = path.join(projectDir, SOURCE_RECORD_PATH);
+  const size = await stat(file).then(
+    (found) => (found.isFile() ? found.size : null),
+    () => null,
+  );
+  if (size === null || size > SOURCE_RECORD_MAX_BYTES) return null;
+  return readFile(file, "utf8").catch(() => null);
 }
 
 type CreateRequest = {
@@ -391,6 +424,7 @@ function mountMoveRoutes(app: Express, deps: BlueprintRouteDeps): void {
 
 export function mountBlueprintRoutes(app: Express, deps: BlueprintRouteDeps): void {
   mountReadRoutes(app, deps);
+  mountSourceRoute(app, deps);
   mountCreateRoute(app, deps);
   mountMoveRoutes(app, deps);
 }

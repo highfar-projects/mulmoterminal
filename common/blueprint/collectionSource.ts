@@ -63,7 +63,20 @@ export function foldersAbove(files: readonly string[]): string[] {
 /** Where a collection's file goes in the build's folder. */
 export const sourcePath = (slug: string, file: string): string => `${SOURCE_DIR}/collections/${slug}/${file}`;
 
-export type SourceRecord = { from: "collection" | "app"; start: string; collections: string[]; missing: string[]; records: boolean; takenAt: string };
+/**
+ * `source`: the answer that named it (a collection's slug, or `app:<id>`), so it can be taken again; `fingerprint`: a
+ * hash of every other file of the copy, to tell whether a copy taken again differs.
+ */
+export type SourceRecord = {
+  from: "collection" | "app";
+  start: string;
+  source: string;
+  collections: string[];
+  missing: string[];
+  records: boolean;
+  takenAt: string;
+  fingerprint: string;
+};
 
 /**
  * `source.json`: what was taken — one collection with the ones it links to, or a shared app whole — from where, when,
@@ -75,13 +88,16 @@ export const sourceRecord = (
   closure: { slugs: string[]; missing: string[] },
   records: boolean,
   takenAtMs: number,
+  identity: { source: string; fingerprint: string },
 ): SourceRecord => ({
   from,
   start,
+  source: identity.source,
   collections: closure.slugs,
   missing: closure.missing,
   records,
   takenAt: new Date(takenAtMs).toISOString(),
+  fingerprint: identity.fingerprint,
 });
 
 /** Where a shared app's declaration goes in the copy. */
