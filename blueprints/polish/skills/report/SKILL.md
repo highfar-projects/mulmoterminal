@@ -29,7 +29,8 @@ With the folder's style, the style is its `chaff.yaml`. `STYLE.md` belongs to th
 `scope` did not ask for the guide, a folder without `STYLE.md` lacks nothing: do not mention it.
 
 When `.blueprint/viewpoints.json` records a `writer` verdict for a polished file, add
-`## 書いた人に確かめてほしいこと` / `## For the writer`: one item per verdict, giving the file, what was read
+`## 書いた人に確かめてほしいこと` / `## For the writer` **right after** `## 整えたもの` / `## What was polished` — it is
+the part the person has to act on, so it comes before what was checked and what was left: one item per verdict, giving the file, what was read
 for (the viewpoint's `title` in `<usecase pack>/viewpoints.json`), the `quote` word for word, and the `note` as
 the question. The check looks for every quotation. Under `## 整えたもの` / `## What was polished`, name the
 viewpoints you fixed in the same way as the other changes.
