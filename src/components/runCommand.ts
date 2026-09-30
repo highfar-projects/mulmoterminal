@@ -15,3 +15,11 @@ export type RunCommand =
       agent: TerminalAgent;
       model: string | null;
     };
+
+/** A script.json entry run from the Run menu or the command palette, in the directory its list was read for. */
+export const scriptRunCommand = (script: { index: number; label: string }, cwd: string | null): RunCommand => ({
+  source: "script",
+  index: script.index,
+  label: script.label,
+  cwd,
+});

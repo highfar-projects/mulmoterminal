@@ -32,6 +32,8 @@ export const commandPaletteEn = {
   githubIssue: "Issue #{number}: {title}",
   promptLabel: "Prompt: {text}",
   promptDetail: "Puts it back in the terminal, unsent",
+  runScript: "Run: {label}",
+  runSkill: "Skill: /{slug}",
   findFilesNamed: "Find files named “{query}”",
   searchFilesFor: "Search files for “{query}”",
   rowActions: {

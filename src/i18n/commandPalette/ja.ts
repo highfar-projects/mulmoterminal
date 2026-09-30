@@ -30,6 +30,8 @@ export const commandPaletteJa = {
   githubIssue: "Issue #{number}: {title}",
   promptLabel: "プロンプト: {text}",
   promptDetail: "ターミナルの入力欄に戻します（送信はしません）",
+  runScript: "実行: {label}",
+  runSkill: "スキル: /{slug}",
   findFilesNamed: "「{query}」という名前のファイルを探す",
   searchFilesFor: "ファイルの中身から「{query}」を探す",
   rowActions: {

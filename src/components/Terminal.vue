@@ -233,6 +233,8 @@ usePaletteHeaderEntries(slotKey, {
   buttons: () => headerButtons.value,
   commands: () => (props.command || props.launcher ? [] : resolvedCommands.value),
   run: onHeaderButton,
+  // And the Run and Skill menus' entries, only where this terminal shows those menus (#2697).
+  menus: () => (props.runMenu ? { cwd: serverCwd.value, runScript: (command) => emit("run", command), runSkill: onSkill } : null),
 });
 // A skill picked from the header Skill menu runs IN this session (not a spare cell
 // like a script): type its invocation and submit, exactly like a `run:"input"` button.

@@ -30,6 +30,8 @@ import { aliasTarget, aliasesByKey, pinRows } from "./paletteShortcuts";
 import type { PaletteAliases } from "../../common/paletteConfig";
 import type { SeededFilesPanel } from "./filesPanelSeed";
 import { PALETTE_SCOPES, scopeOf, type ScopedKind } from "./paletteScope";
+import { isMenuRow, menuCandidates, menuRow, menuRowKey, type MenuCandidate, type ScriptRow, type SkillRow } from "./paletteMenuRows";
+import type { DiscoveredSkill, RunnableScript } from "./useDirLists";
 
 /** The actions a palette can run. Not `copy` / `paste` — they act on a terminal's selection, from
  *  inside it — not the palette itself, and not the toolbar's operations it already lists as screens,
@@ -169,7 +171,9 @@ export type PaletteRow =
   | WikiRow
   | HandoffRow
   | GithubRow
-  | PromptRow;
+  | PromptRow
+  | ScriptRow
+  | SkillRow;
 
 const LAUNCH_ICON = "add_box";
 
@@ -197,6 +201,9 @@ export interface PaletteSources {
   wikiPages: readonly PaletteWikiPage[];
   githubItems: readonly PaletteGithubItem[];
   prompts: readonly PalettePrompt[];
+  /** The acting terminal's Run-menu scripts and Skill-menu skills (#2697); empty where it has no menus. */
+  scripts: readonly RunnableScript[];
+  skills: readonly DiscoveredSkill[];
   /** How much each row (by its key) has been used, for breaking ties; 0 for a row never picked. */
   frecency: (key: string) => number;
   /** The config file's `paletteAliases` and `paletteFavorites` (#2540). */
@@ -223,6 +230,7 @@ export const rowKey = (row: PaletteRow): string => {
   if (row.kind === "github") return `github:${paletteGithubItemId(row.item)}`;
   if (row.kind === "handoff") return `handoff:${row.action}`;
   if (row.kind === "resume") return `resume:${paletteResumeId(row.resume)}`;
+  if (isMenuRow(row)) return menuRowKey(row);
   return row.kind === "screen" ? `screen:${row.screen}` : `terminal:${row.uid}`;
 };
 
@@ -256,6 +264,8 @@ export interface PaletteText {
   currentChoice: string;
   switchChoice: string;
   scopeLabel: (kind: ScopedKind) => string;
+  runScript: (label: string) => string;
+  runSkill: (slug: string) => string;
 }
 
 /** The grid's state, as far as the rows care. */
@@ -293,7 +303,8 @@ type Candidate =
   | { kind: "resume"; resume: PaletteResume; name: string; full: boolean }
   | { kind: "wiki"; page: PaletteWikiPage; name: string }
   | { kind: "github"; item: PaletteGithubItem; name: string }
-  | { kind: "prompt"; prompt: PalettePrompt; name: string };
+  | { kind: "prompt"; prompt: PalettePrompt; name: string }
+  | MenuCandidate;
 
 /** What starts a terminal: an agent or a launcher here, a past conversation, a new terminal elsewhere. */
 function startCandidates({ launchDirs, starts, startDir, resumes, gridFull }: PaletteSources, text: PaletteText): [string, Candidate][] {
@@ -351,7 +362,10 @@ function candidatesFor(sources: PaletteSources, state: PaletteState, text: Palet
   const sections = settings.map((tab): [string, Candidate] => [`${text.settingsLabel(tab)} ${tab}`, { kind: "settings", tab, name: text.settingsLabel(tab) }]);
   const switches = choices.map((choice): [string, Candidate] => [`${choice.label} ${choice.id}`, { kind: "choice", choice, name: choice.label }]);
   // A command belongs to the terminal it acts on, so it sits beside the grid's own actions.
-  const runs = commands.map((command): [string, Candidate] => [`${command.label} ${command.id}`, { kind: "command", command, name: command.label }]);
+  const runs: [string, Candidate][] = [
+    ...commands.map((command): [string, Candidate] => [`${command.label} ${command.id}`, { kind: "command", command, name: command.label }]),
+    ...menuCandidates(sources.scripts, sources.skills, text),
+  ];
   // Two collections can name an action alike, so the slug keeps each candidate its own.
   const collectionRuns = collectionActions.map((action): [string, Candidate] => [
     `${action.label} ${action.slug}/${action.id}`,
@@ -398,6 +412,7 @@ function rowOf(candidate: Candidate, indexes: number[], keymap: Keymap, state: P
     candidate.name,
     indexes.filter((index) => index < candidate.name.length),
   );
+  if (candidate.kind === "script" || candidate.kind === "skill") return menuRow(candidate, label);
   if (candidate.kind === "start") return startRow(candidate, label, text);
   if (candidate.kind === "resume") return resumeRow(candidate, label, text);
   if (candidate.kind === "wiki") return wikiRow(candidate, label, text);
@@ -504,9 +519,11 @@ function handoffRow(action: SeededFilesPanel, query: string, state: PaletteState
 
 const HANDOFF_ICONS: Record<SeededFilesPanel, string> = { "files-find": "search", "files-search": "manage_search" };
 
-// `>` means "run something": the grid's actions and the terminal's commands alike (#2465).
+// `>` means "run something": the grid's actions and the terminal's commands alike (#2465), and the
+// Run and Skill menus' entries (#2697).
+const RUN_KINDS: ReadonlySet<Candidate["kind"]> = new Set(["action", "command", "collection", "launch", "start", "resume", "script", "skill"]);
 function inScope(kind: Candidate["kind"], only: ScopedKind | null): boolean {
-  if (only === "action") return kind === "action" || kind === "command" || kind === "collection" || kind === "launch" || kind === "start" || kind === "resume";
+  if (only === "action") return RUN_KINDS.has(kind);
   return kind === only;
 }
 

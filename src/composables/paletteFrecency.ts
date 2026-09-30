@@ -48,7 +48,7 @@ export function readFrecency(raw: unknown): FrecencyStore {
 // in every terminal and on every opening. Left out, among others: a terminal (its uid is renumbered
 // on reload), a launcher start (its place in the list), a command (its id is per terminal's header
 // config), a collection action or a Wiki page (a slug is per project / workspace), a past prompt, a
-// hand-off, a symbol.
+// hand-off, a symbol, a script or a skill (an index into one directory's script.json, a per-project slug).
 const REMEMBERED_KINDS: ReadonlySet<string> = new Set(["action", "screen", "settings", "choice", "launch", "resume", "github"]);
 
 // A switch whose one id flips its meaning: "sound" reads "Sound on" while it is off and "Sound off"
