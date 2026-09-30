@@ -4,7 +4,10 @@ import { tipsZhTW } from "./tips/zh-TW";
 import { commandPaletteZhTW } from "./commandPalette/zh-TW";
 import { focusModeZhTW } from "./focusMode/zh-TW";
 import { fileHistoryZhTW } from "./fileHistory/zh-TW";
+import { dirConfigSaveZhTW } from "./dirConfigSave/zh-TW";
 import { settingsControlsZhTW } from "./settingsControls/zh-TW";
+import { shortcutsZhTW } from "./shortcuts/zh-TW";
+import { filesTreeZhTW } from "./filesTree/zh-TW";
 
 // 繁體中文。`Messages` 就是 en.ts 的形狀，少一個鍵就會編譯失敗 —— 不會出現執行時悄悄退回
 // 英文、卻沒有人發現的狀況。
@@ -82,47 +85,7 @@ export const zhTW: Messages = {
       },
     },
 
-    shortcuts: {
-      intro:
-        "唯讀；不論有沒有綁定，全都列在 {keymapKey} 底下。可以綁定兩類：MulmoTerminal 的操作（放大、跳到正在等你的代理程式、複製 / 貼上），以及送給終端機的按鍵序列（在 Mac 上用 Cmd+← 跳到行首）。你綁定的每個鍵都不再傳給終端機裡的程式，所以請用下面的按鈕來設定 —— 代理程式會先對照你既有的綁定，以及瀏覽器和 Mac 各自帶來的陷阱，然後才寫入。參考資料見{guide}。",
-      guide: "指南",
-      actions: {
-        zoomToggle: "放大 / 收合一個終端機",
-        zoomNext: "放大下一個終端機",
-        zoomPrev: "放大上一個終端機",
-        focusNext: "把游標移到下一個終端機（僅網格檢視）",
-        focusPrev: "把游標移到上一個終端機（僅網格檢視）",
-        nextAttention: "跳到正在等你的終端機",
-        markUnread: "將這個終端機標為未讀 / 已讀",
-        terminalNew: "開啟啟動面板",
-        terminalNewHere: "在這個終端機的目錄下開啟啟動面板",
-        terminalNewAdjacent: "直接在這個終端機的目錄下開一個 shell",
-        terminalClose: "關閉這個終端機",
-        terminalRestart: "重新啟動這個終端機裡的代理程式",
-        terminalMovePrev: "將此終端機前移",
-        terminalMoveNext: "將此終端機後移",
-        filesFind: "在這個終端機旁邊，依檔名開啟檔案",
-        filesSearch: "在這個終端機旁邊，搜尋檔案內容",
-        filesInsertSelection: "把 Files 面板的選取範圍以 {'@'}檔案#L… 的形式放到輸入處",
-        filesTabClose: "關閉 Files 面板的目前分頁",
-        filesTabNext: "前往 Files 面板的下一個分頁",
-        filesTabPrev: "前往 Files 面板的上一個分頁",
-        focusMode: "專注模式（全螢幕，並讓分頁按鍵 Cmd/Ctrl+W、T、N 也交給 MulmoTerminal）",
-        commandPalette: "開啟命令面板",
-        copy: "複製終端機裡選取的內容",
-        paste: "貼到終端機",
-      },
-      list: "鍵盤快速鍵",
-      notSet: "未設定",
-      reservedChip: "不會生效",
-      reservedTip: "瀏覽器把這個鍵留給分頁和視窗操作，頁面收不到它。請使用瀏覽器會放行的鍵，例如 {example} 這樣的兩鍵綁定。",
-      reservedTipSingle: "瀏覽器把這個鍵留給分頁和視窗操作，頁面收不到它。此動作只接受單一鍵，請選擇瀏覽器會放行的另一個單鍵。",
-      reservedNote:
-        "此瀏覽器把這些鍵留給分頁和視窗操作，它們不會傳到 MulmoTerminal：{keys}。大多數動作可以改用像 {example} 這樣的兩鍵綁定來觸發。專注模式（Chrome、Edge、Arc）期間，它們會傳到 MulmoTerminal。",
-      sendRow: "把 {key} 送到終端機",
-      sendNone: "把按鍵送到終端機",
-      setUp: "設定快速鍵…",
-    },
+    shortcuts: shortcutsZhTW,
 
     surviving: {
       intro:
@@ -155,8 +118,8 @@ export const zhTW: Messages = {
       sweepDisabledHint: "上面的清掃本身是關掉的，所以這裡沒有可重複的東西。",
       sweepRunning: "本伺服器每 {hours} 小時重複一次清理。",
       sweepRunningOff: "本伺服器僅在啟動時清理一次，不會重複。",
-      sweepPending: "上面儲存的間隔將從下次啟動開始生效。",
-      sweepNote: "這個間隔在伺服器啟動時讀取，所以在這裡改動要下次啟動才生效。",
+      sweepPending: "上面儲存的間隔還沒有到達這台伺服器：請重新讀取設定檔，或重新啟動它。",
+      sweepNote: "在這裡改動會立即生效，從上一次清理開始計算。",
       neverTitle: "永不自動結束。",
       neverHint: "它們會一直留著，直到你在這裡停掉，或是從佔著它的終端機把它結束。",
       reapHint: "沒有任何東西在用 —— 沒人連線、這麼久沒有輸出 —— 的工作階段{ended}。它的對話會保留。設成 0 就永不自動結束。",
@@ -226,7 +189,7 @@ export const zhTW: Messages = {
       prFooter: "在建立的 PR 末尾寫上 clone 名稱",
       prFooterHint: "在內文底部加一行 {line}，這樣並排放著好幾個 clone 時，PR 能說明自己出自哪一個。",
       gitlabTitle: "自架 GitLab",
-      gitlabHint: "光看 URL 看不出這台主機跑的是哪種 forge，所以在這裡宣告，它的儲存庫就會用 {glab} 來讀。需要 {authCommand}。下次伺服器啟動時生效。",
+      gitlabHint: "光看 URL 看不出這台主機跑的是哪種 forge，所以在這裡宣告，它的儲存庫就會用 {glab} 來讀。需要 {authCommand}。立即生效。",
       gitlabField: "新增一台自架 GitLab 主機",
     },
 
@@ -242,7 +205,7 @@ export const zhTW: Messages = {
       worklogInterval: "多久執行一次：",
       worklogStepper: "開發工作紀錄的間隔",
       systemTasks: "內建的排程作業",
-      systemTasksHint: "兩個都每小時執行一次，不關就一直開著。關掉其中一個要等伺服器下次啟動才生效。",
+      systemTasksHint: "兩個都每小時執行一次，不關就一直開著。開關立即生效。",
       feedRefresh: "重新整理集合與訂閱來源",
       feedRefreshHint: "抓取你的 RSS/JSON 訂閱來源，並派送由 skill 支撐的集合更新，涵蓋工作區和每個存過的專案目錄。一個訂閱來源都沒註冊時它什麼也不做。",
       calendarSync: "同步 Google 日曆",
@@ -632,8 +595,10 @@ export const zhTW: Messages = {
     empty: "此檔案沒有標題。",
   },
   fileHistory: fileHistoryZhTW,
+  dirConfigSave: dirConfigSaveZhTW,
   focusMode: focusModeZhTW,
   settingsControls: settingsControlsZhTW,
+  ...filesTreeZhTW,
   tips: tipsZhTW,
   blueprints: blueprintsZhTW,
 };

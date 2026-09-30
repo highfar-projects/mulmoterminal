@@ -8,6 +8,7 @@ import { hearingSchema, type HearingAnswers } from "../../common/blueprint/heari
 import { planStepSchema } from "../../common/blueprint/plan";
 import { blueprintRunSchema, blueprintRunSummarySchema, blueprintRunViewSchema, type BlueprintRunView } from "../../common/blueprint/run";
 import { presetListingSchema, type PresetListing } from "../../common/blueprint/presets";
+import type { PersonLanguage } from "../../common/blueprint/personLanguage";
 import { refusalSchema, type Refusal } from "../../common/blueprint/refusal";
 import { catalogSchema, installRecordSchema, type Catalog, type InstallRecord } from "../../common/blueprint/registry";
 
@@ -82,6 +83,7 @@ export const startRun = (request: {
   usecase: string;
   answers: HearingAnswers;
   preset?: string;
+  language?: PersonLanguage;
 }): Promise<ApiResult<{ runId: string }>> => call(createdSchema, "/api/blueprints/runs", postJson(request));
 
 export type PersonEvent = { type: "approve" } | { type: "reject"; reason: string } | { type: "answer"; answer: string } | { type: "retry" };

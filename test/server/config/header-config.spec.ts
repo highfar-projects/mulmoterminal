@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { githubIconOf } from "../../../common/githubIcons";
-import { HEADER_ACTIONS } from "../../../common/headerActions";
+import { CELL_ACTIONS, HEADER_ACTIONS } from "../../../common/headerActions";
+import { APP_ACTIONS } from "../../../common/appActions";
 import {
   sanitizeButtons,
   sanitizeChips,
@@ -198,12 +199,13 @@ describe("sanitizeButtons open.pickFile", () => {
 describe("sanitizeButtons run:action", () => {
   it("keeps a button whose action is a known one", () => {
     expect(sanitizeButtons([{ id: "r", icon: "restart_alt", label: "Restart", run: "action", action: "restart" }])).toEqual([
-      { id: "r", icon: "restart_alt", label: "Restart", run: "action", action: "restart" },
+      { id: "r", icon: "restart_alt", label: "Restart", run: "action", action: "terminal-restart" },
     ]);
   });
-  it("keeps every action the client dispatches", () => {
-    const kept = sanitizeButtons(HEADER_ACTIONS.map((action) => ({ id: action, label: action, run: "action", action })));
-    expect(kept?.map((b) => ("action" in b ? b.action : null))).toEqual([...HEADER_ACTIONS]);
+  it("keeps every action the client dispatches, and rewrites the old `restart` to its current name", () => {
+    // One at a time: the whole list is longer than a header may hold (MAX_BUTTONS).
+    const kept = HEADER_ACTIONS.map((action) => sanitizeButtons([{ id: action, label: action, run: "action", action }])?.[0]);
+    expect(kept.map((b) => (b && "action" in b ? b.action : null))).toEqual([...CELL_ACTIONS, ...APP_ACTIONS, "terminal-restart"]);
   });
   it("drops one naming an unknown action, or none at all", () => {
     expect(sanitizeButtons([{ id: "r", label: "R", run: "action", action: "reboot" }])).toEqual([]);
@@ -236,7 +238,7 @@ describe("sanitizeButtons folders", () => {
         when: "isGitRepo",
         order: 5,
         items: [
-          { id: "restart", icon: "restart_alt", label: "Restart the agent", run: "action", action: "restart" },
+          { id: "restart", icon: "restart_alt", label: "Restart the agent", run: "action", action: "terminal-restart" },
           { id: "test", icon: "science", label: "Run the tests", run: "shell", cmd: "yarn test" },
         ],
       },

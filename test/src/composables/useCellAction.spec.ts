@@ -9,7 +9,7 @@ describe("useCellAction", () => {
     const off1 = registerCellAction("cell-1", cell1);
     const off2 = registerCellAction("cell-2", cell2);
 
-    expect(requestCellAction("cell-2", "restart")).toBe(true);
+    expect(requestCellAction("cell-2", "terminal-restart")).toBe(true);
     expect(cell1).not.toHaveBeenCalled();
     expect(cell2).toHaveBeenCalledTimes(1);
     off1();
@@ -17,17 +17,17 @@ describe("useCellAction", () => {
   });
 
   it("answers false for a terminal that is not there, or a handler that declines", () => {
-    expect(requestCellAction("cell-nobody", "restart")).toBe(false);
-    expect(requestCellAction(null, "restart")).toBe(false);
+    expect(requestCellAction("cell-nobody", "terminal-restart")).toBe(false);
+    expect(requestCellAction(null, "terminal-restart")).toBe(false);
     const off = registerCellAction("cell-3", () => false); // mounted, but no session yet
-    expect(requestCellAction("cell-3", "restart")).toBe(false);
+    expect(requestCellAction("cell-3", "terminal-restart")).toBe(false);
     off();
   });
 
   it("stops routing once unregistered", () => {
     const handler = vi.fn(() => true);
     registerCellAction("cell-4", handler)();
-    expect(requestCellAction("cell-4", "restart")).toBe(false);
+    expect(requestCellAction("cell-4", "terminal-restart")).toBe(false);
     expect(handler).not.toHaveBeenCalled();
   });
 
@@ -38,7 +38,7 @@ describe("useCellAction", () => {
     const offFresh = registerCellAction("cell-5", fresh); // remount: registers first…
     offOld(); // …then the old instance unmounts
 
-    expect(requestCellAction("cell-5", "restart")).toBe(true);
+    expect(requestCellAction("cell-5", "terminal-restart")).toBe(true);
     expect(fresh).toHaveBeenCalledTimes(1);
     expect(old).not.toHaveBeenCalled();
     offFresh();
@@ -47,9 +47,9 @@ describe("useCellAction", () => {
   it("hands the handler the action that was asked for", () => {
     const handler = vi.fn(() => true);
     const off = registerCellAction("cell-6", handler);
-    requestCellAction("cell-6", "new-here");
-    requestCellAction("cell-6", "files");
-    expect(handler.mock.calls).toEqual([["new-here"], ["files"]]);
+    requestCellAction("cell-6", "terminal-timeline");
+    requestCellAction("cell-6", "terminal-park");
+    expect(handler.mock.calls).toEqual([["terminal-timeline"], ["terminal-park"]]);
     off();
   });
 });

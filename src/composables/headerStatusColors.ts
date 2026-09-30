@@ -30,3 +30,9 @@ export async function saveHeaderStatusTint(value: HeaderStatusTint): Promise<boo
   if (saved.ok) tint.value = sanitizeHeaderStatusTint(saved.value) ?? DEFAULT_HEADER_STATUS_TINT;
   return saved.ok;
 }
+
+export async function saveHeaderStatusColors(value: HeaderStatusColors): Promise<boolean> {
+  const saved = await postConfigField("headerStatusColors", value);
+  if (saved.ok) colors.value = sanitizeHeaderStatusColors(saved.value);
+  return saved.ok;
+}

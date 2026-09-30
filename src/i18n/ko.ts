@@ -4,7 +4,10 @@ import { tipsKo } from "./tips/ko";
 import { commandPaletteKo } from "./commandPalette/ko";
 import { focusModeKo } from "./focusMode/ko";
 import { fileHistoryKo } from "./fileHistory/ko";
+import { dirConfigSaveKo } from "./dirConfigSave/ko";
 import { settingsControlsKo } from "./settingsControls/ko";
+import { shortcutsKo } from "./shortcuts/ko";
+import { filesTreeKo } from "./filesTree/ko";
 
 // 한국어. `Messages`는 en.ts의 모양 그대로라서 키를 하나라도 빠뜨리면 컴파일이 실패한다 ——
 // 실행 중에 조용히 영어로 되돌아가 아무도 눈치채지 못하는 상태는 생기지 않는다.
@@ -80,48 +83,7 @@ export const ko: Messages = {
       },
     },
 
-    shortcuts: {
-      intro:
-        "읽기 전용이며, 할당 여부와 상관없이 전부 {keymapKey} 아래에 나열됩니다. 할당할 수 있는 것은 두 가지 —— MulmoTerminal의 동작(확대, 기다리는 에이전트로 이동, 복사 / 붙여넣기), 그리고 터미널로 보내는 키 시퀀스(Mac에서 Cmd+←로 줄 맨 앞으로). 할당한 키는 터미널 안의 프로그램에 더 이상 닿지 않으므로, 아래 버튼으로 설정하세요 —— 에이전트가 기존 할당과 브라우저·Mac이 각자 만들어 내는 함정을 먼저 대조한 뒤에 씁니다. 레퍼런스는 {guide}에 있습니다.",
-      guide: "가이드",
-      actions: {
-        zoomToggle: "터미널 확대 / 되돌리기",
-        zoomNext: "다음 터미널 확대",
-        zoomPrev: "이전 터미널 확대",
-        focusNext: "다음 터미널로 커서 옮기기(그리드 보기에서만)",
-        focusPrev: "이전 터미널로 커서 옮기기(그리드 보기에서만)",
-        nextAttention: "나를 기다리는 터미널로 이동",
-        markUnread: "이 터미널을 읽지 않음 / 읽음으로 표시",
-        terminalNew: "실행 패널 열기",
-        terminalNewHere: "이 터미널의 디렉터리에서 실행 패널 열기",
-        terminalNewAdjacent: "이 터미널의 디렉터리에서 곧바로 shell 열기",
-        terminalClose: "이 터미널 닫기",
-        terminalRestart: "이 터미널의 에이전트 다시 시작",
-        terminalMovePrev: "이 터미널을 앞으로 이동",
-        terminalMoveNext: "이 터미널을 뒤로 이동",
-        filesFind: "이 터미널 옆에서 파일 이름으로 찾아 열기",
-        filesSearch: "이 터미널 옆에서 파일 내용 검색",
-        filesInsertSelection: "Files 패널의 선택 범위를 {'@'}파일#L… 로 입력에 넣기",
-        filesTabClose: "Files 패널의 앞쪽 탭 닫기",
-        filesTabNext: "Files 패널의 다음 탭으로",
-        filesTabPrev: "Files 패널의 이전 탭으로",
-        focusMode: "집중 모드(전체 화면, 탭 키 Cmd/Ctrl+W, T, N도 MulmoTerminal에서 받기)",
-        commandPalette: "명령 팔레트 열기",
-        copy: "터미널에서 선택한 내용 복사",
-        paste: "터미널에 붙여넣기",
-      },
-      list: "키보드 단축키",
-      notSet: "설정 안 됨",
-      reservedChip: "작동 안 함",
-      reservedTip: "브라우저가 탭과 창 조작에 쓰는 키라 페이지에 전달되지 않습니다. {example} 같은 두 키 지정 등 브라우저가 통과시키는 키를 쓰세요.",
-      reservedTipSingle:
-        "브라우저가 탭과 창 조작에 쓰는 키라 페이지에 전달되지 않습니다. 이 동작은 한 키만 받으므로 브라우저가 통과시키는 다른 한 키를 고르세요.",
-      reservedNote:
-        "이 브라우저는 다음 키를 탭과 창 조작에 쓰므로 MulmoTerminal에 전달되지 않습니다: {keys}. 대부분의 동작은 {example} 같은 두 키 지정이면 닿습니다. 집중 모드(Chrome, Edge, Arc) 중에는 MulmoTerminal에 전달됩니다.",
-      sendRow: "{key}를 터미널로 보내기",
-      sendNone: "터미널로 키 보내기",
-      setUp: "단축키 설정하기…",
-    },
+    shortcuts: shortcutsKo,
 
     surviving: {
       intro:
@@ -154,8 +116,8 @@ export const ko: Messages = {
       sweepDisabledHint: "위에서 스윕 자체가 꺼져 있으므로 반복할 것이 없습니다.",
       sweepRunning: "이 서버는 {hours}시간마다 스윕을 반복하고 있습니다.",
       sweepRunningOff: "이 서버는 시작할 때 한 번만 스윕하며 반복하지 않습니다.",
-      sweepPending: "위에서 저장한 주기는 다음 시작부터 적용됩니다.",
-      sweepNote: "이 간격은 서버가 시작할 때 읽으므로, 여기서 바꾼 값은 다음 시작부터 적용됩니다.",
+      sweepPending: "위에서 저장한 주기가 아직 이 서버에 닿지 않았습니다. 설정 파일을 다시 읽거나 서버를 다시 시작하세요.",
+      sweepNote: "여기서 바꾸면 바로 적용되고, 마지막 정리부터 셉니다.",
       neverTitle: "자동으로 종료하지 않습니다.",
       neverHint: "여기서 멈추거나, 붙잡고 있는 터미널에서 끝낼 때까지 남아 있습니다.",
       reapHint: "아무것도 쓰고 있지 않고 —— 붙은 사람도 없고 이만큼 출력도 없는 —— 세션은 {ended}. 대화는 남습니다. 0으로 두면 자동으로 종료하지 않습니다.",
@@ -229,7 +191,7 @@ export const ko: Messages = {
       prFooterHint: "본문 맨 아래에 {line} 한 줄을 붙입니다. 나란히 둔 여러 클론 중 어느 것에서 나왔는지 PR이 말해 줍니다.",
       gitlabTitle: "자체 호스팅 GitLab",
       gitlabHint:
-        "URL만 봐서는 그 호스트가 어떤 forge인지 알 수 없으므로 여기서 선언하면 {glab}으로 저장소를 읽습니다. {authCommand}가 필요합니다. 다음 서버 시작부터 적용됩니다.",
+        "URL만 봐서는 그 호스트가 어떤 forge인지 알 수 없으므로 여기서 선언하면 {glab}으로 저장소를 읽습니다. {authCommand}가 필요합니다. 바로 적용됩니다.",
       gitlabField: "자체 호스팅 GitLab 호스트 추가",
     },
 
@@ -245,7 +207,7 @@ export const ko: Messages = {
       worklogInterval: "실행 주기:",
       worklogStepper: "개발 작업 로그 주기",
       systemTasks: "내장 예약 작업",
-      systemTasksHint: "둘 다 한 시간마다 돌고, 끄지 않는 한 켜져 있습니다. 하나를 끄면 서버가 다음에 시작할 때 반영됩니다.",
+      systemTasksHint: "둘 다 한 시간마다 돌고, 끄지 않는 한 켜져 있습니다. 켜고 끄면 바로 반영됩니다.",
       feedRefresh: "컬렉션과 피드 새로고침",
       feedRefreshHint:
         "RSS/JSON 피드를 받아오고 skill 기반 컬렉션 업데이트를 내보냅니다. 워크스페이스와 저장해 둔 모든 프로젝트 디렉터리가 대상입니다. 피드를 하나도 등록하지 않았다면 아무것도 하지 않습니다.",
@@ -642,8 +604,10 @@ export const ko: Messages = {
     empty: "이 파일에는 제목이 없습니다.",
   },
   fileHistory: fileHistoryKo,
+  dirConfigSave: dirConfigSaveKo,
   focusMode: focusModeKo,
   settingsControls: settingsControlsKo,
+  ...filesTreeKo,
   tips: tipsKo,
   blueprints: blueprintsKo,
 };

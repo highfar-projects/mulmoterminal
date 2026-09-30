@@ -6,6 +6,7 @@ import type { Cell } from "../../../src/components/gridTabs.js";
 import { mountRequests } from "../../helpers/mountRequests";
 import { seedFilesPanel, takeFilesPanelSeed } from "../../../src/composables/filesPanelSeed";
 import { isRecord } from "../../../common/isRecord";
+import { requestGridCellAction } from "../../../src/composables/useGridCellAction";
 
 const runsFilesActions = (vm: unknown): vm is { runFilesAction: (action: string) => Promise<void> } => isRecord(vm) && typeof vm.runFilesAction === "function";
 
@@ -30,7 +31,7 @@ vi.mock("../../../src/components/TerminalCell.vue", () => ({
   default: {
     name: "TerminalCell",
     props: ["expanded", "rightPane", "canvasAvailable"],
-    emits: ["toggle-expand", "open-files", "toggle-canvas", "open-canvas", "press-pane", "new-here", "session", "cwd", "close", "move", "status"],
+    emits: ["toggle-expand", "open-files", "toggle-canvas", "open-canvas", "new-here", "session", "cwd", "close", "move", "status"],
     template: '<div class="stub-cell" />',
   },
 }));
@@ -40,7 +41,7 @@ vi.mock("../../../src/components/CommandCell.vue", () => ({
 vi.mock("../../../src/components/LauncherCell.vue", () => ({
   default: { name: "LauncherCell", props: ["expanded", "launcher"], emits: ["toggle-expand", "close", "move", "status", "session"], template: "<div />" },
 }));
-// Stubbed so a pane opened by `press-pane` below is visible without its own history request.
+// Stubbed so a pane opened by a cell action below is visible without its own history request.
 vi.mock("../../../src/components/PromptsPane.vue", () => ({
   default: { name: "PromptsPane", template: '<div class="stub-prompts-pane" />' },
 }));
@@ -293,10 +294,10 @@ describe("open-files from a cell's path menu", () => {
   });
 });
 
-// A configured header button (`run: "action"`, #2611). On the enlarged cell it toggles the pane the
-// way the History / Tools menu does; on a tile it enlarges first, like `open-files`, because a
-// toggle there would only record a wish and the button would look dead.
-describe("press-pane and new-here from a configured header button", () => {
+// A header button, a shortcut or a palette pick, through the runner the grid registers. On the
+// enlarged cell a pane toggles the way the History / Tools menu does; on a tile it enlarges first,
+// like `open-files`, because a toggle there would only record a wish and look dead.
+describe("cell actions asked for by name (#2611, #2635)", () => {
   beforeEach(() => {
     localStorage.clear();
     requests.install();
@@ -311,11 +312,11 @@ describe("press-pane and new-here from a configured header button", () => {
 
   it("toggles the pane on the enlarged cell without asking to enlarge", async () => {
     const w = mountGrid();
-    cells(w)[0].vm.$emit("press-pane", "files");
+    requestGridCellAction("cell-1", "pane-files");
     await flushPromises();
     expect(filesPane(w).props("cwd")).toBe("/work/a");
 
-    cells(w)[0].vm.$emit("press-pane", "files");
+    requestGridCellAction("cell-1", "pane-files");
     await flushPromises();
     expect(filesPane(w).exists()).toBe(false);
     expect(w.emitted("toggle-expand")).toBeUndefined();
@@ -324,7 +325,7 @@ describe("press-pane and new-here from a configured header button", () => {
 
   it("enlarges a tiled cell and opens the pane on THAT cell", async () => {
     const w = mountGrid();
-    cells(w)[1].vm.$emit("press-pane", "files");
+    requestGridCellAction("cell-2", "pane-files");
     await applyExpand(w, 2);
 
     expect(w.emitted("toggle-expand")).toEqual([[2]]);
@@ -334,7 +335,7 @@ describe("press-pane and new-here from a configured header button", () => {
 
   it("opens a non-files pane on a tiled cell too, replacing none on the way", async () => {
     const w = mountGrid();
-    cells(w)[1].vm.$emit("press-pane", "prompts");
+    requestGridCellAction("cell-2", "pane-prompts");
     await applyExpand(w, 2);
 
     expect(w.emitted("toggle-expand")).toEqual([[2]]);
@@ -354,13 +355,40 @@ describe("press-pane and new-here from a configured header button", () => {
 
     flush.mockClear();
     flush.mockResolvedValue(false);
-    cells(w)[0].vm.$emit("press-pane", "prompts");
+    requestGridCellAction("cell-1", "pane-prompts");
     await flushPromises();
 
     expect(flush).toHaveBeenCalledTimes(1);
     expect(w.emitted("toggle-expand")).toBeUndefined();
     expect(filesPane(w).exists()).toBe(true);
     w.unmount();
+  });
+
+  it("hands what needs the whole grid to GridView, naming the cell", async () => {
+    const w = mountGrid();
+    expect(requestGridCellAction("cell-2", "terminal-new-here")).toBe(true);
+    expect(requestGridCellAction("cell-2", "terminal-close")).toBe(true);
+    expect(w.emitted("cell-shortcut")).toEqual([
+      [2, "terminal-new-here"],
+      [2, "terminal-close"],
+    ]);
+    w.unmount();
+  });
+
+  it("enlarges by the cell's own event, and declines a move outside manual order", async () => {
+    const w = mountGrid();
+    expect(requestGridCellAction("cell-2", "zoom-toggle")).toBe(true);
+    expect(w.emitted("toggle-expand")).toEqual([[2]]);
+    expect(requestGridCellAction("cell-2", "terminal-move-next")).toBe(false);
+    expect(w.emitted("move")).toBeUndefined();
+    w.unmount();
+  });
+
+  it("answers nothing for a slot that is no grid cell, or once the grid is gone", async () => {
+    const w = mountGrid();
+    expect(requestGridCellAction("single", "pane-files")).toBe(false);
+    w.unmount();
+    expect(requestGridCellAction("cell-1", "pane-files")).toBe(false);
   });
 
   it("passes new-here up with the cell it was pressed on", async () => {

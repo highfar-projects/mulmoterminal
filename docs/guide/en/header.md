@@ -195,31 +195,46 @@ Pressing it opens a cell like this and shows the output:
 
 ### `run: "action"` — act on this cell {#run-action}
 
-Acts on the cell itself. These bring back, as a button of your own, what the cell's menus do:
+Acts on the cell itself — or, for the toolbar's operations at the end of the table, on the app. The
+names are the [keyboard shortcut](config.html#keymap) names, so the same operation is a button, a
+key, and a command-palette entry (the toolbar's are in the palette as its screen, Settings and
+choice rows):
 
-| `action` | What it does | Otherwise found in |
-|---|---|---|
-| `"restart"` | Restart the agent in this cell (below) | Tools menu |
-| `"new-here"` | Open the **launch panel** on this cell's directory — pick Claude, Codex, a shell, … to start there | the **＋** on row 2, the `terminal-new-here` shortcut |
-| `"files"` | The **files pane** beside this cell | path menu → Browse files in the app |
-| `"prompts"` / `"transcript"` | The **prompts you sent** / the **conversation** pane | History menu |
-| `"timeline"` | The **activity timeline** (Claude sessions only) | History menu |
-| `"tools"` / `"canvas"` / `"collections"` | The **tools used** / **Canvas** / **Collections** pane | Tools menu |
-| `"talk"` | **Talk to another terminal** | Tools menu |
+| `action` | What it does |
+|---|---|
+| `"terminal-new-here"` | Open the **launch panel** on this cell's directory — pick Claude, Codex, a shell, … (also the **＋** on row 2) |
+| `"terminal-new-adjacent"` | Start a **shell** in this cell's directory at once |
+| `"terminal-restart"` | Restart the agent in this cell (below) |
+| `"terminal-close"` | Close this cell |
+| `"zoom-toggle"` | Enlarge / collapse this cell |
+| `"terminal-move-prev"` / `"terminal-move-next"` | Move this cell one place (manual order only) |
+| `"mark-unread"` | Mark this cell unread / read |
+| `"terminal-park"` | Set this cell aside / wake it |
+| `"terminal-timeline"` | The **activity timeline** (Claude sessions only) |
+| `"terminal-talk"` | **Talk to another terminal** |
+| `"terminal-copy-code"` | **Copy the last code block** of the latest reply (the row-2 copy button) |
+| `"terminal-insert-path"` / `"terminal-reveal"` | **Insert a file path** at the prompt / **open the directory** in the file manager (the path menu's items) |
+| `"terminal-voice"` | **Voice input** on / off (the mic) |
+| `"terminal-diff"` / `"terminal-note"` | Open the **changes panel** (worktree with changes) / write or edit the **note** |
+| `"pane-files"` | The **files pane** beside this cell |
+| `"pane-prompts"` / `"pane-transcript"` | The **prompts you sent** / the **conversation** pane |
+| `"pane-tools"` / `"pane-canvas"` / `"pane-collections"` | The **tools used** / **Canvas** / **Collections** pane |
+| `"screen-wiki"`, `"screen-collections"`, … (every `screen-*`) | **Go to that screen** — the toolbar's doors |
+| `"settings-open"` / `"sound-toggle"` / `"view-toggle"` | Open Settings / notification sound on-off / enlarged view roster-strip |
+| `"order-auto"` / `"order-manual"` / `"order-priority"` | Set the cell order |
+| `"page-next"` / `"page-prev"` | Next / previous page of the grid |
 
 A pane button toggles its pane on the enlarged cell. On a tiled cell it enlarges the cell and opens
-the pane, as *Browse files in the app* does. When the cell cannot do it — `timeline` on a
-non-Claude session, `talk` with no other terminal — the cell says so instead of doing nothing.
+the pane, as *Browse files in the app* does. When the cell cannot do it — `terminal-timeline` on a
+non-Claude session, `terminal-talk` with no other terminal, a move outside manual order — the cell
+says so instead of doing nothing. `"restart"`, the name before the shortcut names were shared, still
+works.
 
 ```json
-{ "id": "new-here", "icon": "add", "label": "Start a terminal here", "run": "action", "action": "new-here" }
+{ "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "terminal-restart" }
 ```
 
-```json
-{ "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "restart" }
-```
-
-`"restart"` ends the agent process and starts it again **in the same cell, in the same directory, on
+`"terminal-restart"` ends the agent process and starts it again **in the same cell, in the same directory, on
 the same conversation** — no going back to the launcher to pick the directory and hunt for the
 session in *or resume here*. This is what makes a changed MCP registration, an edited
 `~/.mulmoterminal/config.json` or an updated plugin take effect: those are read once, when the
@@ -238,7 +253,7 @@ with its icon and label.
 ```json
 { "id": "ops", "icon": "construction", "label": "Operations",
   "items": [
-    { "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "restart" },
+    { "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "terminal-restart" },
     { "id": "test", "icon": "science", "label": "Run the tests", "run": "shell", "cmd": "yarn test" }
   ] }
 ```

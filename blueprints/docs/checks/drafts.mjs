@@ -11,13 +11,16 @@ const DIR = ".blueprint/chaff-feedback";
 const INDEX = join(DIR, "index.json");
 const DRAFTS_SECTION = [["chaff への報告の下書き", "Drafts for chaff"]];
 
-const argsFor = (entry) =>
+const argsFor = (entry, extra) =>
   entry.kind === "wrong"
-    ? ["feedback", entry.file, "--rule", entry.rule, "--line", String(entry.line), "--experimental"]
-    : ["feedback", entry.file, "--missed", "--line", String(entry.line), "--experimental"];
+    ? ["feedback", entry.file, "--rule", entry.rule, "--line", String(entry.line), "--experimental", ...extra]
+    : ["feedback", entry.file, "--missed", "--line", String(entry.line), "--experimental", ...extra];
 
-/** Drafts one report per case and writes the index. Stops, leaving nothing behind, when a draft fails. */
-export const draftReports = (cases) => {
+/**
+ * Drafts one report per case and writes the index. Stops, leaving nothing behind, when a draft fails. `extra` adds
+ * arguments (such as `--genre`), so a draft reproduces the finding under the same measure the check used.
+ */
+export const draftReports = (cases, extra = []) => {
   if (existsSync(DRAFT)) fail(`${DRAFT} already exists in this folder: it may be the person's own draft, so move it away first`);
   const supported = runChaff(["--help"]).stdout.includes("chaff feedback");
   mkdirSync(DIR, { recursive: true });
@@ -30,7 +33,7 @@ export const draftReports = (cases) => {
   };
   const drafted = supported
     ? cases.map((entry) => {
-        const run = runChaff(argsFor(entry));
+        const run = runChaff(argsFor(entry, extra));
         if (run.code !== 0 || !existsSync(DRAFT)) undo(`chaff feedback did not draft ${entry.id}:\n${run.stderr || run.stdout}`);
         const draft = join(DIR, `${entry.id}.md`);
         renameSync(DRAFT, draft);

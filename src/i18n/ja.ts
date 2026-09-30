@@ -4,7 +4,10 @@ import { tipsJa } from "./tips/ja";
 import { commandPaletteJa } from "./commandPalette/ja";
 import { focusModeJa } from "./focusMode/ja";
 import { fileHistoryJa } from "./fileHistory/ja";
+import { dirConfigSaveJa } from "./dirConfigSave/ja";
 import { settingsControlsJa } from "./settingsControls/ja";
+import { shortcutsJa } from "./shortcuts/ja";
+import { filesTreeJa } from "./filesTree/ja";
 
 // 日本語。`Messages` は en.ts の形そのものなので、キーを一つ落とすと型エラーになる — 実行時に
 // 英語へフォールバックして気づかない、という状態にはならない。
@@ -81,49 +84,7 @@ export const ja: Messages = {
       },
     },
 
-    shortcuts: {
-      intro:
-        "読み取り専用で、割り当ての有無にかかわらず全部 {keymapKey} の下に並びます。割り当てられるのは 2 種類 —— MulmoTerminal の操作（拡大、待っているエージェントへ移動、コピー / ペースト）と、ターミナルへのキー列送信（macOS で Cmd+← を行頭へ、など）。割り当てたキーはターミナル内のプログラムに届かなくなるので、下のボタンから設定してください —— エージェントが、既にある割り当てや、ブラウザ / Mac 固有の落とし穴と突き合わせてから書き込みます。{guide}にリファレンスがあります。",
-      guide: "ガイド",
-      actions: {
-        zoomToggle: "ターミナルを拡大 / 元に戻す",
-        zoomNext: "次のターミナルを拡大",
-        zoomPrev: "前のターミナルを拡大",
-        focusNext: "次のターミナルへカーソルを移す（グリッド表示のみ）",
-        focusPrev: "前のターミナルへカーソルを移す（グリッド表示のみ）",
-        nextAttention: "あなたを待っているターミナルへ移動",
-        markUnread: "このターミナルを未読 / 既読にする",
-        terminalNew: "起動パネルを開く",
-        terminalNewHere: "このターミナルのディレクトリで起動パネルを開く",
-        terminalNewAdjacent: "このターミナルのディレクトリで、そのままシェルを開く",
-        terminalClose: "このターミナルを閉じる",
-        terminalRestart: "このターミナルのエージェントを再起動する",
-        terminalMovePrev: "このターミナルを前へ移動",
-        terminalMoveNext: "このターミナルを後ろへ移動",
-        filesFind: "このターミナルの横で、ファイル名から探して開く",
-        filesSearch: "このターミナルの横で、ファイルの中身を全文検索する",
-        filesInsertSelection: "Files ペインの選択範囲を {'@'}ファイル#L… として入力に差し込む",
-        filesTabClose: "Files ペインの前面のタブを閉じる",
-        filesTabNext: "Files ペインの次のタブへ",
-        filesTabPrev: "Files ペインの前のタブへ",
-        focusMode: "集中モード（全画面にして、タブ操作のキー Cmd/Ctrl+W・T・N も MulmoTerminal で受ける）",
-        commandPalette: "コマンドパレットを開く",
-        copy: "ターミナルの選択範囲をコピー",
-        paste: "ターミナルにペースト",
-      },
-      list: "キーボードショートカット",
-      notSet: "未設定",
-      reservedChip: "効かない",
-      reservedTip:
-        "このキーはブラウザがタブやウィンドウの操作に使うため、ページに届きません。{example} のような 2 打の割り当てなど、ブラウザが通すキーを使ってください。",
-      reservedTipSingle:
-        "このキーはブラウザがタブやウィンドウの操作に使うため、ページに届きません。この動作は 1 打のキーしか取れないので、ブラウザが通す別の 1 打のキーを選んでください。",
-      reservedNote:
-        "このブラウザは次のキーをタブやウィンドウの操作に使うため、MulmoTerminal には届きません: {keys}。たいていの動作は、{example} のような 2 打の割り当てなら届きます。集中モード（Chrome・Edge・Arc）の間は MulmoTerminal に届きます。",
-      sendRow: "{key} をターミナルに送る",
-      sendNone: "ターミナルにキー列を送る",
-      setUp: "ショートカットを設定する…",
-    },
+    shortcuts: shortcutsJa,
 
     surviving: {
       intro:
@@ -156,8 +117,8 @@ export const ja: Messages = {
       sweepDisabledHint: "上でスイープ自体が無効なので、繰り返すものがありません。",
       sweepRunning: "このサーバーは {hours} 時間ごとにスイープを繰り返しています。",
       sweepRunningOff: "このサーバーは起動時に一度スイープするだけで、繰り返しません。",
-      sweepPending: "上で保存した間隔は次回の起動から適用されます。",
-      sweepNote: "この間隔はサーバ起動時に読まれるため、変更は次回起動から反映されます。",
+      sweepPending: "上で保存した間隔はまだこのサーバーに届いていません。設定ファイルを読み直すか、再起動してください。",
+      sweepNote: "ここで変えるとすぐに反映され、前回の片付けから数えます。",
       neverTitle: "自動では終了しません。",
       neverHint: "ここで止めるか、掴んでいるターミナルから終わらせるまで残ります。",
       reapHint: "誰も使っておらず、この日数だけ出力の無いセッションは{ended}。会話は残ります。0 にすると自動終了しません。",
@@ -232,7 +193,7 @@ export const ja: Messages = {
       prFooterHint: "本文の最後に {line} の 1 行を足します。横に並んだ複数のクローンのどれで作業したかが PR から分かります。",
       gitlabTitle: "セルフホストの GitLab",
       gitlabHint:
-        "URL を見てもそのホストがどの forge かは分からないので、ここで宣言すると {glab} でリポジトリを読みます。{authCommand} が必要です。次のサーバ起動から有効になります。",
+        "URL を見てもそのホストがどの forge かは分からないので、ここで宣言すると {glab} でリポジトリを読みます。{authCommand} が必要です。すぐに有効になります。",
       gitlabField: "セルフホストの GitLab ホストを追加",
     },
 
@@ -249,7 +210,7 @@ export const ja: Messages = {
       worklogInterval: "実行間隔:",
       worklogStepper: "開発作業ログの間隔",
       systemTasks: "組み込みの定期タスク",
-      systemTasksHint: "どちらも 1 時間ごとに実行され、切らない限り有効です。切り替えはサーバの次回起動から反映されます。",
+      systemTasksHint: "どちらも 1 時間ごとに実行され、切らない限り有効です。切り替えはすぐに反映されます。",
       feedRefresh: "コレクションとフィードを更新する",
       feedRefreshHint:
         "RSS/JSON フィードを取得し、スキル連動のコレクション更新を発行します。対象はワークスペースと保存済みの各プロジェクトディレクトリです。フィードを 1 つも登録していなければ何もしません。",
@@ -646,8 +607,10 @@ export const ja: Messages = {
     empty: "このファイルには見出しがありません。",
   },
   fileHistory: fileHistoryJa,
+  dirConfigSave: dirConfigSaveJa,
   focusMode: focusModeJa,
   settingsControls: settingsControlsJa,
+  ...filesTreeJa,
   tips: tipsJa,
   blueprints: blueprintsJa,
 };

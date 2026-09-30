@@ -5,6 +5,7 @@ import { mount, flushPromises } from "@vue/test-utils";
 import CommandPalette from "../../../src/components/CommandPalette.vue";
 import { closeCommandPalette, openCommandPalette, paletteOpen, providePaletteHost } from "../../../src/composables/commandPalette";
 import { takeFilesPanelSeed } from "../../../src/composables/filesPanelSeed";
+import { provideFilesScreenHost } from "../../../src/composables/filesScreenHost";
 
 vi.mock("../../../src/composables/voiceModelStatus", () => ({ fetchVoiceInputStatus: async () => ({ capable: false }) }));
 vi.mock("../../../src/composables/usePaletteWikiPages", async () => {
@@ -65,5 +66,45 @@ describe("CommandPalette — / and #", () => {
     expect(run).toHaveBeenCalledWith("files-search");
     expect(takeFilesPanelSeed("files-search")).toBe("");
     w.unmount();
+  });
+});
+
+// #2655. With the full-screen Files view up the grid is not in front, and the Files rows and `/` run
+// on that view instead of being refused.
+describe("CommandPalette — Files actions on the full-screen Files view", () => {
+  const hiddenGrid = () => {
+    const run = vi.fn();
+    withdraw = providePaletteHost({ run, zoomed: () => false, available: () => false, manualOrder: () => true, filesOpen: () => false });
+    return run;
+  };
+
+  it("runs a Files action row on the view, not the grid", async () => {
+    const gridRun = hiddenGrid();
+    const filesRun = vi.fn();
+    const withdrawFiles = provideFilesScreenHost({ open: () => true, run: filesRun });
+    const w = await mountPalette();
+    document.querySelector<HTMLElement>('[data-action="files-tab-next"]')?.click();
+    await flushPromises();
+    expect(filesRun).toHaveBeenCalledWith("files-tab-next");
+    expect(gridRun).not.toHaveBeenCalled();
+    w.unmount();
+    withdrawFiles();
+  });
+
+  it("hands what follows / to the view's finder", async () => {
+    const gridRun = hiddenGrid();
+    const taken: string[] = [];
+    const withdrawFiles = provideFilesScreenHost({
+      open: () => true,
+      run: (action) => {
+        if (action === "files-find") taken.push(takeFilesPanelSeed(action));
+      },
+    });
+    const w = await mountPalette();
+    await typeAndEnter("/ app.ts");
+    expect(taken).toEqual(["app.ts"]);
+    expect(gridRun).not.toHaveBeenCalled();
+    w.unmount();
+    withdrawFiles();
   });
 });

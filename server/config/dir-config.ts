@@ -133,9 +133,13 @@ export interface PublicDirConfig extends DirChrome {
  *  rules, so the config's live reload and the editor's change feed can't drift apart. */
 export function dirConfigWriteTarget(toolName: unknown, toolInput: unknown, sessionCwd: string | null = null): string | null {
   const file = writtenFilePath(toolName, toolInput, sessionCwd);
-  if (!file) return null;
-  // Either file — a clone's local override is the one a user edits most, and reloading only on the
-  // shared file would leave the very setting they just changed not applying (#1430).
+  return file ? dirConfigDirOf(file) : null;
+}
+
+/** The directory whose config `file` is, when it is one of the two config files; else null.
+ *  Either file — a clone's local override is the one a user edits most, and reloading only on the
+ *  shared file would leave the very setting they just changed not applying (#1430). */
+export function dirConfigDirOf(file: string): string | null {
   const name = path.basename(file);
   return name === DIR_CONFIG_FILE || name === DIR_LOCAL_CONFIG_FILE ? path.dirname(file) : null;
 }

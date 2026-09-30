@@ -4,7 +4,10 @@ import { tipsZhCN } from "./tips/zh-CN";
 import { commandPaletteZhCN } from "./commandPalette/zh-CN";
 import { focusModeZhCN } from "./focusMode/zh-CN";
 import { fileHistoryZhCN } from "./fileHistory/zh-CN";
+import { dirConfigSaveZhCN } from "./dirConfigSave/zh-CN";
 import { settingsControlsZhCN } from "./settingsControls/zh-CN";
+import { shortcutsZhCN } from "./shortcuts/zh-CN";
+import { filesTreeZhCN } from "./filesTree/zh-CN";
 
 // 简体中文。`Messages` 就是 en.ts 的形状，少一个键就会编译失败 —— 不会出现运行时悄悄回退到
 // 英文、而谁都没发现的状态。
@@ -79,47 +82,7 @@ export const zhCN: Messages = {
       },
     },
 
-    shortcuts: {
-      intro:
-        "只读；不管有没有绑定，全都列在 {keymapKey} 下面。可以绑定两类：MulmoTerminal 的操作（放大、跳到在等你的智能体、复制 / 粘贴），以及发送给终端的按键序列（在 Mac 上用 Cmd+← 跳到行首）。你绑定的每个键都不再传给终端里的程序，所以请用下面的按钮来设置 —— 智能体会先对照你已有的绑定，以及浏览器和 Mac 各自带来的陷阱，然后才写入。参考资料见{guide}。",
-      guide: "指南",
-      actions: {
-        zoomToggle: "放大 / 收起一个终端",
-        zoomNext: "放大下一个终端",
-        zoomPrev: "放大上一个终端",
-        focusNext: "把光标移到下一个终端（仅网格视图）",
-        focusPrev: "把光标移到上一个终端（仅网格视图）",
-        nextAttention: "跳到在等你的终端",
-        markUnread: "将这个终端标为未读 / 已读",
-        terminalNew: "打开启动面板",
-        terminalNewHere: "在这个终端的目录下打开启动面板",
-        terminalNewAdjacent: "直接在这个终端的目录下开一个 shell",
-        terminalClose: "关闭这个终端",
-        terminalRestart: "重启这个终端里的智能体",
-        terminalMovePrev: "将此终端前移",
-        terminalMoveNext: "将此终端后移",
-        filesFind: "在这个终端旁边，按文件名打开文件",
-        filesSearch: "在这个终端旁边，搜索文件内容",
-        filesInsertSelection: "把 Files 面板的选区以 {'@'}文件#L… 的形式放到输入处",
-        filesTabClose: "关闭 Files 面板的当前标签页",
-        filesTabNext: "转到 Files 面板的下一个标签页",
-        filesTabPrev: "转到 Files 面板的上一个标签页",
-        focusMode: "专注模式（全屏，并让标签页按键 Cmd/Ctrl+W、T、N 也交给 MulmoTerminal）",
-        commandPalette: "打开命令面板",
-        copy: "复制终端里选中的内容",
-        paste: "粘贴到终端",
-      },
-      list: "键盘快捷键",
-      notSet: "未设置",
-      reservedChip: "不会生效",
-      reservedTip: "浏览器把这个键留给标签页和窗口操作，页面收不到它。请使用浏览器会放行的键，例如 {example} 这样的两键绑定。",
-      reservedTipSingle: "浏览器把这个键留给标签页和窗口操作，页面收不到它。此动作只接受单个键，请选择浏览器会放行的另一个单键。",
-      reservedNote:
-        "此浏览器把这些键留给标签页和窗口操作，它们不会传到 MulmoTerminal：{keys}。大多数动作可以改用像 {example} 这样的两键绑定来触发。专注模式（Chrome、Edge、Arc）期间，它们会传到 MulmoTerminal。",
-      sendRow: "把 {key} 发送到终端",
-      sendNone: "把按键发送到终端",
-      setUp: "设置快捷键…",
-    },
+    shortcuts: shortcutsZhCN,
 
     surviving: {
       intro:
@@ -152,8 +115,8 @@ export const zhCN: Messages = {
       sweepDisabledHint: "上面的清扫本身是关掉的，所以这里没有可重复的东西。",
       sweepRunning: "本服务器每 {hours} 小时重复一次清理。",
       sweepRunningOff: "本服务器仅在启动时清理一次，不会重复。",
-      sweepPending: "上面保存的间隔将从下次启动开始生效。",
-      sweepNote: "这个间隔在服务器启动时读取，所以在这里改动要下次启动才生效。",
+      sweepPending: "上面保存的间隔还没有到达这台服务器：请重新读取配置文件，或重启它。",
+      sweepNote: "在这里改动会立即生效，从上一次清理开始计算。",
       neverTitle: "永不自动结束。",
       neverHint: "它们会一直留着，直到你在这里停掉，或者从占着它的终端里结束它。",
       reapHint: "没有任何东西在用 —— 没人连接、这么久没有输出 —— 的会话{ended}。它的对话会保留。设为 0 就永不自动结束。",
@@ -223,7 +186,7 @@ export const zhCN: Messages = {
       prFooter: "在创建的 PR 末尾写上克隆名",
       prFooterHint: "在正文底部加一行 {line}，这样并排放着好几个克隆时，PR 能说明自己出自哪一个。",
       gitlabTitle: "自建 GitLab",
-      gitlabHint: "光看 URL 看不出这台主机跑的是哪种 forge，所以在这里声明，它的仓库就会用 {glab} 来读。需要 {authCommand}。下次服务器启动时生效。",
+      gitlabHint: "光看 URL 看不出这台主机跑的是哪种 forge，所以在这里声明，它的仓库就会用 {glab} 来读。需要 {authCommand}。立即生效。",
       gitlabField: "添加一台自建 GitLab 主机",
     },
 
@@ -239,7 +202,7 @@ export const zhCN: Messages = {
       worklogInterval: "多久运行一次：",
       worklogStepper: "开发工作日志的间隔",
       systemTasks: "内置的定时任务",
-      systemTasksHint: "两个都每小时运行一次，不关就一直开着。关掉某一个要等服务器下次启动才生效。",
+      systemTasksHint: "两个都每小时运行一次，不关就一直开着。开关立即生效。",
       feedRefresh: "刷新集合与订阅源",
       feedRefreshHint: "拉取你的 RSS/JSON 订阅源，并派发由 skill 支撑的集合更新，覆盖工作区和每个保存过的项目目录。一个订阅源都没注册时它什么也不做。",
       calendarSync: "同步 Google 日历",
@@ -627,8 +590,10 @@ export const zhCN: Messages = {
     empty: "此文件没有标题。",
   },
   fileHistory: fileHistoryZhCN,
+  dirConfigSave: dirConfigSaveZhCN,
   focusMode: focusModeZhCN,
   settingsControls: settingsControlsZhCN,
+  ...filesTreeZhCN,
   tips: tipsZhCN,
   blueprints: blueprintsZhCN,
 };

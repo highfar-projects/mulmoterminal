@@ -15,7 +15,7 @@ import os from "node:os";
 import { hasErrnoCode } from "../errors.js";
 import { backupCurrentFile, backupHolds, listBackups, readBackup, storeBackup } from "./backup-store.js";
 import { losslessText } from "./editableText.js";
-import { containedPath, expandTilde, resolveBase, resolveContained } from "./pathContainment.js";
+import { containedPath, expandTilde, namedBase, resolveBase, resolveContained } from "./pathContainment.js";
 import { servedImageSrc, type ServedDoc } from "./mdImageSrc.js";
 import { listProjectFiles } from "./project-files.js";
 import { answered, modeFromProbe, parseSearchOutput, searchArgv, SEARCH_TIMEOUT_MS } from "./file-search.js";
@@ -28,8 +28,11 @@ import { mdPreviewEmbedCsp, newPreviewNonce, wantsMdPreviewEmbed } from "./mdPre
 import { mdPreviewReporterTag } from "./mdPreviewReporter.js";
 import { isPreviewToken, MD_PREVIEW_EMBED_PARAM, MD_PREVIEW_TOKEN_PARAM } from "../../common/mdPreviewMessage.js";
 import { requestBody } from "../routes/requestBody.js";
+import { mountFilesTreeRoutes } from "./files-tree-routes.js";
 import { splitFrontmatter } from "@mulmoclaude/markdown-utils/markdown/frontmatter";
 import { mountFilesGitStatusRoute } from "./files-git-status.js";
+import { dirConfigDetail, dirConfigDirOf } from "../config/dir-config.js";
+import { dirConfigSaveReport, type DirConfigSaveReport } from "../../common/dirConfigSaveReport.js";
 
 // Cap on the bytes served to the editor / accepted on write — a text editor, not a
 // blob store. Large/binary files are refused rather than streamed into a textarea.
@@ -451,12 +454,36 @@ export function mountFilesBrowseRoutes(app: Express, deps: BrowseDeps): void {
   serveRendered("/api/files/browse/table", (text, title, _doc, theme) => tableHtmlDoc(text, title, delimiterForExtension(path.extname(title)), theme));
 
   mountWriteRoute(app, deps);
+  mountFilesTreeRoutes(app, { base: (cwd) => namedBase(typeof cwd === "string" ? cwd : null, defaultCwd, os.homedir()) });
   mountBackupRoute(app, deps);
 }
 
-type BrowseDeps = { defaultCwd: string; backupRoot: string };
+type BrowseDeps = {
+  defaultCwd: string;
+  backupRoot: string;
+  /** Told when a save wrote a directory's `.mulmoterminal.json` / `.local.json`, so every open
+   *  view re-reads that directory's config — the same signal an agent's write already sends. */
+  onDirConfigWritten?: (dir: string) => void;
+};
 
-function mountWriteRoute(app: Express, { defaultCwd, backupRoot }: BrowseDeps): void {
+// Only for a directory's config file: what the pane should say about the save (#2624). Best-effort —
+// the write has already landed, so a report that cannot be built is left out, never a failed save.
+function dirConfigReportFor(file: string, text: string, onDirConfigWritten: BrowseDeps["onDirConfigWritten"]): { dirConfig?: DirConfigSaveReport } {
+  const dir = dirConfigDirOf(file);
+  if (dir === null) return {};
+  try {
+    onDirConfigWritten?.(dir);
+  } catch (err) {
+    console.warn("[files] telling the views about a saved directory config failed", err);
+  }
+  try {
+    return { dirConfig: dirConfigSaveReport(text, dirConfigDetail(dir).source) };
+  } catch {
+    return {};
+  }
+}
+
+function mountWriteRoute(app: Express, { defaultCwd, backupRoot, onDirConfigWritten }: BrowseDeps): void {
   // Conditional write. `baseVersion` is the version the editor loaded (null = "I expect no
   // file here"); it is REQUIRED, because an optional one is a blind-write escape hatch and
   // blind writes are what this endpoint stopped doing. A mismatch answers 409 with the
@@ -488,7 +515,11 @@ function mountWriteRoute(app: Express, { defaultCwd, backupRoot }: BrowseDeps): 
       backupCurrentFile(abs, backupRoot);
       const bytes = Buffer.from(text, "utf8");
       fs.writeFileSync(abs, bytes);
-      res.json({ ok: true, version: versionOfBytes(bytes) });
+      // The LEXICAL path, not `abs`: containment resolved symlinks to decide the write was allowed,
+      // but a view is keyed by the cwd string it launched with, and the signal is matched exactly —
+      // a project opened through a symlink would never hear about its own config (#1002).
+      const asRequested = path.resolve(browseBase(req, defaultCwd), browseRel(req));
+      res.json({ ok: true, version: versionOfBytes(bytes), ...dirConfigReportFor(asRequested, text, onDirConfigWritten) });
     } catch {
       res.status(500).json({ error: "failed to write file" });
     }

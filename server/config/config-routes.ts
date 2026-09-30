@@ -9,6 +9,7 @@ import path from "node:path";
 import { existsSync, statSync } from "node:fs";
 import type { Express, Request, Response } from "express";
 import { MAX_PALETTE_FAVORITES, MAX_PALETTE_KEY_CHARS } from "../../common/paletteConfig.js";
+import { KEYMAP_PRESETS, presetChanges, withPreset } from "../../common/keymapPresets.js";
 import {
   loadAppConfig,
   loadAppConfigResult,
@@ -28,6 +29,7 @@ import type { QuickCommand } from "../../common/quickCommands.js";
 import type { CustomAgent } from "../../common/customAgents.js";
 import type { AgentAccount } from "../../common/agentAccounts.js";
 import type { PlayfulEffects } from "../../common/playfulEffects.js";
+import { systemTaskSettingsChanged } from "./system-task-settings.js";
 import { setAccountsProvider } from "../session/session-home.js";
 import { installBundledSkills } from "../infra/install-bundled-skills.js";
 import type { SystemTaskSwitches } from "../backends/system-tasks.js";
@@ -44,7 +46,9 @@ import { readSoundPreset } from "./sound-presets.js";
 import { isNotifyKind } from "../../common/notifyKinds.js";
 import { parsePresetRef, soundPresetById } from "../../common/notifySounds.js";
 import { requestBody } from "../routes/requestBody.js";
+import { mountAgentEntryRoutes, type OnDiskChange } from "./agent-entry-routes.js";
 import { withConfigLock, ConfigLockTimeout } from "./config-lock.js";
+import { mountConfigReloadRoute } from "./config-reload.js";
 import { lastSegment } from "../../common/pathSegments.js";
 
 export const APP_CONFIG_FILE = path.join(os.homedir(), ".mulmoterminal", "config.json");
@@ -175,17 +179,66 @@ export function getPushKinds(): PushKind[] {
   return config.pushKinds;
 }
 
-// The periodic dev-work-log settings — read live so a toggle takes effect on the next
-// scheduler wiring (a restart, currently). Off by default.
+// The periodic dev-work-log settings. Off by default. Read whenever the system tasks are built:
+// at boot, and again when a save moves one of them (onSystemTaskSettingsChanged below).
 export function getWorklogConfig(): { enabled: boolean; intervalHours: number } {
   return { enabled: config.worklogEnabled, intervalHours: config.worklogIntervalHours };
 }
 
-// Which built-in system tasks to register (#2015). Read at boot only: the scheduler registers
-// once, so switching one off takes effect at the next start — the same "currently, a restart"
-// the worklog getter above already has.
+// Which built-in system tasks to register (#2015). Read at the same moments as the worklog above.
 export function getSystemTaskSwitches(): SystemTaskSwitches {
   return { feedRefresh: config.feedRefreshEnabled, calendarSync: config.calendarSyncEnabled };
+}
+
+// Told when a save moves a setting the system tasks are built from, so the scheduler rebuilds them
+// without a restart (#2626). One listener: the scheduler is the only thing that registers them.
+let systemTaskSettingsListener: (() => void) | null = null;
+export function onSystemTaskSettingsChanged(listener: () => void): void {
+  systemTaskSettingsListener = listener;
+}
+
+// The subscribers a save may concern, told only when what they depend on moved. Both compare against
+// the in-memory config, which is what the directories served and the scheduler running were built from.
+function notifySavedChanges(previous: AppConfig, next: AppConfig, onCwdPresetsChanged?: CwdPresetsChanged): void {
+  if (!samePresets(previous.cwdPresets, next.cwdPresets)) notifyPresetsChanged(onCwdPresetsChanged);
+  if (systemTaskSettingsChanged(previous, next)) notifySystemTaskSettingsChanged();
+  if (previous.sessionReapIntervalHours !== next.sessionReapIntervalHours) notifyReapIntervalChanged(next.sessionReapIntervalHours);
+}
+
+function notifyReapIntervalChanged(hours: number): void {
+  try {
+    reapIntervalListener?.(hours);
+  } catch (err) {
+    console.error("[tmux] re-arming the idle-session sweep failed", err);
+  }
+}
+
+function mountReload(app: Express, configResponse: () => unknown, onCwdPresetsChanged?: CwdPresetsChanged): void {
+  mountConfigReloadRoute(app, {
+    file: CONFIG_FILE,
+    adopt: (next) => adoptReloaded(next, onCwdPresetsChanged),
+    respond: (res) => res.json(configResponse()),
+    lockFailure: answerLockFailure,
+  });
+}
+
+// A config read back from disk (#2627) is adopted the way a save is: the same subscribers are told
+// about what moved, and a new account gets the bundled skills in its home.
+function adoptReloaded(next: AppConfig, onCwdPresetsChanged?: CwdPresetsChanged): void {
+  const previous = config;
+  config = next;
+  if (JSON.stringify(previous.accounts) !== JSON.stringify(next.accounts)) installBundledSkills();
+  notifySavedChanges(previous, next, onCwdPresetsChanged);
+}
+
+// Fire-and-forget by contract, like notifyPresetsChanged: the save already succeeded, and a
+// scheduler that fails to rebuild must not turn it into a 500.
+function notifySystemTaskSettingsChanged(): void {
+  try {
+    systemTaskSettingsListener?.();
+  } catch (err) {
+    console.error("[scheduler] rebuilding the system tasks failed", err);
+  }
 }
 
 // How long a session may sit unused before a sweep ends it (#1467). Read live, and LIVE IS THE
@@ -197,13 +250,17 @@ export function getSessionIdleReapDays(): number {
   return config.sessionIdleReapDays;
 }
 
-// How often the sweep runs again while we are up (#2165). Read once, at the start that arms the
-// timer: re-arming on every config POST would let a stream of edits reset the countdown forever.
-// So unlike the threshold above, the saved value and the running one differ until a restart. What
-// this process actually armed is reported by session/reap-schedule.ts rather than inferred from
-// this number, because only that side knows it.
+// How often the sweep runs again while we are up (#2165). Read at the start that arms the timer, and
+// passed on when a save moves it (#2626), which re-arms counted from the last sweep. What this process
+// actually armed is reported by session/reap-schedule.ts rather than inferred from this number.
 export function getSessionReapIntervalHours(): number {
   return config.sessionReapIntervalHours;
+}
+
+// Told the new cadence when a save or a reload moves it. One listener: the sweep is armed in one place.
+let reapIntervalListener: ((hours: number) => void) | null = null;
+export function onSessionReapIntervalChanged(listener: (hours: number) => void): void {
+  reapIntervalListener = listener;
 }
 
 // The Enter-key submit/newline byte mapping — read live so the phone remote-view submit
@@ -340,13 +397,6 @@ function mountCwdPresetRoutes(app: Express, onCwdPresetsChanged?: CwdPresetsChan
   }
 }
 
-interface OnDiskChange {
-  /** Why the change cannot be made to this config, or null to make it. Asked under the lock. */
-  refuse?: (base: AppConfig) => string | null;
-  update: (base: AppConfig) => Record<string, unknown>;
-  answer: (next: AppConfig) => void;
-}
-
 /** Apply a change to the config ON DISK, reading and writing the file the same way `POST /api/config`
  *  does — including refusing a config we could not parse, so a stray comma never costs the user the
  *  rest of their settings. */
@@ -364,7 +414,7 @@ async function mutateConfigOnDisk(res: Response, onCwdPresetsChanged: CwdPresets
       }
       const base = loaded.status === "ok" ? loaded.config : emptyConfig();
       const refusal = refuse?.(base) ?? null;
-      if (refusal !== null) return res.status(409).json({ error: refusal });
+      if (refusal !== null) return res.status(409).json(typeof refusal === "string" ? { error: refusal } : refusal);
       const next = mergeConfigUpdate(base, update(base));
       if (!saveAppConfig(CONFIG_FILE, next, unknownKeysOf(loaded))) return res.status(500).json({ error: "failed to persist config" });
       // Compared against what THIS PROCESS was serving, not against what was on disk. The two differ
@@ -382,10 +432,33 @@ async function mutateConfigOnDisk(res: Response, onCwdPresetsChanged: CwdPresets
   }
 }
 
-/** The routes that change one entry of a global list against the file, never a client's copy of it. */
-function mountOneEntryRoutes(app: Express, onCwdPresetsChanged?: CwdPresetsChanged): void {
+/** The routes that change one entry of a global list against the file, never a client's copy of it —
+ *  and the one that reads the whole file back (#2627), which is against the file too. */
+function mountOneEntryRoutes(app: Express, onCwdPresetsChanged: CwdPresetsChanged | undefined, configResponse: () => unknown): void {
+  mountReload(app, configResponse, onCwdPresetsChanged);
   mountCwdPresetRoutes(app, onCwdPresetsChanged);
   mountPaletteFavoriteRoutes(app, onCwdPresetsChanged);
+  mountAgentEntryRoutes(app, (res, change) => mutateConfigOnDisk(res, onCwdPresetsChanged, change), installBundledSkills);
+  mountKeymapPresetRoute(app, onCwdPresetsChanged);
+}
+
+// Settings' Recommended keys (#2581). `keymap` is replaced whole on a write, so the additions are
+// worked out HERE, on the keymap in the file under the lock — a tab's copy (or this process's) can be
+// missing a binding another mulmoterminal, the keys skill or a hand edit wrote since, and writing it
+// back would erase that. `expected` is the list the reader was shown: if the file makes it different,
+// nothing is written and the 409 carries the file's keymap for the list to be drawn again.
+function mountKeymapPresetRoute(app: Express, onCwdPresetsChanged?: CwdPresetsChanged): void {
+  app.post("/api/config/keymap-preset", (req, res) => {
+    const { platform, expected } = requestBody(req.body);
+    if (platform !== "mac" && platform !== "other") return res.status(400).json({ error: "platform (mac|other) required" });
+    const changesOn = (base: AppConfig) => presetChanges(base.keymap, KEYMAP_PRESETS[platform]);
+    return void mutateConfigOnDisk(res, onCwdPresetsChanged, {
+      refuse: (base) =>
+        JSON.stringify(changesOn(base)) === JSON.stringify(expected) ? null : { error: "the keymap changed since the list was shown", keymap: base.keymap },
+      update: (base) => ({ keymap: withPreset(base.keymap, changesOn(base)) }),
+      answer: (next) => res.json({ keymap: next.keymap }),
+    });
+  });
 }
 
 /** One palette favorite added or removed (#2546), against the list on disk — the same reason the
@@ -502,7 +575,7 @@ export function mountConfigRoutes(app: Express, claudeCwd: string, onCwdPresetsC
     // See mutatePresets: the question is whether the list THIS process serves has moved, not
     // whether the file did. A change another instance made and we are only now absorbing is a
     // change from here.
-    const presetsChanged = !samePresets(config.cwdPresets, next.cwdPresets);
+    const previous = config;
     config = next;
     // An account added here has a home with none of the bundled skills in it yet; boot is the only
     // other time they are installed, and a restart is not something saving a setting should need.
@@ -511,11 +584,11 @@ export function mountConfigRoutes(app: Express, claudeCwd: string, onCwdPresetsC
     // projects the collection watchers mount for, and without this a directory added mid-session
     // waits out the poll before its collections can ring. Fire-and-forget by contract — a
     // subscriber's failure is its own, and must not turn a saved config into a 500.
-    if (presetsChanged) notifyPresetsChanged(onCwdPresetsChanged);
+    notifySavedChanges(previous, next, onCwdPresetsChanged);
     res.json(configResponse());
   }
 
-  mountOneEntryRoutes(app, onCwdPresetsChanged);
+  mountOneEntryRoutes(app, onCwdPresetsChanged, configResponse);
 
   // What the launch form may offer (#584): the configured backends, whether each can be
   // reached right now, and the models it can run. Never the tokens themselves — only the

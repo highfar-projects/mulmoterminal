@@ -26,6 +26,7 @@ import { useFilesGitStatus } from "../composables/useFilesGitStatus";
 import { useFileHeadText } from "../composables/useFileHeadText";
 import { rawFileSrc } from "./filesPreviewSrc";
 import FileFinder from "./FileFinder.vue";
+import DirConfigSaveNote from "./DirConfigSaveNote.vue";
 import FileSearch from "./FileSearch.vue";
 import { useFileSearchPanel } from "../composables/useFileSearchPanel";
 import { useFileTreeWidth } from "../composables/useFileTreeWidth";
@@ -34,6 +35,8 @@ import FilesToolbarButton from "./FilesToolbarButton.vue";
 import { canOpenInCanvas, absoluteUnder, type StoriesRoots } from "../composables/canvasOpenFile";
 import { filesRowActions, type FilesRowAction } from "./filesRowActions";
 import { useFilesRowMenu } from "../composables/useFilesRowMenu";
+import { isTreeOpAction, useTreeFileOps } from "../composables/useTreeFileOps";
+import { focusTreeRow } from "./treeRowFocus";
 import { askTheMachine } from "./filesPaneApi";
 import { selectionReferenceText } from "../composables/selectionReferenceText";
 import type { FileLocation } from "../composables/filePathLocation";
@@ -72,7 +75,7 @@ const tree = useFilesTree(() => props.cwd);
 // And so is the open file: the buffer, the editor it is shown in, the reader's place in it, and
 // every way it is written back. Destructured because the template names these directly.
 const file = useOpenFile(() => props.cwd);
-const { openPath, openName, dirty, editSeq, saving, fileError, unpreviewable, conflict, showPreview, previewKind, previewSrc } = file;
+const { openPath, openName, dirty, editSeq, saving, fileError, unpreviewable, conflict, showPreview, previewKind, previewSrc, dirConfigReport } = file;
 // A PNG or JPEG: no text to edit, so the "not text" panel shows the picture itself (#2269).
 const rasterSrc = computed(() => (openPath.value && isRasterImage(openPath.value) ? rawFileSrc(props.cwd, openPath.value, file.baseVersion.value) : null));
 const { flush, save, overwrite, discardAndReload, openInOs } = file;
@@ -153,6 +156,7 @@ const rowActionsFor = (node: TreeNode): FilesRowAction[] =>
     // button would refuse — `canvasTarget` is "there is a cell to put a Canvas beside" and the
     // overlay mount has none.
     canvas: props.canvasTarget ? { roots: storiesRoots.value } : null,
+    trash: fileOps.trash.value,
   });
 
 /** The @ button and key (#2575): the reference for the selection, at the terminal's prompt, not sent. */
@@ -172,20 +176,15 @@ function runRowAction(action: FilesRowAction): void {
   // Not an emit: nothing above this pane takes part. The browser cannot open a file manager, so
   // the local server does it (#2039) — through filesPaneApi, like every other request here.
   else if (action.id === "reveal") void file.reportFailure(askTheMachine("/api/files/reveal", action.pathAbs, `could not show ${action.pathAbs}`));
-  else emit("insert-text", action.text);
+  else if (action.id === "insert-relative" || action.id === "insert-absolute") emit("insert-text", action.text);
+  else if (isTreeOpAction(action)) void fileOps.run(action);
 }
 
-const {
-  menu: rowMenu,
-  open: openRowMenu,
-  onMenuNav,
-  onRowKeydown,
-  pick: pickRowAction,
-} = useFilesRowMenu<TreeNode>({
-  menuEl: rowMenuEl,
-  actionsFor: rowActionsFor,
-  run: runRowAction,
-});
+// New, rename and Trash from the row menu (#2578); the browser's own dialogs ask for the name.
+const focusRow = (p: string) => focusTreeRow(treeEl.value, p);
+const fileOps = useTreeFileOps({ cwd: () => props.cwd, tree, tabs, file, t, focusRow, changed: () => void gitStatus.refresh() });
+
+const { menu: rowMenu, ...rowMenuApi } = useFilesRowMenu<TreeNode>({ menuEl: rowMenuEl, actionsFor: rowActionsFor, run: runRowAction });
 
 // Cmd/Ctrl+click asks for a tab of its own, as it asks a browser for one; a plain click replaces
 // the front tab, as it replaced the one open file before tabs.
@@ -637,8 +636,8 @@ defineExpose({
           @click="openFile(node, $event)"
           @pointerover="tipIfClipped(node.name, $event)"
           @focusin="tipIfClipped(node.name, $event)"
-          @contextmenu="openRowMenu(node, $event)"
-          @keydown="onRowKeydown(node, $event)"
+          @contextmenu="rowMenuApi.open(node, $event)"
+          @keydown="rowMenuApi.onRowKeydown(node, $event)"
         >
           <span class="w-3.5 flex-none text-dim">
             <span v-if="node.dir" class="material-symbols-outlined" aria-hidden="true">{{ node.expanded ? "expand_more" : "chevron_right" }}</span>
@@ -708,6 +707,7 @@ defineExpose({
              reader who is not looking at this pane learns nothing without a live region — which is
              the same dead-button silence #1941 removed for everyone else. -->
         <p v-if="fileError" role="alert" data-testid="files-error" class="p-4 text-[13px] text-err">{{ fileError }}</p>
+        <DirConfigSaveNote v-if="dirConfigReport && openPath" :report="dirConfigReport" @dismiss="dirConfigReport = null" />
         <p v-if="!openPath" class="m-auto p-4 text-[13px] text-muted">Select a file to view or edit.</p>
         <!-- Not text. The editor is hidden rather than shown empty: an empty buffer over a file
              that has content is an invitation to save, and saving is what destroyed it (#2038). -->
@@ -770,7 +770,7 @@ defineExpose({
         role="menu"
         class="fixed z-[60] min-w-[200px] rounded-lg border border-border bg-panel p-1.5 text-fg shadow-xl"
         :style="{ top: `${rowMenu.top}px`, left: `${rowMenu.left}px` }"
-        @keydown="onMenuNav"
+        @keydown="rowMenuApi.onMenuNav"
       >
         <button
           v-for="action in rowMenu.actions"
@@ -779,7 +779,7 @@ defineExpose({
           role="menuitem"
           :data-testid="`files-row-action-${action.id}`"
           class="flex w-full cursor-pointer items-center gap-2 whitespace-nowrap rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left text-[13px] text-secondary hover:bg-hover hover:text-fg"
-          @click="pickRowAction(action)"
+          @click="rowMenuApi.pick(action)"
         >
           <span class="material-symbols-outlined text-[15px]" aria-hidden="true">{{ action.icon }}</span> {{ action.label }}
         </button>

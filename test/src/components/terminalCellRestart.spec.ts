@@ -24,6 +24,25 @@ vi.mock("../../../src/components/Terminal.vue", () => ({
       showHint(message: string) {
         hints.push(message);
       },
+      toggleVoice() {
+        voiceToggles.count++;
+        return true;
+      },
+    },
+  },
+}));
+
+const voiceToggles = vi.hoisted(() => ({ count: 0 }));
+const copyCalls = vi.hoisted(() => ({ count: 0 }));
+vi.mock("../../../src/components/CopyCodeBlock.vue", () => ({
+  default: {
+    name: "CopyCodeBlock",
+    props: ["sessionId", "cwd", "agent"],
+    template: "<button />",
+    methods: {
+      async copyLastBlock() {
+        copyCalls.count++;
+      },
     },
   },
 }));
@@ -79,7 +98,7 @@ describe("restarting the agent in a cell", () => {
     await flushPromises();
     const before = Number(term(w).props("connectKey"));
 
-    expect(requestCellAction("cell-7", "restart")).toBe(true);
+    expect(requestCellAction("cell-7", "terminal-restart")).toBe(true);
     await flushPromises();
 
     // Mid-restart: the reap is in flight. Reconnecting here would hand `tmux new-session -A` a
@@ -104,7 +123,7 @@ describe("restarting the agent in a cell", () => {
     await flushPromises();
     const before = Number(term(w).props("connectKey"));
 
-    expect(requestCellAction("cell-7", "restart")).toBe(true);
+    expect(requestCellAction("cell-7", "terminal-restart")).toBe(true);
     await flushPromises();
     term(w).vm.$emit("session", "sess-2"); // the cell is now on another session
     await flushPromises();
@@ -123,7 +142,7 @@ describe("restarting the agent in a cell", () => {
     const w = mountCell("sess-1");
     await flushPromises();
 
-    expect(requestCellAction("cell-7", "restart")).toBe(true);
+    expect(requestCellAction("cell-7", "terminal-restart")).toBe(true);
     await flushPromises();
     await w.find(".cell-close").trigger("click"); // back to the launch form
     await flushPromises();
@@ -147,7 +166,7 @@ describe("restarting the agent in a cell", () => {
     await flushPromises();
     const before = Number(term(w).props("connectKey"));
 
-    expect(requestCellAction("cell-7", "restart")).toBe(true);
+    expect(requestCellAction("cell-7", "terminal-restart")).toBe(true);
     await flushPromises();
     terminate.resolve(false);
     await flushPromises();
@@ -164,7 +183,7 @@ describe("restarting the agent in a cell", () => {
     const w = mountCell("sess-1");
     await flushPromises();
 
-    expect(requestCellAction("cell-7", "restart")).toBe(true);
+    expect(requestCellAction("cell-7", "terminal-restart")).toBe(true);
     await flushPromises();
     await w.find(".cell-close").trigger("click");
     await flushPromises();
@@ -201,7 +220,7 @@ describe("restarting the agent in a cell", () => {
   it("declines for a cell that has no session, so the caller can say so", async () => {
     const w = mountCell(null);
     await flushPromises();
-    expect(requestCellAction("cell-7", "restart")).toBe(false);
+    expect(requestCellAction("cell-7", "terminal-restart")).toBe(false);
     expect(terminate.calls).toEqual([]);
     w.unmount();
   });
@@ -210,40 +229,37 @@ describe("restarting the agent in a cell", () => {
     const w = mountCell("sess-1");
     await flushPromises();
     w.unmount();
-    expect(requestCellAction("cell-7", "restart")).toBe(false);
+    expect(requestCellAction("cell-7", "terminal-restart")).toBe(false);
   });
 });
 
-// The rest of what a `run: "action"` header button can ask of a cell (#2611). Panes and the launch
-// panel belong to the grid, so the cell only passes them up; the timeline and talk are its own.
-describe("the other header actions a cell answers", () => {
-  it("passes a pane and new-here up to the grid", async () => {
+// What the cell does by itself besides restarting (#2635). Panes and the launch panel are the
+// grid's (TerminalGrid.runCellAction) and never reach the cell.
+describe("the other actions a cell answers itself", () => {
+  it("sets itself aside, or wakes", async () => {
     const w = mountCell("sess-1");
     await flushPromises();
-    expect(requestCellAction("cell-7", "files")).toBe(true);
-    expect(requestCellAction("cell-7", "canvas")).toBe(true);
-    expect(requestCellAction("cell-7", "new-here")).toBe(true);
-    expect(w.emitted("press-pane")).toEqual([["files"], ["canvas"]]);
-    expect(w.emitted("new-here")).toEqual([[]]);
+    expect(requestCellAction("cell-7", "terminal-park")).toBe(true);
+    expect(w.emitted("park")).toEqual([[true]]);
     w.unmount();
   });
 
   it("opens the timeline for a Claude session and declines without one", async () => {
     const empty = mountCell(null);
     await flushPromises();
-    expect(requestCellAction("cell-7", "timeline")).toBe(false);
+    expect(requestCellAction("cell-7", "terminal-timeline")).toBe(false);
     empty.unmount();
 
     const w = mountCell("sess-1");
     await flushPromises();
-    expect(requestCellAction("cell-7", "timeline")).toBe(true);
+    expect(requestCellAction("cell-7", "terminal-timeline")).toBe(true);
     w.unmount();
   });
 
   it("declines talk when there is no other terminal to talk to", async () => {
     const w = mountCell("sess-1");
     await flushPromises();
-    expect(requestCellAction("cell-7", "talk")).toBe(false);
+    expect(requestCellAction("cell-7", "terminal-talk")).toBe(false);
     w.unmount();
   });
 });
@@ -255,6 +271,72 @@ describe("the row-2 new-here button", () => {
     await flushPromises();
     await w.find('[data-testid="cell-new-here-btn"]').trigger("click");
     expect(w.emitted("new-here")).toEqual([[]]);
+    w.unmount();
+  });
+});
+
+// #2653: the row-2 and path-menu operations by name.
+describe("the row-2 and path-menu actions a cell answers itself", () => {
+  it("copies the last code block and toggles the mic through the same components as their buttons", async () => {
+    copyCalls.count = 0;
+    voiceToggles.count = 0;
+    const w = mountCell("sess-1");
+    await flushPromises();
+    expect(requestCellAction("cell-7", "terminal-copy-code")).toBe(true);
+    expect(requestCellAction("cell-7", "terminal-voice")).toBe(true);
+    expect(copyCalls.count).toBe(1);
+    expect(voiceToggles.count).toBe(1);
+    w.unmount();
+  });
+
+  it("declines copy and the note without a session, and the diff panel without changes", async () => {
+    const w = mountCell(null);
+    await flushPromises();
+    expect(requestCellAction("cell-7", "terminal-copy-code")).toBe(false);
+    expect(requestCellAction("cell-7", "terminal-note")).toBe(false);
+    expect(requestCellAction("cell-7", "terminal-diff")).toBe(false);
+    // On the launch form there is no terminal to act on: every self action but set-aside declines,
+    // before it opens a picker or a folder.
+    (
+      [
+        "terminal-restart",
+        "terminal-timeline",
+        "terminal-talk",
+        "terminal-copy-code",
+        "terminal-insert-path",
+        "terminal-reveal",
+        "terminal-voice",
+        "terminal-diff",
+        "terminal-note",
+      ] as const
+    ).forEach((action) => expect(requestCellAction("cell-7", action), action).toBe(false));
+    await flushPromises();
+    expect(vi.mocked(globalThis.fetch).mock.calls.some(([url]) => /\/api\/(pick|open-dir)/.test(String(url)))).toBe(false);
+    expect(requestCellAction("cell-7", "terminal-park")).toBe(true);
+    w.unmount();
+  });
+
+  it("inserts a picked path through the file-dialog route", async () => {
+    const w = mountCell("sess-1");
+    await flushPromises();
+    expect(requestCellAction("cell-7", "terminal-insert-path")).toBe(true);
+    await flushPromises();
+    const calls = vi.mocked(globalThis.fetch).mock.calls.map(([url]) => String(url));
+    expect(calls.some((url) => url.includes("/api/pick"))).toBe(true);
+    w.unmount();
+  });
+
+  it("opens the note editor, and reveals the directory through the open-dir route", async () => {
+    const w = mountCell("sess-1");
+    await flushPromises();
+    expect(w.find('[data-testid="cell-memo-edit"]').exists()).toBe(true);
+    expect(requestCellAction("cell-7", "terminal-note")).toBe(true);
+    await flushPromises();
+    expect(w.find('[data-testid="cell-memo-edit"]').exists()).toBe(false); // the editor replaced it
+    expect(requestCellAction("cell-7", "terminal-reveal")).toBe(true);
+    await flushPromises();
+    const calls = vi.mocked(globalThis.fetch).mock.calls.map(([url]) => String(url));
+    expect(calls).toContain("/api/open-dir");
     w.unmount();
   });
 });

@@ -103,7 +103,7 @@ describe("starting a document blueprint from an example", () => {
     await wrapper.get('[data-testid="blueprint-project-dir"]').setValue("/tmp/example");
     await wrapper.get('[data-testid="blueprint-new-form"]').trigger("submit");
     await flushPromises();
-    expect(startRun).toHaveBeenCalledWith(expect.objectContaining({ base: "docs", usecase: "review", preset: "itaku-keiyaku" }));
+    expect(startRun).toHaveBeenCalledWith(expect.objectContaining({ base: "docs", usecase: "review", preset: "itaku-keiyaku", language: "en" }));
   });
 
   it("forgets the example, and its samples, when the usecase is changed by hand", async () => {
@@ -118,7 +118,13 @@ describe("starting a document blueprint from an example", () => {
     await wrapper.get('[data-testid="blueprint-new-form"]').trigger("submit");
     await flushPromises();
     expect(startRun).toHaveBeenCalledTimes(1);
-    expect(startRun.mock.calls[0]?.[0]).toEqual({ projectDir: "/tmp/example", base: "docs", usecase: "ask", answers: { limit: 5, documents: "contract.txt" } });
+    expect(startRun.mock.calls[0]?.[0]).toEqual({
+      projectDir: "/tmp/example",
+      base: "docs",
+      usecase: "ask",
+      answers: { limit: 5, documents: "contract.txt" },
+      language: "en",
+    });
   });
 
   it("words a refusal from its code, not from the server's English", async () => {
@@ -241,7 +247,13 @@ describe("opening the form as a finished build's next step", () => {
     expect(scrolledTo()).toEqual([wrapper.get('[data-testid="blueprint-follow-up"]').text()]);
     await wrapper.get('[data-testid="blueprint-new-form"]').trigger("submit");
     await flushPromises();
-    expect(startRun).toHaveBeenCalledWith({ projectDir: "/work/docs", base: "docs", usecase: "ask", answers: { limit: 5, documents: "keihi.md" } });
+    expect(startRun).toHaveBeenCalledWith({
+      projectDir: "/work/docs",
+      base: "docs",
+      usecase: "ask",
+      answers: { limit: 5, documents: "keihi.md" },
+      language: "en",
+    });
   });
 
   it("leaves out an answer the form's interview would not take", async () => {
@@ -366,6 +378,7 @@ describe("a folder Claude Code does not trust yet", () => {
       usecase: "review",
       answers: { documents: "contract.txt" },
       preset: "itaku-keiyaku",
+      language: "en",
     });
   });
 });

@@ -38,6 +38,8 @@ import { setFeedRefreshEnabled, setCalendarSyncEnabled } from "./systemTasks";
 import { setSessionIdleReapDays, setSessionReapIntervalHours } from "./sessionReap";
 import { setHeaderConfigSummary } from "./headerConfigSummary";
 import { postConfigField } from "./postConfigField";
+import { postEntryChange, type EntryChange } from "./configEntryChange";
+import { isEntryProblem } from "../../common/agentEntries";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { configRetryDelayMs } from "./configRetryPolicy";
 
@@ -562,6 +564,18 @@ async function saveLaunchers(next: Launcher[]): Promise<boolean> {
   if (r.ok) launchers.value = Array.isArray(r.value) ? r.value.filter(isLauncher) : [];
   return r.ok;
 }
+// Add or remove ONE custom agent or account (#2620), against the list on disk — a tab sending its
+// whole list would drop an entry added elsewhere since it loaded, as the palette favorites below say.
+async function changeCustomAgents(action: "add" | "remove", payload: Record<string, unknown>): Promise<EntryChange> {
+  const change = await postEntryChange(`/api/config/custom-agents/${action}`, payload, isEntryProblem);
+  if (change.ok) customAgents.value = listOf(change.body.customAgents, isCustomAgent);
+  return change;
+}
+async function changeAccounts(action: "add" | "remove", payload: Record<string, unknown>): Promise<EntryChange> {
+  const change = await postEntryChange(`/api/config/accounts/${action}`, payload, isEntryProblem);
+  if (change.ok) accounts.value = listOf(change.body.accounts, isAgentAccount);
+  return change;
+}
 // Add or remove ONE palette favorite (#2546). Against the list on disk, not by sending this tab's
 // copy: another tab or a hand edit may have changed it since, and a whole list would erase that.
 async function setPaletteFavorite(key: string, favorite: boolean): Promise<boolean> {
@@ -831,6 +845,8 @@ export function useAppConfig() {
     savePushKinds,
     savePrRepos,
     saveLaunchers,
+    changeCustomAgents,
+    changeAccounts,
     setPaletteFavorite,
     saveQuickCommands,
     saveUserMcpServers,

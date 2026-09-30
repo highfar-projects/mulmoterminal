@@ -40,6 +40,11 @@ export const ACCOUNT_ID_RE = /^[a-z0-9][a-z0-9_-]{0,31}$/;
 
 export const isAccountId = (value: unknown): value is string => typeof value === "string" && ACCOUNT_ID_RE.test(value);
 
+// What the config keeps of an entry, for the same reason as the custom-agent limits.
+export const ACCOUNT_LABEL_MAX = 24;
+export const ACCOUNT_HOME_MAX = 500;
+export const ACCOUNTS_MAX = 8;
+
 // Relative homes are refused rather than resolved: the CLI would resolve one against each cell's
 // own working directory, i.e. a different home — and login — per directory.
 export const isAccountHome = (value: unknown): value is string =>

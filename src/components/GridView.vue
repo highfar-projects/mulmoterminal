@@ -19,7 +19,6 @@ import {
   setCellParked,
   closeCell,
   toggleExpand,
-  switchPage,
   runCommand,
   runScriptInNewCell,
   insertCellAfter,
@@ -37,7 +36,6 @@ import {
   nextAttentionUid,
   orderCells,
   countByStatus,
-  pageCount,
   zoomedUid,
   runningCount,
   STATE_KEY,
@@ -57,6 +55,7 @@ import { closeSettings, settingsOpen } from "../composables/settingsOpener";
 import { useGridJumps } from "../composables/useGridJumps";
 import { usePaletteTerminals } from "../composables/usePaletteTerminals";
 import { usePaletteGridView } from "../composables/usePaletteGridView";
+import { useGridPaging } from "../composables/useGridPaging";
 import PrefixKeyHint from "./PrefixKeyHint.vue";
 import FocusModeNotice from "./FocusModeNotice.vue";
 import { useCaptureKeydown } from "../composables/useCaptureKeydown";
@@ -69,7 +68,7 @@ import { becameCiFailing, EMPTY_SESSION_META, isPrPhase, mergeSessionMeta, type 
 import { notifySound } from "../composables/notifySound";
 import { useGridActivity } from "../composables/useGridActivity";
 import { registerNewTerminalHandler, type NewTerminalRequest } from "../composables/useNewTerminal";
-import { requestCellAction } from "../composables/useCellAction";
+import { isGridCellShortcut } from "../../common/headerActions";
 import { registerSpawnedChatHandler, type SpawnedChatRequest } from "../composables/useSpawnedChat";
 import { usePendingScript } from "../composables/usePendingScript";
 import { reportActiveTerminals } from "../composables/useUnloadGuard";
@@ -119,8 +118,6 @@ watch(
   (n) => reportActiveTerminals("grid", n),
   { immediate: true },
 );
-
-const pages = computed(() => pageCount(state.value.cells.length));
 
 // Nothing has been launched yet (only the entry launch cell) — show the newcomer a
 // pointer to the guide, cleared the moment any terminal starts.
@@ -419,20 +416,8 @@ const onMove = (uid: number, dir: -1 | 1) => (state.value = moveCell(state.value
 // tiles re-order with it.
 const onMoveBefore = (uid: number, beforeUid: number | null) => (state.value = moveCellBefore(state.value, uid, beforeUid));
 const chooseSortMode = (mode: SortMode) => (state.value = setSortMode(state.value, mode));
-usePaletteGridView(listModeOn, toggleListMode, () => state.value.sortMode, chooseSortMode);
-// Switching page BY HAND is the one page change that moves no cursor: the cells leaving the screen
-// unmount, nothing emits focus-cell, and the retained uid goes on naming a terminal nobody can see —
-// so walking from it sent the user straight back to the page they had just left (CodeRabbit on #2120).
-// INVARIANT 4 makes the focused cell the un-zoomed selection, and a selection off-screen is not one.
-//
-// The condition is what is VISIBLE afterwards, not that a tab was clicked: `switchPage` returns the
-// state unchanged for the page already shown, where nothing unmounted and the selection is still in
-// front of the user — dropping it there would take `zoom-toggle`, `next-attention` and
-// `terminal-new-here` with it for a click that changed nothing (Codex on #2120).
-const switchTo = (page: number) => {
-  state.value = switchPage(state.value, page);
-  if (!displayCells.value.some((c) => c.uid === focusedCellUid.value)) focusedCellUid.value = null;
-};
+const { pages, switchTo, stepPage } = useGridPaging(state, displayCells, focusedCellUid);
+usePaletteGridView(listModeOn, toggleListMode, () => state.value.sortMode, chooseSortMode, stepPage);
 
 // A script the single view's terminal-header Run menu handed off: run it in a spare
 // cell now that the grid (where command cells live) is mounted.
@@ -561,6 +546,11 @@ function runCellShortcut(shortcut: GridShortcut, uid: number | null) {
     // stage this works in every view mode, and with no cell to read it simply opens on the default
     // workspace instead of doing nothing.
     toggleLaunchPanel(uid ?? focusedCellUid.value);
+  } else if (isGridCellShortcut(shortcut)) {
+    // A pane, the timeline, talk, set aside, restart: the grid decides them for one cell, the same
+    // way it does for that cell's header button. Un-zoomed they act on the cursor's cell.
+    const target = uid ?? focusedCellUid.value;
+    if (target !== null) gridRef.value?.runCellAction(shortcut, target);
   } else if (uid === null) {
     return; // everything below acts on one terminal, and there is none to name
   } else if (shortcut === "terminal-new-adjacent") {
@@ -571,10 +561,6 @@ function runCellShortcut(shortcut: GridShortcut, uid: number | null) {
     // The grid owns the key; the pane that answers it belongs to TerminalGrid, which alone knows
     // what is enlarged, where the pane is rooted, and whether it is up at all.
     void gridRef.value?.runFilesAction(shortcut);
-  } else if (shortcut === "terminal-restart") {
-    // The cell owns its session, so it does the work; a cell still on its launch form declines and
-    // the key does nothing, which is the same answer its header button gives.
-    requestCellAction(`cell-${uid}`, "restart");
   }
 }
 
@@ -924,6 +910,7 @@ onBeforeUnmount(detachSpawnedChat);
       @close="onClose"
       @toggle-expand="onToggleExpand"
       @new-here="toggleLaunchPanel"
+      @cell-shortcut="(uid, action) => runCellShortcut(action, uid)"
       @focus-cell="focusedCellUid = $event"
       @run="onRun"
       @run-spare="onRunSpare"

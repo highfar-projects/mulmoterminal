@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import FilesOverlay from "../../../src/components/FilesOverlay.vue";
+import { filesScreenOpen, runOnFilesScreen } from "../../../src/composables/filesScreenHost";
+import { seedFilesPanel, takeFilesPanelSeed } from "../../../src/composables/filesPanelSeed";
 import { fakeCmEditor } from "../../helpers/cmEditorDouble";
 
 // The view is route-driven; stub useFilesView so the overlay is "open" without a router.
@@ -374,5 +376,42 @@ describe("FilesOverlay when the parting save fails", () => {
 
     expect(w.findComponent({ name: "FilesPane" }).props("cwd")).toBe("/proj");
     expect(w.text()).toContain("/proj"); // and the header says so
+  });
+});
+
+// #2655. The full-screen view takes the `files-*` keys and the palette's `/` itself, since the grid
+// that hands them to its pane is not in front here.
+describe("FilesOverlay as the files-* host", () => {
+  afterEach(() => wrappers.splice(0).forEach((w) => w.unmount()));
+  beforeEach(() => {
+    hoisted.setCwd("/proj");
+    hoisted.setOpen(true);
+    mockFs();
+  });
+
+  it("opens its finder on the palette's text, and answers only while it is open", async () => {
+    const w = mountOverlay();
+    await flushPromises();
+    expect(filesScreenOpen()).toBe(true);
+    seedFilesPanel("files-find", "app");
+    expect(runOnFilesScreen("files-find")).toBe(true);
+    await flushPromises();
+    const input = w.find('[data-testid="file-finder-input"]');
+    expect(input.exists()).toBe(true);
+    expect((input.element as HTMLInputElement).value).toBe("app");
+    expect(takeFilesPanelSeed("files-find")).toBe(""); // taken, nothing left for later
+
+    hoisted.setOpen(false);
+    await flushPromises();
+    expect(filesScreenOpen()).toBe(false);
+    expect(runOnFilesScreen("files-find")).toBe(false);
+  });
+
+  it("withdraws on unmount", async () => {
+    const w = mountOverlay();
+    await flushPromises();
+    w.unmount();
+    wrappers.splice(0);
+    expect(filesScreenOpen()).toBe(false);
   });
 });
