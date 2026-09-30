@@ -56,6 +56,12 @@ describe("the workflow", () => {
     ["write-all on one line", (text) => text.replace("permissions:\n  contents: read\n\njobs:", "permissions: write-all\n\njobs:")],
     ["the upload right only in a comment", (text) => text.replace("      security-events: write", "      # security-events: write")],
     ["no job block", (text) => text.replace("    permissions:\n      contents: read\n      security-events: write\n", "")],
+    ["a second job inheriting the top-level grant", (text) => `${text}  other:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n`],
+    [
+      "a second job with its own block",
+      (text) =>
+        `${text}  other:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n      security-events: write\n    steps:\n      - run: echo hi\n`,
+    ],
   ])("refuses permissions with %s", (_label, change) => {
     expect(workflowProblems(change(workflowFor("docs")), ["docs"]).join("\n")).toContain("grant only contents: read at the top");
   });

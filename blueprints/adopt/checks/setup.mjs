@@ -46,6 +46,19 @@ const permissionBlocks = (text) => {
   });
 };
 
+// The jobs under the top-level `jobs:`: the keys one level in. The workflow runs one job, chaff's, so a second one —
+// which would inherit the top-level grant with nothing checking what it does — is refused rather than inspected.
+const jobsIn = (text) => {
+  const lines = linesOf(text).map((line) => line.split("#")[0].trimEnd());
+  const at = lines.indexOf("jobs:");
+  if (at < 0) return [];
+  const under = lines.slice(at + 1);
+  const end = under.findIndex((line) => line.trim() !== "" && !line.startsWith(" "));
+  const body = under.slice(0, end < 0 ? under.length : end).filter((line) => line.trim() !== "");
+  const indent = Math.min(...body.map((line) => line.length - line.trimStart().length));
+  return body.filter((line) => line.length - line.trimStart().length === indent).map((line) => line.trim().split(":")[0]);
+};
+
 const exactly = (grants, wanted) => JSON.stringify(Object.entries(grants).sort()) === JSON.stringify(Object.entries(wanted).sort());
 // What the workflow may grant, and nothing more: reading at the top, and uploading findings in the job.
 const TOP = { contents: "read" };
@@ -54,7 +67,7 @@ const leastPrivilege = (text) => {
   const blocks = permissionBlocks(text);
   const tops = blocks.filter((block) => block.top);
   const jobs = blocks.filter((block) => !block.top);
-  return tops.length === 1 && jobs.length > 0 && exactly(tops[0].grants, TOP) && jobs.every((block) => exactly(block.grants, JOB));
+  return tops.length === 1 && jobsIn(text).length === 1 && jobs.length > 0 && exactly(tops[0].grants, TOP) && jobs.every((block) => exactly(block.grants, JOB));
 };
 
 // Each thing the workflow must hold, and why a reader would care it is there.
@@ -64,7 +77,7 @@ const REQUIRED = [
   [has(/--sarif chaff\.sarif/u), "write the findings as SARIF (--sarif chaff.sarif)"],
   [has(/uses: github\/codeql-action\/upload-sarif@[0-9a-f]{40}\b/u), "upload the SARIF with github/codeql-action/upload-sarif pinned to a commit"],
   [has(/sarif_file: chaff\.sarif/u), "upload chaff.sarif"],
-  [leastPrivilege, "grant only contents: read at the top, and only contents: read with security-events: write in the job"],
+  [leastPrivilege, "grant only contents: read at the top, and only contents: read with security-events: write in its one job"],
   [has(/persist-credentials: false/u), "check out without keeping the token (persist-credentials: false)"],
 ];
 /** What `workflow` (a GitHub Actions file's text) lacks, or takes that it should not, to report on `places`. */
