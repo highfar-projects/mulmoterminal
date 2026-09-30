@@ -23,7 +23,7 @@
 // absent from, and a `MessagePort` handed to a document that no longer exists is not a thing it
 // models. A run with no browser installed says so and reports nothing, which is the honest answer.
 import { createServer, type Server } from "node:http";
-import type { Browser, Frame, Page } from "puppeteer";
+import type { Browser, ElementHandle, Frame, Page } from "puppeteer";
 import { mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -318,7 +318,7 @@ function viewDistDir(): string {
  *  Over HTTP rather than `setContent` or a `data:` URL because the harness is an ES MODULE and its
  *  imports are relative: it needs a real base URL to resolve them against. 127.0.0.1 is also a
  *  secure context, which `viewNonce`'s `crypto.randomUUID()` requires. */
-async function serveHarness(): Promise<{ origin: string; close: () => Promise<void> }> {
+export async function serveHarness(): Promise<{ origin: string; close: () => Promise<void> }> {
   const dir = viewDistDir();
   // An ALLOW-LIST built from the directory, so a request path never becomes a filesystem path.
   const allowed = new Set((await readdir(dir)).filter((name) => name.endsWith(".js")));
@@ -434,7 +434,7 @@ const LABELS = `[...document.querySelectorAll(${JSON.stringify(CLICKABLE)})].map
  *  Lazily, and tolerantly, for the reason `server/backends/markdown.ts` gives: it is a heavy
  *  optional dependency and this server has to boot without it. A run with no browser is an answer,
  *  not a crash. */
-async function browserOrProblem(): Promise<{ ok: true; browser: Browser } | { ok: false; problems: string[] }> {
+export async function browserOrProblem(): Promise<{ ok: true; browser: Browser } | { ok: false; problems: string[] }> {
   try {
     const puppeteer = (await import("puppeteer")).default;
     // NO PROXY, and this is not a preference. Puppeteer's default arguments include
@@ -516,8 +516,13 @@ export interface Driver {
    *  collected afterwards belongs to THIS document. */
   mount: (input: HeadlessPageInput) => Promise<void>;
   observe: () => Promise<HarnessObservation>;
-  /** The rendered document. `null` while nothing is mounted. */
-  frame: () => Frame | null;
+  /** The rendered document: the frame of the iframe the harness holds NOW. `null` while nothing is
+   *  mounted, or when the browser could not say. */
+  frame: () => Promise<Frame | null>;
+  /** The document's clickable elements, in order. A survey that could not be taken — the frame was
+   *  replaced under the handle, the page broke the query — is said the way `evaluate`'s failures
+   *  are, and answers none. */
+  controls: (target: Frame) => Promise<ElementHandle[]>;
   /** Everything the BROWSER said since the last mount, not only what the page's own scripts said.
    *  A blocked form submission arrives this way and by no other: the browser refuses, so there is
    *  no exception, no rejected promise, and nothing for the page to catch. */
@@ -630,8 +635,7 @@ async function photograph(page: Page, file: string): Promise<string> {
   const element = await page.$("iframe");
   if (element === null) return "there was no rendered document to photograph";
   const taken = await withDeadline(
-    element
-      .screenshot()
+    browserCall(() => element.screenshot())
       .then(async (bytes) => {
         await writeFile(file, bytes);
         return "";
@@ -642,7 +646,44 @@ async function photograph(page: Page, file: string): Promise<string> {
   return taken === TIMED_OUT ? "the picture could not be taken: the page did not settle in time" : taken;
 }
 
-async function openDriver(browser: Browser, origin: string): Promise<Driver> {
+/** A question to the browser whose every failure arrives as a REJECTION.
+ *
+ *  Puppeteer refuses a detached frame, and elements in one, by throwing SYNCHRONOUSLY from a
+ *  decorator before any promise exists — so `frame.$$(…).catch(…)` does not catch it, and the throw
+ *  goes on up to end the whole run. Run through here, it reaches the `.catch` like any other
+ *  failure. `test/server/backends/headlessDriver.spec.ts` holds a detached frame to show it. */
+const browserCall = <T>(ask: () => Promise<T>): Promise<T> => Promise.resolve().then(ask);
+
+/** What a question that could not be put becomes: a line in the lists of the mount that ASKED it,
+ *  captured when it was asked (see `evaluate`), and `fallback` as its answer. */
+const failedFor =
+  <T>(pageSink: string[], askSink: string[], fallback: T) =>
+  (err: unknown): T => {
+    const line = `the preview could not put a question to this page: ${messageOf(err)}`;
+    pageSink.push(line);
+    askSink.push(line);
+    return fallback;
+  };
+
+/** The frame of the iframe the harness holds now.
+ *
+ *  Asked of the ELEMENT, not picked from `page.frames()`: `render` removes the old iframe and makes a
+ *  new one, and Puppeteer drops the old frame from that list only when the browser's detach event
+ *  arrives. On a slow runner the old one was still listed first, so a mount's questions went to a
+ *  frame about to be detached — and the one question not caught, the control survey, ended the
+ *  whole run with "Attempted to use detached Frame" (#2588). */
+async function currentFrame(page: Page): Promise<Frame | null> {
+  const found = await withDeadline(
+    page
+      .$("iframe")
+      .then((element) => element?.contentFrame() ?? null)
+      .catch(() => null),
+    LIMITS.evaluateMs,
+  );
+  return found === TIMED_OUT ? null : found;
+}
+
+export async function openDriver(browser: Browser, origin: string): Promise<Driver> {
   const page = await browser.newPage();
   let noise: string[] = [];
   let askFailures: string[] = [];
@@ -670,14 +711,7 @@ async function openDriver(browser: Browser, origin: string): Promise<Driver> {
     // files page A's failure under page B, or under a press that had nothing to do with it. The
     // arrays this mount is reading are captured instead, so a late rejection lands in one nobody
     // holds any more and is discarded, which is what a report about page B should say about it.
-    const pageSink = noise;
-    const askSink = askFailures;
-    const asked = (target ?? page).evaluate(script).catch((err: unknown) => {
-      const line = `the preview could not put a question to this page: ${messageOf(err)}`;
-      pageSink.push(line);
-      askSink.push(line);
-      return undefined;
-    });
+    const asked = browserCall(() => (target ?? page).evaluate(script)).catch(failedFor(noise, askFailures, undefined));
     // Only the deadline moves this flag.
     const answered = await withDeadline(asked, LIMITS.evaluateMs);
     if (answered === TIMED_OUT) {
@@ -690,7 +724,11 @@ async function openDriver(browser: Browser, origin: string): Promise<Driver> {
     evaluate,
     askFailures: () => askFailures,
     stalled: () => stalled,
-    frame: () => page.frames().find((candidate) => candidate.url() === "about:srcdoc") ?? null,
+    frame: () => currentFrame(page),
+    controls: async (target) => {
+      const surveyed = await withDeadline(browserCall(() => target.$$(CLICKABLE)).catch(failedFor(noise, askFailures, [])), LIMITS.evaluateMs);
+      return surveyed === TIMED_OUT ? [] : surveyed;
+    },
     noise: () => noise,
     observe: async () => asObservation(await evaluate("window.__preview.observe()")),
     decline: async () => {
@@ -854,7 +892,7 @@ export async function answerPress(
 
 async function pressOne(driver: Driver, input: HeadlessPageInput, index: number, budget: WriteBudget): Promise<PressResult | null> {
   await driver.mount(input);
-  const frame = driver.frame();
+  const frame = await driver.frame();
   if (frame === null) return null;
   await driver.evaluate(FILL_INPUTS, frame);
 
@@ -888,7 +926,7 @@ async function pressOne(driver: Driver, input: HeadlessPageInput, index: number,
   // Located BEFORE the snapshot below. Each of these is a round trip to the browser, and anything
   // the page does during one of them would otherwise land in the window being attributed to the
   // press.
-  const controls = await frame.$$(CLICKABLE);
+  const controls = await driver.controls(frame);
   const control = controls[index];
 
   // WHAT WAS ALREADY THERE, read as late as it can be — with the control in hand and nothing left
@@ -905,10 +943,12 @@ async function pressOne(driver: Driver, input: HeadlessPageInput, index: number,
   // `element.click()` in the page's own realm invokes the handler regardless of what covers the
   // button — and this action would then report a submission reaching the parent for a control
   // nobody can press, which is the opposite of what it promises.
-  const notClickable = await control
-    ?.click()
-    .then(() => false)
-    .catch(() => true);
+  const notClickable =
+    control === undefined
+      ? undefined
+      : await browserCall(() => control.click())
+          .then(() => false)
+          .catch(() => true);
   await new Promise((resolve) => setTimeout(resolve, LIMITS.settleMs));
   const after = await driver.observe();
   const submitted = after.submitted[before.submitted.length] ?? null;
@@ -941,7 +981,7 @@ async function pressOne(driver: Driver, input: HeadlessPageInput, index: number,
 async function reportPage(driver: Driver, input: HeadlessPageInput, budget: WriteBudget, shot: string | null): Promise<HeadlessPageReport> {
   await driver.mount(input);
   const observed = await driver.observe();
-  const frame = driver.frame();
+  const frame = await driver.frame();
   // BEFORE anything is filled in or pressed, because that is the page a visitor first meets — and
   // because a picture taken after a press would be of whichever control happened to be last, which
   // represents nothing.
