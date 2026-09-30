@@ -30,8 +30,9 @@ const PERSONAL_WORDS = new Set([
   "postcode",
 ]);
 const PERSONAL_PHRASES = ["氏名", "名前", "メール", "電話", "住所", "生年月日", "誕生日", "郵便番号"];
-// Types whose value is free text a person typed; an enum, a number or a date is not read by its name.
-const TEXT_TYPES = new Set(["string", "text"]);
+// Types that can hold personal data named by the field: free text, and a number or a date (a phone, a postal code, a
+// birth date). An enum, a boolean, a reference or a derived value is not read by its name.
+const NAMED_TYPES = new Set(["string", "text", "markdown", "number", "date", "datetime"]);
 
 // `firstName`, `first_name`, `first-name`, `First name` all give "first", "name" — and "firstname" whole.
 function wordsOf(text: string): string[] {
@@ -46,12 +47,22 @@ function wordsOf(text: string): string[] {
 const namesAPerson = (text: string): boolean =>
   wordsOf(text).some((word) => PERSONAL_WORDS.has(word)) || PERSONAL_PHRASES.some((phrase) => text.includes(phrase));
 
-/** The fields of a collection's records that may hold personal data: every email field, and text fields named for one. */
+type FieldSpec = { type: string; label: string; of?: Record<string, FieldSpec> };
+
+const isPersonal = (key: string, spec: FieldSpec): boolean =>
+  spec.type === "email" || (NAMED_TYPES.has(spec.type) && (namesAPerson(key) || namesAPerson(spec.label)));
+
+// A field, and the columns of a table field under it as `table.column`: a row of a table is copied with its record.
+function personalIn(slug: string, key: string, spec: FieldSpec, parentLabel = ""): PersonalField[] {
+  const label = parentLabel === "" ? spec.label : `${parentLabel} / ${spec.label}`;
+  const own = isPersonal(key, spec) ? [{ collection: slug, field: key, label }] : [];
+  const columns = Object.entries(spec.of ?? {}).flatMap(([column, columnSpec]) => personalIn(slug, `${key}.${column}`, columnSpec, label));
+  return [...own, ...columns];
+}
+
+/** The fields of a collection's records that may hold personal data: every email field, and fields named for one. */
 export function personalFields(slug: string, schema: CollectionSchema): PersonalField[] {
-  return Object.entries(schema.fields).flatMap(([key, spec]) => {
-    const personal = spec.type === "email" || (TEXT_TYPES.has(spec.type) && (namesAPerson(key) || namesAPerson(spec.label)));
-    return personal ? [{ collection: slug, field: key, label: spec.label }] : [];
-  });
+  return Object.entries(schema.fields).flatMap(([key, spec]) => personalIn(slug, key, spec));
 }
 
 /** How many email addresses a shared app's declaration keys its roster by. */

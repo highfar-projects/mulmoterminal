@@ -27,6 +27,9 @@ describe("personalFields", () => {
     ["a Japanese label with more around it", { a2: { type: "text", label: "お届け先の住所" } }],
     ["a mail key that is not an email field", { mail: { type: "string", label: "Contact" } }],
     ["a birth date kept as text", { dob: { type: "string", label: "Born" } }],
+    ["a phone kept as a number", { phone: { type: "number", label: "Phone" } }],
+    ["a birthday kept as a date", { birthday: { type: "date", label: "Birthday" } }],
+    ["an address written as markdown", { address: { type: "markdown", label: "Address" } }],
   ])("finds %s", (_label, fields) => {
     expect(fieldsFound(fields)).toEqual(Object.keys(fields));
   });
@@ -34,12 +37,16 @@ describe("personalFields", () => {
   it.each([
     ["a text field named for something else", { title: { type: "string", label: "Title" } }],
     ["a word that only contains a personal one", { nameless: { type: "string", label: "Tone" }, hotel: { type: "string", label: "Stay" } }],
-    ["a number named for a phone", { phone: { type: "number", label: "Phone" } }],
-    ["a date named for a birthday", { birthday: { type: "date", label: "Birthday" } }],
     ["an enum named for a name", { name: { type: "enum", label: "Name", values: ["a", "b"] } }],
-    ["markdown named for an address", { address: { type: "markdown", label: "Address" } }],
+    ["a boolean named for an address", { address: { type: "boolean", label: "Address" } }],
+    ["a date named for something else", { due: { type: "date", label: "Due" } }],
   ])("leaves out %s", (_label, fields) => {
     expect(fieldsFound(fields)).toEqual([]);
+  });
+
+  it("finds a table's columns, named under the table, and not the table itself", () => {
+    const contacts = { type: "table", label: "Contacts", of: { email: { type: "email", label: "Email" }, role: { type: "string", label: "Role" } } };
+    expect(personalFields("people", schemaWith({ contacts }))).toEqual([{ collection: "people", field: "contacts.email", label: "Contacts / Email" }]);
   });
 
   it("names each field with its collection and its label, in the schema's order", () => {

@@ -8,7 +8,7 @@ personal data out of its source asks once first.
 - With the records: every `email` field, and every `string` / `text` field whose key or label names a person's name,
   mail, phone, address, birth date or postal code (`common/blueprint/personalData.ts`). Keys are split into words
   (`homePhone`, `phone_number`, `home-address`), so a word that only contains one (`nameless`, `hotel`) is not counted.
-  Japanese labels are matched by phrase. The list leans wide: a false alarm costs one confirmation.
+  Table columns are walked as `table.column`; `markdown`, `number`, `date` and `datetime` fields count by name too (an address, a phone, a birth date). Japanese labels are matched by phrase. The list leans wide: a false alarm costs one confirmation.
 - Always, for a shared app: the email addresses its `app.json` roster is keyed by, since the declaration is copied
   whether or not the records are.
 
