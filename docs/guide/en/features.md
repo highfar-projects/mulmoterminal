@@ -175,9 +175,11 @@ file may appear as plain text for a moment before the colours arrive. Anything e
 
 **Editor and Preview side by side.** For a Markdown file, the button beside **Preview** (the split icon) shows the editor on the left and the Preview on the right. As you scroll the editor, the Preview follows the heading you are under — by heading, not by line, so within a section the two scroll on their own. The Preview shows the file as saved: an edit reaches it on the next save. Press the button again to go back to the editor alone.
 
-**HTML pages and images open in the pane.** An `.html` file gets a **Preview** that shows the page
+**HTML pages, images, PDFs, video and audio open in the pane.** An `.html` file gets a **Preview** that shows the page
 itself (sandboxed: its scripts run but cannot fetch; images beside it load, a relative stylesheet or
-script does not); an `.svg` previews as its picture; a PNG, JPEG, GIF or WebP shows as the image.
+script does not); an `.svg` previews as its picture; a PNG, JPEG, GIF or WebP shows as the image; a PDF shows in a frame, and a video or audio file plays
+with the browser's controls (seeking works whatever its size). A text file too large to edit still
+offers **Open in OS**.
 A `.csv` or `.tsv` previews as a table in the app's colours. Clicking such a path in a terminal
 opens it here, drawn, when the pane is up.
 
