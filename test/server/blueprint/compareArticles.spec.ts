@@ -99,6 +99,16 @@ describe("an article named in the table", () => {
     expect(mentions("第1条の委託料", "第1条")).toBe(true);
     expect(mentions("| 第1条の2 | 第1条 |", "第1条")).toBe(true);
   });
+
+  it("stops an English name at a word boundary: 1bis, 1b, 12 and 1-2 are other articles", () => {
+    expect(mentions("| Section 2A |", "Section 2")).toBe(false);
+    expect(mentions("| a.b |", "a.b")).toBe(true);
+    expect(mentions("| Article 1bis |", "Article 1")).toBe(false);
+    expect(mentions("| Article 1b |", "Article 1")).toBe(false);
+    expect(mentions("| Article 1(a) |", "Article 1")).toBe(true);
+    expect(mentions("Article 1, as amended", "Article 1")).toBe(true);
+    expect(mentions("第1条第2項", "第1条")).toBe(true);
+  });
 });
 
 describe("a provision removed and added again", () => {

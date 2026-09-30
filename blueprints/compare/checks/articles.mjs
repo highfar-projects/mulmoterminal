@@ -89,16 +89,22 @@ export const comparisonProblems = (rows, olds, news) => {
   ];
 };
 
-// What goes on to make another article's number: a digit (Article 12), a branch number (第1条の2, 第二十一条の二,
-// Article 1-2, Article 1.2). "の" with anything else is prose: 「第1条の委託料」 still names 第1条.
-const CONTINUES = /^(?:[0-9０-９]|[の之ノ][0-9０-９一二三四五六七八九十百千]|[-.‐－．][0-9０-９])/u;
+// Where a name stops and another article's number would go on. A name ending in a letter or digit ("Article 1")
+// stops at a word boundary, so "Article 12", "Article 1bis" and "Article 1-2" are other words. A name ending in any
+// other character (第1条) goes on only into a branch number: a digit, or の/之/ノ with a numeral (第1条の2,
+// 第二十一条の二) — 「第1条の委託料」 still names 第1条, and so does 「第1条第2項」.
+const WORD_END = /[A-Za-z0-9０-９]$/u;
+const WORD_GOES_ON = /^(?:[A-Za-z0-9０-９]|[-.‐－．][A-Za-z0-9０-９])/u;
+const BRANCH_GOES_ON = /^(?:[0-9０-９]|[の之ノ][0-9０-９一二三四五六七八九十百千])/u;
 
-/** Whether `text` names the article `name`, and not only another article whose number starts the same. */
-export const mentions = (text, name) =>
-  String(text)
-    .split(name)
-    .slice(1)
-    .some((after) => !CONTINUES.test(after));
+/** Whether `text` names the article `name`: a match that goes on into a longer number names another article. */
+export const mentions = (text, name) => {
+  const goesOn = WORD_END.test(name) ? WORD_GOES_ON : BRANCH_GOES_ON;
+  const source = String(text);
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  const hits = [...source.matchAll(new RegExp(escaped, "gu"))].map((match) => match.index ?? 0);
+  return hits.some((index) => !goesOn.test(source.slice(index + name.length)));
+};
 
 const headingLevel = (line) => /^(#{1,6}) /u.exec(line)?.[1].length ?? 0;
 
