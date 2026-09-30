@@ -3,6 +3,7 @@
   "kind": "usecase",
   "title": "用語をそろえる（用語集をつくって chaff に入れる）",
   "version": "0.1.0",
+  "order": 90,
   "description": "文書から、定義された語と、同じ語の二重定義や表記ゆれを集めて用語集にする。定義と書き方にはすべて原文の引用を付け、文書が定義する語を落としていないことを機械で確かめる。望めば、使う書き方と社内の言葉をフォルダの chaff.yaml に入れ、以後は chaff が揺れを指摘する。原本は変えない。",
   "bases": ["docs"],
   "report": ".blueprint/glossary-report.md",
