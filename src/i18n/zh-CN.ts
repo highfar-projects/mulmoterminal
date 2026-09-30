@@ -4,6 +4,7 @@ import { tipsZhCN } from "./tips/zh-CN";
 import { commandPaletteZhCN } from "./commandPalette/zh-CN";
 import { focusModeZhCN } from "./focusMode/zh-CN";
 import { fileHistoryZhCN } from "./fileHistory/zh-CN";
+import { dirConfigSaveZhCN } from "./dirConfigSave/zh-CN";
 import { settingsControlsZhCN } from "./settingsControls/zh-CN";
 import { shortcutsZhCN } from "./shortcuts/zh-CN";
 import { filesTreeZhCN } from "./filesTree/zh-CN";
@@ -589,6 +590,7 @@ export const zhCN: Messages = {
     empty: "此文件没有标题。",
   },
   fileHistory: fileHistoryZhCN,
+  dirConfigSave: dirConfigSaveZhCN,
   focusMode: focusModeZhCN,
   settingsControls: settingsControlsZhCN,
   ...filesTreeZhCN,

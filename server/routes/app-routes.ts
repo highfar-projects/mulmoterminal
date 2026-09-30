@@ -391,7 +391,11 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
   // Project-scoped file browsing + editing for the full-screen Files view
   // (GET /api/files/browse/{list,text,md}, PUT .../write — all ?cwd=&path=). Each
   // terminal browses its own session's project dir; paths are contained within it.
-  mountFilesBrowseRoutes(app, { defaultCwd: CLAUDE_CWD, backupRoot: path.join(MULMOTERMINAL_HOME, "backups") });
+  mountFilesBrowseRoutes(app, {
+    defaultCwd: CLAUDE_CWD,
+    backupRoot: path.join(MULMOTERMINAL_HOME, "backups"),
+    onDirConfigWritten: (cwd) => deps.publish(DIR_CONFIG_CHANNEL, { cwd }),
+  });
 
   // Directory-scoped reads for a terminal cell: scripts, skills, dir config, git status,
   // PR phase, resolved header, custom sound. All keyed by ?cwd= (see routes/dir-routes.ts).

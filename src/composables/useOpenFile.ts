@@ -10,6 +10,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, type ComputedRef, type Ref, type ShallowRef } from "vue";
 import { createEditor, langKindForFilename, type CmEditor } from "../components/cmEditor";
 import { askTheMachine, bankText, browseQuery, writeBuffer } from "../components/filesPaneApi";
+import type { DirConfigSaveReport } from "../../common/dirConfigSaveReport";
 import type { FilesTabState } from "../components/filesPaneState";
 import { restoresPreview, staysOnSameFile } from "../components/filesPreviewMode";
 import { diskVersion, previewSrcFor } from "../components/filesPreviewSrc";
@@ -61,6 +62,9 @@ export interface OpenFileBuffer {
    *  which is what makes it ride the snapshot, the carry across a re-read and the reset on
    *  leaving without any of them learning about previews. */
   previewScrollTop: Ref<number>;
+  /** What the last save said about a directory's config file (#2624): whether it parsed, and which
+   *  keys did not take effect. Null for any other file, and cleared when another file is read. */
+  dirConfigReport: Ref<DirConfigSaveReport | null>;
   editor: ShallowRef<CmEditor | null>;
 }
 
@@ -122,6 +126,7 @@ async function loadFile(ctx: OpenFileCtx, pathRel: string, force: boolean, remem
   const id = ++ctx.reqId.n;
   ctx.fileError.value = null;
   ctx.conflict.value = null;
+  ctx.dirConfigReport.value = null;
   // What survives a re-read of the SAME file, and what a different file leaves behind: the mode
   // belongs to the file it was turned on for, and so does the reader's place in it. Carried across
   // the read rather than restored from a snapshot, because this path has no snapshot — the agent
@@ -271,6 +276,7 @@ async function save(ctx: OpenFileCtx): Promise<void> {
   ctx.baseVersion.value = outcome.version;
   ctx.dirty.value = false;
   ctx.conflict.value = null;
+  ctx.dirConfigReport.value = outcome.dirConfig;
 }
 
 /** Edit ↔ Preview. Preview renders the file ON DISK, so unsaved edits are saved first — the same
@@ -464,10 +470,11 @@ function previewOf(buffer: OpenFileBuffer, cwd: string | null): { src: string; t
   return { src: previewSrcOf(buffer, cwd, token), token };
 }
 
-export function useOpenFile(cwd: () => string | null): OpenFile {
+/** The refs one open file is made of, empty. */
+function newBuffer(): OpenFileBuffer {
   const openPath = ref<string | null>(null);
   const openName = computed(() => (openPath.value ? (openPath.value.split("/").pop() ?? "") : ""));
-  const buffer: OpenFileBuffer = {
+  return {
     openPath,
     openName,
     isMarkdown: computed(() => langKindForFilename(openName.value) === "markdown"),
@@ -481,8 +488,13 @@ export function useOpenFile(cwd: () => string | null): OpenFile {
     conflict: ref<FileConflict | null>(null),
     showPreview: ref(false),
     previewScrollTop: ref(0),
+    dirConfigReport: ref<DirConfigSaveReport | null>(null),
     editor: shallowRef<CmEditor | null>(null),
   };
+}
+
+export function useOpenFile(cwd: () => string | null): OpenFile {
+  const buffer = newBuffer();
   const ctx: OpenFileCtx = { ...buffer, cwd, reqId: { n: 0 } };
   const preview = computed(() => previewOf(buffer, cwd()));
 

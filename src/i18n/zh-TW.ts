@@ -4,6 +4,7 @@ import { tipsZhTW } from "./tips/zh-TW";
 import { commandPaletteZhTW } from "./commandPalette/zh-TW";
 import { focusModeZhTW } from "./focusMode/zh-TW";
 import { fileHistoryZhTW } from "./fileHistory/zh-TW";
+import { dirConfigSaveZhTW } from "./dirConfigSave/zh-TW";
 import { settingsControlsZhTW } from "./settingsControls/zh-TW";
 import { shortcutsZhTW } from "./shortcuts/zh-TW";
 import { filesTreeZhTW } from "./filesTree/zh-TW";
@@ -594,6 +595,7 @@ export const zhTW: Messages = {
     empty: "此檔案沒有標題。",
   },
   fileHistory: fileHistoryZhTW,
+  dirConfigSave: dirConfigSaveZhTW,
   focusMode: focusModeZhTW,
   settingsControls: settingsControlsZhTW,
   ...filesTreeZhTW,

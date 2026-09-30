@@ -44,7 +44,17 @@ describe("browseQuery", () => {
 describe("writeBuffer", () => {
   it("reports the new version on a save", async () => {
     globalThis.fetch = answering({ status: 200, body: { ok: true, version: "v2" } });
-    expect(await writeBuffer("path=a.ts", "hi", "v1")).toEqual({ status: "saved", version: "v2" });
+    expect(await writeBuffer("path=a.ts", "hi", "v1")).toEqual({ status: "saved", version: "v2", dirConfig: null });
+  });
+
+  // #2624: a directory config's save carries what took; any other file carries nothing.
+  it("reads the directory-config report a save carries", async () => {
+    globalThis.fetch = answering({ status: 200, body: { ok: true, version: "v2", dirConfig: { parsed: true, ignored: ["headerColor"], unknown: [] } } });
+    expect(await writeBuffer("path=.mulmoterminal.json", "{}", "v1")).toEqual({
+      status: "saved",
+      version: "v2",
+      dirConfig: { parsed: true, ignored: ["headerColor"], unknown: [] },
+    });
   });
 
   // 409 is the agent in this very directory having written the file first. Nothing was saved, and
@@ -72,7 +82,7 @@ describe("writeBuffer", () => {
 
   it("reports no version when the body's is not a string", async () => {
     globalThis.fetch = answering({ status: 200, body: { version: 7 } });
-    expect(await writeBuffer("path=a.ts", "hi", null)).toEqual({ status: "saved", version: null });
+    expect(await writeBuffer("path=a.ts", "hi", null)).toEqual({ status: "saved", version: null, dirConfig: null });
   });
 });
 

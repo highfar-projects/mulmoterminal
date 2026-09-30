@@ -8,6 +8,7 @@
 import { jsonBody } from "../jsonBody";
 import { isRecord } from "../../common/isRecord";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
+import { readDirConfigSaveReport, type DirConfigSaveReport } from "../../common/dirConfigSaveReport";
 
 /** The `?cwd=&path=` every `/api/files/browse/*` route takes. `cwd` is omitted when the pane has
  *  no root of its own, which is how the server is told to use its default workspace. */
@@ -18,7 +19,10 @@ export function browseQuery(cwd: string | null, pathRel: string): string {
   return params.toString();
 }
 
-export type WriteOutcome = { status: "saved"; version: string | null } | { status: "conflict"; version: string | null } | { status: "error"; message: string };
+export type WriteOutcome =
+  | { status: "saved"; version: string | null; dirConfig: DirConfigSaveReport | null }
+  | { status: "conflict"; version: string | null }
+  | { status: "error"; message: string };
 
 /** One conditional write, reported as a value rather than through component state. Leaving has to
  *  keep working while the pane is being torn down, and anything read from a ref AFTER an await may
@@ -35,7 +39,7 @@ export async function writeBuffer(query: string, text: string, base: string | nu
     const version = typeof data.version === "string" ? data.version : null;
     if (res.status === 409) return { status: "conflict", version };
     if (!res.ok) return { status: "error", message: typeof data.error === "string" ? data.error : `HTTP ${res.status}` };
-    return { status: "saved", version };
+    return { status: "saved", version, dirConfig: readDirConfigSaveReport(data.dirConfig) };
   } catch (e) {
     return { status: "error", message: e instanceof Error ? e.message : String(e) };
   }
