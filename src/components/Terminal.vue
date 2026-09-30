@@ -2,8 +2,9 @@
 import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch, nextTick } from "vue";
 import { type ITheme } from "@xterm/xterm";
 import { FLIP_MS, shouldRefocusOnZoomChange } from "./cellFlip";
+import { isRemoteServer } from "../composables/remoteServer";
 import { terminalManagesAttention, terminalViewActive } from "./terminalViewActive";
-import { dragCarriesFiles, dropTextFromUriList, toInsertText } from "./dropPaths";
+import { dragCarriesFiles, dropPlan, dropTextFromUriList, toInsertText } from "./dropPaths";
 import { dropUploadErrorMessage, uploadDropBatch } from "./dropUpload";
 import { createImagePasteHandler } from "../composables/usePasteImage";
 import { translateUiSentence } from "../utils/translateUi";
@@ -500,9 +501,13 @@ function onDrop(e: DragEvent) {
   if (!dt || !dragCarriesFiles(dt.types)) return; // not a file drop — leave text drags alone
   e.preventDefault();
   const text = dropTextFromUriList(dt.getData("text/uri-list") || dt.getData("text/plain"));
-  if (text) return insertText(text);
-  const files = Array.from(dt.files);
-  if (files.length) enqueueDrop(files);
+  // The files are only read when the plan can use them: a path the browser gave settles a local drop,
+  // as it always did (#2669).
+  const remote = isRemoteServer();
+  const files = text && !remote ? [] : Array.from(dt.files);
+  const plan = dropPlan({ pathText: text, fileCount: files.length, remoteServer: remote });
+  if (plan === "insert-path") insertText(text);
+  else if (plan === "upload") enqueueDrop(files);
   else showDropHint();
 }
 

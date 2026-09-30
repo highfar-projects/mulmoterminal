@@ -26,6 +26,7 @@ import { setQuestionPaneEnabled } from "./questionPane";
 import { setIssueWorkComments } from "./issueWorkComments";
 import { setShowLoadAverage } from "./showLoadAverage";
 import { setPaletteSearchBox } from "./paletteSearchBox";
+import { setRemoteServer } from "./remoteServer";
 import { setPlayfulEffects } from "./playfulEffects";
 import { setDefaultAgent } from "./defaultAgent";
 import { seedLaunchAgentFromConfig } from "./useChatLauncher";
@@ -37,6 +38,8 @@ import { setWorklogEnabled, setWorklogIntervalHours } from "./worklog";
 import { setFeedRefreshEnabled, setCalendarSyncEnabled } from "./systemTasks";
 import { setSessionIdleReapDays, setSessionReapIntervalHours } from "./sessionReap";
 import { setHeaderConfigSummary } from "./headerConfigSummary";
+import { setGlobalHeaderChips } from "./headerChipsConfig";
+import { setGlobalHeaderButtons } from "./headerButtonsConfig";
 import { postConfigField } from "./postConfigField";
 import { postEntryChange, type EntryChange } from "./configEntryChange";
 import { isEntryProblem } from "../../common/agentEntries";
@@ -477,6 +480,7 @@ function applyGlobalSettings(c: Record<string, unknown>, pinsMark: number): void
   // Whether the grid header carries this machine's load average (#1786). On unless opted out.
   setShowLoadAverage(c.showLoadAverage);
   setPaletteSearchBox(c.paletteSearchBox);
+  setRemoteServer(c.remoteServer);
   setPlayfulEffects(c.playfulEffects);
   // Which pinned favourites the toolbar carries (#1984). Absent, it carries none. The mark is what
   // stops a read that started before a save from putting the old list back — see toolbarPins.ts.
@@ -508,6 +512,8 @@ function applyGlobalSettings(c: Record<string, unknown>, pinsMark: number): void
 // on this side had a reason to know their values.
 function adoptServerSideSettings(c: Record<string, unknown>): void {
   setHeaderConfigSummary(c);
+  setGlobalHeaderChips(c.chips);
+  setGlobalHeaderButtons(c.buttons);
   setPrWorkdirFooter(c.prWorkdirFooter);
   setAppendSystemPrompt(c.appendSystemPrompt);
   setDecisionDigest(c.decisionDigest);

@@ -173,6 +173,8 @@ Place this at the project root to change the appearance, sound, and header of **
 
 Open it in the Files pane and the editor knows this file's keys: it offers them as you type (`Ctrl+Space` asks) and underlines a value the server would reject — a misspelt key or a colour it cannot read — before you save.
 
+To get to it from Settings: **Settings → Directory settings**, expand a directory, and press **Open in Files** beside its file — or, where it has none yet, **Create .mulmoterminal.json and open it**, which writes an empty `{}` first. Either one closes Settings and opens the file in the full-screen Files view.
+
 ### Which model to use
 
 ```json
@@ -665,6 +667,11 @@ global setting, which is on. → [Turning off the closing summary](#append-syste
 Beyond the four built-ins (Midnight / Nord / Daylight / Solarized Light), define your own in
 `themes` in `~/.mulmoterminal/config.json` and it **appears in Settings' theme picker**. Picking it
 recolours the whole app — grid background, headers, panels, and the terminals themselves.
+
+The quickest way to start one needs no JSON: **Settings → Theme → Your own theme** copies the theme in
+use (**Make a copy**), then shows every colour of the copy with a picker. A change is painted at once so
+you can judge it on the real app; **Save** keeps it, and closing Settings without saving puts the saved
+colours back. The terminal's own palette (`term`, below) is still written by hand or by the theme skill.
 
 ```json
 {
@@ -2182,6 +2189,7 @@ What you write here appears in an empty cell's launcher under **OR RUN A SCRIPT*
 | `toolbarPins` | Pinned collections / feeds that also get a button in the toolbar, e.g. `["collection:works"]`. Empty by default. **Five buttons** are drawn; the array itself may hold more (up to 50) — a key whose pin is currently unpinned is kept, not drawn, so do not tidy those out by hand (→ [A favourite you open all day](#toolbar-pins)) |
 | `showLoadAverage` | The machine's load average in the bar above the grid. **On unless `false`** (→ Settings → Grid header read-outs) |
 | `paletteSearchBox` | A search box in the middle of the top bar, on every screen, that opens the command palette. **Off unless `true`** (→ Settings → Grid header read-outs) |
+| `remoteServer` | **Experimental.** Say the server runs on another machine than your browser (an SSH tunnel — see [Run the server on another machine](remote.html)). Then the actions that act on the server's screen are withheld: the path menu's *Insert a file path* and *Reveal in the file manager* and the launch form's folder button are hidden; a header button, a key or the Files pane asking for the file dialog, the file manager or the OS app says why instead; and a dropped file is always uploaded, never inserted as your machine's path. The launcher opens no browser on the server, and Google sign-in points to `npx mulmoterminal google login` on the server. **Off unless set to `true`**; no Settings switch yet. |
 | `cockpitLines` | How many lines each cockpit-roster row shows before clamping (default `2 / 2 / 3` → [Cockpit roster line counts](#cockpit-lines)) |
 | `fontFamily` | The font every terminal renders in — a CSS font-family stack (→ [Terminal font](#font-family)) |
 

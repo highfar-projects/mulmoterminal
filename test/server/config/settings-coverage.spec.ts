@@ -49,9 +49,9 @@ const REACHABLE_BY: Record<string, Reachable> = {
   defaultAgent: { ui: true, skill: "mulmoterminal-model" },
   quickCommands: { ui: true },
   userMcpServers: { ui: true },
-  themes: { skill: "mulmoterminal-theme" },
-  buttons: { skill: "mulmoterminal-header" },
-  chips: { skill: "mulmoterminal-header" },
+  themes: { ui: true, skill: "mulmoterminal-theme" },
+  buttons: { ui: true, skill: "mulmoterminal-header" },
+  chips: { ui: true, skill: "mulmoterminal-header" },
   commands: { skill: "mulmoterminal-header" },
   pushEnabled: { ui: true, skill: "mulmoterminal-notify" },
   pushKinds: { ui: true, skill: "mulmoterminal-notify" },
@@ -86,20 +86,13 @@ const REACHABLE_BY: Record<string, Reachable> = {
   showLoadAverage: { ui: true, skill: CONFIG_SKILL },
   // Beside the load average in Settings → Grid header read-outs (#2569).
   paletteSearchBox: { ui: true, skill: CONFIG_SKILL },
+  // Experimental (#2669), no Settings switch yet: the config skill documents it.
+  remoteServer: { skill: CONFIG_SKILL },
   toolbarPins: { ui: true, skill: CONFIG_SKILL },
   // On/off only in Settings, worded so it does not advertise: which pictures exist is left to find.
   playfulEffects: { ui: true, skill: CONFIG_SKILL },
   fontFamily: { ui: true, skill: "mulmoterminal-dirs" },
 };
-
-// The settings Settings can only SHOW. Each is structured enough that a form would be a small
-// editor with its own wrong-answer failure mode — a binding that steals a key the agent underneath
-// needs, a palette, a key in the wrong env var, a button whose command does nothing. Custom agents
-// and accounts left this list on #2616's direction; their editor says how a command must end.
-// Each has a section that displays its current state and
-// launches the owning skill, which is what the aria-label assertions in SettingsModal.spec pin.
-// Listed here so that moving one into the UI is a deliberate edit rather than a quiet lapse.
-const DISPLAY_ONLY = ["themes", "buttons", "chips"];
 
 const readAll = (dir: string, ext: string): string => {
   const entries = readdirSync(dir, { withFileTypes: true, recursive: true });
@@ -125,6 +118,9 @@ const ONE_ENTRY_ROUTES: Partial<Record<string, string>> = {
   accounts: "/api/config/accounts/",
   providers: "/api/config/providers/",
   keymap: "/api/config/keymap/binding",
+  chips: "/api/config/chips/",
+  buttons: "/api/config/buttons/",
+  themes: "/api/config/themes/",
 };
 const writesKey = (source: string, key: string): boolean => {
   const route = ONE_ENTRY_ROUTES[key];
@@ -168,10 +164,5 @@ describe("every global setting is reachable", () => {
       .filter(([key, where]) => where.skill !== undefined && !skillSource(where.skill).includes(key))
       .map(([key, where]) => `${key} (expected in ${where.skill})`);
     expect(missing).toEqual([]);
-  });
-
-  it("keeps the display-only settings out of the UI's write paths", () => {
-    const editable = DISPLAY_ONLY.filter((key) => REACHABLE_BY[key]?.ui);
-    expect(editable).toEqual([]);
   });
 });

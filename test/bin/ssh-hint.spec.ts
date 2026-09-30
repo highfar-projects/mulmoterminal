@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { inSshSession, sshTunnelHintLines } from "../../bin/ssh-hint.js";
+import { configuredRemoteServer, inSshSession, sshTunnelHintLines } from "../../bin/ssh-hint.js";
 
 // #2669. Started over SSH, the launcher opens no browser on that machine and says how to reach it
 // through a port forward instead.
@@ -35,5 +35,24 @@ describe("sshTunnelHintLines", () => {
 
   it("is null when not over SSH", () => {
     expect(sshTunnelHintLines({ USER: "dev" }, 34567)).toBeNull();
+  });
+});
+
+// #2669 (experimental): remoteServer in the config also keeps the launcher from opening a browser
+// here, when it was started without SSH (a service, a remote desktop).
+describe("remoteServer in the launcher", () => {
+  it("reads only a literal true", () => {
+    expect(configuredRemoteServer({ remoteServer: true })).toBe(true);
+    [{ remoteServer: "true" }, { remoteServer: 1 }, {}, null, "x"].forEach((c) => expect(configuredRemoteServer(c)).toBe(false));
+  });
+
+  it("gives the tunnel lines without SSH when remoteServer is set, and says why", () => {
+    const text = (sshTunnelHintLines({ USER: "dev" }, 34567, true) ?? []).join("\n");
+    expect(text).toContain("remoteServer is set");
+    expect(text).toContain("ssh -N -L 34567:127.0.0.1:34567 dev@<this-host>");
+  });
+
+  it("stays null with neither", () => {
+    expect(sshTunnelHintLines({ USER: "dev" }, 34567, false)).toBeNull();
   });
 });

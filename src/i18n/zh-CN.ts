@@ -5,9 +5,14 @@ import { commandPaletteZhCN } from "./commandPalette/zh-CN";
 import { focusModeZhCN } from "./focusMode/zh-CN";
 import { fileHistoryZhCN } from "./fileHistory/zh-CN";
 import { dirConfigSaveZhCN } from "./dirConfigSave/zh-CN";
+import { dirConfigOpenZhCN } from "./dirConfigOpen/zh-CN";
+import { themeEditorZhCN } from "./themeEditor/zh-CN";
+import { headerChipsZhCN } from "./headerChips/zh-CN";
+import { headerButtonsZhCN } from "./headerButtons/zh-CN";
 import { settingsControlsZhCN } from "./settingsControls/zh-CN";
 import { shortcutsZhCN } from "./shortcuts/zh-CN";
 import { filesTreeZhCN } from "./filesTree/zh-CN";
+import { previewCodeCopyZhCN } from "./previewCodeCopy/zh-CN";
 
 // 简体中文。`Messages` 就是 en.ts 的形状，少一个键就会编译失败 —— 不会出现运行时悄悄回退到
 // 英文、而谁都没发现的状态。
@@ -599,9 +604,14 @@ export const zhCN: Messages = {
   },
   fileHistory: fileHistoryZhCN,
   dirConfigSave: dirConfigSaveZhCN,
+  dirConfigOpen: dirConfigOpenZhCN,
+  themeEditor: themeEditorZhCN,
+  headerChips: headerChipsZhCN,
+  headerButtons: headerButtonsZhCN,
   focusMode: focusModeZhCN,
   settingsControls: settingsControlsZhCN,
   ...filesTreeZhCN,
+  ...previewCodeCopyZhCN,
   tips: tipsZhCN,
   blueprints: blueprintsZhCN,
 };

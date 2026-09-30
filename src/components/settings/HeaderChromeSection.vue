@@ -4,17 +4,14 @@ import { useI18n } from "vue-i18n";
 import { headerButtonCount, headerChipCount } from "../../composables/headerConfigSummary";
 import SkillLaunchButton from "../SkillLaunchButton.vue";
 import HeaderStatusColorsEditor from "./HeaderStatusColorsEditor.vue";
+import HeaderChipsEditor from "./HeaderChipsEditor.vue";
+import HeaderButtonsEditor from "./HeaderButtonsEditor.vue";
 import type { BundledSkillName } from "../../../common/bundledSkills";
 import { HEADER_STATUS_TINTS, sanitizeHeaderStatusTint } from "../../../common/headerStatusColors";
 import { globalHeaderStatusTint, saveHeaderStatusTint } from "../../composables/headerStatusColors";
 
-// Read-only. A button carries a command, a run mode and a `when` scope, and a chip a template
-// substituted with the session's live context — an editor for that is a small IDE, and the skill
-// already asks the two questions ("what should it do", "where should it appear") that produce a
-// correct entry.
-//
-// `null` is not zero: the key is unconfigured, so the built-in header applies. An empty array is a
-// user who removed every button, and saying "0" for both would hide that difference.
+// Chips and the two simplest kinds of button are edited here; folders and buttons that open
+// something are still written by the skill, which asks what they should do and where they appear.
 defineEmits<{ (e: "launch-skill", skill: BundledSkillName): void }>();
 
 const { t } = useI18n();
@@ -65,6 +62,8 @@ async function onTintChange(e: Event) {
     <option v-for="mode in HEADER_STATUS_TINTS" :key="mode" :value="mode">{{ t(`settingsControls.headerTint.tints.${mode}`) }}</option>
   </select>
   <HeaderStatusColorsEditor />
+  <HeaderButtonsEditor />
+  <HeaderChipsEditor />
   <div class="mb-3">
     <SkillLaunchButton skill="mulmoterminal-header" icon="widgets" :label="t('settings.headerChrome.setUp')" @launch="$emit('launch-skill', $event)" />
   </div>

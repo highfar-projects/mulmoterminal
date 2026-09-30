@@ -2,6 +2,7 @@
 // that lets it run and nothing else. Its own module because it is pure text-building with no Node
 // dependency, unlike the nonce beside it there.
 import { EXTERNAL_HREF, isPreviewToken, MD_PREVIEW_FROM_FRAME, MD_PREVIEW_FROM_HOST, OTHER_SCHEME_HREF } from "../../common/mdPreviewMessage.js";
+import { CODE_BLOCK_ATTR } from "../../common/previewCodeBlocks.js";
 
 /** How long the document sits on a burst of scrolling before reporting where it ended up.
  *  `setTimeout` rather than `requestAnimationFrame` deliberately: the pane hides this iframe with
@@ -76,6 +77,64 @@ const GROWTH_WATCH = [
   "}).observe(document.documentElement);",
 ];
 
+// A copy button on each code block the server numbered (#2615). It asks the HOST to show the block —
+// the host takes the text from the file, so nothing here decides what is copied. Its name comes from
+// the host, which knows the app's language; until then it is the icon alone. The DOM is reached through
+// the prototypes: a `.md` can shadow `document.querySelectorAll` with `<img name=...>`, and a throw here
+// must not take the rest of this script with it — which is also why it runs last.
+const COPY_ICON =
+  '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="5.5" y="5.5" width="8.5" height="8.5" rx="1.5"/><path d="M10.5 3.5V3A1.5 1.5 0 0 0 9 1.5H3A1.5 1.5 0 0 0 1.5 3v6A1.5 1.5 0 0 0 3 10.5h.5"/></svg>';
+const COPY_BUTTON_STYLE =
+  "position:absolute;top:4px;right:4px;padding:2px 4px;line-height:0;border:1px solid currentColor;border-radius:4px;background:inherit;color:inherit;opacity:.6;cursor:pointer;user-select:none";
+const CODE_COPY = [
+  `copyButtons = Array.from(Document.prototype.querySelectorAll.call(document, 'pre[${CODE_BLOCK_ATTR}]')).map((pre) => {`,
+  "  const button = Document.prototype.createElement.call(document, 'button');",
+  "  button.type = 'button';",
+  `  button.innerHTML = ${JSON.stringify(COPY_ICON)};`,
+  `  button.setAttribute('style', ${JSON.stringify(COPY_BUTTON_STYLE)});`,
+  "  pre.style.position = 'relative';",
+  // Room for the button, so it does not sit over the end of the first line.
+  "  pre.style.paddingRight = '2.5em';",
+  "  button.addEventListener('click', (event) => {",
+  "    event.preventDefault();",
+  // A block inside a link: the press is the button's, not the link's.
+  "    event.stopPropagation();",
+  `    post({ kind: "code-block", index: Number(pre.getAttribute('${CODE_BLOCK_ATTR}')) });`,
+  "  });",
+  "  pre.prepend(button);",
+  "  return button;",
+  "});",
+  "nameCopyButtons = (label) => copyButtons.forEach((button) => {",
+  "  button.title = label;",
+  "  button.setAttribute('aria-label', label);",
+  "});",
+];
+
+// What the host says: the copy buttons' name (with the answer to `ready`, and again when the app's
+// language changes), a heading to go to, or the place to hold.
+const MESSAGE_LISTENER = [
+  "addEventListener('message', (event) => {",
+  "  if (event.source !== parent) return;",
+  "  const data = event.data;",
+  `  if (!data || data.source !== ${JSON.stringify(MD_PREVIEW_FROM_HOST)}) return;`,
+  "  if (typeof data.codeCopyLabel === 'string') nameCopyButtons(data.codeCopyLabel);",
+  "  if (typeof data.heading === 'number' && typeof data.headingText === 'string') {",
+  "    const occurrence = typeof data.headingOccurrence === 'number' ? data.headingOccurrence : 0;",
+  "    const target = headingFor(data.heading, data.headingText, occurrence);",
+  "    if (!target) return;",
+  "    anchor = target;",
+  "    readerMoved = false;",
+  "    applyPlace();",
+  '    post({ kind: "scroll", scrollY: place });',
+  "    return;",
+  "  }",
+  "  if (typeof data.scrollY !== 'number') return;",
+  "  anchor = null;",
+  "  place = data.scrollY;",
+  "  applyPlace();",
+  "});",
+];
+
 const reporterSource = (token: string | null): string =>
   [
     "(() => {",
@@ -107,25 +166,10 @@ const reporterSource = (token: string | null): string =>
     `  }, ${SCROLL_REPORT_MS});`,
     "}, { passive: true });",
     ...HEADING_LOOKUP,
-    "addEventListener('message', (event) => {",
-    "  if (event.source !== parent) return;",
-    "  const data = event.data;",
-    `  if (!data || data.source !== ${JSON.stringify(MD_PREVIEW_FROM_HOST)}) return;`,
-    "  if (typeof data.heading === 'number' && typeof data.headingText === 'string') {",
-    "    const occurrence = typeof data.headingOccurrence === 'number' ? data.headingOccurrence : 0;",
-    "    const target = headingFor(data.heading, data.headingText, occurrence);",
-    "    if (!target) return;",
-    "    anchor = target;",
-    "    readerMoved = false;",
-    "    applyPlace();",
-    '    post({ kind: "scroll", scrollY: place });',
-    "    return;",
-    "  }",
-    "  if (typeof data.scrollY !== 'number') return;",
-    "  anchor = null;",
-    "  place = data.scrollY;",
-    "  applyPlace();",
-    "});",
+    // Declared before the listener that names the buttons; filled in last (see CODE_COPY).
+    "let copyButtons = [];",
+    "let nameCopyButtons = () => {};",
+    ...MESSAGE_LISTENER,
     ...GROWTH_WATCH,
     // A link is handed to the host rather than followed, decided on the attribute as written. An
     // external one because the frame has no `allow-popups` and most sites refuse to be framed
@@ -142,6 +186,7 @@ const reporterSource = (token: string | null): string =>
     '  post(external ? { kind: "navigate", href } : { kind: "open", href });',
     "});",
     'post({ kind: "ready" });',
+    ...CODE_COPY,
     "})();",
   ].join("\n");
 

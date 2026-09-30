@@ -13,7 +13,8 @@ import { expandedPaths, restoreLevels } from "./filesTreeState";
 import { useFilesTree, type TreeNode } from "../composables/useFilesTree";
 import { useOpenFile } from "../composables/useOpenFile";
 import { useFilesReveal } from "../composables/useFilesReveal";
-import { useMdPreviewScroll } from "../composables/useMdPreviewScroll";
+import { useFilesPreviewWire } from "../composables/useFilesPreviewWire";
+import PreviewCodeBlockDialog from "./PreviewCodeBlockDialog.vue";
 import type { FilesPaneState } from "./filesPaneState";
 import { useFilesTabs } from "../composables/useFilesTabs";
 import { tabLabels } from "./filesTabs";
@@ -104,18 +105,7 @@ const editorHost = ref<HTMLDivElement>();
 
 // Preview is an iframe the pane cannot read into, so where the reader is in it arrives by message
 // from the document's own reporter — and goes back the same way when that document reloads.
-const previewFrame = useTemplateRef<HTMLIFrameElement>("previewFrame");
-// The wire hears the frame only while a MARKDOWN document was put in it: that document's one script
-// is the server's nonce'd reporter. An HTML page runs its own scripts and could ask the host to open
-// a browser tab or another file (#2269 review), so while one is up the wire hears no frame at all.
-// Which DOCUMENT is in the frame is settled by the token its reporter stamps (#2515): a Markdown file
-// nobody sanitised can navigate its own frame elsewhere, and that page never had the token.
-const previewScroll = useMdPreviewScroll(
-  () => (previewKind.value === "markdown" ? previewFrame.value : null),
-  file.previewScrollTop,
-  openPreviewLink,
-  () => file.previewToken.value,
-);
+const previewScroll = useFilesPreviewWire(file, openPreviewLink, () => props.cwd);
 
 // A Markdown file's headings, to go to one in the editor or the Preview (#2576).
 const outline = useFileOutline({ editor: file.editor, showPreview, goToPreviewHeading: previewScroll.goToHeading });
@@ -785,5 +775,6 @@ defineExpose({
         </button>
       </div>
     </Teleport>
+    <PreviewCodeBlockDialog v-if="previewScroll.codeBlock?.shown.value" :lookup="previewScroll.codeBlock.shown.value" @close="previewScroll.codeBlock.close" />
   </div>
 </template>

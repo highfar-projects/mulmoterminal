@@ -71,6 +71,15 @@ describe("mdPreviewFrameMessage", () => {
   it.each([[""], [7], [undefined], [null]])("refuses %j as a file to open", (href) => {
     expect(mdPreviewFrameMessage(frame({ kind: "open", href }))).toBeNull();
   });
+
+  // #2615. A code block's number: all the document can say, and the pane reads the block from the file.
+  it.each([[0], [3], [2 ** 31]])("passes code block %j on", (index) => {
+    expect(mdPreviewFrameMessage(frame({ kind: "code-block", index }))).toEqual({ token: null, kind: "code-block", index });
+  });
+
+  it.each([[-1], [1.5], ["2"], [Number.NaN], [Infinity], [2 ** 53], [null], [undefined]])("refuses %j as a code block", (index) => {
+    expect(mdPreviewFrameMessage(frame({ kind: "code-block", index }))).toBeNull();
+  });
 });
 
 // #2515. Every message carries the token its document was served with; the host compares it.

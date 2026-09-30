@@ -192,6 +192,8 @@ description: MulmoTerminal のヘッダー設定を書くときに引くペー�
 
 `chips` は 1 段目の情報表示を並べ替え・非表示にし、自分のものを足します。書かなければ既定のままです。
 
+全体の一覧は JSON を書かずにも変えられます。**設定 → ヘッダーのボタンとチップ** で、組み込みや自作のチップを足す・外す・上下に動かす・既定の並びに戻す、ができます。開いている端末にはすぐ反映されます。プロジェクトの `.mulmoterminal.json` に一覧があるところでは、引き続きそちらが使われます。
+
 ```json
 { "chips": ["git", "ctx", { "label": "Which environment this project deploys to", "text": "env staging" }] }
 ```

@@ -7,6 +7,7 @@ import path from "node:path";
 import { isRecord } from "../../common/isRecord.js";
 import { SHOW_LOAD_AVERAGE_DEFAULT, sanitizeShowLoadAverage } from "../../common/showLoadAverage.js";
 import { PALETTE_SEARCH_BOX_DEFAULT, sanitizePaletteSearchBox } from "../../common/paletteSearchBox.js";
+import { REMOTE_SERVER_DEFAULT, sanitizeRemoteServer } from "../../common/remoteServer.js";
 import { PLAYFUL_EFFECTS_DEFAULT, sanitizePlayfulEffects, type PlayfulEffects } from "../../common/playfulEffects.js";
 import { sanitizePresets } from "./cwd-presets.js";
 import { sanitizeButtons, sanitizeChips } from "./header-config.js";
@@ -55,6 +56,7 @@ import { sanitizeGitlabHosts } from "../../common/gitlabHosts.js";
 import { DEFAULT_WORKLOG_INTERVAL_HOURS, sanitizeWorklogIntervalHours } from "../../common/worklogInterval.js";
 import { DEFAULT_REAP_IDLE_DAYS, sanitizeReapIdleDays, DEFAULT_REAP_INTERVAL_HOURS, sanitizeReapIntervalHours } from "../../common/sessionReap.js";
 import { GUI_SERVER_ID } from "../../common/toolGroups.js";
+import { CUSTOM_THEMES_MAX } from "../../common/themeEntries.js";
 
 export interface AppConfig {
   cwdPresets: CwdPreset[];
@@ -155,6 +157,9 @@ export interface AppConfig {
   showLoadAverage: boolean;
   // A search box in the middle of the top bar that opens the command palette (#2569). Off by default.
   paletteSearchBox: boolean;
+  // Experimental: the browser is on another machine (an SSH tunnel), so actions that act on this
+  // machine's screen are withheld (#2669). Off by default.
+  remoteServer: boolean;
   // A little theatre on the terminal now and then. "off" switches it off; a picture name fixes the picture.
   playfulEffects: PlayfulEffects;
   // Which pinned favourites the toolbar shows without opening Collections (#1984), as
@@ -217,7 +222,6 @@ export interface AppConfig {
 
 // A user-defined colour scheme (#996). `extends` names a built-in to start from, so a theme
 // that only recolours the accent is three lines; without it `colors` has to be complete.
-const CUSTOM_THEMES_MAX = 24;
 export function sanitizeCustomThemes(input: unknown): CustomTheme[] {
   if (!Array.isArray(input)) return [];
   const seen = new Set<string>();
@@ -567,6 +571,7 @@ export const emptyConfig = (): AppConfig => ({
   autoDirIcon: true,
   showLoadAverage: SHOW_LOAD_AVERAGE_DEFAULT,
   paletteSearchBox: PALETTE_SEARCH_BOX_DEFAULT,
+  remoteServer: REMOTE_SERVER_DEFAULT,
   playfulEffects: PLAYFUL_EFFECTS_DEFAULT,
   toolbarPins: [],
   cockpitLines: { ...DEFAULT_COCKPIT_LINES },
@@ -667,6 +672,7 @@ function sanitizeAppConfig(raw: unknown): AppConfig {
     autoDirIcon: sanitizeAutoDirIcon(o.autoDirIcon),
     showLoadAverage: sanitizeShowLoadAverage(o.showLoadAverage),
     paletteSearchBox: sanitizePaletteSearchBox(o.paletteSearchBox),
+    remoteServer: sanitizeRemoteServer(o.remoteServer),
     playfulEffects: sanitizePlayfulEffects(o.playfulEffects),
     toolbarPins: sanitizeToolbarPins(o.toolbarPins),
     cockpitLines: sanitizeCockpitLines(o.cockpitLines),
@@ -797,6 +803,7 @@ export function mergeConfigUpdate(base: AppConfig, body: Record<string, unknown>
     autoDirIcon: updated("autoDirIcon", sanitizeAutoDirIcon, base.autoDirIcon),
     showLoadAverage: updated("showLoadAverage", sanitizeShowLoadAverage, base.showLoadAverage),
     paletteSearchBox: updated("paletteSearchBox", sanitizePaletteSearchBox, base.paletteSearchBox),
+    remoteServer: updated("remoteServer", sanitizeRemoteServer, base.remoteServer),
     playfulEffects: updated("playfulEffects", sanitizePlayfulEffects, base.playfulEffects),
     toolbarPins: updated("toolbarPins", sanitizeToolbarPins, base.toolbarPins),
     cockpitLines: updated("cockpitLines", sanitizeCockpitLines, base.cockpitLines),
@@ -848,6 +855,7 @@ export function toPublicAppConfig(config: AppConfig): AppConfig {
     autoDirIcon: config.autoDirIcon,
     showLoadAverage: config.showLoadAverage,
     paletteSearchBox: config.paletteSearchBox,
+    remoteServer: config.remoteServer,
     playfulEffects: config.playfulEffects,
     toolbarPins: config.toolbarPins,
     cockpitLines: config.cockpitLines,

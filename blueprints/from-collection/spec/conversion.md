@@ -1,6 +1,6 @@
 # コレクションからの対応表
 
-土台が local（Express + SQLite + Vue）なら上の表と「表と列の名前」、firebase なら「Firebase（Firestore）」、cloudflare なら「Cloudflare（D1 と R2）」の節に従う。画面と操作は両方に共通。
+土台が local（Express + SQLite + Vue）なら上の表と「表と列の名前」、firebase なら「Firebase（Firestore）」、cloudflare なら「Cloudflare（D1 と R2）」、supabase なら「Supabase（Postgres と Storage）」の節に従う。画面と操作は両方に共通。
 
 ## local（Express + SQLite + Vue）
 
@@ -81,9 +81,28 @@ D1 は SQLite なので、項目の型と「表と列の名前」は local と�
 
 記録の移し替えは、wrangler で D1 と R2 を読み直してこの約束で突き合わせる（手元では空の状態から 2 回移して、2 回目で行が増えないことも見る）。行は主キーでの upsert（`INSERT … ON CONFLICT … DO UPDATE`）で入れる。`INSERT OR REPLACE` は行を消して入れ直すので、移し替えが書かない列が既定値に戻る。
 
+## Supabase（Postgres と Storage）
+
+表と列の名前は local と同じ（表は slug の `-` を `_` に、列はキーのまま）。値は Postgres の型で持つ。
+
+| コレクション | Supabase での持ち方 |
+|---|---|
+| string / text / email / markdown / enum | text |
+| number | numeric（整数だけなら integer） |
+| boolean | boolean |
+| date / datetime | date / timestamptz（読み直しは同じ時刻かで比べる） |
+| ref | 参照先の主キー（外部キー） |
+| image / file | Storage のバケットの、記録と同じパスをキーにして置く。列はそのパス。バケットはマイグレーションで作り（`insert into storage.buckets …`）、その名前を `.blueprint/supabase-bucket` に書く。読み書きの方針（storage.objects の RLS）も表と同じく仕様どおりに書く |
+| table | 子の表（親への外部キー） |
+
+記録の移し替えは、Supabase の CLI で Postgres と Storage を読み直して、この約束で突き合わせる（手元ではデータベースを作り直してから 2 回移し、2 回目で行が増えないことも見る）。
+- 行は主キーでの upsert（`INSERT … ON CONFLICT … DO UPDATE`）で入れる。`supabase db query --file` は一つの文しか流せないので、全体を一つの `DO $$ … $$` ブロックに包むか、表ごとに一つの INSERT にまとめる。
+- 移した記録の持ち主（`owner` の列）は仕様書で決める。既定は取り込む本人のアカウント: 手元では試しのデータの利用者、本番では本人のメールアドレスから引いた利用者。
+- 移し替えは CLI（データベースの持ち主の権限）で行うので、RLS を通らない。秘密の鍵は使わない。
+
 ## 共有アプリの権限（元が共有アプリのとき）
 
-`app.json` の宣言は、仕様書の「誰が何をできるか」の表になり、土台のログイン・役割・ルールの工程の入力になる。local と Cloudflare ならサーバー（Worker）の規則、Firebase ならセキュリティルール（と関数）で強制する。
+`app.json` の宣言は、仕様書の「誰が何をできるか」の表になり、土台のログイン・役割・ルールの工程の入力になる。local と Cloudflare ならサーバー（Worker）の規則、Firebase ならセキュリティルール（と関数）、Supabase なら行ごとの権限（RLS）で強制する。
 
 | app.json | 仕様書での扱い |
 |---|---|

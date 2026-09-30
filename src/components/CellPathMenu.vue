@@ -9,6 +9,7 @@
 import { ref, nextTick, watch, onUnmounted, useTemplateRef } from "vue";
 import { useI18n } from "vue-i18n";
 import { openTerminalAt } from "../composables/useNewTerminal";
+import { remoteServer } from "../composables/remoteServer";
 import { pickFileInto } from "../composables/useHeaderAction";
 import { menuPlacement, type MenuPlacement } from "../composables/menuPlacement";
 import { jsonBody } from "../jsonBody";
@@ -244,10 +245,10 @@ onUnmounted(() => {
     >
       <!-- Insert a file path leads: it is the one item that acts on the prompt the user is in the
          middle of writing, and the one reached for most. -->
-      <button v-if="slotKey" type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(insertFilePath)">
+      <button v-if="slotKey && !remoteServer" type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(insertFilePath)">
         <span class="material-symbols-outlined text-[15px]" aria-hidden="true">attach_file</span> {{ t("pathMenu.insertFilePath") }}
       </button>
-      <button type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(openDir)">
+      <button v-if="!remoteServer" type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(openDir)">
         <span class="material-symbols-outlined text-[15px]" aria-hidden="true">folder</span> {{ t("pathMenu.reveal") }}
       </button>
       <button type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(browseFiles)">
