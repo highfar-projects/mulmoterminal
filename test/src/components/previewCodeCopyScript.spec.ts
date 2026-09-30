@@ -51,6 +51,14 @@ describe("the Preview's code-block buttons", () => {
     expect(button?.style.background).toBe(preview.window.getComputedStyle(pre ?? preview.window.document.body).backgroundColor);
   });
 
+  // A document that colours its own blocks: the button takes the block's text colour, not the page's.
+  it("take the block's own colours", () => {
+    const preview = previewOf('<style>pre{background:#111;color:#eee}</style><pre data-code-block="0"><code>a</code></pre>');
+    const button = preview.buttons()[0];
+    expect(button?.style.color).toBe("rgb(238, 238, 238)");
+    expect(button?.style.background).toBe("rgb(17, 17, 17)");
+  });
+
   it("are the press, not the link a block sits in", () => {
     const preview = previewOf('<a href="https://example.com/"><pre data-code-block="0"><code>a</code></pre></a>');
     preview.buttons()[0]?.click();
