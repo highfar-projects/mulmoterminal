@@ -1,6 +1,7 @@
 // The blueprint overlay's calls to /api/blueprints. Every body is parsed with the same schemas the
 // server writes with, so a shape that drifted shows up as an error on screen, not as `undefined`.
 import { z } from "zod";
+import { originalsViewSchema, type OriginalsView } from "../../common/blueprint/originals";
 import { sourceStatusSchema, type SourceStatus } from "../../common/blueprint/sourceStatus";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { jsonBody } from "../jsonBody";
@@ -140,6 +141,10 @@ const reportViewSchema = z.object({
   pair: z.object({ base: z.string(), usecase: z.string() }).nullable(),
 });
 export type ReportView = z.infer<typeof reportViewSchema>;
+
+/** The originals the build kept, each beside the file as it is now. */
+export const loadOriginals = (runId: string): Promise<ApiResult<OriginalsView>> =>
+  call(originalsViewSchema, `/api/blueprints/runs/${encodeURIComponent(runId)}/originals`);
 
 /** The finished build's report, as its usecase names it; nulls when there is none. */
 export const loadReport = (runId: string): Promise<ApiResult<ReportView>> => call(reportViewSchema, `/api/blueprints/runs/${encodeURIComponent(runId)}/report`);

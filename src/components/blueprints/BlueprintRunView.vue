@@ -15,6 +15,7 @@ import { checkOutputText, stopReasonText, untrustedFolder } from "./stepNoticeTe
 import BlueprintLiveActivity from "./BlueprintLiveActivity.vue";
 import BlueprintSpecReview from "./BlueprintSpecReview.vue";
 import BlueprintChangedFiles from "./BlueprintChangedFiles.vue";
+import BlueprintOriginalsDiff from "./BlueprintOriginalsDiff.vue";
 import BlueprintNextSteps from "./BlueprintNextSteps.vue";
 import { filesGotoFile } from "../../composables/useFilesView";
 import { openTerminalAt } from "../../composables/useNewTerminal";
@@ -322,6 +323,8 @@ const roundOf = (step: Pick<PlanStep, "id" | "repeatWhile">) => roundNumber(step
           <MarkdownProse :markdown="report.markdown" />
         </div>
       </section>
+
+      <BlueprintOriginalsDiff v-if="finished" :run-id="runId" />
 
       <BlueprintNextSteps
         v-if="finished && report?.pair"
