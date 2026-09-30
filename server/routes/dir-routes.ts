@@ -24,6 +24,7 @@ import { EMPTY_WORK_ITEM, isIssueNumber } from "../../common/prPhase.js";
 import { ensureWorkComment } from "../git/work-comment.js";
 import { isWorkCommentKind, workCommentDirLabel } from "../../common/workComment.js";
 import { isRecord } from "../../common/isRecord.js";
+import { dirConfigJsonSchema } from "../config/config-schema.js";
 import { prUrlForBranch } from "../git/pr-for-branch.js";
 import { applySkillFilter, discoverSkills } from "../backends/remoteHost/skills.js";
 
@@ -182,6 +183,12 @@ export function mountDirRoutes(app: Express): void {
   // Per-directory overrides (<cwd>/.mulmoterminal.json): the badge/name/theme a
   // terminal opened in this directory should use. cwd is validated like every other
   // cwd-scoped route; the raw sound path stays server-side (see /api/dir-sound).
+  // The JSON Schema of a directory's config file, for the Files pane's editor (#2625): it offers the
+  // keys and marks a value the loader would drop, while the file is being written.
+  app.get("/api/dir-config/schema", (_req, res) => {
+    res.json(dirConfigJsonSchema());
+  });
+
   app.get("/api/dir-config", (req, res) => {
     const cwd = workspaceForRoute(req.query.cwd, res);
     if (cwd === null) return;

@@ -171,6 +171,8 @@ Why the misspelt key stays in the file at all: [keys this version doesn't know s
 
 Place this at the project root to change the appearance, sound, and header of **terminals (grid cells) opened in that directory**.
 
+Open it in the Files pane and the editor knows this file's keys: it offers them as you type (`Ctrl+Space` asks) and underlines a value the server would reject — a misspelt key or a colour it cannot read — before you save.
+
 ### Which model to use
 
 ```json
@@ -1191,6 +1193,11 @@ the off state nothing.
 Keyboard shortcuts are **opt-in**. There are no defaults: with no `keymap` in `config.json`, nothing is
 bound and no key is intercepted. That is deliberate — **every key you bind is a key the program inside the
 terminal stops receiving**, and only you know whether that trade is worth it for your workflow.
+
+The quickest way to bind one is **Settings → Keyboard shortcuts → Change** on its row: press the keys, and
+it is saved and works at once. **Clear** removes it. A binding that would stop MulmoTerminal from starting
+is refused there, and one the browser keeps for itself is saved with a warning. Two-key sequences and
+`send` entries are still written in the file (or with `/mulmoterminal-keys`).
 
 ```json
 {

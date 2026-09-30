@@ -634,6 +634,17 @@ up for Codex, loaded by description.
 
 ---
 
+## Running the server on another machine
+
+The server can live on a Linux box, a VPS or a container while your browser stays on your laptop:
+start it there over SSH (`npx mulmoterminal`), and reach it through an SSH tunnel
+(`ssh -N -L 34567:127.0.0.1:34567 you@server`, then open `http://localhost:34567`). Started over
+SSH, the launcher opens no browser on the server and prints that command. It still listens on
+loopback only — nothing is opened to the network. Logging the agents in on the server, Docker, and
+the few actions that act on the server's machine: [Run the server on another machine](https://receptron.github.io/mulmoterminal/guide/en/remote.html).
+
+---
+
 ## Session persistence (tmux)
 
 If **`tmux` is installed**, MulmoTerminal runs each Claude session and launcher inside

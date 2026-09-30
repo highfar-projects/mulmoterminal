@@ -57,6 +57,16 @@ export const settingsControlsZhTW = {
     full: "已滿（最多 8 項）。請先刪除一項。",
     refused: "伺服器沒有儲存。什麼都沒有改變。",
   },
+  shortcuts: {
+    change: "變更",
+    clear: "清除",
+    recording: "請按鍵…（Esc 取消）",
+    whitespace: "空白鍵等空白按鍵無法綁定。",
+    unidentified: "瀏覽器無法識別該按鍵，請換一個。",
+    plus: "+ 鍵無法寫進綁定，請換一個鍵。",
+    numpad: "數字鍵盤上的鍵無法與主鍵盤上的同一鍵區分，請換一個鍵。",
+    refused: "未儲存 — {problems}",
+  },
   providers: {
     labelPlaceholder: "名稱（例如：OpenRouter）",
     labelField: "後端名稱",
