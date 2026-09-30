@@ -57,6 +57,9 @@ export const blueprintsJa: Messages["blueprints"] = {
     pickMore: "ファイルが多いので一部だけ出しています。ほかは打ち込んでください。",
     followUp: "「{title}」の続きです。同じフォルダと答えを入れました。質問を確かめて「始める」を押してください。",
     restored: "信頼の確認に答える前に入れていた内容を戻しました。確かめて「始める」を押してください。",
+    personalDataMembers: "共有アプリのメンバー {count} 人のメールアドレス（記録を写さなくても、アプリと一緒に写ります）",
+    copyPersonalData: "確かめたので、写して始める",
+    personalDataHint: "記録を写さないなら、「記録（中のデータ）も写しますか」をいいえにして、もう一度「始める」を押してください。",
     openToTrust: "ここで Claude Code を開く",
     openToTrustHint:
       "{dir} で Claude Code を開きます。「このフォルダを信頼しますか」と聞かれたら、信頼してよければ答えてください。答えたら設計図に戻り、もう一度「始める」を押します。入れた内容はそのまま残ります。",
@@ -154,6 +157,7 @@ export const blueprintsJa: Messages["blueprints"] = {
     untrusted: "Claude Code がまだ {dir} を信頼していません。{trustIn} で一度 Claude Code を開いて信頼の確認に答えてから、もう一度試してください。",
     folderBusy: "別の作業（{runId}）がいま {dir} で作業しています。止まる（終わるか、あなたを待つ）まで待ってから、もう一度試してください。",
     samplesClash: "フォルダに同じ名前の別のファイル（{files}）があります。例には空のフォルダを選んでください。",
+    personalData: "この元には個人情報になり得るものがあります：{list}。フォルダに写す前に確かめてください。",
     heldElsewhere: "このマシンの設計図は、ポート {port} の MulmoTerminal が動かしています。そちらで操作してください。",
     revisionPending: "仕様書をまだ直しています。返事を待ってください。",
     specNotAtReview: "仕様書について話せるのは、あなたの確認を待っている間だけです。",

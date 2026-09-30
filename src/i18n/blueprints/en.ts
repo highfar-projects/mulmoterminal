@@ -58,6 +58,9 @@ export const blueprintsEn = {
     pickMore: "The folder has more files than are shown; type the others in.",
     followUp: 'Continues "{title}" in the same folder. The folder and the answers are filled in; read the questions and press Start.',
     restored: "This is what you had filled in before answering the trust prompt. Check it and press Start.",
+    personalDataMembers: "The email addresses of the shared app's {count} members (copied with the app in any case)",
+    copyPersonalData: "Checked: copy it and start",
+    personalDataHint: "To leave the records out, answer No to copying the records and press Start again.",
     openToTrust: "Open Claude Code here",
     openToTrustHint:
       "Opens Claude Code in {dir}. When it asks whether you trust this folder, answer if you do. Then come back to Blueprints and press Start again; what you filled in stays.",
@@ -155,6 +158,7 @@ export const blueprintsEn = {
     untrusted: "Claude Code does not trust {dir} yet. Open Claude Code in {trustIn} once, accept the trust prompt, then try again.",
     folderBusy: "Another build ({runId}) is working in {dir} right now. Wait until it stops (finished, or waiting for you), then try again.",
     samplesClash: "The folder already has different files named {files}. Choose an empty folder for the example.",
+    personalData: "This source holds what may be personal data: {list}. Check it before it is copied into the folder.",
     heldElsewhere: "Blueprints on this machine are run by the MulmoTerminal on port {port}. Make changes there.",
     revisionPending: "The specification is still being revised. Wait for the reply.",
     specNotAtReview: "The specification can be discussed only while it waits for you to review it.",

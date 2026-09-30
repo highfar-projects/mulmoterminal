@@ -84,6 +84,7 @@ export const startRun = (request: {
   answers: HearingAnswers;
   preset?: string;
   language?: PersonLanguage;
+  personalDataConfirmed?: boolean;
 }): Promise<ApiResult<{ runId: string }>> => call(createdSchema, "/api/blueprints/runs", postJson(request));
 
 export type PersonEvent = { type: "approve" } | { type: "reject"; reason: string } | { type: "answer"; answer: string } | { type: "retry" };

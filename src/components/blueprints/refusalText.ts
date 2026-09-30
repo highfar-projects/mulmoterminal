@@ -14,6 +14,7 @@ const REFUSAL_KEYS: Record<RefusalCode, RefusalKey> = {
   untrusted: "untrusted",
   "folder-busy": "folderBusy",
   "samples-clash": "samplesClash",
+  "personal-data": "personalData",
   "held-elsewhere": "heldElsewhere",
   "revision-pending": "revisionPending",
   "spec-not-at-review": "specNotAtReview",
@@ -30,7 +31,14 @@ const REFUSAL_KEYS: Record<RefusalCode, RefusalKey> = {
   "install-failed": "installFailed",
 };
 
-function valuesOf(refusal: Refusal): Record<string, string> {
+// The personal data a refusal names, one item each: a field as its label and where it is, then the roster.
+function personalDataItems(t: Translate, refusal: Extract<Refusal, { code: "personal-data" }>): string[] {
+  const fields = refusal.fields.map((field) => `${field.label} (${field.collection}.${field.field})`);
+  const roster = refusal.members > 0 ? [t("blueprints.form.personalDataMembers", { count: String(refusal.members) })] : [];
+  return [...fields, ...roster];
+}
+
+function valuesOf(t: Translate, refusal: Refusal): Record<string, string> {
   switch (refusal.code) {
     case "not-a-directory":
     case "no-parent":
@@ -43,6 +51,8 @@ function valuesOf(refusal: Refusal): Record<string, string> {
       return { dir: refusal.dir, runId: refusal.runId };
     case "samples-clash":
       return { files: refusal.files.join(", ") };
+    case "personal-data":
+      return { list: personalDataItems(t, refusal).join(", ") };
     case "held-elsewhere":
       return { port: refusal.port };
     case "registry-url-not-allowed":
@@ -68,5 +78,5 @@ function valuesOf(refusal: Refusal): Record<string, string> {
 /** A failed call's message in the person's language when the server said why as data; its English otherwise. */
 export function failureText(t: Translate, failure: Pick<ApiFailure, "error" | "refusal">): string {
   const { refusal } = failure;
-  return refusal ? t(`blueprints.refusals.${REFUSAL_KEYS[refusal.code]}`, valuesOf(refusal)) : failure.error;
+  return refusal ? t(`blueprints.refusals.${REFUSAL_KEYS[refusal.code]}`, valuesOf(t, refusal)) : failure.error;
 }
