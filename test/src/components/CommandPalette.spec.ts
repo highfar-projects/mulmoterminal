@@ -317,7 +317,7 @@ describe("CommandPalette", () => {
     host(true);
     const toggleListMode = vi.fn();
     const setSortMode = vi.fn();
-    paletteGridView.value = { listMode: () => true, toggleListMode, sortMode: () => "manual", setSortMode };
+    paletteGridView.value = { listMode: () => true, toggleListMode, sortMode: () => "manual", setSortMode, stepPage: () => true };
     await pickRow("choice:view:list");
     expect(toggleListMode).not.toHaveBeenCalled();
     await pickRow("choice:view:strip");

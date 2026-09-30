@@ -77,6 +77,8 @@ export interface PaletteGridView {
   toggleListMode: () => void;
   sortMode: () => SortMode;
   setSortMode: (mode: SortMode) => void;
+  /** Go to the next (+1) or previous (-1) page of the tiled grid; false past either end. */
+  stepPage: (dir: -1 | 1) => boolean;
 }
 
 export const paletteGridView = shallowRef<PaletteGridView | null>(null);

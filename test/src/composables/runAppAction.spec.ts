@@ -18,7 +18,13 @@ import { runAppAction } from "../../../src/composables/runAppAction";
 import { paletteGridView } from "../../../src/composables/commandPalette";
 import { settingsOpen } from "../../../src/composables/settingsOpener";
 
-const grid = { listMode: vi.fn(() => true), toggleListMode: vi.fn(), sortMode: vi.fn(() => "auto" as const), setSortMode: vi.fn() };
+const grid = {
+  listMode: vi.fn(() => true),
+  toggleListMode: vi.fn(),
+  sortMode: vi.fn(() => "auto" as const),
+  setSortMode: vi.fn(),
+  stepPage: vi.fn(() => true),
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -56,6 +62,16 @@ describe("runAppAction", () => {
     expect(grid.toggleListMode).toHaveBeenCalledTimes(1);
     expect(runAppAction("order-priority")).toBe(true);
     expect(grid.setSortMode).toHaveBeenCalledWith("priority");
+  });
+
+  it("steps the grid's page, and passes the grid's refusal at either end on", () => {
+    expect(runAppAction("page-next")).toBe(false); // no grid
+    paletteGridView.value = grid;
+    expect(runAppAction("page-next")).toBe(true);
+    expect(grid.stepPage).toHaveBeenLastCalledWith(1);
+    grid.stepPage.mockReturnValueOnce(false);
+    expect(runAppAction("page-prev")).toBe(false);
+    expect(grid.stepPage).toHaveBeenLastCalledWith(-1);
   });
 
   it("answers every app action", () => {
