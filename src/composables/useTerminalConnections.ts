@@ -31,6 +31,7 @@ import { Terminal, type ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { ClipboardAddon, type IClipboardProvider } from "@xterm/addon-clipboard";
+import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { guardMouseClicks, guardMouseTracking, type WheelScrollControl } from "./terminalMouseInput";
 import { getTerminalScrollSpeed } from "./useTerminalScrollSpeed";
 import { scrollsToBottomOnSubmit } from "./useScrollToBottomOnSubmit";
@@ -432,6 +433,13 @@ function buildTerminal(swallowedMouseModes: Set<number>, font: TerminalFont): Te
   // OSC 52 clipboard: Claude Code auto-copies the selection via OSC 52 — without this
   // addon xterm ignores it, so the copy silently never reaches the browser clipboard.
   term.loadAddon(new ClipboardAddon(undefined, clipboardProvider));
+  // Count an emoji (`✅`, `👉`) two cells wide, as Claude Code and tmux/psmux do. xterm's default
+  // Unicode 6 table counts it as one, so any repaint that skips cells it thinks are unchanged lands
+  // one column off per emoji. On psmux every scroll repaints that way, and a checklist of emoji
+  // lines broke apart into a staircase. The server's headless emulators use the same table
+  // (server/session/unicodeWidth.ts). Ambiguous-width characters stay one cell in both tables.
+  term.loadAddon(new Unicode11Addon());
+  term.unicode.activeVersion = "11";
   const host = document.createElement("div");
   host.style.width = "100%";
   host.style.height = "100%";

@@ -113,4 +113,13 @@ describe("renderScreen", () => {
     const rows = await renderScreen({ buffer: "0123456789", cols: 20, rows: 2, historyLines: 0 });
     expect(rows[0].full).toBe(false);
   });
+
+  // Claude Code and tmux/psmux count an emoji two cells wide, and a repaint addresses the cells
+  // after it by that count. psmux repaints only the cells it thinks changed, so "z" is placed at
+  // column 3 to replace "b". On xterm's default Unicode 6 table the emoji is one cell and the row
+  // would read "👉abz".
+  it("counts an emoji two cells wide, as the program that drew it does", async () => {
+    const buffer = `👉ab${ESC}[1;4Hz`;
+    expect(await screenOf({ buffer, cols: 20, rows: 2 })).toBe("👉az");
+  });
 });

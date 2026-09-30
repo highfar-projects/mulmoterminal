@@ -12,6 +12,7 @@
 import headless from "@xterm/headless";
 import type { IBufferLine } from "@xterm/headless";
 import type { ScreenRow } from "./screen-rows.js";
+import { useUnicode11Widths } from "./unicodeWidth.js";
 
 const { Terminal } = headless;
 
@@ -46,6 +47,7 @@ export async function renderScreen({ buffer, cols, rows, historyLines }: Headles
   // without this opt-in. `scrollback` is stated rather than left at xterm's default, so
   // asking for more history than the emulator keeps can't silently return less.
   const term = new Terminal({ cols, rows, scrollback: historyLines, allowProposedApi: true });
+  useUnicode11Widths(term);
   try {
     await new Promise<void>((resolve) => term.write(buffer, resolve));
     const active = term.buffer.active;

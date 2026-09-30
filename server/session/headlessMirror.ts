@@ -14,6 +14,7 @@
 // interop `@xterm/headless` needs under `node --import tsx`).
 import headless from "@xterm/headless";
 import { createRequire } from "node:module";
+import { useUnicode11Widths } from "./unicodeWidth.js";
 
 const { Terminal } = headless;
 
@@ -59,6 +60,7 @@ export interface HeadlessMirror {
 // above the fold is still covered, imperfectly, by the existing bounded-tail replay.
 export function createHeadlessMirror(cols: number, rows: number): HeadlessMirror {
   const term = new Terminal({ cols, rows, scrollback: 0, allowProposedApi: true });
+  useUnicode11Widths(term);
   const serializeAddon = new SerializeAddon();
   term.loadAddon(serializeAddon);
 

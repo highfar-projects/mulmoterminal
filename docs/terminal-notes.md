@@ -36,6 +36,7 @@ server   ── node-pty  ── tmux (persistence)  ── agent (claude / code
 | `@xterm/addon-web-links` | `^0.12.0` | Linkifies visible `http(s)://` URLs. |
 | `@xterm/addon-clipboard` | `^0.2.0` | OSC 52 clipboard write (auto-copy → browser clipboard). |
 | `@xterm/addon-fit` | `^0.11.0` | Size the grid to the container. |
+| `@xterm/addon-unicode11` | `^0.9.0` | Unicode 11 character widths, so an emoji (`✅`, `👉`) is two cells, as Claude Code and tmux/psmux count it. On xterm's default Unicode 6 table it is one cell, and every repaint that places cells after it lands one column off; on psmux, which repaints only changed cells on every scroll, a list of emoji lines broke into a staircase. Loaded in the browser (`buildTerminal`) and in both headless emulators (`server/session/unicodeWidth.ts`). |
 | `node-pty` | `^1.1.0` | The PTY. |
 | tmux | 3.4+ at runtime | OSC 8 hyperlink forwarding (`terminal-features hyperlinks`) needs 3.4+. Measured on 3.6a. |
 
@@ -410,6 +411,7 @@ looking) — flag them for QA on the release.
 | Area | Check in code | Needs user QA |
 |---|---|---|
 | Renderer / CJK | canvas addon still **loads** (the console warns when it falls back to DOM). The peer-major mismatch is expected and is not the check — a silent fallback is, because the CJK grid goes with it | long Japanese line doesn't drift off the right edge |
+| Emoji width | `term.unicode.activeVersion` is `"11"` in the browser and in `unicodeWidth.ts` | a Claude checklist of `✅` / `👉` lines stays aligned after it scrolls, including on psmux |
 | Scrollbar / selection | — (no unit coverage) | scrollbar visible + synced; Option+drag selects; selection auto-scrolls past the visible screen (#782) |
 | OSC 8 links | tmux `terminal-features '*:hyperlinks'` present; xterm `linkHandler` set | click Claude statusline `PR #NNNN` → opens the PR (no confirm dialog) |
 | OSC 52 clipboard | tmux `Ms` override + `set-clipboard on` present (`planMsOverride`) | Claude auto-copy reaches the browser clipboard |

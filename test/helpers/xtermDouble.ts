@@ -116,6 +116,8 @@ export function xtermModule(termState: XtermTermState, keyState: XtermKeyState) 
       // is covered against a REAL terminal in mouseTrackingGuard.spec.ts.
       parser = { registerCsiHandler: (...args: unknown[]) => termState.csiHandlers.push(args) };
       loadAddon() {}
+      // buildTerminal() switches the width table to Unicode 11 after loading its addon.
+      unicode = { activeVersion: "6" };
       registerLinkProvider() {}
       // Real xterm puts a hidden helper textarea inside the host, and the clipboard fallback finds
       // the copy target through it — a double that skipped it would let that path "pass" untested.
