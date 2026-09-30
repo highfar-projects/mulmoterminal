@@ -16,15 +16,18 @@ const TAKEN_AT = "2026-09-29T00:00:00.000Z";
 let projectDir = "";
 let retaken: Snapshot = { kind: "unknown" };
 const asked: { slug: string; records: boolean }[] = [];
+// The answers the server kept for the build: what it chose to start from, and whether the records came.
+let runAnswers: Record<string, unknown> = {};
 
 const run = () =>
   blueprintRunSchema.parse({
     id: "run-00000001",
     projectDir,
     basePackDir: "/packs/local",
-    usecasePackDir: "/packs/from-collection",
+    usecasePackDir: path.join(import.meta.dirname, "..", "..", "..", "blueprints", "from-collection"),
     steps: [{ id: "spec", title: "仕様書", description: "", skill: "skills/spec", check: "true", gates: [], reads: [], origin: "usecase" }],
     createdAtMs: 1,
+    answers: runAnswers,
   });
 const unused = async (): Promise<never> => {
   throw new Error("not used here");
@@ -78,6 +81,7 @@ afterAll(() => server.close());
 beforeEach(async () => {
   projectDir = await mkdtemp(path.join(tmpdir(), "bp-source-status-"));
   asked.length = 0;
+  runAnswers = { source: "app:f00d", copyRecords: true };
 });
 afterEach(() => rm(projectDir, { recursive: true, force: true }));
 
@@ -124,6 +128,23 @@ describe("GET /api/blueprints/runs/:id/source", () => {
   ])("has nothing to compare for %s, and takes nothing again", async (_label, content) => {
     if (content !== null) await writeRecord(content);
     retaken = ok("sha256:now");
+    expect((await statusOf()).body).toEqual({ status: "unknown" });
+    expect(asked).toEqual([]);
+  });
+
+  it.each([
+    ["another source than the build chose", { source: "app:other" }],
+    ["the records when the build copied the shape only", { records: false }],
+  ])("takes nothing again when source.json names %s", async (_label, tampered) => {
+    await writeRecord(record(tampered));
+    retaken = ok("sha256:now");
+    expect((await statusOf()).body).toEqual({ status: "unknown" });
+    expect(asked).toEqual([]);
+  });
+
+  it("takes nothing again for a build that did not start from a source", async () => {
+    runAnswers = {};
+    await writeRecord(record());
     expect((await statusOf()).body).toEqual({ status: "unknown" });
     expect(asked).toEqual([]);
   });

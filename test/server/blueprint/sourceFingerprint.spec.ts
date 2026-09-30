@@ -33,6 +33,10 @@ describe("sourceFingerprint", () => {
     expect(sourceFingerprint(changed())).not.toBe(sourceFingerprint(copy()));
   });
 
+  it("reads a record's keys in any order as the same record", () => {
+    expect(sourceFingerprint(copy('{"id":"1","a":1,"b":{"x":1,"y":2}}\n'))).toBe(sourceFingerprint(copy('{"b":{"y":2,"x":1},"a":1,"id":"1"}\n')));
+  });
+
   it("does not let one file's content run into the next file's name", () => {
     expect(sourceFingerprint([{ path: "a", content: "bc" }])).not.toBe(sourceFingerprint([{ path: "ab", content: "c" }]));
   });

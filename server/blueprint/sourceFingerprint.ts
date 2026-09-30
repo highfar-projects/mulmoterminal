@@ -6,13 +6,33 @@ import type { SnapshotFile } from "./collectionSnapshot.js";
 
 export const SOURCE_RECORD_PATH = `${SOURCE_DIR}/source.json`;
 
+// A record's keys in one order, so the same values read back in another order are the same record.
+const canonical = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (typeof value !== "object" || value === null) return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .toSorted(([a], [b]) => a.localeCompare(b))
+      .map(([key, entry]) => [key, canonical(entry)]),
+  );
+};
+
+const canonicalLine = (line: string): string => {
+  try {
+    return JSON.stringify(canonical(JSON.parse(line)));
+  } catch {
+    return line;
+  }
+};
+
 // The order a store lists records in is not promised, so a records file counts by its lines, not their order.
 const comparableContent = (file: SnapshotFile): Buffer => {
   if (!file.path.endsWith(`/${RECORDS_FILE}`)) return Buffer.from(file.content);
   const lines = file.content
     .toString()
     .split("\n")
-    .filter((line) => line !== "");
+    .filter((line) => line !== "")
+    .map(canonicalLine);
   return Buffer.from(lines.toSorted((a, b) => a.localeCompare(b)).join("\n"));
 };
 

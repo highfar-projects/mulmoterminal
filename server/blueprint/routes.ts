@@ -5,7 +5,7 @@ import path from "node:path";
 import { mkdir, readFile, rmdir, stat } from "node:fs/promises";
 import type { Express, Response } from "express";
 import { z } from "zod";
-import { listPacks, listPresets, loadPackPair, readPresets, type PackPair, type PackRoot } from "./packs.js";
+import { listPacks, listPresets, loadPackPair, readHearing, readPresets, type PackPair, type PackRoot } from "./packs.js";
 import { placeSamples, readSamples } from "./samples.js";
 import type { Sample } from "../../common/blueprint/samples.js";
 import { personLanguageSchema, type PersonLanguage } from "../../common/blueprint/personLanguage.js";
@@ -25,7 +25,7 @@ import { MAX_SOURCE_BYTES } from "../../common/blueprint/collectionSource.js";
 import { carriesPersonalData } from "../../common/blueprint/personalData.js";
 import type { SourceStatus } from "../../common/blueprint/sourceStatus.js";
 import { SOURCE_RECORD_PATH } from "./sourceFingerprint.js";
-import { compareSource, storedSource } from "./sourceStatus.js";
+import { compareSource, retakeTarget, storedSource } from "./sourceStatus.js";
 import { BlueprintRefusal, type BlueprintExecutor, type HumanEvent } from "./executor.js";
 import { BLUEPRINT_SLUG_RE } from "../../common/blueprint/manifest.js";
 import type { Refusal } from "../../common/blueprint/refusal.js";
@@ -180,8 +180,10 @@ function mountSourceRoute(app: Express, deps: BlueprintRouteDeps): void {
     try {
       const { run } = await deps.executor.view(req.params.id);
       const stored = storedSource(await readSourceRecord(run.projectDir));
-      if (stored === null) return res.json({ status: "unknown" } satisfies SourceStatus);
-      return res.json(compareSource(stored, await deps.collections.snapshot(stored.source, deps.now(), stored.records)));
+      const hearing = stored === null ? null : await readHearing(run.usecasePackDir).catch(() => null);
+      const target = stored === null || hearing === null ? null : retakeTarget(stored, hearing, run.answers);
+      if (stored === null || target === null) return res.json({ status: "unknown" } satisfies SourceStatus);
+      return res.json(compareSource(stored, await deps.collections.snapshot(target.source, deps.now(), target.records)));
     } catch (err) {
       return fail(res, err);
     }
