@@ -98,7 +98,7 @@ describeSh("verify: extract.mjs", () => {
 
   it("fails when nothing was extracted", () => {
     write(".blueprint/facts.json", {});
-    expect(node("extract.mjs").stderr).toContain("holds no events, amounts or totals");
+    expect(node("extract.mjs").stderr).toContain("holds no events, amounts, totals or products");
   });
 
   it("refuses a quotation from a file that is not one of the documents", () => {

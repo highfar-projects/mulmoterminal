@@ -20,6 +20,10 @@ exists. The machine's rules are these:
   `"more"` when the written total is larger than the sum of the parts, `"less"` when smaller, by `by`. Say it
   that way round (「書かれた合計は、内訳を足した額より 500円 多い」) — never work the direction out yourself.
 - `unit-mismatch`: a total and its parts are in different units.
+- `product-mismatch`: an amount is not the product it claims to be (単価 × 数量, 小計 × 税率), even allowing for
+  rounding to the digits it is written to. `detail` gives `written`, the true `product`, and `writtenIs` / `by` the
+  same way as a total. Say that way round, and propose the product; for a tax, say the fraction may be rounded
+  either way (1,234円 or 1,235円) and that the issuer decides.
 
 You cannot add or drop a problem. Explain each one; if you think one is not really wrong (an overnight
 leg read as ending before it starts, say), say so under that problem, but still name it.
@@ -34,7 +38,7 @@ Write `.blueprint/verify-report.md` for the person, in their language and in pla
 - `## 確かめたこと` / `## What was checked`: how many events, amounts and totals were extracted. Each value
   was found in its quotation, and each quotation in the document (`chaff cite`). Then name the rules that ran.
 - `## 確かめきれなかったこと` / `## Not checked`: what a machine cannot confirm. That the extraction is
-  complete; travel time between places; time zones; dates written as `MM-DD` because no year was known (their
+  complete; a product the document gives no factor for (a line with no quantity); travel time between places; time zones; dates written as `MM-DD` because no year was known (their
   weekdays were not checked); prices, availability and anything outside these files.
 
 ## Done when

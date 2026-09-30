@@ -35,6 +35,9 @@ missed event is theirs to catch.
   ],
   "totals": [
     { "id": "grand-total", "label": "合計", "value": 36000, "unit": "円", "parts": ["hotel", "train"], "citation": { "source": "estimate.md", "address": "h2.2", "quote": "合計 36,000円" } }
+  ],
+  "products": [
+    { "id": "hotel-line", "label": "宿泊費", "value": 24000, "unit": "円", "of": ["hotel-rate", "hotel-nights"], "citation": { "source": "estimate.md", "address": "h2.2", "quote": "宿泊費 12,000円 × 2泊 = 24,000円" } }
   ]
 }
 ```
@@ -51,6 +54,11 @@ missed event is theirs to catch.
 - `amounts` are the lines that add up; `totals` are the lines that claim to be their sum (合計, 小計, Total),
   with `parts` naming the amount ids they add up. A subtotal that is itself part of a grand total is both: list it
   as an amount too, under another id, and name that id in the grand total's `parts`.
+- `products` are the lines that claim to be a product: a line's amount that is its unit price times its quantity
+  (単価 × 数量), a tax that is a subtotal times a rate. `of` names the amount ids multiplied, two or more: the price
+  and the quantity (`unit` 台, 泊, 個, pcs — as written), or the subtotal and the rate (`value` 10, `unit` `%`).
+  Like a subtotal, a line that is also added into a total is listed as an amount too, under another id. Extract a
+  product only where the document gives every factor; a line with no quantity written is not one.
 - `value` is a plain number (`24000`, not `"24,000円"`); `unit` is the currency or unit as written (円, USD).
 - `id`: lower-case letters, digits and `-`, unique across the whole file.
 - `citation.quote` is copied character for character from the document and **must contain every value of its
