@@ -212,6 +212,9 @@ export const zhCN: Messages = {
       feedRefreshHint: "拉取你的 RSS/JSON 订阅源，并派发由 skill 支撑的集合更新，覆盖工作区和每个保存过的项目目录。一个订阅源都没注册时它什么也不做。",
       calendarSync: "同步 Google 日历",
       calendarSyncHint: "把有变动的日程拉进任何声明了 Google 日历的集合。在你连接账号之前它什么也不做。",
+      remoteServer: "实验功能：服务器运行在另一台机器上",
+      remoteServerHint:
+        "用于通过 SSH 隧道连接的服务器。隐藏或说明会在服务器屏幕上执行的操作（文件对话框、文件管理器、应用、Google 登录），并始终上传拖放的文件。立即生效；启动脚本在下次启动时读取。",
     },
 
     launchers: {

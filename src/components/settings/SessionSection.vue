@@ -6,6 +6,7 @@ import { worklogEnabled, saveWorklogEnabled, worklogIntervalHours, saveWorklogIn
 import { MIN_WORKLOG_INTERVAL_HOURS, MAX_WORKLOG_INTERVAL_HOURS } from "../../../common/worklogInterval";
 import { feedRefreshEnabled, saveFeedRefreshEnabled, calendarSyncEnabled, saveCalendarSyncEnabled } from "../../composables/systemTasks";
 import SettingsStepper from "./SettingsStepper.vue";
+import { remoteServer, saveRemoteServer } from "../../composables/remoteServer";
 
 // What a spawned session carries, and what runs on its own in the background. All three are
 // global config keys the server acts on — this browser only shows and writes them.
@@ -30,6 +31,12 @@ function onFeedRefreshToggle(e: Event) {
 }
 function onCalendarSyncToggle(e: Event) {
   if (e.target instanceof HTMLInputElement) void saveCalendarSyncEnabled(e.target.checked);
+}
+// Experimental (#2669). A refused save leaves the flag where it was, so the box goes back with it.
+async function onRemoteServerToggle(e: Event) {
+  if (!(e.target instanceof HTMLInputElement)) return;
+  const input = e.target;
+  if (!(await saveRemoteServer(input.checked))) input.checked = remoteServer.value;
 }
 </script>
 
@@ -100,6 +107,20 @@ function onCalendarSyncToggle(e: Event) {
     />
     <span class="text-[12px]">
       <strong>{{ t("settings.sessions.calendarSync") }}</strong> — {{ t("settings.sessions.calendarSyncHint") }}
+    </span>
+  </label>
+
+  <label class="mb-3 mt-2 flex cursor-pointer items-start gap-2">
+    <input
+      type="checkbox"
+      class="mt-1 cursor-pointer"
+      data-testid="settings-remote-server"
+      :checked="remoteServer"
+      :aria-label="t('settings.sessions.remoteServer')"
+      @change="(e) => void onRemoteServerToggle(e)"
+    />
+    <span class="text-[12px]">
+      <strong>{{ t("settings.sessions.remoteServer") }}</strong> — {{ t("settings.sessions.remoteServerHint") }}
     </span>
   </label>
 </template>

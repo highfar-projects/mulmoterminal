@@ -78,22 +78,42 @@ ssh -N -L 34567:127.0.0.1:34567 you@server
 | **Claude Code** | Shell のセルか SSH で、`claude` を 1 回起動します。サーバにブラウザが無いと、サインイン用の URL を表示し（"Browser didn't open? Use the url below to sign in"）、コードの入力を待ちます。その URL をノート PC で開いてサインインし、表示されたコードを貼ります。Linux ではログイン情報が `~/.claude` の下のファイルに残るので、次からは要りません。 |
 | **GitHub（`gh`）** | `gh auth login` でブラウザを選び、表示された 1 回限りのコードを、ノート PC で `github.com/login/device` に入れます。MulmoTerminal 自身の PR・Issue の画面もこのログインを使います。 |
 | **`git push`** | ノート PC から `ssh -A`（上記。信頼できるサーバでだけ）か、サーバに鍵や認証ヘルパーを用意します。 |
-| **Codex** | サーバで `codex` を起動し、そのログインを使います。*まだ試していません。* |
+| **Codex** | `codex` を 1 回起動し、**Sign in with Device Code** を選びます。ノート PC で `https://auth.openai.com/codex/device` を開いてサインインし、表示された 1 回限りのコード（15 分で切れます）を入れます。 |
 
-試した範囲で確認できたのは、Claude Code のサインイン用 URL が表示されるところまでです（サインインは最後まで
-していません）。
+試した範囲で確認できたのは、画面の無い Linux で Claude Code のサインイン用 URL と、Codex のデバイスコードが
+表示されるところまでです（どちらもサインインは最後までしていません）。
 
 ## Docker で動かす
 
-サーバをコンテナで動かし、自分のマシンの `127.0.0.1` にだけ公開します:
+公式のイメージはまだありません。次の `Dockerfile` は例です。このガイドのために実際にビルドして動かしました
+（Node 22・`git`・`gh`・`tmux`・Claude Code 入り。ほかに使うエージェントは足してください）:
 
-```bash
-docker run -p 127.0.0.1:34567:34567 -e MULMOTERMINAL_HOST=0.0.0.0 \
-  -v "$HOME/work:/home/dev/work" <Node・git・gh・エージェント入りのイメージ> \
-  npx mulmoterminal@latest --no-open
+```dockerfile
+FROM node:22-bookworm
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends git tmux curl ca-certificates \
+ && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o /usr/share/keyrings/githubcli-archive-keyring.gpg \
+ && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
+ && apt-get update && apt-get install -y --no-install-recommends gh \
+ && rm -rf /var/lib/apt/lists/*
+RUN npm install -g mulmoterminal @anthropic-ai/claude-code
+RUN useradd -m dev && mkdir -p /home/dev/work && chown -R dev:dev /home/dev
+USER dev
+WORKDIR /home/dev/work
+# Published on the host's 127.0.0.1 only (see `docker run` below); the bind has to be wide inside.
+ENV MULMOTERMINAL_HOST=0.0.0.0
+EXPOSE 34567
+CMD ["mulmoterminal", "--no-open"]
 ```
 
-- `MULMOTERMINAL_HOST=0.0.0.0` は、公開したポートがコンテナの中のサーバに届くために必要です。
+ビルドして、自分のマシンの `127.0.0.1` にだけ公開して起動します:
+
+```bash
+docker build -t mulmoterminal-server .
+docker run -p 127.0.0.1:34567:34567 -v "$HOME/work:/home/dev/work" mulmoterminal-server
+```
+
+- `MULMOTERMINAL_HOST=0.0.0.0`（上の `Dockerfile` で設定しています）は、公開したポートがコンテナの中のサーバに届くために必要です。
   `[security]` の警告が出ますが、想定どおりです。ポートは `127.0.0.1` にだけ公開しているので、届くのは
   自分のマシンからだけです。この設定の意味は[設定](config.html)を見てください。
 - エージェントのログイン情報は、イメージに焼き込まず**ボリューム**で渡します。`~/.claude`・
@@ -101,8 +121,6 @@ docker run -p 127.0.0.1:34567:34567 -e MULMOTERMINAL_HOST=0.0.0.0 \
   `~/.mulmoterminal` です。
 - 別のマシンの Docker なら、両方を組み合わせます。そのマシンの `127.0.0.1` に公開し、そのマシンへ
   `ssh -L` でトンネルを張ります。
-
-公式のイメージはまだありません。
 
 ## 手元と違うところ
 
@@ -122,7 +140,8 @@ docker run -p 127.0.0.1:34567:34567 -e MULMOTERMINAL_HOST=0.0.0.0 \
 ## 実験機能: サーバが別のマシンだと宣言する
 
 ブラウザが別のマシンにあることは、サーバからは分かりません。トンネル越しの接続は、サーバ自身からの接続に
-見えるためです。そこで、**サーバの** `~/.mulmoterminal/config.json` に書いて宣言します:
+見えるためです。そこで宣言します。**設定 → Sessions and background tasks → 実験機能: サーバは別のマシンで
+動いている**にチェックを入れるか、**サーバの** `~/.mulmoterminal/config.json` に書きます:
 
 ```json
 { "remoteServer": true }
@@ -133,11 +152,12 @@ docker run -p 127.0.0.1:34567:34567 -e MULMOTERMINAL_HOST=0.0.0.0 \
 キー・Files ペインから呼ぶと、代わりに理由が出ます。ドロップしたファイルは、ノート PC のパスを入れずに、
 常にアップロードします。SSH を使わずに起動した場合（サービスとして動かすなど）も、サーバ側でブラウザを開き
 ません。設定画面の Google のサインインは、代わりにサーバで `npx mulmoterminal google login` を実行するよう
-案内します。ファイルを書き換えたら、サーバを再起動してください。実験機能なので、使ってみたら
+案内します。設定画面のチェックはすぐに効きます。ファイルを手で書き換えたときは、サーバを再起動してください。実験機能なので、使ってみたら
 [issue #2669](https://github.com/receptron/mulmoterminal/issues/2669) に結果を書いてください。
 
 ## リモートのサーバを相手に MulmoTerminal を開発する
 
 サーバとページは別々にも起動できます。サーバで `yarn dev:server`（Express だけ）、ノート PC で
 `yarn dev:client`（Vite だけ）を起動し、`34567` のトンネルを張っておきます。Vite は `/api` と `/ws` を
-`localhost:34567` に転送し、トンネルがそれをサーバへ運びます。*まだ試していません。*
+`localhost:34567` に転送し、トンネルがそれをサーバへ運びます。サーバが別のポートで待ち受けているときは、
+クライアントにも同じポートを渡します: `PORT=<ポート> yarn dev:client`。
