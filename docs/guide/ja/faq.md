@@ -208,6 +208,28 @@ npx mulmoterminal@latest
 この 3 つならどれでも同じで、WORKING DIRECTORY 行の先頭にある **WORKSPACE** チップがそこへの近道です（Antigravity・Grok・Muse・Cursor は例外で、どこで動かしてもディレクトリに登録されたぶんだけ → [Antigravity・Grok・Muse・Cursor はどこでも登録が要る](basics.html#antigravity-gui-tools)）。**起動コマンド（launch command）はこれには当たりません** — コマンドラインを逐語的に実行するだけで、`claude` であっても GUI ツールは付きません。
 プロジェクトのディレクトリで起動したセルは、そのディレクトリに登録されているツールグループだけを持つので、GUI ツールが要るならランチャの MCP トグルで登録します（→ [どのディレクトリで起動するか](basics.html#launch-dir)）。
 
+### 開き直したセルで、最後の会話が消えていました。なくなったのですか？
+
+**なくなっていません。別のセッション ID で、ディスクに残っています。** Claude Code で会話を
+バックグラウンドに移すと（**←** キー、"Your conversation moved to the background"）、Claude Code は
+**新しい** セッション ID で続けます。それ以降の会話は新しい ID に書かれますが、セルが知っているのは
+古い ID のままです。
+
+ターミナルが動いている間は、何も起きていないように見えます。ページの再読み込みやサーバの再起動は、
+そのターミナルにつなぎ直すだけだからです。ところが、ターミナル自体が終わったあと（マシンの再起動や、
+セルを閉じたあと）にセルを開き直すと、知っている古い ID で再開します。会話は **←** を押した時点の
+状態に戻り、警告は出ません。
+
+続きを取り戻すには、そのフォルダで起動パネルを開き、**OR RESUME HERE** から続きが入っているほうの会話を選び
+ます（`claude --resume <新しい ID>` でも戻せます）。2 つは開始時刻が同じです。古いほうは分かれてから
+数秒で止まっているので、ずっと大きいほうが続きの入ったほうです。最終更新の時刻では見分けないでください。
+Claude Code の終了時に古いほうへもう一度書き込まれ、新しく見えることがあります。
+
+これは Claude Code の動きで、どのターミナルでも起きます。上流には
+[anthropics/claude-code#87984](https://github.com/anthropics/claude-code/issues/87984) として報告
+済みで、2 つの記録をつなぐ要望は
+[anthropics/claude-code#85004](https://github.com/anthropics/claude-code/issues/85004) にあります。
+
 ---
 
 ## その他
