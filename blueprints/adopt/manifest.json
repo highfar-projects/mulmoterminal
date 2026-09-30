@@ -5,5 +5,18 @@
   "version": "0.1.0",
   "description": "既にある文書のフォルダに chaff を入れる。文書の種類に合わせた chaff.yaml を置き、今ある指摘は chaff baseline で棚に上げて、新しい指摘だけが出るようにする。望めば、GitHub の PR の行に指摘が出るワークフローも作る。原本は変えない。",
   "bases": ["docs"],
-  "report": ".blueprint/adopt-report.md"
+  "report": ".blueprint/adopt-report.md",
+  "next": [
+    {
+      "usecase": "polish",
+      "answers": {
+        "style": "このフォルダの規約（STYLE.md と chaff.yaml）",
+        "scope": "chaff が指摘した所だけ",
+        "shelved": "棚上げした指摘も直す"
+      },
+      "carry": {
+        "targets": "places"
+      }
+    }
+  ]
 }
