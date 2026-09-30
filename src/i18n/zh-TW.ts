@@ -5,6 +5,7 @@ import { commandPaletteZhTW } from "./commandPalette/zh-TW";
 import { focusModeZhTW } from "./focusMode/zh-TW";
 import { fileHistoryZhTW } from "./fileHistory/zh-TW";
 import { dirConfigSaveZhTW } from "./dirConfigSave/zh-TW";
+import { releaseNotesZhTW } from "./releaseNotes/zh-TW";
 import { dirConfigOpenZhTW } from "./dirConfigOpen/zh-TW";
 import { dirSettingsFormZhTW } from "./dirSettingsForm/zh-TW";
 import { themeEditorZhTW } from "./themeEditor/zh-TW";
@@ -72,6 +73,7 @@ export const zhTW: Messages = {
       cost: "費用（估算）",
       quit: "結束 MulmoTerminal",
       help: "說明與使用者指南",
+      releaseNotes: "版本說明",
     },
 
     terminalKeys: {
@@ -613,6 +615,7 @@ export const zhTW: Messages = {
   },
   fileHistory: fileHistoryZhTW,
   dirConfigSave: dirConfigSaveZhTW,
+  releaseNotes: releaseNotesZhTW,
   dirConfigOpen: dirConfigOpenZhTW,
   dirSettingsForm: dirSettingsFormZhTW,
   themeEditor: themeEditorZhTW,

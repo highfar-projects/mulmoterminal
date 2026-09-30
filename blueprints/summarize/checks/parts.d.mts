@@ -5,7 +5,6 @@ export type SummarizedDocument = { readonly source: string; readonly parts: read
 export declare const partsIn: (tree: unknown) => Part[];
 export declare const within: (address: string, part: string) => boolean;
 export declare const numbersIn: (text: unknown) => string[];
-export declare const namedIn: (text: string, name: string) => boolean;
 export declare const summaryProblems: (
   summary: unknown,
   documents: readonly SummarizedDocument[],

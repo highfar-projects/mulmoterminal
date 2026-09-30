@@ -5,6 +5,7 @@ import { commandPaletteKo } from "./commandPalette/ko";
 import { focusModeKo } from "./focusMode/ko";
 import { fileHistoryKo } from "./fileHistory/ko";
 import { dirConfigSaveKo } from "./dirConfigSave/ko";
+import { releaseNotesKo } from "./releaseNotes/ko";
 import { dirConfigOpenKo } from "./dirConfigOpen/ko";
 import { dirSettingsFormKo } from "./dirSettingsForm/ko";
 import { themeEditorKo } from "./themeEditor/ko";
@@ -69,6 +70,7 @@ export const ko: Messages = {
       cost: "비용(추정)",
       quit: "MulmoTerminal 종료",
       help: "도움말과 사용자 가이드",
+      releaseNotes: "릴리스 노트",
     },
 
     terminalKeys: {
@@ -622,6 +624,7 @@ export const ko: Messages = {
   },
   fileHistory: fileHistoryKo,
   dirConfigSave: dirConfigSaveKo,
+  releaseNotes: releaseNotesKo,
   dirConfigOpen: dirConfigOpenKo,
   dirSettingsForm: dirSettingsFormKo,
   themeEditor: themeEditorKo,

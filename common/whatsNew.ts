@@ -69,3 +69,21 @@ export function parseWhatsNew(body: unknown): WhatsNewResponse | null {
   if (!isRecord(body) || typeof body.version !== "string" || !Array.isArray(body.entries)) return null;
   return { version: body.version, entries: body.entries.flatMap(parseEntry), truncated: body.truncated === true };
 }
+
+/** One release in Settings' list of release notes (#2717). */
+export interface ReleaseNoteSummary {
+  version: string;
+  title: string;
+}
+
+/** The list, or null when the body is not one. */
+export function parseReleaseNotes(body: unknown): { version: string; releases: ReleaseNoteSummary[] } | null {
+  if (!isRecord(body) || typeof body.version !== "string" || !Array.isArray(body.releases)) return null;
+  const releases = body.releases.flatMap((value: unknown) =>
+    isRecord(value) && typeof value.version === "string" && typeof value.title === "string" ? [{ version: value.version, title: value.title }] : [],
+  );
+  return { version: body.version, releases };
+}
+
+/** One release's page, or null when the body is not one. */
+export const parseReleaseNote = (body: unknown): WhatsNewEntry | null => parseEntry(body)[0] ?? null;

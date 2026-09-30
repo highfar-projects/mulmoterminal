@@ -5,6 +5,7 @@ import { commandPaletteJa } from "./commandPalette/ja";
 import { focusModeJa } from "./focusMode/ja";
 import { fileHistoryJa } from "./fileHistory/ja";
 import { dirConfigSaveJa } from "./dirConfigSave/ja";
+import { releaseNotesJa } from "./releaseNotes/ja";
 import { dirConfigOpenJa } from "./dirConfigOpen/ja";
 import { dirSettingsFormJa } from "./dirSettingsForm/ja";
 import { themeEditorJa } from "./themeEditor/ja";
@@ -69,6 +70,7 @@ export const ja: Messages = {
       cost: "コスト（推定）",
       quit: "MulmoTerminal を終了",
       help: "ヘルプとユーザーガイド",
+      releaseNotes: "リリースノート",
     },
 
     terminalKeys: {
@@ -625,6 +627,7 @@ export const ja: Messages = {
   },
   fileHistory: fileHistoryJa,
   dirConfigSave: dirConfigSaveJa,
+  releaseNotes: releaseNotesJa,
   dirConfigOpen: dirConfigOpenJa,
   dirSettingsForm: dirSettingsFormJa,
   themeEditor: themeEditorJa,

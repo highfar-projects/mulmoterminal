@@ -2,9 +2,8 @@
 // word for word, every part left out is named with its reason, and neither the documents nor the summary moved since.
 import { existsSync, readFileSync } from "node:fs";
 import { fromBase } from "./base.mjs";
-import { namedIn } from "./parts.mjs";
 const { fail, readJson } = await import(fromBase("chaff.mjs"));
-const { missingSections, sectionText } = await import(fromBase("markdown.mjs"));
+const { missingSections, namedIn, sectionText } = await import(fromBase("markdown.mjs"));
 const { documentsNamed, fingerprint } = await import(fromBase("documents.mjs"));
 const { placeNamesOf } = await import(fromBase("places.mjs"));
 
