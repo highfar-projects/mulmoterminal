@@ -8,6 +8,52 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@7.3.0 — 2026-09-30
+
+> **Setup guide:** [7.3.0 — Header buttons of every kind, folders included, and PDF / video in the Files pane](https://receptron.github.io/mulmoterminal/guide/en/v7.3.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v7.3.0.html))
+
+### Settings
+
+- [#2702](https://github.com/receptron/mulmoterminal/pull/2702) ([#2622](https://github.com/receptron/mulmoterminal/issues/2622)) — Settings → Header buttons and chips also adds **open** buttons (a URL, a folder in the Files view
+  or the file manager, a new shell in a folder, a view of the app, this branch's PR, a file picker) and **action**
+  buttons (a named operation, listed by the keyboard-shortcut labels).
+- [#2709](https://github.com/receptron/mulmoterminal/pull/2709) ([#2622](https://github.com/receptron/mulmoterminal/issues/2622)) — a **pencil** on a button's row edits it in place; its id, `order` and `emoji` stay.
+- [#2711](https://github.com/receptron/mulmoterminal/pull/2711) ([#2622](https://github.com/receptron/mulmoterminal/issues/2622)) — **folders**: put a button into an existing or a new folder, take it out (the folder goes with
+  its last button), edit or remove the buttons inside, and change a folder's name, icon and condition.
+- [#2701](https://github.com/receptron/mulmoterminal/pull/2701) ([#2669](https://github.com/receptron/mulmoterminal/issues/2669)) — a Settings box for the experimental `remoteServer`, plus guide notes on Codex's headless
+  sign-in, the `dev:server` / `dev:client` split and an example Dockerfile.
+- [#2700](https://github.com/receptron/mulmoterminal/pull/2700) ([#2693](https://github.com/receptron/mulmoterminal/issues/2693)) — Recommended keys count keys held by entries this version does not know as taken, and send
+  one request at a time.
+
+### Files
+
+- [#2716](https://github.com/receptron/mulmoterminal/pull/2716) ([#2674](https://github.com/receptron/mulmoterminal/issues/2674)) — the Files pane **shows a PDF, a video and an audio file** instead of refusing them as too
+  large to edit; a text file too large to edit offers **Open in OS**.
+- [#2714](https://github.com/receptron/mulmoterminal/pull/2714) ([#2674](https://github.com/receptron/mulmoterminal/issues/2674)) — the raw file route no longer caps PDF, audio and video at 25 MiB.
+- [#2708](https://github.com/receptron/mulmoterminal/pull/2708) ([#2694](https://github.com/receptron/mulmoterminal/issues/2694)) — the tree's row menu is translated, the tree's empty space has a New file / New folder menu,
+  and a rename or Trash no longer reopens the file you moved away from.
+- [#2703](https://github.com/receptron/mulmoterminal/pull/2703) ([#2694](https://github.com/receptron/mulmoterminal/issues/2694)) — more Windows device names are refused, and a long extension no longer blocks the Trash.
+- [#2698](https://github.com/receptron/mulmoterminal/pull/2698) ([#2692](https://github.com/receptron/mulmoterminal/issues/2692)) — Preview code-copy follow-ups: joiners inside words are not flagged, a closed dialog stays
+  closed, and the copy button no longer scrolls away.
+
+### Command palette
+
+- [#2699](https://github.com/receptron/mulmoterminal/pull/2699) — the acting terminal's **Run-menu scripts** and **Skill-menu skills** are rows in the palette's `>` scope.
+
+### Blueprints
+
+- [#2705](https://github.com/receptron/mulmoterminal/pull/2705) ([#2689](https://github.com/receptron/mulmoterminal/issues/2689)) — a new task compares two versions of a document **article by article** and makes a comparison table.
+- [#2712](https://github.com/receptron/mulmoterminal/pull/2712) ([#2710](https://github.com/receptron/mulmoterminal/issues/2710)) — a new task **summarizes** documents, every sentence backed by a checked quotation.
+- [#2706](https://github.com/receptron/mulmoterminal/pull/2706) ([#2704](https://github.com/receptron/mulmoterminal/issues/2704)) — a build asks once before it copies what may be personal data from its source.
+- [#2715](https://github.com/receptron/mulmoterminal/pull/2715) ([#2707](https://github.com/receptron/mulmoterminal/issues/2707)) — a build tells you when its source changed after it was copied.
+- [#2686](https://github.com/receptron/mulmoterminal/pull/2686), [#2687](https://github.com/receptron/mulmoterminal/pull/2687), [#2690](https://github.com/receptron/mulmoterminal/pull/2690), [#2695](https://github.com/receptron/mulmoterminal/pull/2695) — Supabase base fixes from the from-collection dogfood run
+  ([#2480](https://github.com/receptron/mulmoterminal/issues/2480)): an open policy the spec declared passes the linter, the skills' prose, the local stack restarts
+  when its config changed, and a source action a must-have needs is built once.
+
+### Tests
+
+- [#2696](https://github.com/receptron/mulmoterminal/pull/2696) ([#2691](https://github.com/receptron/mulmoterminal/issues/2691)) — the dev-server spec's stub ends with its supervisor.
+
 ## mulmoterminal@7.2.0 — 2026-09-30
 
 > **Setup guide:** [7.2.0 — Change settings in Settings instead of asking the agent](https://receptron.github.io/mulmoterminal/guide/en/v7.2.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v7.2.0.html))
