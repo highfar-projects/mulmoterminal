@@ -38,6 +38,8 @@ export const blueprintsZhCN: Messages["blueprints"] = {
   },
   form: {
     presets: "从示例开始",
+    presetsMore: "查看其他示例（{count} 个）",
+    presetsFewer: "收起示例",
     presetUse: "使用此示例",
     presetApplied: "已填入“{title}”的回答。输入项目文件夹并点击开始，即可观看构建过程。",
     presetSamples: "示例文档（{files}）将放入该文件夹。若已有同名的其他文件则无法开始，请选择一个空文件夹。",

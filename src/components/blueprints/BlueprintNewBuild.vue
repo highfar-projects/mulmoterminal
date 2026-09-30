@@ -30,7 +30,7 @@ import {
   type HearingAnswer,
   type HearingAnswers,
 } from "../../../common/blueprint/hearing";
-import { basePacks, basesFor, presetGroups, usecaseGroups, usecasesFor } from "./blueprintView";
+import { basePacks, basesFor, firstOfEachUsecase, presetGroups, usecaseGroups, usecasesFor } from "./blueprintView";
 import { latestOnly } from "./latestOnly";
 import { failureText } from "./refusalText";
 import { keepFormFill, takeFormFill, type FormFill } from "../../composables/useBlueprintsView";
@@ -76,7 +76,14 @@ const usecases = computed(() => usecasesFor(packs.value, base.value));
 // there is one — a document task is never offered a cloud platform.
 const groups = computed(() => usecaseGroups(packs.value));
 const usecaseBases = computed(() => basesFor(packs.value, usecase.value));
-const exampleGroups = computed(() => presetGroups(presets.value, packs.value));
+const exampleGroups = computed(() => presetGroups(presets.value, packs.value).map((group) => ({ ...group, ...firstOfEachUsecase(group.presets) })));
+// The groups whose every example is shown; the rest show one per task.
+const openGroups = ref<ReadonlySet<string>>(new Set());
+const toggleGroup = (base: string): void => {
+  const next = new Set(openGroups.value);
+  if (!next.delete(base)) next.add(base);
+  openGroups.value = next;
+};
 // The paths some option needs that the folder has; null while unknown, and then every option is offered — the server
 // still refuses one whose path is missing.
 const presentPaths = ref<ReadonlySet<string> | null>(null);
@@ -291,13 +298,15 @@ function openToTrust(): void {
         <h4 class="m-0 font-sans text-[12px] font-[650] text-secondary">{{ group.title }}</h4>
         <div class="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-2">
           <article
-            v-for="preset in group.presets"
+            v-for="preset in openGroups.has(group.base) ? group.presets : group.shown"
             :key="`${preset.usecase}/${preset.id}`"
             class="flex flex-col gap-1.5 rounded-md border border-border bg-panel p-3"
             data-testid="blueprint-preset"
           >
             <span class="font-sans text-[13px] font-[650] text-fg">{{ preset.title }}</span>
-            <span class="font-sans text-[12px] text-secondary">{{ preset.description }}</span>
+            <span class="line-clamp-3 font-sans text-[12px] text-secondary" :title="preset.description" data-testid="blueprint-preset-description">{{
+              preset.description
+            }}</span>
             <div class="mt-auto pt-1">
               <button
                 type="button"
@@ -310,9 +319,22 @@ function openToTrust(): void {
             </div>
           </article>
         </div>
+        <button
+          v-if="group.hidden.length > 0"
+          type="button"
+          data-testid="blueprint-preset-more"
+          class="flex cursor-pointer items-center gap-1 self-start border-none bg-transparent p-0 font-sans text-[12px] text-accent hover:underline"
+          @click="toggleGroup(group.base)"
+        >
+          <span class="material-symbols-outlined text-[16px]" aria-hidden="true">{{ openGroups.has(group.base) ? "expand_less" : "expand_more" }}</span>
+          {{ openGroups.has(group.base) ? t("blueprints.form.presetsFewer") : t("blueprints.form.presetsMore", { count: group.hidden.length }) }}
+        </button>
       </div>
       <p v-if="appliedPreset" class="m-0 font-sans text-[12px] text-ok" data-testid="blueprint-preset-applied">
         {{ t("blueprints.form.presetApplied", { title: appliedPreset.title }) }}
+      </p>
+      <p v-if="appliedPreset" class="m-0 font-sans text-[12px] text-secondary" data-testid="blueprint-preset-applied-description">
+        {{ appliedPreset.description }}
       </p>
       <p v-if="appliedPreset?.samples.length" class="m-0 font-sans text-[12px] text-secondary" data-testid="blueprint-preset-samples">
         {{ t("blueprints.form.presetSamples", { files: appliedPreset.samples.join(", ") }) }}

@@ -83,6 +83,19 @@ export function presetGroups<P extends { base: string }>(presets: readonly P[], 
     .filter((group) => group.presets.length > 0);
 }
 
+/**
+ * The examples a group shows before it is opened: the first of each usecase, so every kind of task is in view and
+ * the form below is not pushed off the screen by a task's second and third example. The rest are `hidden`.
+ */
+export function firstOfEachUsecase<P extends { usecase: string }>(presets: readonly P[]): { shown: P[]; hidden: P[] } {
+  const firstIndex = new Map<string, number>();
+  presets.forEach((preset, index) => {
+    if (!firstIndex.has(preset.usecase)) firstIndex.set(preset.usecase, index);
+  });
+  const isFirst = (preset: P, index: number): boolean => firstIndex.get(preset.usecase) === index;
+  return { shown: presets.filter(isFirst), hidden: presets.filter((preset, index) => !isFirst(preset, index)) };
+}
+
 /** The usecases that say they can be built on `baseSlug`. */
 export const usecasesFor = (packs: readonly PackChoice[], baseSlug: string): PackChoice[] =>
   packs.filter((pack) => pack.manifest.kind === "usecase" && pack.manifest.bases.includes(baseSlug));
