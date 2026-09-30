@@ -123,13 +123,18 @@ describe("dev-server supervisor", () => {
       const ends = path.join(dir, "ends.log");
       writeFileSync(stub, stayingStub(boots, ends));
       const watchDir = makeTempDir("dev-server-watch-");
-      child = spawn(process.execPath, [SUPERVISOR], { env: { ...process.env, DEV_SERVER_ENTRY: stub, DEV_SERVER_WATCH: watchDir }, stdio: "ignore" });
+      // Its own handle: after a wait, the shared one may already be the next test's supervisor.
+      const supervisor = spawn(process.execPath, [SUPERVISOR], {
+        env: { ...process.env, DEV_SERVER_ENTRY: stub, DEV_SERVER_WATCH: watchDir },
+        stdio: "ignore",
+      });
+      child = supervisor;
       await waitFor(() => bootedPids(boots).length > 0, BOOT_WAIT_MS);
       const [backend] = bootedPids(boots);
       expect(backend, "the backend never booted").toBeDefined();
       expect(isAlive(backend)).toBe(true);
 
-      await stopSupervisor(child);
+      await stopSupervisor(supervisor);
       await waitFor(() => !isAlive(backend), SUPERVISOR_EXIT_MS);
       rmSync(watchDir, { recursive: true, force: true });
       expect(isAlive(backend)).toBe(false);
