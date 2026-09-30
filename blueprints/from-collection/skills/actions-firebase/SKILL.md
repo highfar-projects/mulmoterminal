@@ -10,7 +10,8 @@ source had no actions or ingests: stop. Each entry names an action (`books.actio
 what it was (`kind`) and what was decided (`decision`). The original instructions are in
 `.blueprint/source/collections/<slug>/templates/`.
 
-For every `feature`:
+For every `feature` (one an earlier step already built, because a must-have needed it, is checked against its entry and
+given its test here, not built a second time):
 
 - **mutate** — a button on the record's screen that makes the change its `set` names. Its `require` is enforced by the
   security rules (or a callable function when the rules cannot express it), not only by the screen.

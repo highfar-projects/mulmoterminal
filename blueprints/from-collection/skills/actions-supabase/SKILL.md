@@ -10,7 +10,8 @@ source had no actions or ingests: stop. Each entry names an action (`books.actio
 what it was (`kind`) and what was decided (`decision`). The original instructions are in
 `.blueprint/source/collections/<slug>/templates/`.
 
-For every `feature`:
+For every `feature` (one an earlier step already built, because a must-have needed it, is checked against its entry and
+given its test here, not built a second time):
 
 - **mutate** — a Postgres function the screen calls with `supabase.rpc`, in a migration, and a button on the record's
   screen. It runs as the caller (`security invoker`), so the table's RLS still decides; its `require` is checked

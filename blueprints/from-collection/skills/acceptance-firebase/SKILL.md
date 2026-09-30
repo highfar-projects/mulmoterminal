@@ -13,6 +13,8 @@ The spec numbers the must-haves. For EACH one, in `test/blueprint/acceptance.spe
 2. Then the refusal: the same action by someone who must not be able to do it (another user, a signed-out
    visitor) is refused by the rules.
 3. If a must-have does not work yet, make it work — this step is where gaps between the spec and the app close.
+   When that means building one of the source's actions (`.blueprint/actions.json`), build it as its entry decides; the
+   actions step then finds it done.
 
 Do not add features that are not must-haves.
 

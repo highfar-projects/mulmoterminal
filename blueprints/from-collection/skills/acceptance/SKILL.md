@@ -10,6 +10,8 @@ The spec numbers the must-haves. For EACH one:
 1. Write a test in `test/acceptance.test.ts` named after it (`must-have 1: …`) that walks the real flow through the
    API on a temporary database — create what it needs, do the action, and read back the result the user would see.
 2. If a must-have does not work yet, make it work — this step is where gaps between the spec and the app close.
+   When that means building one of the source's actions (`.blueprint/actions.json`), build it as its entry decides; the
+   actions step then finds it done.
 3. If a must-have cannot be tested through the API (it is purely visual), test the screen instead and say so in a
    comment on the test.
 
