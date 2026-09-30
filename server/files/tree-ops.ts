@@ -12,7 +12,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { containedPath, namesAWindowsDevice, realContainedWithin } from "./pathContainment.js";
 import { isSamePath } from "../infra/path-within.js";
-import { hasErrnoCode } from "../errors.js";
 
 /** The longest name a new entry may have: what the common filesystems allow, in bytes. */
 const MAX_NAME_BYTES = 255;
@@ -62,67 +61,17 @@ export function createEntry(abs: string, kind: EntryKind): void {
 }
 
 /** Rename in place. A name that differs only in case is the same entry on a case-insensitive disk,
- *  so that one is allowed through; any other existing name is refused. */
-export function renameEntry(from: string, to: string, platform: NodeJS.Platform = process.platform): "renamed" | "exists" {
+ *  so that one is allowed through; any other existing name is refused.
+ *
+ *  A file created at `to` between the check and the rename is replaced (POSIX `rename` does that). A
+ *  link-then-unlink rename would refuse it, but where the old name cannot be removed (a deny-delete
+ *  ACL, another user's file in a sticky folder) it leaves the file under BOTH names with no way back —
+ *  worse than the race it closes, so it is not done (#2694). */
+export function renameEntry(from: string, to: string): "renamed" | "exists" {
   const sameEntry = from.toLowerCase() === to.toLowerCase() && entryExists(to) && fs.lstatSync(from).ino === fs.lstatSync(to).ino;
   if (entryExists(to) && !sameEntry) return "exists";
-  // Not on Windows: a file held open without delete sharing refuses removal through EVERY name, so the
-  // old name could not go after the link and neither could the link — two names where `rename` would
-  // have failed cleanly. The check above is all there is there, as before.
-  if (sameEntry || platform === "win32" || !fs.lstatSync(from).isFile()) {
-    fs.renameSync(from, to);
-    return "renamed";
-  }
-  return renameFileNoReplace(from, to);
-}
-
-/** A file renamed without replacing one that appeared at `to` after the check above: `rename` would
- *  replace it, a hard link refuses an existing name. Any other refusal of the link — a disk that cannot
- *  link says so in many ways (Windows FAT answers EISDIR) — falls back to `rename`, as before this: the
- *  check above is then all there is. A folder cannot be replaced by `rename` unless empty, and a symlink
- *  is not linked (macOS's `link` follows it), so both keep `rename`. */
-function renameFileNoReplace(from: string, to: string): "renamed" | "exists" {
-  try {
-    fs.linkSync(from, to);
-  } catch (err) {
-    if (hasErrnoCode(err) && err.code === "EEXIST") return "exists";
-    fs.renameSync(from, to);
-    return "renamed";
-  }
-  // Another writer may have saved a NEW file at the old name since the link (an editor's atomic save):
-  // that one is theirs and stays — as it would after a plain `rename`. Narrows the window; POSIX has no
-  // "unlink only this inode".
-  if (!sameFile(from, to)) return "renamed";
-  try {
-    fs.unlinkSync(from);
-  } catch (err) {
-    // Already gone (removed by another writer since the link): the file is under its new name only.
-    if (hasErrnoCode(err) && err.code === "ENOENT") return "renamed";
-    // The old name could not go (a sticky folder, a file someone else owns): take the new one back —
-    // the same file, so nothing is lost — and fail as a plain rename would have.
-    takeBackLink(from, to);
-    throw err;
-  }
+  fs.renameSync(from, to);
   return "renamed";
-}
-
-/** Whether both names still hold the one file the link made; false when either is gone or replaced. */
-function sameFile(a: string, b: string): boolean {
-  try {
-    return fs.lstatSync(a).ino === fs.lstatSync(b).ino;
-  } catch {
-    return false;
-  }
-}
-
-/** Remove `to` only if it is still the link just made (another writer may have replaced it since), and
- *  never a folder; a failure here must not hide the error the caller is about to report. */
-function takeBackLink(from: string, to: string): void {
-  try {
-    if (sameFile(to, from)) fs.unlinkSync(to);
-  } catch {
-    // Left as it is: the caller's own error is the one worth reporting.
-  }
 }
 
 /** Where deleted entries go on this machine, or null where it is not known. */

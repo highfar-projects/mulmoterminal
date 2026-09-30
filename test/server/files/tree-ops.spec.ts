@@ -1,6 +1,6 @@
 // @vitest-environment node
-import { describe, it, expect, afterEach, vi } from "vitest";
-import fs, { mkdirSync, writeFileSync, symlinkSync, existsSync, readFileSync, rmSync, realpathSync, lstatSync } from "node:fs";
+import { describe, it, expect, afterEach } from "vitest";
+import { mkdirSync, writeFileSync, symlinkSync, existsSync, readFileSync, rmSync, realpathSync, lstatSync } from "node:fs";
 import path from "node:path";
 import { makeTempDir } from "../../support/tempDir.js";
 import { createEntry, entryUnder, freeTrashName, moveToTrash, renameEntry, trashInfo, trashLayout, validEntryName } from "../../../server/files/tree-ops";
@@ -88,9 +88,6 @@ describe("createEntry", () => {
   });
 });
 
-// The link path is not taken on Windows (see renameEntry); these pin it wherever the spec runs.
-const LINKING: NodeJS.Platform = "linux";
-
 describe("renameEntry", () => {
   it("renames in place and refuses an existing name", () => {
     const root = tmp();
@@ -99,144 +96,6 @@ describe("renameEntry", () => {
     expect(renameEntry(path.join(root, "a.md"), path.join(root, "b.md"))).toBe("exists");
     expect(readFileSync(path.join(root, "b.md"), "utf8")).toBe("b");
     expect(renameEntry(path.join(root, "a.md"), path.join(root, "c.md"))).toBe("renamed");
-    expect(readFileSync(path.join(root, "c.md"), "utf8")).toBe("a");
-  });
-
-  // #2694. A file that appears at the new name after the check is not replaced: the rename goes through
-  // a hard link, which refuses an existing name (a plain `rename` would overwrite it).
-  it("does not replace a file that appeared at the new name after the check", () => {
-    const root = tmp();
-    const [from, to] = [path.join(root, "a.md"), path.join(root, "b.md")];
-    writeFileSync(from, "a");
-    const realLink = fs.linkSync.bind(fs);
-    const racing = vi.spyOn(fs, "linkSync").mockImplementation((existing, target) => {
-      writeFileSync(to, "someone else's");
-      realLink(existing, target);
-    });
-    try {
-      expect(renameEntry(from, to, LINKING)).toBe("exists");
-    } finally {
-      racing.mockRestore();
-    }
-    expect(readFileSync(to, "utf8")).toBe("someone else's");
-    expect(readFileSync(from, "utf8")).toBe("a");
-  });
-
-  it("leaves one name for the file after renaming it", () => {
-    const root = tmp();
-    writeFileSync(path.join(root, "a.md"), "a");
-    expect(renameEntry(path.join(root, "a.md"), path.join(root, "c.md"), LINKING)).toBe("renamed");
-    expect(existsSync(path.join(root, "a.md"))).toBe(false);
-    expect(lstatSync(path.join(root, "c.md")).nlink).toBe(1);
-  });
-
-  // FAT, exFAT and some shares cannot hard-link; the rename still happens, as before.
-  it.each(["EPERM", "ENOTSUP", "EOPNOTSUPP", "EISDIR", "EINVAL"])("renames anyway on a disk that answers %s to a link", (code) => {
-    const root = tmp();
-    writeFileSync(path.join(root, "a.md"), "a");
-    const noLinks = vi.spyOn(fs, "linkSync").mockImplementation(() => {
-      throw Object.assign(new Error(code), { code });
-    });
-    try {
-      expect(renameEntry(path.join(root, "a.md"), path.join(root, "c.md"), LINKING)).toBe("renamed");
-    } finally {
-      noLinks.mockRestore();
-    }
-    expect(readFileSync(path.join(root, "c.md"), "utf8")).toBe("a");
-  });
-
-  // The old name could not be removed (a file held open without delete sharing on Windows): the new
-  // name is taken back, and the rename fails as a plain one would, with one name left.
-  it("leaves the file under its old name alone when the old name cannot be removed", () => {
-    const root = tmp();
-    writeFileSync(path.join(root, "a.md"), "a");
-    const realUnlink = fs.unlinkSync.bind(fs);
-    const busy = vi.spyOn(fs, "unlinkSync").mockImplementation((target) => {
-      if (String(target).endsWith("a.md")) throw Object.assign(new Error("EBUSY"), { code: "EBUSY" });
-      realUnlink(target);
-    });
-    try {
-      expect(() => renameEntry(path.join(root, "a.md"), path.join(root, "c.md"), LINKING)).toThrow("EBUSY");
-    } finally {
-      busy.mockRestore();
-    }
-    expect(readFileSync(path.join(root, "a.md"), "utf8")).toBe("a");
-    expect(existsSync(path.join(root, "c.md"))).toBe(false);
-  });
-
-  // Another writer put its own file at the new name between the link and the take-back: it is theirs,
-  // and stays; the reported error is still the one that stopped the rename.
-  it("takes back only its own link, and still reports why the rename failed", () => {
-    const root = tmp();
-    const [from, to] = [path.join(root, "a.md"), path.join(root, "c.md")];
-    writeFileSync(from, "a");
-    const busy = vi.spyOn(fs, "unlinkSync").mockImplementation((target) => {
-      if (String(target) === from) {
-        rmSync(to);
-        writeFileSync(to, "someone else's");
-        throw Object.assign(new Error("EBUSY"), { code: "EBUSY" });
-      }
-    });
-    try {
-      expect(() => renameEntry(from, to, LINKING)).toThrow("EBUSY");
-    } finally {
-      busy.mockRestore();
-    }
-    expect(readFileSync(to, "utf8")).toBe("someone else's");
-    expect(readFileSync(from, "utf8")).toBe("a");
-  });
-
-  // An editor saved a new file at the OLD name between the link and its removal: that save is kept, as
-  // a plain rename would have kept it.
-  it("keeps a file saved at the old name while the rename was in between", () => {
-    const root = tmp();
-    const [from, to] = [path.join(root, "a.md"), path.join(root, "c.md")];
-    writeFileSync(from, "a");
-    const realLink = fs.linkSync.bind(fs);
-    const saved = vi.spyOn(fs, "linkSync").mockImplementation((existing, target) => {
-      realLink(existing, target);
-      rmSync(from);
-      writeFileSync(from, "saved meanwhile");
-    });
-    try {
-      expect(renameEntry(from, to, LINKING)).toBe("renamed");
-    } finally {
-      saved.mockRestore();
-    }
-    expect(readFileSync(from, "utf8")).toBe("saved meanwhile");
-    expect(readFileSync(to, "utf8")).toBe("a");
-  });
-
-  // The old name vanished between the link and its removal: the file is under the new name, so the
-  // rename did happen and says so.
-  it("says renamed when the old name was removed by someone else in between", () => {
-    const root = tmp();
-    const [from, to] = [path.join(root, "a.md"), path.join(root, "c.md")];
-    writeFileSync(from, "a");
-    const realUnlink = fs.unlinkSync.bind(fs);
-    const gone = vi.spyOn(fs, "unlinkSync").mockImplementation((target) => {
-      realUnlink(target);
-      throw Object.assign(new Error("ENOENT"), { code: "ENOENT" });
-    });
-    try {
-      expect(renameEntry(from, to, LINKING)).toBe("renamed");
-    } finally {
-      gone.mockRestore();
-    }
-    expect(readFileSync(to, "utf8")).toBe("a");
-  });
-
-  // Windows refuses to remove a file held open through any of its names, so there it is `rename`.
-  it("renames with rename on Windows, not a link", () => {
-    const root = tmp();
-    writeFileSync(path.join(root, "a.md"), "a");
-    const link = vi.spyOn(fs, "linkSync");
-    try {
-      expect(renameEntry(path.join(root, "a.md"), path.join(root, "c.md"), "win32")).toBe("renamed");
-      expect(link).not.toHaveBeenCalled();
-    } finally {
-      link.mockRestore();
-    }
     expect(readFileSync(path.join(root, "c.md"), "utf8")).toBe("a");
   });
 
