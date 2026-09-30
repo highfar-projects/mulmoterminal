@@ -36,7 +36,8 @@ export type SettingsTabId =
   | "surviving"
   | "cost"
   | "quit"
-  | "help";
+  | "help"
+  | "releaseNotes";
 
 export interface SettingsGroup {
   key: string;
@@ -54,7 +55,7 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
   { key: "notifications", tabs: ["sounds", "push", "quickCommands"] },
   { key: "integrations", tabs: ["github", "prRepos", "google"] },
   { key: "sessions", tabs: ["sessions", "surviving", "cost", "quit"] },
-  { key: "help", tabs: ["help"] },
+  { key: "help", tabs: ["help", "releaseNotes"] },
 ];
 
 export const SETTINGS_TABS: readonly SettingsTabId[] = SETTINGS_GROUPS.flatMap((group) => group.tabs);

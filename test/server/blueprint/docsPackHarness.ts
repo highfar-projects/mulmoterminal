@@ -56,7 +56,7 @@ if (args[0] === "cite") {
 }
 appendFileSync(join(dir, "lint.log"), args.join(" ") + "\\n");
 const listed = json("findings.json", {})[args[0]] ?? [];
-const results = listed.map((f) => ({ ruleId: "chaff/" + f.rule, level: f.level, locations: [{ physicalLocation: { artifactLocation: { uri: f.file }, region: { startLine: f.line ?? 1 } } }] }));
+const results = listed.map((f) => ({ ruleId: "chaff/" + f.rule, level: f.level, message: { text: f.message ?? "" }, locations: [{ physicalLocation: { artifactLocation: { uri: f.file }, region: { startLine: f.line ?? 1 } } }] }));
 writeFileSync(args[args.indexOf("--sarif") + 1], JSON.stringify({ runs: [{ tool: {}, results }] }));
 `;
 

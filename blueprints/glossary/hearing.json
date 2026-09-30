@@ -1,0 +1,19 @@
+{
+  "questions": [
+    {
+      "id": "documents",
+      "label": "用語を集める文書（このフォルダの中のファイルを 1 行に 1 つ）",
+      "why": "定義された語と書き方をこの文書から集め、原文の引用で裏付ける",
+      "kind": "text",
+      "lines": true,
+      "pick": "files"
+    },
+    {
+      "id": "write",
+      "label": "見つけた書き方のそろえ方を chaff.yaml に入れますか",
+      "why": "入れると、以後このフォルダの文書を chaff で確かめるたびに、使わない書き方が指摘される",
+      "kind": "select",
+      "options": ["このフォルダの chaff.yaml に入れる", "入れない（.blueprint の中だけ）"]
+    }
+  ]
+}

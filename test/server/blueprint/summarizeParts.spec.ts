@@ -2,7 +2,8 @@
 // What a summary answers for and may not invent: the parts it may not drop silently, and the numbers it may only
 // copy from the quotations backing each sentence.
 import { describe, expect, it } from "vitest";
-import { namedIn, numbersIn, partsIn, summaryProblems, within } from "../../../blueprints/summarize/checks/parts.mjs";
+import { numbersIn, partsIn, summaryProblems, within } from "../../../blueprints/summarize/checks/parts.mjs";
+import { namedIn } from "../../../blueprints/docs/checks/markdown.mjs";
 
 const section = (address: string, heading: string, children: unknown[] = []) => ({ kind: "section", address, attrs: { heading }, children });
 const MANUAL = {
