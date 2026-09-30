@@ -11,7 +11,7 @@ import { previewCodeBlocks } from "../../../common/previewCodeBlocks";
 const TOKEN = "0123456789abcdef-wire";
 const FILE = "# Doc\n\n```ts\nconst first = 1;\n```\n\n```sh\necho second\n```\n";
 
-function mountHost(openPath = ref<string | null>("a.md")) {
+function mountHost(openPath = ref<string | null>("a.md"), cwd = ref("/proj")) {
   const frame = document.createElement("iframe");
   document.body.append(frame);
   let api: MdPreviewScroll | null = null;
@@ -23,7 +23,7 @@ function mountHost(openPath = ref<string | null>("a.md")) {
           ref(0),
           () => {},
           () => TOKEN,
-          { cwd: () => "/proj", openPath: () => openPath.value, label: () => "Copy this code block" },
+          { cwd: () => cwd.value, openPath: () => openPath.value, label: () => "Copy this code block" },
         );
         return () => h("div");
       },
@@ -34,7 +34,7 @@ function mountHost(openPath = ref<string | null>("a.md")) {
     Object.defineProperty(event, "source", { value: frame.contentWindow });
     window.dispatchEvent(event);
   };
-  return { frame, press, shown: () => api?.codeBlock?.shown.value ?? null, openPath };
+  return { frame, press, shown: () => api?.codeBlock?.shown.value ?? null, openPath, cwd };
 }
 
 /** The server's `/code-block` route over one file: the block at `?index=`, or its 404 for none. */
@@ -84,6 +84,38 @@ describe("a Preview code block's copy button", () => {
     const host = mountHost();
     host.press(0);
     host.openPath.value = "b.md";
+    await flushPromises();
+    expect(host.shown()).toBeNull();
+  });
+
+  it("shows the latest press when an earlier one answers last", async () => {
+    const answers: ((res: Response) => void)[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Promise<Response>((resolve) => answers.push(resolve))),
+    );
+    const host = mountHost();
+    host.press(0);
+    host.press(1);
+    answers[1]?.(new Response(JSON.stringify({ lang: "sh", text: "echo second" }), { status: 200 }));
+    await flushPromises();
+    answers[0]?.(new Response(JSON.stringify({ lang: "ts", text: "const first = 1;" }), { status: 200 }));
+    await flushPromises();
+    expect(host.shown()).toEqual({ status: "found", block: { lang: "sh", text: "echo second" } });
+  });
+
+  // The same relative path under another root is another file (a re-root keeps the pane mounted).
+  it("drops a read in flight, and a dialog already open, when the root changes", async () => {
+    serveFile(FILE);
+    const host = mountHost();
+    host.press(0);
+    host.cwd.value = "/other";
+    await flushPromises();
+    expect(host.shown()).toBeNull();
+    host.press(0);
+    await flushPromises();
+    expect(host.shown()).not.toBeNull();
+    host.cwd.value = "/proj";
     await flushPromises();
     expect(host.shown()).toBeNull();
   });

@@ -19,9 +19,14 @@ The app shows the block, read from the FILE, in a dialog of its own, and copies 
   N (`/api/files/browse/code-block`, read-only like `/lines` — `/text` would rotate a backup on every
   press); the server takes it with `previewCodeBlocks` (`common/`, marked's lexer, same order as
   drawing). `PreviewCodeBlockDialog.vue` shows it and copies exactly that text.
-- A text box does not draw every character as itself (bidi controls, zero-width and control
-  characters), so the dialog writes those out as `<U+XXXX>` with a warning (`common/hiddenCharacters.ts`);
-  Copy still copies the file's text.
+- A text box does not draw every character as itself, so the dialog writes those out as `<U+XXXX>`
+  with a warning (`common/hiddenCharacters.ts`): decided by Unicode property (Cc, Cf, Cn, Zs except
+  space, Zl, Zp, Co, Default_Ignorable) plus a few blank glyphs and a lone CR; left alone are one
+  selector/joiner inside an emoji and up to two ideographic spaces. Copy still copies the file's text.
+- Character rules cannot cover every way LAYOUT hides text (newline runs; blanks one engine wraps and
+  another hangs), so the dialog also measures its own box (`useContinuesBelow`) and shows a note while
+  text lies below what is in view. This is the structural guard — do not drop it as redundant with the
+  character rules. The box opens at the top (WebKit otherwise scrolls to the caret at the end).
 
 ## What a hostile `.md` can still do
 Hide or fake the in-Preview button, or post a different number (a forged `data-code-block`). Either

@@ -24,9 +24,9 @@ let noteTimer: ReturnType<typeof setTimeout> | undefined;
 const block = computed(() => (props.lookup.status === "found" ? props.lookup.block : null));
 // What the box shows: the file's text, with anything a text box would not draw written out.
 const revealed = computed(() => revealHidden(block.value?.text ?? ""));
-// Counted as the box draws them: a CR alone is a line break there too.
 // Blanks or newlines can put part of the block below the fold; say so until the reader has seen the end.
 const continuesBelow = useContinuesBelow(box, () => revealed.value.shown);
+// The lines a paste makes: a CR alone is Enter there, as it is shown as a marker here.
 const lineCount = computed(() => (block.value ? block.value.text.split(/\r\n|\r|\n/).length : 0));
 
 // Selecting by hand copies the box — with its `<U+XXXX>` markers, not the characters they stand for.
