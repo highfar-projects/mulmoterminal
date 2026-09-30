@@ -534,9 +534,9 @@ const writableDirConfigSchema = z.object({
   // http(s) URL or a data: image — alone, or with how strongly and how it fills the cell.
   backgroundImage: z
     .union([
-      nonEmptyText,
+      nonEmptyText.max(DIR_ICON_MAX_CHARS),
       z.object({
-        image: nonEmptyText,
+        image: nonEmptyText.max(DIR_ICON_MAX_CHARS),
         opacity: z.number().gt(0).max(1).optional(),
         fit: z.enum(DIR_BACKGROUND_FITS).optional(),
       }),

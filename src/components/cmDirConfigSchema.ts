@@ -40,8 +40,10 @@ function loadSchema(): Promise<JsonSchema | null> {
 /** The JSON mode with the schema's completion, lint and hover — or null when the schema could not be
  *  had, leaving the file on the plain JSON mode it opened with. */
 export async function dirConfigSchemaExtension(): Promise<Extension | null> {
-  const [schema, tooling] = await Promise.all([loadSchema(), import("codemirror-json-schema")]);
-  return schema ? tooling.jsonSchema(schema) : null;
+  const schema = await loadSchema();
+  if (schema === null) return null;
+  const tooling = await import("codemirror-json-schema");
+  return tooling.jsonSchema(schema);
 }
 
 /** Test seam: forget the schema asked for. */

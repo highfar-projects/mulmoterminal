@@ -83,10 +83,6 @@ const LANG_EXTENSIONS = {
 
 // A directory's config: plain JSON at once, then the schema's completion and marks once they load
 // (#2625). The JSON mode is bundled, so the file is coloured from the first frame either way.
-function withDirConfigSchema(): Extension | Promise<Extension> {
-  return dirConfigSchemaExtension().then((extension) => extension ?? json());
-}
-
 /** Exported for the spec: which modes cost a round trip is a decision worth pinning. */
 export function langExtensionForKind(kind: LangKind): Extension | Promise<Extension> {
   return kind === "text" ? [] : LANG_EXTENSIONS[kind]();
@@ -250,14 +246,17 @@ export function createEditor(parent: HTMLElement, onChange: () => void): CmEdito
   return {
     setDoc(text, filename) {
       const seq = ++docSeq;
-      const mode = isDirConfigFile(filename) ? withDirConfigSchema() : langExtensionForKind(langKindForFilename(filename));
+      const dirConfig = isDirConfigFile(filename);
+      const mode: Extension | Promise<Extension | null> = dirConfig ? dirConfigSchemaExtension() : langExtensionForKind(langKindForFilename(filename));
       // A bundled mode is applied with the text. A lazy one starts as no highlighting and arrives
-      // below — the file is readable either way, it just goes from plain to coloured.
-      view.setState(stateFor(text, mode instanceof Promise ? [] : mode));
+      // below — the file is readable either way, it just goes from plain to coloured. A directory's
+      // config opens as plain JSON, which is bundled, and gains the schema's help if that loads.
+      const whileLoading: Extension = dirConfig ? json() : [];
+      view.setState(stateFor(text, mode instanceof Promise ? whileLoading : mode));
       if (mode instanceof Promise) {
         void mode
           .then((extension) => {
-            if (seq === docSeq) view.dispatch({ effects: lang.reconfigure(extension) });
+            if (seq === docSeq && extension !== null) view.dispatch({ effects: lang.reconfigure(extension) });
           })
           .catch(() => {
             // A grammar that fails to load leaves the file as plain text, which is what it was
