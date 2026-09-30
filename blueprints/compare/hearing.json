@@ -1,0 +1,27 @@
+{
+  "questions": [
+    {
+      "id": "old",
+      "label": "旧版の文書（このフォルダの中のファイル 1 つ）",
+      "why": "比べる元。条ごとに新版と対応づける",
+      "kind": "text",
+      "pick": "files",
+      "lines": true
+    },
+    {
+      "id": "new",
+      "label": "新版の文書（このフォルダの中のファイル 1 つ）",
+      "why": "比べる先",
+      "kind": "text",
+      "pick": "files",
+      "lines": true
+    },
+    {
+      "id": "focus",
+      "label": "特に見てほしいこと（任意）",
+      "why": "その点に関わる変更を先に、詳しく書く",
+      "kind": "text",
+      "required": false
+    }
+  ]
+}

@@ -31,8 +31,15 @@ function changeButtons(res: Response, mutate: MutateOnDisk, change: (base: AppCo
 export function mountHeaderButtonRoutes(app: Express, mutate: MutateOnDisk): void {
   app.post("/api/config/buttons/add", (req, res) => {
     const body = requestBody(req.body);
-    if (!isEditableRun(body.run)) return res.status(400).json({ error: "run must be shell or input" });
-    const draft = { label: text(body.label), icon: text(body.icon), run: body.run, payload: text(body.payload), when: text(body.when) };
+    if (!isEditableRun(body.run)) return res.status(400).json({ error: "run must be shell, input, open or action" });
+    const draft = {
+      label: text(body.label),
+      icon: text(body.icon),
+      run: body.run,
+      payload: text(body.payload),
+      target: text(body.target),
+      when: text(body.when),
+    };
     return changeButtons(res, mutate, (base) => entriesWithAdded(base.buttons, DEFAULT_BUTTONS, draft));
   });
 
