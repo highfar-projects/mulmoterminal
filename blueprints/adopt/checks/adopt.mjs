@@ -72,6 +72,8 @@ const apply = () => {
   const detected = JSON.parse(run.stdout).detected?.genre;
   const baseline = existsSync(BASELINE) ? readJson(BASELINE, '{ "entries" }') : null;
   const left = findingsNow([]);
+  // The shelf is the survey's, taken under this chaff.yaml: shown with what it shelves, chaff reports what was measured.
+  const shelved = findingsNow(["--show-baseline"]);
   const problems = [
     ...(detected === genre ? [] : [`${CONFIG} gives genre ${detected}, not ${genre}`]),
     ...lostLines(checked.config, readFileSync(CONFIG, "utf8")).map((line) => `${CONFIG} lost a line it had: ${line.trim()}`),
@@ -79,6 +81,11 @@ const apply = () => {
     ...(baseline !== null && (baseline.entries?.length ?? 0) < checked.findings
       ? [`${BASELINE} shelves ${baseline.entries?.length ?? 0} finding(s), fewer than the ${checked.findings} measured`]
       : []),
+    ...(shelved.length === checked.findings
+      ? []
+      : [
+          `with its baseline shown, chaff reports ${shelved.length} finding(s) under ${CONFIG}, not the ${checked.findings} measured: the settings or the shelf are not the ones the person approved`,
+        ]),
     ...(left.length === 0
       ? []
       : [

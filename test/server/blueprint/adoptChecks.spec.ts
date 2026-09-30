@@ -26,6 +26,7 @@ const setUpChaff = (baselineEntries: number) => {
   write(".chaff-baseline.json", { version: 1, entries: Array.from({ length: baselineEntries }, (_unused, index) => String(index)) });
   writeFake("rules.json", RULES("docs/manual"));
   writeFake("findings.json", {});
+  writeFake("shown.json", TODAY);
 };
 const workflow = (text = TEMPLATE.replace("{{PATHS}}", "login.md export.md")) => {
   mkdirSync(join(harness.dir(), ".github", "workflows"), { recursive: true });
@@ -88,6 +89,13 @@ describeSh("adopt: the setup", () => {
     expect(node("adopt.mjs", ["apply"]).stderr).toContain(".chaff-baseline.json is missing");
   });
 
+  it("refuses a shelf that is not the survey's: settings that drop findings, or a baseline taken under another genre", () => {
+    setUpChaff(2);
+    workflow();
+    writeFake("shown.json", { "login.md": [long("login.md")] });
+    expect(node("adopt.mjs", ["apply"]).stderr).toContain("with its baseline shown, chaff reports 1 finding(s) under chaff.yaml, not the 2 measured");
+  });
+
   it("refuses chaff.yaml naming another genre, and one that lost a line the folder had", () => {
     write("chaff.yaml", "genre: blog/tech\nprefer:\n  サーバ: サーバー\n");
     write(".blueprint/adopt.json", { genre: "docs/manual", findings: 2 });
@@ -104,7 +112,7 @@ describeSh("adopt: the setup", () => {
     setUpChaff(2);
     expect(node("adopt.mjs", ["apply"]).stderr).toContain(".github/workflows/chaff.yml is missing");
     workflow(TEMPLATE.replace("{{PATHS}}", "login.md export.md").replace("contents: read\n\njobs:", "contents: write\n\njobs:"));
-    expect(node("adopt.mjs", ["apply"]).stderr).toContain("it takes contents: write");
+    expect(node("adopt.mjs", ["apply"]).stderr).toContain("it does not grant only contents: read at the top");
   });
 
   it("adds no workflow when the person chose none", () => {

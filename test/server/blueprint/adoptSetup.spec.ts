@@ -17,6 +17,7 @@ describe("the places chaff watches", () => {
 
   it("refuse a line that leaves the folder", () => {
     expect(placesIn("docs\n../other\n/etc\nC:\\\\x")).toEqual({ places: ["docs"], refused: ["../other", "/etc", "C:\\\\x"] });
+    expect(placesIn("help pages/login.md\ndocs")).toEqual({ places: ["docs"], refused: ["help pages/login.md"] });
     expect(placesIn(undefined)).toEqual({ places: [], refused: [] });
   });
 });
@@ -31,22 +32,32 @@ describe("the workflow", () => {
     ["another chaff version", "chaffjs@0.16 ", "run the chaff version the packs are written for"],
     ["no SARIF", "--sarif chaff.sarif", "write the findings as SARIF"],
     ["no upload", "github/codeql-action/upload-sarif@", "upload the SARIF"],
-    ["no top-level least privilege", "permissions:\n  contents: read\n\njobs:", "declare least privilege at the top"],
-    ["no right to upload findings", "security-events: write", "grant security-events: write"],
     ["a checkout that keeps the token", "persist-credentials: false", "check out without keeping the token"],
   ])("refuses a workflow with %s", (_label, removed, message) => {
-    const broken = workflowFor("docs").replace(removed, removed.includes("jobs:") ? "jobs:" : "");
-    expect(workflowProblems(broken, ["docs"]).join("\n")).toContain(message);
+    expect(workflowProblems(workflowFor("docs").replace(removed, ""), ["docs"]).join("\n")).toContain(message);
   });
 
-  it("refuses a top-level permissions block that is not contents: read", () => {
-    const other = workflowFor("docs").replace("permissions:\n  contents: read\n\njobs:", "permissions:\n  actions: read\n\njobs:");
-    expect(workflowProblems(other, ["docs"]).join("\n")).toContain("declare least privilege at the top");
+  it("reads a permission with a comment after it as the permission", () => {
+    const commented = workflowFor("docs").replace("      security-events: write", "      security-events: write # the upload needs it");
+    expect(workflowProblems(commented, ["docs"])).toEqual([]);
   });
 
-  it.each(["contents: write", "pull-requests: write", "permissions: write-all"])("refuses a workflow that takes %s", (right) => {
-    const greedy = workflowFor("docs").replace("security-events: write", `security-events: write\n      ${right}`);
-    expect(workflowProblems(greedy, ["docs"]).join("\n")).toContain(`it takes ${right}`);
+  it("refuses an upload not pinned to a commit", () => {
+    const tagged = workflowFor("docs").replace(/upload-sarif@[0-9a-f]{40}/u, "upload-sarif@v4");
+    expect(workflowProblems(tagged, ["docs"]).join("\n")).toContain("pinned to a commit");
+  });
+
+  it.each<[string, (text: string) => string]>([
+    ["no top-level block", (text) => text.replace("permissions:\n  contents: read\n\njobs:", "jobs:")],
+    ["a top-level block granting something else", (text) => text.replace("permissions:\n  contents: read\n\njobs:", "permissions:\n  actions: read\n\njobs:")],
+    ["write at the top", (text) => text.replace("permissions:\n  contents: read\n\njobs:", "permissions:\n  contents: write\n\njobs:")],
+    ["an extra right in the job", (text) => text.replace("      security-events: write", "      security-events: write\n      id-token: write")],
+    ["pull-requests: write in the job", (text) => text.replace("      security-events: write", "      security-events: write\n      pull-requests: write")],
+    ["write-all on one line", (text) => text.replace("permissions:\n  contents: read\n\njobs:", "permissions: write-all\n\njobs:")],
+    ["the upload right only in a comment", (text) => text.replace("      security-events: write", "      # security-events: write")],
+    ["no job block", (text) => text.replace("    permissions:\n      contents: read\n      security-events: write\n", "")],
+  ])("refuses permissions with %s", (_label, change) => {
+    expect(workflowProblems(change(workflowFor("docs")), ["docs"]).join("\n")).toContain("grant only contents: read at the top");
   });
 
   it("refuses a chaff run that leaves out a place, or only names it inside another word", () => {
