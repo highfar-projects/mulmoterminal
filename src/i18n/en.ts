@@ -228,6 +228,9 @@ export const en = {
         "fetches your RSS/JSON feeds and dispatches skill-backed collection updates, for the workspace and every saved project directory. With no feeds registered it does nothing.",
       calendarSync: "Sync Google Calendar",
       calendarSyncHint: "pulls changed events into any collection that declares a Google calendar. Does nothing until you connect an account.",
+      remoteServer: "Experimental: the server runs on another machine",
+      remoteServerHint:
+        "for a server reached through an SSH tunnel. Hides or explains the actions that would act on the server's screen (its file dialog, file manager, apps, Google sign-in), and always uploads a dropped file. Takes effect at once; the launcher reads it at its next start.",
     },
 
     launchers: {
