@@ -3,7 +3,7 @@
 // decides what lands in the user's file — is tested without mounting anything.
 import { DIR_FORM_COLOR_KEYS, type DirConfigEdit, type DirFormKey } from "../../common/dirConfigForm";
 
-export type DirFormFieldKind = "text" | "color" | "number" | "theme";
+export type DirFormFieldKind = "text" | "color" | "number" | "theme" | "tint";
 
 export interface DirFormField {
   key: DirFormKey;
@@ -15,6 +15,7 @@ export interface DirFormField {
 export const DIR_FORM_FIELDS: readonly DirFormField[] = [
   { key: "name", kind: "text" },
   ...DIR_FORM_COLOR_KEYS.map((key): DirFormField => ({ key, kind: "color" })),
+  { key: "headerStatusTint", kind: "tint" },
   { key: "theme", kind: "theme" },
   { key: "fontSize", kind: "number" },
   { key: "fontFamily", kind: "text" },
@@ -23,6 +24,15 @@ export const DIR_FORM_FIELDS: readonly DirFormField[] = [
 
 const unset = (key: DirFormKey): DirConfigEdit => ({ set: {}, unset: [key] });
 const setTo = (key: DirFormKey, value: unknown): DirConfigEdit => ({ set: { [key]: value }, unset: [] });
+
+// Keys edited as a whole set by an editor of their own rather than by one input (#2724): the colour
+// per header status, and the terminal palette.
+export const DIR_FORM_SET_KEYS = ["headerStatusColors", "colors"] as const satisfies readonly DirFormKey[];
+
+/** The save for a whole set: written when it holds anything, taken out of the file when it is empty,
+ *  so an emptied set falls back to the global one rather than overriding it with nothing. */
+export const editForSet = (key: DirFormKey, value: Record<string, unknown>): DirConfigEdit =>
+  Object.keys(value).length === 0 ? unset(key) : setTo(key, value);
 
 /** The save an input's text asks for. Clearing a text, number or theme field takes the key out of
  *  the file, so the global setting applies again. Null when the text is not a value the field can

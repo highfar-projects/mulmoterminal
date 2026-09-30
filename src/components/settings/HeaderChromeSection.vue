@@ -3,7 +3,7 @@ import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { headerButtonCount, headerChipCount } from "../../composables/headerConfigSummary";
 import SkillLaunchButton from "../SkillLaunchButton.vue";
-import HeaderStatusColorsEditor from "./HeaderStatusColorsEditor.vue";
+import GlobalHeaderStatusColors from "./GlobalHeaderStatusColors.vue";
 import HeaderChipsEditor from "./HeaderChipsEditor.vue";
 import HeaderButtonsEditor from "./HeaderButtonsEditor.vue";
 import type { BundledSkillName } from "../../../common/bundledSkills";
@@ -61,7 +61,7 @@ async function onTintChange(e: Event) {
   >
     <option v-for="mode in HEADER_STATUS_TINTS" :key="mode" :value="mode">{{ t(`settingsControls.headerTint.tints.${mode}`) }}</option>
   </select>
-  <HeaderStatusColorsEditor />
+  <GlobalHeaderStatusColors />
   <HeaderButtonsEditor />
   <HeaderChipsEditor />
   <div class="mb-3">

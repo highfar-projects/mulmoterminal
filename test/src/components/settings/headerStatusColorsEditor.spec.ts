@@ -14,7 +14,7 @@ vi.mock("../../../../src/composables/postConfigField", () => ({
   },
 }));
 
-const Editor = (await import("../../../../src/components/settings/HeaderStatusColorsEditor.vue")).default;
+const Editor = (await import("../../../../src/components/settings/GlobalHeaderStatusColors.vue")).default;
 
 afterEach(() => {
   setHeaderStatusDefaults({}, "background");

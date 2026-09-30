@@ -1060,7 +1060,9 @@ of range) and the keys it doesn't read at all (`badgeColour`, a global-only sett
 what tells "I never set that" apart from "I set it and it didn't take".
 
 **Changing it there.** Under the values, **Change here** is a form for the name, the seven chrome
-colors, the terminal theme, font size, font family and grid priority. Each change is written to
+colors, how the header shows a running session (`headerStatusTint`) and its colour per status
+(`headerStatusColors`), the terminal theme and palette (`colors`), font size, font family and grid
+priority. Each change is written to
 the directory's file at once and applies without a restart; **Use global** takes the key out
 again. A key `.mulmoterminal.local.json` already holds is written there. Keys the form doesn't
 show are left as they are, and a file that isn't a JSON object is not touched — fix it in Files.

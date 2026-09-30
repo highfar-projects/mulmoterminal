@@ -3,13 +3,18 @@
 // own as soon as the change is final. The server answers with the directory's detail as it now is,
 // and the form is always drawn from that — never from what it sent — so a value the server wrote
 // somewhere unexpected, or refused, is what the row shows next.
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useTheme } from "../../composables/useTheme";
-import type { DirConfigEdit } from "../../../common/dirConfigForm";
+import type { DirConfigEdit, DirFormKey } from "../../../common/dirConfigForm";
+import { HEADER_STATUS_TINTS, headerStatusColorsForFile, sanitizeHeaderStatusColors, type HeaderStatusColors } from "../../../common/headerStatusColors";
 import type { DirConfigDetailView } from "../dirConfigDetail";
 import { saveDirConfigEdit, type DirConfigSaveFailure } from "../dirConfigEditApi";
-import { DIR_FORM_FIELDS, UNSET_COLOR_PICKER_START, editForInput, inputText, type DirFormField } from "../dirSettingsFormFields";
+import { paletteFromValue, type DirPalette } from "../dirPalette";
+import { DIR_FORM_FIELDS, UNSET_COLOR_PICKER_START, editForInput, editForSet, inputText, type DirFormField } from "../dirSettingsFormFields";
+import DirFormKeyActions from "./DirFormKeyActions.vue";
+import DirPaletteEditor from "./DirPaletteEditor.vue";
+import HeaderStatusColorsEditor from "./HeaderStatusColorsEditor.vue";
 
 const props = defineProps<{ path: string; detail: DirConfigDetailView }>();
 const emit = defineEmits<{ (e: "saved", detail: DirConfigDetailView): void }>();
@@ -23,8 +28,8 @@ const error = ref<string | null>(null);
 // browser is still showing goes back to what the file holds.
 const redraw = ref(0);
 
-const isSet = (field: DirFormField): boolean => field.key in props.detail.formValues;
-const isLocal = (field: DirFormField): boolean => props.detail.source.local.includes(field.key);
+const isSet = (key: DirFormKey): boolean => key in props.detail.formValues;
+const isLocal = (key: DirFormKey): boolean => props.detail.source.local.includes(key);
 const valueOf = (field: DirFormField): string => inputText(field, props.detail.formValues[field.key]);
 
 function failureText(failure: DirConfigSaveFailure): string {
@@ -54,14 +59,18 @@ function onInput(field: DirFormField, e: Event): void {
   redraw.value += 1;
 }
 
+// The two keys edited as a whole set, read back from what the file holds.
+const statusColors = computed(() => sanitizeHeaderStatusColors(props.detail.formValues.headerStatusColors));
+const palette = computed(() => paletteFromValue(props.detail.formValues.colors));
+const onStatusColors = (next: HeaderStatusColors) => void save(editForSet("headerStatusColors", headerStatusColorsForFile(next)));
+const onPalette = (next: DirPalette) => void save(editForSet("colors", next));
+
 // Enter commits a text field the way leaving it does, which is what fires `change`.
 function commitOnEnter(e: KeyboardEvent): void {
   if (e.target instanceof HTMLInputElement) e.target.blur();
 }
 
 const INPUT = "min-w-0 rounded border border-border bg-elevated px-1.5 py-0.5 font-mono text-[12px] text-fg disabled:opacity-60";
-const CLEAR_BUTTON =
-  "flex-none cursor-pointer rounded border border-border bg-elevated px-1.5 py-0.5 font-sans text-[11px] text-secondary hover:bg-hover hover:text-fg disabled:opacity-60";
 </script>
 
 <template>
@@ -82,7 +91,7 @@ const CLEAR_BUTTON =
               :disabled="saving"
               @change="onInput(field, $event)"
             />
-            <span class="font-mono text-[11px]" :class="isSet(field) ? 'text-fg' : 'text-dim'">{{ valueOf(field) || t("dirSettingsForm.notSet") }}</span>
+            <span class="font-mono text-[11px]" :class="isSet(field.key) ? 'text-fg' : 'text-dim'">{{ valueOf(field) || t("dirSettingsForm.notSet") }}</span>
           </template>
           <select
             v-else-if="field.kind === 'theme'"
@@ -95,6 +104,17 @@ const CLEAR_BUTTON =
             <option value="">{{ t("dirSettingsForm.themeGlobal") }}</option>
             <option v-for="theme in themes" :key="theme.id" :value="theme.id">{{ theme.label }}</option>
           </select>
+          <select
+            v-else-if="field.kind === 'tint'"
+            :id="`dir-form-${field.key}`"
+            :class="INPUT"
+            :value="valueOf(field)"
+            :disabled="saving"
+            @change="onInput(field, $event)"
+          >
+            <option value="">{{ t("dirSettingsForm.themeGlobal") }}</option>
+            <option v-for="mode in HEADER_STATUS_TINTS" :key="mode" :value="mode">{{ t(`settingsControls.headerTint.tints.${mode}`) }}</option>
+          </select>
           <input
             v-else
             :id="`dir-form-${field.key}`"
@@ -106,20 +126,42 @@ const CLEAR_BUTTON =
             @change="onInput(field, $event)"
             @keydown.enter="commitOnEnter"
           />
-          <span v-if="isLocal(field)" class="flex-none text-[10px] text-dim">{{ t("dirSettingsForm.local") }}</span>
-          <button
-            v-if="isSet(field)"
-            type="button"
-            :class="CLEAR_BUTTON"
-            :disabled="saving"
-            :data-tip="t('dirSettingsForm.useGlobalTip')"
-            :data-testid="`dir-form-clear-${field.key}`"
-            @click="save({ set: {}, unset: [field.key] })"
-          >
-            {{ t("dirSettingsForm.useGlobal") }}
-          </button>
+          <DirFormKeyActions
+            :form-key="field.key"
+            :is-set="isSet(field.key)"
+            :is-local="isLocal(field.key)"
+            :saving="saving"
+            @clear="save({ set: {}, unset: [field.key] })"
+          />
         </div>
       </template>
+    </div>
+    <div class="mt-2" data-testid="dir-form-row-headerStatusColors">
+      <div class="flex items-center gap-1.5">
+        <span class="text-[12px] text-dim">{{ t("dirSettingsForm.fields.headerStatusColors") }}</span>
+        <DirFormKeyActions
+          form-key="headerStatusColors"
+          :is-set="isSet('headerStatusColors')"
+          :is-local="isLocal('headerStatusColors')"
+          :saving="saving"
+          @clear="save({ set: {}, unset: ['headerStatusColors'] })"
+        />
+      </div>
+      <p class="m-0 text-[11px] text-dim">{{ t("dirSettingsForm.statusColorsHint") }}</p>
+      <HeaderStatusColorsEditor :key="`status-${redraw}`" :colors="statusColors" :saving="saving" @change="onStatusColors" />
+    </div>
+    <div data-testid="dir-form-row-colors">
+      <div class="flex items-center gap-1.5">
+        <span class="text-[12px] text-dim">{{ t("dirSettingsForm.fields.colors") }}</span>
+        <DirFormKeyActions
+          form-key="colors"
+          :is-set="isSet('colors')"
+          :is-local="isLocal('colors')"
+          :saving="saving"
+          @clear="save({ set: {}, unset: ['colors'] })"
+        />
+      </div>
+      <DirPaletteEditor :redraw="redraw" :palette="palette" :saving="saving" @change="onPalette" />
     </div>
   </section>
 </template>
