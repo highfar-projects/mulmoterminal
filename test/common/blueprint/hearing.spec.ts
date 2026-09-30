@@ -11,8 +11,8 @@ import {
   unansweredQuestions,
   askedQuestions,
   folderAnswers,
-  missingFileProblems,
-  neededFiles,
+  missingPathProblems,
+  neededPaths,
   offeredOptions,
   settledAnswers,
   type Hearing,
@@ -219,7 +219,7 @@ describe("an option that needs a file in the folder", () => {
   const DEFAULT = "chaff's default";
   const styled: Hearing = hearingSchema.parse({
     questions: [
-      { id: "style", label: "Style", why: "which rules", kind: "select", options: [FOLDER, DEFAULT], needsFile: { [FOLDER]: "chaff.yaml" } },
+      { id: "style", label: "Style", why: "which rules", kind: "select", options: [FOLDER, DEFAULT], needsPath: { [FOLDER]: "chaff.yaml" } },
       { id: "kind", label: "Kind", why: "genre", kind: "select", options: ["report", "blog"], showIf: { id: "style", equals: DEFAULT } },
     ],
   });
@@ -247,54 +247,54 @@ describe("an option that needs a file in the folder", () => {
     expect(folderAnswers(styled, { style: DEFAULT, kind: "blog" }, has())).toEqual({ style: DEFAULT, kind: "blog" });
     expect(folderAnswers(styled, {}, has("chaff.yaml"))).toEqual({});
     const three = hearingSchema.parse({
-      questions: [{ id: "voice", label: "Voice", why: "tone", kind: "select", options: ["mine", "polite", "plain"], needsFile: { mine: "VOICE.md" } }],
+      questions: [{ id: "voice", label: "Voice", why: "tone", kind: "select", options: ["mine", "polite", "plain"], needsPath: { mine: "VOICE.md" } }],
     });
     expect(folderAnswers(three, { voice: "mine" }, has())).toEqual({});
     expect(folderAnswers(three, { voice: "polite" }, has())).toEqual({ voice: "polite" });
   });
 
   it("names an answer whose file is missing, only when that question is asked", () => {
-    expect(missingFileProblems(styled, { style: FOLDER }, has())).toHaveLength(1);
-    expect(missingFileProblems(styled, { style: FOLDER }, has("chaff.yaml"))).toEqual([]);
-    expect(missingFileProblems(styled, { style: DEFAULT }, has())).toEqual([]);
+    expect(missingPathProblems(styled, { style: FOLDER }, has())).toHaveLength(1);
+    expect(missingPathProblems(styled, { style: FOLDER }, has("chaff.yaml"))).toEqual([]);
+    expect(missingPathProblems(styled, { style: DEFAULT }, has())).toEqual([]);
   });
 
   it("offers an option that needs several files only when every one is there", () => {
     const both = hearingSchema.parse({
       questions: [
-        { id: "style", label: "Style", why: "which", kind: "select", options: [FOLDER, DEFAULT], needsFile: { [FOLDER]: ["STYLE.md", "chaff.yaml"] } },
+        { id: "style", label: "Style", why: "which", kind: "select", options: [FOLDER, DEFAULT], needsPath: { [FOLDER]: ["STYLE.md", "chaff.yaml"] } },
       ],
     });
     expect(settledAnswers(both, has("STYLE.md", "chaff.yaml"))).toEqual({});
     expect(settledAnswers(both, has("chaff.yaml"))).toEqual({ style: DEFAULT });
     expect(settledAnswers(both, has("STYLE.md"))).toEqual({ style: DEFAULT });
-    expect(missingFileProblems(both, { style: FOLDER }, has("chaff.yaml"))).toEqual([`style: 「${FOLDER}」 needs STYLE.md in the folder, and it has none`]);
-    expect(missingFileProblems(both, { style: FOLDER }, has())[0]).toContain("STYLE.md and chaff.yaml");
+    expect(missingPathProblems(both, { style: FOLDER }, has("chaff.yaml"))).toEqual([`style: 「${FOLDER}」 needs STYLE.md in the folder, and it has none`]);
+    expect(missingPathProblems(both, { style: FOLDER }, has())[0]).toContain("STYLE.md and chaff.yaml");
     expect(folderAnswers(both, { style: FOLDER }, has("STYLE.md"))).toEqual({ style: DEFAULT });
-    expect(neededFiles(both)).toEqual(["STYLE.md", "chaff.yaml"]);
+    expect(neededPaths(both)).toEqual(["STYLE.md", "chaff.yaml"]);
   });
 
   it("lists each needed file once", () => {
-    expect(neededFiles(styled)).toEqual(["chaff.yaml"]);
-    expect(neededFiles(hearing)).toEqual([]);
+    expect(neededPaths(styled)).toEqual(["chaff.yaml"]);
+    expect(neededPaths(hearing)).toEqual([]);
   });
 
   it.each([
-    ["an option the question does not have", { needsFile: { other: "chaff.yaml" } }],
-    ["a path from the root", { needsFile: { [FOLDER]: "/etc/chaff.yaml" } }],
-    ["a path out of the folder", { needsFile: { [FOLDER]: "../chaff.yaml" } }],
-    ["an empty segment", { needsFile: { [FOLDER]: "a//chaff.yaml" } }],
-    ["a backslash", { needsFile: { [FOLDER]: "a\\chaff.yaml" } }],
-    ["one bad path among several", { needsFile: { [FOLDER]: ["STYLE.md", "../chaff.yaml"] } }],
-    ["no files at all", { needsFile: { [FOLDER]: [] } }],
-    ["a question that is not a select", { kind: "multiselect", needsFile: { [FOLDER]: "chaff.yaml" } }],
+    ["an option the question does not have", { needsPath: { other: "chaff.yaml" } }],
+    ["a path from the root", { needsPath: { [FOLDER]: "/etc/chaff.yaml" } }],
+    ["a path out of the folder", { needsPath: { [FOLDER]: "../chaff.yaml" } }],
+    ["an empty segment", { needsPath: { [FOLDER]: "a//chaff.yaml" } }],
+    ["a backslash", { needsPath: { [FOLDER]: "a\\chaff.yaml" } }],
+    ["one bad path among several", { needsPath: { [FOLDER]: ["STYLE.md", "../chaff.yaml"] } }],
+    ["no files at all", { needsPath: { [FOLDER]: [] } }],
+    ["a question that is not a select", { kind: "multiselect", needsPath: { [FOLDER]: "chaff.yaml" } }],
   ])("refuses a hearing naming %s", (_name, patch) => {
     const question = { id: "style", label: "Style", why: "which", kind: "select", options: [FOLDER, DEFAULT], ...patch };
     expect(hearingSchema.safeParse({ questions: [question] }).success).toBe(false);
   });
 
   it("accepts a path inside a folder", () => {
-    const question = { id: "style", label: "Style", why: "which", kind: "select", options: [FOLDER, DEFAULT], needsFile: { [FOLDER]: "rules/chaff.yaml" } };
+    const question = { id: "style", label: "Style", why: "which", kind: "select", options: [FOLDER, DEFAULT], needsPath: { [FOLDER]: "rules/chaff.yaml" } };
     expect(hearingSchema.safeParse({ questions: [question] }).success).toBe(true);
   });
 });

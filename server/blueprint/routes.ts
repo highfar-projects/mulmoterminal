@@ -13,8 +13,8 @@ import {
   answerProblems,
   askedQuestions,
   isFolderRelativePath,
-  missingFileProblems,
-  neededFiles,
+  missingPathProblems,
+  neededPaths,
   settledAnswers,
   hearingAnswersSchema,
   recordsWanted,
@@ -44,7 +44,7 @@ import { SIGN_IN_STEP } from "../backends/sharedApp/signInStep.js";
 
 // More than the changed-files list shows: this is for choosing among them, not for glancing at what moved.
 const PICKABLE_FILES_MAX = 200;
-const PRESENT_FILES_MAX = 20;
+const PRESENT_PATHS_MAX = 20;
 const KNOWN_FOLDERS_MAX = 40;
 const RECENT_FOLDERS_MAX = 15;
 
@@ -114,15 +114,15 @@ async function projectDirPlan(projectDir: string): Promise<FolderPlan> {
 }
 
 function mountFolderPresentRoute(app: Express, deps: BlueprintRouteDeps): void {
-  // Which of the files an interview's options need are in the folder the form names. A folder not made yet has none.
+  // Which of the paths an interview's options need are in the folder the form names. A folder not made yet has none.
   app.get("/api/blueprints/folder-present", async (req, res) => {
     const dir = expandHome(typeof req.query.dir === "string" ? req.query.dir : "", deps.home);
     if (!path.isAbsolute(dir) || path.parse(dir).root === dir) return res.status(400).json(refusalBody({ code: "not-absolute" }));
-    const asked = [req.query.file].flat();
-    const files = asked.filter((file): file is string => typeof file === "string" && isFolderRelativePath(file));
-    if (files.length !== asked.length || files.length > PRESENT_FILES_MAX) return res.status(400).json({ error: "expected ?file=<path inside the folder>" });
+    const asked = [req.query.path].flat();
+    const paths = asked.filter((relative): relative is string => typeof relative === "string" && isFolderRelativePath(relative));
+    if (paths.length !== asked.length || paths.length > PRESENT_PATHS_MAX) return res.status(400).json({ error: "expected ?path=<path inside the folder>" });
     try {
-      return res.json({ present: [...(await presentFiles(dir, files))] });
+      return res.json({ present: [...(await presentPaths(dir, paths))] });
     } catch (err) {
       return fail(res, err);
     }
@@ -255,15 +255,16 @@ const sourceLabel = (slug: string): string => (appIdOf(slug) === null ? `"${slug
 const tooLargeReason = (label: string, bytes: number): string =>
   `the copy of ${label} with its records would be ${Math.ceil(bytes / BYTES_PER_MB)} MB, more than the ${MAX_SOURCE_BYTES / BYTES_PER_MB} MB a build copies; start without the records`;
 
-// Only these say the file is not there; a folder it cannot read (EACCES) is not a folder without the file.
+// Only these say the path is not there; a folder it cannot read (EACCES) is not a folder without it.
 const isAbsent = (err: unknown): boolean => err instanceof Error && "code" in err && (err.code === "ENOENT" || err.code === "ENOTDIR");
 
-// A folder not made yet has none of them. A link is not one, as the folder's file list does not follow links either.
-async function presentFiles(projectDir: string, files: readonly string[]): Promise<Set<string>> {
+// A file or a folder counts (a repository's .git is either); a link does not, as the folder's file list does not
+// follow links either. A folder not made yet has none of them.
+async function presentPaths(projectDir: string, paths: readonly string[]): Promise<Set<string>> {
   const found = await Promise.all(
-    files.map((file) =>
-      lstat(path.join(projectDir, file)).then(
-        (entry) => entry.isFile(),
+    paths.map((relative) =>
+      lstat(path.join(projectDir, relative)).then(
+        (entry) => !entry.isSymbolicLink(),
         (err: unknown) => {
           if (isAbsent(err)) return false;
           throw err;
@@ -271,7 +272,7 @@ async function presentFiles(projectDir: string, files: readonly string[]): Promi
       ),
     ),
   );
-  return new Set(files.filter((_, index) => found[index]));
+  return new Set(paths.filter((_, index) => found[index]));
 }
 
 async function checkCreate(deps: BlueprintRouteDeps, body: unknown): Promise<Checked> {
@@ -290,11 +291,11 @@ async function checkCreate(deps: BlueprintRouteDeps, body: unknown): Promise<Che
   if (busy) return refused(409, { code: "folder-busy", dir: projectDir, runId: busy });
   const pair = await loadPackPair(deps.packRoots, base, usecase);
   if (!pair.ok) return refused(400, pair.problems.join("; "));
-  const present = await presentFiles(projectDir, neededFiles(pair.hearing));
-  const hasFile = (file: string): boolean => present.has(file);
-  const given: HearingAnswers = { ...requiredDefaults(pair.hearing), ...settledAnswers(pair.hearing, hasFile), ...answers };
+  const present = await presentPaths(projectDir, neededPaths(pair.hearing));
+  const hasPath = (file: string): boolean => present.has(file);
+  const given: HearingAnswers = { ...requiredDefaults(pair.hearing), ...settledAnswers(pair.hearing, hasPath), ...answers };
   // Before the rest: an option the folder cannot take may open questions nobody should have been asked.
-  const missing = missingFileProblems(pair.hearing, given, hasFile);
+  const missing = missingPathProblems(pair.hearing, given, hasPath);
   if (missing.length > 0) return refused(400, `not in the folder: ${missing.join("; ")}`);
   const problem = answersProblem(pair, given);
   if (problem) return refused(400, problem);

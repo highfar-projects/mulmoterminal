@@ -35,7 +35,8 @@
       "label": "GitHub の PR に指摘を出しますか",
       "why": "作ると、PR を出すたびに chaff が動き、新しい指摘がその行に出る",
       "kind": "select",
-      "options": ["GitHub の PR に指摘を出すワークフローを作る", "作らない（手元で npx chaffjs を動かす）"]
+      "options": ["GitHub の PR に指摘を出すワークフローを作る", "作らない（手元で npx chaffjs を動かす）"],
+      "needsPath": { "GitHub の PR に指摘を出すワークフローを作る": ".git" }
     }
   ]
 }

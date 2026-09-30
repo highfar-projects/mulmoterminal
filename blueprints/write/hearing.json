@@ -38,7 +38,7 @@
       "why": "このフォルダに「規約をつくる」で作った STYLE.md と chaff.yaml があれば、それに沿って書く",
       "kind": "select",
       "options": ["このフォルダの規約（STYLE.md と chaff.yaml）", "chaff の既定のまま"],
-      "needsFile": { "このフォルダの規約（STYLE.md と chaff.yaml）": ["STYLE.md", "chaff.yaml"] }
+      "needsPath": { "このフォルダの規約（STYLE.md と chaff.yaml）": ["STYLE.md", "chaff.yaml"] }
     }
   ]
 }
