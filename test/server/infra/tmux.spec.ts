@@ -673,6 +673,18 @@ describe("psmuxInput", () => {
     expect(psmuxInput("a・b")).toBe(`a${key("・")}b`);
   });
 
+  // A bare ESC byte did not interrupt a Claude turn through psmux, and two in one write were dropped.
+  it("sends the Escape key as a VK_ESCAPE key event, once per press", () => {
+    const esc = "\x1b[27;1;27;1;0;1_\x1b[27;1;27;0;0;1_";
+    expect(psmuxInput("\x1b")).toBe(esc);
+    expect(psmuxInput("\x1b\x1b")).toBe(esc + esc);
+  });
+
+  it("leaves the ESC that starts a sequence alone", () => {
+    expect(psmuxInput("\x1b[A")).toBe("\x1b[A");
+    expect(psmuxInput("\x1bb")).toBe("\x1bb");
+  });
+
   // An emoji written as UTF-8 already reached the pane; as two surrogate key events it did not.
   it("passes a surrogate pair through untouched", () => {
     expect(psmuxInput("x😀y")).toBe("x😀y");

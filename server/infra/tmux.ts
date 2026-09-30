@@ -509,6 +509,11 @@ export async function tmuxWindowSize(id: string): Promise<{ cols: number; rows: 
 /** Whether the tmux on PATH is psmux. Only meaningful once tmuxAvailable() has run. */
 export const tmuxIsPsmux = (): boolean => cachedPsmux;
 
+// One or more Escape key presses and nothing else — what xterm.js sends for the Esc key.
+const isOnlyEscapeKeys = (data: string): boolean => data !== "" && data === "\x1b".repeat(data.length);
+// VK_ESCAPE (27), scan code 1, character 27: key down, then key up.
+const PSMUX_ESCAPE_KEY = "\x1b[27;1;27;1;0;1_\x1b[27;1;27;0;0;1_";
+
 /** Input for a psmux client, with every non-ASCII BMP character sent as a win32-input-mode key
  *  press and release (`CSI Vk;Sc;Uc;Kd;Cs;Rc _`, Vk 0) instead of as UTF-8.
  *
@@ -519,8 +524,15 @@ export const tmuxIsPsmux = (): boolean => cachedPsmux;
  *  (`CSI ? 9001 h`) the moment it started.
  *
  *  Surrogate halves are left as they are: an emoji written as UTF-8 already arrives, and sent as
- *  two key events it did not. */
+ *  two key events it did not.
+ *
+ *  The Escape KEY goes the same way, as the VK_ESCAPE press and release Windows Terminal sends. A
+ *  bare ESC byte from the browser did not interrupt a running Claude turn (while `send-keys Escape`
+ *  did, and under Windows Terminal, where psmux gets key events, Esc works), and two ESC bytes in
+ *  one write were dropped outright. Only input that is nothing BUT Escape presses is converted, so
+ *  the ESC that opens an arrow key, a mouse report or a paste marker is left alone. */
 export function psmuxInput(data: string): string {
+  if (isOnlyEscapeKeys(data)) return PSMUX_ESCAPE_KEY.repeat(data.length);
   return data.replace(/[\u0080-퟿-￿]/g, (c) => {
     const unit = c.charCodeAt(0);
     return `\x1b[0;0;${unit};1;0;1_\x1b[0;0;${unit};0;0;1_`;
