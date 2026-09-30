@@ -35,15 +35,15 @@ describe("the viewpoint catalog", () => {
     });
   });
 
-  it("reads a report, a blog, a manual and a contract for different things, and a README for none yet", () => {
+  it("reads each kind for its own things, and a document left to chaff for none", () => {
     expect(viewpointsFor(catalog, "business/report")).toContain("actionable-ask");
     expect(viewpointsFor(catalog, "blog/tech")).toContain("padded-intro");
     expect(viewpointsFor(catalog, "blog/tech")).not.toContain("actionable-ask");
     expect(viewpointsFor(catalog, "docs/manual")).toEqual(["prerequisites-stated", "steps-one-action", "result-check"]);
     expect(viewpointsFor(catalog, "legal/contract")).toEqual(["duty-owner-deadline", "breach-consequence", "exception-with-rule"]);
     expect(viewpointsFor(catalog, "legal/statute")).toEqual(["scope-stated", "duty-owner-deadline", "breach-consequence", "exception-with-rule"]);
-    expect(viewpointsFor(catalog, "technical/spec")).toEqual([]);
-    expect(viewpointsFor(catalog, "technical/readme")).toEqual([]);
+    expect(viewpointsFor(catalog, "technical/spec")).toEqual(["measurable-requirement", "failure-behaviour"]);
+    expect(viewpointsFor(catalog, "technical/readme")).toEqual(["prerequisites-stated", "first-run", "result-check"]);
     expect(viewpointsFor(catalog, null)).toEqual([]);
   });
 });
