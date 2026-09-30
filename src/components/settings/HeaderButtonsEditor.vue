@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import SettingsButton from "../SettingsButton.vue";
 import SettingsField from "../SettingsField.vue";
@@ -73,6 +73,16 @@ function cancelEdit() {
   editing.value = null;
   fill(null);
 }
+
+// The list can change under an edit — another tab, an agent, or the saved list a refusal carries. A
+// button that is gone, or can no longer be shown in the form, ends the edit instead of leaving Save
+// aimed at it.
+watch(globalHeaderButtons, (rows) => {
+  if (editing.value === null) return;
+  const current = rows?.find((row) => row.id === editing.value?.id);
+  if (current?.draft) editing.value = current;
+  else cancelEdit();
+});
 
 function remove(id: string) {
   if (!saving.value) void apply("remove", { id });

@@ -103,6 +103,31 @@ describe("HeaderButtonsEditor", () => {
     expect((field(w, "header-button-label").element as HTMLInputElement).value).toBe("");
   });
 
+  it("ends an edit when that button leaves the list or becomes a folder", async () => {
+    rows.value = [row("a"), row("b")];
+    const w = mountEditor();
+    await w.findAll('[data-testid="header-button-edit"]')[0].trigger("click");
+    rows.value = [row("b")];
+    await flushPromises();
+    expect(w.find('[data-testid="header-button-editing"]').exists()).toBe(false);
+    expect((field(w, "header-button-label").element as HTMLInputElement).value).toBe("");
+    await w.findAll('[data-testid="header-button-edit"]')[0].trigger("click");
+    rows.value = [{ ...row("b"), kind: "folder", draft: null }];
+    await flushPromises();
+    expect(w.find('[data-testid="header-button-editing"]').exists()).toBe(false);
+  });
+
+  it("stays in the edit when the list refreshes with that button still there", async () => {
+    rows.value = [row("a")];
+    const w = mountEditor();
+    await w.find('[data-testid="header-button-edit"]').trigger("click");
+    await field(w, "header-button-payload").setValue("typed");
+    rows.value = [row("a"), row("c")];
+    await flushPromises();
+    expect(w.find('[data-testid="header-button-editing"]').exists()).toBe(true);
+    expect((field(w, "header-button-payload").element as HTMLInputElement).value).toBe("typed");
+  });
+
   it("moves and removes by id, and offers no move at an end or on an ordered entry", async () => {
     rows.value = [row("a"), row("b"), row("c", true)];
     const w = mountEditor();
