@@ -7,7 +7,7 @@ import SettingsListRow from "./SettingsListRow.vue";
 import { SETTINGS_LIST } from "./sectionClasses";
 import { effectiveChips, isCellChipId, type ChipEntry, type ChipProblem } from "../../../common/headerChips";
 import { changeHeaderChips, globalHeaderChips, type ChipAction } from "../../composables/headerChipsConfig";
-import { addableBuiltins, chipRowKeys } from "./headerChipsEditing";
+import { addableBuiltins, chipRows } from "./headerChipsEditing";
 
 // The global header chips, one change at a time against the list on disk (#2622). An unconfigured
 // list shows the default set the cells draw, and the first change saves it along with that change.
@@ -15,7 +15,7 @@ const { t } = useI18n();
 
 const CUSTOM = "custom";
 const shown = computed(() => effectiveChips(globalHeaderChips.value));
-const rowKeys = computed(() => chipRowKeys(shown.value));
+const rows = computed(() => chipRows(shown.value));
 const addable = computed(() => addableBuiltins(globalHeaderChips.value));
 
 const kind = ref<string>(CUSTOM);
@@ -71,7 +71,7 @@ function reset() {
   </p>
   <p v-if="globalHeaderChips === null" class="mb-1.5 text-[11px] text-dim" data-testid="header-chips-default">{{ t("headerChips.defaultNote") }}</p>
   <ul v-if="shown.length" :class="SETTINGS_LIST" data-testid="settings-header-chips">
-    <SettingsListRow v-for="(chip, i) in shown" :key="rowKeys[i]" :name="chipName(chip)" :disabled="saving" @remove="remove(i, chip)">
+    <SettingsListRow v-for="({ chip, key }, i) in rows" :key="key" :name="chipName(chip)" :disabled="saving" @remove="remove(i, chip)">
       <span class="shrink-0 text-[12px] text-secondary">{{ chipName(chip) }}</span>
       <code class="min-w-0 flex-auto truncate font-mono text-[11px] text-dim" :data-tip="chipDetail(chip)">{{ chipDetail(chip) }}</code>
       <button

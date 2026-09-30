@@ -2,15 +2,15 @@ import { CELL_CHIP_IDS, effectiveChips, type CellChipId, type ChipEntry } from "
 
 // What the chip editor shows, kept out of the component so the rules can be tested alone.
 
-/** A key per row that follows the chip, not its place: a chip's own value, and for a chip listed
- *  twice, which of the equal ones it is. Moving a row keeps its key. */
-export function chipRowKeys(chips: readonly ChipEntry[]): string[] {
+/** Each chip with a key that follows the chip, not its place: the chip's own value, and for a chip
+ *  listed twice, which of the equal ones it is. Moving a row keeps its key. */
+export function chipRows(chips: readonly ChipEntry[]): { chip: ChipEntry; key: string }[] {
   const seen = new Map<string, number>();
   return chips.map((chip) => {
     const value = JSON.stringify(chip);
     const nth = seen.get(value) ?? 0;
     seen.set(value, nth + 1);
-    return `${value}#${nth}`;
+    return { chip, key: `${value}#${nth}` };
   });
 }
 

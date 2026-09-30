@@ -17,7 +17,7 @@ export const isCellChipId = (value: unknown): value is CellChipId => CELL_CHIP_I
 export interface CustomChip {
   label: string;
   text: string;
-  when?: string;
+  when?: string | undefined;
 }
 /** A built-in chip's id, or a chip of the user's own. */
 export type ChipEntry = string | CustomChip;
@@ -72,8 +72,10 @@ export function chipsWithAdded(current: readonly ChipEntry[] | null, draft: Chip
 // `expected` is the chip the caller saw at `index`. Anything else there means the list changed since
 // it loaded — another tab, another MulmoTerminal, a hand-edit — and acting on the index would hit a
 // different chip than the one that was pressed.
-const isAt = (chips: readonly ChipEntry[], index: number, expected: ChipEntry): boolean =>
-  Number.isInteger(index) && index >= 0 && index < chips.length && sameChip(chips[index], expected);
+function isAt(chips: readonly ChipEntry[], index: number, expected: ChipEntry): boolean {
+  const found = Number.isInteger(index) && index >= 0 ? chips[index] : undefined;
+  return found !== undefined && sameChip(found, expected);
+}
 
 export function chipsWithout(current: readonly ChipEntry[] | null, index: number, expected: ChipEntry): Changed {
   const chips = effectiveChips(current);
@@ -81,11 +83,21 @@ export function chipsWithout(current: readonly ChipEntry[] | null, index: number
   return { chips: chips.filter((_, i) => i !== index) };
 }
 
+interface Swap {
+  index: number;
+  target: number;
+  moving: ChipEntry;
+  neighbour: ChipEntry;
+}
+function swapped(chip: ChipEntry, i: number, swap: Swap): ChipEntry {
+  if (i === swap.index) return swap.neighbour;
+  return i === swap.target ? swap.moving : chip;
+}
+
 export function chipsMoved(current: readonly ChipEntry[] | null, index: number, delta: -1 | 1, expected: ChipEntry): Changed {
   const chips = effectiveChips(current);
   const target = index + delta;
-  if (!isAt(chips, index, expected) || target < 0 || target >= chips.length) return { problem: "stale" };
-  const moved = [...chips];
-  [moved[index], moved[target]] = [moved[target], moved[index]];
-  return { chips: moved };
+  const neighbour = chips[target];
+  if (!isAt(chips, index, expected) || target < 0 || neighbour === undefined) return { problem: "stale" };
+  return { chips: chips.map((chip, i) => swapped(chip, i, { index, target, moving: expected, neighbour })) };
 }
