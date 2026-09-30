@@ -5,6 +5,7 @@ import { commandPaletteJa } from "./commandPalette/ja";
 import { focusModeJa } from "./focusMode/ja";
 import { fileHistoryJa } from "./fileHistory/ja";
 import { dirConfigSaveJa } from "./dirConfigSave/ja";
+import { themeEditorJa } from "./themeEditor/ja";
 import { headerChipsJa } from "./headerChips/ja";
 import { settingsControlsJa } from "./settingsControls/ja";
 import { shortcutsJa } from "./shortcuts/ja";
@@ -617,6 +618,7 @@ export const ja: Messages = {
   },
   fileHistory: fileHistoryJa,
   dirConfigSave: dirConfigSaveJa,
+  themeEditor: themeEditorJa,
   headerChips: headerChipsJa,
   focusMode: focusModeJa,
   settingsControls: settingsControlsJa,
