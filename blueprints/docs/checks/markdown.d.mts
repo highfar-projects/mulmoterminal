@@ -6,4 +6,5 @@ export declare const sectionsOf: (markdown: string) => Section[];
 export declare const missingSections: (markdown: string, wanted: readonly (readonly string[])[]) => string[];
 export declare const skeletonOf: (markdown: string) => Skeleton;
 export declare const skeletonChanges: (before: string, after: string) => string[];
+export declare const namedIn: (text: string, name: string) => boolean;
 export declare const sectionText: (markdown: string, names: readonly string[]) => string;
