@@ -90,6 +90,15 @@ describe("an article named in the table", () => {
     expect(mentions("第18条", "第8条")).toBe(false);
     expect(mentions("", "第8条")).toBe(false);
   });
+
+  it("is not found in a branch article's number, but is in prose that follows it", () => {
+    expect(mentions("| 第1条の2 |", "第1条")).toBe(false);
+    expect(mentions("| 第二十一条の二 |", "第二十一条")).toBe(false);
+    expect(mentions("| Article 1-2 |", "Article 1")).toBe(false);
+    expect(mentions("| Article 1.2 |", "Article 1")).toBe(false);
+    expect(mentions("第1条の委託料", "第1条")).toBe(true);
+    expect(mentions("| 第1条の2 | 第1条 |", "第1条")).toBe(true);
+  });
 });
 
 describe("a provision removed and added again", () => {

@@ -89,12 +89,16 @@ export const comparisonProblems = (rows, olds, news) => {
   ];
 };
 
-/** Whether `text` names the article `name`. A name followed by a digit is another article's: "Article 1" is not in "Article 12". */
+// What goes on to make another article's number: a digit (Article 12), a branch number (第1条の2, 第二十一条の二,
+// Article 1-2, Article 1.2). "の" with anything else is prose: 「第1条の委託料」 still names 第1条.
+const CONTINUES = /^(?:[0-9０-９]|[の之ノ][0-9０-９一二三四五六七八九十百千]|[-.‐－．][0-9０-９])/u;
+
+/** Whether `text` names the article `name`, and not only another article whose number starts the same. */
 export const mentions = (text, name) =>
   String(text)
     .split(name)
     .slice(1)
-    .some((after) => !/^[0-9０-９]/u.test(after));
+    .some((after) => !CONTINUES.test(after));
 
 const headingLevel = (line) => /^(#{1,6}) /u.exec(line)?.[1].length ?? 0;
 
