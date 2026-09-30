@@ -58,9 +58,11 @@ async function nudgeIdleDays(delta: number): Promise<void> {
   if (await saveSessionIdleReapDays(sessionIdleReapDays.value + delta)) await reload();
 }
 
-// No reload here, unlike the days above: the cadence does not change WHICH rows are reapable, only
-// how soon the sweep looks again — so the server's `reapable` answer is still current (#2165).
-const nudgeSweepHours = (delta: number): void => void saveSessionReapIntervalHours(sessionReapIntervalHours.value + delta);
+// Reloaded after a save for the cadence the server ARMED, which now follows the save at once (#2626) —
+// the rows themselves do not change, since the cadence only decides how soon the sweep looks again.
+async function nudgeSweepHours(delta: number): Promise<void> {
+  if (await saveSessionReapIntervalHours(sessionReapIntervalHours.value + delta)) await reload();
+}
 
 // With the threshold off, nothing is swept at any cadence, so the row below says that rather
 // than promising a repeat that will never end anything.

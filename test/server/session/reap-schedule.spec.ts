@@ -20,7 +20,7 @@ vi.mock("../../../server/session/session-drops.js", () => ({
   cleanupSessionDrops: (...a: unknown[]) => cleanupSessionDrops(...(a as [])),
 }));
 
-const { startReapSchedule, armedReapIntervalHours } = await import("../../../server/session/reap-schedule.js");
+const { startReapSchedule, armedReapIntervalHours, rearmReapSchedule, nextSweepDelayMs } = await import("../../../server/session/reap-schedule.js");
 
 // Real session ids are UUIDs (SESSION_ID_RE in server/config/env.ts), and the guard under test
 // rejects anything else — so a readable stand-in like "mt-a" would make these pass for the wrong
@@ -226,5 +226,86 @@ describe("startReapSchedule — the boot half, over every shape a sweep can answ
       reapSweepLines.mockReset();
     });
     expect(BOOT_CASES).toHaveLength(SWEEP_SHAPES.length * THRESHOLDS.length * LOG_OUTPUTS.length);
+  });
+});
+
+// #2626: a cadence saved while the server runs is applied at once, counted from the LAST sweep, so a
+// stream of edits cannot keep pushing the next one back — the reason #2167 had declined re-arming.
+describe("rearmReapSchedule", () => {
+  const HOUR = 3_600_000;
+  const schedule = (intervalHours: number) => ({ intervalHours, idleDays: () => 7, log: () => {} });
+  beforeEach(() => {
+    vi.useFakeTimers();
+    sweepIdleSessions.mockClear();
+  });
+  afterEach(() => {
+    startReapSchedule(schedule(0));
+    vi.useRealTimers();
+  });
+
+  it("counts a longer cadence from the last sweep, not from the save", () => {
+    startReapSchedule(schedule(2)); // boot sweep at t0
+    sweepIdleSessions.mockClear();
+    vi.advanceTimersByTime(1 * HOUR);
+    rearmReapSchedule(schedule(3));
+    vi.advanceTimersByTime(2 * HOUR - 1);
+    expect(sweepIdleSessions).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1); // t0 + 3h
+    expect(sweepIdleSessions).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(3 * HOUR);
+    expect(sweepIdleSessions).toHaveBeenCalledTimes(2);
+    expect(armedReapIntervalHours()).toBe(3);
+  });
+
+  it("sweeps at once when a shorter cadence is already overdue", () => {
+    startReapSchedule(schedule(6));
+    sweepIdleSessions.mockClear();
+    vi.advanceTimersByTime(5 * HOUR);
+    rearmReapSchedule(schedule(4));
+    vi.advanceTimersByTime(0);
+    expect(sweepIdleSessions).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(4 * HOUR);
+    expect(sweepIdleSessions).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not push the next sweep back however many times the cadence is saved", () => {
+    startReapSchedule(schedule(6));
+    sweepIdleSessions.mockClear();
+    [5, 6, 5, 6].forEach((hours) => {
+      vi.advanceTimersByTime(1 * HOUR);
+      rearmReapSchedule(schedule(hours));
+    });
+    vi.advanceTimersByTime(2 * HOUR); // t0 + 6h, the cadence the last save set
+    expect(sweepIdleSessions).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves the countdown alone when the cadence did not change", () => {
+    startReapSchedule(schedule(2));
+    sweepIdleSessions.mockClear();
+    vi.advanceTimersByTime(1 * HOUR);
+    rearmReapSchedule(schedule(2));
+    vi.advanceTimersByTime(1 * HOUR);
+    expect(sweepIdleSessions).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops the repeat when switched off, and arms one when switched on", () => {
+    startReapSchedule(schedule(2));
+    rearmReapSchedule(schedule(0));
+    expect(armedReapIntervalHours()).toBe(0);
+    sweepIdleSessions.mockClear();
+    vi.advanceTimersByTime(10 * HOUR);
+    expect(sweepIdleSessions).not.toHaveBeenCalled();
+    rearmReapSchedule(schedule(3));
+    expect(armedReapIntervalHours()).toBe(3);
+    vi.advanceTimersByTime(0);
+    expect(sweepIdleSessions).toHaveBeenCalledTimes(1); // overdue since the boot sweep
+  });
+});
+
+describe("nextSweepDelayMs", () => {
+  it("is the new interval counted from the last sweep, never below zero", () => {
+    expect(nextSweepDelayMs(1_000, 5_000, 2_000)).toBe(4_000);
+    expect(nextSweepDelayMs(1_000, 5_000, 9_000)).toBe(0);
+    expect(nextSweepDelayMs(null, 5_000, 9_000)).toBe(5_000);
   });
 });

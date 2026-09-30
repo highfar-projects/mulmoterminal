@@ -18,9 +18,14 @@ export interface ReapSchedule {
   log: (line: string) => void;
 }
 
+// When the sweep last ran — the boot sweep or a tick. A cadence changed while the server runs is
+// counted from here (rearmReapSchedule), so saving it again and again never pushes the next sweep back.
+let lastSweepAt: number | null = null;
+
 const sweepNow = (idleDays: () => number, log: (line: string) => void) => {
   const days = idleDays();
-  const sweep = sweepIdleSessions(Date.now(), days);
+  lastSweepAt = Date.now();
+  const sweep = sweepIdleSessions(lastSweepAt, days);
   reapSweepLines(sweep, days).forEach(log);
   return sweep;
 };
@@ -58,15 +63,13 @@ const dropEndedSessionFiles = (reaped: readonly string[]): void => {
  * timer and the number describing it are set and cleared in the same assignment, so there is no
  * state in which a cadence is reported and nothing is ticking, or the reverse.
  */
-let armed: { timer: ReturnType<typeof setInterval>; intervalHours: number } | null = null;
+let armed: { stop: () => void; intervalHours: number } | null = null;
 
 /**
  * The cadence THIS process is running, which is not the cadence in the config.
  *
- * The timer is armed once, at boot, and deliberately not re-armed when the config is POSTed — a
- * stream of edits would reset the countdown forever (#2167). So from the moment someone saves a
- * new interval until the next restart, the saved number describes a future server and this one
- * describes the running one. A screen that wants to say what WILL happen needs this one.
+ * The two differ only until a saved cadence reaches this server (rearmReapSchedule), or for a
+ * hand-edit nothing has re-read. A screen that wants to say what WILL happen needs this one.
  */
 export const armedReapIntervalHours = (): number => armed?.intervalHours ?? REAP_INTERVAL_HOURS_OFF;
 
@@ -86,20 +89,45 @@ export const armedReapIntervalHours = (): number => armed?.intervalHours ?? REAP
  */
 const stopArmedTimer = (): void => {
   if (armed === null) return;
-  clearInterval(armed.timer);
+  armed.stop();
   armed = null;
 };
 
 // Off unless asked for: a running server that starts ending sessions because someone upgraded is
-// the surprise worth avoiding.
-function armTimer({ intervalHours, idleDays, log }: ReapSchedule): void {
+// the surprise worth avoiding. The first sweep waits `firstDelayMs` — a whole interval at boot, the
+// rest of one when the cadence changed — and each after that a whole interval.
+function armTimer({ intervalHours, idleDays, log }: ReapSchedule, firstDelayMs: number = reapIntervalMs(intervalHours)): void {
   if (!reapTimerEnabled(intervalHours)) return;
   log(`[tmux] idle-session sweep repeats every ${intervalHours}h`);
-  const timer = setInterval(() => {
-    dropEndedSessionFiles(sweepNow(idleDays, log).reaped);
-  }, reapIntervalMs(intervalHours));
-  timer.unref(); // a sweep waiting to run is never a reason to keep the process alive
-  armed = { timer, intervalHours };
+  const tick = () => dropEndedSessionFiles(sweepNow(idleDays, log).reaped);
+  const repeat: { timer: ReturnType<typeof setInterval> | null } = { timer: null };
+  const first = setTimeout(() => {
+    tick();
+    repeat.timer = setInterval(tick, reapIntervalMs(intervalHours));
+    repeat.timer.unref(); // a sweep waiting to run is never a reason to keep the process alive
+  }, firstDelayMs);
+  first.unref();
+  const stop = () => {
+    clearTimeout(first);
+    if (repeat.timer !== null) clearInterval(repeat.timer);
+  };
+  armed = { stop, intervalHours };
+}
+
+/** How long until the next sweep under a new cadence: the new interval counted from the last sweep,
+ *  never less than now. Counted from the last sweep rather than from the save, so a stream of edits
+ *  cannot keep resetting the countdown — the reason #2167 declined re-arming on a save at all. */
+export function nextSweepDelayMs(lastSweepAtMs: number | null, intervalMs: number, nowMs: number): number {
+  return lastSweepAtMs === null ? intervalMs : Math.max(0, lastSweepAtMs + intervalMs - nowMs);
+}
+
+/** A cadence saved while the server runs (#2626). No sweep now: the next one is due the new interval
+ *  after the last one, which may be at once if that has already passed. Re-arming the same cadence
+ *  therefore lands on the same moment, so a save that did not move it changes nothing. */
+export function rearmReapSchedule(schedule: ReapSchedule): void {
+  stopArmedTimer();
+  if (!reapTimerEnabled(schedule.intervalHours)) return;
+  armTimer(schedule, nextSweepDelayMs(lastSweepAt, reapIntervalMs(schedule.intervalHours), Date.now()));
 }
 
 /** Sweeps once, arms the repeat, and answers with what the boot sweep ended. */
