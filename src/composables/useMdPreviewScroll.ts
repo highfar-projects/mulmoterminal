@@ -48,7 +48,7 @@ export interface MdPreviewScroll {
   goToTop: () => void;
   /** Called each time a document announces itself, after the host has answered it with the place. */
   onReady: (listener: () => void) => void;
-  /** The code block a Preview button asked for (#2615), read from the file; null without `codeBlockDeps`. */
+  /** The code-block dialog's state (#2615) — which block is shown, and how to close it; null without `codeBlockDeps`. */
   codeBlock: PreviewCodeBlockDialogState | null;
 }
 
