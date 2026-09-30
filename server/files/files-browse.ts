@@ -23,6 +23,8 @@ import { CONTEXT_RADIUS_LINES, isSearchable, lineWindow, type SearchRequest, typ
 import { git } from "../git/worktrees.js";
 import { htmlDoc, jsonHtmlDoc, tableHtmlDoc, delimiterForExtension, themeStyle } from "./renderedDoc.js";
 import { fenceColourer } from "./codeHighlight.js";
+import { numberedCodeRenderer } from "./previewCodeFence.js";
+import { previewCodeBlocks } from "../../common/previewCodeBlocks.js";
 import { previewThemeFromQuery, type PreviewTheme } from "../../common/previewTheme.js";
 import { mdPreviewEmbedCsp, newPreviewNonce, wantsMdPreviewEmbed } from "./mdPreviewEmbed.js";
 import { mdPreviewReporterTag } from "./mdPreviewReporter.js";
@@ -326,16 +328,19 @@ function mountSearchRoute(app: Express, defaultCwd: string): void {
   });
 }
 
-/** A 1-based line number off the query string, or null for anything that is not one.
+/** A whole number of at least `min` off the query string, or null for anything that is not one.
  *
  *  Digits only, so `"1e3"`, `"1.5"` and a leading `+` are all refused rather than coerced into a
- *  line that was never asked for — and `Number.isSafeInteger` catches the run of digits too long to
+ *  number that was never asked for — and `Number.isSafeInteger` catches the run of digits too long to
  *  survive being a number at all. */
-const lineParam = (value: unknown): number | null => {
+const wholeNumberParam = (value: unknown, min: number): number | null => {
   if (typeof value !== "string" || !/^\d+$/.test(value)) return null;
-  const line = Number(value);
-  return Number.isSafeInteger(line) && line > 0 ? line : null;
+  const whole = Number(value);
+  return Number.isSafeInteger(whole) && whole >= min ? whole : null;
 };
+
+const FIRST_LINE = 1;
+const FIRST_BLOCK = 0;
 
 /** The lines around one line of a file, for the search panel's peek at a result (#2159).
  *
@@ -350,11 +355,26 @@ function mountLinesRoute(app: Express, defaultCwd: string): void {
   app.get("/api/files/browse/lines", (req, res) => {
     const abs = containedFor(req, res, defaultCwd);
     if (!abs) return;
-    const around = lineParam(req.query.line);
+    const around = wholeNumberParam(req.query.line, FIRST_LINE);
     if (around === null) return res.status(400).json({ error: "line must be a positive integer" });
     const text = readTextOr4xx(res, abs);
     if (text === null) return;
     res.json(lineWindow(text, around, CONTEXT_RADIUS_LINES));
+  });
+}
+
+/** The `index`-th code block as the Preview draws it, for its copy button (#2615). Read-only like
+ *  `/lines` and for the same reason: pressing a button is not opening the file, so no backup rotates. */
+function mountCodeBlockRoute(app: Express, defaultCwd: string): void {
+  app.get("/api/files/browse/code-block", (req, res) => {
+    const abs = containedFor(req, res, defaultCwd);
+    if (!abs) return;
+    const index = wholeNumberParam(req.query.index, FIRST_BLOCK);
+    if (index === null) return res.status(400).json({ error: "index must be a whole number" });
+    const text = readTextOr4xx(res, abs);
+    if (text === null) return;
+    const block = previewCodeBlocks(text)[index];
+    return block ? res.json(block) : res.status(404).json({ error: "no such code block", kind: "no-block" });
   });
 }
 
@@ -374,8 +394,9 @@ const mdBody = async (text: string, doc: ServedDoc): Promise<string> => {
       if (!isImageToken(token)) return;
       token.href = servedImageSrc(token.href, doc) ?? token.href;
     },
-    // A fence in a language with a grammar is coloured here (#2579); `false` leaves the rest to marked.
-    renderer: { code: ({ text, lang }) => colour(text, lang) ?? false },
+    // A fence in a language with a grammar is coloured here (#2579); every block is numbered for the
+    // Preview's copy button (#2615).
+    renderer: { code: numberedCodeRenderer(colour) },
   }).parse(splitFrontmatter(text).body);
 };
 
@@ -393,6 +414,7 @@ export function mountFilesBrowseRoutes(app: Express, deps: BrowseDeps): void {
 
   mountSearchRoute(app, defaultCwd);
   mountLinesRoute(app, defaultCwd);
+  mountCodeBlockRoute(app, defaultCwd);
   mountFilesGitStatusRoute(app, { base: baseResolver(defaultCwd), maxHeadBytes: MAX_EDIT_BYTES });
 
   app.get("/api/files/browse/list", (req, res) => {

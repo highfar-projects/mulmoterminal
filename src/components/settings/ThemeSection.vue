@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useTheme } from "../../composables/useTheme";
 import SkillLaunchButton from "../SkillLaunchButton.vue";
+import ThemeColorEditor from "./ThemeColorEditor.vue";
 import type { BundledSkillName } from "../../../common/bundledSkills";
 import { playfulEffects, savePlayfulEffects } from "../../composables/playfulEffects";
 import { playfulAfterSwitch, playfulIsOn } from "./playfulSwitch";
@@ -92,6 +93,7 @@ async function onPlayfulToggle(e: Event) {
       <span class="text-[12px]">{{ scheme.label }}</span>
     </button>
   </div>
+  <ThemeColorEditor />
   <label class="mt-3 flex cursor-pointer items-start gap-2">
     <input
       type="checkbox"
