@@ -1,7 +1,7 @@
 // Tries every table in the local stack's public schema the way a stranger would, through the same API the app uses: a
 // signed-out visitor and a freshly signed-up user, neither of whom owns anything, each try to read, add, change and
 // delete a row that the seed put there. An ownership policy can only tell two users apart — the row's owner and the one
-// asking — so every write is tried with each user column (a foreign key to auth.users, or a default of auth.uid()) set
+// asking — so every write is tried with each user column (a foreign key to auth.users, a default of auth.uid(), or a seeded value that is a user's id) set
 // to both: a row added in the seeded owner's name, and the seeded row changed as it is and changed over to the stranger.
 // An add is tried both empty and as a copy of the seeded row's own values, so a policy that only opens for realistic
 // values is reached too. Whatever gets through must be declared in .blueprint/public-access.json, with who may do it and
@@ -180,9 +180,20 @@ async function attempts(api, target, row, stranger) {
   ];
 }
 
-async function tableProblems(api, access, strangers, target) {
-  const seeded = await call(`${api.url}/rest/v1/${encodeURIComponent(target.table)}?limit=1`, { headers: { apikey: api.secret } });
-  const [row] = Array.isArray(seeded.body) ? seeded.body : [];
+async function seededRow(api, table) {
+  const seeded = await call(`${api.url}/rest/v1/${encodeURIComponent(table)}?limit=1`, { headers: { apikey: api.secret } });
+  return Array.isArray(seeded.body) ? seeded.body[0] : undefined;
+}
+
+// A column names a user when its schema says so (a foreign key to auth.users, a default of auth.uid()) or when the seeded
+// row holds a real user's id in it: an owner column that lost its foreign key is still found by what it holds.
+function withSeededOwners(target, row, userIds) {
+  if (!row) return target;
+  const held = Object.keys(row).filter((column) => row[column] !== null && userIds.has(String(row[column])));
+  return { ...target, owners: [...new Set([...target.owners, ...held])] };
+}
+
+async function tableProblems(api, access, strangers, target, row) {
   if (target.key.length === 0) return [`${target.table} has no primary key, so no single row of it can be tried`];
   if (!row) return [`${target.table} is empty after the seed; supabase/seed.sql must put a row in it so the check can try reading it as a stranger`];
   const problems = [];
@@ -207,11 +218,16 @@ async function tableProblems(api, access, strangers, target) {
 async function main() {
   const status = JSON.parse(supabase(["status", "-o", "json"]));
   const api = { url: status.API_URL, publishable: status.PUBLISHABLE_KEY, secret: status.SECRET_KEY };
-  const found = tables();
-  const access = declared(new Map(found.map(({ table, owners }) => [table, owners])));
+  const userIds = new Set(query("--local", "select id::text as id from auth.users").map((row) => row.id));
+  const found = [];
+  for (const target of tables()) {
+    const row = await seededRow(api, target.table);
+    found.push({ target: withSeededOwners(target, row, userIds), row });
+  }
+  const access = declared(new Map(found.map(({ target }) => [target.table, target.owners])));
   const strangers = [{ who: "anyone", headers: { apikey: api.publishable }, id: null }, await signedInStranger(api)];
   const problems = [];
-  for (const target of found) problems.push(...(await tableProblems(api, access, strangers, target)));
+  for (const { target, row } of found) problems.push(...(await tableProblems(api, access, strangers, target, row)));
   return problems;
 }
 

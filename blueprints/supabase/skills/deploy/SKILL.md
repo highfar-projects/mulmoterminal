@@ -30,7 +30,8 @@ their own Supabase and Cloudflare accounts. You never handle a password, an acce
    `.blueprint/deploy-url`, then do step 3 with it and tell the person the URL.
 
 Done when the check passes: the URL in `.blueprint/deploy-url` serves the id this deploy wrote, lets the page connect
-to the Supabase in `.blueprint/supabase-url` and talks to it (and to no other), carries no secret or service_role key,
+to the Supabase in `.blueprint/supabase-url` and talks to it (and to no other), carries no secret or service_role key —
+in the page and in every chunk of `dist/`, which must still hold this deploy's build (do not rebuild after deploying) —
 and renders; the production database applied exactly the migrations in `supabase/migrations/`, as they read now, and
 passes Supabase's security linter. (The check resets the local database to compare, so the local stack must run.)
 

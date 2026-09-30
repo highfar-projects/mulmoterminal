@@ -20,10 +20,12 @@ served=$(curl -fsS --max-time 20 "$url/blueprint-build.txt")
 [ "$served" = "$expected" ] || { echo "$url serves build $served, this deploy made $expected" >&2; exit 1; }
 node --no-warnings "$here/linked-url.mjs" "$supabase"
 node --no-warnings "$here/client-secrets.mjs" "$url/" "$supabase"
-# The deploy step writes .env.production; no .env file may hold a key that must stay on the server.
-set --
+# The page names only some of the build's chunks; the browser loads the rest later. dist/ is read whole, once it is shown
+# to be the build that was published, with the .env files the deploy step wrote.
+[ "$(cat dist/blueprint-build.txt 2>/dev/null)" = "$expected" ] || { echo "dist/ is not the build that was published (dist/blueprint-build.txt is not $expected); build and deploy again" >&2; exit 1; }
+set -- dist
 for env in .env* supabase/.env*; do [ -f "$env" ] && set -- "$@" "$env"; done
-[ "$#" -eq 0 ] || node --no-warnings "$here/client-secrets.mjs" "$@"
+node --no-warnings "$here/client-secrets.mjs" --supabase "$supabase" "$@"
 sh "$here/page-renders.sh" "$url/"
 
 # Production itself, through the person's supabase login and the project this folder is linked to.

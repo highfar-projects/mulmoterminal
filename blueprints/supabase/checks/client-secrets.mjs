@@ -2,8 +2,10 @@
 // or a service_role token — and, for the published page, when it talks to, or is allowed by its Content-Security-Policy
 // to talk to, any Supabase other than the production one.
 //
-//   node client-secrets.mjs <folder or file> …               the local build (dist/), and the .env files
-//   node client-secrets.mjs <https page URL> <supabase URL>   the published page, which must talk to that Supabase
+//   node client-secrets.mjs <folder or file> …                         the local build (dist/), and the .env files
+//   node client-secrets.mjs --supabase <URL> <folder or file> …        the production build, every chunk of it: no
+//                                                                      other Supabase and not the local stack either
+//   node client-secrets.mjs <https page URL> <supabase URL>             the published page, which must talk to that Supabase
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
@@ -109,13 +111,30 @@ async function publishedProblems(page, supabaseUrl) {
   ];
 }
 
+// The production build read as files: every chunk the browser may load later, not only those the page names.
+function builtProblems(expectedUrl, paths) {
+  const expectedHost = new URL(expectedUrl).host;
+  return localFiles(paths).flatMap((file) => {
+    const text = readFileSync(file, "utf8");
+    const others = otherHosted(text, expectedHost);
+    const local = text.match(LOCAL_STACK_RE);
+    return [
+      ...secretProblems(file, text),
+      ...(local ? [`${file} still talks to the local Supabase stack (${local[0]}); build it with the production settings`] : []),
+      ...(others.length > 0 ? [`${file} names another Supabase (${others.join(", ")}); it must talk only to ${expectedHost}`] : []),
+    ];
+  });
+}
+
 const [target, supabaseUrl] = process.argv.slice(2);
 // Every file under the folders named, and the files named as they are (an .env file is read whatever its name).
 const localFiles = (paths) => paths.flatMap((item) => (statSync(item).isDirectory() ? filesUnder(item) : [item]));
 try {
-  const problems = /^https?:\/\//.test(target ?? "")
-    ? await publishedProblems(target, supabaseUrl)
-    : localFiles(process.argv.slice(2)).flatMap((file) => secretProblems(file, readFileSync(file, "utf8")));
+  const problems = await (async () => {
+    if (target === "--supabase") return builtProblems(supabaseUrl, process.argv.slice(4));
+    if (/^https?:\/\//.test(target ?? "")) return publishedProblems(target, supabaseUrl);
+    return localFiles(process.argv.slice(2)).flatMap((file) => secretProblems(file, readFileSync(file, "utf8")));
+  })();
   if (problems.length > 0) {
     console.error(problems.join("\n"));
     process.exit(1);

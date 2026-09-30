@@ -140,6 +140,7 @@ function pick() {
   if (args[0] === "status") return answers.status;
   if (args[1] === "reset") return answers.reset;
   if (args[1] === "query" && /schema_migrations/.test(args.at(-1))) return args[2] === "--local" ? answers.localMigrations : answers.migrations;
+  if (args[1] === "query" && /from auth.users/.test(args.at(-1))) return answers.users;
   if (args[1] === "query") return answers.tables;
   return answers.advisors;
 }
@@ -156,8 +157,9 @@ const put = (file: string, content: string) => {
 };
 type Reply = { stdout?: string; stderr?: string; status?: number };
 // `migrations` is production's history, `localMigrations` the local database's after the reset.
-const answers: { status: Reply; tables: Reply; reset: Reply; migrations: Reply; localMigrations: Reply; advisors: Reply } = {
+const answers: { status: Reply; tables: Reply; users: Reply; reset: Reply; migrations: Reply; localMigrations: Reply; advisors: Reply } = {
   status: {},
+  users: {},
   tables: {},
   reset: {},
   migrations: {},
@@ -184,6 +186,7 @@ beforeEach(() => {
   answers.status = { stdout: JSON.stringify({ API_URL: origin, PUBLISHABLE_KEY: PUBLISHABLE, SECRET_KEY: SECRET }) };
   answers.tables = rowsReply(tables.map(({ name, key, owners }) => ({ table: name, key, owners })));
   answers.reset = {};
+  answers.users = rowsReply([{ id: SEED_OWNER }]);
   answers.migrations = rowsReply([APPLIED]);
   answers.localMigrations = rowsReply([APPLIED]);
   answers.advisors = { stdout: JSON.stringify({ results: [], message: "db advisors" }) };
@@ -318,6 +321,12 @@ describe("supabase: security-probe.mjs", { timeout: CHECK_TIMEOUT_MS }, () => {
   it("reports an insert that only a row with real values gets past, by also adding a copy of the seeded row", async () => {
     tables[0].open.anyone = ["insert-with-title"];
     expect((await probe()).stderr).toContain("a signed-out visitor can add a row (it got past row level security)");
+  });
+
+  it("finds a user column by what the seeded row holds, when the schema does not say so", async () => {
+    answers.tables = rowsReply([{ table: "books", key: ["id"], owners: [] }]);
+    tables[0].open["signed-in"] = ["insert", "insert-for-another"];
+    expect((await probe()).stderr).toContain("can add a row in another user's name (owner set to the seeded row's)");
   });
 
   it.each([
@@ -527,6 +536,8 @@ describeSh("supabase: deploy-check.sh against a stand-in page", { timeout: CHECK
     put(".blueprint/supabase-url", `${SUPABASE_URL}\n`);
     put(".blueprint/build-id", BUILD_ID);
     put("supabase/.temp/project-ref", `${LINKED_REF}\n`);
+    put("dist/blueprint-build.txt", BUILD_ID);
+    put("dist/assets/index.js", page.code);
   });
 
   it("passes when the page is this build, talks to production Supabase, renders, and production is migrated and clean", async () => {
@@ -548,6 +559,17 @@ describeSh("supabase: deploy-check.sh against a stand-in page", { timeout: CHECK
         }),
       "rls_disabled_in_public",
     ],
+    [
+      "a chunk the page does not name that talks to another project",
+      () => put("dist/assets/Settings-lazy.js", 'createClient("https://wrongwrongwrongwrong.supabase.co", "k")'),
+      "dist/assets/Settings-lazy.js names another Supabase (wrongwrongwrongwrong.supabase.co)",
+    ],
+    [
+      "a secret key in a chunk the page does not name",
+      () => put("dist/assets/Admin-lazy.js", `const k = "${SECRET}";`),
+      "dist/assets/Admin-lazy.js carries a Supabase secret key",
+    ],
+    ["a dist/ that is not the published build", () => put("dist/blueprint-build.txt", "build-other"), "dist/ is not the build that was published"],
     [
       "a page that talks to another project than the one linked",
       () => put("supabase/.temp/project-ref", "zyxwvutsrqponmlkjihg\n"),
