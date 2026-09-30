@@ -129,6 +129,17 @@ describe("paletteRows", () => {
     expect(zoomed.find((row) => row.action === "zoom-toggle")?.disabledReason).toBeNull();
   });
 
+  // #2655: on the full-screen Files view the grid is not in front, but that view takes the Files
+  // actions itself — except inserting a selection, which needs a terminal beside it.
+  it("enables the Files actions while the full-screen Files view is up", () => {
+    const filesScreen = { ...UNZOOMED, available: false, filesScreen: true };
+    const rows = actionRowsOf("", {}, filesScreen, TEXT);
+    expect(rows.find((row) => row.action === "files-find")?.disabledReason).toBeNull();
+    expect(rows.find((row) => row.action === "files-tab-next")?.disabledReason).toBeNull();
+    expect(rows.find((row) => row.action === "files-insert-selection")?.disabledReason).not.toBeNull();
+    expect(rows.find((row) => row.action === "zoom-toggle")?.disabledReason).not.toBeNull();
+  });
+
   it("carries each action's description", () => {
     expect(actionRowsOf("", {}, ZOOMED, TEXT)[0]?.description).toBe(`About ${PALETTE_ACTIONS[0]}`);
   });
