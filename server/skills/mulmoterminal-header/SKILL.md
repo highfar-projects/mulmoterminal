@@ -184,9 +184,10 @@ button the header used to have:
 | `"terminal-move-prev"` / `"terminal-move-next"` | Move this cell (manual order only; declines otherwise) |
 | `"mark-unread"` / `"terminal-park"` | Mark unread-read / set aside-wake |
 | `"terminal-timeline"` / `"terminal-talk"` | Activity timeline (Claude only) / talk to another terminal |
+| `"terminal-copy-code"` / `"terminal-insert-path"` / `"terminal-reveal"` / `"terminal-voice"` / `"terminal-diff"` / `"terminal-note"` | Copy the last code block / insert a file path / reveal the directory / mic on-off / changes panel / note |
 | `"pane-files"` | The files PANE beside this cell (not the full-screen view `open.files` gives) |
 | `"pane-prompts"` / `"pane-transcript"` / `"pane-tools"` / `"pane-canvas"` / `"pane-collections"` | The History / Tools menu panes |
-| `"screen-*"` (e.g. `"screen-wiki"`), `"settings-open"`, `"sound-toggle"`, `"view-toggle"`, `"order-auto"` / `"-manual"` / `"-priority"` | The toolbar's operations — act on the app, not this cell; a screen not set up (prs / rooms / worklog) shows a hint instead |
+| `"screen-*"` (e.g. `"screen-wiki"`), `"settings-open"`, `"sound-toggle"`, `"view-toggle"`, `"order-auto"` / `"-manual"` / `"-priority"`, `"page-next"` / `"page-prev"` | The toolbar's operations — act on the app, not this cell; a screen not set up (prs / rooms / worklog) shows a hint instead |
 
 A pane action toggles the pane on the enlarged cell, and on a tile enlarges the cell and opens it.
 A cell that cannot do it now shows a hint instead. Write the current names; `"restart"` (the name

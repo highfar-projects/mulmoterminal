@@ -24,6 +24,12 @@ const LABEL_KEYS: Record<KeymapAction, string> = {
   "terminal-timeline": "settings.shortcuts.actions.terminalTimeline",
   "terminal-talk": "settings.shortcuts.actions.terminalTalk",
   "terminal-park": "settings.shortcuts.actions.terminalPark",
+  "terminal-copy-code": "settings.shortcuts.actions.terminalCopyCode",
+  "terminal-insert-path": "settings.shortcuts.actions.terminalInsertPath",
+  "terminal-reveal": "settings.shortcuts.actions.terminalReveal",
+  "terminal-voice": "settings.shortcuts.actions.terminalVoice",
+  "terminal-diff": "settings.shortcuts.actions.terminalDiff",
+  "terminal-note": "settings.shortcuts.actions.terminalNote",
   "pane-files": "settings.shortcuts.actions.paneFiles",
   "pane-prompts": "settings.shortcuts.actions.panePrompts",
   "pane-transcript": "settings.shortcuts.actions.paneTranscript",
@@ -54,6 +60,8 @@ const LABEL_KEYS: Record<KeymapAction, string> = {
   "order-auto": "settings.shortcuts.actions.orderAuto",
   "order-manual": "settings.shortcuts.actions.orderManual",
   "order-priority": "settings.shortcuts.actions.orderPriority",
+  "page-next": "settings.shortcuts.actions.pageNext",
+  "page-prev": "settings.shortcuts.actions.pagePrev",
   // Only acts when the terminal has a selection; with none, the key reaches the shell as it
   // always did — which is what makes Ctrl+C a usable binding here without losing interrupt.
   copy: "settings.shortcuts.actions.copy",

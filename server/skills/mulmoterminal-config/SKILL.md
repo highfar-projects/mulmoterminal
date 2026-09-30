@@ -110,8 +110,9 @@ phrase it as a general question:
     still use it).
   - Chrome colours while a session is busy or waiting — the working/attention colours take over,
     and the configured ones only show when the cell is idle.
-  - A global change that needs a **tab reload**, or `fontFamily` / a provider key, which need a
-    **server restart**.
+  - A global change that needs a **tab reload**, a hand-edit the server has not read yet (Settings →
+    **Reload config file**, or `POST /api/config/reload`), or a provider key in the environment,
+    which needs a **server restart**.
 - **Then** the settings that are working, grouped by area, briefly.
 
 Offer to fix what you found, and route to the owning skill for anything they pick.
@@ -137,8 +138,10 @@ State these when they matter; they are the ones that cost people an afternoon.
 - **Malformed values are silently dropped**, so an invalid field just never takes effect. Check with
   the audit above rather than assuming a write landed.
 - **When it takes effect**: per-project → immediately. Most global → **reload the tab**.
-  `fontFamily`, provider keys, and any hand-edit made while the server is running → **restart the
-  server**.
+  A global file written with your own Write/Edit tool, or by hand, is not read until something asks:
+  `POST /api/config/reload` (Settings → **Reload config file** does the same) adopts it, or refuses
+  and keeps the running config when the file does not parse or its keymap would stop the start — say
+  what it answered. A provider key lives in the environment, which only a **server restart** re-reads.
 
 ## The settings that live here
 
@@ -287,7 +290,7 @@ many days.
   row there is marked **due to be ended** when the next sweep will take it.
 - **This one applies at once.** `startReapSchedule` takes the threshold as a function and re-reads
   it on every tick, so a change reaches the running server immediately — including `0`, which
-  stops an already-armed timer from ending anything. Only the cadence below waits for a restart.
+  stops an already-armed timer from ending anything. The cadence below applies at once too.
 
 ### `sessionReapIntervalHours` — looking again while the server is up
 
@@ -312,17 +315,16 @@ sessions that go idle after boot sit there until the next restart. This repeats 
 - A second stepper in **Settings → Sessions that survived a restart**, beside the one that sets
   the threshold. It is disabled while the threshold is `0`, because then there is nothing to
   repeat.
-- **Nothing in that section names a TIME the next sweep will run, and that is the rule.** The
-  timer is armed once at boot, so the saved number and the running one are different things until
-  a restart. Every clock-naming sentence is false in half the reachable states: "ends at next
-  start" is wrong for a server that booted with a cadence, and "ends on the next sweep" would be
-  wrong for one that has a cadence saved and has not restarted. Knowing the cadence does not fix
-  that — a cadence is not a countdown, and nothing knows when the current interval started.
+- **Nothing in that section names a TIME the next sweep will run, and that is the rule.** A cadence
+  saved through `POST /api/config` (or the stepper) re-arms the running server at once, counted from
+  its LAST sweep so repeated saves never push the next one back (#2626); a hand-edit reaches it on a
+  config reload or a restart. Until then the saved number and the running one can still differ, so a
+  clock-naming sentence can still be false, and the section names the event instead.
 - **What the section says instead**, each part true whatever was armed: a doomed row names the
   **event** — **due to be ended**, "the next sweep ends it"; the stepper's hint states what is
   **saved**, because that is what the control edits; and the line below it states what this server
-  actually **armed**, reported on `/api/tmux/sessions` (#2184), adding that a saved change applies
-  from the next start when the two differ. When a reply does not carry the armed cadence, or
+  actually **armed**, reported on `/api/tmux/sessions` (#2184), adding that the saved change has not
+  reached the server yet when the two differ. When a reply does not carry the armed cadence, or
   carries a value the server could not have meant, that line falls back to the general sentence
   about the cadence being read at startup rather than substituting the saved number, which would
   read as fact while being a guess.
@@ -339,7 +341,8 @@ wiki pages.
 - **Off by default, and it costs tokens** — each run spawns an LLM session. Say so before enabling.
 - The interval is whole hours, clamped to 1–168. Anything else falls back to 6.
 - Written through `POST /api/config` (or its Settings control), it applies at once — the running
-  scheduler rebuilds its built-in tasks. A hand-edit of the file still waits for a restart.
+  scheduler rebuilds its built-in tasks. A hand-edit applies once the file is reloaded
+  (`POST /api/config/reload`, or Settings → Reload config file).
 
 ### `feedRefreshEnabled` / `calendarSyncEnabled` — the two always-on scheduled tasks
 
@@ -355,8 +358,8 @@ Google Calendar sync. These switch them off.
   string `"false"` all leave it running, so an existing config never changes behaviour on upgrade.
   Same rule as `enabled` on a task in `config/scheduler/tasks.json`.
 - **Saved through `POST /api/config` (or the Settings checkboxes), it applies at once** — the
-  running scheduler rebuilds its built-in tasks. A hand-edit of the file still waits for the next
-  server start, since nothing reads the file while the server runs.
+  running scheduler rebuilds its built-in tasks. A hand-edit applies once the file is reloaded
+  (`POST /api/config/reload`, or Settings → Reload config file) or the server restarts.
 - Turning one off does not delete anything already fetched; it stops the *scheduled* run. Feeds
   and calendar collections still update when someone asks for them explicitly.
 - **These do not touch the tasks you wrote.** `config/scheduler/tasks.json` is a separate list with

@@ -8,6 +8,7 @@
       "answers": {
         "targets": "oshirase.md",
         "style": "chaff の既定のまま",
+        "kind": "指定しない（chaff に任せる）",
         "maxFiles": 1,
         "avoid": ""
       }

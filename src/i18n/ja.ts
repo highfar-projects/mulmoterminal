@@ -4,6 +4,7 @@ import { tipsJa } from "./tips/ja";
 import { commandPaletteJa } from "./commandPalette/ja";
 import { focusModeJa } from "./focusMode/ja";
 import { fileHistoryJa } from "./fileHistory/ja";
+import { dirConfigSaveJa } from "./dirConfigSave/ja";
 import { settingsControlsJa } from "./settingsControls/ja";
 import { shortcutsJa } from "./shortcuts/ja";
 import { filesTreeJa } from "./filesTree/ja";
@@ -117,8 +118,8 @@ export const ja: Messages = {
       sweepDisabledHint: "上でスイープ自体が無効なので、繰り返すものがありません。",
       sweepRunning: "このサーバーは {hours} 時間ごとにスイープを繰り返しています。",
       sweepRunningOff: "このサーバーは起動時に一度スイープするだけで、繰り返しません。",
-      sweepPending: "上で保存した間隔は次回の起動から適用されます。",
-      sweepNote: "この間隔はサーバ起動時に読まれるため、変更は次回起動から反映されます。",
+      sweepPending: "上で保存した間隔はまだこのサーバーに届いていません。設定ファイルを読み直すか、再起動してください。",
+      sweepNote: "ここで変えるとすぐに反映され、前回の片付けから数えます。",
       neverTitle: "自動では終了しません。",
       neverHint: "ここで止めるか、掴んでいるターミナルから終わらせるまで残ります。",
       reapHint: "誰も使っておらず、この日数だけ出力の無いセッションは{ended}。会話は残ります。0 にすると自動終了しません。",
@@ -193,7 +194,7 @@ export const ja: Messages = {
       prFooterHint: "本文の最後に {line} の 1 行を足します。横に並んだ複数のクローンのどれで作業したかが PR から分かります。",
       gitlabTitle: "セルフホストの GitLab",
       gitlabHint:
-        "URL を見てもそのホストがどの forge かは分からないので、ここで宣言すると {glab} でリポジトリを読みます。{authCommand} が必要です。次のサーバ起動から有効になります。",
+        "URL を見てもそのホストがどの forge かは分からないので、ここで宣言すると {glab} でリポジトリを読みます。{authCommand} が必要です。すぐに有効になります。",
       gitlabField: "セルフホストの GitLab ホストを追加",
     },
 
@@ -210,7 +211,7 @@ export const ja: Messages = {
       worklogInterval: "実行間隔:",
       worklogStepper: "開発作業ログの間隔",
       systemTasks: "組み込みの定期タスク",
-      systemTasksHint: "どちらも 1 時間ごとに実行され、切らない限り有効です。切り替えはサーバの次回起動から反映されます。",
+      systemTasksHint: "どちらも 1 時間ごとに実行され、切らない限り有効です。切り替えはすぐに反映されます。",
       feedRefresh: "コレクションとフィードを更新する",
       feedRefreshHint:
         "RSS/JSON フィードを取得し、スキル連動のコレクション更新を発行します。対象はワークスペースと保存済みの各プロジェクトディレクトリです。フィードを 1 つも登録していなければ何もしません。",
@@ -607,6 +608,7 @@ export const ja: Messages = {
     empty: "このファイルには見出しがありません。",
   },
   fileHistory: fileHistoryJa,
+  dirConfigSave: dirConfigSaveJa,
   focusMode: focusModeJa,
   settingsControls: settingsControlsJa,
   ...filesTreeJa,

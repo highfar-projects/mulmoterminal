@@ -4,6 +4,7 @@ import { tipsZhCN } from "./tips/zh-CN";
 import { commandPaletteZhCN } from "./commandPalette/zh-CN";
 import { focusModeZhCN } from "./focusMode/zh-CN";
 import { fileHistoryZhCN } from "./fileHistory/zh-CN";
+import { dirConfigSaveZhCN } from "./dirConfigSave/zh-CN";
 import { settingsControlsZhCN } from "./settingsControls/zh-CN";
 import { shortcutsZhCN } from "./shortcuts/zh-CN";
 import { filesTreeZhCN } from "./filesTree/zh-CN";
@@ -115,8 +116,8 @@ export const zhCN: Messages = {
       sweepDisabledHint: "上面的清扫本身是关掉的，所以这里没有可重复的东西。",
       sweepRunning: "本服务器每 {hours} 小时重复一次清理。",
       sweepRunningOff: "本服务器仅在启动时清理一次，不会重复。",
-      sweepPending: "上面保存的间隔将从下次启动开始生效。",
-      sweepNote: "这个间隔在服务器启动时读取，所以在这里改动要下次启动才生效。",
+      sweepPending: "上面保存的间隔还没有到达这台服务器：请重新读取配置文件，或重启它。",
+      sweepNote: "在这里改动会立即生效，从上一次清理开始计算。",
       neverTitle: "永不自动结束。",
       neverHint: "它们会一直留着，直到你在这里停掉，或者从占着它的终端里结束它。",
       reapHint: "没有任何东西在用 —— 没人连接、这么久没有输出 —— 的会话{ended}。它的对话会保留。设为 0 就永不自动结束。",
@@ -186,7 +187,7 @@ export const zhCN: Messages = {
       prFooter: "在创建的 PR 末尾写上克隆名",
       prFooterHint: "在正文底部加一行 {line}，这样并排放着好几个克隆时，PR 能说明自己出自哪一个。",
       gitlabTitle: "自建 GitLab",
-      gitlabHint: "光看 URL 看不出这台主机跑的是哪种 forge，所以在这里声明，它的仓库就会用 {glab} 来读。需要 {authCommand}。下次服务器启动时生效。",
+      gitlabHint: "光看 URL 看不出这台主机跑的是哪种 forge，所以在这里声明，它的仓库就会用 {glab} 来读。需要 {authCommand}。立即生效。",
       gitlabField: "添加一台自建 GitLab 主机",
     },
 
@@ -202,7 +203,7 @@ export const zhCN: Messages = {
       worklogInterval: "多久运行一次：",
       worklogStepper: "开发工作日志的间隔",
       systemTasks: "内置的定时任务",
-      systemTasksHint: "两个都每小时运行一次，不关就一直开着。关掉某一个要等服务器下次启动才生效。",
+      systemTasksHint: "两个都每小时运行一次，不关就一直开着。开关立即生效。",
       feedRefresh: "刷新集合与订阅源",
       feedRefreshHint: "拉取你的 RSS/JSON 订阅源，并派发由 skill 支撑的集合更新，覆盖工作区和每个保存过的项目目录。一个订阅源都没注册时它什么也不做。",
       calendarSync: "同步 Google 日历",
@@ -590,6 +591,7 @@ export const zhCN: Messages = {
     empty: "此文件没有标题。",
   },
   fileHistory: fileHistoryZhCN,
+  dirConfigSave: dirConfigSaveZhCN,
   focusMode: focusModeZhCN,
   settingsControls: settingsControlsZhCN,
   ...filesTreeZhCN,

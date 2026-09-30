@@ -470,7 +470,14 @@ function terminate() {
 function readOutput(): string {
   return conn.readBuffer(slotKey);
 }
-defineExpose({ submitText, terminate, readOutput, showHint });
+// The mic, asked for by name (a key, the palette, a header button): false where it cannot listen.
+function toggleVoice(): boolean {
+  if (!voice.capable.value) return false;
+  void voice.toggle();
+  return true;
+}
+
+defineExpose({ submitText, terminate, readOutput, showHint, toggleVoice });
 
 // Insert text (a path, or space-joined paths) at the terminal cursor via the
 // normal input channel — no trailing CR, so the user reviews and submits.

@@ -210,12 +210,17 @@ Actions** が並びます。GitLab（gitlab.com、または `gitlabHosts` に書
 | `"terminal-park"` | このセルを休ませる / 起こす |
 | `"terminal-timeline"` | **アクティビティのタイムライン**（Claude のセッションのみ） |
 | `"terminal-talk"` | **他のターミナルと話す** |
+| `"terminal-copy-code"` | 最新の返事の**最後のコードブロックをコピー**する（2段目のコピーボタンと同じ） |
+| `"terminal-insert-path"` / `"terminal-reveal"` | 入力欄に**ファイルのパスを挿入**する / **ディレクトリをファイルマネージャで開く**（パスメニューの項目と同じ） |
+| `"terminal-voice"` | **音声入力**のオン / オフ（マイク） |
+| `"terminal-diff"` / `"terminal-note"` | **変更パネル**を開く（変更のある worktree） / **メモ**を書く・直す |
 | `"pane-files"` | このセルの横に**ファイルペイン**を開く |
 | `"pane-prompts"` / `"pane-transcript"` | **送ったプロンプト** / **会話**のペイン |
 | `"pane-tools"` / `"pane-canvas"` / `"pane-collections"` | **使ったツール** / **キャンバス** / **コレクション**のペイン |
 | `"screen-wiki"`・`"screen-collections"` など（`screen-*` のすべて） | **その画面へ移動**する（ツールバーの入口と同じ） |
 | `"settings-open"` / `"sound-toggle"` / `"view-toggle"` | 設定を開く / 通知音のオン・オフ / 拡大時の表示を一覧・サムネイル列で切り替える |
 | `"order-auto"` / `"order-manual"` / `"order-priority"` | 並び順を選ぶ |
+| `"page-next"` / `"page-prev"` | グリッドの次 / 前のページへ |
 
 ペインのボタンは、拡大中のセルではそのペインの開閉を切り替えます。並べて表示しているセルでは、
 「アプリでファイルを見る」と同じく、セルを拡大してからペインを開きます。そのセルでできないとき

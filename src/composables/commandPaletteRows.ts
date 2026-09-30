@@ -10,7 +10,8 @@ import {
   type Keymap,
   type KeymapAction,
 } from "../../common/keymap";
-import { isAppAction } from "../../common/appActions";
+import { isFilesScreenAction } from "../components/filesPaneActions";
+import { LISTED_ELSEWHERE_IN_PALETTE } from "../../common/appActions";
 import { highlightParts, rankPaths, type HighlightPart } from "../components/filePathMatch";
 import { SCREEN_ICONS, type PaletteScreen } from "./paletteScreens";
 import type { PaletteTerminal } from "./commandPalette";
@@ -31,10 +32,10 @@ import type { SeededFilesPanel } from "./filesPanelSeed";
 import { PALETTE_SCOPES, scopeOf, type ScopedKind } from "./paletteScope";
 
 /** The actions a palette can run. Not `copy` / `paste` — they act on a terminal's selection, from
- *  inside it — not the palette itself, and not the toolbar's operations, which it already lists as
- *  screens, Settings sections and choices. */
+ *  inside it — not the palette itself, and not the toolbar's operations it already lists as screens,
+ *  Settings sections and choices. */
 export const PALETTE_ACTIONS: readonly KeymapAction[] = KEYMAP_ACTIONS.filter(
-  (action) => !TERMINAL_SCOPED_ACTIONS.includes(action) && action !== "command-palette" && !isAppAction(action),
+  (action) => !TERMINAL_SCOPED_ACTIONS.includes(action) && action !== "command-palette" && !LISTED_ELSEWHERE_IN_PALETTE.includes(action),
 );
 
 interface RowCommon {
@@ -265,9 +266,12 @@ export interface PaletteState {
   manualOrder: boolean;
   /** Whether the Files pane is up beside the enlarged terminal, which its tab actions act on. */
   filesOpen: boolean;
+  /** Whether the full-screen Files view is up, which takes the Files actions itself (#2655). */
+  filesScreen?: boolean;
 }
 
-const disabledReason = (action: KeymapAction, { zoomed, available, manualOrder, filesOpen }: PaletteState, text: PaletteText): string | null => {
+const disabledReason = (action: KeymapAction, { zoomed, available, manualOrder, filesOpen, filesScreen }: PaletteState, text: PaletteText): string | null => {
+  if (filesScreen && isFilesScreenAction(action)) return null;
   if (!available) return text.gridHidden;
   if (NEEDS_MANUAL_ORDER.includes(action) && !manualOrder) return text.needsManualOrder;
   if (NEEDS_A_CURRENT_TERMINAL.includes(action) && !zoomed) return text.needsEnlarged;

@@ -212,12 +212,17 @@ choice rows):
 | `"terminal-park"` | Set this cell aside / wake it |
 | `"terminal-timeline"` | The **activity timeline** (Claude sessions only) |
 | `"terminal-talk"` | **Talk to another terminal** |
+| `"terminal-copy-code"` | **Copy the last code block** of the latest reply (the row-2 copy button) |
+| `"terminal-insert-path"` / `"terminal-reveal"` | **Insert a file path** at the prompt / **open the directory** in the file manager (the path menu's items) |
+| `"terminal-voice"` | **Voice input** on / off (the mic) |
+| `"terminal-diff"` / `"terminal-note"` | Open the **changes panel** (worktree with changes) / write or edit the **note** |
 | `"pane-files"` | The **files pane** beside this cell |
 | `"pane-prompts"` / `"pane-transcript"` | The **prompts you sent** / the **conversation** pane |
 | `"pane-tools"` / `"pane-canvas"` / `"pane-collections"` | The **tools used** / **Canvas** / **Collections** pane |
 | `"screen-wiki"`, `"screen-collections"`, … (every `screen-*`) | **Go to that screen** — the toolbar's doors |
 | `"settings-open"` / `"sound-toggle"` / `"view-toggle"` | Open Settings / notification sound on-off / enlarged view roster-strip |
 | `"order-auto"` / `"order-manual"` / `"order-priority"` | Set the cell order |
+| `"page-next"` / `"page-prev"` | Next / previous page of the grid |
 
 A pane button toggles its pane on the enlarged cell. On a tiled cell it enlarges the cell and opens
 the pane, as *Browse files in the app* does. When the cell cannot do it — `terminal-timeline` on a

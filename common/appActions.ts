@@ -1,7 +1,6 @@
 // The toolbar's operations as named actions: a `keymap` binding and a `run: "action"` header button
 // reach them under these names. They act on the APP, not on a terminal, so they work on every
-// screen. The command palette already has a row for each (screens, Settings sections, the sound /
-// view / order choices), so it does not list them a second time.
+// screen.
 import type { KeymapAction } from "./keymap.js";
 
 export const SCREEN_ACTIONS = [
@@ -19,7 +18,19 @@ export const SCREEN_ACTIONS = [
 
 export const ORDER_ACTIONS = ["order-auto", "order-manual", "order-priority"] as const satisfies readonly KeymapAction[];
 
-export const APP_ACTIONS = [...SCREEN_ACTIONS, "settings-open", "sound-toggle", "view-toggle", ...ORDER_ACTIONS] as const satisfies readonly KeymapAction[];
+export const APP_ACTIONS = [
+  ...SCREEN_ACTIONS,
+  "settings-open",
+  "sound-toggle",
+  "view-toggle",
+  ...ORDER_ACTIONS,
+  "page-next",
+  "page-prev",
+] as const satisfies readonly KeymapAction[];
+
+// The ones the command palette already has a row for — a screen, a Settings section, the sound /
+// view / order choices — so it does not list them a second time. Paging has no other row.
+export const LISTED_ELSEWHERE_IN_PALETTE: readonly KeymapAction[] = [...SCREEN_ACTIONS, "settings-open", "sound-toggle", "view-toggle", ...ORDER_ACTIONS];
 
 export type ScreenAction = (typeof SCREEN_ACTIONS)[number];
 export type OrderAction = (typeof ORDER_ACTIONS)[number];

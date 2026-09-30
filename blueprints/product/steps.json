@@ -26,6 +26,15 @@
       "description": "Each must-have gets a test against the emulators that walks it end to end as a signed-in user, and is refused for everyone it should be refused for.",
       "skill": "skills/acceptance-firebase",
       "check": "sh \"$BLUEPRINT_BASE/checks/emulator-test.sh\" acceptance"
+    },
+    {
+      "id": "acceptance",
+      "insertAfter": "run-check",
+      "bases": ["supabase"],
+      "title": "必須の機能を試験で確かめる",
+      "description": "Each must-have gets a test against the local Supabase stack that walks it end to end as the user the spec names, and is refused for everyone it should be refused for.",
+      "skill": "skills/acceptance-supabase",
+      "check": "sh \"$BLUEPRINT_BASE/checks/tests-pass.sh\" acceptance"
     }
   ]
 }

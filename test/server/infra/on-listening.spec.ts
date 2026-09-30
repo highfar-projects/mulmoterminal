@@ -21,6 +21,8 @@ const mocks = vi.hoisted(() => ({
   tmuxAvailable: vi.fn(() => true),
   tmuxListSessionIds: vi.fn(() => ["alive", "reaped-one"]),
   startReapSchedule: vi.fn(() => ["reaped-one"]),
+  rearmReapSchedule: vi.fn(),
+  onSessionReapIntervalChanged: vi.fn(),
   // Typed so `mock.calls[0]` is a tuple rather than `[]` — the cutoff argument IS the assertion.
   pruneOrphanSettings: vi.fn<PruneOrphans>(() => []),
   pruneOrphanDrops: vi.fn<PruneOrphans>(() => []),
@@ -36,7 +38,7 @@ vi.mock("../../../server/infra/announce-listening.js", () => ({ announceListenin
 vi.mock("../../../server/infra/allowed-origin.js", () => ({ bindSecurityWarning: mocks.bindSecurityWarning }));
 vi.mock("../../../server/infra/loopback.js", () => ({ boundAddress: mocks.boundAddress, isLoopbackBinding: mocks.isLoopbackBinding }));
 vi.mock("../../../server/infra/tmux.js", () => ({ tmuxAvailable: mocks.tmuxAvailable, tmuxListSessionIds: mocks.tmuxListSessionIds }));
-vi.mock("../../../server/session/reap-schedule.js", () => ({ startReapSchedule: mocks.startReapSchedule }));
+vi.mock("../../../server/session/reap-schedule.js", () => ({ startReapSchedule: mocks.startReapSchedule, rearmReapSchedule: mocks.rearmReapSchedule }));
 vi.mock("../../../server/session/session-settings.js", () => ({ pruneOrphanSettings: mocks.pruneOrphanSettings }));
 vi.mock("../../../server/session/session-drops.js", () => ({ pruneOrphanDrops: mocks.pruneOrphanDrops }));
 vi.mock("../../../server/agents/machine-global-hooks.js", () => ({ wireMachineGlobalHooks: mocks.wireMachineGlobalHooks }));
@@ -44,6 +46,7 @@ vi.mock("../../../server/config/update-status.js", () => ({ startUpdateStatusRef
 vi.mock("../../../server/config/config-routes.js", () => ({
   getSessionIdleReapDays: mocks.getSessionIdleReapDays,
   getSessionReapIntervalHours: mocks.getSessionReapIntervalHours,
+  onSessionReapIntervalChanged: mocks.onSessionReapIntervalChanged,
 }));
 vi.mock("../../../bin/instances.js", async (importOriginal) => ({
   // earliestStartedAt is the rule under test, so it stays REAL — mocking it would make the cutoff
@@ -103,6 +106,18 @@ describe("onListening", () => {
     run();
     expect(mocks.startReapSchedule).not.toHaveBeenCalled();
     expect([...mocks.pruneOrphanSettings.mock.calls[0][0]]).toEqual([]);
+  });
+
+  // #2626: a cadence saved while the server runs re-arms the sweep with the live threshold getter.
+  it("re-arms the sweep when a saved cadence moves, with the live threshold", () => {
+    mocks.onSessionReapIntervalChanged.mockClear();
+    mocks.rearmReapSchedule.mockClear();
+    mocks.tmuxAvailable.mockReturnValue(true);
+    run();
+    expect(mocks.onSessionReapIntervalChanged).toHaveBeenCalledTimes(1);
+    const listener = mocks.onSessionReapIntervalChanged.mock.calls[0]?.[0] as ((hours: number) => void) | undefined;
+    listener?.(6);
+    expect(mocks.rearmReapSchedule).toHaveBeenCalledWith(expect.objectContaining({ intervalHours: 6, idleDays: mocks.getSessionIdleReapDays }));
   });
 
   it("registers this instance and repairs the machine-global hook files", () => {

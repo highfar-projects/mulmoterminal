@@ -4,6 +4,7 @@ import { tipsKo } from "./tips/ko";
 import { commandPaletteKo } from "./commandPalette/ko";
 import { focusModeKo } from "./focusMode/ko";
 import { fileHistoryKo } from "./fileHistory/ko";
+import { dirConfigSaveKo } from "./dirConfigSave/ko";
 import { settingsControlsKo } from "./settingsControls/ko";
 import { shortcutsKo } from "./shortcuts/ko";
 import { filesTreeKo } from "./filesTree/ko";
@@ -116,8 +117,8 @@ export const ko: Messages = {
       sweepDisabledHint: "위에서 스윕 자체가 꺼져 있으므로 반복할 것이 없습니다.",
       sweepRunning: "이 서버는 {hours}시간마다 스윕을 반복하고 있습니다.",
       sweepRunningOff: "이 서버는 시작할 때 한 번만 스윕하며 반복하지 않습니다.",
-      sweepPending: "위에서 저장한 주기는 다음 시작부터 적용됩니다.",
-      sweepNote: "이 간격은 서버가 시작할 때 읽으므로, 여기서 바꾼 값은 다음 시작부터 적용됩니다.",
+      sweepPending: "위에서 저장한 주기가 아직 이 서버에 닿지 않았습니다. 설정 파일을 다시 읽거나 서버를 다시 시작하세요.",
+      sweepNote: "여기서 바꾸면 바로 적용되고, 마지막 정리부터 셉니다.",
       neverTitle: "자동으로 종료하지 않습니다.",
       neverHint: "여기서 멈추거나, 붙잡고 있는 터미널에서 끝낼 때까지 남아 있습니다.",
       reapHint: "아무것도 쓰고 있지 않고 —— 붙은 사람도 없고 이만큼 출력도 없는 —— 세션은 {ended}. 대화는 남습니다. 0으로 두면 자동으로 종료하지 않습니다.",
@@ -191,7 +192,7 @@ export const ko: Messages = {
       prFooterHint: "본문 맨 아래에 {line} 한 줄을 붙입니다. 나란히 둔 여러 클론 중 어느 것에서 나왔는지 PR이 말해 줍니다.",
       gitlabTitle: "자체 호스팅 GitLab",
       gitlabHint:
-        "URL만 봐서는 그 호스트가 어떤 forge인지 알 수 없으므로 여기서 선언하면 {glab}으로 저장소를 읽습니다. {authCommand}가 필요합니다. 다음 서버 시작부터 적용됩니다.",
+        "URL만 봐서는 그 호스트가 어떤 forge인지 알 수 없으므로 여기서 선언하면 {glab}으로 저장소를 읽습니다. {authCommand}가 필요합니다. 바로 적용됩니다.",
       gitlabField: "자체 호스팅 GitLab 호스트 추가",
     },
 
@@ -207,7 +208,7 @@ export const ko: Messages = {
       worklogInterval: "실행 주기:",
       worklogStepper: "개발 작업 로그 주기",
       systemTasks: "내장 예약 작업",
-      systemTasksHint: "둘 다 한 시간마다 돌고, 끄지 않는 한 켜져 있습니다. 하나를 끄면 서버가 다음에 시작할 때 반영됩니다.",
+      systemTasksHint: "둘 다 한 시간마다 돌고, 끄지 않는 한 켜져 있습니다. 켜고 끄면 바로 반영됩니다.",
       feedRefresh: "컬렉션과 피드 새로고침",
       feedRefreshHint:
         "RSS/JSON 피드를 받아오고 skill 기반 컬렉션 업데이트를 내보냅니다. 워크스페이스와 저장해 둔 모든 프로젝트 디렉터리가 대상입니다. 피드를 하나도 등록하지 않았다면 아무것도 하지 않습니다.",
@@ -604,6 +605,7 @@ export const ko: Messages = {
     empty: "이 파일에는 제목이 없습니다.",
   },
   fileHistory: fileHistoryKo,
+  dirConfigSave: dirConfigSaveKo,
   focusMode: focusModeKo,
   settingsControls: settingsControlsKo,
   ...filesTreeKo,

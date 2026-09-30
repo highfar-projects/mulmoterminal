@@ -17,6 +17,7 @@ import { tipsEn } from "./tips/en";
 import { commandPaletteEn } from "./commandPalette/en";
 import { focusModeEn } from "./focusMode/en";
 import { fileHistoryEn } from "./fileHistory/en";
+import { dirConfigSaveEn } from "./dirConfigSave/en";
 import { settingsControlsEn } from "./settingsControls/en";
 import { shortcutsEn } from "./shortcuts/en";
 import { filesTreeEn } from "./filesTree/en";
@@ -124,8 +125,8 @@ export const en = {
       sweepDisabledHint: "The sweep is off above, so there is nothing for this to repeat.",
       sweepRunning: "This server repeats the sweep every {hours} hour(s).",
       sweepRunningOff: "This server sweeps once at start and does not repeat.",
-      sweepPending: "The saved cadence above applies from the next start.",
-      sweepNote: "The cadence is read when the server starts, so a change here applies from the next one.",
+      sweepPending: "The saved cadence above has not reached this server yet — reload the config file, or restart it.",
+      sweepNote: "A change here applies at once, counted from the last sweep.",
       neverTitle: "Never ended automatically.",
       neverHint: "They stay until you stop one here, or end it from the terminal holding it.",
       reapHint:
@@ -201,7 +202,7 @@ export const en = {
       prFooterHint: "a {line} line at the bottom of the body, so a PR says which of several side-by-side clones produced it.",
       gitlabTitle: "Self-hosted GitLab",
       gitlabHint:
-        "a URL does not say which forge a host runs, so declare it here to have its repos read with {glab}. Needs {authCommand}. Takes effect on the next server start.",
+        "a URL does not say which forge a host runs, so declare it here to have its repos read with {glab}. Needs {authCommand}. Takes effect at once.",
       gitlabField: "Add a self-hosted GitLab host",
     },
 
@@ -217,7 +218,7 @@ export const en = {
       worklogInterval: "How often it runs:",
       worklogStepper: "dev-work log interval",
       systemTasks: "Built-in scheduled tasks",
-      systemTasksHint: "Both run hourly and are on unless you turn them off. Switching one off takes effect the next time the server starts.",
+      systemTasksHint: "Both run hourly and are on unless you turn them off. Switching one takes effect at once.",
       feedRefresh: "Refresh collections and feeds",
       feedRefreshHint:
         "fetches your RSS/JSON feeds and dispatches skill-backed collection updates, for the workspace and every saved project directory. With no feeds registered it does nothing.",
@@ -626,6 +627,7 @@ export const en = {
     empty: "No headings in this file.",
   },
   fileHistory: fileHistoryEn,
+  dirConfigSave: dirConfigSaveEn,
   focusMode: focusModeEn,
   settingsControls: settingsControlsEn,
   ...filesTreeEn,

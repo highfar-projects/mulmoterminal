@@ -4,6 +4,7 @@ import { tipsZhTW } from "./tips/zh-TW";
 import { commandPaletteZhTW } from "./commandPalette/zh-TW";
 import { focusModeZhTW } from "./focusMode/zh-TW";
 import { fileHistoryZhTW } from "./fileHistory/zh-TW";
+import { dirConfigSaveZhTW } from "./dirConfigSave/zh-TW";
 import { settingsControlsZhTW } from "./settingsControls/zh-TW";
 import { shortcutsZhTW } from "./shortcuts/zh-TW";
 import { filesTreeZhTW } from "./filesTree/zh-TW";
@@ -118,8 +119,8 @@ export const zhTW: Messages = {
       sweepDisabledHint: "上面的清掃本身是關掉的，所以這裡沒有可重複的東西。",
       sweepRunning: "本伺服器每 {hours} 小時重複一次清理。",
       sweepRunningOff: "本伺服器僅在啟動時清理一次，不會重複。",
-      sweepPending: "上面儲存的間隔將從下次啟動開始生效。",
-      sweepNote: "這個間隔在伺服器啟動時讀取，所以在這裡改動要下次啟動才生效。",
+      sweepPending: "上面儲存的間隔還沒有到達這台伺服器：請重新讀取設定檔，或重新啟動它。",
+      sweepNote: "在這裡改動會立即生效，從上一次清理開始計算。",
       neverTitle: "永不自動結束。",
       neverHint: "它們會一直留著，直到你在這裡停掉，或是從佔著它的終端機把它結束。",
       reapHint: "沒有任何東西在用 —— 沒人連線、這麼久沒有輸出 —— 的工作階段{ended}。它的對話會保留。設成 0 就永不自動結束。",
@@ -189,7 +190,7 @@ export const zhTW: Messages = {
       prFooter: "在建立的 PR 末尾寫上 clone 名稱",
       prFooterHint: "在內文底部加一行 {line}，這樣並排放著好幾個 clone 時，PR 能說明自己出自哪一個。",
       gitlabTitle: "自架 GitLab",
-      gitlabHint: "光看 URL 看不出這台主機跑的是哪種 forge，所以在這裡宣告，它的儲存庫就會用 {glab} 來讀。需要 {authCommand}。下次伺服器啟動時生效。",
+      gitlabHint: "光看 URL 看不出這台主機跑的是哪種 forge，所以在這裡宣告，它的儲存庫就會用 {glab} 來讀。需要 {authCommand}。立即生效。",
       gitlabField: "新增一台自架 GitLab 主機",
     },
 
@@ -205,7 +206,7 @@ export const zhTW: Messages = {
       worklogInterval: "多久執行一次：",
       worklogStepper: "開發工作紀錄的間隔",
       systemTasks: "內建的排程作業",
-      systemTasksHint: "兩個都每小時執行一次，不關就一直開著。關掉其中一個要等伺服器下次啟動才生效。",
+      systemTasksHint: "兩個都每小時執行一次，不關就一直開著。開關立即生效。",
       feedRefresh: "重新整理集合與訂閱來源",
       feedRefreshHint: "抓取你的 RSS/JSON 訂閱來源，並派送由 skill 支撐的集合更新，涵蓋工作區和每個存過的專案目錄。一個訂閱來源都沒註冊時它什麼也不做。",
       calendarSync: "同步 Google 日曆",
@@ -595,6 +596,7 @@ export const zhTW: Messages = {
     empty: "此檔案沒有標題。",
   },
   fileHistory: fileHistoryZhTW,
+  dirConfigSave: dirConfigSaveZhTW,
   focusMode: focusModeZhTW,
   settingsControls: settingsControlsZhTW,
   ...filesTreeZhTW,

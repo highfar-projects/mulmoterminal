@@ -34,6 +34,7 @@ function fakeFile(): FakeFile {
     conflict: ref(null),
     showPreview: ref(false),
     previewScrollTop: ref(0),
+    dirConfigReport: ref(null),
     editor: shallowRef(null),
     previewSrc: computed(() => ""),
     previewToken: computed(() => null),

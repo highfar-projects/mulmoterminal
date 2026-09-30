@@ -63,3 +63,16 @@ describe("POST /api/config and the system tasks", () => {
     expect(res.status).toBe(200);
   });
 });
+
+// #2626: the idle-session sweep's cadence is re-armed on a save that moves it, and only then.
+describe("POST /api/config and the sweep cadence", () => {
+  it("passes the new cadence on when a save moves it, and says nothing otherwise", async () => {
+    const { app, routes } = await mountWith({ sessionReapIntervalHours: 0 });
+    const cadences: number[] = [];
+    routes.onSessionReapIntervalChanged((hours) => cadences.push(hours));
+    expect((await post(app, { sessionReapIntervalHours: 6 })).status).toBe(200);
+    expect((await post(app, { sessionReapIntervalHours: 6 })).status).toBe(200);
+    expect((await post(app, { showLoadAverage: false })).status).toBe(200);
+    expect(cadences).toEqual([6]);
+  });
+});
