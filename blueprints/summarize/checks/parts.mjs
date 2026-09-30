@@ -36,7 +36,8 @@ const narrow = (text) => text.replace(WIDE, (char) => String.fromCharCode(char.c
 // A run of digits, commas and points as the number it writes: separators out, a sentence's full stop and a zero
 // fraction off ("20,000" is 20000, "25." is 25, "3.0" is 3).
 const tidied = (run) => {
-  const bare = run.replaceAll(",", "").replace(/\.+$/u, "");
+  const digits = run.replaceAll(",", "");
+  const bare = digits.slice(0, [...digits].findLastIndex((char) => char !== ".") + 1);
   const [whole, fraction] = bare.split(".");
   return fraction === undefined || /^0+$/u.test(fraction) ? whole : bare;
 };
