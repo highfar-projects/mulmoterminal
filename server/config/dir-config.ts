@@ -74,10 +74,10 @@ export interface DirConfig extends DirChrome {
   theme: ThemeId | null;
   // Per-key xterm palette overrides (on top of `theme`), or null when none are valid.
   colors: Record<string, string> | null;
-  // Absolute path to the attention sound, resolved within cwd; null when unset or the
-  // configured path is absolute / escapes the directory / doesn't exist. The fallback for
-  // EVERY notification kind; `sounds` overrides it per kind.
-  sound: string | null;
+  // The attention sound for EVERY notification kind — a preset, or a file resolved within cwd —
+  // or null when unset or the configured path is absolute / escapes the directory / doesn't
+  // exist. `sounds` overrides it per kind, and takes the same two forms.
+  sound: DirSound | null;
   // Per-kind overrides of `sound` (#873), each either a preset or a file inside cwd.
   sounds: Partial<Record<NotifyKind, DirSound>>;
   // What the FILE said about this directory's image (#1421): an icon, `"off"` for an explicit
@@ -252,7 +252,7 @@ export function loadDirConfig(cwd: string): DirConfig {
       orderPriority: dirOrderPriorityField.parse(raw.orderPriority),
       theme: resolvableTheme(dirThemeField.parse(raw.theme)),
       colors: dirColorsField.parse(raw.colors),
-      sound: resolveDirSound(base, raw.sound),
+      sound: resolveDirSoundValue(base, raw.sound),
       sounds: resolveDirSounds(base, raw.sounds),
       icon: resolveDirIcon(base, raw.icon),
       backgroundImage: resolveDirBackground(base, raw.backgroundImage),
@@ -470,5 +470,5 @@ export function dirSoundFor(cwd: string, kind: NotifyKind | null): DirSound | nu
   const config = loadDirConfig(cwd);
   const perKind = kind ? config.sounds[kind] : undefined;
   if (perKind) return perKind;
-  return config.sound ? { source: "file", path: config.sound } : null;
+  return config.sound;
 }

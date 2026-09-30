@@ -84,7 +84,7 @@ describe("PUT /api/dir-config", () => {
 
   it.each([
     ["an invalid value", { set: { fontSize: 2 } }],
-    ["a key the form does not write", { set: { sound: "a.mp3" } }],
+    ["a key the form does not write", { set: { soundFile: "a.mp3" } }],
     ["nothing to change", {}],
   ])("answers 400 for %s and writes nothing", async (_label, edit) => {
     const { dir, put } = setup();

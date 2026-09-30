@@ -21,6 +21,7 @@ import {
   type DirFormField,
 } from "../dirSettingsFormFields";
 import DirAddDirsEditor from "./DirAddDirsEditor.vue";
+import DirMediaSection from "./DirMediaSection.vue";
 import DirModelSelect from "./DirModelSelect.vue";
 import DirFormKeyActions from "./DirFormKeyActions.vue";
 import DirPaletteEditor from "./DirPaletteEditor.vue";
@@ -176,6 +177,7 @@ const INPUT = "min-w-0 rounded border border-border bg-elevated px-1.5 py-0.5 fo
         />
       </div>
     </div>
+    <DirMediaSection :key="`media-${redraw}`" :detail="detail" :saving="saving" @save="(edit) => void save(edit)" />
     <div class="mt-2" data-testid="dir-form-row-addDirs">
       <div class="flex items-center gap-1.5">
         <span class="text-[12px] text-dim">{{ t("dirSettingsForm.fields.addDirs") }}</span>

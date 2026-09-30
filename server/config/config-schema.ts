@@ -570,8 +570,8 @@ const writableDirConfigSchema = z.object({
   // Rank in the grid's "priority" sort mode, ascending. Omit to sort after everything that sets it.
   orderPriority: z.number().int().optional(),
   sound: nonEmptyText.optional(),
-  // Per-notification-kind sound, overriding `sound` for that kind. Each value is either
-  // `preset:<id>` or a path relative to this directory, same as `sound`. partialRecord for
+  // Per-notification-kind sound, overriding `sound` for that kind. Each value, like `sound`'s, is
+  // either `preset:<id>` or a path relative to this directory. partialRecord for
   // the same reason `colors` uses it: z.record over an enum marks every key required in the
   // generated JSON Schema, which would reject the usual one-or-two-kind object.
   sounds: z.partialRecord(z.enum(NOTIFY_KINDS), nonEmptyText).optional(),
