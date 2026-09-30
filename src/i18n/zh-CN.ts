@@ -8,6 +8,7 @@ import { dirConfigSaveZhCN } from "./dirConfigSave/zh-CN";
 import { dirConfigOpenZhCN } from "./dirConfigOpen/zh-CN";
 import { themeEditorZhCN } from "./themeEditor/zh-CN";
 import { headerChipsZhCN } from "./headerChips/zh-CN";
+import { headerButtonsZhCN } from "./headerButtons/zh-CN";
 import { settingsControlsZhCN } from "./settingsControls/zh-CN";
 import { shortcutsZhCN } from "./shortcuts/zh-CN";
 import { filesTreeZhCN } from "./filesTree/zh-CN";
@@ -606,6 +607,7 @@ export const zhCN: Messages = {
   dirConfigOpen: dirConfigOpenZhCN,
   themeEditor: themeEditorZhCN,
   headerChips: headerChipsZhCN,
+  headerButtons: headerButtonsZhCN,
   focusMode: focusModeZhCN,
   settingsControls: settingsControlsZhCN,
   ...filesTreeZhCN,

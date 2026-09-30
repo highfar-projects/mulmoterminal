@@ -21,6 +21,7 @@ import { dirConfigSaveEn } from "./dirConfigSave/en";
 import { dirConfigOpenEn } from "./dirConfigOpen/en";
 import { themeEditorEn } from "./themeEditor/en";
 import { headerChipsEn } from "./headerChips/en";
+import { headerButtonsEn } from "./headerButtons/en";
 import { settingsControlsEn } from "./settingsControls/en";
 import { shortcutsEn } from "./shortcuts/en";
 import { filesTreeEn } from "./filesTree/en";
@@ -642,6 +643,7 @@ export const en = {
   dirConfigOpen: dirConfigOpenEn,
   themeEditor: themeEditorEn,
   headerChips: headerChipsEn,
+  headerButtons: headerButtonsEn,
   focusMode: focusModeEn,
   settingsControls: settingsControlsEn,
   ...filesTreeEn,

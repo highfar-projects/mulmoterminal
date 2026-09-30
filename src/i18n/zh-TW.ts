@@ -8,6 +8,7 @@ import { dirConfigSaveZhTW } from "./dirConfigSave/zh-TW";
 import { dirConfigOpenZhTW } from "./dirConfigOpen/zh-TW";
 import { themeEditorZhTW } from "./themeEditor/zh-TW";
 import { headerChipsZhTW } from "./headerChips/zh-TW";
+import { headerButtonsZhTW } from "./headerButtons/zh-TW";
 import { settingsControlsZhTW } from "./settingsControls/zh-TW";
 import { shortcutsZhTW } from "./shortcuts/zh-TW";
 import { filesTreeZhTW } from "./filesTree/zh-TW";
@@ -611,6 +612,7 @@ export const zhTW: Messages = {
   dirConfigOpen: dirConfigOpenZhTW,
   themeEditor: themeEditorZhTW,
   headerChips: headerChipsZhTW,
+  headerButtons: headerButtonsZhTW,
   focusMode: focusModeZhTW,
   settingsControls: settingsControlsZhTW,
   ...filesTreeZhTW,

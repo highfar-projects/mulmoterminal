@@ -3,14 +3,11 @@ import { isChipEntry, isChipProblem, type ChipEntry, type ChipProblem } from "..
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { postEntryChange, type EntryChange } from "./configEntryChange";
 import { setHeaderChipCount } from "./headerConfigSummary";
+import { headerConfigRevision } from "./headerConfigRevision";
 
 // The global header chips as Settings edits them (#2622). `null` is "unconfigured": the cells show
 // their default set, and the editor lists that set as what a first change starts from.
 export const globalHeaderChips = ref<ChipEntry[] | null>(null);
-
-// Bumped after a change is saved, so every cell asks for its header again instead of waiting for
-// the window to regain focus — Settings is open in this same window, so that never comes.
-export const headerChipsRevision = ref(0);
 
 export function setGlobalHeaderChips(value: unknown): void {
   globalHeaderChips.value = isUnknownArray(value) ? value.filter(isChipEntry) : null;
@@ -27,6 +24,6 @@ export async function changeHeaderChips(action: ChipAction, payload: Record<stri
     setGlobalHeaderChips(answered.chips);
     setHeaderChipCount(answered.chips);
   }
-  if (change.ok) headerChipsRevision.value += 1;
+  if (change.ok) headerConfigRevision.value += 1;
   return change;
 }
