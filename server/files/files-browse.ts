@@ -24,6 +24,7 @@ import { git } from "../git/worktrees.js";
 import { htmlDoc, jsonHtmlDoc, tableHtmlDoc, delimiterForExtension, themeStyle } from "./renderedDoc.js";
 import { fenceColourer } from "./codeHighlight.js";
 import { numberedCodeRenderer } from "./previewCodeFence.js";
+import { previewCodeBlocks } from "../../common/previewCodeBlocks.js";
 import { previewThemeFromQuery, type PreviewTheme } from "../../common/previewTheme.js";
 import { mdPreviewEmbedCsp, newPreviewNonce, wantsMdPreviewEmbed } from "./mdPreviewEmbed.js";
 import { mdPreviewReporterTag } from "./mdPreviewReporter.js";
@@ -340,6 +341,21 @@ function mountLinesRoute(app: Express, defaultCwd: string): void {
   });
 }
 
+/** The `index`-th code block as the Preview draws it, for its copy button (#2615). Read-only like
+ *  `/lines` and for the same reason: pressing a button is not opening the file, so no backup rotates. */
+function mountCodeBlockRoute(app: Express, defaultCwd: string): void {
+  app.get("/api/files/browse/code-block", (req, res) => {
+    const abs = containedFor(req, res, defaultCwd);
+    if (!abs) return;
+    const index = typeof req.query.index === "string" && /^\d+$/.test(req.query.index) ? Number(req.query.index) : null;
+    if (index === null || !Number.isSafeInteger(index)) return res.status(400).json({ error: "index must be a whole number" });
+    const text = readTextOr4xx(res, abs);
+    if (text === null) return;
+    const block = previewCodeBlocks(text)[index];
+    return block ? res.json(block) : res.status(404).json({ error: "no such code block", kind: "no-block" });
+  });
+}
+
 // marked's union carries a generic token whose fields are `any`, so `type === "image"` alone
 // does not narrow it.
 const isImageToken = (token: Token): token is Tokens.Image => token.type === "image";
@@ -376,6 +392,7 @@ export function mountFilesBrowseRoutes(app: Express, deps: BrowseDeps): void {
 
   mountSearchRoute(app, defaultCwd);
   mountLinesRoute(app, defaultCwd);
+  mountCodeBlockRoute(app, defaultCwd);
   mountFilesGitStatusRoute(app, { base: baseResolver(defaultCwd), maxHeadBytes: MAX_EDIT_BYTES });
 
   app.get("/api/files/browse/list", (req, res) => {

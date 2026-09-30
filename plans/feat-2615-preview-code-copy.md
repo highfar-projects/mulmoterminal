@@ -15,9 +15,13 @@ The app shows the block, read from the FILE, in a dialog of its own, and copies 
 - Reporter script (`server/files/mdPreviewReporter.ts`, the one nonce'd script): a copy button on each
   numbered block posts `{kind: "code-block", index}`. Its accessible name arrives from the host with
   the answer to `ready`, in the app's language.
-- Host: `useMdPreviewScroll` hands the index to `usePreviewCodeBlock`, which reads the file
-  (`/api/files/browse/text`) and takes block N with `previewCodeBlocks` (`common/`, marked's lexer,
-  same order as drawing). `PreviewCodeBlockDialog.vue` shows it and copies exactly that text.
+- Host: `useMdPreviewScroll` hands the index to `usePreviewCodeBlock`, which asks the server for block
+  N (`/api/files/browse/code-block`, read-only like `/lines` — `/text` would rotate a backup on every
+  press); the server takes it with `previewCodeBlocks` (`common/`, marked's lexer, same order as
+  drawing). `PreviewCodeBlockDialog.vue` shows it and copies exactly that text.
+- A text box does not draw every character as itself (bidi controls, zero-width and control
+  characters), so the dialog writes those out as `<U+XXXX>` with a warning (`common/hiddenCharacters.ts`);
+  Copy still copies the file's text.
 
 ## What a hostile `.md` can still do
 Hide or fake the in-Preview button, or post a different number (a forged `data-code-block`). Either

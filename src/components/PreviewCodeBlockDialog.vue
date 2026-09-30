@@ -8,6 +8,7 @@ import { clipboardAvailable } from "./codeBlockCopy";
 import { MODAL_FOCUSABLE } from "../utils/focusTrap";
 import { modalKeydownHandler } from "../composables/useModalKeyboard";
 import type { CodeBlockLookup } from "./previewCodeBlockApi";
+import { revealHidden } from "../../common/hiddenCharacters";
 
 const props = defineProps<{ lookup: CodeBlockLookup }>();
 const emit = defineEmits<{ close: [] }>();
@@ -20,6 +21,9 @@ const note = ref<"copied" | "manual" | null>(null);
 let noteTimer: ReturnType<typeof setTimeout> | undefined;
 
 const block = computed(() => (props.lookup.status === "found" ? props.lookup.block : null));
+// What the box shows: the file's text, with anything a text box would not draw written out.
+const revealed = computed(() => revealHidden(block.value?.text ?? ""));
+const lineCount = computed(() => (block.value ? block.value.text.split("\n").length : 0));
 
 const onKeydown = modalKeydownHandler({ modalEl, onClose: () => emit("close"), trapSelector: MODAL_FOCUSABLE });
 onMounted(async () => {
@@ -66,8 +70,12 @@ async function copy(): Promise<void> {
         <div class="flex items-baseline gap-2">
           <span class="text-[13px] font-semibold">{{ t("previewCodeCopy.title") }}</span>
           <span v-if="block?.lang" class="font-mono text-[11px] text-muted">{{ block.lang }}</span>
+          <span v-if="block" class="text-[11px] text-muted">{{ t("previewCodeCopy.lines", { count: lineCount }) }}</span>
         </div>
-        <p class="text-[12px] text-muted" :role="block ? undefined : 'alert'">
+        <p v-if="block && revealed.hidden > 0" role="alert" data-testid="preview-code-block-hidden" class="text-[12px] text-err">
+          {{ t("previewCodeCopy.hidden", { count: revealed.hidden }) }}
+        </p>
+        <p v-else class="text-[12px] text-muted" :role="block ? undefined : 'alert'">
           {{ block ? t("previewCodeCopy.hint") : t(`previewCodeCopy.${lookup.status}`) }}
         </p>
         <textarea
@@ -76,7 +84,7 @@ async function copy(): Promise<void> {
           readonly
           data-testid="preview-code-block-text"
           class="h-[50vh] w-full resize-none rounded border border-border bg-deep p-2 font-mono text-[12px] text-fg"
-          :value="block.text"
+          :value="revealed.shown"
         />
         <div class="flex items-center justify-end gap-2">
           <span role="status" class="mr-auto text-[12px] text-muted">{{ note ? t(`previewCodeCopy.${note}`) : "" }}</span>

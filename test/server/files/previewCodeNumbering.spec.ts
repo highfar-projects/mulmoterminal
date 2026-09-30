@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { makeTempDir } from "../../support/tempDir.js";
-import { writeFileSync, rmSync } from "node:fs";
+import { existsSync, writeFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import express from "express";
 import { routeCall } from "../../helpers/routeCall";
@@ -95,6 +95,25 @@ describe("the Preview's code-block numbers", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   }, 120000);
+
+  // The route the pane reads a block through: the same block, and no backup stored for a press.
+  it("answers a block by its number without storing a backup", async () => {
+    const dir = makeTempDir("mt-code-numbers-");
+    const app = express();
+    mountFilesBrowseRoutes(app, { defaultCwd: dir, backupRoot: path.join(dir, ".backups") });
+    writeFileSync(path.join(dir, "a.md"), documentFor(7));
+    try {
+      const query = `/api/files/browse/code-block?cwd=${encodeURIComponent(dir)}&path=a.md`;
+      const read = previewCodeBlocks(documentFor(7));
+      const answers = await Promise.all(read.map((_, index) => routeCall(app)(`${query}&index=${index}`)));
+      expect(answers.map((res) => res.body)).toEqual(read);
+      expect((await routeCall(app)(`${query}&index=${read.length}`)).body).toMatchObject({ kind: "no-block" });
+      expect((await routeCall(app)(`${query}&index=-1`)).status).toBe(400);
+      expect(existsSync(path.join(dir, ".backups"))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 
   it("puts a copy button on the numbered blocks only in the embeddable document", async () => {
     const dir = makeTempDir("mt-code-numbers-");
