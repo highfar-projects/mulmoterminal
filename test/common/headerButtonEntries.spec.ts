@@ -14,7 +14,15 @@ import {
   type EntryLike,
 } from "../../common/headerButtonEntries";
 
-const draft = (fields: Partial<ButtonDraft>): ButtonDraft => ({ label: "Build", icon: "", run: "shell", payload: "yarn build", when: "", ...fields });
+const draft = (fields: Partial<ButtonDraft>): ButtonDraft => ({
+  label: "Build",
+  icon: "",
+  run: "shell",
+  payload: "yarn build",
+  target: "url",
+  when: "",
+  ...fields,
+});
 const pr: EntryLike = { id: "pr" };
 const defaults = [pr];
 
@@ -33,6 +41,30 @@ describe("buttonFromDraft", () => {
     ["Build", "a b", "<svg>", "github:", "github:not-real", "x".repeat(41)].forEach((icon) =>
       expect(buttonFromDraft(draft({ icon }), [])).toEqual({ problem: "icon" }),
     );
+  });
+
+  it("builds an open button for each kind of target, and refuses one it cannot open", () => {
+    const open = (target: string, payload = "") => buttonFromDraft(draft({ run: "open", target, payload }), []);
+    expect(open("url", " https://example.com/${repo} ")).toMatchObject({ entry: { run: "open", open: { url: "https://example.com/${repo}" } } });
+    expect(open("files", "${dir}/docs")).toMatchObject({ entry: { open: { files: "${dir}/docs" } } });
+    expect(open("reveal", "${dir}")).toMatchObject({ entry: { open: { reveal: "${dir}" } } });
+    expect(open("terminal", "${dir}")).toMatchObject({ entry: { open: { terminal: "${dir}" } } });
+    expect(open("view", "wiki")).toMatchObject({ entry: { open: { view: "wiki" } } });
+    expect(open("pr", "ignored")).toMatchObject({ entry: { open: { pr: true } } });
+    expect(open("pickFile")).toMatchObject({ entry: { open: { pickFile: true } } });
+    expect(open("url", " ")).toEqual({ problem: "payload" });
+    expect(open("view", "nope")).toEqual({ problem: "payload" });
+    expect(open("nope", "x")).toEqual({ problem: "target" });
+    expect(open("pr")).not.toHaveProperty("entry.cmd");
+  });
+
+  it("builds an action button by the operation's current name, and refuses an unknown one", () => {
+    const action = (payload: string) => buttonFromDraft(draft({ run: "action", payload }), []);
+    expect(action("pane-files")).toMatchObject({ entry: { run: "action", action: "pane-files" } });
+    expect(action("restart")).toMatchObject({ entry: { action: "terminal-restart" } });
+    expect(action("screen-wiki")).toMatchObject({ entry: { action: "screen-wiki" } });
+    expect(action("nope")).toEqual({ problem: "action" });
+    expect(action("")).toEqual({ problem: "action" });
   });
 
   it("refuses a missing or long label, and a missing payload", () => {
@@ -82,6 +114,7 @@ describe("entriesWithout / entriesMoved", () => {
     expect(isButtonProblem("ordered")).toBe(true);
     expect(isButtonProblem("stale")).toBe(false);
     expect(isEditableRun("shell")).toBe(true);
-    expect(isEditableRun("open")).toBe(false);
+    expect(isEditableRun("open")).toBe(true);
+    expect(isEditableRun("folder")).toBe(false);
   });
 });

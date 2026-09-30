@@ -46,6 +46,17 @@ describe("header buttons, one entry at a time", () => {
     expect(onDisk().prRepos).toEqual(["acme/app"]);
   });
 
+  it("adds an open button and an action button as the loader reads them", async () => {
+    const { post, onDisk } = await mountWith({ buttons: [] });
+    expect((await post("/api/config/buttons/add", { run: "open", target: "view", payload: "wiki", label: "Wiki" })).status).toBe(200);
+    expect((await post("/api/config/buttons/add", { run: "action", payload: "pane-files", label: "Files", icon: "folder" })).status).toBe(200);
+    expect(onDisk().buttons).toEqual([
+      { id: "wiki", label: "Wiki", run: "open", open: { view: "wiki" } },
+      { id: "files", label: "Files", run: "action", action: "pane-files", icon: "folder" },
+    ]);
+    expect((await post("/api/config/buttons/add", { run: "action", payload: "nope", label: "X" })).body).toMatchObject({ error: "action" });
+  });
+
   it("keeps the built-in PR button when the first button is added", async () => {
     const { post, onDisk } = await mountWith({});
     expect((await post("/api/config/buttons/add", { run: "shell", label: "Build", payload: "yarn build" })).status).toBe(200);
@@ -67,7 +78,7 @@ describe("header buttons, one entry at a time", () => {
 
   it("rejects a malformed request before touching the file", async () => {
     const { post, onDisk } = await mountWith({ buttons: [build] });
-    expect((await post("/api/config/buttons/add", { run: "open", label: "x", payload: "y" })).status).toBe(400);
+    expect((await post("/api/config/buttons/add", { run: "folder", label: "x", payload: "y" })).status).toBe(400);
     expect((await post("/api/config/buttons/move", { id: "build", delta: 2 })).status).toBe(400);
     expect((await post("/api/config/buttons/remove", {})).status).toBe(400);
     expect((await post("/api/config/buttons/add", { run: "shell", label: "x", payload: " " })).body).toEqual({ error: "payload", buttons: [build] });

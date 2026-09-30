@@ -41,10 +41,10 @@ import { CUSTOM_AGENT_KINDS, type CustomAgent } from "../../common/customAgents.
 import { ACCOUNT_AGENTS, type AgentAccount } from "../../common/agentAccounts.js";
 import { MAX_HEADER_CHIPS } from "../../common/headerChips.js";
 import { MAX_HEADER_BUTTONS } from "../../common/headerButtonEntries.js";
+import { VIEW_TARGETS } from "../../common/viewTargets.js";
 
 // ---- shared constants ---------------------------------------------------------------------
 
-export const VIEW_TARGETS = ["diff", "prs", "wiki", "collections", "accounting"] as const;
 export const RUN_TYPES = ["shell", "input", "open", "action"] as const;
 export const BUILTIN_CHIPS = ["dir", "git", "work", "ctx", "usage", "status", "diff", "tools", "env"] as const;
 

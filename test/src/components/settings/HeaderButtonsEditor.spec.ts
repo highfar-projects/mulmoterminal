@@ -51,8 +51,31 @@ describe("HeaderButtonsEditor", () => {
     await w.find('[data-testid="header-button-add"]').trigger("click");
     await flushPromises();
     expect(state.sent).toEqual([
-      ["add", { run: "shell", label: "Build", icon: "build", payload: "yarn build", when: "" }],
-      ["add", { run: "input", label: "Compact", icon: "", payload: "/compact", when: "agent == claude" }],
+      ["add", { run: "shell", label: "Build", icon: "build", payload: "yarn build", target: "url", when: "" }],
+      ["add", { run: "input", label: "Compact", icon: "", payload: "/compact", target: "url", when: "agent == claude" }],
+    ]);
+  });
+
+  it("asks what an open button opens and which operation an action button runs", async () => {
+    const w = mountEditor();
+    await w.find('[data-testid="header-button-run"]').setValue("open");
+    await w.find('[data-testid="header-button-target"]').setValue("view");
+    expect(w.find('[data-testid="header-button-payload"]').exists()).toBe(false);
+    await w.find('[data-testid="header-button-view"]').setValue("wiki");
+    await field(w, "header-button-label").setValue("Wiki");
+    await w.find('[data-testid="header-button-add"]').trigger("click");
+    await flushPromises();
+    await w.find('[data-testid="header-button-target"]').setValue("pr");
+    expect(w.find('[data-testid="header-button-payload"]').exists()).toBe(false);
+    expect(w.find('[data-testid="header-button-view"]').exists()).toBe(false);
+    await w.find('[data-testid="header-button-run"]').setValue("action");
+    await w.find('[data-testid="header-button-action"]').setValue("pane-files");
+    await field(w, "header-button-label").setValue("Files");
+    await w.find('[data-testid="header-button-add"]').trigger("click");
+    await flushPromises();
+    expect(state.sent).toEqual([
+      ["add", { run: "open", label: "Wiki", icon: "", payload: "wiki", target: "view", when: "" }],
+      ["add", { run: "action", label: "Files", icon: "", payload: "pane-files", target: "pr", when: "" }],
     ]);
   });
 

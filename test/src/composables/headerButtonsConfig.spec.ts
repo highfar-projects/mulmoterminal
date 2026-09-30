@@ -23,14 +23,18 @@ describe("setGlobalHeaderButtons", () => {
       { id: "c", label: "Compact", run: "input", text: "/compact", order: 3 },
       { id: "o", label: "Docs", run: "open", open: { url: "x" } },
       { id: "f", label: "Tools", items: [{ id: "x" }, { id: "y" }] },
+      { id: "p", label: "PR", run: "open", open: { pr: true } },
+      { id: "a", label: "Files", run: "action", action: "pane-files" },
       { id: "bad", label: "Bad", run: "nope" },
       "junk",
     ]);
     expect(globalHeaderButtons.value).toEqual([
       { id: "b", label: "Build", kind: "shell", detail: "yarn build", ordered: false },
       { id: "c", label: "Compact", kind: "input", detail: "/compact", ordered: true },
-      { id: "o", label: "Docs", kind: "open", detail: "", ordered: false },
+      { id: "o", label: "Docs", kind: "open", detail: "url: x", ordered: false },
       { id: "f", label: "Tools", kind: "folder", detail: "2", ordered: false },
+      { id: "p", label: "PR", kind: "open", detail: "pr", ordered: false },
+      { id: "a", label: "Files", kind: "action", detail: "pane-files", ordered: false },
     ]);
   });
 });

@@ -25,13 +25,23 @@ const KINDS: readonly ButtonKind[] = ["shell", "input", "open", "action"];
 const isKind = (value: unknown): value is ButtonKind => KINDS.some((kind) => kind === value);
 const text = (value: unknown): string => (typeof value === "string" ? value : "");
 
+// What a row shows under its name: the command, the text, the action's name, or what it opens.
+function detailOf(entry: Record<string, unknown>): string {
+  if (entry.run === "shell") return text(entry.cmd);
+  if (entry.run === "input") return text(entry.text);
+  if (entry.run === "action") return text(entry.action);
+  if (!isRecord(entry.open)) return "";
+  return Object.entries(entry.open)
+    .map(([kind, value]) => (value === true ? kind : `${kind}: ${text(value)}`))
+    .join(", ");
+}
+
 function rowOf(entry: unknown): ButtonRow | null {
   if (!isRecord(entry) || typeof entry.id !== "string" || typeof entry.label !== "string") return null;
   const ordered = typeof entry.order === "number";
   if (isUnknownArray(entry.items)) return { id: entry.id, label: entry.label, kind: "folder", detail: String(entry.items.length), ordered };
   if (!isKind(entry.run)) return null;
-  const detail = entry.run === "shell" ? text(entry.cmd) : text(entry.text);
-  return { id: entry.id, label: entry.label, kind: entry.run, detail, ordered };
+  return { id: entry.id, label: entry.label, kind: entry.run, detail: detailOf(entry), ordered };
 }
 
 export const globalHeaderButtons = ref<ButtonRow[] | null>(null);

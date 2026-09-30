@@ -1,17 +1,20 @@
 import { slugFromLabel, uniqueSlug } from "./agentEntries.js";
 import { GITHUB_ICON_PREFIX, githubIconOf } from "./githubIcons.js";
+import { headerActionName } from "./headerActions.js";
+import { isViewTargetName, type ViewTargetName } from "./viewTargets.js";
 
 // The header's buttons as Settings changes them (#2622): the top-level list, one entry at a time,
 // against the config on disk. What can be ADDED is the two simplest kinds — run a command in a new
-// cell (`shell`), or type text into the agent (`input`); folders, `open` and `action` buttons are
-// listed and can be removed or moved, and are still written by hand or by the header skill.
+// cell (`shell`), type text into the agent (`input`), open something (`open`) or run one of the
+// app's named operations (`action`); folders are listed, removed and moved, and still written by
+// hand or by the header skill.
 //
 // An UNCONFIGURED list (`null`) is the built-in set, not nothing, so the first change starts from
 // it — adding a button must not silently take the built-in PR button away.
 
 export const MAX_HEADER_BUTTONS = 32;
 export const BUTTON_LABEL_MAX = 40;
-export const EDITABLE_RUNS = ["shell", "input"] as const;
+export const EDITABLE_RUNS = ["shell", "input", "open", "action"] as const;
 export type EditableRun = (typeof EDITABLE_RUNS)[number];
 export const isEditableRun = (value: unknown): value is EditableRun => EDITABLE_RUNS.some((run) => run === value);
 
@@ -20,7 +23,25 @@ export const isEditableRun = (value: unknown): value is EditableRun => EDITABLE_
 const SYMBOL_NAME_RE = /^[a-z0-9_]{1,40}$/;
 const isIconName = (icon: string): boolean => (icon.startsWith(GITHUB_ICON_PREFIX) ? githubIconOf(icon) !== null : SYMBOL_NAME_RE.test(icon));
 
-export const BUTTON_PROBLEMS = ["label", "payload", "icon", "full", "missing", "edge", "ordered"] as const;
+export const BUTTON_PROBLEMS = ["label", "payload", "icon", "target", "action", "full", "missing", "edge", "ordered"] as const;
+
+/** What an `open` button opens. The first four take a value (a URL, a path, an overlay's name);
+ *  the last two take none. */
+export const OPEN_TARGET_KINDS = ["url", "files", "reveal", "terminal", "view", "pr", "pickFile"] as const;
+export type OpenTargetKind = (typeof OPEN_TARGET_KINDS)[number];
+export const isOpenTargetKind = (value: unknown): value is OpenTargetKind => OPEN_TARGET_KINDS.some((kind) => kind === value);
+const VALUELESS_TARGETS: readonly OpenTargetKind[] = ["pr", "pickFile"];
+export const openTargetTakesValue = (kind: OpenTargetKind): boolean => !VALUELESS_TARGETS.includes(kind);
+
+export interface OpenTargetEntry {
+  url?: string;
+  files?: string;
+  reveal?: string;
+  terminal?: string;
+  view?: ViewTargetName;
+  pr?: true;
+  pickFile?: true;
+}
 export type ButtonProblem = (typeof BUTTON_PROBLEMS)[number];
 export const isButtonProblem = (value: unknown): value is ButtonProblem => BUTTON_PROBLEMS.some((problem) => problem === value);
 
@@ -35,8 +56,11 @@ export interface ButtonDraft {
   label: string;
   icon: string;
   run: EditableRun;
-  /** The command for `shell`, the text for `input`. */
+  /** The command for `shell`, the text for `input`, the value an `open` target takes (a URL, a path,
+   *  an overlay's name), or the action's name. */
   payload: string;
+  /** What an `open` button opens; ignored for the other kinds. */
+  target: string;
   when: string;
 }
 
@@ -46,6 +70,8 @@ export interface NewButton {
   run: EditableRun;
   cmd?: string;
   text?: string;
+  open?: OpenTargetEntry;
+  action?: string;
   icon?: string;
   when?: string;
 }
@@ -54,16 +80,37 @@ type Changed<T> = { entries: (T | NewButton)[] } | { problem: ButtonProblem };
 
 const allIds = (entries: readonly EntryLike[]): string[] => entries.flatMap((entry) => [entry.id, ...(entry.items ?? []).map((child) => child.id)]);
 
+type Payload = { fields: Pick<NewButton, "cmd" | "text" | "open" | "action"> } | { problem: ButtonProblem };
+
+function openTarget(kind: OpenTargetKind, value: string): OpenTargetEntry | null {
+  if (kind === "pr") return { pr: true };
+  if (kind === "pickFile") return { pickFile: true };
+  if (kind === "view") return isViewTargetName(value) ? { view: value } : null;
+  return value ? { [kind]: value } : null;
+}
+
+function payloadFor(run: EditableRun, value: string, target: string): Payload {
+  if (run === "shell") return value ? { fields: { cmd: value } } : { problem: "payload" };
+  if (run === "input") return value ? { fields: { text: value } } : { problem: "payload" };
+  if (run === "action") {
+    const action = headerActionName(value);
+    return action ? { fields: { action } } : { problem: "action" };
+  }
+  if (!isOpenTargetKind(target)) return { problem: "target" };
+  const open = openTarget(target, value);
+  return open ? { fields: { open } } : { problem: "payload" };
+}
+
 export function buttonFromDraft(draft: ButtonDraft, taken: readonly string[]): { entry: NewButton } | { problem: ButtonProblem } {
   const label = draft.label.trim();
-  const payload = draft.payload.trim();
   const icon = draft.icon.trim();
   const when = draft.when.trim();
   if (!label || label.length > BUTTON_LABEL_MAX) return { problem: "label" };
-  if (!payload) return { problem: "payload" };
   if (icon && !isIconName(icon)) return { problem: "icon" };
+  const payload = payloadFor(draft.run, draft.payload.trim(), draft.target);
+  if ("problem" in payload) return payload;
   const id = uniqueSlug(slugFromLabel(label) || "button", (candidate) => !taken.includes(candidate), taken.length + 2) ?? "button";
-  const entry: NewButton = draft.run === "shell" ? { id, label, run: "shell", cmd: payload } : { id, label, run: "input", text: payload };
+  const entry: NewButton = { id, label, run: draft.run, ...payload.fields };
   if (icon) entry.icon = icon;
   if (when) entry.when = when;
   return { entry };
