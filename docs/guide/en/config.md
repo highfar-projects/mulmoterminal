@@ -171,6 +171,8 @@ Why the misspelt key stays in the file at all: [keys this version doesn't know s
 
 Place this at the project root to change the appearance, sound, and header of **terminals (grid cells) opened in that directory**.
 
+Open it in the Files pane and the editor knows this file's keys: it offers them as you type (`Ctrl+Space` asks) and underlines a value the server would reject — a misspelt key or a colour it cannot read — before you save.
+
 ### Which model to use
 
 ```json
