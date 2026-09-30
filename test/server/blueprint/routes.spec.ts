@@ -109,8 +109,8 @@ beforeAll(async () => {
         if (slug === "app:signed-out") return { kind: "signed-out" };
         if (slug === "app:partial") return { kind: "not-a-reader", collections: ["ballots", "topics"] };
         const files = [{ path: ".blueprint/source/source.json", content: `{"takenAtMs":${nowMs}}` }];
-        if (slug === "people") return { kind: "ok", files, personal: { fields: [PEOPLE_EMAIL], members: 2 } };
-        return slug === "books" ? { kind: "ok", files, personal: { fields: [], members: 0 } } : { kind: "unknown" };
+        if (slug === "people") return { kind: "ok", files, personal: { fields: [PEOPLE_EMAIL], members: 2 }, fingerprint: "sha256:people" };
+        return slug === "books" ? { kind: "ok", files, personal: { fields: [], members: 0 }, fingerprint: "sha256:books" } : { kind: "unknown" };
       },
     },
     ensureOwner: async () => {

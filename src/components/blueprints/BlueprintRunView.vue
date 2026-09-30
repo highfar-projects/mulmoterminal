@@ -4,7 +4,7 @@
 // an agent is working this only says so.
 import { computed, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { archiveRun, loadReport, loadRun, sendEvent, type PersonEvent, type ReportView } from "../../composables/blueprintsApi";
+import { archiveRun, loadReport, loadRun, loadRunSource, sendEvent, type PersonEvent, type ReportView } from "../../composables/blueprintsApi";
 import { currentStep } from "../../../common/blueprint/state";
 import type { BlueprintRunView } from "../../../common/blueprint/run";
 import type { PlanStep } from "../../../common/blueprint/plan";
@@ -22,7 +22,7 @@ import MarkdownProse from "../MarkdownProse.vue";
 
 const props = defineProps<{ runId: string }>();
 const emit = defineEmits<{ archived: [] }>();
-const { t } = useI18n();
+const { t, locale } = useI18n();
 
 // Fast enough that an approval visibly moves the build on; a step takes minutes, not seconds.
 const RUN_POLL_MS = 2000;
@@ -81,6 +81,19 @@ async function refresh(): Promise<void> {
     loadError.value = null;
   } else loadError.value = failureText(t, result);
 }
+
+// Asked once per build shown, not on every poll: taking a shared app's copy again reads its records from Firestore.
+const sourceChangedAt = ref<string | null>(null);
+watch(
+  () => props.runId,
+  async (runId) => {
+    sourceChangedAt.value = null;
+    const result = await loadRunSource(runId);
+    if (runId !== props.runId || !result.ok || result.value.status !== "changed") return;
+    sourceChangedAt.value = new Date(result.value.takenAt).toLocaleString(locale.value);
+  },
+  { immediate: true },
+);
 
 void refresh();
 const pollTimer = setInterval(() => void refresh(), RUN_POLL_MS);
@@ -147,6 +160,10 @@ const roundOf = (step: Pick<PlanStep, "id" | "repeatWhile">) => roundNumber(step
       </div>
       <p v-if="archiveError" class="m-0 font-sans text-[12px] text-err-text" data-testid="blueprint-archive-error">{{ archiveError }}</p>
       <p v-if="archived" class="m-0 font-sans text-[12px] text-dim" data-testid="blueprint-archived-note">{{ t("blueprints.run.archivedNote") }}</p>
+      <p v-if="sourceChangedAt" class="m-0 flex items-start gap-1.5 font-sans text-[12px] text-secondary" data-testid="blueprint-source-changed">
+        <span class="material-symbols-outlined text-[15px]" aria-hidden="true">update</span>
+        {{ t("blueprints.run.sourceChanged", { takenAt: sourceChangedAt }) }}
+      </p>
 
       <section v-if="current" class="flex max-w-[1280px] flex-col gap-3 rounded-md border border-border bg-panel p-4" data-testid="blueprint-current">
         <h2 class="m-0 flex items-center gap-2 font-sans text-[15px] font-[650] text-fg">

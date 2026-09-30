@@ -76,6 +76,8 @@ export const blueprintsJa: Messages["blueprints"] = {
     starting: "開始中…",
   },
   run: {
+    sourceChanged:
+      "元にしたコレクション（または共有アプリ）は、写しを取った後（{takenAt}）に変わっています。この作業はその写しのまま進みます。新しい内容を使うなら、同じ元から新しく作り直してください。",
     starting: "エージェントを起動しています…",
     elapsed: "{minutes}分{seconds}秒経過",
     steps: "工程",

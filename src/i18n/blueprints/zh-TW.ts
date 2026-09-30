@@ -74,6 +74,7 @@ export const blueprintsZhTW: Messages["blueprints"] = {
     starting: "正在開始…",
   },
   run: {
+    sourceChanged: "來源在複製之後（{takenAt}）已有變更。此建置仍依那份副本繼續。要使用新內容，請從同一來源重新開始一個建置。",
     starting: "正在啟動代理…",
     elapsed: "已經過 {minutes} 分 {seconds} 秒",
     steps: "步驟",

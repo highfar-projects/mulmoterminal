@@ -76,6 +76,7 @@ export const blueprintsKo: Messages["blueprints"] = {
     starting: "시작하는 중…",
   },
   run: {
+    sourceChanged: "원본이 복사 이후({takenAt})에 바뀌었습니다. 이 빌드는 그 복사본으로 계속 진행합니다. 새 내용을 쓰려면 같은 원본에서 새로 시작하세요.",
     starting: "에이전트를 시작하는 중…",
     elapsed: "{minutes}분 {seconds}초 경과",
     steps: "단계",
