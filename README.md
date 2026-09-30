@@ -1067,7 +1067,8 @@ directories (`addDirs`), its icon, terminal background, and attention sounds (`s
 chips and command-palette entries (`buttons` / `chips` / `commands`) with the same editors the global
 lists use, its Skill menu (`skills`, in order), Mulmo menu decks (`decks`) and per-worktree variables
 (`worktreeEnv`) — every key the file can hold. **This checkout only** moves a key into
-`.mulmoterminal.local.json` (and **Share** moves it back). Each change is written to
+`.mulmoterminal.local.json` (and **Share** moves it back). A cell's path menu has **This directory's
+settings**, which opens Settings on that directory. Each change is written to
 the directory's file at once and applies without a restart; **Use global** takes the key out
 again. A key `.mulmoterminal.local.json` already holds is written there. Keys the form doesn't
 show are left as they are, and a file that isn't a JSON object is not touched — fix it in Files.
