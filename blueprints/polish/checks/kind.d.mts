@@ -5,4 +5,5 @@ export declare const CHAFF_DEFAULT_STYLE: string;
 export declare const genreOf: (answers: unknown, kinds: readonly Kind[]) => string | null;
 export declare const genreArgs: (genre: string | null) => string[];
 export declare const readKinds: (usecaseDir: string) => Kind[];
+export declare const kindGenre: () => string | null;
 export declare const kindArgs: () => string[];

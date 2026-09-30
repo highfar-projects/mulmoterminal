@@ -244,6 +244,9 @@ describeSh("polish: the kind of document decides chaff's genre", () => {
     write(".blueprint/originals/docs/setup.md", ORIGINAL);
     write("docs/setup.md", REWORDED);
     list([target("docs/setup.md", "done", 0)]);
+    // A report is also read for its viewpoints; recorded here so the run gets as far as chaff.
+    const read = ["conclusion-first", "actionable-ask", "unsourced-number", "stacked-hedging", "agentless-passive"];
+    write(".blueprint/viewpoints.json", { "docs/setup.md": read.map((id) => ({ id, verdict: "ok" })) });
     expect(node("targets.mjs", ["verify"]).code).toBe(0);
     expect(lintLog()).toHaveLength(2);
     lintLog().forEach((line) => expect(line).toContain("--genre business/report"));
@@ -307,6 +310,8 @@ describeSh("polish: nothing to polish", () => {
   it("leaves out a document the person asked to leave alone, and only one they named", () => {
     writeFake("findings.json", { "docs/other.md": [{ rule: "sentence-length", level: "warning", file: "docs/other.md" }] });
     nothing(["docs/other.md"]);
+    expect(node("targets.mjs", ["survey"])).toMatchObject({ code: 1, stderr: expect.stringContaining("the answer avoid does not: docs/other.md") });
+    write(".blueprint/answers.json", { maxFiles: 3, targets: "docs", avoid: "docs/other.md" });
     expect(node("targets.mjs", ["survey"]).code).toBe(0);
     nothing(["docs/other.md", "elsewhere.md"]);
     expect(node("targets.mjs", ["survey"])).toMatchObject({ code: 1, stderr: expect.stringContaining("not among the named documents: elsewhere.md") });
@@ -336,17 +341,94 @@ describeSh("polish: nothing to polish", () => {
     });
   });
 
-  it('checks "avoided" on a list with files in it too: named, and not also chosen', () => {
+  it('checks "avoided" on a list with files in it too: named, asked for, and not also chosen', () => {
+    write(".blueprint/answers.json", { maxFiles: 3, targets: "docs", avoid: "docs/" });
     write(".blueprint/polish.json", { targets: [target("docs/setup.md")], avoided: ["elsewhere.md"] });
     expect(node("targets.mjs", ["survey"])).toMatchObject({ code: 1, stderr: expect.stringContaining("not among the named documents: elsewhere.md") });
     write(".blueprint/polish.json", { targets: [target("docs/setup.md")], avoided: ["docs/setup.md"] });
     expect(node("targets.mjs", ["survey"])).toMatchObject({ code: 1, stderr: expect.stringContaining("both chosen and left alone: docs/setup.md") });
     write(".blueprint/polish.json", { targets: [target("docs/setup.md")], avoided: ["docs/other.md"] });
     expect(node("targets.mjs", ["survey"]).code).toBe(0);
+    write(".blueprint/answers.json", { maxFiles: 3, targets: "docs", avoid: "docs/setup.md\n下書きは触らないで" });
+    expect(node("targets.mjs", ["survey"])).toMatchObject({ code: 1, stderr: expect.stringContaining("the answer avoid does not: docs/other.md") });
   });
 
   it('refuses an "avoided" that is not a list of files', () => {
     write(".blueprint/polish.json", { targets: [], avoided: "docs/other.md" });
     expect(node("targets.mjs", ["survey"])).toMatchObject({ code: 1, stderr: expect.stringContaining('"avoided" must be a list') });
+  });
+});
+
+describeSh("polish: a report is read for what a report needs", () => {
+  const REPORT_KIND = { maxFiles: 3, style: "chaff の既定のまま", kind: "報告書", targets: "docs" };
+  const viewpoints = (entries: unknown[]) => write(".blueprint/viewpoints.json", { "docs/setup.md": entries });
+  const everyOk = ["conclusion-first", "actionable-ask", "unsourced-number", "stacked-hedging", "agentless-passive"].map((id) => ({ id, verdict: "ok" }));
+  const polishedReport = () => {
+    mkdirSync(join(harness.dir(), ".blueprint", "originals", "docs"), { recursive: true });
+    write(".blueprint/originals/docs/setup.md", ORIGINAL);
+    write("docs/setup.md", REWORDED);
+    list([target("docs/setup.md", "done", 0)]);
+  };
+  const SECTIONS = ["整えたもの", "確かめたこと", "直さずに残したもの"];
+  const report = (extra: string) => write(".blueprint/polish-report.md", SECTIONS.map((section) => `## ${section}\ndocs/setup.md\n`).join("\n") + extra);
+
+  beforeEach(() => {
+    write(".blueprint/answers.json", REPORT_KIND);
+    polishedReport();
+  });
+
+  it("is not done until every viewpoint of the kind is recorded", () => {
+    expect(node("targets.mjs", ["verify"])).toMatchObject({ code: 1, stderr: expect.stringContaining("docs/setup.md: no viewpoints recorded") });
+    viewpoints(everyOk);
+    expect(node("targets.mjs", ["verify"])).toEqual({ code: 0, stderr: "" });
+  });
+
+  it("chooses every report, up to the agreed number, even when chaff finds nothing, since each is read for its viewpoints", () => {
+    write("docs/second.md", "# 二つめ\n\n本文。\n");
+    write(".blueprint/polish.json", { targets: [] });
+    expect(node("targets.mjs", ["survey"])).toMatchObject({
+      code: 1,
+      stderr: expect.stringContaining(
+        "a business/report is read for its viewpoints: choose 2 of the named documents; not chosen: docs/second.md, docs/setup.md",
+      ),
+    });
+    write(".blueprint/polish.json", { targets: [target("docs/setup.md")] });
+    expect(node("targets.mjs", ["survey"])).toMatchObject({ code: 1, stderr: expect.stringContaining("not chosen: docs/second.md") });
+    write(".blueprint/answers.json", { ...REPORT_KIND, maxFiles: 1 });
+    expect(node("targets.mjs", ["survey"]).code).toBe(0);
+    write(".blueprint/answers.json", { ...REPORT_KIND, avoid: "docs/second.md\ndocs/setup.md" });
+    write(".blueprint/polish.json", { targets: [], avoided: ["docs/second.md", "docs/setup.md"] });
+    expect(node("targets.mjs", ["survey"]).code).toBe(0);
+  });
+
+  it("asks nothing more of a kind that has no viewpoints, or of the folder's own style", () => {
+    write(".blueprint/answers.json", { ...REPORT_KIND, kind: "手順書・README" });
+    expect(node("targets.mjs", ["verify"]).code).toBe(0);
+    write(".blueprint/answers.json", { ...REPORT_KIND, style: "このフォルダの規約（STYLE.md と chaff.yaml）" });
+    expect(node("targets.mjs", ["verify"]).code).toBe(0);
+  });
+
+  it("puts every question for the writer in the report, quoted", () => {
+    const question = { id: "actionable-ask", verdict: "writer", quote: "項目を選べます", note: "誰がいつまでに選びますか" };
+    viewpoints([...everyOk.filter((entry) => entry.id !== "actionable-ask"), question]);
+    expect(node("targets.mjs", ["verify"]).code).toBe(0);
+    report("");
+    expect(node("report.mjs").stderr).toContain("lacks the section 書いた人に確かめてほしいこと / For the writer");
+    report("\n## 書いた人に確かめてほしいこと\n- docs/setup.md: 頼みごと\n");
+    expect(node("report.mjs").stderr).toContain(
+      "its part for the writer does not name the file and quote, word for word, the place of: docs/setup.md actionable-ask",
+    );
+    // The quotation elsewhere in the report does not count: the question belongs in the writer's part.
+    report("\n項目を選べます\n\n## 書いた人に確かめてほしいこと\n- docs/setup.md 頼みごと\n");
+    expect(node("report.mjs").stderr).toContain("the place of: docs/setup.md actionable-ask");
+    report("\n## 書いた人に確かめてほしいこと\n- docs/setup.md 「項目を選べます」 誰がいつまでに選びますか\n");
+    expect(node("report.mjs")).toEqual({ code: 0, stderr: "" });
+  });
+
+  it("asks nothing of a file that was skipped, even with a record left from an earlier try", () => {
+    write(".blueprint/polish.json", { targets: [{ ...target("docs/setup.md", "skipped", 0), note: "原文の引用だけの文書" }] });
+    write(".blueprint/viewpoints.json", { "docs/setup.md": [{ id: "actionable-ask", verdict: "writer", quote: "項目を選べます", note: "誰が？" }] });
+    report("");
+    expect(node("report.mjs")).toEqual({ code: 0, stderr: "" });
   });
 });
