@@ -119,7 +119,7 @@ function mountOriginalsRoute(app: Express, deps: BlueprintRouteDeps): void {
   app.get("/api/blueprints/runs/:id/originals", async (req, res) => {
     try {
       const { run } = await deps.executor.view(req.params.id);
-      res.json(await originalsOf(run.projectDir, { list: listProjectFiles, read: readProjectFile }));
+      res.json(await originalsOf(run.projectDir, { list: listProjectFiles, read: readProjectFile }, run.createdAtMs));
     } catch (err) {
       fail(res, err);
     }

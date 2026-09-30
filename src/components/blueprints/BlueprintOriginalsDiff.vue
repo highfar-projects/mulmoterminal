@@ -49,9 +49,17 @@ onBeforeUnmount(clearViews);
 <template>
   <section v-if="originals && originals.files.length > 0" class="flex flex-col gap-2" data-testid="blueprint-originals">
     <h3 class="m-0 font-sans text-[13px] font-[650] text-fg">{{ t("blueprints.run.originals") }}</h3>
-    <p class="m-0 font-sans text-[12px] text-secondary">{{ t("blueprints.run.originalsHint", { dir: ORIGINALS_DIR }) }}</p>
+    <p class="m-0 font-sans text-[12px] text-secondary">
+      {{ t("blueprints.run.originalsHint") }}
+      <span v-if="originals.files.some((file) => file.from === undefined)" data-testid="blueprint-originals-kept">{{
+        t("blueprints.run.originalsKept", { dir: ORIGINALS_DIR })
+      }}</span>
+      <span v-if="originals.files.some((file) => file.from !== undefined)" data-testid="blueprint-originals-proposed">{{
+        t("blueprints.run.originalsProposed")
+      }}</span>
+    </p>
     <div v-for="file in originals.files" :key="file.path" class="flex flex-col gap-1" data-testid="blueprint-original">
-      <span class="font-mono text-[12px] text-fg">{{ file.path }}</span>
+      <span class="font-mono text-[12px] text-fg">{{ file.from === undefined ? file.path : `${file.from} → ${file.path}` }}</span>
       <p v-if="file.current === null" class="m-0 font-sans text-[12px] text-secondary" data-testid="blueprint-original-gone">
         {{ t("blueprints.run.originalsGone") }}
       </p>
