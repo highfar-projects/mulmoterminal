@@ -14,5 +14,6 @@ export const previewCodeCopyEn = {
     hidden:
       "This block has {count} character(s) a text box does not show as themselves — invisible, control or direction-changing — written here as <U+…>. Copy puts them on the clipboard as they are in the file.",
     manualMarked: "Selected — copy it with your usual key. The <U+…> markers are copied as written, not as the characters they stand for.",
+    continuesBelow: "The text continues below — scroll to the end before copying.",
   },
 };

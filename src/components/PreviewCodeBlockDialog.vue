@@ -9,6 +9,7 @@ import { MODAL_FOCUSABLE } from "../utils/focusTrap";
 import { modalKeydownHandler } from "../composables/useModalKeyboard";
 import type { CodeBlockLookup } from "./previewCodeBlockApi";
 import { revealHidden } from "../../common/hiddenCharacters";
+import { useContinuesBelow } from "../composables/useContinuesBelow";
 
 const props = defineProps<{ lookup: CodeBlockLookup }>();
 const emit = defineEmits<{ close: [] }>();
@@ -24,6 +25,8 @@ const block = computed(() => (props.lookup.status === "found" ? props.lookup.blo
 // What the box shows: the file's text, with anything a text box would not draw written out.
 const revealed = computed(() => revealHidden(block.value?.text ?? ""));
 // Counted as the box draws them: a CR alone is a line break there too.
+// Blanks or newlines can put part of the block below the fold; say so until the reader has seen the end.
+const continuesBelow = useContinuesBelow(box, () => revealed.value.shown);
 const lineCount = computed(() => (block.value ? block.value.text.split(/\r\n|\r|\n/).length : 0));
 
 // Selecting by hand copies the box — with its `<U+XXXX>` markers, not the characters they stand for.
@@ -38,8 +41,11 @@ const opener = document.activeElement instanceof HTMLElement ? document.activeEl
 onMounted(async () => {
   document.addEventListener("keydown", onKeydown);
   await nextTick();
-  if (box.value) box.value.focus();
-  else modalEl.value?.focus();
+  if (!box.value) return modalEl.value?.focus();
+  box.value.focus();
+  // Safari puts the caret at the end on focus and scrolls there; the reader starts at the top.
+  box.value.setSelectionRange(0, 0);
+  box.value.scrollTop = 0;
 });
 onUnmounted(() => {
   document.removeEventListener("keydown", onKeydown);
@@ -81,6 +87,9 @@ async function copy(): Promise<void> {
           <span class="text-[13px] font-semibold">{{ t("previewCodeCopy.title") }}</span>
           <span v-if="block?.lang" class="font-mono text-[11px] text-muted">{{ block.lang }}</span>
           <span v-if="block" class="text-[11px] text-muted">{{ t("previewCodeCopy.lines", { count: lineCount }) }}</span>
+          <span v-if="block && continuesBelow" role="status" data-testid="preview-code-block-below" class="text-[11px] font-semibold text-err">
+            {{ t("previewCodeCopy.continuesBelow") }}
+          </span>
         </div>
         <p v-if="block && revealed.hidden > 0" role="alert" data-testid="preview-code-block-hidden" class="text-[12px] text-err">
           {{ t("previewCodeCopy.hidden", { count: revealed.hidden }) }}

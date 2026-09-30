@@ -17,8 +17,8 @@ const PICTOGRAPHIC = /[\p{Extended_Pictographic}\p{Emoji_Modifier}]/u;
 const KEYCAP_BASE = /[0-9#*]/;
 const DRAWN_AS_ITSELF = new Set([" ", "\t", "\n"]);
 // The ideographic space is in every other Japanese sentence, one or two at a time — but Safari wraps a
-// long run of it as blank lines, which pushes what follows out of view. So only a run longer than
-// Japanese text uses is flagged.
+// long run of it as blank lines. A run longer than prose uses is flagged; shorter runs mixed with
+// spaces can still push text down there, which the dialog's "continues below" note covers.
 const IDEOGRAPHIC_SPACE = "\u3000";
 const MAX_IDEOGRAPHIC_SPACES = 2;
 const PRESENTATION_SELECTORS = new Set(["\uFE0E", "\uFE0F"]);

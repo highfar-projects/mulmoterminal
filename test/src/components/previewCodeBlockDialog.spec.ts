@@ -91,6 +91,32 @@ describe("PreviewCodeBlockDialog", () => {
     expect(inBody("preview-code-block")?.textContent).toContain("markers are copied as written");
   });
 
+  // jsdom lays nothing out, so the box's measurements are given; the note follows them and the scroll.
+  it("says the text continues below until the reader scrolls to the end", async () => {
+    const heights = { scrollHeight: { get: () => 1042, configurable: true }, clientHeight: { get: () => 398, configurable: true } };
+    Object.defineProperties(HTMLTextAreaElement.prototype, { ...heights });
+    try {
+      dialogFor({ status: "found", block: BLOCK });
+      await flushPromises();
+      expect(inBody("preview-code-block-below")).not.toBeNull();
+      const box = inBody("preview-code-block-text");
+      if (!box) throw new Error("no box");
+      box.scrollTop = 644;
+      box.dispatchEvent(new Event("scroll"));
+      await flushPromises();
+      expect(inBody("preview-code-block-below")).toBeNull();
+    } finally {
+      Reflect.deleteProperty(HTMLTextAreaElement.prototype, "scrollHeight");
+      Reflect.deleteProperty(HTMLTextAreaElement.prototype, "clientHeight");
+    }
+  });
+
+  it("says nothing about more below when the text fits", async () => {
+    dialogFor({ status: "found", block: BLOCK });
+    await flushPromises();
+    expect(inBody("preview-code-block-below")).toBeNull();
+  });
+
   it("closes on Escape", async () => {
     const w = dialogFor({ status: "found", block: BLOCK });
     await flushPromises();
