@@ -23,6 +23,7 @@ const askedFolders: string[] = [];
 const createdAnswers: unknown[] = [];
 const createdLanguages: unknown[] = [];
 const snapshotAsks: { slug: string; records: boolean }[] = [];
+const PEOPLE_EMAIL = { collection: "people", field: "email", label: "Email" };
 
 const executor: BlueprintExecutor = {
   create: async (request) => {
@@ -107,7 +108,9 @@ beforeAll(async () => {
         if (slug === "huge" || slug === "app:huge") return { kind: "too-large", bytes: 300 * 1024 * 1024 };
         if (slug === "app:signed-out") return { kind: "signed-out" };
         if (slug === "app:partial") return { kind: "not-a-reader", collections: ["ballots", "topics"] };
-        return slug === "books" ? { kind: "ok", files: [{ path: ".blueprint/source/source.json", content: `{"takenAtMs":${nowMs}}` }] } : { kind: "unknown" };
+        const files = [{ path: ".blueprint/source/source.json", content: `{"takenAtMs":${nowMs}}` }];
+        if (slug === "people") return { kind: "ok", files, personal: { fields: [PEOPLE_EMAIL], members: 2 } };
+        return slug === "books" ? { kind: "ok", files, personal: { fields: [], members: 0 } } : { kind: "unknown" };
       },
     },
     ensureOwner: async () => {
@@ -481,6 +484,30 @@ describe("POST /api/blueprints/runs from a collection", () => {
         status: 400,
         body: { error: expect.stringMatching(/"huge" with its records would be 300 MB, more than the 200 MB.*without the records/) },
       });
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it("asks once before copying personal data, placing nothing, and starts once it is confirmed", async () => {
+    const project = await emptyTrusted();
+    const before = calls.length;
+    try {
+      const asked = await startFrom(project, "people");
+      expect(asked.status).toBe(409);
+      expect(asked.body.refusal).toEqual({ code: "personal-data", fields: [PEOPLE_EMAIL], members: 2 });
+      expect(asked.body.error).toContain("people.email (Email), the email addresses of the app's 2 members");
+      expect(calls).toHaveLength(before);
+      await expect(readFile(path.join(project, ".blueprint/source/source.json"), "utf8")).rejects.toThrow();
+      const answers = { ...FROM_ANSWERS, source: "people" };
+      const confirmed = await post("/api/blueprints/runs", {
+        projectDir: project,
+        base: "local",
+        usecase: "from-collection",
+        answers,
+        personalDataConfirmed: true,
+      });
+      expect(confirmed.status).toBe(200);
     } finally {
       await rm(project, { recursive: true, force: true });
     }

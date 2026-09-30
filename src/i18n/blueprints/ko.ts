@@ -57,6 +57,9 @@ export const blueprintsKo: Messages["blueprints"] = {
     pickMore: "파일이 많아 일부만 보여 줍니다. 나머지는 직접 입력해 주세요.",
     followUp: "「{title}」에 이어지는 작업입니다. 같은 폴더와 답을 넣었습니다. 질문을 확인하고 「시작」을 눌러 주세요.",
     restored: "신뢰 확인에 답하기 전에 입력했던 내용을 되돌렸습니다. 확인하고 「시작」을 눌러 주세요.",
+    personalDataMembers: "공유 앱 구성원 {count}명의 이메일 주소(기록을 복사하지 않아도 앱과 함께 복사됩니다)",
+    copyPersonalData: "확인했으니 복사하고 시작",
+    personalDataHint: "기록을 빼려면 기록 복사 질문에 아니요로 답하고 다시 시작을 누르세요.",
     openToTrust: "여기서 Claude Code 열기",
     openToTrustHint:
       "{dir}에서 Claude Code를 엽니다. 「이 폴더를 신뢰합니까」라고 물으면, 신뢰해도 된다면 답해 주세요. 답한 뒤 설계도로 돌아와 다시 「시작」을 누릅니다. 입력한 내용은 그대로 남습니다.",
@@ -154,6 +157,7 @@ export const blueprintsKo: Messages["blueprints"] = {
     untrusted: "Claude Code가 아직 {dir}를 신뢰하지 않습니다. {trustIn}에서 Claude Code를 한 번 열어 신뢰 확인에 답한 뒤 다시 시도해 주세요.",
     folderBusy: "다른 작업({runId})이 지금 {dir}에서 진행 중입니다. 멈출 때까지(끝나거나 당신을 기다릴 때까지) 기다린 뒤 다시 시도해 주세요.",
     samplesClash: "폴더에 같은 이름의 다른 파일({files})이 있습니다. 예제에는 빈 폴더를 골라 주세요.",
+    personalData: "이 원본에는 개인정보일 수 있는 항목이 있습니다: {list}. 폴더에 복사하기 전에 확인하세요.",
     heldElsewhere: "이 컴퓨터의 설계도는 포트 {port}의 MulmoTerminal이 실행하고 있습니다. 그쪽에서 조작해 주세요.",
     revisionPending: "사양서를 아직 고치고 있습니다. 답을 기다려 주세요.",
     specNotAtReview: "사양서에 대해 이야기할 수 있는 것은 당신의 확인을 기다리는 동안뿐입니다.",

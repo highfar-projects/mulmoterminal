@@ -16,6 +16,7 @@ import {
   type PairPreview,
 } from "../../composables/blueprintsApi";
 import type { PresetListing } from "../../../common/blueprint/presets";
+import type { Refusal } from "../../../common/blueprint/refusal";
 import {
   acceptedAnswers,
   askedQuestions,
@@ -61,6 +62,8 @@ const appliedFill = ref<FormFill | null>(null);
 const filledNote = useTemplateRef<HTMLElement>("filledNote");
 // Where to answer Claude Code's trust prompt, when the last start was refused for want of it.
 const trustIn = ref<string | null>(null);
+// What personal data the copy of the source would carry, when the last start was refused to have the person look first.
+const personalData = ref<Extract<Refusal, { code: "personal-data" }> | null>(null);
 
 const bases = computed(() => basePacks(packs.value));
 const usecases = computed(() => usecasesFor(packs.value, base.value));
@@ -159,6 +162,10 @@ watch([base, usecase], ([baseSlug, usecaseSlug]) => loadPreview(baseSlug, usecas
 watch(projectDir, () => {
   trustIn.value = null;
 });
+// The list was of what those answers would copy; confirming it must not send answers that copy something else.
+watch([answers, base, usecase], () => {
+  personalData.value = null;
+});
 
 async function loadPreview(baseSlug: string, usecaseSlug: string): Promise<void> {
   // A pair changed by hand drops a waiting example: coming back to its pair later must not refill it.
@@ -188,7 +195,7 @@ function setAnswer(id: string, answer: HearingAnswer | undefined): void {
   answers.value = answer === undefined ? others : { ...others, [id]: answer };
 }
 
-async function start(): Promise<void> {
+async function start(personalDataConfirmed = false): Promise<void> {
   if (!ready.value) return;
   starting.value = true;
   const preset = appliedPreset.value?.id;
@@ -199,9 +206,11 @@ async function start(): Promise<void> {
     answers: answers.value,
     ...(preset === undefined ? {} : { preset }),
     ...(isPersonLanguage(locale.value) ? { language: locale.value } : {}),
+    ...(personalDataConfirmed ? { personalDataConfirmed } : {}),
   });
   starting.value = false;
   trustIn.value = !result.ok && result.refusal?.code === "untrusted" ? result.refusal.trustIn : null;
+  personalData.value = !result.ok && result.refusal?.code === "personal-data" ? result.refusal : null;
   if (!result.ok) {
     error.value = failureText(t, result);
     return;
@@ -226,7 +235,7 @@ function openToTrust(): void {
 </script>
 
 <template>
-  <form class="flex flex-col gap-5 p-5" data-testid="blueprint-new-form" @submit.prevent="start">
+  <form class="flex flex-col gap-5 p-5" data-testid="blueprint-new-form" @submit.prevent="start()">
     <h2 class="m-0 font-sans text-[16px] font-[650] text-fg">{{ t("blueprints.form.title") }}</h2>
 
     <section v-if="presets.length" class="flex flex-col gap-2" data-testid="blueprint-presets">
@@ -350,6 +359,20 @@ function openToTrust(): void {
           {{ t("blueprints.form.openToTrust") }}
         </button>
         <p class="m-0 font-sans text-[11px] text-dim">{{ t("blueprints.form.openToTrustHint", { dir: trustIn }) }}</p>
+      </div>
+
+      <div v-if="error && personalData" class="flex flex-col items-start gap-1.5" data-testid="blueprint-personal-data">
+        <button
+          type="button"
+          data-testid="blueprint-copy-personal-data"
+          class="flex cursor-pointer items-center gap-1.5 rounded-[4px] border border-border bg-base px-3 py-1.5 font-sans text-[13px] text-fg hover:bg-hover disabled:cursor-default disabled:opacity-40"
+          :disabled="!ready"
+          @click="start(true)"
+        >
+          <span class="material-symbols-outlined text-[16px]" aria-hidden="true">policy</span>
+          {{ t("blueprints.form.copyPersonalData") }}
+        </button>
+        <p v-if="personalData.fields.length > 0" class="m-0 font-sans text-[11px] text-dim">{{ t("blueprints.form.personalDataHint") }}</p>
       </div>
 
       <div>

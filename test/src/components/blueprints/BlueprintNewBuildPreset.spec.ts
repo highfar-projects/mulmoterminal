@@ -431,3 +431,42 @@ describe("a question with a default", () => {
     expect(startRun).toHaveBeenCalledWith(expect.objectContaining({ answers: { limit: 2, documents: "keihi.md" } }));
   });
 });
+
+describe("a source that carries personal data", () => {
+  const FIELD = { collection: "people", field: "email", label: "Email" };
+  const PERSONAL = { ok: false, error: "personal data", refusal: { code: "personal-data", fields: [FIELD], members: 2 } };
+
+  beforeEach(() => {
+    startRun.mockReset();
+    suggestFolder.mockReset();
+    suggestFolder.mockResolvedValue({ ok: true, value: { path: null } });
+  });
+
+  const refused = async () => {
+    startRun.mockResolvedValueOnce(PERSONAL);
+    const wrapper = await mountForm();
+    await wrapper.get('[data-testid="blueprint-preset-use"]').trigger("click");
+    await flushPromises();
+    await wrapper.get('[data-testid="blueprint-project-dir"]').setValue("/Users/me/new");
+    await wrapper.get('[data-testid="blueprint-new-form"]').trigger("submit");
+    await flushPromises();
+    return wrapper;
+  };
+
+  it("names what it would copy, and starts again with the same answers once it is confirmed", async () => {
+    const wrapper = await refused();
+    expect(startRun.mock.calls[0][0]).not.toHaveProperty("personalDataConfirmed");
+    expect(wrapper.get('[data-testid="blueprint-new-error"]').text()).toContain("Email (people.email)");
+    startRun.mockResolvedValueOnce({ ok: true, value: { runId: "run-9" } });
+    await wrapper.get('[data-testid="blueprint-copy-personal-data"]').trigger("click");
+    await flushPromises();
+    expect(startRun.mock.calls[1][0]).toEqual({ ...startRun.mock.calls[0][0], personalDataConfirmed: true });
+  });
+
+  it("stops offering to confirm once an answer changes: the list was of what the old answers would copy", async () => {
+    const wrapper = await refused();
+    await wrapper.get('[data-testid="blueprint-question"] input').setValue("other.txt");
+    await flushPromises();
+    expect(wrapper.find('[data-testid="blueprint-copy-personal-data"]').exists()).toBe(false);
+  });
+});

@@ -13,6 +13,12 @@ export const refusalSchema = z.discriminatedUnion("code", [
   z.object({ code: z.literal("untrusted"), dir: z.string(), trustIn: z.string() }),
   z.object({ code: z.literal("folder-busy"), dir: z.string(), runId: z.string() }),
   z.object({ code: z.literal("samples-clash"), files: z.array(z.string()).readonly() }),
+  // The copy of the source would carry personal data; the person confirms once, and the start is sent again.
+  z.object({
+    code: z.literal("personal-data"),
+    fields: z.array(z.object({ collection: z.string(), field: z.string(), label: z.string() })).readonly(),
+    members: z.number().int().nonnegative(),
+  }),
   z.object({ code: z.literal("held-elsewhere"), port: z.string() }),
   z.object({ code: z.literal("revision-pending") }),
   z.object({ code: z.literal("spec-not-at-review") }),
@@ -49,6 +55,13 @@ type MarketRefusal = Extract<Refusal, { code: (typeof MARKET_CODES)[number] }>;
 
 const isMarketRefusal = (refusal: Refusal): refusal is MarketRefusal => MARKET_CODES.some((code) => code === refusal.code);
 
+/** What personal data a `personal-data` refusal names, in one line: `collection.field (label)`, and the roster. */
+export function personalDataList(refusal: Extract<Refusal, { code: "personal-data" }>): string {
+  const fields = refusal.fields.map((field) => `${field.collection}.${field.field} (${field.label})`);
+  const roster = refusal.members > 0 ? [`the email addresses of the app's ${refusal.members} members`] : [];
+  return [...fields, ...roster].join(", ");
+}
+
 export function englishRefusal(refusal: Refusal): string {
   return isMarketRefusal(refusal) ? englishMarketRefusal(refusal) : englishBuildRefusal(refusal);
 }
@@ -71,6 +84,9 @@ function englishBuildRefusal(refusal: Exclude<Refusal, MarketRefusal>): string {
       return `another build (${refusal.runId}) is working in ${refusal.dir} right now: wait until it stops for you, then try again`;
     case "samples-clash":
       return `this folder already has other files named ${refusal.files.join(", ")}: choose an empty folder for the example`;
+    case "personal-data":
+      // The roster is copied with the app whether or not the records come, so only record fields leave that way out.
+      return `the copy would carry personal data (${personalDataList(refusal)}): confirm that it may be copied${refusal.fields.length > 0 ? ", or start without the records" : ""}`;
     case "held-elsewhere":
       return `blueprints on this machine are run by the MulmoTerminal on port ${refusal.port}; make changes there`;
     case "revision-pending":
