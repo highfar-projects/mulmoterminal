@@ -121,6 +121,22 @@ server). A few actions act on **the server's machine**, not yours:
 | `localhost:<port>` links on a worktree's `env` chip | Open on your laptop — forward that port too | Same |
 | Linking Google Calendar | The sign-in redirect lands on your laptop, not the server | Same |
 
+## Experimental: tell it the server is remote
+
+Nothing can tell from the server that your browser is elsewhere — through a tunnel the connection
+comes from the server itself. So say it, in the **server's** `~/.mulmoterminal/config.json`:
+
+```json
+{ "remoteServer": true }
+```
+
+Then the actions in the table above that would act on the server's screen are withheld: the path
+menu's *Insert a file path* and *Reveal in the file manager* and the launch form's folder button
+are hidden, the same actions from a header button, a key or the Files pane say why instead, and a
+dropped file is always uploaded rather than inserted as your laptop's path. Restart the server
+after editing the file. This is an experiment — say how it went on
+[issue #2669](https://github.com/receptron/mulmoterminal/issues/2669).
+
 ## Developing MulmoTerminal against a remote server
 
 The server and the page can also be run apart: `yarn dev:server` on the server (Express only), and
