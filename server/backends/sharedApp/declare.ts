@@ -570,6 +570,8 @@ export interface InviteSuccess {
   email: string;
   role: AppRoleName | null;
   cid: string;
+  /** The address was not on the roster before, so this wrote a new string into a committed file. */
+  addedAddress: boolean;
 }
 
 /** Add, change or remove one address on the roster.
@@ -603,6 +605,7 @@ export async function inviteToSharedApp(root: string, rawEmail: string, role: Ap
   let written = email;
   let ambiguous: string[] = [];
   let orphaned = false;
+  let addedAddress = false;
   const updated = await updateManifest(root, (manifest) => {
     // A hand edit can leave TWO keys for one person, differing only in case. Whichever this
     // operation picked would be a guess, and the guess is invisible: the other entry keeps its
@@ -618,6 +621,7 @@ export async function inviteToSharedApp(root: string, rawEmail: string, role: Ap
     // leave it in place, and still report success, and changing its role would add a SECOND entry
     // beside it — two keys for one person, one of which still holds the old permissions.
     written = matches[0] ?? email;
+    addedAddress = matches.length === 0 && role !== null;
     const next = nextMembers(manifest, written, role, cid);
     if (next === null) return null;
     // An app with no app-wide owner has no publisher: every publish is refused, INCLUDING the one
@@ -652,7 +656,7 @@ export async function inviteToSharedApp(root: string, rawEmail: string, role: Ap
     };
   }
   if (!updated.ok) return { ok: false, partial: false, problems: updated.problems };
-  return { ok: true, email: written, role, cid };
+  return { ok: true, email: written, role, cid, addedAddress };
 }
 
 /** Every roster key that is this address, differing at most in case — none, one, or (from a hand

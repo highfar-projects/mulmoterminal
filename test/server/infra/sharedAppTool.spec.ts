@@ -269,6 +269,26 @@ describe("manageSharedApp, the tool", () => {
     expect(JSON.parse(readFileSync(path.join(root, "app.json"), "utf-8")).members).toEqual({ "o@e.com": { "*": "owner" } });
   });
 
+  // #1963: the roster holds plain addresses and app.json is committed, so an address the file did
+  // not have before enters the repository's history. Said only when a NEW string is written.
+  it("says a new address will enter the committed file, and only when it is new", async () => {
+    const root = makeTempDir("mt-shared-tool-");
+    writeFileSync(path.join(root, "app.json"), JSON.stringify({ aid: "a1", members: { "o@e.com": { "*": "owner" }, "Kept@E.com": { "*": "viewer" } } }));
+    const invite = (email: string, role?: string, cid?: string) =>
+      manageSharedApp(root, { action: "invite", email, ...(role ? { role } : {}), ...(cid ? { cid } : {}) });
+    const HISTORY = "enter the repository's history";
+
+    expect(await invite("t@e.com", "viewer")).toContain(HISTORY);
+    // Already on the roster: a role change, another collection, or the same address in other case.
+    expect(await invite("t@e.com", "editor")).not.toContain(HISTORY);
+    expect(await invite("t@e.com", "participant", "survey")).not.toContain(HISTORY);
+    expect(await invite("kept@e.com", "editor")).not.toContain(HISTORY);
+    // A removal writes nothing new; once the address is gone entirely, adding it back does.
+    expect(await invite("t@e.com")).not.toContain(HISTORY);
+    expect(await invite("t@e.com", undefined, "survey")).not.toContain(HISTORY);
+    expect(await invite("t@e.com", "viewer")).toContain(HISTORY);
+  });
+
   it("writes the SIGNED-IN address as owner, and generates the aid", async () => {
     // The whole reason `init` is an operation: the owner has to be the address the rules will see,
     // the agent cannot read it, and the address a user offers is the one that fails at deploy.
