@@ -4,6 +4,7 @@ import { tipsKo } from "./tips/ko";
 import { commandPaletteKo } from "./commandPalette/ko";
 import { focusModeKo } from "./focusMode/ko";
 import { fileHistoryKo } from "./fileHistory/ko";
+import { dirConfigSaveKo } from "./dirConfigSave/ko";
 import { settingsControlsKo } from "./settingsControls/ko";
 import { shortcutsKo } from "./shortcuts/ko";
 import { filesTreeKo } from "./filesTree/ko";
@@ -190,7 +191,7 @@ export const ko: Messages = {
       prFooterHint: "본문 맨 아래에 {line} 한 줄을 붙입니다. 나란히 둔 여러 클론 중 어느 것에서 나왔는지 PR이 말해 줍니다.",
       gitlabTitle: "자체 호스팅 GitLab",
       gitlabHint:
-        "URL만 봐서는 그 호스트가 어떤 forge인지 알 수 없으므로 여기서 선언하면 {glab}으로 저장소를 읽습니다. {authCommand}가 필요합니다. 다음 서버 시작부터 적용됩니다.",
+        "URL만 봐서는 그 호스트가 어떤 forge인지 알 수 없으므로 여기서 선언하면 {glab}으로 저장소를 읽습니다. {authCommand}가 필요합니다. 바로 적용됩니다.",
       gitlabField: "자체 호스팅 GitLab 호스트 추가",
     },
 
@@ -206,7 +207,7 @@ export const ko: Messages = {
       worklogInterval: "실행 주기:",
       worklogStepper: "개발 작업 로그 주기",
       systemTasks: "내장 예약 작업",
-      systemTasksHint: "둘 다 한 시간마다 돌고, 끄지 않는 한 켜져 있습니다. 하나를 끄면 서버가 다음에 시작할 때 반영됩니다.",
+      systemTasksHint: "둘 다 한 시간마다 돌고, 끄지 않는 한 켜져 있습니다. 켜고 끄면 바로 반영됩니다.",
       feedRefresh: "컬렉션과 피드 새로고침",
       feedRefreshHint:
         "RSS/JSON 피드를 받아오고 skill 기반 컬렉션 업데이트를 내보냅니다. 워크스페이스와 저장해 둔 모든 프로젝트 디렉터리가 대상입니다. 피드를 하나도 등록하지 않았다면 아무것도 하지 않습니다.",
@@ -603,6 +604,7 @@ export const ko: Messages = {
     empty: "이 파일에는 제목이 없습니다.",
   },
   fileHistory: fileHistoryKo,
+  dirConfigSave: dirConfigSaveKo,
   focusMode: focusModeKo,
   settingsControls: settingsControlsKo,
   ...filesTreeKo,
