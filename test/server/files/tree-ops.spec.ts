@@ -186,6 +186,27 @@ describe("renameEntry", () => {
     expect(readFileSync(from, "utf8")).toBe("a");
   });
 
+  // An editor saved a new file at the OLD name between the link and its removal: that save is kept, as
+  // a plain rename would have kept it.
+  it("keeps a file saved at the old name while the rename was in between", () => {
+    const root = tmp();
+    const [from, to] = [path.join(root, "a.md"), path.join(root, "c.md")];
+    writeFileSync(from, "a");
+    const realLink = fs.linkSync.bind(fs);
+    const saved = vi.spyOn(fs, "linkSync").mockImplementation((existing, target) => {
+      realLink(existing, target);
+      rmSync(from);
+      writeFileSync(from, "saved meanwhile");
+    });
+    try {
+      expect(renameEntry(from, to, LINKING)).toBe("renamed");
+    } finally {
+      saved.mockRestore();
+    }
+    expect(readFileSync(from, "utf8")).toBe("saved meanwhile");
+    expect(readFileSync(to, "utf8")).toBe("a");
+  });
+
   // The old name vanished between the link and its removal: the file is under the new name, so the
   // rename did happen and says so.
   it("says renamed when the old name was removed by someone else in between", () => {

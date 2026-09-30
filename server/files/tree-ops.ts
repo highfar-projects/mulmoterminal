@@ -89,6 +89,10 @@ function renameFileNoReplace(from: string, to: string): "renamed" | "exists" {
     fs.renameSync(from, to);
     return "renamed";
   }
+  // Another writer may have saved a NEW file at the old name since the link (an editor's atomic save):
+  // that one is theirs and stays — as it would after a plain `rename`. Narrows the window; POSIX has no
+  // "unlink only this inode".
+  if (!sameFile(from, to)) return "renamed";
   try {
     fs.unlinkSync(from);
   } catch (err) {
@@ -102,11 +106,20 @@ function renameFileNoReplace(from: string, to: string): "renamed" | "exists" {
   return "renamed";
 }
 
+/** Whether both names still hold the one file the link made; false when either is gone or replaced. */
+function sameFile(a: string, b: string): boolean {
+  try {
+    return fs.lstatSync(a).ino === fs.lstatSync(b).ino;
+  } catch {
+    return false;
+  }
+}
+
 /** Remove `to` only if it is still the link just made (another writer may have replaced it since), and
  *  never a folder; a failure here must not hide the error the caller is about to report. */
 function takeBackLink(from: string, to: string): void {
   try {
-    if (fs.lstatSync(to).ino === fs.lstatSync(from).ino) fs.unlinkSync(to);
+    if (sameFile(to, from)) fs.unlinkSync(to);
   } catch {
     // Left as it is: the caller's own error is the one worth reporting.
   }
