@@ -18,6 +18,7 @@ import { commandPaletteEn } from "./commandPalette/en";
 import { focusModeEn } from "./focusMode/en";
 import { fileHistoryEn } from "./fileHistory/en";
 import { dirConfigSaveEn } from "./dirConfigSave/en";
+import { themeEditorEn } from "./themeEditor/en";
 import { settingsControlsEn } from "./settingsControls/en";
 import { shortcutsEn } from "./shortcuts/en";
 import { filesTreeEn } from "./filesTree/en";
@@ -627,6 +628,7 @@ export const en = {
   },
   fileHistory: fileHistoryEn,
   dirConfigSave: dirConfigSaveEn,
+  themeEditor: themeEditorEn,
   focusMode: focusModeEn,
   settingsControls: settingsControlsEn,
   ...filesTreeEn,
