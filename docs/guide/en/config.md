@@ -1287,9 +1287,7 @@ already have and edit from there. Every key below is checked against the traps i
 add for the platform your browser is on and adds it in one click: on a Mac the Up/Down pair of
 **Arrows** below plus the line-editing `send` entries (`Cmd+←` / `Cmd+→` / `Cmd+Backspace`); on
 Windows and Linux all four **Arrows**. It only fills actions that are unbound and keys that no
-binding already uses — a binding you set keeps its key — and the keys work at once. (Like every
-keymap write, it drops entries this version does not recognise, such as an action a newer release
-added.)
+binding already uses — a binding you set keeps its key — and the keys work at once.
 
 **Minimal — just get into the zoom and back**
 
@@ -2179,10 +2177,12 @@ What you write here appears in an empty cell's launcher under **OR RUN A SCRIPT*
 
 Every MulmoTerminal on the machine reads and writes this one file, so a key written by a newer
 version can be saved over by an older one. It isn't: **a top-level key this build doesn't
-recognise is written back untouched.** Run 2.4 and 2.2 side by side, or downgrade for an
-afternoon, and the newer version's settings are still there when you come back.
+recognise is written back untouched**, and so is a `keymap` entry naming an action it doesn't know.
+Run 2.4 and 2.2 side by side, or downgrade for an afternoon, and the newer version's settings are
+still there when you come back.
 
-A typo survives the same way — `copyOnSlect` stays in the file rather than being quietly dropped.
+A typo survives the same way — `copyOnSlect`, or a keymap entry for `zoom-toogle`, stays in the file
+rather than being quietly dropped (the startup warning names the keymap one; remove it by editing the file).
 That is the intended trade: a setting that "doesn't work" is easier to spot when the line is still
 there to look at.
 

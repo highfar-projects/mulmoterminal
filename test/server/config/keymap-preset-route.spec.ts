@@ -60,6 +60,15 @@ describe("POST /api/config/keymap-preset", () => {
     expect(onDisk().keymap["files-search"]).toBe("Cmd+Shift+g");
   });
 
+  // An action a newer mulmoterminal added is not one this build lists — and not one it may delete (#2650).
+  it("keeps an entry for an action this version does not know", async () => {
+    const { app, onDisk } = await mountAgainstTempHome({ keymap: { "some-future-action": "Ctrl+j", "files-find": "F2" } });
+    const res = await post(app, { platform: "other", expected: shown({ "files-find": "F2" }) });
+    expect(res.status).toBe(200);
+    expect(onDisk().keymap).toMatchObject({ "some-future-action": "Ctrl+j", "files-find": "F2", "zoom-toggle": "Alt+ArrowUp" });
+    expect(res.body).not.toHaveProperty(["keymap", "some-future-action"]); // the tab gets what this build acts on
+  });
+
   // Written since, and it changes what the list promised: nothing is written, and the file's keymap
   // comes back for the list to be drawn again.
   it("writes nothing when the file makes the list different, and answers the file's keymap", async () => {

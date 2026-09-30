@@ -597,6 +597,13 @@ export function sanitizeKeymap(input: unknown): Keymap {
   return { ...Object.fromEntries(entries), ...(send.length ? { send } : {}) };
 }
 
+/** The keymap entries named for an action this build does not know — what a newer version wrote.
+ *  `sanitizeKeymap` drops them, so a writer carries them over from the file (see unknownConfigKeys). */
+export function unrecognisedKeymapEntries(input: unknown): Record<string, unknown> {
+  if (!isRecord(input)) return {};
+  return Object.fromEntries(Object.entries(input).filter(([name]) => name !== "send" && !isKeymapAction(name)));
+}
+
 // An entry survives only if it names a parseable key AND carries bytes to send. An empty `send`
 // is dropped entirely rather than kept as `[]`, so an absent and an emptied list look the same
 // to everything downstream.
