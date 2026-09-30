@@ -106,6 +106,7 @@ describe("the model choice", () => {
     ["router|vendor/big", { set: { provider: "router", model: "vendor/big" }, unset: [] }],
     ["|claude-x", { set: { model: "claude-x" }, unset: ["provider"] }],
     ["router|", { set: { provider: "router" }, unset: ["model"] }],
+    ["router|vendor/a|b", { set: { provider: "router", model: "vendor/a|b" }, unset: [] }],
   ])("saves %j as %j", (choice, edit) => {
     expect(editForModelChoice(choice)).toEqual(edit);
   });

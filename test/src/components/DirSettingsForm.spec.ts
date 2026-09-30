@@ -12,7 +12,7 @@ const detail = (formValues: Record<string, unknown>, local: string[] = []) =>
 let sent: unknown[] = [];
 let answer: () => Response = () => new Response("{}");
 
-// What /api/launch-options offers the model select: one configured backend with one model.
+// What /api/launch-options answers: a backend a session can start on, and one it cannot (no key).
 const LAUNCH_OPTIONS = {
   anyReady: true,
   providers: [
@@ -23,6 +23,16 @@ const LAUNCH_OPTIONS = {
       tokenEnv: "ROUTER_KEY",
       models: [
         { provider: "router", id: "vendor/big", label: "Big", contextLength: 200000, pricePerMTok: { input: 1, output: 2 }, trials: { status: "unmeasured" } },
+      ],
+    },
+    {
+      id: "nokey",
+      label: "No key",
+      ready: false,
+      reason: "provider 'nokey' needs NOKEY_KEY in the server's environment",
+      tokenEnv: "NOKEY_KEY",
+      models: [
+        { provider: "nokey", id: "vendor/small", label: "Small", contextLength: 8000, pricePerMTok: { input: 1, output: 1 }, trials: { status: "unmeasured" } },
       ],
     },
   ],
@@ -188,7 +198,9 @@ describe("DirSettingsForm", () => {
     expect(sent).toEqual([{ cwd: "/p", set: { colors: { red: "#ff0000", blue: "#0000ff" } }, unset: [] }]);
   });
 
-  it("offers the configured models, and writes the backend and the model together", async () => {
+  // A provider the server cannot start a session on is not a choice: as this directory's default,
+  // every cell here would refuse to start. The launch picker leaves it out for the same reason.
+  it("offers the configured models of the providers that can start a session, and writes the backend and the model together", async () => {
     const wrapper = mountForm({});
     await flushPromises();
     const select = wrapper.find('[data-testid="dir-form-model-select"]');
@@ -196,6 +208,13 @@ describe("DirSettingsForm", () => {
     await select.setValue("router|vendor/big");
     await flushPromises();
     expect(sent).toEqual([{ cwd: "/p", set: { provider: "router", model: "vendor/big" }, unset: [] }]);
+  });
+
+  it("still shows a file's choice on a provider that is not ready", async () => {
+    const wrapper = mountForm({ provider: "nokey", model: "vendor/small" });
+    await flushPromises();
+    const values = wrapper.findAll('[data-testid="dir-form-model-select"] option').map((option) => option.attributes("value"));
+    expect(values).toEqual(["", "nokey|vendor/small", "router|vendor/big"]);
   });
 
   it("keeps showing a model choice the list does not hold, and 'Use global' takes both keys out", async () => {

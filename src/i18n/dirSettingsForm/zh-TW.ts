@@ -31,7 +31,6 @@ export const dirSettingsFormZhTW = {
   boolOff: "不加上",
   modelDefault: "不指定（預設模型）",
   modelUnlisted: "檔案中的值：{choice}",
-  modelNotReady: "{label}（未就緒）",
   addDirs: {
     hint: "此目錄的工作階段還可以讀寫的其他目錄（Claude Code 的 --add-dir）。相對路徑以此目錄為基準解析，不存在的目錄不會使用。",
     entry: "附加目錄 {index}",

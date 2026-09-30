@@ -31,7 +31,6 @@ export const dirSettingsFormKo = {
   boolOff: "붙이지 않음",
   modelDefault: "지정 안 함 (기본 모델)",
   modelUnlisted: "파일의 값: {choice}",
-  modelNotReady: "{label} (준비 안 됨)",
   addDirs: {
     hint: "이 디렉터리의 세션이 함께 읽고 편집할 수 있는 디렉터리(Claude Code의 --add-dir). 상대 경로는 이 디렉터리 기준으로 풀고, 존재하지 않는 경로는 쓰지 않습니다.",
     entry: "추가 디렉터리 {index}",

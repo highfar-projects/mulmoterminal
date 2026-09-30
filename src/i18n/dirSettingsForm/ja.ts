@@ -31,7 +31,6 @@ export const dirSettingsFormJa = {
   boolOff: "付けない",
   modelDefault: "指定しない（既定のモデル）",
   modelUnlisted: "ファイルの値: {choice}",
-  modelNotReady: "{label}（未準備）",
   addDirs: {
     hint: "このディレクトリのセッションが読み書きしてよい別のディレクトリ（Claude Code の --add-dir）。相対パスはこのディレクトリから解決し、存在しないものは使われません。",
     entry: "追加のディレクトリ {index}",

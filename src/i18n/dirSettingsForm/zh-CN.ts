@@ -31,7 +31,6 @@ export const dirSettingsFormZhCN = {
   boolOff: "不添加",
   modelDefault: "不指定（默认模型）",
   modelUnlisted: "文件中的值：{choice}",
-  modelNotReady: "{label}（未就绪）",
   addDirs: {
     hint: "此目录的会话还可以读写的其他目录（Claude Code 的 --add-dir）。相对路径以此目录为基准解析，不存在的目录不会使用。",
     entry: "附加目录 {index}",

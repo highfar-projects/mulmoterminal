@@ -57,7 +57,10 @@ export function currentModelChoice(values: Record<string, unknown>): string {
  *  launch picks; a choice writes both, and a half left empty is taken out rather than written empty. */
 export function editForModelChoice(choice: string): DirConfigEdit {
   if (choice === "") return { set: {}, unset: [...DIR_FORM_MODEL_KEYS] };
-  const [provider = "", model = ""] = choice.split(MODEL_CHOICE_SEPARATOR);
+  // At the FIRST separator: a provider id cannot hold one, a model id could.
+  const at = choice.indexOf(MODEL_CHOICE_SEPARATOR);
+  const provider = at === -1 ? "" : choice.slice(0, at);
+  const model = at === -1 ? choice : choice.slice(at + 1);
   const halves: [DirFormKey, string][] = [
     ["provider", provider],
     ["model", model],

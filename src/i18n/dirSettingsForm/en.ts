@@ -31,7 +31,6 @@ export const dirSettingsFormEn = {
   boolOff: "Don't add",
   modelDefault: "Not set here (the default model)",
   modelUnlisted: "In the file: {choice}",
-  modelNotReady: "{label} (not ready)",
   addDirs: {
     hint: "Directories this directory's sessions may also read and edit (Claude Code's --add-dir). A relative path is resolved against this directory; one that does not exist is skipped.",
     entry: "Extra directory {index}",
