@@ -12,6 +12,7 @@ import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { useI18n } from "vue-i18n";
 import { lastSegment } from "../../common/pathSegments";
 import { DIR_CONFIG_FILE, ensureDirConfigFile } from "./dirConfigOpen";
+import DirSettingsForm from "./settings/DirSettingsForm.vue";
 
 const props = defineProps<{ paths: string[] }>();
 // Asks the host to open `name` in `dir` in the Files view; Settings closes itself to show it.
@@ -49,6 +50,11 @@ async function load(path: string) {
     // Leave the row unloaded so expanding it again retries; the template says nothing is known.
     loaded.value = new Set([...loaded.value].filter((p) => p !== path));
   }
+}
+
+// A save answers with the directory as it now is, which replaces what the row was showing.
+function onSaved(path: string, detail: DirConfigDetailView) {
+  details.value = { ...details.value, [path]: detail };
 }
 
 // A directory removed from the list (a preset was deleted) must not keep a stale entry around.
@@ -156,6 +162,7 @@ watch(
                 Not settings this app reads (a typo?): <code>{{ details[path].source.unknown.join(", ") }}</code>
               </p>
             </template>
+            <DirSettingsForm v-if="details[path].exists" :path="path" :detail="details[path]" @saved="(detail) => onSaved(path, detail)" />
           </template>
           <p v-else class="m-0 text-dim">Reading…</p>
         </div>

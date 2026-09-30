@@ -19,6 +19,7 @@ import { focusModeEn } from "./focusMode/en";
 import { fileHistoryEn } from "./fileHistory/en";
 import { dirConfigSaveEn } from "./dirConfigSave/en";
 import { dirConfigOpenEn } from "./dirConfigOpen/en";
+import { dirSettingsFormEn } from "./dirSettingsForm/en";
 import { themeEditorEn } from "./themeEditor/en";
 import { headerChipsEn } from "./headerChips/en";
 import { headerButtonsEn } from "./headerButtons/en";
@@ -644,6 +645,7 @@ export const en = {
   fileHistory: fileHistoryEn,
   dirConfigSave: dirConfigSaveEn,
   dirConfigOpen: dirConfigOpenEn,
+  dirSettingsForm: dirSettingsFormEn,
   themeEditor: themeEditorEn,
   headerChips: headerChipsEn,
   headerButtons: headerButtonsEn,

@@ -6,6 +6,7 @@ import { focusModeJa } from "./focusMode/ja";
 import { fileHistoryJa } from "./fileHistory/ja";
 import { dirConfigSaveJa } from "./dirConfigSave/ja";
 import { dirConfigOpenJa } from "./dirConfigOpen/ja";
+import { dirSettingsFormJa } from "./dirSettingsForm/ja";
 import { themeEditorJa } from "./themeEditor/ja";
 import { headerChipsJa } from "./headerChips/ja";
 import { headerButtonsJa } from "./headerButtons/ja";
@@ -625,6 +626,7 @@ export const ja: Messages = {
   fileHistory: fileHistoryJa,
   dirConfigSave: dirConfigSaveJa,
   dirConfigOpen: dirConfigOpenJa,
+  dirSettingsForm: dirSettingsFormJa,
   themeEditor: themeEditorJa,
   headerChips: headerChipsJa,
   headerButtons: headerButtonsJa,

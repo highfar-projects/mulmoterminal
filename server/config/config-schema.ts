@@ -27,6 +27,7 @@ import { DIR_ICON_MAX_CHARS } from "../../common/dirIcon.js";
 import { HEADER_STATUS_KEYS, HEADER_STATUS_TINTS, sanitizeHeaderStatusColors, sanitizeHeaderStatusTint } from "../../common/headerStatusColors.js";
 import type { QuickCommand } from "../../common/quickCommands.js";
 import { isRecord } from "../../common/isRecord.js";
+import type { DirConfigKey } from "../../common/dirConfigSource.js";
 import { HEADER_ACTIONS } from "../../common/headerActions.js";
 import {
   ENV_NAME_RE,
@@ -599,6 +600,11 @@ const writableDirConfigSchema = z.object({
   // distinct value, exported into its terminals. Omit and nothing is set, as before.
   worktreeEnv: worktreeEnvSchema.optional(),
 });
+
+/** Whether `value` is one the file may hold under `key` — the same rule the Files pane's editor marks. */
+export function isWritableDirConfigValue(key: DirConfigKey, value: unknown): boolean {
+  return writableDirConfigSchema.shape[key].safeParse(value).success;
+}
 
 export function dirConfigJsonSchema(): Record<string, unknown> {
   return z.toJSONSchema(writableDirConfigSchema);

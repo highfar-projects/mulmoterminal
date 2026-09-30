@@ -40,6 +40,8 @@ export const DIR_CONFIG_KEYS = [
   "worktreeEnv",
 ] as const;
 
+export type DirConfigKey = (typeof DIR_CONFIG_KEYS)[number];
+
 export interface DirConfigSource {
   // Keys the file set that the app is using.
   applied: string[];
