@@ -5,7 +5,22 @@
       "title": "業務委託契約書の改定を比べる",
       "description": "見本の業務委託契約書の旧版（kyu.txt）と改定版（shin.txt）を条ごとに対応づけ、委託料や報告の回数が変わったこと、報告の条が足され、成果物の条が消えて契約期間の条が繰り上がったことを新旧対照表にする。原本は変えない。",
       "base": "docs",
-      "answers": { "old": "kyu.txt", "new": "shin.txt", "focus": "" }
+      "answers": {
+        "old": "kyu.txt",
+        "new": "shin.txt",
+        "focus": ""
+      }
+    },
+    {
+      "id": "ryohi-kaitei",
+      "title": "出張旅費規程の改定を比べる",
+      "description": "見本の出張旅費規程の旧版（kyu.txt）と改定版（shin.txt）を条ごとに対応づけ、日当と宿泊費の上限が上がったこと、出張を命じない場合がただし書きで足されたこと、回数券の条が消えて精算の条が繰り上がり期限が短くなったこと、施行の条が足されたことを新旧対照表にする。原本は変えない。",
+      "base": "docs",
+      "answers": {
+        "old": "kyu.txt",
+        "new": "shin.txt",
+        "focus": ""
+      }
     }
   ]
 }
