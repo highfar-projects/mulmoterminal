@@ -2,7 +2,16 @@
 // DISK. Entries are named by id, which the loader keeps unique across the list, so a remove or move
 // cannot land on a different entry than the one pressed.
 import type { Express, Response } from "express";
-import { entriesMoved, entriesWithAdded, entriesWithout, isEditableRun, type ButtonProblem, type NewButton } from "../../common/headerButtonEntries.js";
+import {
+  entriesMoved,
+  entriesWithAdded,
+  entriesWithEdited,
+  entriesWithout,
+  isEditableRun,
+  type ButtonDraft,
+  type ButtonProblem,
+  type NewButton,
+} from "../../common/headerButtonEntries.js";
 import type { AppConfig } from "./app-config.js";
 import type { MutateOnDisk } from "./agent-entry-routes.js";
 import { DEFAULT_BUTTONS } from "./header-config.js";
@@ -12,6 +21,11 @@ import { requestBody } from "../routes/requestBody.js";
 type Changed = { entries: (HeaderEntry | NewButton)[] } | { problem: ButtonProblem };
 
 const text = (value: unknown): string => (typeof value === "string" ? value : "");
+
+function draftFrom(body: Record<string, unknown>): ButtonDraft | null {
+  if (!isEditableRun(body.run)) return null;
+  return { label: text(body.label), icon: text(body.icon), run: body.run, payload: text(body.payload), target: text(body.target), when: text(body.when) };
+}
 
 function changeButtons(res: Response, mutate: MutateOnDisk, change: (base: AppConfig) => Changed): void {
   void mutate(res, {
@@ -30,17 +44,17 @@ function changeButtons(res: Response, mutate: MutateOnDisk, change: (base: AppCo
 
 export function mountHeaderButtonRoutes(app: Express, mutate: MutateOnDisk): void {
   app.post("/api/config/buttons/add", (req, res) => {
-    const body = requestBody(req.body);
-    if (!isEditableRun(body.run)) return res.status(400).json({ error: "run must be shell, input, open or action" });
-    const draft = {
-      label: text(body.label),
-      icon: text(body.icon),
-      run: body.run,
-      payload: text(body.payload),
-      target: text(body.target),
-      when: text(body.when),
-    };
+    const draft = draftFrom(requestBody(req.body));
+    if (draft === null) return res.status(400).json({ error: "run must be shell, input, open or action" });
     return changeButtons(res, mutate, (base) => entriesWithAdded(base.buttons, DEFAULT_BUTTONS, draft));
+  });
+
+  app.post("/api/config/buttons/edit", (req, res) => {
+    const body = requestBody(req.body);
+    const id = text(body.id);
+    const draft = draftFrom(body);
+    if (!id || draft === null) return res.status(400).json({ error: "id and a run of shell, input, open or action are required" });
+    return changeButtons(res, mutate, (base) => entriesWithEdited(base.buttons, DEFAULT_BUTTONS, id, draft));
   });
 
   app.post("/api/config/buttons/remove", (req, res) => {

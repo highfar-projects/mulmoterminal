@@ -13,7 +13,7 @@ is the thing to get right, and it has no UI anywhere.
 
 | File | Applies to | Settings UI |
 |---|---|---|
-| `~/.mulmoterminal/config.json` → `buttons` | every directory | Settings → Header buttons and chips: add a `shell`, `input`, `open` or `action` button, remove or move any top-level entry, back to the built-in set. Folders are written here |
+| `~/.mulmoterminal/config.json` → `buttons` | every directory | Settings → Header buttons and chips: add a `shell`, `input`, `open` or `action` button, edit one in place (id, `order` and `emoji` kept), remove or move any top-level entry, back to the built-in set. Folders are written here |
 | `~/.mulmoterminal/config.json` → `chips` | every directory | Settings → Header buttons and chips (add, remove, reorder, back to the default set) |
 | `<project>/.mulmoterminal.json` → `buttons` / `chips` | that project | **none** |
 
