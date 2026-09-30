@@ -1,7 +1,7 @@
 // The report says what was polished, what was checked, and what was left as it was — naming every file.
 import { existsSync, readFileSync } from "node:fs";
 import { fromBase } from "./base.mjs";
-import { readRecord, unreportedWriterItems, writerItems } from "./viewpoints.mjs";
+import { readRecord, sectionText, unreportedWriterItems, writerItems } from "./viewpoints.mjs";
 const { fail, readJson } = await import(fromBase("chaff.mjs"));
 const { missingSections } = await import(fromBase("markdown.mjs"));
 const { unreportedDismissals, wrongCases } = await import(fromBase("dismissals.mjs"));
@@ -41,6 +41,6 @@ const questions = writerItems(Object.fromEntries(Object.entries(readRecord()).fi
 if (questions.length > 0) {
   const lacking = missingSections(text, WRITER_SECTION);
   if (lacking.length > 0) fail(`${REPORT} lacks the section ${lacking.join(", ")}: ${questions.length} question(s) for the writer`);
-  const unasked = unreportedWriterItems(questions, text);
-  if (unasked.length > 0) fail(`${REPORT} does not quote, word for word, the place each question for the writer is about: ${unasked.join(", ")}`);
+  const unasked = unreportedWriterItems(questions, sectionText(text, WRITER_SECTION[0]));
+  if (unasked.length > 0) fail(`${REPORT}: its part for the writer does not name the file and quote, word for word, the place of: ${unasked.join(", ")}`);
 }

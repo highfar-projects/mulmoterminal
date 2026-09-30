@@ -17,4 +17,6 @@ export declare const viewpointProblems: (input: {
   readonly current: string;
 }) => string[];
 export declare const writerItems: (record: unknown) => WriterItem[];
-export declare const unreportedWriterItems: (items: readonly WriterItem[], reportText: string) => string[];
+export declare const quotedIn: (quote: unknown, text: string) => boolean;
+export declare const sectionText: (markdown: string, names: readonly string[]) => string;
+export declare const unreportedWriterItems: (items: readonly WriterItem[], section: string) => string[];

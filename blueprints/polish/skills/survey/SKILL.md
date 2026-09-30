@@ -53,7 +53,8 @@ alone, and do not ask the person how to go on.
 ```
 
 The check measures every Markdown or text file under the named paths again, and refuses an empty list while
-one that is not in `avoided` has a finding.
+one that is not in `avoided` has a finding. `avoided` may hold only files at or under a path the answer `avoid` names;
+when `avoid` describes files in words rather than paths, ask the person which files it means.
 
 ## Done when
 

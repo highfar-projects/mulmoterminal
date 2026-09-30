@@ -3,7 +3,15 @@
 // record is the only proof the reading happened, so every rule here is one an agent could otherwise skip.
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { readCatalog, unreportedWriterItems, viewpointProblems, viewpointsFor, writerItems } from "../../../blueprints/polish/checks/viewpoints.mjs";
+import {
+  quotedIn,
+  readCatalog,
+  sectionText,
+  unreportedWriterItems,
+  viewpointProblems,
+  viewpointsFor,
+  writerItems,
+} from "../../../blueprints/polish/checks/viewpoints.mjs";
 import { readKinds } from "../../../blueprints/polish/checks/kind.mjs";
 import { PACKS } from "./docsPackHarness";
 
@@ -114,9 +122,54 @@ describe("the questions for the writer in the report", () => {
     expect(writerItems(undefined)).toEqual([]);
   });
 
-  it("names the questions whose quotation the report does not carry, spacing aside", () => {
+  it("names the questions the writer's part does not carry, by file and quotation, spacing aside", () => {
     const items = writerItems(record);
     expect(unreportedWriterItems(items, "- r.md 「ご確認を お願いします」\n")).toEqual(["s.md actionable-ask"]);
-    expect(unreportedWriterItems(items, "ご確認をお願いします / 至急対応")).toEqual([]);
+    expect(unreportedWriterItems(items, "- r.md ご確認をお願いします\n- s.md 至急対応")).toEqual([]);
+    expect(unreportedWriterItems(items, "- ご確認をお願いします\n- 至急対応")).toEqual(["r.md actionable-ask", "s.md actionable-ask"]);
+  });
+
+  it("wants a quotation as many times as there are questions quoting it", () => {
+    const twice = writerItems({
+      "a.md": [
+        { id: "actionable-ask", verdict: "writer", quote: "至急", note: "誰が？" },
+        { id: "agentless-passive", verdict: "writer", quote: "至急", note: "いつ？" },
+      ],
+    });
+    expect(unreportedWriterItems(twice, "- a.md 至急 誰が？")).toEqual(["a.md agentless-passive"]);
+    expect(unreportedWriterItems(twice, "- a.md 至急 誰が？\n- a.md 至急 いつ？")).toEqual([]);
+  });
+});
+
+describe("a quotation", () => {
+  it("is found within a paragraph, across a wrapped line", () => {
+    expect(quotedIn("ご確認を お願いします", "前の文。\nご確認を\nお願いします。")).toBe(true);
+  });
+
+  it("is not made of words from two paragraphs, nor one that spans a blank line", () => {
+    expect(quotedIn("増えた。増加", ORIGINAL)).toBe(false);
+    expect(quotedIn("9月は増えた。\n\n増加", ORIGINAL)).toBe(false);
+  });
+
+  it.each([
+    ["", ORIGINAL],
+    ["   ", ORIGINAL],
+    [undefined, ORIGINAL],
+    [3, ORIGINAL],
+  ])("is nothing for %j", (quote, text) => {
+    expect(quotedIn(quote, text)).toBe(false);
+  });
+});
+
+describe("the writer's part of a report", () => {
+  const REPORT = "# 報告\n\n## 整えたもの\nx\n\n## 書いた人に確かめてほしいこと\n- a\n### 小見出し\n- b\n\n## 直さずに残したもの\n- c\n";
+
+  it("runs from its heading to the next section, keeping deeper headings", () => {
+    expect(sectionText(REPORT, ["書いた人に確かめてほしいこと", "For the writer"])).toBe("- a\n### 小見出し\n- b\n");
+    expect(sectionText("## For the writer\n- a", ["書いた人に確かめてほしいこと", "For the writer"])).toBe("- a");
+  });
+
+  it("is empty when the report has no such part", () => {
+    expect(sectionText(REPORT, ["For the writer"])).toBe("");
   });
 });

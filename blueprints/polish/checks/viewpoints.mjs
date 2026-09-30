@@ -19,14 +19,20 @@ export const readRecord = () => {
   return record !== null && typeof record === "object" && !Array.isArray(record) ? record : {};
 };
 
-// Line breaks and spacing aside: a quotation copied across a wrapped line is still the same words.
+// Line breaks and spacing aside: a quotation copied across a wrapped line is still the same words. A blank line is
+// not spacing: it ends a paragraph, and words from two paragraphs are not a quotation of either.
 const squash = (text) => String(text).replace(/\s+/gu, "");
 const hasText = (value) => typeof value === "string" && squash(value) !== "";
+const BLANK_LINE = /\n[^\S\n]*\n/u;
+const blocksOf = (text) => String(text).split(BLANK_LINE);
+
+/** Whether `quote` is in `text`, within one paragraph or block, spacing and wrapping aside. */
+export const quotedIn = (quote, text) => hasText(quote) && blocksOf(text).some((block) => squash(block).includes(squash(quote)));
 
 /** The viewpoint ids for `genre` in `catalog`; none without a genre or for a genre the catalog does not cover. */
 export const viewpointsFor = (catalog, genre) => (genre ? (catalog.genres?.[genre] ?? []) : []);
 
-const quoted = (entry, text) => hasText(entry.quote) && squash(text).includes(squash(entry.quote));
+const quoted = (entry, text) => quotedIn(entry.quote, text);
 
 // A fix the catalog allows, quoting what was there and is there no longer.
 const fixedProblems = (entry, catalog, original, current) => {
@@ -80,6 +86,28 @@ export const writerItems = (record) =>
     (Array.isArray(entries) ? entries : []).filter((entry) => entry?.verdict === "writer").map((entry) => ({ file, ...entry })),
   );
 
-/** The writer's questions a report does not carry: each needs its quotation, word for word. */
-export const unreportedWriterItems = (items, reportText) =>
-  items.filter((item) => !squash(reportText).includes(squash(item.quote))).map((item) => `${item.file} ${item.id}`);
+/** The text under the first `## ` heading starting with one of `names`, up to the next `#` or `##` heading. */
+export const sectionText = (markdown, names) => {
+  const lines = String(markdown).split("\n");
+  const start = lines.findIndex((line) => line.startsWith("## ") && names.some((name) => line.slice(3).trim().startsWith(name)));
+  if (start < 0) return "";
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((line) => /^#{1,2} /u.test(line));
+  return rest.slice(0, end < 0 ? rest.length : end).join("\n");
+};
+
+const occurrences = (haystack, needle) => haystack.split(needle).length - 1;
+
+/**
+ * The writer's questions `section` (the report's part for them) does not carry: each needs its file named and its
+ * quotation word for word — as many times as there are questions quoting it.
+ */
+export const unreportedWriterItems = (items, section) => {
+  const flat = squash(section);
+  return items
+    .filter((item, index) => {
+      const same = items.slice(0, index + 1).filter((other) => squash(other.quote) === squash(item.quote)).length;
+      return !section.includes(item.file) || occurrences(flat, squash(item.quote)) < same;
+    })
+    .map((item) => `${item.file} ${item.id}`);
+};

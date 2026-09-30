@@ -32,7 +32,7 @@
     },
     "stacked-hedging": {
       "title": "ぼかしを重ねていないか",
-      "look": "Two or more hedges on one claim (〜と考えられる可能性があります, 〜かと思われます). One hedge may stay; removing the others leaves the claim as certain as the writer made it, no more.",
+      "look": "Two or more hedges on one claim (〜と考えられる可能性があります, 〜かと思われます). The only fix is taking out the extra ones so exactly one remains; the claim stays as certain as the writer made it. A claim with one hedge is fine; any other change to how certain it sounds is the writer's.",
       "fix": "may"
     },
     "agentless-passive": {

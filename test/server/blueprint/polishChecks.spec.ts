@@ -310,6 +310,8 @@ describeSh("polish: nothing to polish", () => {
   it("leaves out a document the person asked to leave alone, and only one they named", () => {
     writeFake("findings.json", { "docs/other.md": [{ rule: "sentence-length", level: "warning", file: "docs/other.md" }] });
     nothing(["docs/other.md"]);
+    expect(node("targets.mjs", ["survey"])).toMatchObject({ code: 1, stderr: expect.stringContaining("the answer avoid does not: docs/other.md") });
+    write(".blueprint/answers.json", { maxFiles: 3, targets: "docs", avoid: "docs/other.md" });
     expect(node("targets.mjs", ["survey"]).code).toBe(0);
     nothing(["docs/other.md", "elsewhere.md"]);
     expect(node("targets.mjs", ["survey"])).toMatchObject({ code: 1, stderr: expect.stringContaining("not among the named documents: elsewhere.md") });
@@ -339,13 +341,16 @@ describeSh("polish: nothing to polish", () => {
     });
   });
 
-  it('checks "avoided" on a list with files in it too: named, and not also chosen', () => {
+  it('checks "avoided" on a list with files in it too: named, asked for, and not also chosen', () => {
+    write(".blueprint/answers.json", { maxFiles: 3, targets: "docs", avoid: "docs/" });
     write(".blueprint/polish.json", { targets: [target("docs/setup.md")], avoided: ["elsewhere.md"] });
     expect(node("targets.mjs", ["survey"])).toMatchObject({ code: 1, stderr: expect.stringContaining("not among the named documents: elsewhere.md") });
     write(".blueprint/polish.json", { targets: [target("docs/setup.md")], avoided: ["docs/setup.md"] });
     expect(node("targets.mjs", ["survey"])).toMatchObject({ code: 1, stderr: expect.stringContaining("both chosen and left alone: docs/setup.md") });
     write(".blueprint/polish.json", { targets: [target("docs/setup.md")], avoided: ["docs/other.md"] });
     expect(node("targets.mjs", ["survey"]).code).toBe(0);
+    write(".blueprint/answers.json", { maxFiles: 3, targets: "docs", avoid: "docs/setup.md\n下書きは触らないで" });
+    expect(node("targets.mjs", ["survey"])).toMatchObject({ code: 1, stderr: expect.stringContaining("the answer avoid does not: docs/other.md") });
   });
 
   it('refuses an "avoided" that is not a list of files', () => {
@@ -378,13 +383,21 @@ describeSh("polish: a report is read for what a report needs", () => {
     expect(node("targets.mjs", ["verify"])).toEqual({ code: 0, stderr: "" });
   });
 
-  it("chooses a report even when chaff finds nothing in it, since it is still read for its viewpoints", () => {
+  it("chooses every report, up to the agreed number, even when chaff finds nothing, since each is read for its viewpoints", () => {
+    write("docs/second.md", "# 二つめ\n\n本文。\n");
     write(".blueprint/polish.json", { targets: [] });
     expect(node("targets.mjs", ["survey"])).toMatchObject({
       code: 1,
-      stderr: expect.stringContaining("a business/report is read for its viewpoints: docs/setup.md"),
+      stderr: expect.stringContaining(
+        "a business/report is read for its viewpoints: choose 2 of the named documents; not chosen: docs/second.md, docs/setup.md",
+      ),
     });
-    write(".blueprint/polish.json", { targets: [], avoided: ["docs/setup.md"] });
+    write(".blueprint/polish.json", { targets: [target("docs/setup.md")] });
+    expect(node("targets.mjs", ["survey"])).toMatchObject({ code: 1, stderr: expect.stringContaining("not chosen: docs/second.md") });
+    write(".blueprint/answers.json", { ...REPORT_KIND, maxFiles: 1 });
+    expect(node("targets.mjs", ["survey"]).code).toBe(0);
+    write(".blueprint/answers.json", { ...REPORT_KIND, avoid: "docs/second.md\ndocs/setup.md" });
+    write(".blueprint/polish.json", { targets: [], avoided: ["docs/second.md", "docs/setup.md"] });
     expect(node("targets.mjs", ["survey"]).code).toBe(0);
   });
 
@@ -402,7 +415,12 @@ describeSh("polish: a report is read for what a report needs", () => {
     report("");
     expect(node("report.mjs").stderr).toContain("lacks the section 書いた人に確かめてほしいこと / For the writer");
     report("\n## 書いた人に確かめてほしいこと\n- docs/setup.md: 頼みごと\n");
-    expect(node("report.mjs").stderr).toContain("does not quote, word for word, the place each question for the writer is about: docs/setup.md actionable-ask");
+    expect(node("report.mjs").stderr).toContain(
+      "its part for the writer does not name the file and quote, word for word, the place of: docs/setup.md actionable-ask",
+    );
+    // The quotation elsewhere in the report does not count: the question belongs in the writer's part.
+    report("\n項目を選べます\n\n## 書いた人に確かめてほしいこと\n- docs/setup.md 頼みごと\n");
+    expect(node("report.mjs").stderr).toContain("the place of: docs/setup.md actionable-ask");
     report("\n## 書いた人に確かめてほしいこと\n- docs/setup.md 「項目を選べます」 誰がいつまでに選びますか\n");
     expect(node("report.mjs")).toEqual({ code: 0, stderr: "" });
   });
