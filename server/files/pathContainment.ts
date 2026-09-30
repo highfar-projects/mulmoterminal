@@ -127,9 +127,10 @@ export function containForWatching(roots: Iterable<string>, candidatePath: strin
 //
 // Windows only: `con` is a perfectly ordinary filename on POSIX, and refusing it there would
 // break a real file for no reason.
-// COM0/LPT0 and the superscript digits ¹²³ are reserved too, and so are the console's CONIN$/CONOUT$
-// (Microsoft's "Naming Files, Paths, and Namespaces"). A name Windows maps to a device is no file.
-const DEVICE_DIGITS = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "\u00B9", "\u00B2", "\u00B3"];
+// The superscript digits ¹²³ are reserved too, and so are the console's CONIN$/CONOUT$ (Microsoft's
+// "Naming Files, Paths, and Namespaces"). Not COM0/LPT0: listed there, but Windows opens them as files,
+// and refusing them would lock a real `com0.txt` out of the whole file API.
+const DEVICE_DIGITS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "\u00B9", "\u00B2", "\u00B3"];
 const WINDOWS_DEVICE_NAMES = new Set([
   "CON",
   "PRN",
@@ -140,6 +141,9 @@ const WINDOWS_DEVICE_NAMES = new Set([
   ...DEVICE_DIGITS.map((digit) => `COM${digit}`),
   ...DEVICE_DIGITS.map((digit) => `LPT${digit}`),
 ]);
+
+// ASCII letters only: `toUpperCase` turns a Turkish dotless ı into I, and `conın$` is no device.
+const asciiUpper = (text: string): string => text.replace(/[a-z]/g, (letter) => letter.toUpperCase());
 
 // Counted rather than matched: an anchored `[. ]+$` backtracks over a long run.
 function trimTrailingDotsAndSpaces(text: string): string {
@@ -157,7 +161,7 @@ export function namesAWindowsDevice(rel: string, platform: NodeJS.Platform = pro
     // an NTFS alternate data stream (and `NUL:` is the legacy device spelling), neither of
     // which stops the name in front of it being a device.
     const stem = trimTrailingDotsAndSpaces(segment.split(/[.:]/)[0] ?? "");
-    return WINDOWS_DEVICE_NAMES.has(stem.toUpperCase());
+    return WINDOWS_DEVICE_NAMES.has(asciiUpper(stem));
   });
 }
 

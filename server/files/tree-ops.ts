@@ -73,24 +73,27 @@ export function renameEntry(from: string, to: string): "renamed" | "exists" {
   return renameFileNoReplace(from, to);
 }
 
-// A disk that cannot hard-link (FAT, exFAT, some network shares) says so with one of these.
-const NO_HARD_LINKS = ["EPERM", "ENOTSUP", "EOPNOTSUPP", "EMLINK", "ENOSYS"];
-
 /** A file renamed without replacing one that appeared at `to` after the check above: `rename` would
- *  replace it, a hard link refuses an existing name. Where the disk cannot link, `rename` it is — the
- *  check above is then all there is, as before. A folder cannot be replaced by `rename` unless empty,
- *  and a symlink is not linked (macOS's `link` follows it), so both keep `rename`. */
+ *  replace it, a hard link refuses an existing name. Any other refusal of the link — a disk that cannot
+ *  link says so in many ways (Windows FAT answers EISDIR) — falls back to `rename`, as before this: the
+ *  check above is then all there is. A folder cannot be replaced by `rename` unless empty, and a symlink
+ *  is not linked (macOS's `link` follows it), so both keep `rename`. */
 function renameFileNoReplace(from: string, to: string): "renamed" | "exists" {
   try {
     fs.linkSync(from, to);
   } catch (err) {
-    const code = hasErrnoCode(err) ? err.code : undefined;
-    if (code === "EEXIST") return "exists";
-    if (code === undefined || !NO_HARD_LINKS.includes(code)) throw err;
+    if (hasErrnoCode(err) && err.code === "EEXIST") return "exists";
     fs.renameSync(from, to);
     return "renamed";
   }
-  fs.unlinkSync(from);
+  try {
+    fs.unlinkSync(from);
+  } catch (err) {
+    // The old name could not go (a file held open without delete sharing on Windows): take the new one
+    // back — the same file, so nothing is lost — and fail as a plain rename would have.
+    fs.rmSync(to, { force: true });
+    throw err;
+  }
   return "renamed";
 }
 

@@ -128,7 +128,7 @@ describe("renameEntry", () => {
   });
 
   // FAT, exFAT and some shares cannot hard-link; the rename still happens, as before.
-  it.each(["EPERM", "ENOTSUP", "EOPNOTSUPP"])("renames anyway on a disk that answers %s to a link", (code) => {
+  it.each(["EPERM", "ENOTSUP", "EOPNOTSUPP", "EISDIR", "EINVAL"])("renames anyway on a disk that answers %s to a link", (code) => {
     const root = tmp();
     writeFileSync(path.join(root, "a.md"), "a");
     const noLinks = vi.spyOn(fs, "linkSync").mockImplementation(() => {
@@ -140,6 +140,23 @@ describe("renameEntry", () => {
       noLinks.mockRestore();
     }
     expect(readFileSync(path.join(root, "c.md"), "utf8")).toBe("a");
+  });
+
+  // The old name could not be removed (a file held open without delete sharing on Windows): the new
+  // name is taken back, and the rename fails as a plain one would, with one name left.
+  it("leaves the file under its old name alone when the old name cannot be removed", () => {
+    const root = tmp();
+    writeFileSync(path.join(root, "a.md"), "a");
+    const busy = vi.spyOn(fs, "unlinkSync").mockImplementation(() => {
+      throw Object.assign(new Error("EBUSY"), { code: "EBUSY" });
+    });
+    try {
+      expect(() => renameEntry(path.join(root, "a.md"), path.join(root, "c.md"))).toThrow("EBUSY");
+    } finally {
+      busy.mockRestore();
+    }
+    expect(readFileSync(path.join(root, "a.md"), "utf8")).toBe("a");
+    expect(existsSync(path.join(root, "c.md"))).toBe(false);
   });
 
   it("renames a folder", () => {
