@@ -1,32 +1,15 @@
 // The global header buttons changed one entry at a time from Settings (#2622), against the config ON
 // DISK. Entries are named by id, which the loader keeps unique across the list, so a remove or move
-// cannot land on a different entry than the one pressed.
+// cannot land on a different entry than the one pressed. What each request does is decided in
+// header-entry-changes.ts, which a directory's buttons are changed through as well.
 import type { Express, Response } from "express";
-import { entriesMoved, entriesWithAdded, isEditableRun, type ButtonDraft, type ButtonProblem } from "../../common/headerButtonEntries.js";
-import {
-  entriesIntoFolder,
-  entriesOutOfFolder,
-  entriesWithEditedAnywhere,
-  entriesWithFolderEdited,
-  entriesWithoutAnywhere,
-  type EntryShape,
-  type FolderDestination,
-} from "../../common/headerButtonFolders.js";
 import type { AppConfig } from "./app-config.js";
 import type { MutateOnDisk } from "./agent-entry-routes.js";
 import { DEFAULT_BUTTONS } from "./header-config.js";
 import { requestBody } from "../routes/requestBody.js";
+import { buttonChangeFor, type ButtonsChanged } from "./header-entry-changes.js";
 
-type Changed = { entries: readonly EntryShape[] } | { problem: ButtonProblem };
-
-const text = (value: unknown): string => (typeof value === "string" ? value : "");
-
-function draftFrom(body: Record<string, unknown>): ButtonDraft | null {
-  if (!isEditableRun(body.run)) return null;
-  return { label: text(body.label), icon: text(body.icon), run: body.run, payload: text(body.payload), target: text(body.target), when: text(body.when) };
-}
-
-function changeButtons(res: Response, mutate: MutateOnDisk, change: (base: AppConfig) => Changed): void {
+function changeButtons(res: Response, mutate: MutateOnDisk, change: (base: AppConfig) => ButtonsChanged): void {
   void mutate(res, {
     refuse: (base) => {
       const changed = change(base);
@@ -41,64 +24,22 @@ function changeButtons(res: Response, mutate: MutateOnDisk, change: (base: AppCo
   });
 }
 
+// Everything but `reset` — a folder is made by putting a button into it, and goes when its last button
+// is taken out.
+const ACTIONS = ["add", "edit", "remove", "move", "into-folder", "out-of-folder", "folder-edit"] as const;
+
 export function mountHeaderButtonRoutes(app: Express, mutate: MutateOnDisk): void {
-  app.post("/api/config/buttons/add", (req, res) => {
-    const draft = draftFrom(requestBody(req.body));
-    if (draft === null) return res.status(400).json({ error: "run must be shell, input, open or action" });
-    return changeButtons(res, mutate, (base) => entriesWithAdded(base.buttons, DEFAULT_BUTTONS, draft));
+  ACTIONS.forEach((action) => {
+    app.post(`/api/config/buttons/${action}`, (req, res) => {
+      const change = buttonChangeFor(action, requestBody(req.body), DEFAULT_BUTTONS);
+      if (typeof change === "string") return res.status(400).json({ error: change });
+      return changeButtons(res, mutate, (base) => change(base.buttons));
+    });
   });
-
-  app.post("/api/config/buttons/edit", (req, res) => {
-    const body = requestBody(req.body);
-    const id = text(body.id);
-    const draft = draftFrom(body);
-    if (!id || draft === null) return res.status(400).json({ error: "id and a run of shell, input, open or action are required" });
-    return changeButtons(res, mutate, (base) => entriesWithEditedAnywhere(base.buttons, DEFAULT_BUTTONS, id, draft));
-  });
-
-  app.post("/api/config/buttons/remove", (req, res) => {
-    const id = text(requestBody(req.body).id);
-    if (!id) return res.status(400).json({ error: "id is required" });
-    return changeButtons(res, mutate, (base) => entriesWithoutAnywhere(base.buttons, DEFAULT_BUTTONS, id));
-  });
-
-  app.post("/api/config/buttons/move", (req, res) => {
-    const { id, delta } = requestBody(req.body);
-    if (typeof id !== "string" || !id || (delta !== -1 && delta !== 1)) return res.status(400).json({ error: "id and a delta of -1 or 1 are required" });
-    return changeButtons(res, mutate, (base) => entriesMoved(base.buttons, DEFAULT_BUTTONS, id, delta));
-  });
-
-  mountFolderRoutes(app, mutate);
 
   // Back to the built-in set: the key is removed rather than written as that set, so a later change
   // to the defaults reaches this user too.
   app.post("/api/config/buttons/reset", (_req, res) => {
     void mutate(res, { update: () => ({ buttons: null }), answer: (next) => res.json({ buttons: next.buttons }) });
-  });
-}
-
-// A folder is made by putting a button into it, and goes when its last button is taken out (#2622).
-function mountFolderRoutes(app: Express, mutate: MutateOnDisk): void {
-  app.post("/api/config/buttons/into-folder", (req, res) => {
-    const body = requestBody(req.body);
-    const id = text(body.id);
-    const folderId = text(body.folderId);
-    const destination: FolderDestination = folderId ? { folderId } : { label: text(body.folderLabel), icon: text(body.folderIcon) };
-    if (!id) return res.status(400).json({ error: "id is required" });
-    return changeButtons(res, mutate, (base) => entriesIntoFolder(base.buttons, DEFAULT_BUTTONS, id, destination));
-  });
-
-  app.post("/api/config/buttons/out-of-folder", (req, res) => {
-    const id = text(requestBody(req.body).id);
-    if (!id) return res.status(400).json({ error: "id is required" });
-    return changeButtons(res, mutate, (base) => entriesOutOfFolder(base.buttons, DEFAULT_BUTTONS, id));
-  });
-
-  app.post("/api/config/buttons/folder-edit", (req, res) => {
-    const body = requestBody(req.body);
-    const id = text(body.id);
-    if (!id) return res.status(400).json({ error: "id is required" });
-    const fields = { label: text(body.label), icon: text(body.icon), when: text(body.when) };
-    return changeButtons(res, mutate, (base) => entriesWithFolderEdited(base.buttons, DEFAULT_BUTTONS, id, fields));
   });
 }

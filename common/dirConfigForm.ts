@@ -24,6 +24,9 @@ export const DIR_FORM_KEYS = [
   "backgroundImage",
   "sound",
   "sounds",
+  "buttons",
+  "chips",
+  "commands",
 ] as const satisfies readonly DirConfigKey[];
 
 export type DirFormKey = (typeof DIR_FORM_KEYS)[number];

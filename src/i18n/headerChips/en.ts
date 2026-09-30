@@ -2,6 +2,8 @@ export const headerChipsEn = {
   title: "Chips in the terminal header",
   intro:
     "The read-outs in every terminal's header, in this order. A change reaches the open terminals at once; a project whose own .mulmoterminal.json lists chips shows that list instead.",
+  dirIntro: "Setting chips here replaces the global set for this directory.",
+  dirNone: "This directory sets no chips; the global ones apply.",
   defaultNote: "Not set: the terminals show the default set below. The first change here saves it together with that change.",
   none: "No chips: the header shows none.",
   builtins: {

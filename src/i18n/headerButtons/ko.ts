@@ -1,6 +1,10 @@
 export const headerButtonsKo = {
   title: "터미널 헤더의 버튼",
   intro: "모든 터미널 헤더에 있는 동작 버튼입니다. 프로젝트의 .mulmoterminal.json에 버튼 목록이 있으면 id별로 그 목록이 더해지거나 대신 쓰입니다.",
+  dirIntro: "이 디렉터리에서는 전체 헤더 버튼에 더해집니다 (같은 id면 대체). 전체 목록을 정하지 않았으면 기본 버튼 대신 여기의 버튼이 나옵니다.",
+  dirCommandsIntro:
+    "이 디렉터리의 명령 팔레트 항목입니다. 전체 항목에 더해집니다 (같은 id면 대체). 헤더 버튼과 같은 id는 나오지 않습니다. 새로 더하는 항목에는 버튼과 겹치지 않는 id가 붙습니다.",
+  dirNone: "이 디렉터리는 버튼을 더하지 않습니다. 전체 버튼이 나옵니다.",
   defaultNote: "설정되지 않았습니다. 헤더에는 기본 버튼(이 브랜치의 PR 열기)이 표시됩니다. 여기서 버튼을 추가해도 그 버튼은 남습니다.",
   none: "버튼이 없습니다. 헤더에 아무것도 표시되지 않습니다.",
   kinds: { shell: "명령", input: "에이전트에 입력", open: "열기", action: "셀 동작", folder: "폴더" },
@@ -48,6 +52,8 @@ export const headerButtonsKo = {
   ordered: "자체 order 값으로 정렬되므로 여기서 옮기지 않습니다",
   reset: "기본 버튼으로 되돌리기",
   hint: "명령·텍스트·URL·경로에는 {example} 등 헤더 스킬이 안내하는 변수를 쓸 수 있습니다. 표시 조건에는 isGitRepo 나 agent == claude 같은 조건을 씁니다. 행의 폴더 아이콘으로 그 버튼을 폴더에 넣습니다. 안의 버튼을 모두 빼면 폴더는 사라집니다.",
+  hintNoFolder:
+    "명령·텍스트·URL·경로에는 {example} 등 헤더 스킬이 안내하는 변수를 쓸 수 있습니다. 표시 조건에는 isGitRepo 나 agent == claude 같은 조건을 씁니다.",
   problems: {
     folder: "폴더는 헤더 스킬로 바꿉니다.",
     target: "버튼이 열 대상을 고르세요.",

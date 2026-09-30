@@ -1,6 +1,9 @@
 export const headerButtonsZhCN = {
   title: "终端标题栏的按钮",
   intro: "每个终端标题栏上的操作按钮。项目自己的 .mulmoterminal.json 列出了按钮时，会按 id 在那里追加或替换这些按钮。",
+  dirIntro: "在此目录中，这些会加入全局标题栏按钮（相同 id 则替换）。全局未设置按钮时，这里的按钮会代替内置按钮显示。",
+  dirCommandsIntro: "此目录的命令面板条目，加入全局条目（相同 id 则替换）。与标题栏按钮 id 相同的不会显示。新添加的条目会使用与按钮不重复的 id。",
+  dirNone: "此目录没有添加按钮，使用全局按钮。",
   defaultNote: "未设置：标题栏显示内置按钮（打开此分支的 PR）。在这里添加按钮后它仍会保留。",
   none: "没有按钮：标题栏什么也不显示。",
   kinds: { shell: "命令", input: "向代理输入", open: "打开", action: "操作单元格", folder: "文件夹" },
@@ -48,6 +51,7 @@ export const headerButtonsZhCN = {
   ordered: "按自身的 order 数值排列，因此这里不移动它",
   reset: "恢复内置按钮",
   hint: "命令、文字、URL 和路径中可以使用 {example} 等标题栏技能列出的变量。显示条件可写 isGitRepo 或 agent == claude 这样的条件。行上的文件夹图标会把该按钮放进文件夹；里面的按钮全部移出后，文件夹就会消失。",
+  hintNoFolder: "命令、文字、URL 和路径中可以使用 {example} 等标题栏技能列出的变量。显示条件可写 isGitRepo 或 agent == claude 这样的条件。",
   problems: {
     folder: "文件夹请用标题栏技能修改。",
     target: "请选择按钮要打开的内容。",

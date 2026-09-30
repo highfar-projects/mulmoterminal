@@ -6,17 +6,24 @@ import SettingsField from "../SettingsField.vue";
 import SettingsListRow from "./SettingsListRow.vue";
 import { SETTINGS_LIST } from "./sectionClasses";
 import { effectiveChips, isCellChipId, type ChipEntry, type ChipProblem } from "../../../common/headerChips";
-import { changeHeaderChips, globalHeaderChips, type ChipAction } from "../../composables/headerChipsConfig";
+import type { ChipAction } from "../../composables/headerChipsConfig";
+import { useChipsTarget } from "../../composables/headerEntriesTarget";
 import { addableBuiltins, chipRows } from "./headerChipsEditing";
 
-// The global header chips, one change at a time against the list on disk (#2622). An unconfigured
-// list shows the default set the cells draw, and the first change saves it along with that change.
+// The header chips, one change at a time against the list on disk (#2622): the global ones, or — when a
+// directory's Settings form provides the target (#2727) — that directory's. An unconfigured global list
+// shows the default set the cells draw, and the first change saves it along with that change; an
+// unconfigured directory list is empty, since the global chips are what apply there.
 const { t } = useI18n();
+const target = useChipsTarget();
+const isDir = target.scope === "dir";
+const configured = computed(() => target.chips.value);
+const listed = computed(() => (isDir ? (configured.value ?? []) : configured.value));
 
 const CUSTOM = "custom";
-const shown = computed(() => effectiveChips(globalHeaderChips.value));
+const shown = computed(() => effectiveChips(listed.value));
 const rows = computed(() => chipRows(shown.value));
-const addable = computed(() => addableBuiltins(globalHeaderChips.value));
+const addable = computed(() => addableBuiltins(listed.value));
 
 const kind = ref<string>(CUSTOM);
 const label = ref("");
@@ -37,7 +44,7 @@ const chipDetail = (chip: ChipEntry): string => {
 
 async function apply(action: ChipAction, payload: Record<string, unknown>): Promise<boolean> {
   saving.value = true;
-  const change = await changeHeaderChips(action, payload);
+  const change = await target.change(action, payload);
   saving.value = false;
   refused.value = !change.ok && change.problem === null;
   problem.value = change.ok ? null : change.problem;
@@ -66,10 +73,13 @@ function reset() {
 </script>
 
 <template>
-  <p class="mb-1.5 mt-3 text-[12px] text-dim">
+  <p v-if="isDir" class="mb-1.5 mt-2 text-[11px] text-dim">{{ t("headerChips.dirIntro") }}</p>
+  <p v-else class="mb-1.5 mt-3 text-[12px] text-dim">
     <strong class="text-fg">{{ t("headerChips.title") }}</strong> (<code>chips</code>) — {{ t("headerChips.intro") }}
   </p>
-  <p v-if="globalHeaderChips === null" class="mb-1.5 text-[11px] text-dim" data-testid="header-chips-default">{{ t("headerChips.defaultNote") }}</p>
+  <p v-if="configured === null" class="mb-1.5 text-[11px] text-dim" data-testid="header-chips-default">
+    {{ t(isDir ? "headerChips.dirNone" : "headerChips.defaultNote") }}
+  </p>
   <ul v-if="shown.length" :class="SETTINGS_LIST" data-testid="settings-header-chips">
     <SettingsListRow v-for="({ chip, key }, i) in rows" :key="key" :name="chipName(chip)" :disabled="saving" @remove="remove(i, chip)">
       <span class="shrink-0 text-[12px] text-secondary">{{ chipName(chip) }}</span>
@@ -135,7 +145,9 @@ function reset() {
     {{ t("settingsControls.entryProblems.refused") }}
   </p>
   <p class="mb-2 mt-1 text-[11px] text-dim">{{ t("headerChips.hint", { example: "${branch}" }) }}</p>
-  <div v-if="globalHeaderChips !== null" class="mb-3">
-    <SettingsButton data-testid="header-chips-reset" :disabled="saving" @click="reset">{{ t("headerChips.reset") }}</SettingsButton>
+  <div v-if="configured !== null" class="mb-3">
+    <SettingsButton data-testid="header-chips-reset" :disabled="saving" @click="reset">{{
+      t(isDir ? "dirSettingsForm.useGlobal" : "headerChips.reset")
+    }}</SettingsButton>
   </div>
 </template>

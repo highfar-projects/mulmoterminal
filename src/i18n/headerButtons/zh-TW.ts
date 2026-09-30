@@ -1,6 +1,9 @@
 export const headerButtonsZhTW = {
   title: "終端標題列的按鈕",
   intro: "每個終端標題列上的操作按鈕。專案自己的 .mulmoterminal.json 列出了按鈕時，會依 id 在那裡追加或取代這些按鈕。",
+  dirIntro: "在此目錄中，這些會加入全域標題列按鈕（相同 id 則取代）。全域未設定按鈕時，這裡的按鈕會代替內建按鈕顯示。",
+  dirCommandsIntro: "此目錄的命令面板項目，加入全域項目（相同 id 則取代）。與標題列按鈕 id 相同的不會顯示。新加入的項目會使用與按鈕不重複的 id。",
+  dirNone: "此目錄沒有加入按鈕，使用全域按鈕。",
   defaultNote: "未設定：標題列顯示內建按鈕（開啟此分支的 PR）。在這裡新增按鈕後它仍會保留。",
   none: "沒有按鈕：標題列什麼也不顯示。",
   kinds: { shell: "命令", input: "向代理輸入", open: "開啟", action: "操作儲存格", folder: "資料夾" },
@@ -48,6 +51,7 @@ export const headerButtonsZhTW = {
   ordered: "依自身的 order 數值排列，因此這裡不移動它",
   reset: "恢復內建按鈕",
   hint: "命令、文字、URL 和路徑中可以使用 {example} 等標題列技能列出的變數。顯示條件可寫 isGitRepo 或 agent == claude 這樣的條件。列上的資料夾圖示會把該按鈕放進資料夾；裡面的按鈕全部移出後，資料夾就會消失。",
+  hintNoFolder: "命令、文字、URL 和路徑中可以使用 {example} 等標題列技能列出的變數。顯示條件可寫 isGitRepo 或 agent == claude 這樣的條件。",
   problems: {
     folder: "資料夾請用標題列技能修改。",
     target: "請選擇按鈕要開啟的內容。",

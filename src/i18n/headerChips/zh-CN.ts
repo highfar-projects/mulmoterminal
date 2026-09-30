@@ -1,6 +1,8 @@
 export const headerChipsZhCN = {
   title: "终端标题栏的标签",
   intro: "按此顺序显示在每个终端标题栏中。更改会立即应用到已打开的终端；项目自己的 .mulmoterminal.json 列出了标签时，那里使用它的列表。",
+  dirIntro: "在此设置标签后，此目录将整体替换全局的标签组。",
+  dirNone: "此目录未设置标签，使用全局标签。",
   defaultNote: "未设置：终端显示下面的默认组合。在这里第一次更改时，会连同该更改一起保存这个组合。",
   none: "没有标签：标题栏什么也不显示。",
   builtins: {

@@ -1,6 +1,8 @@
 export const headerChipsZhTW = {
   title: "終端標題列的標籤",
   intro: "依此順序顯示在每個終端標題列中。變更會立即套用到已開啟的終端；專案自己的 .mulmoterminal.json 列出了標籤時，那裡使用它的清單。",
+  dirIntro: "在此設定標籤後，此目錄將整組取代全域的標籤。",
+  dirNone: "此目錄未設定標籤，使用全域標籤。",
   defaultNote: "未設定：終端顯示下面的預設組合。在這裡第一次變更時，會連同該變更一起儲存這個組合。",
   none: "沒有標籤：標題列什麼也不顯示。",
   builtins: {

@@ -1,6 +1,6 @@
 ---
 name: mulmoterminal-header
-description: Put your own action buttons and info chips in a MulmoTerminal session header — either everywhere (`buttons` / `chips` in `~/.mulmoterminal/config.json`; the global chips, global buttons of every `run` type, and folders can also be changed in Settings → Header buttons and chips) or for one project (`<project>/.mulmoterminal.json`). Buttons run a shell command in a new cell, type text into the running agent (`/compact`), or open a URL, the file explorer, a diff/PR/wiki overlay, or a new terminal. Chips show live context — branch, context left, diff counts, the PR or issue being worked on. `commands` are written exactly like buttons but appear only in the command palette. Use when the user wants to add, remove, reorder or hide header buttons or chips, wants a one-click build/test/deploy on a session, wants the header to show something it doesn't, or asks why a button is missing or does nothing. For colours and grid order use mulmoterminal-dirs; for keyboard shortcuts use mulmoterminal-keys.
+description: Put your own action buttons and info chips in a MulmoTerminal session header — either everywhere (`buttons` / `chips` in `~/.mulmoterminal/config.json`; the global chips, global buttons of every `run` type, and folders can also be changed in Settings → Header buttons and chips) or for one project (`<project>/.mulmoterminal.json`, also editable in Settings → Directory settings). Buttons run a shell command in a new cell, type text into the running agent (`/compact`), or open a URL, the file explorer, a diff/PR/wiki overlay, or a new terminal. Chips show live context — branch, context left, diff counts, the PR or issue being worked on. `commands` are written exactly like buttons but appear only in the command palette. Use when the user wants to add, remove, reorder or hide header buttons or chips, wants a one-click build/test/deploy on a session, wants the header to show something it doesn't, or asks why a button is missing or does nothing. For colours and grid order use mulmoterminal-dirs; for keyboard shortcuts use mulmoterminal-keys.
 ---
 
 # Header buttons and chips
@@ -15,7 +15,7 @@ is the thing to get right, and it has no UI anywhere.
 |---|---|---|
 | `~/.mulmoterminal/config.json` → `buttons` | every directory | Settings → Header buttons and chips: add a `shell`, `input`, `open` or `action` button, edit one in place (id, `order` and `emoji` kept), remove or move any top-level entry, put a button in a folder (existing or new) or take it out, change a folder's name / icon / `when`, back to the built-in set. Reordering inside a folder is written here |
 | `~/.mulmoterminal/config.json` → `chips` | every directory | Settings → Header buttons and chips (add, remove, reorder, back to the default set) |
-| `<project>/.mulmoterminal.json` → `buttons` / `chips` | that project | **none** |
+| `<project>/.mulmoterminal.json` → `buttons` / `chips` / `commands` | that project | Settings → Directory settings → Change here → Header: the same editors as the global ones, on that project's lists (commands have no folders). An unset list there is empty, not the built-in set |
 
 Ask which the user means. "A button for `yarn build`" is usually per-project (the command only
 exists there); "show me the branch everywhere" is global.

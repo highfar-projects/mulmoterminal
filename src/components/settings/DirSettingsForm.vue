@@ -21,6 +21,7 @@ import {
   type DirFormField,
 } from "../dirSettingsFormFields";
 import DirAddDirsEditor from "./DirAddDirsEditor.vue";
+import DirHeaderSection from "./DirHeaderSection.vue";
 import DirMediaSection from "./DirMediaSection.vue";
 import DirModelSelect from "./DirModelSelect.vue";
 import DirFormKeyActions from "./DirFormKeyActions.vue";
@@ -219,5 +220,6 @@ const INPUT = "min-w-0 rounded border border-border bg-elevated px-1.5 py-0.5 fo
       </div>
       <DirPaletteEditor :redraw="redraw" :palette="palette" :saving="saving" @change="onPalette" />
     </div>
+    <DirHeaderSection :path="path" :detail="detail" @saved="(next) => emit('saved', next)" />
   </section>
 </template>

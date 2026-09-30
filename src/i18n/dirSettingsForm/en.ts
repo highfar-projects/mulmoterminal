@@ -67,6 +67,12 @@ export const dirSettingsFormEn = {
     perKindHint: "Overrides the sound above for one kind of notification.",
     sameAsAll: "Same as above",
   },
+  header: {
+    title: "Header",
+    buttons: "Header buttons",
+    chips: "Header chips",
+    commands: "Command palette",
+  },
   notSet: "not set",
   themeGlobal: "Global setting",
   useGlobal: "Use global",

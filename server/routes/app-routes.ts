@@ -34,6 +34,7 @@ import { mountIssueWorkRoutes } from "../routes/issue-work-routes.js";
 import type { SpawnIssueSession } from "../session/issue-session-spawn.js";
 import { mountDirRoutes } from "../routes/dir-routes.js";
 import { mountDirConfigWriteRoute } from "../routes/dir-config-write-route.js";
+import { mountDirConfigEntriesRoute } from "../routes/dir-config-entries-route.js";
 import { mountGuiMcpRoutes } from "../routes/gui-mcp-routes.js";
 import { mountDropRoutes } from "../routes/drop-routes.js";
 import { mountOpenDirRoute } from "../files/open-dir.js";
@@ -361,6 +362,7 @@ function mountBrowserFileWrites(app: Express, publish: AppRouteDeps["publish"]):
   const onDirConfigWritten = (cwd: string) => publish(DIR_CONFIG_CHANNEL, { cwd });
   mountFilesBrowseRoutes(app, { defaultCwd: CLAUDE_CWD, backupRoot, onDirConfigWritten });
   mountDirConfigWriteRoute(app, { backupRoot, onDirConfigWritten });
+  mountDirConfigEntriesRoute(app, { backupRoot, onDirConfigWritten });
 }
 
 function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {

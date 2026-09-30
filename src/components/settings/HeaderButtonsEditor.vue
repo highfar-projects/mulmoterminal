@@ -11,12 +11,18 @@ import RowIconButton from "./RowIconButton.vue";
 import type { FolderFields } from "../../../common/headerButtonFolders";
 import { SETTINGS_LIST } from "./sectionClasses";
 import { EDITABLE_RUNS, isEditableRun, type ButtonDraft, type ButtonProblem, type EditableRun } from "../../../common/headerButtonEntries";
-import { changeHeaderButtons, globalHeaderButtons, type ButtonAction, type ButtonRow } from "../../composables/headerButtonsConfig";
+import type { ButtonAction, ButtonRow } from "../../composables/headerButtonsConfig";
+import { useButtonsTarget } from "../../composables/headerEntriesTarget";
 
-// The global header buttons, one change at a time against the list on disk (#2622). A command, text
-// for the agent, something to open or a named operation can be added here; folders are listed,
-// removed and moved, and still written by hand or by the header skill.
+// The header buttons, one change at a time against the list on disk (#2622): the global ones, or —
+// when a directory's Settings form provides the target (#2727) — that directory's buttons or its
+// palette commands. A command, text for the agent, something to open or a named operation can be
+// added here; folders are listed, removed and moved, and still written by hand or by the header skill.
 const { t } = useI18n();
+const listTarget = useButtonsTarget();
+const rows = computed(() => listTarget.rows.value);
+const isDir = listTarget.scope === "dir";
+const isCommands = listTarget.list === "commands";
 
 const run = ref<EditableRun>("shell");
 const label = ref("");
@@ -30,7 +36,7 @@ const refused = ref(false);
 
 async function apply(action: ButtonAction, body: Record<string, unknown>): Promise<boolean> {
   saving.value = true;
-  const change = await changeHeaderButtons(action, body);
+  const change = await listTarget.change(action, body);
   saving.value = false;
   refused.value = !change.ok && change.problem === null;
   problem.value = change.ok ? null : change.problem;
@@ -82,9 +88,9 @@ function cancelEdit() {
 // button that is gone, or can no longer be shown in the form, ends the edit instead of leaving Save
 // aimed at it. A button inside a folder is looked for there too.
 const allRows = (rows: readonly ButtonRow[]): ButtonRow[] => rows.flatMap((row) => [row, ...(row.folder?.children ?? [])]);
-watch(globalHeaderButtons, (rows) => {
+watch(rows, (listed) => {
   if (editing.value === null) return;
-  const current = allRows(rows ?? []).find((row) => row.id === editing.value?.id);
+  const current = allRows(listed ?? []).find((row) => row.id === editing.value?.id);
   if (current?.draft) editing.value = current;
   else cancelEdit();
 });
@@ -97,15 +103,15 @@ function move(id: string, delta: -1 | 1) {
 }
 // Only between two entries placed by position: one with its own `order` stays where that puts it.
 function movable(index: number, step: -1 | 1): boolean {
-  const rows = globalHeaderButtons.value ?? [];
-  const here = rows[index];
-  const there = rows[index + step];
+  const listed = rows.value ?? [];
+  const here = listed[index];
+  const there = listed[index + step];
   return here !== undefined && there !== undefined && !here.ordered && !there.ordered;
 }
 // Which row's folder picker, or which folder's own fields, is open.
 const picking = ref<string | null>(null);
 const folderEditing = ref<string | null>(null);
-const folders = computed(() => (globalHeaderButtons.value ?? []).filter((row) => row.folder !== null).map(({ id, label }) => ({ id, label })));
+const folders = computed(() => (rows.value ?? []).filter((row) => row.folder !== null).map(({ id, label }) => ({ id, label })));
 
 async function putInto(id: string, destination: Record<string, string>) {
   if (!saving.value && (await apply("into-folder", { id, ...destination }))) picking.value = null;
@@ -128,12 +134,15 @@ function onRun(event: Event) {
 </script>
 
 <template>
-  <p class="mb-1.5 mt-3 text-[12px] text-dim">
+  <p v-if="isDir" class="mb-1.5 mt-2 text-[11px] text-dim">{{ t(isCommands ? "headerButtons.dirCommandsIntro" : "headerButtons.dirIntro") }}</p>
+  <p v-else class="mb-1.5 mt-3 text-[12px] text-dim">
     <strong class="text-fg">{{ t("headerButtons.title") }}</strong> (<code>buttons</code>) — {{ t("headerButtons.intro") }}
   </p>
-  <p v-if="globalHeaderButtons === null" class="mb-1.5 text-[11px] text-dim" data-testid="header-buttons-default">{{ t("headerButtons.defaultNote") }}</p>
-  <ul v-else-if="globalHeaderButtons.length" :class="SETTINGS_LIST" data-testid="settings-header-buttons">
-    <template v-for="(row, i) in globalHeaderButtons" :key="row.id">
+  <p v-if="rows === null" class="mb-1.5 text-[11px] text-dim" data-testid="header-buttons-default">
+    {{ t(isDir ? "headerButtons.dirNone" : "headerButtons.defaultNote") }}
+  </p>
+  <ul v-else-if="rows.length" :class="SETTINGS_LIST" data-testid="settings-header-buttons">
+    <template v-for="(row, i) in rows" :key="row.id">
       <SettingsListRow :name="row.label" :disabled="saving" data-testid="header-button-row" @remove="remove(row.id)">
         <span class="shrink-0 text-[12px] text-secondary">{{ row.label }}</span>
         <span class="shrink-0 text-[11px] text-dim">{{ t(`headerButtons.kinds.${row.kind}`) }}</span>
@@ -148,7 +157,7 @@ function onRun(event: Event) {
           @click="row.folder ? (folderEditing = row.id) : edit(row)"
         />
         <RowIconButton
-          v-if="!row.folder"
+          v-if="!row.folder && !isCommands"
           icon="create_new_folder"
           data-testid="header-button-into-folder"
           :active="picking === row.id"
@@ -255,8 +264,10 @@ function onRun(event: Event) {
   <p v-if="refused" class="mt-1 text-[11px] text-err-text" role="alert" data-testid="header-button-refused">
     {{ t("settingsControls.entryProblems.refused") }}
   </p>
-  <p class="mb-2 mt-1 text-[11px] text-dim">{{ t("headerButtons.hint", { example: "${branch}" }) }}</p>
-  <div v-if="globalHeaderButtons !== null" class="mb-3">
-    <SettingsButton data-testid="header-buttons-reset" :disabled="saving" @click="reset">{{ t("headerButtons.reset") }}</SettingsButton>
+  <p class="mb-2 mt-1 text-[11px] text-dim">{{ t(isCommands ? "headerButtons.hintNoFolder" : "headerButtons.hint", { example: "${branch}" }) }}</p>
+  <div v-if="rows !== null" class="mb-3">
+    <SettingsButton data-testid="header-buttons-reset" :disabled="saving" @click="reset">{{
+      t(isDir ? "dirSettingsForm.useGlobal" : "headerButtons.reset")
+    }}</SettingsButton>
   </div>
 </template>
