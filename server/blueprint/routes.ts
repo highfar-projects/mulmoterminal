@@ -2,7 +2,7 @@
 // through /events; /ask is the route the step's agent is told to use. The split is what each is FOR,
 // not an authorisation: both sit behind the same-origin guard, and any local process can call either.
 import path from "node:path";
-import { mkdir, readFile, rmdir, stat } from "node:fs/promises";
+import { lstat, mkdir, readFile, rmdir, stat } from "node:fs/promises";
 import type { Express, Response } from "express";
 import { z } from "zod";
 import { listPacks, listPresets, loadPackPair, readHearing, readPresets, type PackPair, type PackRoot } from "./packs.js";
@@ -249,11 +249,11 @@ const sourceLabel = (slug: string): string => (appIdOf(slug) === null ? `"${slug
 const tooLargeReason = (label: string, bytes: number): string =>
   `the copy of ${label} with its records would be ${Math.ceil(bytes / BYTES_PER_MB)} MB, more than the ${MAX_SOURCE_BYTES / BYTES_PER_MB} MB a build copies; start without the records`;
 
-// A folder not made yet has none of them: nothing is found there.
+// A folder not made yet has none of them. A link is not one, as the folder's file list does not follow links either.
 async function presentFiles(projectDir: string, files: readonly string[]): Promise<Set<string>> {
   const found = await Promise.all(
     files.map((file) =>
-      stat(path.join(projectDir, file)).then(
+      lstat(path.join(projectDir, file)).then(
         (entry) => entry.isFile(),
         () => false,
       ),
@@ -281,10 +281,11 @@ async function checkCreate(deps: BlueprintRouteDeps, body: unknown): Promise<Che
   const present = await presentFiles(projectDir, neededFiles(pair.hearing));
   const hasFile = (file: string): boolean => present.has(file);
   const given: HearingAnswers = { ...requiredDefaults(pair.hearing), ...settledAnswers(pair.hearing, hasFile), ...answers };
-  const problem = answersProblem(pair, given);
-  if (problem) return refused(400, problem);
+  // Before the rest: an option the folder cannot take may open questions nobody should have been asked.
   const missing = missingFileProblems(pair.hearing, given, hasFile);
   if (missing.length > 0) return refused(400, `not in the folder: ${missing.join("; ")}`);
+  const problem = answersProblem(pair, given);
+  if (problem) return refused(400, problem);
   const asked: HearingAnswers = Object.fromEntries(
     askedQuestions(pair.hearing, given).flatMap((question) => {
       const answer = given[question.id];

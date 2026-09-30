@@ -259,6 +259,21 @@ describe("an option that needs a file in the folder", () => {
     expect(missingFileProblems(styled, { style: DEFAULT }, has())).toEqual([]);
   });
 
+  it("offers an option that needs several files only when every one is there", () => {
+    const both = hearingSchema.parse({
+      questions: [
+        { id: "style", label: "Style", why: "which", kind: "select", options: [FOLDER, DEFAULT], needsFile: { [FOLDER]: ["STYLE.md", "chaff.yaml"] } },
+      ],
+    });
+    expect(settledAnswers(both, has("STYLE.md", "chaff.yaml"))).toEqual({});
+    expect(settledAnswers(both, has("chaff.yaml"))).toEqual({ style: DEFAULT });
+    expect(settledAnswers(both, has("STYLE.md"))).toEqual({ style: DEFAULT });
+    expect(missingFileProblems(both, { style: FOLDER }, has("chaff.yaml"))).toEqual([`style: 「${FOLDER}」 needs STYLE.md in the folder, and it has none`]);
+    expect(missingFileProblems(both, { style: FOLDER }, has())[0]).toContain("STYLE.md and chaff.yaml");
+    expect(folderAnswers(both, { style: FOLDER }, has("STYLE.md"))).toEqual({ style: DEFAULT });
+    expect(neededFiles(both)).toEqual(["STYLE.md", "chaff.yaml"]);
+  });
+
   it("lists each needed file once", () => {
     expect(neededFiles(styled)).toEqual(["chaff.yaml"]);
     expect(neededFiles(hearing)).toEqual([]);
@@ -270,6 +285,8 @@ describe("an option that needs a file in the folder", () => {
     ["a path out of the folder", { needsFile: { [FOLDER]: "../chaff.yaml" } }],
     ["an empty segment", { needsFile: { [FOLDER]: "a//chaff.yaml" } }],
     ["a backslash", { needsFile: { [FOLDER]: "a\\chaff.yaml" } }],
+    ["one bad path among several", { needsFile: { [FOLDER]: ["STYLE.md", "../chaff.yaml"] } }],
+    ["no files at all", { needsFile: { [FOLDER]: [] } }],
     ["a question that is not a select", { kind: "multiselect", needsFile: { [FOLDER]: "chaff.yaml" } }],
   ])("refuses a hearing naming %s", (_name, patch) => {
     const question = { id: "style", label: "Style", why: "which", kind: "select", options: [FOLDER, DEFAULT], ...patch };

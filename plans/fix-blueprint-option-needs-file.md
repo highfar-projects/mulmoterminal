@@ -8,7 +8,7 @@ whose check fails later. Fewer, workable choices are easier (the same request as
 
 ## Design
 
-- `needsFile` on a select question: `{ option: relative file }`. The hearing schema refuses an option the question
+- `needsFile` on a select question: `{ option: relative file or [files] }`; the option needs every one. The hearing schema refuses an option the question
   does not have, a path that leaves the folder, and `needsFile` on anything but a select.
 - Pure helpers in `common/blueprint/hearing.ts`: `offeredOptions`, `settledAnswers` (a question left with one
   option is answered with it), `folderAnswers` (drop an unoffered answer, add the settled ones),
@@ -17,4 +17,8 @@ whose check fails later. Fewer, workable choices are easier (the same request as
   made yet). `POST /api/blueprints/runs` adds the settled answers and refuses (400) an answer whose file is missing.
 - Form: asks the folder once typing pauses, hides a settled question, narrows the options, and sends the folder's
   answers. While the folder is unknown or could not be read, every option is offered and the server decides.
-- `polish` and `write` mark 「このフォルダの規約」 as needing `chaff.yaml`.
+- `write` marks 「このフォルダの規約」 as needing STYLE.md and chaff.yaml (its brief check requires both). `polish`
+  marks it as needing chaff.yaml only — a folder `adopt` set up has no STYLE.md and polishing against its chaff.yaml
+  works — and marks 「手引き（STYLE.md）の決まりにも合わせる」 as needing STYLE.md.
+- A link does not count as the file (`lstat`), as the folder's file list does not follow links.
+- The missing-file refusal comes before the unanswered-question one: the refused option may open questions.
