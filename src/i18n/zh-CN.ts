@@ -552,6 +552,7 @@ export const zhCN: Messages = {
     insertFilePath: "插入文件路径",
     reveal: "在文件管理器中显示",
     browseFiles: "在应用中浏览文件",
+    dirSettings: "此目录的设置",
     newTerminal: "在此处新建终端",
   },
   prefixKeys: {

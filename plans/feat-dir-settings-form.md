@@ -100,3 +100,9 @@ README の Settings の節、`docs/guide/{en,ja}/config.md` の per-dir 節、`m
 - `skills` / `decks`: `addDirs` の一覧編集を `DirStringListEditor.vue` に一般化して使う。`skills` は並べ替えられ、`/api/skills?unfiltered=1`（このディレクトリで見える skill すべて）を候補に出す。絞り込み済みの一覧からは絞り込みを編集できないため。
 - `worktreeEnv`: 変数ごとに種類（port / 一意な名前）と値。空になったらキーを消す。
 - 共有 / local: 各行に「この checkout だけにする / 共有に戻す」。`POST /api/dir-config/move` が値を書いてあるまま移す（両方のファイルを計算してから書く）。モデルの行は 2 つのキーなので出さない。ヘッダーの一覧も出さない（それぞれの編集画面の中に行が無いため）。
+
+## #2729: セルからそのディレクトリの設定を開く
+
+セルのパスメニューに「このディレクトリの設定」を足す。`openDirSettings(dir)` が設定画面を Directory settings で開き、
+`requestedSettingsDir` をその画面が一度だけ受け取って、そのディレクトリの行を開いてスクロールする。
+最近のディレクトリの一覧に無いディレクトリでも行を足して出す。

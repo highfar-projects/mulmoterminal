@@ -199,4 +199,15 @@ describe("DirConfigPreview opening a config in Files", () => {
     expect(w.emitted("open-file")).toHaveLength(1);
     expect(w.find('[role="alert"]').exists()).toBe(true);
   });
+
+  // #2729: a cell's path menu opens Settings on its own directory.
+  it("opens the row it is asked to focus, and reads it", async () => {
+    const w = mount(DirConfigPreview, { props: { paths: ["/proj/a", "/proj/b"], focus: "/proj/b" }, attachTo: document.body });
+    await flushPromises();
+    const rows = w.findAll('[data-testid="dir-preview-row"]');
+    const open = rows.map((row) => (row.element instanceof HTMLDetailsElement ? row.element.open : false));
+    expect(open).toEqual([false, true]);
+    expect(requested).toEqual(["/api/dir-config-detail?cwd=%2Fproj%2Fb"]);
+    w.unmount();
+  });
 });

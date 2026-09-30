@@ -5,7 +5,7 @@
 // setting that was misspelled or rejected looked exactly like a setting that was never made.
 // Each directory expands to the values the app resolved, plus the keys it dropped and the
 // keys it doesn't know — which is what tells those two cases apart.
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, useTemplateRef, watch } from "vue";
 import { parseDirConfigDetail, sortDirPathsByName, type DirConfigDetailView } from "./dirConfigDetail";
 import { presetLabel } from "./presets";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
@@ -14,7 +14,8 @@ import { lastSegment } from "../../common/pathSegments";
 import { DIR_CONFIG_FILE, ensureDirConfigFile } from "./dirConfigOpen";
 import DirSettingsForm from "./settings/DirSettingsForm.vue";
 
-const props = defineProps<{ paths: string[] }>();
+// `focus`: a directory to open and scroll to — the one a cell asked for (#2729).
+const props = defineProps<{ paths: string[]; focus?: string | null | undefined }>();
 // Asks the host to open `name` in `dir` in the Files view; Settings closes itself to show it.
 const emit = defineEmits<{ (e: "open-file", dir: string, name: string): void }>();
 const { t } = useI18n();
@@ -57,6 +58,21 @@ function onSaved(path: string, detail: DirConfigDetailView) {
   details.value = { ...details.value, [path]: detail };
 }
 
+const list = useTemplateRef<HTMLElement>("list");
+watch(
+  () => props.focus,
+  async (dir) => {
+    if (!dir) return;
+    await nextTick();
+    const row = [...(list.value?.querySelectorAll<HTMLDetailsElement>("details[data-dir]") ?? [])].find((element) => element.dataset.dir === dir);
+    if (!row) return;
+    row.open = true;
+    void load(dir);
+    row.scrollIntoView({ block: "start" });
+  },
+  { immediate: true },
+);
+
 // A directory removed from the list (a preset was deleted) must not keep a stale entry around.
 watch(
   () => props.paths,
@@ -70,9 +86,9 @@ watch(
 
 <template>
   <p v-if="!paths.length" class="mb-3 mt-1.5 text-[12px] text-dim">No directories yet — open a terminal somewhere and it will be listed here.</p>
-  <ul v-else class="m-0 list-none p-0" data-testid="dir-preview-list">
+  <ul v-else ref="list" class="m-0 list-none p-0" data-testid="dir-preview-list">
     <li v-for="path in listed" :key="path" class="border-b border-border last:border-b-0">
-      <details data-testid="dir-preview-row" @toggle="load(path)">
+      <details data-testid="dir-preview-row" :data-dir="path" @toggle="load(path)">
         <summary class="flex cursor-pointer items-center gap-2 py-2 text-[13px] text-fg">
           <span data-testid="dir-preview-name" class="flex-none font-semibold">{{ presetLabel(path) }}</span>
           <span class="min-w-0 flex-auto truncate text-left font-mono text-[11px] text-dim [direction:rtl]" :data-tip="path"

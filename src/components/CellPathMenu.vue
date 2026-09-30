@@ -9,6 +9,7 @@
 import { ref, nextTick, watch, onUnmounted, useTemplateRef } from "vue";
 import { useI18n } from "vue-i18n";
 import { openTerminalAt } from "../composables/useNewTerminal";
+import { openDirSettings } from "../composables/settingsOpener";
 import { remoteServer } from "../composables/remoteServer";
 import { pickFileInto } from "../composables/useHeaderAction";
 import { menuPlacement, type MenuPlacement } from "../composables/menuPlacement";
@@ -106,6 +107,10 @@ function openForgePage(url: string) {
 // arbitrary path, while the pane can only ever be rooted at the enlarged cell.
 function browseFiles() {
   emit("open-files");
+}
+// This directory's own settings (#2729): Settings opens on Directory settings with this row open.
+function openThisDirSettings() {
+  if (props.cwd) openDirSettings(props.cwd);
 }
 function newTerminalHere() {
   if (props.cwd) openTerminalAt(props.cwd, props.slotKey);
@@ -253,6 +258,9 @@ onUnmounted(() => {
       </button>
       <button type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(browseFiles)">
         <span class="material-symbols-outlined text-[15px]" aria-hidden="true">folder_open</span> {{ t("pathMenu.browseFiles") }}
+      </button>
+      <button type="button" data-testid="cell-path-dir-settings" :class="PATH_MENU_ITEM" @click="pathMenuAction(openThisDirSettings)">
+        <span class="material-symbols-outlined text-[15px]" aria-hidden="true">tune</span> {{ t("pathMenu.dirSettings") }}
       </button>
       <button type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(newTerminalHere)">
         <span class="material-symbols-outlined text-[15px]" aria-hidden="true">terminal</span> {{ t("pathMenu.newTerminal") }}
