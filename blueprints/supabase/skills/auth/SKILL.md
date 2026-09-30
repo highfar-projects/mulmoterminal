@@ -11,7 +11,8 @@ sign-in choice.
 - **None**: nobody signs in. Only what `.blueprint/public-access.json` allows for `anyone` is reachable. Say so on the
   main screen's footer.
 - **Accounts (email and password)**: Supabase Auth. A sign-in screen, sign-up only if the spec lets people register
-  themselves, sign-out. In `supabase/config.toml`: `[auth] enable_signup` as the spec says, `site_url` and
+  themselves, sign-out. In `supabase/config.toml`: `[auth] enable_signup` as the spec says (not `[auth.email] enable_signup`, which turns
+  email sign-in off altogether), `site_url` and
   `additional_redirect_urls` to the local `yarn start` address (the publish step adds the published one).
 - **Email link**: the same, with `signInWithOtp`; locally the mail lands in the stack's mail viewer, so `db:start`
   must not leave out `mailpit`.

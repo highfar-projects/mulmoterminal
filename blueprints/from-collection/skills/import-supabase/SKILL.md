@@ -23,7 +23,8 @@ names.
 3. Names and types follow the spec and the pack's `spec/conversion.md` ("表と列の名前" and "Supabase（Postgres と
    Storage）"): the table is the collection's slug with `-` as `_`; a stored field's column is its key, unchanged; a
    boolean is a boolean, a date a `date` or `timestamptz`, a `ref` keeps the referenced primary key, a `table` field's
-   rows go to its child table.
+   rows go to its child table. A key with a capital letter (`startedOn`) is double-quoted everywhere it appears in SQL —
+   the migration and the import — or Postgres lowercases it and the check cannot find the column.
 4. Running it twice leaves the same rows: insert with an upsert on the primary key
    (`insert … on conflict (<key>) do update set …`), and replace a record's child rows with it.
 5. Who owns the imported rows is the spec's decision. By default: `--owner <email>` names the account, looked up with
@@ -31,8 +32,11 @@ names.
    seeded user. Refuse, with the reason, when the owner cannot be found.
 6. Files: when a record points at an `image` / `file`, create the bucket in a migration
    (`insert into storage.buckets (id, name, public) values ('<bucket>', '<bucket>', false) on conflict do nothing;`)
-   with Storage policies (`storage.objects`) that follow the spec's read and write rules, write its name to
-   `.blueprint/supabase-bucket`, and upload each file the source has with
+   with Storage policies (`storage.objects`) that follow the spec's read and write rules. An object the CLI uploads has
+   no `owner`, so a read policy on `owner = auth.uid()` locks its owner out: read through the row that points at it
+   instead, `bucket_id = '<bucket>' and exists (select 1 from public.<table> t where t.<column> = storage.objects.name)`,
+   which the table's own RLS then decides (write `storage.objects.name` in full: a bare `name` means the table's column
+   when it has one). Write the bucket's name to `.blueprint/supabase-bucket`, and upload each file the source has with
    `yarn supabase storage cp .blueprint/source/files/<path> ss:///<bucket>/<path> <where> --experimental`, the key being
    the path the record names. `storage cp` does not overwrite (a second run is refused as a duplicate), so remove the
    object first with `yarn supabase storage rm ss:///<bucket>/<path> <where> --experimental --yes`, which succeeds when
