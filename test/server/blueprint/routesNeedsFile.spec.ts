@@ -5,7 +5,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import express from "express";
 import type { Server } from "node:http";
 import { tmpdir } from "node:os";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { mountBlueprintRoutes } from "../../../server/blueprint/routes";
 import type { BlueprintExecutor } from "../../../server/blueprint/executor";
@@ -148,6 +148,24 @@ describe("an option that needs a file in the folder", () => {
     expect((await inFolder({ "chaff.yaml": "" }, (dir) => write(dir, { style: FOLDER_STYLE }))).status).toBe(400);
     expect((await inFolder({ "chaff.yaml": "" }, (dir) => write(dir, {}))).status).toBe(200);
     expect(createdAnswers.at(-1)).toMatchObject({ style: DEFAULT_STYLE });
+  });
+
+  // A folder it cannot look into is not a folder without the file: the form then offers every option.
+  it.skipIf(process.platform === "win32" || process.getuid?.() === 0)("does not call a file absent when the folder cannot be read", async () => {
+    const found = await inFolder({ "chaff.yaml": "" }, async (dir) => {
+      await chmod(dir, 0o600);
+      try {
+        return await present(
+          new URLSearchParams([
+            ["dir", dir],
+            ["file", "chaff.yaml"],
+          ]).toString(),
+        );
+      } finally {
+        await chmod(dir, 0o700);
+      }
+    });
+    expect(found.status).toBe(500);
   });
 
   it("refuses the folder's rules for a folder it would make", async () => {
