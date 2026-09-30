@@ -112,12 +112,12 @@ Choose a document task as the kind (the ones listed under 文書のフォルダ,
 |---|---|
 | 規約をつくる (make a style from model texts) | Takes "how we write here" from model texts and turns it into rules the machine checks (`chaff.yaml`) and a guide for writers (`STYLE.md`) |
 | 文書を書く (write, following the style) | Writes the document you ask for, part by part, following the folder's style |
-| 文書を整える (polish, without changing what it says) | Makes existing documents easier to read without changing what they say; the originals are kept. Choose the kind of document (a report, a blog post, …) and it is also read for what that kind needs (the conclusion first, a deadline on each request, …); what would need adding is not written in but listed as a question for the writer |
+| 文書を整える (polish, without changing what it says) | Makes existing documents easier to read without changing what they say; the originals are kept. Choose the kind of document (a report, a blog post, a manual, a contract, …) and it is also read for what that kind needs (the conclusion first, a deadline on each request, who bears each obligation and by when, …); what would need adding is not written in but listed as a question for the writer |
 | 文書を読み解く (review) | Finds contradictions and gaps in a contract or a policy, and writes the fixes to a separate file |
 | 文書を確かめる (verify) | Finds wrong dates, weekdays, order and totals in an itinerary or an estimate, by machine |
 | 要約する (summarize) | Summarizes long documents to the length you choose; every sentence carries a quotation, and the machine checks the quotations, that no part was dropped silently, and that every number is in a quotation |
 | 用語をそろえる (glossary) | Collects the terms the documents define, terms defined twice and words spelled more than one way into a glossary; if you choose, the spellings to use go into the folder's chaff.yaml, so chaff reports the others from then on |
-| 文書のフォルダに chaff を入れる (adopt) | Sets chaff up in an existing folder of documents: a chaff.yaml for their kind, today's findings shelved so only new ones are reported, and, if you choose, a GitHub workflow that puts new findings on a pull request's lines |
+| 文書のフォルダに chaff を入れる (adopt) | Sets chaff up in an existing folder of documents: a chaff.yaml for their kind, today's findings shelved so only new ones are reported, and, if you choose, a GitHub workflow that puts new findings on a pull request's lines (offered only when the folder is the top of a git repository) |
 | 版を比べる (compare) | Pairs the articles of an old and a new version of a contract or a policy, and makes a comparison table of what changed, was added or was removed; whether an article changed is decided by comparing its text by machine |
 | 文書に尋ねる (ask) | Answers your questions about a document, saying where in it the answer is written |
 

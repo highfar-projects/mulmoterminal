@@ -14,14 +14,14 @@ const HEARING = {
       kind: "select",
       required: true,
       options: [FOLDER_STYLE, DEFAULT_STYLE],
-      needsFile: { [FOLDER_STYLE]: "chaff.yaml" },
+      needsPath: { [FOLDER_STYLE]: "chaff.yaml" },
     },
-    { id: "voice", label: "Voice", why: "tone", kind: "select", required: false, options: ["mine", "polite", "plain"], needsFile: { mine: "VOICE.md" } },
+    { id: "voice", label: "Voice", why: "tone", kind: "select", required: false, options: ["mine", "polite", "plain"], needsPath: { mine: "VOICE.md" } },
     { id: "kind", label: "Kind", why: "genre", kind: "select", required: true, options: ["報告書", "ブログ"], showIf: { id: "style", equals: DEFAULT_STYLE } },
   ],
 };
-const { folderPresentFiles, startRun } = vi.hoisted(() => ({
-  folderPresentFiles: vi.fn<(dir: string, files: readonly string[]) => Promise<unknown>>(async () => ({ ok: true, value: { present: [] } })),
+const { folderPresentPaths, startRun } = vi.hoisted(() => ({
+  folderPresentPaths: vi.fn<(dir: string, files: readonly string[]) => Promise<unknown>>(async () => ({ ok: true, value: { present: [] } })),
   startRun: vi.fn<(request: unknown) => Promise<unknown>>(async () => ({ ok: true, value: { runId: "r1" } })),
 }));
 vi.mock("../../../../src/composables/useBlueprintsView", () => ({ takeFormFill: () => null, keepFormFill: vi.fn() }));
@@ -38,7 +38,7 @@ vi.mock("../../../../src/composables/blueprintsApi", () => ({
   }),
   listPresets: async () => ({ ok: true, value: { presets: [] } }),
   previewPair: async () => ({ ok: true, value: { hearing: HEARING, steps: [] } }),
-  folderPresentFiles,
+  folderPresentPaths,
   startRun,
   suggestFolder: vi.fn(async () => ({ ok: true, value: { path: null } })),
   listKnownFolders: vi.fn(async () => ({ ok: true, value: { folders: [] } })),
@@ -48,7 +48,7 @@ import BlueprintNewBuild from "../../../../src/components/blueprints/BlueprintNe
 
 const PRESENCE_SETTLED_MS = 400;
 const inFolder = async (present: string[] | null) => {
-  folderPresentFiles.mockResolvedValue(present === null ? { ok: false, value: { present: [] } } : { ok: true, value: { present } });
+  folderPresentPaths.mockResolvedValue(present === null ? { ok: false, value: { present: [] } } : { ok: true, value: { present } });
   const wrapper = mount(BlueprintNewBuild);
   await flushPromises();
   await wrapper.get('[data-testid="blueprint-project-dir"]').setValue("/home/me/notes");
@@ -65,14 +65,14 @@ const asked = (wrapper: Awaited<ReturnType<typeof inFolder>>) =>
     ]);
 
 beforeEach(() => {
-  folderPresentFiles.mockClear();
+  folderPresentPaths.mockClear();
   startRun.mockClear();
 });
 
 describe("an option that needs a file in the folder", () => {
   it("asks which rules where the folder has chaff.yaml", async () => {
     const wrapper = await inFolder(["chaff.yaml", "VOICE.md"]);
-    expect(folderPresentFiles).toHaveBeenLastCalledWith("/home/me/notes", ["chaff.yaml", "VOICE.md"]);
+    expect(folderPresentPaths).toHaveBeenLastCalledWith("/home/me/notes", ["chaff.yaml", "VOICE.md"]);
     expect(asked(wrapper)).toEqual([
       ["Style", [FOLDER_STYLE, DEFAULT_STYLE]],
       ["Voice (optional)", ["mine", "polite", "plain"]],

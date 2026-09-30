@@ -5,8 +5,9 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import express from "express";
 import type { Server } from "node:http";
 import { tmpdir } from "node:os";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { mountBlueprintRoutes } from "../../../server/blueprint/routes";
 import type { BlueprintExecutor } from "../../../server/blueprint/executor";
 
@@ -92,11 +93,6 @@ describe("an option that needs a file in the folder", () => {
     const refused = await inFolder({ "STYLE.md": "# style\n" }, (dir) => start(dir, { style: FOLDER_STYLE, scope: "chaff が指摘した所だけ" }));
     expect(refused.status).toBe(400);
     expect(JSON.stringify(refused.body)).toContain("chaff.yaml");
-    const folderNamed = await inFolder({}, async (dir) => {
-      await mkdir(path.join(dir, "chaff.yaml"));
-      return start(dir, { style: FOLDER_STYLE, scope: "chaff が指摘した所だけ" });
-    });
-    expect(folderNamed.status).toBe(400);
   });
 
   it("does not take a link for the file", async () => {
@@ -114,7 +110,7 @@ describe("an option that needs a file in the folder", () => {
         return present(
           new URLSearchParams([
             ["dir", dir],
-            ["file", "chaff.yaml"],
+            ["path", "chaff.yaml"],
           ]).toString(),
         );
       });
@@ -150,6 +146,56 @@ describe("an option that needs a file in the folder", () => {
     expect(createdAnswers.at(-1)).toMatchObject({ style: DEFAULT_STYLE });
   });
 
+  // A folder it cannot look into is not a folder without the file: the form then offers every option.
+  it.skipIf(process.platform === "win32" || process.getuid?.() === 0)("does not call a file absent when the folder cannot be read", async () => {
+    const found = await inFolder({ "chaff.yaml": "" }, async (dir) => {
+      await chmod(dir, 0o600);
+      try {
+        return await present(
+          new URLSearchParams([
+            ["dir", dir],
+            ["path", "chaff.yaml"],
+          ]).toString(),
+        );
+      } finally {
+        await chmod(dir, 0o700);
+      }
+    });
+    expect(found.status).toBe(500);
+  });
+
+  it("offers adopt's GitHub workflow only in a repository, whose .git is a folder or, in a worktree, a file", async () => {
+    const WORKFLOW = "GitHub の PR に指摘を出すワークフローを作る";
+    const LOCAL = "作らない（手元で npx chaffjs を動かす）";
+    const adopt = (dir: string, answers: Record<string, unknown>) =>
+      post("/api/blueprints/runs", { projectDir: dir, base: "docs", usecase: "adopt", answers: { places: "docs", kind: "論文", ...answers } });
+    const inRepository = (gitIsFile: boolean) =>
+      inFolder({}, async (dir) => {
+        await (gitIsFile ? writeFile(path.join(dir, ".git"), "gitdir: /elsewhere\n") : mkdir(path.join(dir, ".git")));
+        return adopt(dir, { ci: WORKFLOW });
+      });
+    expect((await inRepository(false)).status).toBe(200);
+    expect((await inRepository(true)).status).toBe(200);
+    const outside = await inFolder({}, (dir) => adopt(dir, { ci: WORKFLOW }));
+    expect(outside.status).toBe(400);
+    expect(JSON.stringify(outside.body)).toContain(".git");
+    expect((await inFolder({}, (dir) => adopt(dir, {}))).status).toBe(200);
+    expect(createdAnswers.at(-1)).toMatchObject({ ci: LOCAL });
+  });
+
+  it.skipIf(process.platform === "win32")("takes neither a link nor a pipe for the path", async () => {
+    const found = await inFolder({}, async (dir) => {
+      execFileSync("/usr/bin/mkfifo", [path.join(dir, "chaff.yaml")]);
+      return present(
+        new URLSearchParams([
+          ["dir", dir],
+          ["path", "chaff.yaml"],
+        ]).toString(),
+      );
+    });
+    expect(found.body).toEqual({ present: [] });
+  });
+
   it("refuses the folder's rules for a folder it would make", async () => {
     const project = path.join(tmpdir(), `blueprint-needs-new-${process.pid}`);
     trusted.add(project);
@@ -167,8 +213,8 @@ describe("an option that needs a file in the folder", () => {
       present(
         new URLSearchParams([
           ["dir", dir],
-          ["file", "chaff.yaml"],
-          ["file", "missing.yaml"],
+          ["path", "chaff.yaml"],
+          ["path", "missing.yaml"],
         ]).toString(),
       ),
     );
@@ -176,26 +222,26 @@ describe("an option that needs a file in the folder", () => {
     const none = await present(
       new URLSearchParams([
         ["dir", path.join(tmpdir(), "no-such-dir-xyz")],
-        ["file", "chaff.yaml"],
+        ["path", "chaff.yaml"],
       ]).toString(),
     );
     expect(none).toEqual({ status: 200, body: { present: [] } });
   });
 
   it.each([
-    ["no file", new URLSearchParams([["dir", tmpdir()]])],
+    ["no path", new URLSearchParams([["dir", tmpdir()]])],
     [
       "a file out of the folder",
       new URLSearchParams([
         ["dir", tmpdir()],
-        ["file", "../chaff.yaml"],
+        ["path", "../chaff.yaml"],
       ]),
     ],
     [
       "a relative folder",
       new URLSearchParams([
         ["dir", "app"],
-        ["file", "chaff.yaml"],
+        ["path", "chaff.yaml"],
       ]),
     ],
   ])("refuses to look for %s", async (_name, query) => {

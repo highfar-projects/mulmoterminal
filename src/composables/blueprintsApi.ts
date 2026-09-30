@@ -56,11 +56,11 @@ export const previewPair = (base: string, usecase: string): Promise<ApiResult<Pa
 export const listFolderFiles = (dir: string): Promise<ApiResult<{ files: string[]; more: boolean }>> =>
   call(z.object({ files: z.array(z.string()), more: z.boolean() }), `/api/blueprints/folder-files?dir=${encodeURIComponent(dir)}`);
 
-/** Which of `files` are in `dir`; none for a folder that does not exist yet. */
-export const folderPresentFiles = (dir: string, files: readonly string[]): Promise<ApiResult<{ present: string[] }>> =>
+/** Which of `paths` are in `dir`; none for a folder that does not exist yet. */
+export const folderPresentPaths = (dir: string, paths: readonly string[]): Promise<ApiResult<{ present: string[] }>> =>
   call(
     z.object({ present: z.array(z.string()) }),
-    `/api/blueprints/folder-present?${new URLSearchParams([["dir", dir], ...files.map((file) => ["file", file])]).toString()}`,
+    `/api/blueprints/folder-present?${new URLSearchParams([["dir", dir], ...paths.map((relative) => ["path", relative])]).toString()}`,
   );
 
 /** A new folder for an example that Claude Code would trust, or null when no such place was found. */

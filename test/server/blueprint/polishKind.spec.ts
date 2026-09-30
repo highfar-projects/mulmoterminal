@@ -48,6 +48,25 @@ describe("polish: the kinds of document", () => {
     expect(kindQuestion.showIf).toEqual({ id: "style", equals: CHAFF_DEFAULT_STYLE });
   });
 
+  it("measure each kind as its own genre", () => {
+    expect(Object.fromEntries(kinds.map((kind) => [kind.option, kind.genre]))).toEqual({
+      "指定しない（chaff に任せる）": null,
+      "ブログ（技術記事）": "blog/tech",
+      "ブログ（エッセイ・読み物）": "blog/essay",
+      "会社のサイトの記事（オウンドメディア）": "blog/owned-media",
+      報告書: "business/report",
+      "提案書・企画書": "business/proposal",
+      メール: "business/email",
+      プレスリリース: "business/press-release",
+      議事録: "business/meeting-notes",
+      "マニュアル・手順書": "docs/manual",
+      "README・技術文書": "technical/readme",
+      仕様書: "technical/spec",
+      "契約書・利用規約": "legal/contract",
+      "規程・社内規則": "legal/statute",
+    });
+  });
+
   it("each name a genre chaff has, each only once", () => {
     const genres = kinds.flatMap((kind) => (kind.genre === null ? [] : [kind.genre]));
     genres.forEach((genre) => expect(CHAFF_GENRES).toContain(genre));
@@ -57,6 +76,9 @@ describe("polish: the kinds of document", () => {
   it("picks the genre only with chaff's own style", () => {
     expect(genreOf({ style: CHAFF_DEFAULT_STYLE, kind: "報告書" }, kinds)).toBe("business/report");
     expect(genreOf({ style: CHAFF_DEFAULT_STYLE, kind: "議事録" }, kinds)).toBe("business/meeting-notes");
+    expect(genreOf({ style: CHAFF_DEFAULT_STYLE, kind: "契約書・利用規約" }, kinds)).toBe("legal/contract");
+    expect(genreOf({ style: CHAFF_DEFAULT_STYLE, kind: "規程・社内規則" }, kinds)).toBe("legal/statute");
+    expect(genreOf({ style: CHAFF_DEFAULT_STYLE, kind: "マニュアル・手順書" }, kinds)).toBe("docs/manual");
     expect(genreOf({ style: "このフォルダの規約（STYLE.md と chaff.yaml）", kind: "報告書" }, kinds)).toBeNull();
   });
 

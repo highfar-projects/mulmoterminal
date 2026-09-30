@@ -14,6 +14,7 @@ import {
   type FolderDestination,
 } from "../../common/headerButtonFolders.js";
 import { chipsMoved, chipsWithAdded, chipsWithout, isChipEntry, type ChipEntry } from "../../common/headerChips.js";
+import { uniqueSlug } from "../../common/agentEntries.js";
 
 export type ButtonsChanged = { entries: readonly EntryShape[] } | { problem: ButtonProblem };
 export type ChipsChanged = { chips: ChipEntry[] } | { problem: string };
@@ -84,4 +85,21 @@ export function chipChangeFor(action: string, body: Record<string, unknown>): Ch
     return valid ? (current) => chipsMoved(current, index, delta, chip) : "index, chip and a delta of -1 or 1 are required";
   }
   return `unknown action: ${action}`;
+}
+
+const ID_TRIES = 50;
+
+/** `next` with every id it did not have before moved off `reserved`, the way a new entry's id is
+ *  already kept off the list's own ids. A palette command whose id a header button has is dropped
+ *  from the palette (mergeHeaderConfig), so a new command must not be given one. Ids the list
+ *  already held are left alone — renaming an id is the user's call, and a button may be the reason. */
+export function withNewIdsClearOf(next: readonly EntryShape[], previous: readonly EntryShape[], reserved: ReadonlySet<string>): EntryShape[] {
+  const before = new Set(previous.map((entry) => entry.id));
+  const taken = new Set([...reserved, ...next.map((entry) => entry.id)]);
+  return next.map((entry) => {
+    if (before.has(entry.id) || !reserved.has(entry.id)) return entry;
+    const id = uniqueSlug(entry.id, (candidate) => !taken.has(candidate), ID_TRIES) ?? entry.id;
+    taken.add(id);
+    return { ...entry, id };
+  });
 }
