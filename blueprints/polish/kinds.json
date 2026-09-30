@@ -9,7 +9,10 @@
     { "option": "メール", "genre": "business/email" },
     { "option": "プレスリリース", "genre": "business/press-release" },
     { "option": "議事録", "genre": "business/meeting-notes" },
-    { "option": "手順書・README", "genre": "technical/readme" },
-    { "option": "仕様書・規程・契約書", "genre": "technical/spec" }
+    { "option": "マニュアル・手順書", "genre": "docs/manual" },
+    { "option": "README・技術文書", "genre": "technical/readme" },
+    { "option": "仕様書", "genre": "technical/spec" },
+    { "option": "契約書・利用規約", "genre": "legal/contract" },
+    { "option": "規程・社内規則", "genre": "legal/statute" }
   ]
 }

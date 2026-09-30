@@ -8,8 +8,10 @@ import { existingWorkspaceFromQuery } from "../config/workspace.js";
 import { isRecord } from "../../common/isRecord.js";
 import { isWritableDirConfigValue } from "../config/config-schema.js";
 import { dirConfigDetail, dirOwnConfigRaw } from "../config/dir-config.js";
-import { sanitizeButtons, sanitizeChips } from "../config/header-config.js";
-import { buttonChangeFor, chipChangeFor } from "../config/header-entry-changes.js";
+import { buttonChangeFor, chipChangeFor, withNewIdsClearOf } from "../config/header-entry-changes.js";
+import { DEFAULT_BUTTONS, flattenEntries, sanitizeButtons, sanitizeChips } from "../config/header-config.js";
+import { loadHeaderConfig } from "../config/header-context.js";
+import { getHeaderConfig } from "../config/config-routes.js";
 import type { DirConfigEdit } from "../../common/dirConfigForm.js";
 import { writeAndAnswer, type DirConfigWriteDeps } from "./dir-config-write-route.js";
 
@@ -21,7 +23,7 @@ const isDirEntryList = (value: unknown): value is DirEntryList => DIR_ENTRY_LIST
 // answered with the list as it now is).
 type Outcome = { next: readonly unknown[] | null } | { badRequest: string } | { problem: string };
 
-function outcomeFor(list: DirEntryList, action: string, body: Record<string, unknown>, raw: unknown): Outcome {
+function outcomeFor(list: DirEntryList, action: string, body: Record<string, unknown>, raw: unknown, reserved: () => ReadonlySet<string>): Outcome {
   if (action === "reset") return { next: null };
   if (list === "chips") {
     const change = chipChangeFor(action, body);
@@ -32,12 +34,19 @@ function outcomeFor(list: DirEntryList, action: string, body: Record<string, unk
   }
   const change = buttonChangeFor(action, body, NO_DEFAULT_BUTTONS);
   if (typeof change === "string") return { badRequest: change };
-  const changed = change(sanitizeButtons(raw));
-  return "problem" in changed ? { problem: changed.problem } : { next: changed.entries };
+  const current = sanitizeButtons(raw);
+  const changed = change(current);
+  if ("problem" in changed) return { problem: changed.problem };
+  return { next: list === "commands" ? withNewIdsClearOf(changed.entries, current ?? [], reserved()) : changed.entries };
 }
 
 // What an unset list of a directory's buttons or commands starts from.
 const NO_DEFAULT_BUTTONS: readonly [] = [];
+
+// The ids this directory's header buttons have once the global list is merged in — the ones a palette
+// command here loses to.
+const buttonIdsIn = (cwd: string): ReadonlySet<string> =>
+  new Set(flattenEntries(loadHeaderConfig(cwd, getHeaderConfig()).buttons ?? DEFAULT_BUTTONS).map((button) => button.id));
 
 /** The save for a list: written when it holds anything, taken out when it is empty or reset. */
 const editForList = (list: DirEntryList, next: readonly unknown[] | null): DirConfigEdit =>
@@ -58,7 +67,7 @@ function dirEntriesHandler(req: Request, res: Response, deps: DirConfigWriteDeps
     return;
   }
   const raw = dirOwnConfigRaw(cwd)[fields.list];
-  const outcome = outcomeFor(fields.list, fields.action, fields, raw);
+  const outcome = outcomeFor(fields.list, fields.action, fields, raw, () => buttonIdsIn(cwd));
   if ("badRequest" in outcome) {
     res.status(400).json({ error: outcome.badRequest });
     return;

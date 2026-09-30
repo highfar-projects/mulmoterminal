@@ -3,7 +3,7 @@
 // global lists and a directory's. The global routes' own specs pin their behaviour end to end; this
 // pins the request reading both sides share, including what an unconfigured list starts from.
 import { describe, it, expect } from "vitest";
-import { buttonChangeFor, chipChangeFor } from "../../../server/config/header-entry-changes";
+import { buttonChangeFor, chipChangeFor, withNewIdsClearOf } from "../../../server/config/header-entry-changes";
 
 const build = { id: "build", label: "Build", run: "shell" as const, cmd: "yarn build" };
 
@@ -59,5 +59,24 @@ describe("chipChangeFor", () => {
     if (typeof add === "string" || typeof remove === "string") throw new Error("unexpected refusal");
     expect(add([])).toEqual({ chips: ["git"] });
     expect(remove(["git"])).toEqual({ problem: "stale" });
+  });
+});
+
+describe("withNewIdsClearOf", () => {
+  const cmd = (id: string) => ({ id, label: id, run: "shell" as const, cmd: id });
+
+  it("moves a new id off the reserved ones, and leaves the ids the list already had", () => {
+    const previous = [cmd("deploy")];
+    const next = [cmd("deploy"), cmd("build")];
+    expect(withNewIdsClearOf(next, previous, new Set(["build", "deploy"])).map((entry) => entry.id)).toEqual(["deploy", "build-2"]);
+  });
+
+  it("keeps clear of the list's own ids too", () => {
+    expect(withNewIdsClearOf([cmd("build-2"), cmd("build")], [cmd("build-2")], new Set(["build"])).map((entry) => entry.id)).toEqual(["build-2", "build-3"]);
+  });
+
+  it("changes nothing when no new id is reserved", () => {
+    const next = [cmd("a"), cmd("b")];
+    expect(withNewIdsClearOf(next, [cmd("a")], new Set(["c"]))).toEqual(next);
   });
 });

@@ -22,3 +22,9 @@ whose check fails later. Fewer, workable choices are easier (the same request as
   works — and marks 「手引き（STYLE.md）の決まりにも合わせる」 as needing STYLE.md.
 - A link does not count as the file (`lstat`), as the folder's file list does not follow links.
 - The missing-file refusal comes before the unanswered-question one: the refused option may open questions.
+
+## Follow-up: a folder it cannot read
+
+Only ENOENT and ENOTDIR mean the file is not there. Any other lookup error (EACCES on an unreadable folder) makes
+`folder-present` answer 500, so the form treats the folder as unknown and offers every option instead of hiding one.
+The create path needs no guard of its own: an unreadable folder is refused earlier, by the `.blueprint` check.

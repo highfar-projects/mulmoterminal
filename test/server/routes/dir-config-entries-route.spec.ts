@@ -79,4 +79,11 @@ describe("POST /api/dir-config/entries", () => {
     const res = await routeCall(app)("/api/dir-config/entries", jsonPost({ cwd: "/no/such/dir", list: "buttons", action: "reset" }));
     expect(res.status).toBe(400);
   });
+
+  // A command whose id a header button has is dropped from the palette, so a new one is given another.
+  it("gives a new palette command an id no header button of this directory has", async () => {
+    const { post, file } = setup({ buttons: [build] });
+    expect((await post({ list: "commands", action: "add", run: "shell", label: "Build", payload: "make" })).status).toBe(200);
+    expect(file().commands).toEqual([{ id: "build-2", label: "Build", run: "shell", cmd: "make" }]);
+  });
 });

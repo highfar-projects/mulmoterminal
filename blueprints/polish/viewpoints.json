@@ -74,6 +74,41 @@
       "title": "具体的なもの（数字・例・引用）がない節はないか",
       "look": "A section with no concrete thing in it — no number, example, code, quotation, link or name. Adding one is the writer's.",
       "fix": "writer"
+    },
+    "duty-owner-deadline": {
+      "title": "義務に、誰が・いつまでにがあるか",
+      "look": "Every obligation or prohibition (〜しなければならない, 〜するものとする, 〜してはならない, shall, must) names who bears it, and, where it has to be done in time, by when. Quote the obligation that lacks one; adding either adds a fact, so it is the writer's.",
+      "fix": "writer"
+    },
+    "breach-consequence": {
+      "title": "守らなかったときどうなるかが書かれているか",
+      "look": "An obligation the document relies on says, somewhere in it, what follows when it is not met (解除, 損害賠償, 懲戒, termination, damages). The consequence may stand in another article; what matters is that a reader finds it. Quote the obligation left without one; adding it is the writer's.",
+      "fix": "writer"
+    },
+    "exception-with-rule": {
+      "title": "例外が、決まりのそばにあるか",
+      "look": "An exception to a rule (ただし, 〜を除く, except, unless) stands in the rule's own article, or the rule points to where it is. Quote a rule whose exception a reader could only find by reading the whole document; moving it or pointing to it is the writer's.",
+      "fix": "writer"
+    },
+    "scope-stated": {
+      "title": "誰に、何に当てはまるかが書かれているか",
+      "look": "A regulation says whom and what it applies to (対象者, 適用範囲), near its start. Quote the opening when it does not; adding it is the writer's.",
+      "fix": "writer"
+    },
+    "steps-one-action": {
+      "title": "手順が、一つずつの動作で番号順に並んでいるか",
+      "look": "A procedure is a numbered list with one action per step. Quote a step that asks for two or more actions, or a procedure written as a paragraph; splitting it is the writer's, since the order of the actions is theirs to confirm.",
+      "fix": "writer"
+    },
+    "prerequisites-stated": {
+      "title": "始める前に要るものが書かれているか",
+      "look": "Before the first step, the procedure says what the reader needs (an account, a permission, a file, a version). Quote the first step when nothing comes before it that a reader needs; adding it is the writer's.",
+      "fix": "writer"
+    },
+    "result-check": {
+      "title": "うまくいったことの確かめ方があるか",
+      "look": "The procedure says what the reader sees when it worked (a screen, a message, a result), at its end or after a step where it matters. Quote the last step when it does not; adding it is the writer's.",
+      "fix": "writer"
     }
   },
   "genres": {
@@ -84,6 +119,9 @@
     "business/meeting-notes": ["minutes-sections", "actionable-ask", "agentless-passive"],
     "blog/tech": ["padded-intro", "closing-cliche", "empty-conclusion", "title-body-alignment", "thin-section"],
     "blog/essay": ["padded-intro", "closing-cliche", "empty-conclusion", "title-body-alignment"],
-    "blog/owned-media": ["padded-intro", "closing-cliche", "empty-conclusion", "title-body-alignment", "thin-section", "unqualified-superlative"]
+    "blog/owned-media": ["padded-intro", "closing-cliche", "empty-conclusion", "title-body-alignment", "thin-section", "unqualified-superlative"],
+    "docs/manual": ["prerequisites-stated", "steps-one-action", "result-check"],
+    "legal/contract": ["duty-owner-deadline", "breach-consequence", "exception-with-rule"],
+    "legal/statute": ["scope-stated", "duty-owner-deadline", "breach-consequence", "exception-with-rule"]
   }
 }
