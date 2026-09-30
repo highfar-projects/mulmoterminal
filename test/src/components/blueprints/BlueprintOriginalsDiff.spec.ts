@@ -25,7 +25,7 @@ describe("BlueprintOriginalsDiff", () => {
         files: [
           { path: "a.md", original: "old a", current: "new a" },
           { path: "gone.md", original: "old g", current: null },
-          { path: "b.md", original: "old b", current: "new b" },
+          { path: "b.proposed.md", original: "old b", current: "new b", from: "b.md" },
         ],
         more: true,
       },
@@ -33,7 +33,7 @@ describe("BlueprintOriginalsDiff", () => {
     const wrapper = mount(BlueprintOriginalsDiff, { props: { runId: "r1" } });
     await flushPromises();
     expect(loadOriginals).toHaveBeenCalledWith("r1");
-    expect(wrapper.findAll('[data-testid="blueprint-original"] span').map((span) => span.text())).toEqual(["a.md", "gone.md", "b.md"]);
+    expect(wrapper.findAll('[data-testid="blueprint-original"] span').map((span) => span.text())).toEqual(["a.md", "gone.md", "b.md → b.proposed.md"]);
     expect(wrapper.findAll('[data-testid="blueprint-original-gone"]')).toHaveLength(1);
     expect(createDiffView.mock.calls.map((call) => [call[1], call[2]])).toEqual([
       ["old a", "new a"],
@@ -41,6 +41,8 @@ describe("BlueprintOriginalsDiff", () => {
     ]);
     expect(createDiffView.mock.calls[0]?.[3]).toEqual({ "$ unchanged lines": "$ unchanged lines" });
     expect(wrapper.text()).toContain("There are more");
+    expect(wrapper.find('[data-testid="blueprint-originals-kept"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="blueprint-originals-proposed"]').exists()).toBe(true);
   });
 
   it("shows nothing for a build that kept no originals, or when they could not be read", async () => {
@@ -53,5 +55,18 @@ describe("BlueprintOriginalsDiff", () => {
     await flushPromises();
     expect(failed.find('[data-testid="blueprint-originals"]').exists()).toBe(false);
     expect(createDiffView).not.toHaveBeenCalled();
+  });
+
+  it("says where the originals are only when it kept some, and what a proposed copy is only when there is one", async () => {
+    loadOriginals.mockResolvedValue({ ok: true, value: { files: [{ path: "c.proposed.txt", original: "o", current: "n", from: "c.txt" }], more: false } });
+    const proposals = mount(BlueprintOriginalsDiff, { props: { runId: "r1" } });
+    await flushPromises();
+    expect(proposals.find('[data-testid="blueprint-originals-kept"]').exists()).toBe(false);
+    expect(proposals.find('[data-testid="blueprint-originals-proposed"]').exists()).toBe(true);
+    loadOriginals.mockResolvedValue({ ok: true, value: { files: [{ path: "a.md", original: "o", current: "n" }], more: false } });
+    const kept = mount(BlueprintOriginalsDiff, { props: { runId: "r2" } });
+    await flushPromises();
+    expect(kept.find('[data-testid="blueprint-originals-kept"]').exists()).toBe(true);
+    expect(kept.find('[data-testid="blueprint-originals-proposed"]').exists()).toBe(false);
   });
 });

@@ -18,7 +18,7 @@ describe("originalsOf", () => {
       "docs/b.md",
       "a.md",
     ]);
-    expect(await originalsOf("/p", reader)).toEqual({
+    expect(await originalsOf("/p", reader, 0)).toEqual({
       files: [
         { path: "a.md", original: "old a", current: "new a" },
         { path: "docs/b.md", original: "old b", current: "new b" },
@@ -29,11 +29,74 @@ describe("originalsOf", () => {
 
   it("gives a file that is gone as null, and leaves out an original it could not read", async () => {
     const reader = fakeReader({ ".blueprint/originals/gone.md": "old" }, ["gone.md", "unreadable.md"]);
-    expect(await originalsOf("/p", reader)).toEqual({ files: [{ path: "gone.md", original: "old", current: null }], more: false });
+    expect(await originalsOf("/p", reader, 0)).toEqual({ files: [{ path: "gone.md", original: "old", current: null }], more: false });
   });
 
   it("says more are left when the walk stopped early", async () => {
-    expect((await originalsOf("/p", fakeReader({}, [], false))).more).toBe(true);
+    expect((await originalsOf("/p", fakeReader({}, [], false), 0)).more).toBe(true);
+  });
+});
+
+describe("originalsOf with proposed copies", () => {
+  const since = 1000;
+  const reader = (files: Record<string, string>, listed: readonly (readonly [string, number])[]): OriginalsReader => ({
+    list: async (dir) => ({ entries: dir.endsWith("originals") ? [] : listed.map(([file, mtimeMs]) => ({ path: file, mtimeMs })), complete: true }),
+    read: async (_dir, relative) => files[relative] ?? null,
+  });
+
+  it("pairs a copy written during the build with the document it was made from", async () => {
+    const files = { "contract.txt": "old", "contract.proposed.txt": "new", "docs/a.md": "a", "docs/a.proposed.md": "a2" };
+    const listed = [
+      ["contract.txt", 1],
+      ["contract.proposed.txt", 2000],
+      ["docs/a.proposed.md", 1500],
+    ] as const;
+    expect(await originalsOf("/p", reader(files, listed), since)).toEqual({
+      files: [
+        { path: "contract.proposed.txt", original: "old", current: "new", from: "contract.txt" },
+        { path: "docs/a.proposed.md", original: "a", current: "a2", from: "docs/a.md" },
+      ],
+      more: false,
+    });
+  });
+
+  it("leaves out a copy from before the build, one whose document is gone, and a file that is no copy", async () => {
+    const files = { "old.txt": "o", "old.proposed.txt": "o2", "orphan.proposed.txt": "x", "plain.txt": "p" };
+    const listed = [
+      ["old.proposed.txt", 10],
+      ["orphan.proposed.txt", 2000],
+      ["plain.txt", 2000],
+    ] as const;
+    expect(await originalsOf("/p", reader(files, listed), since)).toEqual({ files: [], more: false });
+  });
+
+  it("leaves out a copy it could not read", async () => {
+    expect(await originalsOf("/p", reader({ "a.md": "old" }, [["a.proposed.md", 2000]]), since)).toEqual({ files: [], more: false });
+  });
+
+  it("puts the kept originals first, and stops at the limit across both", async () => {
+    const kept = Array.from({ length: 15 }, (_, index) => `k${String(index).padStart(2, "0")}.md`);
+    const proposed = Array.from({ length: 10 }, (_, index) => `p${String(index).padStart(2, "0")}.proposed.md`);
+    const files = Object.fromEntries([
+      ...kept.flatMap((file) => [
+        [`.blueprint/originals/${file}`, "was"],
+        [file, "is"],
+      ]),
+      ...proposed.flatMap((file) => [
+        [file, "new"],
+        [file.replace(".proposed", ""), "old"],
+      ]),
+    ]);
+    const both: OriginalsReader = {
+      list: async (dir) => ({
+        entries: dir.endsWith("originals") ? kept.map((file) => ({ path: file, mtimeMs: 0 })) : proposed.map((file) => ({ path: file, mtimeMs: 2000 })),
+        complete: true,
+      }),
+      read: async (_dir, relative) => files[relative] ?? null,
+    };
+    const view = await originalsOf("/p", both, since);
+    expect(view.files.map((file) => file.path)).toEqual([...kept, ...proposed.slice(0, 5)]);
+    expect(view.more).toBe(true);
   });
 });
 
@@ -52,7 +115,7 @@ describe("originalsOf on a real folder", () => {
     await writeFile(path.join(dir, "note.md"), "after\n");
     await writeFile(path.join(outside, "secret.md"), "not the build's\n");
     await symlink(path.join(outside, "secret.md"), path.join(dir, ".blueprint", "originals", "secret.md"));
-    const view = await originalsOf(dir, { list: listProjectFiles, read: readProjectFile });
+    const view = await originalsOf(dir, { list: listProjectFiles, read: readProjectFile }, 0);
     expect(view.files).toEqual([{ path: "note.md", original: "before\n", current: "after\n" }]);
   });
 });

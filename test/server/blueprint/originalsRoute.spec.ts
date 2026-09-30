@@ -12,6 +12,7 @@ import { BlueprintRefusal, type BlueprintExecutor } from "../../../server/bluepr
 import { blueprintRunSchema } from "../../../common/blueprint/run";
 
 let projectDir = "";
+let startedAtMs = 1;
 const run = () =>
   blueprintRunSchema.parse({
     id: "run-00000001",
@@ -19,7 +20,7 @@ const run = () =>
     basePackDir: "/packs/docs",
     usecasePackDir: "/packs/polish",
     steps: [{ id: "polish", title: "整える", description: "", skill: "skills/polish", check: "true", gates: [], reads: [], origin: "usecase" }],
-    createdAtMs: 1,
+    createdAtMs: startedAtMs,
     answers: {},
   });
 const unused = async (): Promise<never> => {
@@ -67,6 +68,7 @@ afterAll(() => server.close());
 
 beforeEach(async () => {
   projectDir = await mkdtemp(path.join(tmpdir(), "bp-originals-route-"));
+  startedAtMs = 1;
 });
 afterEach(() => rm(projectDir, { recursive: true, force: true }));
 
@@ -98,6 +100,22 @@ describe("GET /api/blueprints/runs/:id/originals", () => {
     } finally {
       await rm(outside, { recursive: true, force: true });
     }
+  });
+
+  it("pairs a proposed copy with its document", async () => {
+    await writeFile(path.join(projectDir, "contract.txt"), "第1条 旧\n");
+    await writeFile(path.join(projectDir, "contract.proposed.txt"), "第1条 新\n");
+    expect((await get("run-00000001")).body).toEqual({
+      files: [{ path: "contract.proposed.txt", original: "第1条 旧\n", current: "第1条 新\n", from: "contract.txt" }],
+      more: false,
+    });
+  });
+
+  it("leaves out a proposed copy written before the build started", async () => {
+    await writeFile(path.join(projectDir, "contract.txt"), "旧\n");
+    await writeFile(path.join(projectDir, "contract.proposed.txt"), "新\n");
+    startedAtMs = Date.now() + 60_000;
+    expect((await get("run-00000001")).body).toEqual({ files: [], more: false });
   });
 
   it("has nothing for a build that kept no originals", async () => {

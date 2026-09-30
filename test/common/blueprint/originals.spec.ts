@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { originalPaths, originalsViewSchema } from "../../../common/blueprint/originals";
+import { originalPaths, originalsViewSchema, proposedBase } from "../../../common/blueprint/originals";
 
 describe("originalPaths", () => {
   it("compares each path once, in a stable order", () => {
@@ -22,4 +22,23 @@ describe("originalsViewSchema", () => {
     expect(originalsViewSchema.safeParse({ files: [{ path: "a.md", original: "x", current: null }], more: false }).success).toBe(true);
     expect(originalsViewSchema.safeParse({ files: [{ path: "a.md", original: null, current: "x" }], more: false }).success).toBe(false);
   });
+});
+
+describe("proposedBase", () => {
+  it.each([
+    ["contract.proposed.txt", "contract.txt"],
+    ["docs/a.proposed.md", "docs/a.md"],
+    ["notes.proposed", "notes"],
+    ["a.b.proposed.md", "a.b.md"],
+    ["x.proposed.proposed.md", "x.proposed.md"],
+  ])("finds the document %s was made from", (file, base) => {
+    expect(proposedBase(file)).toBe(base);
+  });
+
+  it.each(["contract.txt", ".proposed.md", "docs/.proposed.md", "a.proposed.tar.gz", "a.proposed.", "a.proposedx.md", "proposed.md"])(
+    "finds none for %s",
+    (file) => {
+      expect(proposedBase(file)).toBeNull();
+    },
+  );
 });
