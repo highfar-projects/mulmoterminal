@@ -39,6 +39,7 @@ import ModelContextBadge from "./ModelContextBadge.vue";
 import type { LaunchChoice } from "./wsUrl";
 import type { RunCommand } from "./runCommand";
 import { useHeaderButtons } from "../composables/useHeaderButtons";
+import { CELL_CHIP_IDS, isCellChipId } from "../../common/headerChips";
 import CellPathMenu from "./CellPathMenu.vue";
 import { registerCellAction } from "../composables/useCellAction";
 import type { CellSelfAction } from "../../common/headerActions";
@@ -291,10 +292,8 @@ const context = ref<CellContext | null>(null);
 // (git/diff/ctx/usage) render in that order — others are hidden — and custom chips render as text. `dir`,
 // the project badge, the status dot/activity, and the row-2 tools timeline stay structural.
 const { chips: headerChips, env: worktreeEnv } = useHeaderButtons({ cwd, session: sessionId, agent, model: computed(() => context.value?.model ?? null) });
-const ROW1_BUILTIN_CHIPS = new Set(["git", "work", "diff", "ctx", "usage", "env"]);
 // `env` is in the defaults and costs nothing to a project that declares no `worktreeEnv`: the
 // chip renders nothing when there are no values, so this only shows up where it was asked for.
-const DEFAULT_CELL_CHIP_IDS = ["git", "work", "diff", "ctx", "usage", "env"];
 interface CellChipView {
   key: string;
   builtin: string | null;
@@ -302,12 +301,12 @@ interface CellChipView {
 }
 const cellChips = computed<CellChipView[]>(() => {
   const configured = headerChips.value;
-  if (configured === null) return DEFAULT_CELL_CHIP_IDS.map((id) => ({ key: `b-${id}`, builtin: id, custom: null }));
+  if (configured === null) return CELL_CHIP_IDS.map((id) => ({ key: `b-${id}`, builtin: id, custom: null }));
   const views: CellChipView[] = [];
   // Key by index so a config that repeats a built-in (sanitizeChips allows duplicates) can't collide.
   configured.forEach((chip, i) => {
     if (chip.kind === "custom") views.push({ key: `c-${i}`, builtin: null, custom: { label: chip.label, text: chip.text } });
-    else if (ROW1_BUILTIN_CHIPS.has(chip.id)) views.push({ key: `b-${i}-${chip.id}`, builtin: chip.id, custom: null });
+    else if (isCellChipId(chip.id)) views.push({ key: `b-${i}-${chip.id}`, builtin: chip.id, custom: null });
   });
   return views;
 });

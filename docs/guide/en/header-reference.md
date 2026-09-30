@@ -197,6 +197,10 @@ written in **your own config file** — not that a condition was true.
 `chips` reorders and hides the info display on row 1, and adds your own. Omit it and the default set
 stays.
 
+The global list can also be edited without writing JSON: **Settings → Header buttons and chips** adds a
+built-in or your own chip, removes one, moves one up or down, and goes back to the default set. The
+open terminals pick the change up at once. A project's own `.mulmoterminal.json` list still wins there.
+
 ```json
 { "chips": ["git", "ctx", { "label": "Which environment this project deploys to", "text": "env staging" }] }
 ```

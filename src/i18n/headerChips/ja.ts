@@ -1,0 +1,33 @@
+export const headerChipsJa = {
+  title: "端末ヘッダーのチップ",
+  intro:
+    "すべての端末のヘッダーに並ぶ表示です。この順に並びます。変更は開いている端末にすぐ反映されます。プロジェクトの .mulmoterminal.json にチップの一覧があるところでは、そちらが使われます。",
+  defaultNote: "未設定です。端末には下の既定の並びが出ています。ここで最初に変更すると、その変更と一緒にこの並びが保存されます。",
+  none: "チップはありません。ヘッダーには何も出ません。",
+  builtins: {
+    git: "ブランチと変更",
+    work: "作業中の PR / issue",
+    diff: "追加・削除した行数",
+    ctx: "残りのコンテキスト",
+    usage: "使ったトークン",
+    env: "worktree の環境変数",
+  },
+  custom: "自分で決めた文字",
+  kindField: "追加するチップ",
+  labelPlaceholder: "名前",
+  labelField: "チップの名前",
+  textField: "チップに出す文字",
+  whenField: "出す条件（任意）",
+  moveUp: "{name} を上へ",
+  moveDown: "{name} を下へ",
+  reset: "既定の並びに戻す",
+  hint: "文字には {example} など、ヘッダーの skill が挙げる変数が使えます。「出す条件」には isGitRepo や agent == claude のような条件を書きます。",
+  problems: {
+    builtin: "その組み込みチップは端末に出せません。",
+    duplicate: "そのチップはもう一覧にあります。",
+    label: "チップに名前を付けてください。",
+    text: "チップに出す文字を入れてください。",
+    full: "一覧がいっぱいです。先にどれかを外してください。",
+    stale: "このページを開いた後に一覧が変わりました。保存されている一覧を表示し直したので、もう一度操作してください。",
+  },
+};
