@@ -14,6 +14,9 @@ The spec numbers the must-haves. For EACH one, in `test/acceptance.test.ts`, nam
 2. Then the refusal: the same action by someone who must not be able to do it (another signed-in user, a signed-out
    visitor) is refused by the database — a `42501`, or a read that comes back empty.
 3. If a must-have does not work yet, make it work — this step is where gaps between the spec and the app close.
+   When that means building one of the source's actions and `.blueprint/actions.json` decides it `feature`, build it as
+   its entry says; the actions step then finds it done. If the entry decides `manual` or `drop`, the spec contradicts
+   itself: ask through the blueprint question tool which one holds, and stop.
 4. If a must-have is purely visual, test the screen instead and say so in a comment on the test.
 
 Do not add features that are not must-haves.
