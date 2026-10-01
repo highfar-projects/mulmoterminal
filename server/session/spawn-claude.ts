@@ -35,6 +35,7 @@ import { loadDirConfig } from "../config/dir-config.js";
 import { repoRootSync } from "../git/repo-root-sync.js";
 import { workdirFooter } from "../git/pr-footer.js";
 import { getProviders } from "../config/config-routes.js";
+import { claudeRendererEnv } from "./claude-fullscreen-env.js";
 import { requireResolution, resolveProvider, type DirModelChoice } from "./provider-env.js";
 import { settingsArgument, mcpConfigArgument, appendedPromptArgument, withSettingsCleanup, type AppendedPromptArgument } from "./session-settings.js";
 import { ensureDropsDir } from "./session-drops.js";
@@ -302,7 +303,8 @@ export function createClaudeSpawner(deps: SpawnDeps) {
     function spawnEntry(): PtyEntry {
       recordCapabilitiesForThisSpawn();
       const program = sessionProgram(deps.claudeBin, sessionId, customAgentId, canResume ? resume : null, resolved.unset, deps.permissionMode);
-      const { term, tmux, reattached } = ptySpawn(sessionId, program.file, [...program.prefixArgs, ...args], cwd, true, program.spawnEnv);
+      const spawnEnv = { ...program.spawnEnv, env: { ...program.spawnEnv.env, ...claudeRendererEnv(sessionId, cwd) } };
+      const { term, tmux, reattached } = ptySpawn(sessionId, program.file, [...program.prefixArgs, ...args], cwd, true, spawnEnv);
       console.log(ptyStartLine({ agent: "claude", pid: term.pid, cwd, tmux, reattached, sessionId, note: program.note }));
       return { term, ws, buffer: "", cwd, tmux, active: false, agent: "claude" }; // "claude" whatever wrapper started it — see sessionProgram
     }

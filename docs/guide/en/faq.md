@@ -236,6 +236,25 @@ This is Claude Code's behaviour, and it happens in any terminal: it is reported 
 two transcripts is requested in
 [anthropics/claude-code#85004](https://github.com/anthropics/claude-code/issues/85004).
 
+
+### The scrollbar is gone, and I cannot select more than one screen in a Claude cell. Why? {#claude-fullscreen}
+
+**Claude Code is running in its fullscreen renderer.** It draws on the alternate screen, which has
+no scrollback: the wheel scrolls Claude's own view, while the terminal underneath does not move, so
+there is no scrollbar and a selection stays on the visible screen.
+
+Claude Code can turn this renderer on by itself when your settings do not name one. So
+**MulmoTerminal starts Claude cells with it off unless you chose it**: when no Claude settings file
+(`~/.claude/settings.json`, or the project's `.claude/settings.json` / `.claude/settings.local.json`)
+has a `tui` key, and neither `CLAUDE_CODE_NO_FLICKER` nor `CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN` is
+set, the cell gets `CLAUDE_CODE_NO_FLICKER=0`.
+
+- To keep the classic renderer explicitly, add `"tui": "default"` to `~/.claude/settings.json`.
+- To use the fullscreen renderer, add `"tui": "fullscreen"` (or run `/tui fullscreen` in Claude Code).
+  MulmoTerminal then leaves it alone — and the scrollbar and long selections go with it.
+
+Either change applies to a cell started after it; restart a running one with **Restart the agent**.
+
 ---
 
 ## Other
