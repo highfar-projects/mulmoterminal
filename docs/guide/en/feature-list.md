@@ -4,14 +4,14 @@ nav_title: Feature list
 layout: default
 parent: English
 nav_order: 6.5
-as_of: 8.2.0
-description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 8.2.0)."
+as_of: 8.3.0
+description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 8.3.0)."
 ---
 
 # Feature list
 {: .no_toc }
 
-Every capability MulmoTerminal has as of 8.2.0, one line each, grouped by area. The `(vX.Y.Z)` at the end of a line is the release it first arrived in; significant later extensions are noted inside the line by version. Fixes and internal changes are not listed — see the [ChangeLog](https://github.com/receptron/mulmoterminal/blob/main/docs/ChangeLog.md) for those, and the [Feature reference](features.html) and the page linked from each section for how to use them.
+Every capability MulmoTerminal has as of 8.3.0, one line each, grouped by area. The `(vX.Y.Z)` at the end of a line is the release it first arrived in; significant later extensions are noted inside the line by version. Fixes and internal changes are not listed — see the [ChangeLog](https://github.com/receptron/mulmoterminal/blob/main/docs/ChangeLog.md) for those, and the [Feature reference](features.html) and the page linked from each section for how to use them.
 
 - TOC
 {:toc}
@@ -61,6 +61,7 @@ More: [Basics](basics.html)
 
 More: [Agents](agents.html)
 
+- More features → Skills lists every Claude skill on disk — `~/.claude/skills`, each enabled plugin (as `plugin:skill`), and the `.claude/skills` of each folder a terminal ran in — in three columns with search, marking a folder skill that overrides yours (v8.3.0)
 - Settings → Models and backends adds and removes custom agents, accounts and backends, validating URLs and keys (v7.2.0)
 - A claude cell says when Claude Code is too old for auto permission mode, and how to update (v6.6.0)
 - A Codex cell reads Needs input while Codex waits for approval, with sound and push (v6.2.0)
@@ -292,6 +293,7 @@ More: [From a collection](from-collection.html)
 
 More: [Blueprints](blueprints.html)
 
+- An app built from a collection looks like the collection does in MulmoTerminal by default, or takes a soft, crisp or calm template; a Match the look step applies it and writes `DESIGN.md` (v8.3.0)
 - A failing step gets five attempts, and from the fourth the agent is shown every earlier failure and asked to repair; a build waiting on a busy folder retries when it frees (v8.2.0)
 - Examples to try: polish a manual, a regulation or an English blog post, compare a revision, verify an estimate, review terms of service, and more (v8.1.0)
 - The finished screen compares each document a build kept an original of with the current file (v8.1.0)

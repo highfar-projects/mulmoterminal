@@ -8,6 +8,22 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@8.3.0 — 2026-10-01
+
+> **Setup guide:** [8.3.0 — A Skills viewer, and apps from a collection keep MulmoTerminal's look](https://receptron.github.io/mulmoterminal/guide/en/v8.3.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v8.3.0.html))
+
+### Skills viewer (#2815)
+
+- [#2816](https://github.com/receptron/mulmoterminal/pull/2816) — **More features → Skills** lists every Claude skill on disk in three columns: place, its skills, the chosen `SKILL.md`. The places are `~/.claude/skills`, each plugin enabled in the user settings and installed for the user (skills named `plugin:skill`), and the `.claude/skills` of each folder a grid terminal has run in, taken from the remembered cwd history; a folder with no skills is left out, and one whose skills dir is the user dir is not listed twice. A folder skill that shares a name with a user skill is marked as overriding it. The search matches every typed word against the name, description and folder and narrows the first two columns together. New read-only routes `GET /api/skills/catalog` and `GET /api/skills/doc`; the latter answers only for the user dir, an enabled user plugin, or a remembered folder, a safe slug, and a file up to 1 MB. Project-scoped plugin installs and built-in skills are not listed yet.
+
+### Blueprints: an app from a collection keeps MulmoTerminal's look (#2817)
+
+- [#2820](https://github.com/receptron/mulmoterminal/pull/2820) — the from-collection interview asks for the look: the same as MulmoTerminal (default) or a soft, crisp or calm template. `blueprints/from-collection/design/mulmoterminal.md` holds the collection plugin's screen classes, and each template is an `@theme` block that redefines the colours and radii those classes use. A new step, Match the look, restyles the built screens and writes `DESIGN.md`, which later steps follow; its check builds the app and confirms the tokens, the screens' classes and the icon font are in the build.
+
+### Docs
+
+- [#2819](https://github.com/receptron/mulmoterminal/pull/2819) — `docs/guide/{en,ja}/feature-list.md`: every capability, one line each with the release it arrived in, grouped by area, with `as_of` pinned to `package.json` by a spec. The release procedure now updates it.
+
 ## mulmoterminal@8.2.0 — 2026-10-01
 
 > **Setup guide:** [8.2.0 — Blueprint steps repair themselves, and closed cells can be reopened](https://receptron.github.io/mulmoterminal/guide/en/v8.2.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v8.2.0.html))
