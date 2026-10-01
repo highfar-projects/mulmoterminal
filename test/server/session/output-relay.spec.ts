@@ -198,8 +198,18 @@ describe("wireBufferedOutput", () => {
   it("does not create a mode tracker for tmux entries", () => {
     const pty = fakePty();
     const entry = { ...entryFor(pty, fakeSocket().socket), tmux: true } as unknown as PtyEntry;
-    wireBufferedOutput(entry, LIMIT);
+    wireBufferedOutput(entry, LIMIT, undefined, false);
     expect(entry.modeTracker).toBeUndefined();
+  });
+
+  // psmux leaves the mouse flags out of its mode answer, so its client's own stream is tracked.
+  it("tracks a psmux entry's modes, still without a headlessMirror", () => {
+    const pty = fakePty();
+    const entry = entryFor(pty, fakeSocket().socket, true);
+    wireBufferedOutput(entry, LIMIT, undefined, true);
+    expect(entry.headlessMirror).toBeUndefined();
+    pty.feed("\x1b[?1049h\x1b[?1003;1006h");
+    expect([...(entry.modeTracker?.modes() ?? [])].sort()).toEqual([1003, 1006, 1049]);
   });
 
   // A tmux session already has tmux's own pane as its "real screen" (#1073) — mirroring it too

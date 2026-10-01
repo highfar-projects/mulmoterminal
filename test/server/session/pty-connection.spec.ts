@@ -578,6 +578,20 @@ describe("reattachPty", () => {
     expect(data.indexOf("\x1b[?1006h")).toBeLessThan(outputIndex);
   });
 
+  // psmux answers only `alternate_on`; the mouse modes its client wrote come from the tracker, so the
+  // browser gets the wheel back instead of arrow keys. Each mode once, tmux's answer first.
+  it("adds a psmux entry's tracked mouse modes to tmux's answer", () => {
+    const { reattachPty, calls } = setup([1049]);
+    const s = fakeSocket();
+    const tracker = new TerminalModeTracker();
+    tracker.scan("\x1b[?1049h\x1b[?1003;1006h");
+    reattachPty(entryWith({ ws: null, buffer: "pane", tmux: true, modeTracker: tracker }), s.ws as never, SESSION);
+    expect(calls).toContain(`terminalModes:${SESSION}`);
+    const data = s.parsed()[0].data as string;
+    expect(data.startsWith("\x1b[?1049h\x1b[?1003h\x1b[?1006h")).toBe(true);
+    expect(data.split("\x1b[?1049h")).toHaveLength(2);
+  });
+
   it("restores modes wired through wireBufferedOutput on non-tmux reattach (#1972 e2e)", () => {
     // Full path: wireBufferedOutput creates the tracker, PTY output feeds through it,
     // and reattachPty reads the tracked modes into the replay prefix.

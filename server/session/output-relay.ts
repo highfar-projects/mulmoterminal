@@ -10,6 +10,7 @@ import { TerminalModeTracker } from "./terminal-mode-tracker.js";
 import { sendFrame } from "./ws-frames.js";
 import { createHeadlessMirror } from "./headlessMirror.js";
 import type { PtyEntry } from "./types.js";
+import { tmuxIsPsmux } from "../infra/tmux.js";
 
 // Below one 60fps frame, so a batch can never be seen as lag; large enough that a flood
 // collapses into a handful of frames a second instead of thousands.
@@ -77,17 +78,21 @@ export function createOutputRelay(entry: PtyEntry, limit: number): OutputRelay {
  *  hand the relay back so the exit path can flush what is still queued.
  *
  *  `tap` is the spawner's own view of the stream — claude's draft-ready scanner, codex's
- *  seed injector — fed here rather than through a second onData listener. */
-export function wireBufferedOutput(entry: PtyEntry, limit: number, tap?: (data: string) => void): OutputRelay {
+ *  seed injector — fed here rather than through a second onData listener. `psmux` says whether the
+ *  tmux on PATH is psmux; a parameter so a spec can say so without one installed. */
+export function wireBufferedOutput(entry: PtyEntry, limit: number, tap?: (data: string) => void, psmux = tmuxIsPsmux()): OutputRelay {
   const relay = createOutputRelay(entry, limit);
   entry.output = relay;
   // Only a session tmux can't be asked about needs either of these — a tmux entry already has
   // tmux's pane as its "real screen" and answers the mode query itself, so mirroring or scanning
   // it too would parse every byte twice for nothing (see headlessMirror.ts, #1972).
-  if (!entry.tmux) {
-    entry.headlessMirror = createHeadlessMirror(entry.term.cols, entry.term.rows);
-    entry.modeTracker = new TerminalModeTracker();
-  }
+  if (!entry.tmux) entry.headlessMirror = createHeadlessMirror(entry.term.cols, entry.term.rows);
+  // Fork-only: psmux answers the mode query with EMPTY mouse flags (only `alternate_on` comes back),
+  // so a reattach restored the alternate buffer without mouse tracking. The `?1003;1006h` its client
+  // writes once at start then fell off the bounded replay of a busy session, and the browser turned
+  // the wheel into arrow keys (prompt history) instead of scroll reports. What psmux's client wrote
+  // is exactly what the browser must be put back into, so its stream is tracked as a non-tmux one is.
+  if (!entry.tmux || psmux) entry.modeTracker = new TerminalModeTracker();
   entry.term.onData((data) => {
     relay.push(data);
     entry.headlessMirror?.feed(data);

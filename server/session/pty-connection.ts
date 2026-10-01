@@ -186,7 +186,9 @@ export function createConnectionHandlers(deps: ConnectionDeps) {
       // A tmux session asks tmux; a non-tmux session uses modes tracked from the byte stream
       // (#1972) — without this, the browser replays into the normal buffer and the same output
       // is drawn multiple times with garbled interleaving.
-      const modes = entry.tmux ? deps.terminalModesOf(sessionId) : (entry.modeTracker?.modes() ?? []);
+      // A psmux entry has both (output-relay.ts): tmux's answer, plus the mouse modes it leaves out.
+      const tracked = entry.modeTracker?.modes() ?? [];
+      const modes = entry.tmux ? [...new Set([...deps.terminalModesOf(sessionId), ...tracked])] : tracked;
       const prefix = terminalModePrefix(modes);
       // Cut to the bound BEFORE stripping: the buffer runs over it (PtyEntry.buffer), and the
       // strip is five regex passes that would otherwise sweep the overrun as well.

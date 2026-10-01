@@ -317,6 +317,12 @@ force the DOM renderer or observe effects (`window.open`, buffer state) instead 
     mouse modes; `CSI ? 1049 ; 1003 h` would reach xterm and put it into real mouse tracking,
     turning every drag into coordinate reports — the #729 regression.
   - Only tmux-backed sessions restore; a sandbox/tmux-less pty replays as before.
+  - **psmux (this fork) answers the `mouse_*_flag`s EMPTY** — only `alternate_on` comes back. Its
+    client writes `?1003;1006h` once at start, so on a busy session that fell off the tail and a
+    reattach restored the alternate buffer without mouse tracking: the wheel became arrow keys
+    (prompt history) after a reload, yet scrolled in a fresh cell. A psmux entry therefore also gets
+    the byte-stream `TerminalModeTracker` (`wireBufferedOutput`), and `reattachPty` adds its modes
+    to tmux's answer.
 - **The replay is a stream of deltas, not a screen — so the screen is asked for.** The bounded tail
   reconstructs only the cells that changed inside its window: rows painted before it opened stay
   blank, and cells written at different moments sit side by side. A TUI makes this the normal case
