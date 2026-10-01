@@ -49,6 +49,7 @@ export const shortcutActionsJa = {
   screenRooms: "Rooms へ",
   screenBlueprints: "Blueprints へ",
   screenWorklog: "作業ログへ",
+  screenSkills: "スキルへ",
   settingsOpen: "設定を開く",
   soundToggle: "通知音のオン / オフ",
   viewToggle: "拡大時の表示を切り替える（一覧 / サムネイル列）",

@@ -54,6 +54,7 @@ const LABEL_KEYS: Record<KeymapAction, string> = {
   "screen-rooms": "settings.shortcuts.actions.screenRooms",
   "screen-blueprints": "settings.shortcuts.actions.screenBlueprints",
   "screen-worklog": "settings.shortcuts.actions.screenWorklog",
+  "screen-skills": "settings.shortcuts.actions.screenSkills",
   "settings-open": "settings.shortcuts.actions.settingsOpen",
   "sound-toggle": "settings.shortcuts.actions.soundToggle",
   "view-toggle": "settings.shortcuts.actions.viewToggle",

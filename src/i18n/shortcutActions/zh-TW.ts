@@ -49,6 +49,7 @@ export const shortcutActionsZhTW = {
   screenRooms: "前往 Rooms",
   screenBlueprints: "前往 Blueprints",
   screenWorklog: "前往工作日誌",
+  screenSkills: "前往技能",
   settingsOpen: "開啟設定",
   soundToggle: "開啟 / 關閉通知音",
   viewToggle: "切換放大檢視（清單 / 縮圖列）",
