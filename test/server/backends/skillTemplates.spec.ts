@@ -38,12 +38,14 @@ const TEMPLATE_FILES = readdirSync(TEMPLATES)
 const EXPECTED_TEMPLATES = [
   "ai-council.md",
   "append-feed.md",
+  "class-seats.md",
   "gym.md",
   "live-poll.md",
   "magazine.md",
   "meeting-room.md",
   "project-board.md",
   "salon.md",
+  "schedule-poll.md",
   "survey.md",
 ];
 
@@ -136,6 +138,14 @@ describe("the shared-app templates", () => {
 
   it("magazine.md deploys as written", () => {
     expect(problemsFor("magazine.md", "editor@example.com", [])).toEqual([]);
+  });
+
+  it("class-seats.md deploys as written", () => {
+    expect(problemsFor("class-seats.md", "owner@dance.example.jp", [])).toEqual([]);
+  });
+
+  it("schedule-poll.md deploys as written", () => {
+    expect(problemsFor("schedule-poll.md", "organizer@example.jp", [])).toEqual([]);
   });
 
   it("shows no page the sandbox would silently break", () => {
@@ -340,6 +350,12 @@ describe("the shared-app templates", () => {
       expect.arrayContaining([".claude/skills/tasks/schema.json", ".claude/skills/names/schema.json", ".claude/skills/assignments/schema.json"]),
     );
     expect([...blocksOf("append-feed.md").keys()]).toEqual(expect.arrayContaining([".claude/skills/messages/schema.json"]));
+    expect([...blocksOf("class-seats.md").keys()]).toEqual(
+      expect.arrayContaining([".claude/skills/classes/schema.json", ".claude/skills/seats/schema.json", ".claude/skills/bookings/schema.json"]),
+    );
+    expect([...blocksOf("schedule-poll.md").keys()]).toEqual(
+      expect.arrayContaining([".claude/skills/polls/schema.json", ".claude/skills/answers/schema.json"]),
+    );
     expect([...blocksOf("ai-council.md").keys()]).toEqual(
       expect.arrayContaining([".claude/skills/topics/schema.json", ".claude/skills/speakers/schema.json", ".claude/skills/messages/schema.json"]),
     );
