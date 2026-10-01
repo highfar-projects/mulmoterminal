@@ -14,10 +14,24 @@ decided the look: the base `ui` skills say "plain and readable", so every build 
   classes mean. So there is one reference to follow, not four.
 - A step `design` (見た目を合わせる) restyles what the earlier steps built: after `auth` on local, Cloudflare and
   Supabase, after `features` on Firebase. It writes `DESIGN.md`, which the later actions steps are told to follow.
-- The check (`checks/design.mjs`, rules in `designRules.mjs`) reads the files: the packages, the Vite plugin, a
-  stylesheet importing Tailwind, the template copied unchanged and imported (or no redefined colour for
-  MulmoTerminal's look), the main button and icon classes, the starting collection's icon, and `DESIGN.md` naming
-  the design. Then `yarn build`.
+
+## The check reads the build, not the sources
+
+`design.sh` runs `yarn build`, then `design.mjs` reads the stylesheets that build wrote (under folders named `dist`,
+newer than the build's start) and holds them to `designRules.mjs`:
+
+- Tailwind ran: `.bg-indigo-600` exists as Tailwind writes it, and the build defines `--color-indigo-600`.
+- The design took: every colour and corner token the build kept has the template's value, or Tailwind's own
+  (`node_modules/tailwindcss/theme.css`) for MulmoTerminal's look, compared after minification.
+- Each screen is in the look: one class per screen that appears in no other section of the reference must have a
+  rule (header, list, record panel; kanban and calendar when a copied collection has them). Tailwind writes a rule
+  only for a class some screen uses.
+- The icon font is in the build; the screens use `material-symbols-outlined` and every copied collection's icon;
+  `DESIGN.md` names the design.
+
+The first version scanned source text, and each review round found another way to satisfy it without the design
+(a comment, a look-alike import name, a plugin imported but not used). The build is what the person gets, so the rule
+moved there.
 
 The collection's `color` is not used: inside a collection MulmoTerminal draws the header's icon box in indigo, and
 the colour only marks the collection's shortcut. Following the screen is the point.

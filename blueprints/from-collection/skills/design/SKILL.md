@@ -22,10 +22,11 @@ should look the same. The design is the `design` answer in `.blueprint/answers.j
    Keep each screen's behaviour, text and tests; change markup and classes only. Write class names out in full
    (Tailwind only sees complete names); a choice between classes is a lookup table of whole strings, as the
    reference does. Remove the plain CSS the classes replace.
-4. **The collection's own icon.** `.blueprint/source/source.json` names the starting collection (`start`); its
-   `schema.json` may have `icon` (a Material Symbols name). Show it in the header's icon box beside the app's title,
-   drawn as the reference draws it — MulmoTerminal does not colour that box by the collection's `color`, so neither
-   does the app. Each other collection's screen shows its own icon the same way.
+4. **Each collection's own icon.** `.blueprint/source/source.json` lists every copied collection's slug in
+   `collections` (its `start` is the source's name, which for a shared app is the app's title, not a slug). Each
+   `collections/<slug>/schema.json` may have `icon` (a Material Symbols name): show it in the icon box beside that
+   collection's title, drawn as the reference draws it — MulmoTerminal does not colour that box by the collection's
+   `color`, so neither does the app.
 5. **`DESIGN.md`** at the app's root, for the person and for every later step: the design chosen (its answer, word
    for word), the template file if any, and the rule that new screens use `design/mulmoterminal.md`'s classes — so
    the screens later steps add look like the rest.
