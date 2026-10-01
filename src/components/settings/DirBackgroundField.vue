@@ -3,12 +3,12 @@
 // cell. Each change is saved as soon as it is final; an empty picture takes the key out.
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
-import type { DirConfigEdit } from "../../../common/dirConfigForm";
 import { DIR_BACKGROUND_DEFAULT_FIT, DIR_BACKGROUND_DEFAULT_OPACITY, DIR_BACKGROUND_FITS, isDirBackgroundFit } from "../../../common/dirBackground";
 import { backgroundFromValue, editForBackground, type DirBackgroundDraft } from "../dirMedia";
+import type { DirFieldEmits, DirFieldProps } from "./dirFormContracts";
 
-const props = defineProps<{ value: unknown; saving: boolean }>();
-const emit = defineEmits<{ (e: "change", edit: DirConfigEdit): void }>();
+const props = defineProps<DirFieldProps>();
+const emit = defineEmits<DirFieldEmits>();
 const { t } = useI18n();
 
 const current = computed(() => backgroundFromValue(props.value));
