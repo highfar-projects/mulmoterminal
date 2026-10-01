@@ -305,9 +305,9 @@ a slower way to do what the UI already does is not pressed.
 
 ## Publishing a release
 
-`/publish` drives the mechanics (bump, tag, npm, GitHub release). Three things are this repo's own.
-The first two are easy to skip because the release still "works" without them; the third is the one
-a spec will stop you on:
+`/publish` drives the mechanics (bump, tag, npm, GitHub release). Four things are this repo's own.
+The first two are easy to skip because the release still "works" without them; the last two are the
+ones a spec will stop you on:
 
 **1. `docs/ChangeLog.md`** — English, newest-first, the same per-PR detail as the GitHub release.
 It records **what changed and why**.
@@ -386,6 +386,13 @@ than people, so a stale field is a wrong answer nobody can see is wrong. Unlike 
 in the same commit and `yarn test` goes red until it is there. Leave `updated` alone — it means
 "when a human last read this file against reality", not "when it was last touched". Nothing checked
 any of it until #1988, and the version had sat on 4.4.0 for twelve releases.
+
+**4. The feature list, `docs/guide/{en,ja}/feature-list.md`** — every capability the product has
+now, one line each with the release it arrived in as `(vX.Y.Z)`, grouped by area (#2818). It is what
+an introduction, a post or a comparison is written from, so a release that leaves it behind makes
+every later one wrong. Add the release's user-visible additions (not fixes) under their area, drop
+anything the release removed, and move `as_of:` in the front matter to the new version — in both
+languages. **Enforced**: a spec pins `as_of` to `package.json` and refuses a `(v…)` later than it.
 
 ## Filing issues
 - Before filing a **bug / "broken" / "weird behaviour"** issue about MulmoTerminal, run the

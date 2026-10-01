@@ -248,6 +248,7 @@ installing Node.js / Claude Code / git / gh on macOS and Windows, the
 3. [FAQ](faq.html) (existing sessions, Windows, token cost, how it compares)
 4. [Scenarios — workflows by example](scenarios.html)
 5. [Feature reference](features.html) (grouped by the four pillars)
+   - [Feature list](feature-list.html) (every capability today, one line each with the release it arrived in)
 6. [Making the cells talk to each other](conversation.html) (one-turn handoffs, round tables, the room)
 7. [Configuration](config.html) (settings modal · `config.json` · `.mulmoterminal.json` · the **DSL**)
 8. [Mobile notifications (Web Push)](notifications.html) (iPhone / Android setup)
