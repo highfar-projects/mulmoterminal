@@ -30,6 +30,7 @@ import { listRooms } from "../composables/useRooms";
 import { WORKLOG_TAG } from "../composables/worklog";
 import { useGatedEntries } from "../composables/useGatedEntries";
 import { blueprintsViewOpen } from "../composables/useBlueprintsView";
+import { skillsViewOpen } from "../composables/useSkillsView";
 import { useSoundEnabled } from "../composables/useSoundEnabled";
 import { audioBlocked } from "../composables/audioUnlockState";
 import { soundButtonState } from "./soundButtonState";
@@ -178,6 +179,7 @@ function showRooms(): void {
 const FEATURE_ACTIONS: Record<FeatureMenuEntry, () => void> = {
   rooms: showRooms,
   blueprints: () => blueprintsViewOpen(),
+  skills: skillsViewOpen,
   worklog: showWorklog,
 };
 </script>

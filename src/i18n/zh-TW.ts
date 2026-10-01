@@ -15,6 +15,7 @@ import { settingsControlsZhTW } from "./settingsControls/zh-TW";
 import { shortcutsZhTW } from "./shortcuts/zh-TW";
 import { filesTreeZhTW } from "./filesTree/zh-TW";
 import { previewCodeCopyZhTW } from "./previewCodeCopy/zh-TW";
+import { skillsViewZhTW } from "./skillsView/zh-TW";
 
 // 繁體中文。`Messages` 就是 en.ts 的形狀，少一個鍵就會編譯失敗 —— 不會出現執行時悄悄退回
 // 英文、卻沒有人發現的狀況。
@@ -585,6 +586,7 @@ export const zhTW: Messages = {
     items: {
       rooms: { label: "Rooms", detail: "終端機之間的圓桌對話" },
       blueprints: { label: "藍圖", detail: "依範本逐步建置應用程式或文件" },
+      skills: { label: "Skills", detail: "列出並搜尋 ~/.claude/skills 與各資料夾中的技能" },
       worklog: { label: "Worklog", detail: "wiki 中的開發工作紀錄（#worklog）" },
     },
   },
@@ -627,6 +629,7 @@ export const zhTW: Messages = {
   settingsControls: settingsControlsZhTW,
   ...filesTreeZhTW,
   ...previewCodeCopyZhTW,
+  ...skillsViewZhTW,
   tips: tipsZhTW,
   blueprints: blueprintsZhTW,
 };
