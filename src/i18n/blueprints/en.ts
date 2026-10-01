@@ -37,6 +37,8 @@ export const blueprintsEn = {
     credential: "This step needs you to sign in.",
   },
   form: {
+    reportLanguage: "Report language",
+    reportLanguageHint: "The language the agent writes to you in: reports, questions and replies. Your documents keep their own language.",
     presets: "Start from an example",
     presetsMore: "Show {count} more examples",
     presetsFewer: "Show fewer examples",

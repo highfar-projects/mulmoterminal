@@ -4,7 +4,7 @@
 // gap here is a guess there.
 import { computed, nextTick, onMounted, ref, useTemplateRef, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { isPersonLanguage } from "../../../common/blueprint/personLanguage";
+import { isPersonLanguage, PERSON_LANGUAGE_NAMES, type PersonLanguage } from "../../../common/blueprint/personLanguage";
 import {
   folderPresentPaths,
   listKnownFolders,
@@ -39,6 +39,8 @@ import BlueprintHearingField from "./BlueprintHearingField.vue";
 
 const emit = defineEmits<{ started: [runId: string] }>();
 const { t, locale } = useI18n();
+// What the agent writes to the person is in this language; it starts as the screen's, and documents keep their own.
+const reportLanguage = ref<PersonLanguage>(isPersonLanguage(locale.value) ? locale.value : "en");
 
 const packs = ref<PackList>([]);
 const base = ref("");
@@ -259,7 +261,7 @@ async function start(personalDataConfirmed = false): Promise<void> {
     usecase: usecase.value,
     answers: formAnswers.value,
     ...(preset === undefined ? {} : { preset }),
-    ...(isPersonLanguage(locale.value) ? { language: locale.value } : {}),
+    language: reportLanguage.value,
     ...(personalDataConfirmed ? { personalDataConfirmed } : {}),
   });
   starting.value = false;
@@ -394,7 +396,18 @@ function openToTrust(): void {
             <option v-for="pack in usecaseBases" :key="pack.slug" :value="pack.slug">{{ pack.manifest.title }}</option>
           </select>
         </label>
+        <label class="flex flex-col gap-1 font-sans text-[13px] text-fg">
+          {{ t("blueprints.form.reportLanguage") }}
+          <select
+            v-model="reportLanguage"
+            data-testid="blueprint-report-language"
+            class="rounded-[4px] border border-border bg-input px-2 py-1.5 text-[12px] text-fg"
+          >
+            <option v-for="(name, code) in PERSON_LANGUAGE_NAMES" :key="code" :value="code">{{ name }}</option>
+          </select>
+        </label>
       </div>
+      <p class="m-0 font-sans text-[11px] text-dim">{{ t("blueprints.form.reportLanguageHint") }}</p>
       <p v-if="packs.length > 0 && groups.length === 0" class="m-0 font-sans text-[12px] text-dim">{{ t("blueprints.form.noUsecase") }}</p>
 
       <template v-if="preview">

@@ -37,6 +37,8 @@ export const blueprintsZhTW: Messages["blueprints"] = {
     credential: "此步驟需要你登入。",
   },
   form: {
+    reportLanguage: "報告語言",
+    reportLanguageHint: "代理寫給你的內容（報告、提問、回覆）所用的語言。文件本身的語言不變。",
     presets: "從範例開始",
     presetsMore: "查看其他範例（{count} 個）",
     presetsFewer: "收起範例",

@@ -15,6 +15,15 @@ export const PERSON_LANGUAGES: Readonly<Record<PersonLanguage, string>> = {
   ko: "Korean",
 };
 
+/** Each language in its own words, for a choice the person makes whatever language the screen is in. */
+export const PERSON_LANGUAGE_NAMES: Readonly<Record<PersonLanguage, string>> = {
+  en: "English",
+  ja: "日本語",
+  "zh-CN": "简体中文",
+  "zh-TW": "繁體中文",
+  ko: "한국어",
+};
+
 export const isPersonLanguage = (raw: string): raw is PersonLanguage => personLanguageSchema.safeParse(raw).success;
 
 /** The prompt line that says it; none for a build started before the language was recorded. */

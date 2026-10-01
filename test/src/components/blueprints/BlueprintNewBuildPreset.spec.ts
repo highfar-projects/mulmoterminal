@@ -84,6 +84,43 @@ const mountForm = async () => {
   return wrapper;
 };
 
+describe("the report language", () => {
+  beforeEach(() => {
+    startRun.mockReset();
+    startRun.mockResolvedValue({ ok: true, value: { runId: "run-1" } });
+    suggestFolder.mockReset();
+    suggestFolder.mockResolvedValue({ ok: true, value: { path: null } });
+    listKnownFolders.mockReset();
+    listKnownFolders.mockResolvedValue({ ok: true, value: { folders: [] } });
+  });
+
+  const startWith = async (pick: string | null) => {
+    const wrapper = await mountForm();
+    if (pick !== null) await wrapper.get('[data-testid="blueprint-report-language"]').setValue(pick);
+    await wrapper.get('[data-testid="blueprint-project-dir"]').setValue("/tmp/example");
+    await wrapper.get('[data-testid="blueprint-new-form"]').trigger("submit");
+    await flushPromises();
+    return wrapper;
+  };
+
+  it("offers every language a build can record, each named in its own words", async () => {
+    const wrapper = await mountForm();
+    const options = wrapper.findAll('[data-testid="blueprint-report-language"] option');
+    expect(options.map((option) => option.attributes("value"))).toEqual(["en", "ja", "zh-CN", "zh-TW", "ko"]);
+    expect(options.map((option) => option.text())).toEqual(["English", "日本語", "简体中文", "繁體中文", "한국어"]);
+  });
+
+  it("starts as the screen's language and is sent as it is", async () => {
+    await startWith(null);
+    expect(startRun).toHaveBeenCalledWith(expect.objectContaining({ language: "en" }));
+  });
+
+  it("sends the language the person picked instead of the screen's", async () => {
+    await startWith("ja");
+    expect(startRun).toHaveBeenCalledWith(expect.objectContaining({ language: "ja" }));
+  });
+});
+
 describe("starting a document blueprint from an example", () => {
   beforeEach(() => {
     startRun.mockReset();

@@ -37,6 +37,8 @@ export const blueprintsZhCN: Messages["blueprints"] = {
     credential: "此步骤需要你登录。",
   },
   form: {
+    reportLanguage: "报告语言",
+    reportLanguageHint: "代理写给你的内容（报告、提问、回复）所用的语言。文档本身的语言不变。",
     presets: "从示例开始",
     presetsMore: "查看其他示例（{count} 个）",
     presetsFewer: "收起示例",
