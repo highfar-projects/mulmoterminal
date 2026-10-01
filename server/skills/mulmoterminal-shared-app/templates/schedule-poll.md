@@ -315,6 +315,9 @@ Anonymous プロバイダを有効にする**必要があり、これはリポ�
     const mine = own.get(pollId);
     const result = mine ? await view.correct("answers", mine.id, values) : await view.submit("answers", { pollId, ...values, status: "answered" });
     if (result.ok) {
+      // 新しく出した回答は、次の onState で view.mine に訊き直して自分の行にする。
+      // 訊かないままだと、次に押したときに 2 回目の submit になり拒否されます。
+      if (!mine) asked.delete(pollId);
       say.textContent = mine ? "回答を直しました。" : "回答しました。";
       return;
     }

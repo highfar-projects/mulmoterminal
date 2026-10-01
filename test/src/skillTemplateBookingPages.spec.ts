@@ -214,6 +214,29 @@ describe("schedule-poll.md — views/poll.html", () => {
     expect(page.calls[0]?.id).toBe("u2_p1");
   });
 
+  it("looks the own row up again after a first answer, so the next press corrects it", async () => {
+    let answered = false;
+    const mine: Mine = () =>
+      Promise.resolve(
+        answered ? { known: true, found: true, record: { id: "u9_p1", pollId: "p1", name: "田中", marks: "○○○" } } : { known: true, found: false },
+      );
+    const page = load(schedulePoll, "views/poll.html", mine);
+    page.tell({ polls: [poll], answers });
+    await settle();
+    type("#name-p1", "田中");
+    click("[data-send='p1']");
+    await settle();
+    expect(page.calls[0]?.kind).toBe("submit");
+    answered = true;
+    // The refreshed state that follows a submission.
+    page.tell({ polls: [poll], answers });
+    await settle();
+    click("[data-send='p1']");
+    await settle();
+    expect(page.calls[1]?.kind).toBe("correct");
+    expect(page.calls[1]?.id).toBe("u9_p1");
+  });
+
   it("offers no form once the poll is closed", () => {
     const page = load(schedulePoll, "views/poll.html");
     page.tell({ polls: [{ ...poll, closesAt: 0 }], answers });
