@@ -4,6 +4,8 @@
 // `/api/files/browse/` and 404s (#2261). It is rewritten to the raw route, relative to the
 // document's own directory. Pure, so the rules below can be tested without a server.
 
+import { resolveRelativeSegments } from "../../common/resolveRelativeSegments.js";
+
 /** Where the document sits: the base it was served against, and its directory under that base as
  *  a `/`-separated relative path ("" for the base itself). */
 export interface ServedDoc {
@@ -19,18 +21,7 @@ const NOT_FILE_RELATIVE = /^(?:[a-z][a-z0-9+.-]*:|[/\\#?])/i;
 
 /** The `/`-joined path, or null when it climbs above the base — the raw route would refuse it,
  *  and leaving it as written is the same 404 without implying anything was tried. */
-function joinWithinBase(dirRel: string, rel: string): string | null {
-  const out: string[] = [];
-  for (const segment of `${dirRel}/${rel}`.split("/")) {
-    if (segment === "" || segment === ".") continue;
-    if (segment === "..") {
-      if (out.pop() === undefined) return null;
-      continue;
-    }
-    out.push(segment);
-  }
-  return out.length ? out.join("/") : null;
-}
+const joinWithinBase = (dirRel: string, rel: string): string | null => resolveRelativeSegments(`${dirRel}/${rel}`);
 
 /** The part of `src` that names a file: before any query or fragment, percent-decoded. Null when
  *  the escapes are malformed, since there is then no file name to resolve. */

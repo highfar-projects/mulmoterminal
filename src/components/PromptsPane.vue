@@ -15,6 +15,7 @@ import type { TerminalAgent } from "../../common/sessionAgent";
 import { readPrompt, type PromptEntry } from "../../common/promptHistory";
 import { PROMPT_SUBMITTED_CHANNEL, isPromptSubmittedEvent } from "../../common/promptChannel";
 import { isTextSelected } from "./textSelected";
+import { clockLabel } from "./clockLabel";
 import { useI18n } from "vue-i18n";
 
 const { t } = useI18n();
@@ -116,25 +117,10 @@ onUnmounted(() => {
   unsubscribe();
 });
 
-// The time alone for today, with the date once it is older — "11:31" is enough to place a prompt
-// from this morning, and useless for one from Tuesday.
-const startOfToday = (): number => {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
-};
-function formatTime(at: number | null): string {
-  if (at === null) return "";
-  const d = new Date(at);
-  if (Number.isNaN(d.getTime())) return "";
-  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  return at >= startOfToday() ? time : `${d.toLocaleDateString([], { month: "numeric", day: "numeric" })} ${time}`;
-}
-
 // The time is INSIDE the toggle, so a label naming only the action would replace it in the
 // accessible name and cost a screen reader the one thing that places the prompt in time.
 const toggleLabel = (at: number | null, isOpen: boolean): string =>
-  [formatTime(at), isOpen ? t("tips.panes.collapsePrompt") : t("tips.panes.showWholePrompt")].filter(Boolean).join(" ");
+  [clockLabel(at), isOpen ? t("tips.panes.collapsePrompt") : t("tips.panes.showWholePrompt")].filter(Boolean).join(" ");
 
 // Which rows are showing their full text. A long prompt is clamped so the list stays scannable,
 // and clicking one opens it in place — the pane reads, and this is still reading.
@@ -215,7 +201,7 @@ watch(prompts, () => {
             :data-tip="opened.has(index) ? t('tips.panes.collapse') : t('tips.panes.showWholePrompt')"
             @click="toggle(index)"
           >
-            <span data-testid="prompt-time" class="text-[11px] tabular-nums text-dim">{{ formatTime(prompt.at) }}</span>
+            <span data-testid="prompt-time" class="text-[11px] tabular-nums text-dim">{{ clockLabel(prompt.at) }}</span>
             <span class="material-symbols-outlined text-[16px] text-dim" aria-hidden="true">{{ opened.has(index) ? "expand_less" : "expand_more" }}</span>
           </button>
           <p

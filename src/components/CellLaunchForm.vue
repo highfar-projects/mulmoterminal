@@ -22,6 +22,7 @@ import { launchChips, type CwdPreset, type LaunchChip } from "./presets";
 import type { Launcher, LaunchPick } from "./launchers";
 import type { LaunchChoice } from "./wsUrl";
 import type { RunCommand } from "./runCommand";
+import type { ResumeRequest } from "./resumeRequest";
 import LaunchChipList from "./LaunchChipList.vue";
 import AgentMark from "./AgentMark.vue";
 import ModelPicker from "./ModelPicker.vue";
@@ -94,7 +95,7 @@ const emit = defineEmits<{
   // connect the wrong endpoint to a live id, so neither row may leave it out.
   // `account` is the login the row was found under, so the cell can say so; the server keeps the
   // session on that login whatever is sent.
-  (e: "resume", value: { id: string; cwd: string | null; agent?: TerminalAgent; account?: string | null }): void;
+  (e: "resume", value: ResumeRequest): void;
   (e: "run", value: RunCommand): void;
   (e: "launch", value: LaunchPick): void;
   // `retry-config`: read the config again after it could not be read at all — the button on the

@@ -8,5 +8,6 @@ for d in server/migrations test; do
   [ -d "$d" ] || { echo "missing $d/" >&2; exit 1; }
 done
 grep -q '"start"' package.json || { echo "package.json has no start script" >&2; exit 1; }
+node --no-warnings "$(dirname "$0")/dev-proxy.mjs"
 yarn build
 yarn test
