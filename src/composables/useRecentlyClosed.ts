@@ -17,19 +17,25 @@ function load(): ClosedCell[] {
   }
 }
 
+// Once a write is refused, storage holds less than this page does, and reading it back would
+// drop what only the page has.
+let storageWritable = true;
+
 function save(list: ClosedCell[]): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
   } catch {
-    // Nothing to do: the list still holds for this page.
+    storageWritable = false;
   }
 }
 
 export const recentlyClosed = ref<ClosedCell[]>(load());
 
 // Read back first, so a close in another tab since this page loaded is kept rather than overwritten.
+const latest = (): ClosedCell[] => (storageWritable ? load() : recentlyClosed.value);
+
 export function recordClosedCell(entry: ClosedCell): void {
-  recentlyClosed.value = rememberClosed(load(), entry);
+  recentlyClosed.value = rememberClosed(latest(), entry);
   save(recentlyClosed.value);
 }
 
@@ -40,6 +46,6 @@ export function recordClosedCellOf(cell: Cell, meta: SessionMetaView | undefined
 }
 
 export function forgetClosedCell(entry: ClosedCell): void {
-  recentlyClosed.value = forgetClosed(load(), entry);
+  recentlyClosed.value = forgetClosed(latest(), entry);
   save(recentlyClosed.value);
 }

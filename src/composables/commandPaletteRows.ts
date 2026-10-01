@@ -339,7 +339,7 @@ function startCandidates({ launchDirs, starts, startDir, resumes, closedCells, g
   });
   const reopens = closedCells.map((closed): [string, Candidate] => {
     const name = text.reopenLabel(closed.title);
-    return [`${name} ${closed.cwd ?? ""}`, { kind: "reopen", closed, name, full: gridFull }];
+    return [`${name} ${closed.cwd ?? ""} ${closedCellId(closed)}`, { kind: "reopen", closed, name, full: gridFull }];
   });
   const newTerminals = launchDirs.map((dir): [string, Candidate] => [
     `${text.newTerminalIn(dir.label)} ${dir.path}`,

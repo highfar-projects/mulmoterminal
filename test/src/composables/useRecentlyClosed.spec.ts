@@ -48,6 +48,9 @@ describe("useRecentlyClosed", () => {
       throw new Error("quota");
     });
     expect(() => page.recordClosedCell(entry("a"))).not.toThrow();
-    expect(page.recentlyClosed.value).toHaveLength(1);
+    page.recordClosedCell(entry("b"));
+    page.recordClosedCell(entry("c"));
+    page.forgetClosedCell(entry("b"));
+    expect(page.recentlyClosed.value.map((closed) => closed.kind === "session" && closed.session)).toEqual(["c", "a"]);
   });
 });

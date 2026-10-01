@@ -665,6 +665,13 @@ describe("reopen rows", () => {
     expect(paletteRows("@ Reopen Fix", {}, UNZOOMED, TEXT, HERE).map(rowKey)).not.toContain("reopen:session::s1");
   });
 
+  // Two sessions in one directory with no title of their own both read as the directory name.
+  it("keeps two closed cells with the same title and directory apart", () => {
+    const twins = [CLOSED[0], { ...CLOSED[0], session: "s2" }];
+    const keys = paletteRows("", {}, UNZOOMED, TEXT, { ...NONE, closedCells: twins }).map(rowKey);
+    expect(keys).toEqual(expect.arrayContaining(["reopen:session::s1", "reopen:session::s2"]));
+  });
+
   it("lists nothing when nothing was closed", () => {
     expect(paletteRows("", {}, UNZOOMED, TEXT, NONE).some((row) => row.kind === "reopen")).toBe(false);
   });
