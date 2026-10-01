@@ -109,6 +109,13 @@ const isWorking = ({ run, state }: Loaded): boolean => run.revisionSessionId !==
 // session: whatever it left behind was not claimed as done.
 export const LOST_SESSION_OUTPUT = englishStepNotice({ code: "session-lost" });
 
+// A step starts counting its failures afresh: a person retried it, a round passed, or its check passed.
+const withFailuresCleared = (run: BlueprintRun, stepId: string): BlueprintRun => ({
+  ...run,
+  failedChecks: { ...run.failedChecks, [stepId]: 0 },
+  failureOutputs: { ...run.failureOutputs, [stepId]: [] },
+});
+
 export interface CreateRunRequest {
   projectDir: string;
   basePackDir: string;
@@ -146,6 +153,7 @@ class Executor {
       ...request,
       answers: request.answers ?? {},
       failedChecks: {},
+      failureOutputs: {},
       activeSessionId: null,
       sessions: [],
       createdAtMs: this.deps.now(),
@@ -204,7 +212,7 @@ class Executor {
       const loaded = applied(before, stepId, event);
       if (event.type === "retry") this.closeSessionsOf(before.run, stepId);
       // A person's retry is a fresh start for the automatic retries, too.
-      const run = event.type === "retry" ? { ...loaded.run, failedChecks: { ...loaded.run.failedChecks, [stepId]: 0 } } : loaded.run;
+      const run = event.type === "retry" ? withFailuresCleared(loaded.run, stepId) : loaded.run;
       await this.deps.store.save(run, loaded.state);
       return this.advance({ run, state: loaded.state });
     });
@@ -468,6 +476,9 @@ class Executor {
       askCommand: this.deps.askCommand(run.id, stepId, sessionId),
       earlierAnswers: earlierAnswers(run.steps, state.steps, stepId),
       language: run.language,
+      // The last failure is the step's lastCheck, already in the prompt; these are the ones before it.
+      earlierFailures: (run.failureOutputs[stepId] ?? []).slice(0, -1),
+      failedAttempts: run.failedChecks[stepId] ?? 0,
     });
     this.deps.spawnStepSession(run.projectDir, prompt, sessionId);
     this.deps.onTurnEnded(sessionId, ({ didError }) => this.turnEnded(run.id, sessionId, didError));
@@ -500,7 +511,8 @@ class Executor {
     }
     if (!shouldRepeat(step, round, more.ok)) return loaded;
     const repeated = applied(loaded, step.id, { type: "repeat" });
-    return { run: { ...repeated.run, failedChecks: { ...repeated.run.failedChecks, [step.id]: 0 } }, state: repeated.state };
+    // The round that just passed already cleared its failures.
+    return repeated;
   }
 
   private recordNotice(loaded: Loaded, stepId: string, notice: StepNotice): Loaded {
@@ -509,9 +521,13 @@ class Executor {
 
   private recordCheck(loaded: Loaded, stepId: string, result: CheckResult, notice?: StepNotice): Loaded {
     const checked = applied(loaded, stepId, { type: "check", ok: result.ok, output: result.output, atMs: this.deps.now(), ...(notice ? { notice } : {}) });
-    if (result.ok) return checked;
+    if (result.ok) return { run: withFailuresCleared(checked.run, stepId), state: checked.state };
     const failedChecks = { ...checked.run.failedChecks, [stepId]: (checked.run.failedChecks[stepId] ?? 0) + 1 };
-    return { run: { ...checked.run, failedChecks }, state: checked.state };
+    const failureOutputs = {
+      ...checked.run.failureOutputs,
+      [stepId]: [...(checked.run.failureOutputs[stepId] ?? []), result.output].slice(-MAX_FAILED_CHECKS),
+    };
+    return { run: { ...checked.run, failedChecks, failureOutputs }, state: checked.state };
   }
 }
 

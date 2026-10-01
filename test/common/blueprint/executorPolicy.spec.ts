@@ -3,7 +3,14 @@ import { describe, it, expect } from "vitest";
 import { basePlanSchema } from "../../../common/blueprint/plan";
 import { initialState, type BlueprintState, type StepState } from "../../../common/blueprint/state";
 import { atRoundLimit, nextAction, shouldRepeat, MAX_FAILED_CHECKS, MAX_ROUNDS, type ExecutorInputs } from "../../../common/blueprint/executorPolicy";
-import { earlierAnswers, resolvedCheck, stepPrompt, CHECK_OUTPUT_PROMPT_CHARS, EARLIER_ANSWERS_PROMPT_CHARS } from "../../../common/blueprint/stepPrompt";
+import {
+  earlierAnswers,
+  resolvedCheck,
+  stepPrompt,
+  CHECK_OUTPUT_PROMPT_CHARS,
+  EARLIER_ANSWERS_PROMPT_CHARS,
+  EARLIER_FAILURE_PROMPT_CHARS,
+} from "../../../common/blueprint/stepPrompt";
 
 const steps = basePlanSchema.parse({
   steps: [
@@ -119,6 +126,41 @@ describe("stepPrompt", () => {
     expect(failing).toContain('read the check to see exactly what it requires — it is `sh "/packs/internal/checks/actions.sh" local`');
     expect(failing).toContain("Never change the check");
     expect(prompt(undefined)).not.toContain("read the check");
+  });
+});
+
+describe("stepPrompt — earlier failures and repair attempts", () => {
+  const failing = { status: "running" as const, approved: true, answers: [], lastCheck: { ok: false, output: "LAST", atMs: 1 } };
+  const prompt = (earlierFailures: readonly string[], stepState: Parameters<typeof stepPrompt>[0]["stepState"] = failing, failedAttempts = 0) =>
+    stepPrompt({ step: steps[1], skillFile: "/s", packDirs: { base: "/b", usecase: "/u" }, stepState, askCommand: "ASK", earlierFailures, failedAttempts });
+
+  it("shows no history on a first retry", () => {
+    expect(prompt([])).not.toContain("Earlier attempts failed");
+  });
+
+  it("shows the earlier failures, oldest first, and calls it a repair only once enough have failed", () => {
+    const twice = prompt(["FIRST"]);
+    expect(twice).toContain("Earlier attempts failed this check too");
+    expect(twice.indexOf("FIRST")).toBeLessThan(twice.indexOf("LAST"));
+    expect(twice).not.toContain("This is a repair attempt");
+    expect(prompt(["FIRST", "SECOND"])).toContain("This is a repair attempt: 3 attempts in a row");
+  });
+
+  it("is a repair by the count alone, for a run recorded before the outputs were kept", () => {
+    const legacy = prompt([], failing, 3);
+    expect(legacy).toContain("This is a repair attempt: 3 attempts in a row");
+    expect(legacy).not.toContain("Earlier attempts failed");
+    expect(prompt([], failing, 2)).not.toContain("This is a repair attempt");
+  });
+
+  it("keeps only the tail of each earlier failure", () => {
+    const text = prompt([`${"y".repeat(EARLIER_FAILURE_PROMPT_CHARS + 10)}END-OF-FIRST`]);
+    expect(text).toContain("END-OF-FIRST");
+    expect(text).not.toContain("y".repeat(EARLIER_FAILURE_PROMPT_CHARS + 1));
+  });
+
+  it("says nothing about failures once the check passed", () => {
+    expect(prompt(["FIRST", "SECOND"], { ...failing, lastCheck: { ok: true, output: "", atMs: 2 } })).not.toContain("Earlier attempts failed");
   });
 });
 
