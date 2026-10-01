@@ -188,6 +188,18 @@ describe("designProblems", () => {
       expect(designProblems({ ...withTemplate, styles: commentedImport })).toEqual([
         "src/soft.css holds the template but no stylesheet that imports tailwindcss imports it",
       ]);
+      const lookAlike = [
+        { path: "src/style.css", text: '@import "tailwindcss";\n@import "./not-soft.css";\n' },
+        { path: "src/soft.css", text: template("soft") },
+      ];
+      expect(designProblems({ ...withTemplate, styles: lookAlike })).toEqual([
+        "src/soft.css holds the template but no stylesheet that imports tailwindcss imports it",
+      ]);
+      const bare = [
+        { path: "src/style.css", text: '@import "tailwindcss";\n@import "soft.css";\n' },
+        { path: "src/soft.css", text: template("soft") },
+      ];
+      expect(designProblems({ ...withTemplate, styles: bare })).toEqual([]);
       const commentedOut = [{ path: "style.css", text: `@import "tailwindcss";\n/* ${themeBlock(template("soft"))} */` }];
       expect(designProblems({ ...withTemplate, styles: commentedOut })).toEqual(["no stylesheet holds design/themes/soft.css unchanged"]);
       const other = [{ path: "style.css", text: `@import "tailwindcss";\n${template("calm")}` }];

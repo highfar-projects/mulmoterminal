@@ -65,7 +65,7 @@ const themeProblems = (design, styles, template) => {
   const block = themeBlock(template);
   const holders = styles.filter((style) => block !== null && style.text.includes(block));
   const imported = (holder) =>
-    entries.some((entry) => entry === holder || new RegExp(`@import\\s+["'][^"']*${escaped(holder.path.split("/").pop())}["']`, "u").test(entry.text));
+    entries.some((entry) => entry === holder || new RegExp(`@import\\s+["'](?:[^"']*/)?${escaped(holder.path.split("/").pop())}["']`, "u").test(entry.text));
   if (holders.length === 0) return [`no stylesheet holds design/themes/${design.theme}.css unchanged`];
   return holders.some(imported) ? [] : [`${holders[0].path} holds the template but no stylesheet that imports tailwindcss imports it`];
 };
