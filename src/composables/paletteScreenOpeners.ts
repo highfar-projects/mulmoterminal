@@ -6,6 +6,7 @@ import { browseGotoIndex } from "./useCollectionBrowse";
 import { filesGotoIndex } from "./useFilesView";
 import { githubGotoIndex } from "./useGithubView";
 import { roomsViewOpen } from "./useRoomsView";
+import { skillsViewOpen } from "./useSkillsView";
 import { wikiGotoIndex, wikiGotoTag } from "./useWikiBrowse";
 import { WORKLOG_TAG } from "./worklog";
 import type { PaletteScreen } from "./paletteScreens";
@@ -21,4 +22,5 @@ export const SCREEN_OPENERS: Record<PaletteScreen, () => void> = {
   rooms: () => roomsViewOpen(),
   blueprints: () => blueprintsViewOpen(),
   worklog: () => wikiGotoTag(WORKLOG_TAG),
+  skills: skillsViewOpen,
 };

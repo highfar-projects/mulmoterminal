@@ -40,6 +40,8 @@ describe("runAppAction", () => {
     expect(m.openers.wiki).toHaveBeenCalledTimes(1);
     expect(runAppAction("screen-worklog")).toBe(true);
     expect(m.openers.worklog).toHaveBeenCalledTimes(1);
+    expect(runAppAction("screen-skills")).toBe(true);
+    expect(m.openers.skills).toHaveBeenCalledTimes(1);
   });
 
   it("refuses a screen whose feature is not set up, opening nothing", () => {

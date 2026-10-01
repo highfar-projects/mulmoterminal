@@ -61,6 +61,7 @@ export const KEYMAP_ACTIONS = [
   "screen-rooms",
   "screen-blueprints",
   "screen-worklog",
+  "screen-skills",
   "settings-open",
   "sound-toggle",
   "view-toggle",

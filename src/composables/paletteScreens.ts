@@ -2,7 +2,7 @@
 // feature that is not set up opens onto nothing, so it follows the toolbar's gating.
 import type { GatedEntry } from "../components/gatedToolbarEntries";
 
-export const PALETTE_SCREENS = ["terminals", "collections", "feeds", "accounting", "files", "wiki", "prs", "rooms", "blueprints", "worklog"] as const;
+export const PALETTE_SCREENS = ["terminals", "collections", "feeds", "accounting", "files", "wiki", "prs", "rooms", "blueprints", "worklog", "skills"] as const;
 export type PaletteScreen = (typeof PALETTE_SCREENS)[number];
 
 /** The icon the toolbar (or the screen's own door) uses for each, so a row reads as that screen. */
@@ -17,6 +17,7 @@ export const SCREEN_ICONS: Record<PaletteScreen, string> = {
   rooms: "forum",
   blueprints: "architecture",
   worklog: "history_edu",
+  skills: "auto_stories",
 };
 
 /** Each screen's name, from the key its own door already uses, so the two cannot drift apart. */
@@ -31,6 +32,7 @@ export const SCREEN_LABEL_KEYS: Record<PaletteScreen, string> = {
   rooms: "featureMenu.items.rooms.label",
   blueprints: "featureMenu.items.blueprints.label",
   worklog: "featureMenu.items.worklog.label",
+  skills: "featureMenu.items.skills.label",
 };
 
 const GATED_BY: Partial<Record<PaletteScreen, GatedEntry>> = { prs: "prs", rooms: "rooms", worklog: "worklog" };

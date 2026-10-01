@@ -49,6 +49,7 @@ export const shortcutActionsEn = {
   screenRooms: "Go to Rooms",
   screenBlueprints: "Go to Blueprints",
   screenWorklog: "Go to the Worklog",
+  screenSkills: "Go to Skills",
   settingsOpen: "Open Settings",
   soundToggle: "Turn the notification sound on / off",
   viewToggle: "Switch the enlarged view: roster / strip",

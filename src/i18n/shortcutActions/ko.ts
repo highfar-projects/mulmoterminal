@@ -49,6 +49,7 @@ export const shortcutActionsKo = {
   screenRooms: "Rooms로",
   screenBlueprints: "Blueprints로",
   screenWorklog: "작업 로그로",
+  screenSkills: "스킬로",
   settingsOpen: "설정 열기",
   soundToggle: "알림음 켜기 / 끄기",
   viewToggle: "확대 보기 전환(목록 / 썸네일 줄)",
