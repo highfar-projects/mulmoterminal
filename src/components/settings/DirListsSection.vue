@@ -5,24 +5,23 @@
 // become; the form saves it and redraws this from the answer.
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import type { DirConfigEdit, DirFormKey } from "../../../common/dirConfigForm";
+import type { DirFormKey } from "../../../common/dirConfigForm";
 import { isRecord } from "../../../common/isRecord";
 import type { WorktreeEnvVar } from "../../../common/worktreeEnv";
 import { fetchWithTimeout } from "../../utils/fetchWithTimeout";
-import type { DirConfigDetailView } from "../dirConfigDetail";
 import { editForSet } from "../dirSettingsFormFields";
 import { worktreeEnvRows } from "../dirWorktreeEnv";
 import DirFormKeyActions from "./DirFormKeyActions.vue";
 import DirStringListEditor from "./DirStringListEditor.vue";
 import DirWorktreeEnvEditor from "./DirWorktreeEnvEditor.vue";
+import type { DirSectionEmits, DirSectionProps } from "./dirFormContracts";
+import { useDirFormKeys } from "./useDirFormKeys";
 
-const props = defineProps<{ path: string; detail: DirConfigDetailView; saving: boolean }>();
-const emit = defineEmits<{ (e: "save", edit: DirConfigEdit): void; (e: "move", key: DirFormKey, to: "local" | "shared"): void }>();
+const props = defineProps<{ path: string } & DirSectionProps>();
+const emit = defineEmits<DirSectionEmits>();
 const { t } = useI18n();
 
-const values = computed(() => props.detail.formValues);
-const isSet = (key: DirFormKey): boolean => key in values.value;
-const isLocal = (key: DirFormKey): boolean => props.detail.source.local.includes(key);
+const { values, isSet, isLocal } = useDirFormKeys(() => props.detail);
 const strings = (key: DirFormKey): string[] => {
   const value = values.value[key];
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];

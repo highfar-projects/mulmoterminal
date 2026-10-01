@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { ACCOUNT_AGENTS, type AccountAgent } from "../../../common/agentAccounts";
 import { useAppConfig } from "../../composables/useAppConfig";
+import { useEntryListEditor } from "../../composables/useEntryListEditor";
 import SettingsButton from "../SettingsButton.vue";
 import SettingsField from "../SettingsField.vue";
 import SettingsListRow from "./SettingsListRow.vue";
@@ -17,33 +18,16 @@ const { accounts, changeAccounts } = useAppConfig();
 const label = ref("");
 const agent = ref<AccountAgent>("claude");
 const home = ref("");
-const saving = ref(false);
-const refused = ref(false);
+const { saving, refused, serverProblem, apply, remove } = useEntryListEditor(changeAccounts);
 const draft = computed(() => buildAccount(label.value, agent.value, home.value, accounts.value));
 const localProblem = computed<EntryProblem | null>(() => ((!label.value.trim() && !home.value.trim()) || "entry" in draft.value ? null : draft.value.problem));
 const homePlaceholder = computed(() => (agent.value === "codex" ? "~/.codex-work" : "~/.claude-work"));
-
-const serverProblem = ref<EntryProblem | null>(null);
-
-// One change at a time, against the list on disk; the answer is the list as the server now holds it.
-async function apply(action: "add" | "remove", payload: Record<string, unknown>): Promise<boolean> {
-  saving.value = true;
-  const change = await changeAccounts(action, payload);
-  saving.value = false;
-  refused.value = !change.ok && change.problem === null;
-  serverProblem.value = change.ok ? null : change.problem;
-  return change.ok;
-}
 
 async function add() {
   if (!("entry" in draft.value) || saving.value) return;
   if (!(await apply("add", { label: label.value, agent: agent.value, home: home.value }))) return;
   label.value = "";
   home.value = "";
-}
-
-function remove(id: string) {
-  if (!saving.value) void apply("remove", { id });
 }
 
 function onAgent(e: Event) {

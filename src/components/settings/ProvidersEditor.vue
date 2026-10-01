@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useLaunchOptions } from "../../composables/useLaunchOptions";
 import { changeProviders } from "../../composables/providersEditing";
+import { useEntryListEditor } from "../../composables/useEntryListEditor";
 import { buildProvider, RECOMMENDED_MAX_OUTPUT_TOKENS, type ProviderProblem } from "../../../common/providerEntries";
 import { isOfferable, notOfferedReason } from "../launchOffer";
 import SettingsButton from "../SettingsButton.vue";
@@ -16,9 +17,7 @@ const { t } = useI18n();
 const { launchOptions } = useLaunchOptions();
 
 const draft = ref({ label: "", baseUrl: "", tokenEnv: "", models: "", maxOutputTokens: String(RECOMMENDED_MAX_OUTPUT_TOKENS) });
-const saving = ref(false);
-const refused = ref(false);
-const serverProblem = ref<ProviderProblem | null>(null);
+const { saving, refused, serverProblem, apply, remove } = useEntryListEditor(changeProviders);
 const built = computed(() =>
   buildProvider(
     draft.value,
@@ -29,23 +28,10 @@ const typed = computed(() => [draft.value.label, draft.value.baseUrl, draft.valu
 // Said once something is typed: an empty form is not a mistake.
 const problem = computed<ProviderProblem | null>(() => (typed.value && "problem" in built.value ? built.value.problem : serverProblem.value));
 
-async function apply(action: "add" | "remove", payload: Record<string, unknown>): Promise<boolean> {
-  saving.value = true;
-  const change = await changeProviders(action, payload);
-  saving.value = false;
-  refused.value = !change.ok && change.problem === null;
-  serverProblem.value = change.ok ? null : change.problem;
-  return change.ok;
-}
-
 async function add() {
   if (!("entry" in built.value) || saving.value) return;
   if (await apply("add", { ...draft.value }))
     draft.value = { label: "", baseUrl: "", tokenEnv: "", models: "", maxOutputTokens: String(RECOMMENDED_MAX_OUTPUT_TOKENS) };
-}
-
-function remove(id: string) {
-  if (!saving.value) void apply("remove", { id });
 }
 
 const FIELD = "min-w-0 font-mono";
