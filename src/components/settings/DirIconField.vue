@@ -4,11 +4,11 @@
 // URL or a data: image. It says what the key should become; the form saves it.
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import type { DirConfigEdit } from "../../../common/dirConfigForm";
 import { editForIcon, iconMode, type DirIconMode } from "../dirMedia";
+import type { DirFieldEmits, DirFieldProps } from "./dirFormContracts";
 
-const props = defineProps<{ value: unknown; saving: boolean }>();
-const emit = defineEmits<{ (e: "change", edit: DirConfigEdit): void }>();
+const props = defineProps<DirFieldProps>();
+const emit = defineEmits<DirFieldEmits>();
 const { t } = useI18n();
 
 const MODES: readonly DirIconMode[] = ["auto", "none", "image"];

@@ -138,12 +138,21 @@ export class Docs implements FirestoreDocs {
   watch = (): (() => void) => () => {};
 }
 
+/** set / update / delete as the lines `bag.batched` is asserted against. The batch and the
+ *  transaction both record through it, so the two cannot write the same operation differently. */
+const opRecorder = (ops: string[]) => ({
+  set: (ref: { path: string }, data: Record<string, unknown>) => ops.push(`set ${ref.path} ${JSON.stringify(data)}`),
+  update: (ref: { path: string }, data: Record<string, unknown>) => ops.push(`update ${ref.path} ${JSON.stringify(data)}`),
+  delete: (ref: { path: string }) => ops.push(`delete ${ref.path}`),
+});
+
 /** The `firebase/firestore` surface this feature actually uses. */
 /** The batch, whose whole job is to record what it was GIVEN and only on commit. */
 const batchFor = (bag: Bag): Record<string, unknown> => {
   const ops: string[] = [];
+  const record = opRecorder(ops);
   return {
-    set: (ref: { path: string }, data: Record<string, unknown>) => ops.push(`set ${ref.path} ${JSON.stringify(data)}`),
+    set: record.set,
     // Both call shapes, because the two updates here are deliberately different: a record's declared
     // field goes through a FieldPath (a dotted name is a literal key, not a path), and the mirror's
     // `state` is ours and fixed.
@@ -156,7 +165,7 @@ const batchFor = (bag: Bag): Record<string, unknown> => {
     update: (ref: { path: string }, data: Record<string, unknown> | { segments: string[] }, value?: unknown, ...more: unknown[]) => {
       const asPath = data as { segments?: string[] };
       if (!Array.isArray(asPath.segments)) {
-        ops.push(`update ${ref.path} ${JSON.stringify(data)}`);
+        record.update(ref, data);
         return;
       }
       const written: Record<string, unknown> = { [asPath.segments.join(".")]: value };
@@ -164,9 +173,9 @@ const batchFor = (bag: Bag): Record<string, unknown> => {
         const field = more[at] as { segments?: string[] };
         if (Array.isArray(field.segments)) written[field.segments.join(".")] = more[at + 1];
       }
-      ops.push(`update ${ref.path} ${JSON.stringify(written)}`);
+      record.update(ref, written);
     },
-    delete: (ref: { path: string }) => ops.push(`delete ${ref.path}`),
+    delete: record.delete,
     commit: () => {
       if (bag.batchBreaks > 0) {
         bag.batchBreaks -= 1;
@@ -305,9 +314,7 @@ export const firestoreMock = (bag: Bag): Record<string, unknown> => ({
         const held = bag.docs.store.get(collectionPath)?.has(id) === true;
         return Promise.resolve({ exists: () => held });
       },
-      set: (ref: { path: string }, data: Record<string, unknown>) => ops.push(`set ${ref.path} ${JSON.stringify(data)}`),
-      update: (ref: { path: string }, data: Record<string, unknown>) => ops.push(`update ${ref.path} ${JSON.stringify(data)}`),
-      delete: (ref: { path: string }) => ops.push(`delete ${ref.path}`),
+      ...opRecorder(ops),
     });
     if (bag.batchFails) throw Object.assign(new Error("Missing or insufficient permissions."), { code: "permission-denied" });
     bag.batched.push(...ops);

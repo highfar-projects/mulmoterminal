@@ -5,6 +5,7 @@ import { duplicateTheme, themeColorsFrom, themesWithColors } from "../../common/
 import type { AppConfig } from "./app-config.js";
 import type { MutateOnDisk } from "./agent-entry-routes.js";
 import { requestBody } from "../routes/requestBody.js";
+import { refuseOnProblem } from "./on-disk-entry.js";
 
 const text = (value: unknown): string => (typeof value === "string" ? value : "");
 
@@ -16,10 +17,7 @@ export function mountThemeEntryRoutes(app: Express, mutate: MutateOnDisk): void 
     // caller to switch to.
     let createdId: string | null = null;
     void mutate(res, {
-      refuse: (base) => {
-        const built = build(base);
-        return "problem" in built ? built.problem : null;
-      },
+      refuse: refuseOnProblem(build),
       update: (base) => {
         const built = build(base);
         if ("problem" in built) return { themes: base.themes };
@@ -37,10 +35,7 @@ export function mountThemeEntryRoutes(app: Express, mutate: MutateOnDisk): void 
     if (!id || colors === null) return res.status(400).json({ error: "id and colors of theme variables are required" });
     const change = (base: AppConfig) => themesWithColors(base.themes, id, colors);
     return void mutate(res, {
-      refuse: (base) => {
-        const changed = change(base);
-        return "problem" in changed ? changed.problem : null;
-      },
+      refuse: refuseOnProblem(change),
       update: (base) => {
         const changed = change(base);
         return { themes: "themes" in changed ? changed.themes : base.themes };

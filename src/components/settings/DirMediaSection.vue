@@ -4,23 +4,22 @@
 // what its key should become; the form saves it and redraws this from the answer.
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
-import type { DirConfigEdit, DirFormKey } from "../../../common/dirConfigForm";
+import type { DirFormKey } from "../../../common/dirConfigForm";
 import { NOTIFY_KINDS, type NotifyKind } from "../../../common/notifyKinds";
-import type { DirConfigDetailView } from "../dirConfigDetail";
 import { soundsFromValue, withDirKindSound } from "../dirMedia";
 import { editForSet } from "../dirSettingsFormFields";
 import DirBackgroundField from "./DirBackgroundField.vue";
 import DirFormKeyActions from "./DirFormKeyActions.vue";
 import DirIconField from "./DirIconField.vue";
 import DirSoundChoice from "./DirSoundChoice.vue";
+import type { DirSectionEmits, DirSectionProps } from "./dirFormContracts";
+import { useDirFormKeys } from "./useDirFormKeys";
 
-const props = defineProps<{ detail: DirConfigDetailView; saving: boolean }>();
-const emit = defineEmits<{ (e: "save", edit: DirConfigEdit): void; (e: "move", key: DirFormKey, to: "local" | "shared"): void }>();
+const props = defineProps<DirSectionProps>();
+const emit = defineEmits<DirSectionEmits>();
 const { t } = useI18n();
 
-const values = computed(() => props.detail.formValues);
-const isSet = (key: DirFormKey): boolean => key in values.value;
-const isLocal = (key: DirFormKey): boolean => props.detail.source.local.includes(key);
+const { values, isSet, isLocal } = useDirFormKeys(() => props.detail);
 const clear = (key: DirFormKey) => emit("save", { set: {}, unset: [key] });
 
 const sound = computed(() => (typeof values.value.sound === "string" ? values.value.sound : ""));
