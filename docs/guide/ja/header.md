@@ -223,6 +223,7 @@ Actions** が並びます。GitLab（gitlab.com、または `gitlabHosts` に書
 | `"settings-open"` / `"sound-toggle"` / `"view-toggle"` | 設定を開く / 通知音のオン・オフ / 拡大時の表示を一覧・サムネイル列で切り替える |
 | `"order-auto"` / `"order-manual"` / `"order-priority"` | 並び順を選ぶ |
 | `"page-next"` / `"page-prev"` | グリッドの次 / 前のページへ |
+| `"terminal-reopen"` | 最後に閉じたターミナルを開き直す |
 
 ペインのボタンは、拡大中のセルではそのペインの開閉を切り替えます。並べて表示しているセルでは、
 「アプリでファイルを見る」と同じく、セルを拡大してからペインを開きます。そのセルでできないとき

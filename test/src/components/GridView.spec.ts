@@ -1316,6 +1316,21 @@ describe("GridView close cleans up the cell's slot (#1533)", () => {
     w.unmount();
   });
 
+  // #2800. Both ways a close reaches here record it, so an accidental one can be reopened.
+  it("records the closed cell for the palette's recently closed list", async () => {
+    slots.live.add("cell-1");
+    const w = await mountCloseGrid();
+    w.findComponent(CloseGridStub).vm.$emit("close", 1);
+    w.findComponent(CloseGridStub).vm.$emit("close", 2);
+    await flushPromises();
+    const stored: unknown = JSON.parse(localStorage.getItem("mt-recently-closed") ?? "[]");
+    expect(stored).toMatchObject([
+      { kind: "session", session: uuid(2), cwd: "/w" },
+      { kind: "session", session: uuid(1), cwd: "/w" },
+    ]);
+    w.unmount();
+  });
+
   it("does nothing extra when the cell already tore itself down", async () => {
     const w = await mountCloseGrid(); // no slot registered as live — teardown() already released it
     w.findComponent(CloseGridStub).vm.$emit("close", 1);

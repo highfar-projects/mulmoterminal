@@ -57,6 +57,7 @@ export const shortcutActionsJa = {
   orderPriority: "並び順を優先度順にする",
   pageNext: "ターミナルの次のページへ",
   pagePrev: "ターミナルの前のページへ",
+  terminalReopen: "最後に閉じたターミナルを開き直す",
   copy: "ターミナルの選択範囲をコピー",
   paste: "ターミナルにペースト",
 };

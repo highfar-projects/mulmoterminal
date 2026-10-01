@@ -172,6 +172,7 @@ binding you add is a key the program inside the terminal (Claude Code, `vim`, `l
 | `settings-open` / `sound-toggle` / `view-toggle` | Open Settings / sound on-off / enlarged view roster-strip | no |
 | `order-auto` / `order-manual` / `order-priority` | Set the cell order | no |
 | `page-next` / `page-prev` | Next / previous page of the tiled grid; no wrap. Also a palette row | no |
+| `terminal-reopen` | Reopen the most recently closed terminal beside the current one (agent cells resume their conversation, a shell comes back fresh); every closed one is also listed in the palette as "Reopen: …" | no |
 | `copy` | Copy the terminal's selection. Acts **only** when something is selected, so `Ctrl+C` stays usable as interrupt — with no selection the key reaches the program untouched | no |
 | `paste` | Paste into the terminal | no |
 
@@ -239,7 +240,8 @@ Each is checked against the traps below. The guide documents them at
   Arc, which hands these keys to the page while it is on — so a binding on one works only there.
 - Two actions on one keystroke only fires the first. The startup check warns; don't write one.
 - **`terminal-close` ends the session with no confirmation.** Only bind it if asked, and suggest a
-  combination they won't hit by accident.
+  combination they won't hit by accident. `terminal-reopen` is the way back: it resumes the
+  conversation of the last closed agent cell, so offer the pair together.
 - **`terminal-restart` also acts with no confirmation, and costs a resume.** It kills the agent
   mid-turn if it is working, and the conversation is then read back from its transcript — real
   tokens, not a free reload. Offer it only to someone who says they change MCP servers, config or
