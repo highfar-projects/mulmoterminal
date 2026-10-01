@@ -12,40 +12,27 @@
 //   tool-call (no `kind`) falls through. After a save we publish a file-change so any
 //   open View live-refreshes.
 //
-// Same shape as backends/html.ts — deliberately, since the two plugins share this
-// contract; read that file's comments for the reasoning behind each step.
-import type { Express, Request, Response, NextFunction } from "express";
+// The route itself is shared with backends/html.ts (sourceEditorDispatchRoute.ts), since the
+// two plugins share this contract.
+import type { Express } from "express";
 import { executeShapeScriptDispatch, isShapeScriptDispatchArgs } from "@gui-chat-plugin/shapescript";
 import { artifactsFileOps } from "./artifacts.js";
 import { shapeScriptByPath } from "./openPath.js";
-import { publishFileChange } from "./fileChange.js";
-import { isRecord } from "../../common/isRecord.js";
+import { mountSourceEditorDispatchRoute } from "./sourceEditorDispatchRoute.js";
 
 /** Intercept the View's dispatch (loadShape/saveShape) on
  *  /api/plugin/presentShapeScript, before the generic plugin catch-all (which handles
  *  the tool-call). MUST be registered BEFORE mountAllRoutes. */
 export function mountShapeScriptDispatchRoute(app: Express): void {
-  app.post("/api/plugin/presentShapeScript", async (req: Request, res: Response, next: NextFunction) => {
-    const args: Record<string, unknown> = isRecord(req.body) ? req.body : {};
-    // A tool-call (no `kind`) is left to the package execute via the catch-all.
-    if (args.kind !== "loadShape" && args.kind !== "saveShape") return next();
-    // The package's OWN guard rather than an assertion here: `saveShape` with a
-    // non-string `script` would otherwise reach `files.*.write` and blank the model.
-    if (!isShapeScriptDispatchArgs(args)) {
-      res.status(400).json({ error: "invalid presentShapeScript dispatch args" });
-      return;
-    }
-    try {
-      // `byPath` is what lets the source editor load/save a model OUTSIDE
-      // artifacts/shapes — presentShapeScript's `path` form takes any .shape on disk.
-      // Without it the package degrades to its artifacts-only behaviour.
-      const result = await executeShapeScriptDispatch({ files: { artifacts: artifactsFileOps, byPath: shapeScriptByPath } }, args);
-      if (args.kind === "saveShape" && typeof args.path === "string") {
-        await publishFileChange(args.path);
-      }
-      res.json(result);
-    } catch (err) {
-      res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
-    }
+  mountSourceEditorDispatchRoute(app, {
+    route: "/api/plugin/presentShapeScript",
+    loadKind: "loadShape",
+    saveKind: "saveShape",
+    isDispatchArgs: isShapeScriptDispatchArgs,
+    invalidArgsError: "invalid presentShapeScript dispatch args",
+    // `byPath` is what lets the source editor load/save a model OUTSIDE
+    // artifacts/shapes — presentShapeScript's `path` form takes any .shape on disk.
+    // Without it the package degrades to its artifacts-only behaviour.
+    execute: (args) => executeShapeScriptDispatch({ files: { artifacts: artifactsFileOps, byPath: shapeScriptByPath } }, args),
   });
 }

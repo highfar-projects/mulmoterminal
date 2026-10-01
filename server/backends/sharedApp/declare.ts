@@ -20,7 +20,7 @@ import { isRecord } from "../../../common/isRecord.js";
 import { declarationProblems, schemasOf, sharedCollections, type SharedAppFailure, type SharedAppHandle } from "./context.js";
 import { frozenKeyProblems } from "./exclusivity.js";
 import { oversizeProblem, publicFormOf } from "./publicForm.js";
-import { createManifest, newAid, updateManifest } from "./manifestWrite.js";
+import { createManifest, newAid, updateManifest, type ManifestUpdate } from "./manifestWrite.js";
 import { viewFilesReport } from "./publicView.js";
 import { strandedApp } from "./recovery.js";
 import { scanRecords, type RecordScan } from "./records.js";
@@ -81,10 +81,6 @@ export async function initSharedApp(root: string, name: string | undefined, slug
       ],
     };
   }
-  const aid = newAid();
-  // The roster, and nothing else — see `reserveApp`. Held as a value because the slug reservation
-  // below records the name it took ON this document, and the two must agree byte for byte.
-  const reservation = { owner: handle.uid, members: { [handle.email]: { "*": "owner" } }, memberEmails: [handle.email] };
   // Claimed in Firestore BEFORE it is written to disk, and the app is refused if the claim fails.
   //
   // `apps/{aid}` is a shelf every user of the deployment shares, and its `allow create` asks only
@@ -98,8 +94,9 @@ export async function initSharedApp(root: string, name: string | undefined, slug
   // The reservation carries the roster and nothing else — no `public`, no `collections` — so it
   // grants exactly one thing: this address is the owner. Publish's `set` then lands as an update by
   // the same owner, which is what it always was for an app published twice.
-  const reserved = await reserveApp(handle, aid, reservation, "init");
-  if (reserved) return reserved;
+  const reserved = await reserveNewApp(handle, "init");
+  if (!reserved.ok) return reserved;
+  const { aid } = reserved;
 
   const manifest: Record<string, unknown> = {
     ...(name === undefined ? {} : { name }),
@@ -108,36 +105,77 @@ export async function initSharedApp(root: string, name: string | undefined, slug
     members: { [handle.email]: { "*": "owner" } },
   };
   const written = await createManifest(root, manifest);
-  if (!written.ok) {
-    // PARTIAL, because the reservation is already live. It holds no authorization — the roster and
-    // nothing else — and the next `init` mints a fresh aid, so this is an unused shelf entry
-    // rather than a lockout. But "nothing happened" would be false, and the aid is named here
-    // because it is the only place it is ever said: it never reached a file.
-    return {
-      ok: false,
-      partial: true,
-      problems: [
-        ...written.problems,
-        `The app id was already reserved on the server (apps/${aid}) and is owned by this address, but it never reached app.json.`,
-        "Fix the write problem and run `init` again — it mints a new id, and the one above is simply left unused. No URL name was reserved, and nothing else was written.",
-        ...strandedApp(aid),
-      ],
-    };
-  }
-  // THE NAME IS TAKEN NOW, not at publish.
-  //
-  // An app EXISTS from the moment it is created — that is what makes its records writable and
-  // `preview` worth running (`plans/feat-shared-app-no-staging.md`) — and its address should not
-  // change out from under everything written about it in between. The reservation resolves for
-  // the app's own ROSTER while `published` is false, so `/m/{slug}` works immediately and nobody
-  // outside can even see that the name is taken.
-  //
-  // The cost is stated rather than hidden: `appSlugs` has `allow delete: if false`, so an
-  // abandoned app burns a name. That is why the name is the one the AUTHOR wrote and never one
-  // this code invents.
-  const held = await holdNewName(handle, aid, root, slug, reservation);
+  const named = await nameWrittenApp(written, handle, reserved, root, slug, "init");
+  if (!named.ok) return named;
+  return { ok: true, aid, owner: handle.email, slug: named.slug };
+}
+
+/** Mint an aid and take it on the shared shelf with a roster of one — the signed-in address as
+ *  owner, and nothing else (see `reserveApp`). The reservation is handed back as a value because
+ *  the slug reservation records the name it took ON this document, and the two must agree byte for
+ *  byte. */
+async function reserveNewApp(
+  handle: SharedAppHandle,
+  retry: "init" | "fork",
+): Promise<{ ok: true; aid: string; reservation: Record<string, unknown> } | SharedAppFailure> {
+  const aid = newAid();
+  const reservation = { owner: handle.uid, members: { [handle.email]: { "*": "owner" } }, memberEmails: [handle.email] };
+  const refused = await reserveApp(handle, aid, reservation, retry);
+  return refused ?? { ok: true, aid, reservation };
+}
+
+/** After the manifest write: a failed one is refused as PARTIAL (the aid is already live), and a
+ *  written one takes its URL name now.
+ *
+ *  THE NAME IS TAKEN NOW, not at publish.
+ *
+ *  An app EXISTS from the moment it is created — that is what makes its records writable and
+ *  `preview` worth running (`plans/feat-shared-app-no-staging.md`) — and its address should not
+ *  change out from under everything written about it in between. The reservation resolves for
+ *  the app's own ROSTER while `published` is false, so `/m/{slug}` works immediately and nobody
+ *  outside can even see that the name is taken.
+ *
+ *  The cost is stated rather than hidden: `appSlugs` has `allow delete: if false`, so an
+ *  abandoned app burns a name. That is why the name is the one the AUTHOR wrote and never one
+ *  this code invents.
+ */
+async function nameWrittenApp(
+  written: ManifestUpdate,
+  handle: SharedAppHandle,
+  reserved: { aid: string; reservation: Record<string, unknown> },
+  root: string,
+  slug: string | undefined,
+  retry: "init" | "fork",
+): Promise<{ ok: true; slug: string | undefined } | SharedAppFailure> {
+  if (!written.ok) return unwrittenReservation(written.problems, reserved.aid, retry);
+  const held = await holdNewName(handle, reserved.aid, root, slug, reserved.reservation);
   if (!held.ok) return held;
-  return { ok: true, aid, owner: handle.email, slug: held.slug ?? slug };
+  return { ok: true, slug: held.slug ?? slug };
+}
+
+/** What app.json still declares after a failed write — nothing for `init`; for `fork`, the app this
+ *  was CLONED from, so the repository did not half-become anything. */
+const UNWRITTEN_MANIFEST_STATE: Record<"init" | "fork", string> = {
+  init: "",
+  fork: " — which still declares the app this repository was cloned from",
+};
+
+/** The refusal for a manifest write that failed AFTER the aid was reserved. PARTIAL, because the
+ *  reservation is already live. It holds no authorization — the roster and nothing else — and the
+ *  next run mints a fresh aid, so this is an unused shelf entry rather than a lockout. But "nothing
+ *  happened" would be false, and the aid is named here because it is the only place it is ever
+ *  said: it never reached a file. */
+function unwrittenReservation(writeProblems: readonly string[], aid: string, retry: "init" | "fork"): SharedAppFailure {
+  return {
+    ok: false,
+    partial: true,
+    problems: [
+      ...writeProblems,
+      `The app id was already reserved on the server (apps/${aid}) and is owned by this address, but it never reached app.json${UNWRITTEN_MANIFEST_STATE[retry]}.`,
+      `Fix the write problem and run \`${retry}\` again — it mints a new id, and the one above is simply left unused. No URL name was reserved, and nothing else was written.`,
+      ...strandedApp(aid),
+    ],
+  };
 }
 
 /** Take the aid on the shared shelf, as this session, carrying only the roster.
@@ -252,10 +290,9 @@ export async function forkSharedApp(root: string, name: string | undefined, slug
 
   // Same order as `init`, for the same reason: the id is taken on the shared shelf BEFORE it
   // reaches a file that gets committed and read in a pull request.
-  const aid = newAid();
-  const reservation = { owner: handle.uid, members: { [handle.email]: { "*": "owner" } }, memberEmails: [handle.email] };
-  const reserved = await reserveApp(handle, aid, reservation, "fork");
-  if (reserved) return reserved;
+  const reserved = await reserveNewApp(handle, "fork");
+  if (!reserved.ok) return reserved;
+  const { aid } = reserved;
 
   const taken: ForkNotes = { carried: [], previousSlug: undefined };
   // RE-CHECKED under the write lock, against the manifest `updateManifest` re-reads — not against
@@ -273,26 +310,12 @@ export async function forkSharedApp(root: string, name: string | undefined, slug
     return race.conflict === null ? forked(manifest, { aid, owner: handle.email, name, slug }, taken) : null;
   });
   if (race.conflict !== null) return racedFailure(race.conflict, aid);
-  if (!written.ok) {
-    // PARTIAL for `init`'s reason, and one more: app.json is still the app this was CLONED from,
-    // so the repository did not half-become anything. The reservation is an unused shelf entry.
-    return {
-      ok: false,
-      partial: true,
-      problems: [
-        ...written.problems,
-        `The app id was already reserved on the server (apps/${aid}) and is owned by this address, but it never reached app.json — which still declares the app this repository was cloned from.`,
-        "Fix the write problem and run `fork` again — it mints a new id, and the one above is simply left unused. No URL name was reserved, and nothing else was written.",
-        ...strandedApp(aid),
-      ],
-    };
-  }
   // The name, taken now for `init`'s reason — and here it matters more: a fork starts from a
   // repository whose `slug` named SOMEBODY ELSE's app, so leaving the new one nameless until
   // publish is the state in which the two are easiest to confuse.
-  const held = await holdNewName(handle, aid, root, slug, reservation);
-  if (!held.ok) return held;
-  return { ok: true, aid, owner: handle.email, slug: held.slug ?? slug, previousSlug: taken.previousSlug, carried: taken.carried };
+  const named = await nameWrittenApp(written, handle, reserved, root, slug, "fork");
+  if (!named.ok) return named;
+  return { ok: true, aid, owner: handle.email, slug: named.slug, previousSlug: taken.previousSlug, carried: taken.carried };
 }
 
 /** The refusal for a manifest that changed under the fork. PARTIAL: nothing reached the disk, but

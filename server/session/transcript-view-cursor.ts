@@ -38,7 +38,7 @@
 // rather than ceremonial: it is what makes a shape this store never showed us VISIBLE instead of
 // silently thinning the view.
 import { isRecord } from "../../common/isRecord.js";
-import { cursorUserText } from "../agents/cursor-last-turn.js";
+import { contentOf, cursorUserText } from "../agents/cursor-last-turn.js";
 import { type TranscriptScan, foldTurnRecord, unknownRow } from "./transcript-view.js";
 import type { TranscriptRow } from "../../common/transcriptView.js";
 
@@ -49,13 +49,6 @@ const CALL_ARGS_MAX_CHARS = 200;
 const text = (value: unknown): string => (typeof value === "string" ? value : "");
 
 const clipHead = (value: string): string => (value.length > CALL_ARGS_MAX_CHARS ? `${value.slice(0, CALL_ARGS_MAX_CHARS)}…` : value);
-
-/** The `content` array of a cursor record, or an empty one for anything else. */
-function contentOf(record: Record<string, unknown>): unknown[] {
-  if (!isRecord(record.message)) return [];
-  const content: unknown = record.message.content;
-  return Array.isArray(content) ? content : [];
-}
 
 /** The input of a tool call, as text. A value that will not serialise — a cycle, a BigInt — answers
  *  the empty string rather than throwing: this runs inside a read the phone polls every five
