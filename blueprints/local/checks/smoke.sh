@@ -1,7 +1,9 @@
 #!/bin/sh
 # Builds, starts the built server on a spare port with the default settings, and checks that
-# /api/health and / answer — and that, left at its defaults, it listens on this computer only.
+# /api/health and / answer — and that, left at its defaults, it listens on this computer only. First, that the dev
+# server's proxy keeps the Host, or every change made under yarn dev is refused as cross-site (dev-proxy.mjs).
 set -eu
+node --no-warnings "$(dirname "$0")/dev-proxy.mjs"
 . "$(dirname "$0")/serve.sh"
 curl -fsS --max-time 5 "http://127.0.0.1:$port/api/health" | grep -q '"ok":true' || { echo '/api/health did not answer {"ok":true}' >&2; exit 1; }
 curl -fsS --max-time 5 "http://127.0.0.1:$port/" | grep -q 'id="app"' || { echo "/ does not serve the app" >&2; exit 1; }
