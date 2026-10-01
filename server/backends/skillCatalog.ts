@@ -1,13 +1,14 @@
-// The Skills viewer's disk side (#2815): scan the user skills dir and every directory a terminal has
-// run in, and read one SKILL.md back for the preview.
+// The Skills viewer's disk side (#2815): scan the user skills dir, the enabled user plugins, and every
+// directory a terminal has run in, and read one SKILL.md back for the preview.
 //
 // "What counts as a skill" is `collectSkills`, the rule the header's Skill menu already uses.
 import { readFile, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { collectSkills } from "./remoteHost/skills.js";
+import { userPluginInstalls, type PluginInstall } from "./remoteHost/pluginSkills.js";
 import { projectSkillsDir, userSkillsDir } from "./collections.js";
 import { SLUG_RE } from "../agents/codex-skills.js";
-import { assembleSkillCatalog, recentDistinctDirs, type SkillCatalog } from "../../common/skillCatalog.js";
+import { assembleSkillCatalog, recentDistinctDirs, type FoundPlugin, type FoundSource, type SkillCatalog } from "../../common/skillCatalog.js";
 
 /** A SKILL.md is a page of instructions; anything past this is not one, and is not read whole. */
 const MAX_SKILL_DOC_BYTES = 1024 * 1024;
@@ -27,29 +28,47 @@ function projectDirs(cwds: readonly string[], userDir: string): string[] {
   return recentDistinctDirs(cwds).filter((dir) => resolve(projectSkillsDir(dir)) !== userRoot);
 }
 
-export async function readSkillCatalog(opts: SkillCatalogOptions): Promise<SkillCatalog> {
-  const userDir = opts.userDir ?? userSkillsDir();
-  const dirs = projectDirs(opts.cwds, userDir);
-  const [userSkills, ...projectSkills] = await Promise.all([collectSkills(userDir), ...dirs.map((dir) => collectSkills(projectSkillsDir(dir)))]);
-  const projects = dirs.map((dir, index) => ({ dir, skills: projectSkills[index] ?? [] }));
-  return assembleSkillCatalog({ dir: userDir, skills: userSkills }, projects);
+const pluginSkillsDir = (install: PluginInstall): string => join(install.installPath, "skills");
+
+async function readPlugins(userDir: string): Promise<FoundPlugin[]> {
+  const installs = await userPluginInstalls(userDir);
+  return Promise.all(
+    installs.map(async (install) => ({ plugin: install.plugin, dir: install.installPath, skills: await collectSkills(pluginSkillsDir(install)) })),
+  );
 }
 
+async function readProjects(dirs: readonly string[]): Promise<FoundSource[]> {
+  return Promise.all(dirs.map(async (dir) => ({ dir, skills: await collectSkills(projectSkillsDir(dir)) })));
+}
+
+export async function readSkillCatalog(opts: SkillCatalogOptions): Promise<SkillCatalog> {
+  const userDir = opts.userDir ?? userSkillsDir();
+  const [userSkills, plugins, projects] = await Promise.all([collectSkills(userDir), readPlugins(userDir), readProjects(projectDirs(opts.cwds, userDir))]);
+  return assembleSkillCatalog({ dir: userDir, skills: userSkills }, plugins, projects);
+}
+
+/** Where the skill lives: the user dir, an enabled user plugin by name, or a remembered directory. */
+export type SkillDocSource = { scope: "user" } | { scope: "plugin"; plugin: string } | { scope: "project"; dir: string };
+
 export interface SkillDocRequest extends SkillCatalogOptions {
-  /** A remembered project directory, or null for the user skills dir. */
-  dir: string | null;
+  source: SkillDocSource;
   slug: string;
 }
 
-/** The skills root a request may read from, or null when it names a directory no terminal ran in. */
-function allowedRoot(request: SkillDocRequest): string | null {
-  if (request.dir === null) return request.userDir ?? userSkillsDir();
-  return request.cwds.includes(request.dir) ? projectSkillsDir(request.dir) : null;
+/** The skills root a request may read from, or null when it names a plugin that is not enabled or a
+ *  directory no terminal ran in. */
+async function allowedRoot(request: SkillDocRequest): Promise<string | null> {
+  const userDir = request.userDir ?? userSkillsDir();
+  const { source } = request;
+  if (source.scope === "user") return userDir;
+  if (source.scope === "project") return request.cwds.includes(source.dir) ? projectSkillsDir(source.dir) : null;
+  const install = (await userPluginInstalls(userDir)).find((candidate) => candidate.plugin === source.plugin);
+  return install ? pluginSkillsDir(install) : null;
 }
 
 /** The SKILL.md text, or null when the request is not allowed, the file is missing, or too large. */
 export async function readSkillDoc(request: SkillDocRequest): Promise<string | null> {
-  const root = allowedRoot(request);
+  const root = await allowedRoot(request);
   if (root === null || !SLUG_RE.test(request.slug)) return null;
   const file = join(root, request.slug, SKILL_FILE);
   try {

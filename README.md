@@ -1753,10 +1753,11 @@ narrow and tall for one record you are discussing — and each position keeps it
 
 ## More features
 
-- **Skills viewer** — **More features** → **Skills** lists every Claude skill on disk: your
-  `~/.claude/skills`, then the `.claude/skills` of each folder a terminal has run in (folders
-  with none are left out). A project skill with the same name as one of yours is marked as
-  overriding it. Search by name, description or folder; click one to read its `SKILL.md`.
+- **Skills viewer** — **More features** → **Skills** lists every Claude skill on disk in three
+  columns — where it lives, its skills, its `SKILL.md`. The places are your `~/.claude/skills`,
+  each enabled plugin (skills shown as `plugin:skill`), and the `.claude/skills` of each folder a
+  terminal has run in (folders with none are left out). A project skill with the same name as one
+  of yours is marked as overriding it. The search (name, description or folder) narrows both lists.
 - **Grid of parallel sessions** — the ＋ Terminal / grid view runs many sessions at once,
   auto-sizing by count across pages. Cell borders signal state at a glance — **working**
   (pulsing blue), **blocked** (amber — needs a permission / answer), **done** (blue —

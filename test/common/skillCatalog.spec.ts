@@ -17,10 +17,14 @@ describe("recentDistinctDirs", () => {
 
 describe("assembleSkillCatalog", () => {
   it("puts the user skills first, then the projects in the order given, each sorted by slug", () => {
-    const catalog = assembleSkillCatalog(user, [
-      { dir: "/p2", skills: [skill("zeta"), skill("alpha")] },
-      { dir: "/p1", skills: [skill("mid")] },
-    ]);
+    const catalog = assembleSkillCatalog(
+      user,
+      [],
+      [
+        { dir: "/p2", skills: [skill("zeta"), skill("alpha")] },
+        { dir: "/p1", skills: [skill("mid")] },
+      ],
+    );
     expect(catalog.sources.map((source) => [source.scope, source.dir, source.skills.map((s) => s.slug)])).toEqual([
       ["user", "/home/u/.claude/skills", ["blog", "review"]],
       ["project", "/p2", ["alpha", "zeta"]],
@@ -29,25 +33,50 @@ describe("assembleSkillCatalog", () => {
   });
 
   it("leaves out a directory with no skills, the user dir included", () => {
-    const catalog = assembleSkillCatalog({ dir: "/u", skills: [] }, [
-      { dir: "/empty", skills: [] },
-      { dir: "/p", skills: [skill("x")] },
-    ]);
+    const catalog = assembleSkillCatalog(
+      { dir: "/u", skills: [] },
+      [],
+      [
+        { dir: "/empty", skills: [] },
+        { dir: "/p", skills: [skill("x")] },
+      ],
+    );
     expect(catalog.sources.map((source) => source.dir)).toEqual(["/p"]);
   });
 
+  it("puts the plugins between the user and the projects, ids namespaced, never overriding", () => {
+    const catalog = assembleSkillCatalog(
+      user,
+      [{ plugin: "tne", dir: "/plugins/tne", skills: [skill("review"), skill("ceo")] }],
+      [{ dir: "/p", skills: [skill("x")] }],
+    );
+    expect(catalog.sources.map((source) => [source.scope, source.plugin, source.skills.map((s) => `${s.id}:${s.overridesUser}`)])).toEqual([
+      ["user", "", ["blog:false", "review:false"]],
+      ["plugin", "tne", ["tne:ceo:false", "tne:review:false"]],
+      ["project", "", ["x:false"]],
+    ]);
+  });
+
+  it("leaves out a plugin with no skills", () => {
+    expect(assembleSkillCatalog(user, [{ plugin: "lsp", dir: "/plugins/lsp", skills: [] }], []).sources.map((source) => source.scope)).toEqual(["user"]);
+  });
+
   it("marks only a PROJECT skill that shares a slug with a user skill", () => {
-    const catalog = assembleSkillCatalog(user, [{ dir: "/p", skills: [skill("review"), skill("other")] }]);
+    const catalog = assembleSkillCatalog(user, [], [{ dir: "/p", skills: [skill("review"), skill("other")] }]);
     const flags = catalog.sources.flatMap((source) => source.skills.map((s) => `${source.scope}:${s.slug}:${s.overridesUser}`));
     expect(flags).toEqual(["user:blog:false", "user:review:false", "project:other:false", "project:review:true"]);
   });
 });
 
 describe("filterSkillCatalog", () => {
-  const catalog = assembleSkillCatalog(user, [
-    { dir: "/work/mulmoterminal", skills: [skill("deploy", "Ship it to production")] },
-    { dir: "/work/other", skills: [skill("lint", "Run the Linter")] },
-  ]);
+  const catalog = assembleSkillCatalog(
+    user,
+    [{ plugin: "tne", dir: "/plugins/tne", skills: [skill("ceo17-stress-test-idea", "Stress test an idea")] }],
+    [
+      { dir: "/work/mulmoterminal", skills: [skill("deploy", "Ship it to production")] },
+      { dir: "/work/other", skills: [skill("lint", "Run the Linter")] },
+    ],
+  );
   const slugs = (query: string): string[] => filterSkillCatalog(catalog, query).sources.flatMap((source) => source.skills.map((s) => s.slug));
 
   it.each(["", "   ", "\t\n"])("returns the catalog unchanged for a blank query %j", (query) => {
@@ -63,6 +92,10 @@ describe("filterSkillCatalog", () => {
   it("requires every term to match", () => {
     expect(slugs("ship production")).toEqual(["deploy"]);
     expect(slugs("ship linter")).toEqual([]);
+  });
+
+  it("matches a plugin skill by the name it is run by", () => {
+    expect(slugs("tne:ceo17")).toEqual(["ceo17-stress-test-idea"]);
   });
 
   it("drops a source with nothing left and keeps the rest", () => {

@@ -14,6 +14,7 @@ import { settingsLayers, type HiddenSkillsOptions } from "./skillOverrides.js";
 
 const SKILL_FILE = "SKILL.md";
 const INSTALLED_FILE = path.join("plugins", "installed_plugins.json");
+const USER_SETTINGS_FILE = "settings.json";
 
 /** The plugin ids (`name@marketplace`) switched on, given the settings layers lowest first. */
 export function enabledPluginIds(layers: readonly unknown[]): string[] {
@@ -33,8 +34,10 @@ export interface PluginInstall {
   installPath: string;
 }
 
-const appliesHere = (install: Record<string, unknown>, workspaceRoot: string): boolean =>
-  install.scope === "user" || (typeof install.projectPath === "string" && path.resolve(install.projectPath) === path.resolve(workspaceRoot));
+// A null root asks for the user-scope installs alone: the ones every directory gets.
+const appliesHere = (install: Record<string, unknown>, workspaceRoot: string | null): boolean =>
+  install.scope === "user" ||
+  (workspaceRoot !== null && typeof install.projectPath === "string" && path.resolve(install.projectPath) === path.resolve(workspaceRoot));
 
 // The narrower install wins when a plugin has more than one for this directory, as the narrower
 // settings file does.
@@ -43,7 +46,7 @@ const rankOf = (install: Record<string, unknown>): number =>
   typeof install.scope === "string" ? (SCOPE_RANK[install.scope] ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER;
 
 /** Where each enabled plugin is installed for this directory, from installed_plugins.json's contents. */
-export function enabledInstalls(installed: unknown, enabled: readonly string[], workspaceRoot: string): PluginInstall[] {
+export function enabledInstalls(installed: unknown, enabled: readonly string[], workspaceRoot: string | null): PluginInstall[] {
   if (!isRecord(installed) || !isRecord(installed.plugins)) return [];
   const plugins = installed.plugins;
   return enabled.flatMap((id) => {
@@ -87,4 +90,11 @@ export async function discoverPluginSkillIds(opts: HiddenSkillsOptions): Promise
   const [layers, installed] = await Promise.all([settingsLayers(opts), readJson(path.join(claudeDir, INSTALLED_FILE))]);
   const installs = enabledInstalls(installed, enabledPluginIds(layers), opts.workspaceRoot);
   return (await Promise.all(installs.map(skillIdsOf))).flat();
+}
+
+/** The plugins enabled in the user settings and installed for the user — those every directory gets. */
+export async function userPluginInstalls(userSkillsDir: string): Promise<PluginInstall[]> {
+  const claudeDir = path.dirname(userSkillsDir);
+  const [settings, installed] = await Promise.all([readJson(path.join(claudeDir, USER_SETTINGS_FILE)), readJson(path.join(claudeDir, INSTALLED_FILE))]);
+  return enabledInstalls(installed, enabledPluginIds([settings]), null);
 }

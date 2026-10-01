@@ -2,6 +2,7 @@
 export const skillsViewEn = {
   skillsView: {
     title: "Skills",
+    sources: "Places",
     region: "Skills",
     close: "Close Skills",
     search: "Search name, description, folder",
@@ -9,7 +10,7 @@ export const skillsViewEn = {
     overrides: "overrides the user skill",
     loading: "Reading skills…",
     loadFailed: "Could not read the skills.",
-    empty: "No skills found. Skills in ~/.claude/skills and in the .claude/skills of folders your terminals ran in are listed here.",
+    empty: "No skills found. Skills in ~/.claude/skills, in enabled plugins, and in the .claude/skills of folders your terminals ran in are listed here.",
     noMatch: "No skill matches this search.",
     pick: "Pick a skill to read its SKILL.md.",
     docFailed: "Could not read this SKILL.md.",

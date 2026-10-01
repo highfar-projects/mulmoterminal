@@ -7,12 +7,17 @@ import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import type { CatalogSkill, SkillCatalog, SkillSource } from "../../common/skillCatalog";
 
 const isCatalogSkill = (value: unknown): value is CatalogSkill =>
-  isRecord(value) && typeof value.slug === "string" && typeof value.description === "string" && typeof value.overridesUser === "boolean";
+  isRecord(value) &&
+  typeof value.slug === "string" &&
+  typeof value.id === "string" &&
+  typeof value.description === "string" &&
+  typeof value.overridesUser === "boolean";
 
 const isSkillSource = (value: unknown): value is SkillSource =>
   isRecord(value) &&
-  (value.scope === "user" || value.scope === "project") &&
+  (value.scope === "user" || value.scope === "plugin" || value.scope === "project") &&
   typeof value.dir === "string" &&
+  typeof value.plugin === "string" &&
   isUnknownArray(value.skills) &&
   value.skills.every(isCatalogSkill);
 
@@ -30,6 +35,7 @@ export async function loadSkillCatalog(): Promise<SkillCatalog | null> {
 /** The SKILL.md of `slug` in `source`, or null when it could not be read. */
 export async function loadSkillDoc(source: SkillSource, slug: string): Promise<string | null> {
   const params = new URLSearchParams({ slug });
+  if (source.scope === "plugin") params.set("plugin", source.plugin);
   if (source.scope === "project") params.set("dir", source.dir);
   try {
     const res = await fetchWithTimeout(`/api/skills/doc?${params.toString()}`);
