@@ -19,24 +19,26 @@ export const designOf = (answer) => DESIGNS.find((design) => design.option === (
 const PACKAGES = ["tailwindcss", "@tailwindcss/vite", "material-symbols"];
 // The main button of MulmoTerminal's look, as Tailwind writes it: present only when Tailwind ran over screens using it.
 const MAIN_BUTTON_RULE = /\.bg-indigo-600\s*\{\s*background-color:\s*var\(--color-indigo-600\)/u;
-// One class per screen of MulmoTerminal's look that no other screen uses, from design/mulmoterminal.md. Tailwind writes
-// a rule only for a class some screen uses, so a screen left in its own look shows up as its class missing.
+// One class per screen of MulmoTerminal's look that appears in no other section of design/mulmoterminal.md. Tailwind
+// writes a rule only for a class some screen uses, so a screen left in its own look shows up as its class missing.
+// The screens every collection has, plus the kanban and the calendar when its schema asks for them; the toolbar is
+// left out because a collection without search or views may have none.
 export const SCREEN_ANCHORS = [
-  { screen: "header (the icon box)", className: "border-indigo-100" },
-  { screen: "toolbar (its bar)", className: "border-slate-100" },
-  { screen: "list (the table body)", className: "divide-slate-100" },
-  { screen: "record panel (its backdrop)", className: "bg-slate-900/40" },
+  { screen: "header (the icon box)", className: "w-9" },
+  { screen: "list (the table's cells)", className: "px-5" },
+  { screen: "record panel (its field grid)", className: "gap-x-6" },
   { screen: "kanban (its columns)", className: "w-72", when: "kanban" },
   { screen: "calendar (its day cells)", className: "min-h-[5.5rem]", when: "calendar" },
 ];
 // A class name as a CSS selector writes it: `bg-slate-900/40` is `.bg-slate-900\/40`.
 const selectorOf = (className) => "." + className.replaceAll(/[^\w-]/gu, (character) => "\\" + character);
-// The selector followed by something that ends a class name, so `.w-72` is not found in `.w-720`.
+// The selector followed by something that ends a class name, so `.w-72` is not found in `.w-720` nor
+// `.border-indigo-100` in `.border-indigo-100\/50` (an escape continues the name).
 const hasRule = (css, className) =>
   css
     .split(selectorOf(className))
     .slice(1)
-    .some((rest) => !/^[\w-]/u.test(rest));
+    .some((rest) => !/^[\w\\-]/u.test(rest));
 const ICON_FONT = /font-family:\s*["']?Material Symbols Outlined/u;
 // The tokens a template redefines; the ones the build kept must hold the chosen design's values.
 const DESIGN_TOKEN = /^--(?:color-(?:indigo|slate|gray)-\d+|color-white|radius-[\w-]+)$/u;

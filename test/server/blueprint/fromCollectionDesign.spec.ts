@@ -39,7 +39,7 @@ const built = (source: string, names = ["--color-indigo-600", "--color-slate-50"
   [
     "@layer theme{:root,:host{" + names.map((name) => name + ":" + minified(tokenValue(source, name))).join(";") + "}}",
     ".bg-indigo-600{background-color:var(--color-indigo-600)}",
-    ".border-indigo-100{border-color:x}.border-slate-100{border-color:x}.divide-slate-100>:not(:last-child){border-color:x}.bg-slate-900\\/40{background-color:x}",
+    ".w-9{width:x}.px-5{padding-inline:x}.gap-x-6{column-gap:x}",
     '@font-face{font-family:"Material Symbols Outlined";src:url(./x.woff2)}',
   ].join("");
 
@@ -165,9 +165,33 @@ describe("designProblems", () => {
     expect(designProblems({ ...followingApp, builtCss: both, views: { kanban: true, calendar: true } })).toEqual([]);
   });
 
-  it("does not take a longer class for the one it looks for", () => {
+  it("does not take a longer class, or an opacity variant, for the one it looks for", () => {
     const longer = `${built(TAILWIND_THEME)}.w-720{width:1px}`;
     expect(designProblems({ ...followingApp, builtCss: longer, views: { kanban: true } })[0]).toContain('"w-72"');
+    const variant = built(TAILWIND_THEME).replace(".gap-x-6{", ".gap-x-6\\/50{");
+    expect(designProblems({ ...followingApp, builtCss: variant })[0]).toContain('"gap-x-6"');
+  });
+
+  it("anchors each screen on a class no other section of the reference uses", () => {
+    const sections = readPack("design/mulmoterminal.md")
+      .split("\n## ")
+      .slice(1)
+      .filter((section) => !section.startsWith("Minimal"));
+    const isWord = (text: string, at: number): boolean => /[\w\-[\]./]/u.test(text[at] ?? "");
+    const uses = (section: string, className: string): boolean =>
+      section
+        .split(className)
+        .slice(0, -1)
+        .some((before, index, parts) => {
+          const at = parts.slice(0, index + 1).join(className).length;
+          return !isWord(section, at - 1) && !isWord(section, at + className.length);
+        });
+    SCREEN_ANCHORS.forEach((anchor) => {
+      expect(
+        sections.filter((section) => uses(section, anchor.className)),
+        anchor.className,
+      ).toHaveLength(1);
+    });
   });
 
   it("needs the icon font in the build", () => {
