@@ -16,6 +16,7 @@ import type { TranscriptRow, TranscriptRowKind, TranscriptTurn, TranscriptView }
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
+import { clockLabel } from "./clockLabel";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { useI18n } from "vue-i18n";
 
@@ -327,18 +328,6 @@ const FRAME_CLASSES: Record<TranscriptRowKind, string> = {
 };
 const frameClass = (kind: TranscriptRowKind): string => FRAME_CLASSES[kind];
 
-/** A turn's clock, as a reader places it: the time alone for today, with the date once it is older.
- *  An unparseable timestamp shows nothing rather than "Invalid Date". */
-function formatAt(at: string | null): string {
-  if (at === null) return "";
-  const d = new Date(at);
-  if (Number.isNaN(d.getTime())) return "";
-  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return d.getTime() >= today.getTime() ? time : `${d.toLocaleDateString([], { month: "numeric", day: "numeric" })} ${time}`;
-}
-
 /** A turn's rows as the frames to draw: one per run of the same speaker. */
 const blocksOf = (rows: readonly TranscriptRow[]): TranscriptBlock[] => groupTurnRows(rows);
 
@@ -403,7 +392,7 @@ const label = toolBlockLabel;
         <p v-else data-testid="transcript-head" class="px-4 py-2 text-center text-[11px] text-dim">{{ headMessage }}</p>
         <ol class="m-0 list-none p-0">
           <li v-for="(turn, index) in turns" :key="index" data-testid="transcript-turn" class="px-3 py-2">
-            <p v-if="formatAt(turn.at)" data-testid="transcript-time" class="m-0 mb-1 text-[11px] tabular-nums text-dim">{{ formatAt(turn.at) }}</p>
+            <p v-if="clockLabel(turn.at)" data-testid="transcript-time" class="m-0 mb-1 text-[11px] tabular-nums text-dim">{{ clockLabel(turn.at) }}</p>
             <!-- ONE FRAME PER SPEAKER RUN, not per row: a turn alternates several times (you asked,
                  it answered, it ran three things, it answered again), and a frame per row is a
                  column of boxes with one line in each. -->

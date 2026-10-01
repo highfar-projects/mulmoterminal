@@ -19,7 +19,7 @@ import type { CwdPreset } from "./presets";
 import type { Launcher, LaunchPick } from "./launchers";
 import type { LaunchChoice } from "./wsUrl";
 import type { RunCommand } from "./runCommand";
-import type { TerminalAgent } from "../../common/sessionAgent";
+import type { ResumeRequest } from "./resumeRequest";
 import { useI18n } from "vue-i18n";
 
 const { t } = useI18n();
@@ -43,7 +43,7 @@ const emit = defineEmits<{
   // carry: in a cell both WERE the cell's own state, and here the host has to be told. Dropping
   // `choice` is silent — the cell starts on the directory's default and nothing says the pick went.
   (e: "start", value: { dir: string | null; pick: AgentPick; choice: LaunchChoice | null; account: string | null }): void;
-  (e: "resume", value: { id: string; cwd: string | null; agent?: TerminalAgent; account?: string | null }): void;
+  (e: "resume", value: ResumeRequest): void;
   (e: "run", value: RunCommand): void;
   (e: "launch", value: LaunchPick): void;
   (e: "remove-preset", value: string): void;
