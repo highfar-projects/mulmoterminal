@@ -11,7 +11,8 @@ import type { PlanStep } from "../../../common/blueprint/plan";
 import { elapsedParts, gateKey, roundNumber, stepLook } from "./blueprintView";
 import { latestOnly } from "./latestOnly";
 import { failureText } from "./refusalText";
-import { checkOutputText, stopReasonText, untrustedFolder } from "./stepNoticeText";
+import { checkOutputText, gaveUpAfter, stopReasonText, untrustedFolder } from "./stepNoticeText";
+import { MAX_FAILED_CHECKS } from "../../../common/blueprint/executorPolicy";
 import BlueprintLiveActivity from "./BlueprintLiveActivity.vue";
 import BlueprintSpecReview from "./BlueprintSpecReview.vue";
 import BlueprintChangedFiles from "./BlueprintChangedFiles.vue";
@@ -40,6 +41,10 @@ const reads = latestOnly();
 const current = computed(() => (view.value ? currentStep(view.value.run.steps, view.value.state) : null));
 const currentState = computed(() => (view.value && current.value ? view.value.state.steps[current.value.id] : undefined));
 // Only a person can trust a folder; the step says where, and a terminal opened there asks them.
+// The build tried to fix the step by itself this many times before stopping; said in the person's language above the check's own output.
+const gaveUpAttempts = computed(() =>
+  view.value && current.value ? gaveUpAfter(currentState.value, view.value.run.failedChecks[current.value.id] ?? 0, MAX_FAILED_CHECKS) : null,
+);
 const trustFolder = computed(() => untrustedFolder(currentState.value));
 const reviewing = computed(() => current.value?.gates.includes("review") ?? false);
 // What the build produced is written up in its report (the usecase's, else the base's); once every step is done it is shown here,
@@ -273,6 +278,9 @@ const roundOf = (step: Pick<PlanStep, "id" | "repeatWhile">) => roundNumber(step
         <template v-else-if="currentState?.status === 'failed'">
           <p v-if="stopReasonText(t, currentState)" data-testid="blueprint-stop-reason" class="m-0 font-sans text-[13px] text-err-text">
             {{ stopReasonText(t, currentState) }}
+          </p>
+          <p v-if="gaveUpAttempts !== null" data-testid="blueprint-gave-up" class="m-0 font-sans text-[13px] text-fg">
+            {{ t("blueprints.run.gaveUp", { count: gaveUpAttempts }) }}
           </p>
           <details v-if="currentState.lastCheck && !currentState.lastCheck.ok" open class="font-sans text-[12px] text-secondary">
             <summary class="cursor-pointer">{{ t("blueprints.run.checkOutput") }}</summary>

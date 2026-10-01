@@ -4,6 +4,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { createExecutor, type BlueprintExecutor, type ExecutorDeps } from "../../../server/blueprint/executor";
 import { endTurnOf, executorFakes, step, type ExecutorFakes } from "./executorHarness";
+import type { BlueprintState } from "../../../common/blueprint/state";
 
 const STEPS = [step("a"), step("b", ["billing", "review"]), step("c")];
 
@@ -78,15 +79,64 @@ describe("a build's own answers, when builds share a folder", () => {
     expect(written.at(-1)?.answers).toEqual({ documents: "a.md" });
   });
 
-  it("starts the waiting step once a person retries it after the other build stopped", async () => {
+  it("keeps the waiting step waiting while the other build works, even when a person retries it", async () => {
     await start({ documents: "a.md" });
     const second = await start({ documents: "b.md" });
     await executor.humanEvent(second, "a", { type: "retry" });
     expect(spawned).toHaveLength(1);
+    expect((await stepOfRun(second, "a"))?.lastCheck?.notice?.code).toBe("folder-busy");
+  });
+
+  it("starts the waiting step by itself once the other build stops working", async () => {
+    await start({ documents: "a.md" });
+    const second = await start({ documents: "b.md" });
     await endTurn("s1");
-    await executor.humanEvent(second, "a", { type: "retry" });
     expect(spawned).toHaveLength(2);
+    expect((await stepOfRun(second, "a"))?.status).toBe("running");
     expect(written.at(-1)?.answers).toEqual({ documents: "b.md" });
+  });
+
+  it("wakes waiting builds one at a time: the first takes the folder, the next waits for it", async () => {
+    await start({ documents: "a.md" });
+    const second = await start({ documents: "b.md" });
+    const third = await start({ documents: "c.md" });
+    await endTurn("s1");
+    expect(spawned).toHaveLength(2);
+    expect((await stepOfRun(second, "a"))?.status).toBe("running");
+    expect((await stepOfRun(third, "a"))?.lastCheck?.notice?.code).toBe("folder-busy");
+    await endTurn("s2");
+    expect(spawned).toHaveLength(3);
+    expect((await stepOfRun(third, "a"))?.status).toBe("running");
+  });
+
+  it("wakes a build left waiting across a restart, once the folder is free", async () => {
+    const first = await start({ documents: "a.md" });
+    const second = await start({ documents: "b.md" });
+    // The first build reached its review gate while the server was down: no turn ended here to wake the second.
+    const stopped = await executor.view(first);
+    const atGate: BlueprintState = {
+      steps: {
+        ...stopped.state.steps,
+        a: { status: "passed", approved: false, answers: [], lastCheck: { ok: true, output: "", atMs: 1 } },
+        b: { status: "awaiting-approval", approved: false, answers: [] },
+      },
+    };
+    await fakes.store.save({ ...stopped.run, activeSessionId: null }, atGate);
+    await executor.recover(() => undefined);
+    expect((await stepOfRun(second, "a"))?.status).toBe("running");
+  });
+
+  it("retries writing the answers by itself, and starts once it works", async () => {
+    let failures = 2;
+    executor = createExecutor({
+      ...deps,
+      writeAnswers: async () => {
+        if (failures-- > 0) throw new Error("disk busy");
+      },
+    });
+    const runId = await start({ documents: "a.md" });
+    expect((await stepOfRun(runId, "a"))?.status).toBe("running");
+    expect(spawned).toHaveLength(1);
   });
 
   it("starts beside a build that works in another folder", async () => {

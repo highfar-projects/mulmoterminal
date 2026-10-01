@@ -92,6 +92,8 @@ export const blueprintsEn = {
     answer: "Answer",
     answerPlaceholder: "Your answer",
     send: "Send",
+    gaveUp:
+      "The build tried to fix this {count} times by itself, and the check still does not pass. Below is the last result. Press Retry and it will try again by itself.",
     retry: "Try again",
     archive: "Put away",
     unarchive: "Back to the list",
@@ -187,7 +189,7 @@ export const blueprintsEn = {
     installFailed: "The pack could not be fetched: {detail}",
   },
   notices: {
-    folderBusy: "Another build ({runId}) is working in this folder. Press Try again once it has stopped (finished, or waiting for you).",
+    folderBusy: "Another build ({runId}) is working in this folder. This one carries on by itself once that one stops (finishes, or waits for you).",
     untrusted:
       "Claude Code does not trust {dir} (a step may have made it a git repository, which needs its own trust). Open a terminal there, accept the trust prompt, then press Try again.",
     answersUnwritten: "The interview answers could not be written to .blueprint/answers.json: {detail}",
