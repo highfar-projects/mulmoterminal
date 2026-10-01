@@ -4,7 +4,7 @@
 // loaded by this repo's Vite, as `yarn dev` would load them.
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { proxyProblems } from "../../../blueprints/local/checks/devProxyRules.mjs";
@@ -25,6 +25,13 @@ describe("proxyProblems", () => {
     const [problem] = proxyProblems({ "/api": "http://127.0.0.1:3000" });
     expect(problem).toContain('server.proxy["/api"] is the string "http://127.0.0.1:3000"');
     expect(problem).toContain('{ target: "http://127.0.0.1:3000", changeOrigin: false }');
+  });
+
+  it("names a proxy that sets the Host or Origin header itself, in any case", () => {
+    expect(proxyProblems({ "/api": { target: "http://127.0.0.1:3000", headers: { HOST: "127.0.0.1:3000", Origin: "x" } } })).toEqual([
+      'vite.config server.proxy["/api"] sets the HOST and Origin header itself: the API compares Origin with Host, so leave both as the browser sent them',
+    ]);
+    expect(proxyProblems({ "/api": { target: "http://127.0.0.1:3000", headers: { "x-trace": "1" } } })).toEqual([]);
   });
 
   it("names a proxy that sets changeOrigin: true, and every bad entry", () => {
@@ -62,6 +69,14 @@ describe.skipIf(process.platform === "win32")("dev-proxy.mjs on a real Vite conf
     const result = check('const PORT = process.env.PORT ?? "3000";\nexport default { server: { proxy: { "/api": `http://127.0.0.1:${PORT}` } } };\n');
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('server.proxy["/api"] is the string "http://127.0.0.1:3000"');
+  });
+
+  it("reads a config kept in client/, where the scaffold puts the screens, and names its file", () => {
+    mkdirSync(path.join(dir, "client"));
+    writeFileSync(path.join(dir, "client", "vite.config.mjs"), 'export default { server: { proxy: { "/api": "http://127.0.0.1:3000" } } };\n');
+    const result = check(null);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('client/vite.config.mjs server.proxy["/api"] is the string');
   });
 
   it("passes the proxy the scaffold now writes, from a config written as a function", () => {

@@ -13,10 +13,16 @@ export function proxyProblems(proxy) {
         `${where} is the string ${JSON.stringify(options)}: Vite then rewrites the Host to the API's port, so the API refuses every change made in yarn dev as cross-site. Write { target: ${JSON.stringify(options)}, changeOrigin: false }`,
       ];
     }
-    return options?.changeOrigin === true
-      ? [
-          `${where} sets changeOrigin: true: the API then sees its own port as the Host while the browser sends the Vite port as the Origin, and refuses every change made in yarn dev as cross-site. Set changeOrigin: false`,
-        ]
-      : [];
+    const rewritten = Object.keys(options?.headers ?? {}).filter((name) => ["host", "origin"].includes(name.toLowerCase()));
+    return [
+      ...(options?.changeOrigin === true
+        ? [
+            `${where} sets changeOrigin: true: the API then sees its own port as the Host while the browser sends the Vite port as the Origin, and refuses every change made in yarn dev as cross-site. Set changeOrigin: false`,
+          ]
+        : []),
+      ...(rewritten.length > 0
+        ? [`${where} sets the ${rewritten.join(" and ")} header itself: the API compares Origin with Host, so leave both as the browser sent them`]
+        : []),
+    ];
   });
 }
