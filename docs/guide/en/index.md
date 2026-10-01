@@ -8,8 +8,8 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **8.2.0 is out.** A Blueprints step whose check keeps failing now repairs itself before it stops,
-> and a closed cell can be reopened from the command palette. [Setup guide](v8.2.0.html)
+> **8.3.0 is out.** More features → Skills lists every Claude skill on disk — yours, each plugin's
+> and each folder's — with search. [Setup guide](v8.3.0.html)
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching

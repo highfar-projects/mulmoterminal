@@ -4,14 +4,14 @@ nav_title: 全機能リスト
 layout: default
 parent: 日本語
 nav_order: 6.5
-as_of: 8.2.0
-description: MulmoTerminal のいまある機能を、入った版つきで領域ごとに一行ずつ並べた一覧（8.2.0 時点）。
+as_of: 8.3.0
+description: MulmoTerminal のいまある機能を、入った版つきで領域ごとに一行ずつ並べた一覧（8.3.0 時点）。
 ---
 
 # 全機能リスト
 {: .no_toc }
 
-8.2.0 時点で MulmoTerminal にある機能を、領域ごとに一行ずつ並べた一覧です。行末の `(vX.Y.Z)` はその機能が最初に入った版で、その後の大きな拡張は行の中に版番号で添えています。不具合の修正や内部の変更は載せていません。それらは [ChangeLog](https://github.com/receptron/mulmoterminal/blob/main/docs/ChangeLog.md) を、詳しい使い方は[機能リファレンス](features.html)と各節の「詳しく」から辿れるページを見てください。
+8.3.0 時点で MulmoTerminal にある機能を、領域ごとに一行ずつ並べた一覧です。行末の `(vX.Y.Z)` はその機能が最初に入った版で、その後の大きな拡張は行の中に版番号で添えています。不具合の修正や内部の変更は載せていません。それらは [ChangeLog](https://github.com/receptron/mulmoterminal/blob/main/docs/ChangeLog.md) を、詳しい使い方は[機能リファレンス](features.html)と各節の「詳しく」から辿れるページを見てください。
 
 - TOC
 {:toc}
@@ -61,6 +61,7 @@ description: MulmoTerminal のいまある機能を、入った版つきで領�
 
 詳しく: [エージェント](agents.html)
 
+- その他の機能 → Skills で、`~/.claude/skills`・有効なプラグイン（`plugin:skill` の名前で）・ターミナルを開いたフォルダの `.claude/skills` にあるスキルを 3 列で一覧・検索。自分のスキルを上書きするフォルダのスキルに印がつく (v8.3.0)
 - 設定の「Models and backends」でカスタムエージェント・アカウント・バックエンドを追加・削除できる（URL とキーを検証） (v7.2.0)
 - Claude Code が古くて自動許可モードが使えないとき、その旨と更新方法をセルに出す (v6.6.0)
 - Codex が承認を待つ間、セルを「Needs input」にして音とプッシュ通知を出す (v6.2.0)
@@ -292,6 +293,7 @@ description: MulmoTerminal のいまある機能を、入った版つきで領�
 
 詳しく: [設計図](blueprints.html)
 
+- コレクションから作るアプリは、既定で MulmoTerminal で見るコレクションと同じ見た目になり、やわらかい・くっきり・落ち着いたのひな形も選べる。工程「見た目を合わせる」が整えて `DESIGN.md` に残す (v8.3.0)
 - 失敗した工程は 5 回まで試し、4 回目からはそれまでの失敗をすべて見せて直させる。別のビルドが空けたフォルダは自動でやり直す (v8.2.0)
 - 試せる例: マニュアル・規程・英語ブログの polish、規程改定の compare、見積もりの verify、利用規約の review など (v8.1.0)
 - 終了画面で、ビルドが原本を残した文書と今のファイルを比べる (v8.1.0)
