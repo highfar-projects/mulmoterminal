@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { watch, useTemplateRef } from "vue";
-import { useAnchoredMenu } from "../composables/useAnchoredMenu";
+import AnchoredMenu from "./AnchoredMenu.vue";
 import { LIST_MENU_ITEM_CLASS, LIST_MENU_PANEL_CLASS } from "./anchoredMenuClasses";
 import { useDirScripts, type RunnableScript } from "../composables/useDirLists";
 import { scriptRunCommand, type RunCommand } from "./runCommand";
@@ -24,20 +24,13 @@ const { value: scriptList, load: loadScripts } = useDirScripts();
 
 // Teleported and pulled back inside the viewport, because this row sits at the cell's right edge
 // often enough that a menu hanging rightwards from it was cut off by the cell.
-const trigger = useTemplateRef<HTMLElement>("trigger");
-const menu = useTemplateRef<HTMLElement>("menu");
-const { open, pos, close, leave, toggle, onMenuKeydown } = useAnchoredMenu(trigger, menu, {
-  itemSelector: '[role="menuitem"]',
-  initialItem: (items) => items[0],
-});
+const menu = useTemplateRef<InstanceType<typeof AnchoredMenu>>("menu");
 
 watch(
   () => props.cwd,
   (dir) => {
-    // Close first: a cwd change invalidates the open dropdown (and would otherwise
-    // leave the global listeners attached and the menu re-appearing pre-opened on a
-    // later cwd, since the button can unmount while `open` stays true).
-    close();
+    // Close first: a cwd change invalidates the open dropdown.
+    menu.value?.close();
     void loadScripts(dir);
   },
   { immediate: true },
@@ -45,40 +38,34 @@ watch(
 
 function pick(s: RunnableScript) {
   emit("run", scriptRunCommand(s, scriptList.value.cwd ?? props.cwd));
-  leave();
+  menu.value?.leave();
 }
 </script>
 
 <template>
-  <span v-if="scriptList.scripts.length" ref="trigger" class="inline-flex flex-none">
-    <button
-      class="inline-flex items-center gap-1 border border-border bg-base text-secondary font-sans text-[12px] leading-none py-[5px] px-2.5 rounded-md cursor-pointer hover:bg-hover hover:text-fg aria-expanded:bg-hover aria-expanded:text-fg"
-      :aria-expanded="open"
-      aria-haspopup="menu"
-      :data-tip="t('tips.overlays.runScript')"
-      @click="toggle"
-    >
-      <span class="material-symbols-outlined" aria-hidden="true">play_arrow</span> Run
-      <span class="material-symbols-outlined" aria-hidden="true">{{ open ? "expand_less" : "expand_more" }}</span>
-    </button>
-    <Teleport to="body">
-      <!-- `pointerdown.stop`: the menu lives outside the trigger, and the dropdown closes on any
-           pointerdown it does not contain. -->
-      <div
-        v-if="open"
-        ref="menu"
-        data-testid="run-menu"
-        role="menu"
-        :class="LIST_MENU_PANEL_CLASS"
-        :style="{ top: `${pos.top}px`, left: `${pos.left}px` }"
-        @pointerdown.stop
-        @keydown="onMenuKeydown"
+  <AnchoredMenu
+    v-if="scriptList.scripts.length"
+    ref="menu"
+    item-selector='[role="menuitem"]'
+    initial-focus="first"
+    :panel-class="LIST_MENU_PANEL_CLASS"
+    testid="run-menu"
+  >
+    <template #trigger="{ open, toggle }">
+      <button
+        class="inline-flex items-center gap-1 border border-border bg-base text-secondary font-sans text-[12px] leading-none py-[5px] px-2.5 rounded-md cursor-pointer hover:bg-hover hover:text-fg aria-expanded:bg-hover aria-expanded:text-fg"
+        :aria-expanded="open"
+        aria-haspopup="menu"
+        :data-tip="t('tips.overlays.runScript')"
+        @click="toggle"
       >
-        <button v-for="s in scriptList.scripts" :key="s.index" :class="LIST_MENU_ITEM_CLASS" role="menuitem" :data-tip="s.command" @click="pick(s)">
-          <span class="material-symbols-outlined flex-none" aria-hidden="true">play_arrow</span>
-          <span class="truncate">{{ s.label }}</span>
-        </button>
-      </div>
-    </Teleport>
-  </span>
+        <span class="material-symbols-outlined" aria-hidden="true">play_arrow</span> Run
+        <span class="material-symbols-outlined" aria-hidden="true">{{ open ? "expand_less" : "expand_more" }}</span>
+      </button>
+    </template>
+    <button v-for="s in scriptList.scripts" :key="s.index" :class="LIST_MENU_ITEM_CLASS" role="menuitem" :data-tip="s.command" @click="pick(s)">
+      <span class="material-symbols-outlined flex-none" aria-hidden="true">play_arrow</span>
+      <span class="truncate">{{ s.label }}</span>
+    </button>
+  </AnchoredMenu>
 </template>
