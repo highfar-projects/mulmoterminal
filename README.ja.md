@@ -154,6 +154,13 @@ npx github:highfar-projects/mulmoterminal#main     # 同じく、main の最新�
 - **npm からの更新の案内は出ません。** npm の `mulmoterminal` は本家のものなので、フォークとして
   入れた場合は起動時の確認で案内を出しません。案内どおりに `npx mulmoterminal@latest` を実行すると、
   フォークが本家に入れ替わってしまうためです。更新するときは `#main` を付けて起動し直してください。
+- **起動した場所がワークスペース（`CLAUDE_CWD`）になります。** 本家の `npx` と同じ動きで、
+  新しいセルはそこで開き、一覧に出るのもそこのセッションで、usage のプローブもそこで動きます。
+  そのため、ホームフォルダに置いたショートカットや `.cmd` から起動すると、ホームフォルダが
+  ワークスペースになります。すると usage の表示が `n/a` になります。プローブが、信頼するつもりの
+  なかったホームフォルダについて、Claude Code の信頼確認で止まるためです。ワークスペースは
+  `npx github:highfar-projects/mulmoterminal --cwd ~/mulmoclaude` のように指定してください
+  （Windows ではフルパスで書きます）。
 - サブコマンドも同じ形で使えます: `npx github:highfar-projects/mulmoterminal init`、`… stop`。
 - **自分用の設定は `~/.mulmoterminal/.env` に書いてください**（`CLAUDE_PERMISSION_MODE`、
   `WAIT_REAP_GRACE_MS`、アカウントのトークンなど）。本家は `npx` を実行した場所の `.env` しか

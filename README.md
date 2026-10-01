@@ -290,6 +290,12 @@ npx github:highfar-projects/mulmoterminal#main     # the same, pinned to the new
 - **No update notice from npm.** The registry's `mulmoterminal` is upstream's, so the startup check
   stays quiet on a fork install instead of offering `npx mulmoterminal@latest`, which would replace
   the fork. To update, run the command again with `#main`.
+- **The directory you start it from becomes the workspace** (`CLAUDE_CWD`), as upstream's `npx`
+  does: new cells open there, its sessions are the ones listed, and the usage probe runs there.
+  A shortcut or `.cmd` in your home directory therefore makes HOME the workspace, and the usage
+  gauge then reads `n/a`, its probe waiting on Claude Code's trust prompt for a folder you never
+  meant to trust. Name the workspace instead:
+  `npx github:highfar-projects/mulmoterminal --cwd ~/mulmoclaude` (on Windows, the full path).
 - Every subcommand works the same way: `npx github:highfar-projects/mulmoterminal init`, `… stop`.
 - **Settings that belong to you go in `~/.mulmoterminal/.env`** (`CLAUDE_PERMISSION_MODE`,
   `WAIT_REAP_GRACE_MS`, an account's token). Upstream reads only the `.env` in the directory `npx`
