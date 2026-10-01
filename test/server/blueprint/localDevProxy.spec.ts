@@ -79,6 +79,27 @@ describe.skipIf(process.platform === "win32")("dev-proxy.mjs on a real Vite conf
     expect(result.stderr).toContain('client/vite.config.mjs server.proxy["/api"] is the string');
   });
 
+  it("reads the config as the dev server resolves it, after a plugin's config hook adds the proxy", () => {
+    const config =
+      'const addsProxy = { name: "adds-proxy", config: () => ({ server: { proxy: { "/api": { target: "http://127.0.0.1:3000", changeOrigin: true } } } }) };\nexport default { plugins: [addsProxy] };\n';
+    const result = check(config);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('server.proxy["/api"] sets changeOrigin: true');
+  });
+
+  it("passes when a plugin's config hook corrects a string proxy, as the dev server would", () => {
+    const config =
+      'const fixesProxy = { name: "fixes-proxy", config: (raw) => { raw.server.proxy["/api"] = { target: "http://127.0.0.1:3000", changeOrigin: false }; } };\nexport default { plugins: [fixesProxy], server: { proxy: { "/api": "http://127.0.0.1:3000" } } };\n';
+    expect(check(config)).toEqual({ status: 0, stderr: "" });
+  });
+
+  it("finds a config written in CommonJS (.cjs)", () => {
+    writeFileSync(path.join(dir, "vite.config.cjs"), 'module.exports = { server: { proxy: { "/api": "http://127.0.0.1:3000" } } };\n');
+    const result = check(null);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('vite.config.cjs server.proxy["/api"] is the string');
+  });
+
   it("passes the proxy the scaffold now writes, from a config written as a function", () => {
     const config = 'export default () => ({ server: { proxy: { "/api": { target: "http://127.0.0.1:3000", changeOrigin: false } } } });\n';
     expect(check(config)).toEqual({ status: 0, stderr: "" });
