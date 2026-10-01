@@ -105,10 +105,28 @@ function roundSection(step: PlanStep, stepState: StepState | undefined): string[
   ];
 }
 
-function failureSection(stepState: StepState | undefined): string[] {
+/**
+ * The step's check as a shell would run it from the project, with the pack folders written in: a check names them as
+ * `$BLUEPRINT_BASE` / `$BLUEPRINT_USECASE` (bare or braced), which only the executor's own run sets.
+ */
+export const resolvedCheck = (check: string, packDirs: { base: string; usecase: string }): string =>
+  check.replace(/\$\{?BLUEPRINT_(BASE|USECASE)\}?/gu, (_match, which: string) => (which === "BASE" ? packDirs.base : packDirs.usecase));
+
+// A check's output does not always say how to fix what it found, and an agent that cannot tell fails the same way
+// until the retries run out and a person — who cannot fix it either — is left with the build. The check itself is
+// the exact rule, so the agent is pointed at it; reading has no side effects, where running some checks would.
+function failureSection(step: PlanStep, stepState: StepState | undefined, packDirs: { base: string; usecase: string }): string[] {
   const check = stepState?.lastCheck;
   if (!check || check.ok) return [];
-  return ["", "The previous attempt did not pass its check. Its output:", "```", tail(check.output, CHECK_OUTPUT_PROMPT_CHARS), "```", "Fix what it reports."];
+  return [
+    "",
+    "The previous attempt did not pass its check. Its output:",
+    "```",
+    tail(check.output, CHECK_OUTPUT_PROMPT_CHARS),
+    "```",
+    "Fix what it reports. When the output does not make plain what would satisfy it, read the check to see exactly what it requires — " +
+      `it is \`${resolvedCheck(step.check, packDirs)}\`, and the scripts it names are in the pack folders above — then change the work until it would pass. Never change the check or anything in the pack folders.`,
+  ];
 }
 
 export function stepPrompt({ step, skillFile, packDirs, stepState, askCommand, earlierAnswers: earlier = [], language }: StepPromptInput): string {
@@ -129,6 +147,6 @@ export function stepPrompt({ step, skillFile, packDirs, stepState, askCommand, e
     ...roundSection(step, stepState),
     ...earlierSection(earlier),
     ...answeredSection(stepState),
-    ...failureSection(stepState),
+    ...failureSection(step, stepState, packDirs),
   ].join("\n");
 }

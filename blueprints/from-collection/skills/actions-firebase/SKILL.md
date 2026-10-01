@@ -27,7 +27,8 @@ check it against its entry and give it its test here instead of building it a se
 
 Tests in `test/blueprint/actions.spec.ts`, one per `feature`, each with the entry's `name` in the title of its `it(…)` /
 `test(…)` (`it("books.actions.tidy: summarises", …)`) — with `it` / `test` imported from `vitest` in that file (`import { it } from "vitest"`); the check reads titles only from
-calls to those imports, so a global `it`, a helper of the same name, a comment or a title built at run time does not count —
+calls to those imports, so a global `it`, a helper of the same name, a comment or a title built at run time does not count, and neither does a `describe(…)` name (`it("tidy")` inside
+`describe("books.actions")` is not titled `books.actions.tidy`: write the whole name in every test's own title) —
 against the emulators: do the action as a signed-in user and read back what changed, and check that someone who must not
 do it is refused. Never call the network in a test: the model call and the fetch go through clients the test replaces
 with stand-ins.

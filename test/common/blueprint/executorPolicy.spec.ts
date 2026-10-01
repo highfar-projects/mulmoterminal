@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import { basePlanSchema } from "../../../common/blueprint/plan";
 import { initialState, type BlueprintState, type StepState } from "../../../common/blueprint/state";
 import { atRoundLimit, nextAction, shouldRepeat, MAX_FAILED_CHECKS, MAX_ROUNDS, type ExecutorInputs } from "../../../common/blueprint/executorPolicy";
-import { earlierAnswers, stepPrompt, CHECK_OUTPUT_PROMPT_CHARS, EARLIER_ANSWERS_PROMPT_CHARS } from "../../../common/blueprint/stepPrompt";
+import { earlierAnswers, resolvedCheck, stepPrompt, CHECK_OUTPUT_PROMPT_CHARS, EARLIER_ANSWERS_PROMPT_CHARS } from "../../../common/blueprint/stepPrompt";
 
 const steps = basePlanSchema.parse({
   steps: [
@@ -106,6 +106,31 @@ describe("stepPrompt", () => {
 
   it("says nothing about a check that passed", () => {
     expect(prompt({ status: "running", approved: true, answers: [], lastCheck: { ok: true, output: "fine", atMs: 1 } })).not.toContain("did not pass");
+  });
+
+  it("points a failed attempt at the check itself, with the pack folders written in, and forbids changing it", () => {
+    const failing = stepPrompt({
+      step: { ...steps[1], check: 'sh "$BLUEPRINT_USECASE/checks/actions.sh" local' },
+      skillFile: "/packs/firebase/skills/b/SKILL.md",
+      packDirs: { base: "/packs/firebase", usecase: "/packs/internal" },
+      stepState: { status: "running", approved: true, answers: [], lastCheck: { ok: false, output: "missing", atMs: 1 } },
+      askCommand: "ASK",
+    });
+    expect(failing).toContain('read the check to see exactly what it requires — it is `sh "/packs/internal/checks/actions.sh" local`');
+    expect(failing).toContain("Never change the check");
+    expect(prompt(undefined)).not.toContain("read the check");
+  });
+});
+
+describe("resolvedCheck", () => {
+  const dirs = { base: "/b", usecase: "/u" };
+  it.each([
+    ['sh "$BLUEPRINT_USECASE/checks/a.sh" local', 'sh "/u/checks/a.sh" local'],
+    ['node "${BLUEPRINT_BASE}/checks/x.mjs" && sh "$BLUEPRINT_USECASE/y.sh"', 'node "/b/checks/x.mjs" && sh "/u/y.sh"'],
+    ["sh check-b.sh", "sh check-b.sh"],
+    ["echo $BLUEPRINT_OTHER $HOME", "echo $BLUEPRINT_OTHER $HOME"],
+  ])("writes the pack folders into %s", (check, resolved) => {
+    expect(resolvedCheck(check, dirs)).toBe(resolved);
   });
 });
 

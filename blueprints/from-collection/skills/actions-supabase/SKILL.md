@@ -30,7 +30,8 @@ check it against its entry and give it its test here instead of building it a se
 
 Tests in `test/actions.test.ts`, one per `feature`, each with the entry's `name` in the title of its `it(…)` / `test(…)`
 (`it("books.actions.tidy: summarises", …)`) — with `it` / `test` imported from `vitest` in that file (`import { it } from "vitest"`); the check reads titles only from
-calls to those imports, so a global `it`, a helper of the same name, a comment or a title built at run time does not count:
+calls to those imports, so a global `it`, a helper of the same name, a comment or a title built at run time does not count, and neither does a `describe(…)` name (`it("tidy")` inside
+`describe("books.actions")` is not titled `books.actions.tidy`: write the whole name in every test's own title):
 walk the real flow against the local stack and read back what changed. Never call the network in a test: a model call
 goes through a client the test replaces with a stand-in, and an ingest job takes the fetch it uses as an argument, so
 the test hands it a fixture instead. The tests must pass with no API key set.
