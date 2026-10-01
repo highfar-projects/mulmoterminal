@@ -50,7 +50,7 @@
       "insertAfter": "data-rules",
       "bases": ["firebase"],
       "title": "見た目を合わせる",
-      "description": "選んだ見た目（MulmoTerminal と同じ、またはひな形）で画面をそろえる。MulmoTerminal のコレクションの画面と同じ部品とクラスを Tailwind で使い、元のコレクションのアイコンと色を見出しに引き継ぐ。決まりを DESIGN.md に残す。",
+      "description": "選んだ見た目（MulmoTerminal と同じ、またはひな形）で画面をそろえる。MulmoTerminal のコレクションの画面と同じ部品とクラスを Tailwind で使い、元のコレクションのアイコンを見出しに引き継ぐ。決まりを DESIGN.md に残す。",
       "skill": "skills/design",
       "check": "sh \"$BLUEPRINT_USECASE/checks/design.sh\""
     },
@@ -161,7 +161,7 @@
       "insertAfter": "auth",
       "bases": ["local", "cloudflare", "supabase"],
       "title": "見た目を合わせる",
-      "description": "選んだ見た目（MulmoTerminal と同じ、またはひな形）で画面をそろえる。MulmoTerminal のコレクションの画面と同じ部品とクラスを Tailwind で使い、元のコレクションのアイコンと色を見出しに引き継ぐ。決まりを DESIGN.md に残す。",
+      "description": "選んだ見た目（MulmoTerminal と同じ、またはひな形）で画面をそろえる。MulmoTerminal のコレクションの画面と同じ部品とクラスを Tailwind で使い、元のコレクションのアイコンを見出しに引き継ぐ。決まりを DESIGN.md に残す。",
       "skill": "skills/design",
       "check": "sh \"$BLUEPRINT_USECASE/checks/design.sh\""
     }
