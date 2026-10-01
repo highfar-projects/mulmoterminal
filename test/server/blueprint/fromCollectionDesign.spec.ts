@@ -8,6 +8,7 @@ import path from "node:path";
 import {
   DESIGNS,
   SAME_AS_MULMOTERMINAL,
+  SCREEN_ANCHORS,
   canonicalValue,
   declarations,
   designOf,
@@ -38,6 +39,7 @@ const built = (source: string, names = ["--color-indigo-600", "--color-slate-50"
   [
     "@layer theme{:root,:host{" + names.map((name) => name + ":" + minified(tokenValue(source, name))).join(";") + "}}",
     ".bg-indigo-600{background-color:var(--color-indigo-600)}",
+    ".border-indigo-100{border-color:x}.border-slate-100{border-color:x}.divide-slate-100>:not(:last-child){border-color:x}.bg-slate-900\\/40{background-color:x}",
     '@font-face{font-family:"Material Symbols Outlined";src:url(./x.woff2)}',
   ].join("");
 
@@ -137,9 +139,35 @@ describe("designProblems", () => {
     const handWritten = '.bg-indigo-600{background:red}@font-face{font-family:"Material Symbols Outlined"}';
     expect(designProblems({ ...followingApp, builtCss: handWritten })[0]).toContain("the built CSS has no .bg-indigo-600 rule as Tailwind writes it");
     const noTheme = '.bg-indigo-600{background-color:var(--color-indigo-600)}@font-face{font-family:"Material Symbols Outlined"}';
-    expect(designProblems({ ...followingApp, builtCss: noTheme })).toEqual([
+    expect(designProblems({ ...followingApp, builtCss: noTheme })).toContain(
       "the built CSS does not define --color-indigo-600: Tailwind's theme is not in the build",
+    );
+  });
+
+  it("names each screen whose class the build lacks", () => {
+    SCREEN_ANCHORS.filter((anchor) => !anchor.when).forEach((anchor) => {
+      const selector = "." + anchor.className.replaceAll("/", "\\/");
+      const without = built(TAILWIND_THEME).replace(selector, ".other");
+      expect(without, anchor.className).not.toBe(built(TAILWIND_THEME));
+      expect(designProblems({ ...followingApp, builtCss: without }), anchor.className).toEqual([
+        `the ${anchor.screen} is not in MulmoTerminal's look: no screen uses "${anchor.className}" (design/mulmoterminal.md)`,
+      ]);
+    });
+  });
+
+  it("asks for the kanban and the calendar only when the collection has them", () => {
+    expect(designProblems({ ...followingApp, views: { kanban: false, calendar: false } })).toEqual([]);
+    expect(designProblems({ ...followingApp, views: { kanban: true, calendar: true } })).toEqual([
+      'the kanban (its columns) is not in MulmoTerminal\'s look: no screen uses "w-72" (design/mulmoterminal.md)',
+      'the calendar (its day cells) is not in MulmoTerminal\'s look: no screen uses "min-h-[5.5rem]" (design/mulmoterminal.md)',
     ]);
+    const both = `${built(TAILWIND_THEME)}.w-72{width:18rem}.min-h-\\[5\\.5rem\\]{min-height:5.5rem}`;
+    expect(designProblems({ ...followingApp, builtCss: both, views: { kanban: true, calendar: true } })).toEqual([]);
+  });
+
+  it("does not take a longer class for the one it looks for", () => {
+    const longer = `${built(TAILWIND_THEME)}.w-720{width:1px}`;
+    expect(designProblems({ ...followingApp, builtCss: longer, views: { kanban: true } })[0]).toContain('"w-72"');
   });
 
   it("needs the icon font in the build", () => {

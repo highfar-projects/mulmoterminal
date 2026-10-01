@@ -33,7 +33,9 @@ should look the same. The design is the `design` answer in `.blueprint/answers.j
    in a folder named `dist` (`dist/`, `dist/client/`, `client/dist/`): the check reads the built stylesheet there.
 
 Done when the check passes: `yarn build` succeeds, and the stylesheet it wrote has MulmoTerminal's main button
-(`.bg-indigo-600`), the Material Symbols font, and the chosen design's colour and corner values (Tailwind's own for
+(`.bg-indigo-600`), one class of each screen's own (the header's icon box, the toolbar's bar, the table body, the
+record panel's backdrop, and the kanban's columns or the calendar's day cells when the collection has them — see
+`design/mulmoterminal.md`), the Material Symbols font, and the chosen design's colour and corner values (Tailwind's own for
 `MulmoTerminal と同じ`, the template's otherwise); the screens use `material-symbols-outlined` and the collection's
 icon; `DESIGN.md` names the design.
 

@@ -47,13 +47,14 @@ const filesUnderAll = (dir, extension) =>
     return entry.name.endsWith(extension) && statSync(file).mtimeMs >= builtSince ? [readFileSync(file, "utf8")] : [];
   });
 
-// The starting collection's icon, the one MulmoTerminal shows in its header.
-function iconOf() {
+// The starting collection's schema: its icon is the one MulmoTerminal shows in the header, and its fields decide
+// whether MulmoTerminal shows it as a kanban and a calendar.
+function startingSchema() {
   const source = readJson(".blueprint/source/source.json");
   const slug = source?.start ?? source?.collections?.[0];
-  const schema = slug ? readJson(`.blueprint/source/collections/${slug}/schema.json`) : null;
-  return typeof schema?.icon === "string" ? schema.icon : null;
+  return slug ? readJson(`.blueprint/source/collections/${slug}/schema.json`) : null;
 }
+const schema = startingSchema();
 
 const answer = readJson(".blueprint/answers.json")?.design;
 const design = designOf(answer);
@@ -64,7 +65,8 @@ const problems = designProblems({
   tailwindTheme: readText(path.join("node_modules", "tailwindcss", "theme.css")),
   sources: filesUnder(".", [".vue", ".ts", ".tsx"]),
   designMd: readText("DESIGN.md"),
-  icon: iconOf(),
+  icon: typeof schema?.icon === "string" ? schema.icon : null,
+  views: { kanban: Boolean(schema?.kanbanField), calendar: Boolean(schema?.calendarField) },
   template: design?.theme ? readText(path.join(THEMES, `${design.theme}.css`)) : null,
 });
 problems.forEach((problem) => console.error(problem));
