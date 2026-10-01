@@ -6,6 +6,7 @@ import AccountPickerSource from "../../../src/components/AccountPicker.vue?raw";
 import AccountingOverlaySource from "../../../src/components/AccountingOverlay.vue?raw";
 import CollectionsBrowseOverlaySource from "../../../src/components/CollectionsBrowseOverlay.vue?raw";
 import GithubOverlaySource from "../../../src/components/GithubOverlay.vue?raw";
+import FullScreenOverlaySource from "../../../src/components/FullScreenOverlay.vue?raw";
 import GithubPaneSource from "../../../src/components/GithubPane.vue?raw";
 import GithubPrRepoSource from "../../../src/components/GithubPrRepo.vue?raw";
 import GridViewSource from "../../../src/components/GridView.vue?raw";
@@ -19,6 +20,7 @@ import RunMenuSource from "../../../src/components/RunMenu.vue?raw";
 import SharedAppPreviewSource from "../../../src/components/SharedAppPreview.vue?raw";
 import SharedAppAccessPanelSource from "../../../src/components/SharedAppAccessPanel.vue?raw";
 import SkillMenuSource from "../../../src/components/SkillMenu.vue?raw";
+import SkillsOverlaySource from "../../../src/components/SkillsOverlay.vue?raw";
 import WikiBrowseOverlaySource from "../../../src/components/WikiBrowseOverlay.vue?raw";
 import WikiGraphViewSource from "../../../src/components/WikiGraphView.vue?raw";
 
@@ -27,6 +29,7 @@ describeTipSurface("overlays", {
   "AccountPicker.vue": AccountPickerSource,
   "AccountingOverlay.vue": AccountingOverlaySource,
   "CollectionsBrowseOverlay.vue": CollectionsBrowseOverlaySource,
+  "FullScreenOverlay.vue": FullScreenOverlaySource,
   "GithubOverlay.vue": GithubOverlaySource,
   "GithubPane.vue": GithubPaneSource,
   "GithubPrRepo.vue": GithubPrRepoSource,
@@ -41,6 +44,7 @@ describeTipSurface("overlays", {
   "SharedAppPreview.vue": SharedAppPreviewSource,
   "SharedAppAccessPanel.vue": SharedAppAccessPanelSource,
   "SkillMenu.vue": SkillMenuSource,
+  "SkillsOverlay.vue": SkillsOverlaySource,
   "WikiBrowseOverlay.vue": WikiBrowseOverlaySource,
   "WikiGraphView.vue": WikiGraphViewSource,
 });
