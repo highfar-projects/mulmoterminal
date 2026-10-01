@@ -61,11 +61,12 @@ export const probeScreenFile = (stateDir: string, accountId?: string): string =>
  *
  *  Returns the path written, or null when it could not be — this is diagnostics, so a read-only
  *  state directory must cost nothing. */
-export function writeProbeScreen(stateDir: string, screen: string, accountId?: string): string | null {
+export function writeProbeScreen(stateDir: string, screen: string, accountId?: string, header = ""): string | null {
   const file = probeScreenFile(stateDir, accountId);
   try {
     mkdirSync(stateDir, { recursive: true });
-    writeFileSync(file, readableScreen(screen), { mode: 0o600 });
+    // The spawn facts first, so the file says where the probe ran before what it showed.
+    writeFileSync(file, (header ? `${header}\n\n` : "") + readableScreen(screen), { mode: 0o600 });
     return file;
   } catch {
     return null;

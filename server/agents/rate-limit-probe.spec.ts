@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { startRateLimitProbe, probeArgs, PROBE_PROMPT } from "./rate-limit-probe";
+import { startRateLimitProbe, probeArgs, probeHeader, PROBE_PROMPT } from "./rate-limit-probe";
 import { createRateLimitStore } from "./rate-limit-store";
 import { killPty } from "../session/pty-kill";
 
@@ -175,7 +175,42 @@ describe("what a settled probe carries out", () => {
         },
       }),
     );
-    expect(outcome.mock.calls[0][0]).toEqual({ stall: "unknown", screen: "" });
+    expect(outcome.mock.calls[0][0]).toMatchObject({ stall: "unknown", screen: "" });
+    expect(outcome.mock.calls[0][0].header).toContain("pid:     (spawn failed)");
+  });
+
+  // Fork-only: the saved screen must say where the probe was started, so a screen naming another
+  // directory can be told apart from a probe that really ran there.
+  it("records where and how the probe was started", () => {
+    const outcome = vi.fn();
+    const stop = startRateLimitProbe(deps({ onSettled: outcome, cwd: "/nowhere/at-all" }));
+    stop();
+    const { header } = outcome.mock.calls[0][0] as { header: string };
+    expect(header).toContain("cwd:     /nowhere/at-all  (DID NOT EXIST at spawn)");
+    expect(header).toContain(`server:  ${process.cwd()}`);
+    expect(header).toContain("--session-id");
+  });
+});
+
+describe("probeHeader", () => {
+  it("lays the facts out one per line, with the run's length", () => {
+    const text = probeHeader({
+      startedAt: new Date("2026-10-01T05:00:00.000Z"),
+      endedAt: new Date("2026-10-01T05:01:30.000Z"),
+      cwd: "/w",
+      cwdExists: true,
+      serverCwd: "/s",
+      args: ["a", "b"],
+      pid: 42,
+    });
+    expect(text.split("\n")).toEqual([
+      "started: 2026-10-01T05:00:00.000Z",
+      "ended:   2026-10-01T05:01:30.000Z (90000 ms)",
+      "cwd:     /w",
+      "server:  /s",
+      'args:    ["a","b"]',
+      "pid:     42",
+    ]);
   });
 });
 

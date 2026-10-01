@@ -40,8 +40,8 @@ export interface AccountRateLimitDeps {
    *  stop function. `onSettled` hands back what the probe's screen showed when it ended. */
   startClaudeProbe: (home: string, probeReportKey: string, onSettled: (outcome: ProbeOutcome) => void) => () => void;
   claudeAvailable: () => boolean;
-  /** A probe of this account ended without its statusLine answering; `screen` is what it showed. */
-  onProbeSilent?: (account: AgentAccount, screen: string) => void;
+  /** A probe of this account ended without its statusLine answering; `outcome` is what it showed. */
+  onProbeSilent?: (account: AgentAccount, outcome: ProbeOutcome) => void;
   /** Where a login's readings are cached; a spec points it away from ~/.mulmoterminal. */
   cacheFile?: (login: string) => string;
 }
@@ -102,10 +102,10 @@ export function createAccountRateLimits(deps: AccountRateLimitDeps) {
     const probeReportKey = randomBytes(PROBE_REPORT_KEY_BYTES).toString("hex");
     probeLogins.set(probeReportKey, loginOf(account));
     try {
-      meter.stopProbe = deps.startClaudeProbe(deps.homeOf(account), probeReportKey, ({ stall, screen }) => {
+      meter.stopProbe = deps.startClaudeProbe(deps.homeOf(account), probeReportKey, (outcome) => {
         probeLogins.delete(probeReportKey);
         meter.stopProbe = null;
-        if (meter.store.noteProbeFailedIfNoReport(Date.now(), stall)) deps.onProbeSilent?.(account, screen);
+        if (meter.store.noteProbeFailedIfNoReport(Date.now(), outcome.stall)) deps.onProbeSilent?.(account, outcome);
         meter.store.setProbeInFlight(false);
       });
     } catch {

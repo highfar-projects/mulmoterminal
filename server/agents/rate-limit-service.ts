@@ -42,9 +42,9 @@ const claudeIsRunnable = (): boolean => {
 // report of "usage says n/a" starts from nothing (#1293). Kept for a NAMED stall too (fork-only): a
 // probe here was read as waiting on the trust prompt in a folder both logins had already trusted,
 // and with the screen discarded there was no way to tell whether the dialog was really up.
-const reportProbeScreen = (screen: string, accountId?: string): void => {
+const reportProbeScreen = ({ screen, header }: ProbeOutcome, accountId?: string): void => {
   if (!screen) return;
-  const file = writeProbeScreen(MULMOTERMINAL_HOME, screen, accountId);
+  const file = writeProbeScreen(MULMOTERMINAL_HOME, screen, accountId, header);
   const whose = accountId ? `account '${accountId}' usage probe` : "usage probe";
   if (file) console.warn(`[rate-limit] the ${whose} reported nothing; what its terminal showed is in ${file}`);
 };
@@ -101,12 +101,12 @@ export function createRateLimitService(): RateLimitRouteDeps {
   // A probe that settles WITHOUT the status line having reported is the "asked, heard nothing"
   // case. report() has already moved the state on if anything arrived, so this only widens the gap
   // when nothing did.
-  const onProbeSettled = (sessionId: string, { stall, screen }: ProbeOutcome): void => {
+  const onProbeSettled = (sessionId: string, outcome: ProbeOutcome): void => {
     // Cleared here rather than by whoever called stop(): `stop()` is idempotent, but a stale
     // reference would let the NEXT probe be killed by a late report belonging to this one.
     stopClaudeRateLimitProbe = null;
     // Every probe that reported nothing leaves its screen behind; a successful one has nothing to explain (#1293).
-    if (store.noteProbeFailedIfNoReport(Date.now(), stall)) reportProbeScreen(screen);
+    if (store.noteProbeFailedIfNoReport(Date.now(), outcome.stall)) reportProbeScreen(outcome);
     store.setProbeInFlight(false);
     // Hiding it from /api/sessions is not enough: `claude --resume` reads the transcript directory
     // itself, so the probe has to take its own file with it (#1010).
@@ -142,7 +142,7 @@ export function createRateLimitService(): RateLimitRouteDeps {
     },
     startClaudeProbe: startAccountClaudeProbe,
     claudeAvailable: claudeIsRunnable,
-    onProbeSilent: (account, screen) => reportProbeScreen(screen, account.id),
+    onProbeSilent: (account, outcome) => reportProbeScreen(outcome, account.id),
   });
 
   return { store, refreshCodex, startProbe, claudeAvailable: claudeIsRunnable, now_ms: () => Date.now(), accounts };

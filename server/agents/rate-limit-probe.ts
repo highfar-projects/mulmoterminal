@@ -9,7 +9,7 @@
 // What it costs instead is one small query against the very budget it reports. That is the whole
 // reason the caller only asks when a browser is watching (see rate-limit-store.ts) — a probe on a
 // timer would spend the user's window overnight to refresh a number nobody is reading.
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { killPty } from "../session/pty-kill.js";
@@ -42,6 +42,34 @@ export interface ProbePty {
 export interface ProbeOutcome {
   stall: ProbeStall;
   screen: string;
+  /** How the probe was started, as plain lines for the saved screen file: when, in which directory
+   *  (and whether it existed then), with what arguments, under which pid. Fork-only: a probe was
+   *  seen asking to trust the HOME directory although it is spawned in CLAUDE_CWD, and the screen
+   *  alone could not say whether it really started there. Empty when the probe never spawned. */
+  header: string;
+}
+
+/** The facts `ProbeOutcome.header` records. Pure, so a spec can pin the format. */
+export interface ProbeFacts {
+  startedAt: Date;
+  endedAt: Date;
+  cwd: string;
+  cwdExists: boolean;
+  /** The SERVER's own cwd: if the probe's screen names this instead of `cwd`, the spawn's cwd was lost. */
+  serverCwd: string;
+  args: readonly string[];
+  pid: number | null;
+}
+
+export function probeHeader(facts: ProbeFacts): string {
+  return [
+    `started: ${facts.startedAt.toISOString()}`,
+    `ended:   ${facts.endedAt.toISOString()} (${facts.endedAt.getTime() - facts.startedAt.getTime()} ms)`,
+    `cwd:     ${facts.cwd}${facts.cwdExists ? "" : "  (DID NOT EXIST at spawn)"}`,
+    `server:  ${facts.serverCwd}`,
+    `args:    ${JSON.stringify(facts.args)}`,
+    `pid:     ${facts.pid ?? "(spawn failed)"}`,
+  ].join("\n");
 }
 
 export interface ProbeDeps {
@@ -86,7 +114,7 @@ export function startRateLimitProbe(deps: ProbeDeps): () => void {
     });
     settings = { dir, file };
   } catch {
-    deps.onSettled({ stall: "unknown", screen: "" });
+    deps.onSettled({ stall: "unknown", screen: "", header: "" });
     return () => {};
   }
   const { dir, file: settingsFile } = settings;
@@ -94,15 +122,20 @@ export function startRateLimitProbe(deps: ProbeDeps): () => void {
   let stopped = false;
   let pty: ProbePty | null = null;
   let screen = "";
+  const args = probeArgs(deps.sessionId, settingsFile);
+  const startedAt = new Date();
+  const cwdExists = existsSync(deps.cwd);
   const stop = (): void => {
     if (stopped) return;
     stopped = true;
     clearTimeout(timer);
+    const pid = pty?.pid ?? null;
     // The caller drops its only handle after this, so a probe that ignored SIGHUP would run on
     // untracked — killPty escalates (#2401).
     if (pty) killPty(pty, { label: "rate-limit probe" });
     rmSync(dir, { recursive: true, force: true });
-    deps.onSettled({ stall: classifyProbeStall(screen), screen });
+    const header = probeHeader({ startedAt, endedAt: new Date(), cwd: deps.cwd, cwdExists, serverCwd: process.cwd(), args, pid });
+    deps.onSettled({ stall: classifyProbeStall(screen), screen, header });
   };
   const timer = setTimeout(stop, PROBE_TIMEOUT_MS);
 
@@ -111,7 +144,7 @@ export function startRateLimitProbe(deps: ProbeDeps): () => void {
     // its own, and a session nobody asked for lands in /api/sessions and `claude --resume` with
     // nothing to identify it by (#1010). The caller registers the same id as an internal helper,
     // which is what keeps it out of the listing.
-    pty = deps.spawn(probeArgs(deps.sessionId, settingsFile), deps.cwd);
+    pty = deps.spawn(args, deps.cwd);
     pty.onData((chunk) => {
       screen = appendProbeScreen(screen, chunk);
     });
