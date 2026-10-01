@@ -37,14 +37,14 @@
     "bookings": {
       "submitOnly": true,
       "statusField": "status",
-      "transitions": { "initial": ["booked"] }
+      "transitions": { "initial": ["booked"] },
+      "writerDelete": true
     },
     "seats": { "mirrorOf": "bookings" }
   },
   "views": [
     { "id": "public", "audience": "public", "path": "views/classes.html", "collections": ["classes", "seats"] },
-    { "id": "desk", "audience": "member", "path": "views/desk.html", "collections": ["classes", "seats", "bookings"] },
-    { "id": "mine", "audience": "participant", "path": "views/mine.html", "collections": ["bookings"] }
+    { "id": "desk", "audience": "member", "path": "views/desk.html", "collections": ["classes", "seats", "bookings"] }
   ],
   "public": {
     "enabled": true,
@@ -62,8 +62,7 @@
         "window": {
           "fromField": { "ref": "seat", "collection": "seats", "field": "opensAt" },
           "untilField": { "ref": "seat", "collection": "seats", "field": "closesAt" }
-        },
-        "selfDelete": ["booked"]
+        }
       }
     }
   }
@@ -174,13 +173,14 @@ this template's, not your app's. The rules behind the sheet are in [design.md](.
   input { display: block; width: min(22rem, 100%); margin-top: 6px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink); font: inherit; }
   input:focus { border-color: var(--main); outline: 2px solid var(--line); }
   button { min-height: 38px; padding: 8px 14px; border: 0; border-radius: 10px; background: var(--main); color: var(--paper); font: inherit; font-weight: 750; cursor: pointer; touch-action: manipulation; }
-  #list > div, #mine li, #rows > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 8px; padding: 13px 15px; border: 1px solid var(--line); border-radius: 14px; background: var(--fill); }
+  #list > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 8px; padding: 13px 15px; border: 1px solid var(--line); border-radius: 14px; background: var(--fill); }
   .left { margin-left: auto; color: var(--main); font-weight: 750; }
   .full { margin-left: auto; color: var(--muted); font-weight: 750; }
   ul { margin: 0; padding: 0; list-style: none; }
   #say { min-height: 1.6em; margin: 14px 0 0; color: var(--main); font-size: 13px; font-weight: 700; }
 </style>
 <h1>クラス予約</h1>
+<p>取り消しは受付へご連絡ください。</p>
 <label>お名前 <input id="who" maxlength="40" /></label>
 <p id="say" role="status"></p>
 <div id="list"></div>
@@ -280,77 +280,27 @@ this template's, not your app's. The rules behind the sheet are in [design.md](.
   全申込みを見張ることになり、publish が拒否します。「残り」はページを開いたときと、自分が申し
   込んだ後に更新されます。予約開始の瞬間に人が集まるクラスなら、そうページに書いてください
 
-## views/mine.html — 自分の予約と、取り下げ
+## 取り消しは受付で — 本人の取り消しページを作らない理由
 
-`audience: "participant"`、入口は `/p/{slug}`。取り下げると、**予約の削除と席の再オープンが
-1 つのバッチ**になり、その席はすぐ他の人が取れるようになります。
+会議室（[meeting-room.md](./meeting-room.md)）は本人の取り下げページ（`/p/{slug}`）を持ちますが、
+**このテンプレートには置きません。** 2 つの理由で、外から来た予約者には届かないからです。
 
-```html
-<style>
-  /* Every colour is derived from ONE hue — the rules are in design.md. Change it for your app. */
-  :root {
-    --hue: 350;                                    /* rose - a studio floor, filling up */
-    --main: oklch(50% .12 var(--hue));           --fill: oklch(96% .02 var(--hue));
-    --line: oklch(50% .12 var(--hue) / .16);     --ink: oklch(23% .015 var(--hue));
-    --muted: oklch(53% .02 var(--hue));          --paper: oklch(99.4% .007 85);
-  }
-  * { box-sizing: border-box; }
-  html { background: var(--paper); color: var(--ink); color-scheme: light; }
-  body { margin: 0 auto; max-width: 44rem; padding: 28px 18px 56px; font: 15px/1.65 system-ui, "Hiragino Sans", sans-serif; }
-  button { min-height: 38px; padding: 8px 14px; border: 0; border-radius: 10px; background: var(--main); color: var(--paper); font: inherit; font-weight: 750; cursor: pointer; touch-action: manipulation; }
-  ul { margin: 0; padding: 0; list-style: none; }
-  #mine li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 8px; padding: 13px 15px; border: 1px solid var(--line); border-radius: 14px; background: var(--fill); }
-  #say { min-height: 1.6em; margin: 14px 0 0; color: var(--main); font-size: 13px; font-weight: 700; }
-</style>
-<ul id="mine"></ul>
-<p id="say" role="status"></p>
-<script>
-  const view = window.__MC_APP_VIEW;
-  const list = document.getElementById("mine");
-  const say = document.getElementById("say");
-  view.onState(({ bookings = [] }, viewer = {}) => {
-    const withdrawable = viewer.can?.bookings?.withdrawFrom ?? [];
-    list.replaceChildren(
-      ...bookings.map((booking) => {
-        const row = document.createElement("li");
-        row.textContent = `${booking.seat} — ${booking.status}`;
-        if (withdrawable.includes(booking.status)) {
-          const button = document.createElement("button");
-          button.type = "button";
-          button.dataset.id = booking.id;
-          button.textContent = "取り消す";
-          row.append(button);
-        }
-        return row;
-      }),
-    );
-  });
-  list.addEventListener("click", async (event) => {
-    const button = event.target;
-    const id = button.dataset?.id;
-    if (!id) return;
-    // 確認はページの中で。confirm() はサンドボックスに無視されます。
-    // 1 回目は文言を変えるだけ、2 回目で書きます。
-    if (button.dataset.armed !== "yes") {
-      button.dataset.armed = "yes";
-      button.textContent = "取り消す（席はすぐ他の人が取れるようになります）";
-      return;
-    }
-    const result = await view.withdraw("bookings", id);
-    if (!result.ok) say.textContent = result.error ? `取り消せませんでした: ${result.error}` : "取り消せませんでした。";
-  });
-  view.ready();
-</script>
-```
+- **`/p/` は `members` に載っている人のページです。** 公開ページから申し込んだ人は `members` に
+  いないので、そのページを開けません
+- **公開ページは、後から自分の予約を見つけられません。** 予約の id は席の id（`idFrom: "field"`）で、
+  訪問者の uid から作られていないので、「この人の予約はどれか」を引く手段がありません
 
-**取り消しに締切はありません。** `selfDelete` は受付の `window` を見ないので、クラスが終わった後
-でも本人は取り消せます。「前日までは取り消し可」のような決まりは、今はページに書いて受付が
-運用で守るしかありません。
+だから取り消しは**受付が行います**。`bookings` の `writerDelete: true` が、受付の画面に取り消しの
+ボタンを出させるもので、押すと**予約の削除と席の再オープンが 1 つのバッチ**になり、その席は
+すぐ他の人が取れるようになります。公開ページには「取り消しは受付へ」と連絡先を書いてください。
 
 ## views/desk.html — 受付の画面
 
 `audience: "member"`、入口は `/m/{slug}`。**名前が見えるのはここだけ**です。クラスごとに、
-申し込んだ人の名前と残りの席数を出します。
+申し込んだ人の名前と残りの席数を出し、取り消しの連絡を受けた予約をここで消します。
+
+`viewer.can.bookings.withdrawAny` は**ロールで決まる**取り消しの権限です（`writerDelete`）。
+`viewer` のロールの人には出ないので、それを見てからボタンを描きます。
 
 ```html
 <style>
@@ -368,12 +318,18 @@ this template's, not your app's. The rules behind the sheet are in [design.md](.
   ul { margin: 0; padding: 0; list-style: none; }
   #rows > div { margin: 0 0 8px; padding: 13px 15px; border: 1px solid var(--line); border-radius: 14px; background: var(--fill); }
   .left { color: var(--main); font-weight: 750; }
+  li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 6px; }
+  button { min-height: 34px; padding: 6px 12px; border: 0; border-radius: 10px; background: var(--main); color: var(--paper); font: inherit; font-weight: 750; cursor: pointer; touch-action: manipulation; }
+  #say { min-height: 1.6em; color: var(--main); font-size: 13px; font-weight: 700; }
 </style>
+<p id="say" role="status"></p>
 <div id="rows"></div>
 <script>
   const view = window.__MC_APP_VIEW;
   const rows = document.getElementById("rows");
-  view.onState(({ classes = [], seats = [], bookings = [] }) => {
+  const say = document.getElementById("say");
+  view.onState(({ classes = [], seats = [], bookings = [] }, viewer = {}) => {
+    const canWithdraw = viewer.can?.bookings?.withdrawAny === true;
     // 予約はクラスを持たない。席の id が予約の id なので、席からクラスを引きます。
     const classOfSeat = Object.fromEntries(seats.map((seat) => [seat.id, seat.classId]));
     rows.replaceChildren(
@@ -393,6 +349,13 @@ this template's, not your app's. The rules behind the sheet are in [design.md](.
             ...booked.map((booking) => {
               const item = document.createElement("li");
               item.textContent = `${booking.requesterName ?? ""}（${booking.requesterEmail ?? ""}）`;
+              if (canWithdraw) {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.dataset.id = booking.id;
+                button.textContent = "取り消す";
+                item.append(button);
+              }
               return item;
             }),
           );
@@ -400,6 +363,20 @@ this template's, not your app's. The rules behind the sheet are in [design.md](.
           return block;
         }),
     );
+  });
+  rows.addEventListener("click", async (event) => {
+    const button = event.target;
+    const id = button.dataset?.id;
+    if (!id) return;
+    // 確認はページの中で。confirm() はサンドボックスに無視されます。
+    // 1 回目は文言を変えるだけ、2 回目で書きます。
+    if (button.dataset.armed !== "yes") {
+      button.dataset.armed = "yes";
+      button.textContent = "取り消す（席はすぐ他の人が取れるようになります）";
+      return;
+    }
+    const result = await view.withdraw("bookings", id);
+    say.textContent = result.ok ? "取り消しました。" : result.error ? `取り消せませんでした: ${result.error}` : "取り消せませんでした。";
   });
   view.ready();
 </script>
@@ -431,6 +408,6 @@ this template's, not your app's. The rules behind the sheet are in [design.md](.
 - **キャンセル待ち。** 満席の後に並ぶ場所がありません。並ばせたいなら、順位で見せるジム
   （[gym.md](./gym.md)）を使ってください。代わりに参加者同士が申込みを読める形になります
 - **「お一人様 1 席」の強制。** 表示はできても強制はできません
-- **取り消しの締切**（「前日まで」）。上の `views/mine.html` の注を参照
+- **予約した本人による取り消し。** 上の「取り消しは受付で」を参照
 - **席を選ばせる**（映画館の座席表）。これは会議室と同じ形で、席を訪問者に選ばせれば書けます
   — その場合は `views/classes.html` の `pickSeat` の代わりに席のボタンを並べてください

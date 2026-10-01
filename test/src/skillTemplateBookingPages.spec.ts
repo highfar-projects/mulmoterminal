@@ -14,7 +14,7 @@ import schedulePoll from "../../server/skills/mulmoterminal-shared-app/templates
 
 type Outcome = { ok: true } | { ok: false; error: string };
 interface Call {
-  kind: "submit" | "correct";
+  kind: "submit" | "correct" | "withdraw";
   cid: string;
   id?: string;
   values: Record<string, string>;
@@ -49,6 +49,10 @@ function load(template: string, heading: string, mine?: Mine) {
     },
     correct: (cid: string, id: string, values: Record<string, string>) => {
       calls.push({ kind: "correct", cid, id, values });
+      return Promise.resolve(outcome);
+    },
+    withdraw: (cid: string, id: string) => {
+      calls.push({ kind: "withdraw", cid, id, values: {} });
       return Promise.resolve(outcome);
     },
     ...(mine ? { mine } : {}),
@@ -146,6 +150,38 @@ describe("class-seats.md — views/classes.html", () => {
     click("#list button");
     await settle();
     expect(page.calls).toHaveLength(0);
+    expect(page.said()).not.toBe("");
+  });
+});
+
+describe("class-seats.md — views/desk.html", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  const state = {
+    classes: [{ id: "c1", title: "ジャズ", startAt: "2026-10-03T10:00" }],
+    seats: [seat("c1-01", "c1", "taken"), seat("c1-02", "c1", "open")],
+    bookings: [{ id: "c1-01", seat: "c1-01", requesterName: "山田", requesterEmail: "y@example.jp", status: "booked" }],
+  };
+
+  it("lists the names per class and draws no cancel without the role's permission", () => {
+    const page = load(classSeats, "views/desk.html");
+    page.tell(state, { can: {} });
+    expect(document.body.textContent).toContain("1 / 2 人");
+    expect(document.body.textContent).toContain("山田");
+    expect(document.querySelectorAll("#rows button")).toHaveLength(0);
+  });
+
+  it("cancels on the second press, by the booking's id", async () => {
+    const page = load(classSeats, "views/desk.html");
+    page.tell(state, { can: { bookings: { withdrawAny: true } } });
+    click("#rows button");
+    await settle();
+    expect(page.calls).toHaveLength(0);
+    click("#rows button");
+    await settle();
+    expect(page.calls).toEqual([{ kind: "withdraw", cid: "bookings", id: "c1-01", values: {} }]);
     expect(page.said()).not.toBe("");
   });
 });
