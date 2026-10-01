@@ -225,7 +225,7 @@ describe("designProblems", () => {
 
   it("needs every copied collection's icon, each once", () => {
     const screens = [{ path: "a.vue", text: '<span class="material-symbols-outlined">menu_book</span>' }];
-    expect(designProblems({ ...followingApp, sources: screens, icons: ["menu_book", "person", "menu_book"] })).toEqual([
+    expect(designProblems({ ...followingApp, sources: screens, icons: ["menu_book", "person", "person"] })).toEqual([
       'the screens never show the collection\'s icon "person"',
     ]);
   });
