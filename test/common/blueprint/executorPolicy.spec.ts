@@ -2,7 +2,15 @@
 import { describe, it, expect } from "vitest";
 import { basePlanSchema } from "../../../common/blueprint/plan";
 import { initialState, type BlueprintState, type StepState } from "../../../common/blueprint/state";
-import { atRoundLimit, nextAction, shouldRepeat, MAX_FAILED_CHECKS, MAX_ROUNDS, type ExecutorInputs } from "../../../common/blueprint/executorPolicy";
+import {
+  MAX_FAILED_CHECKS,
+  MAX_ROUNDS,
+  atRoundLimit,
+  nextAction,
+  shouldRepeat,
+  type ExecutorInputs,
+  waitsOnBusyFolder,
+} from "../../../common/blueprint/executorPolicy";
 import {
   earlierAnswers,
   resolvedCheck,
@@ -130,7 +138,7 @@ describe("stepPrompt", () => {
 });
 
 describe("stepPrompt — earlier failures and repair attempts", () => {
-  const failing = { status: "running" as const, approved: true, answers: [], lastCheck: { ok: false, output: "LAST", atMs: 1 } };
+  const failing: StepState = { status: "running", approved: true, answers: [], lastCheck: { ok: false, output: "LAST", atMs: 1 } };
   const prompt = (earlierFailures: readonly string[], stepState: Parameters<typeof stepPrompt>[0]["stepState"] = failing, failedAttempts = 0) =>
     stepPrompt({ step: steps[1], skillFile: "/s", packDirs: { base: "/b", usecase: "/u" }, stepState, askCommand: "ASK", earlierFailures, failedAttempts });
 
@@ -298,5 +306,23 @@ describe("what the person decided in earlier steps", () => {
     expect(text).toContain('In "Survey": Q: Widen the scope?\n  A: Yes, follow STYLE.md');
     expect(text).toContain("it stands over the file");
     expect(stepPrompt(base)).not.toContain("earlier steps");
+  });
+});
+
+describe("waitsOnBusyFolder", () => {
+  const busy: StepState["lastCheck"] = { ok: false, output: "busy", atMs: 1, notice: { code: "folder-busy", runId: "run-1" } };
+  const stateWith = (a: Partial<StepState>): BlueprintState => ({ steps: { a: { status: "failed", approved: false, answers: [], ...a } } });
+  const passed: StepState = { status: "passed", approved: true, answers: [], lastCheck: { ok: true, output: "", atMs: 1 } };
+
+  it("is the step that stopped because another build was working in the folder", () => {
+    expect(waitsOnBusyFolder(steps, stateWith({ lastCheck: busy }))).toBe("a");
+  });
+
+  it("is null for any other stop, a step not stopped, or a build with nothing left", () => {
+    expect(waitsOnBusyFolder(steps, stateWith({ lastCheck: { ok: false, output: "busy", atMs: 1, notice: { code: "untrusted", dir: "/w" } } }))).toBeNull();
+    expect(waitsOnBusyFolder(steps, stateWith({ lastCheck: { ok: false, output: "check failed", atMs: 1 } }))).toBeNull();
+    expect(waitsOnBusyFolder(steps, stateWith({ status: "running", approved: true, lastCheck: busy }))).toBeNull();
+    const done: BlueprintState = { steps: Object.fromEntries(steps.map((entry) => [entry.id, passed])) };
+    expect(waitsOnBusyFolder(steps, done)).toBeNull();
   });
 });

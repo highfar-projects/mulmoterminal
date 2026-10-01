@@ -88,6 +88,7 @@ export const blueprintsZhTW: Messages["blueprints"] = {
     answer: "回答",
     answerPlaceholder: "輸入回答",
     send: "送出",
+    gaveUp: "已自動嘗試修復 {count} 次，但檢查仍未通過。下面是最後一次的判定結果。按「重試」會再次自動修復。",
     retry: "重試",
     archive: "從列表收起",
     unarchive: "放回列表",
@@ -181,7 +182,7 @@ export const blueprintsZhTW: Messages["blueprints"] = {
     installFailed: "無法取得這個套件：{detail}",
   },
   notices: {
-    folderBusy: "另一個建置（{runId}）正在這個資料夾中工作。等它停下（完成，或在等你）後，請按「重試」。",
+    folderBusy: "另一個建置（{runId}）正在這個資料夾中工作。等它停下（完成，或在等你）後，會自動繼續。",
     untrusted: "Claude Code 不信任 {dir}（某個步驟可能把它變成了 git 儲存庫，需要重新信任）。請在那裡開啟終端機並回答信任確認，然後按「重試」。",
     answersUnwritten: "無法將問答寫入 .blueprint/answers.json：{detail}",
     sessionLost: "工作階段在完成之前結束了（被關閉或當機）。沒有執行檢查。按「重試」可以重新開始這個步驟。",

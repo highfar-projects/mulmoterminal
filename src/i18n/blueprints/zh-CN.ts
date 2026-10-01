@@ -88,6 +88,7 @@ export const blueprintsZhCN: Messages["blueprints"] = {
     answer: "回答",
     answerPlaceholder: "输入回答",
     send: "发送",
+    gaveUp: "已自动尝试修复 {count} 次，但检查仍未通过。下面是最后一次的判定结果。按「重试」会再次自动修复。",
     retry: "重试",
     archive: "从列表收起",
     unarchive: "放回列表",
@@ -181,7 +182,7 @@ export const blueprintsZhCN: Messages["blueprints"] = {
     installFailed: "无法获取这个包：{detail}",
   },
   notices: {
-    folderBusy: "另一个构建（{runId}）正在这个文件夹中工作。等它停下（完成，或在等你）后，请按“重试”。",
+    folderBusy: "另一个构建（{runId}）正在这个文件夹中工作。等它停下（完成，或在等你）后，会自动继续。",
     untrusted: "Claude Code 不信任 {dir}（某个步骤可能把它变成了 git 仓库，需要重新信任）。请在那里打开终端并回答信任确认，然后按“重试”。",
     answersUnwritten: "无法将问答写入 .blueprint/answers.json：{detail}",
     sessionLost: "会话在完成之前结束了（被关闭或崩溃）。没有运行检查。按“重试”可以重新开始这个步骤。",

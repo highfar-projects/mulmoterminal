@@ -90,6 +90,7 @@ export const blueprintsKo: Messages["blueprints"] = {
     answer: "답변",
     answerPlaceholder: "답변 입력",
     send: "보내기",
+    gaveUp: "자동으로 {count}번 고치려 했지만 아직 확인을 통과하지 못했습니다. 아래가 마지막 판정 결과입니다. 「다시」를 누르면 다시 자동으로 고칩니다.",
     retry: "다시 시도",
     archive: "목록에서 치우기",
     unarchive: "목록으로 되돌리기",
@@ -185,7 +186,7 @@ export const blueprintsKo: Messages["blueprints"] = {
     installFailed: "팩을 가져오지 못했습니다: {detail}",
   },
   notices: {
-    folderBusy: "다른 작업({runId})이 이 폴더에서 진행 중입니다. 그것이 멈추면(끝나거나 당신을 기다리게 되면) 「다시 시도」를 눌러 주세요.",
+    folderBusy: "다른 작업({runId})이 이 폴더에서 진행 중입니다. 그것이 멈추면(끝나거나 당신을 기다리게 되면) 자동으로 이어서 시작합니다.",
     untrusted:
       "Claude Code가 {dir}를 신뢰하지 않습니다(단계가 그곳을 git 저장소로 만들었다면 다시 신뢰가 필요합니다). 그곳에서 터미널을 열어 신뢰 확인에 답한 뒤 「다시 시도」를 눌러 주세요.",
     answersUnwritten: "질문에 대한 답을 .blueprint/answers.json에 쓰지 못했습니다: {detail}",

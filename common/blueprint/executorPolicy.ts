@@ -59,3 +59,14 @@ export function nextAction(inputs: ExecutorInputs): ExecutorAction {
   if (status === "running") return inputs.sessionActive ? { kind: "wait", stepId: step.id, on: "agent" } : { kind: "spawn", stepId: step.id };
   return forFailed(step.id, inputs);
 }
+
+/**
+ * The step a build stopped at because another build was working in its folder, or null. Only that stop is resumed by
+ * itself when the folder frees: every other stop waits for something a person or the agent has to change.
+ */
+export function waitsOnBusyFolder(steps: readonly PlanStep[], state: BlueprintState): string | null {
+  const step = currentStep(steps, state);
+  if (!step) return null;
+  const stepState = state.steps[step.id];
+  return stepState?.status === "failed" && stepState.lastCheck?.notice?.code === "folder-busy" ? step.id : null;
+}

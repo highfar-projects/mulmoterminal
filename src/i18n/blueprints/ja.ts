@@ -91,6 +91,7 @@ export const blueprintsJa: Messages["blueprints"] = {
     answer: "回答",
     answerPlaceholder: "回答を入力",
     send: "送る",
+    gaveUp: "自動で {count} 回直そうとしましたが、まだ確かめが通りません。下が最後の判定の結果です。「もう一度」を押すと、また自動で直しにいきます。",
     retry: "もう一度",
     archive: "一覧からしまう",
     unarchive: "一覧に戻す",
@@ -186,7 +187,7 @@ export const blueprintsJa: Messages["blueprints"] = {
     installFailed: "パックを取ってこられませんでした: {detail}",
   },
   notices: {
-    folderBusy: "別の作業（{runId}）がこのフォルダで進んでいます。それが止まったら（終わるか、あなたを待つようになったら）「もう一度」を押してください。",
+    folderBusy: "別の作業（{runId}）がこのフォルダで進んでいます。それが止まったら（終わるか、あなたを待つようになったら）、自動で続きを始めます。",
     untrusted:
       "Claude Code が {dir} を信頼していません（工程がそこを git リポジトリにした場合、改めて信頼が必要です）。そこでターミナルを開いて信頼の確認に答えてから「もう一度」を押してください。",
     answersUnwritten: "質問への答えを .blueprint/answers.json に書けませんでした: {detail}",

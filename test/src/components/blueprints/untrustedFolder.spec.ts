@@ -1,7 +1,7 @@
 // Where a stopped step asks the person to answer Claude Code's trust prompt: the folder its notice names, from either
 // place a notice is kept, and nowhere for any other reason.
 import { describe, it, expect } from "vitest";
-import { untrustedFolder } from "../../../../src/components/blueprints/stepNoticeText";
+import { gaveUpAfter, untrustedFolder } from "../../../../src/components/blueprints/stepNoticeText";
 import type { StepState } from "../../../../common/blueprint/state";
 
 const failed = (extra: Partial<StepState>): StepState => ({ status: "failed", approved: false, answers: [], ...extra });
@@ -22,5 +22,24 @@ describe("untrustedFolder", () => {
     expect(untrustedFolder(failed({ lastCheck: check(undefined) }))).toBeNull();
     expect(untrustedFolder(failed({}))).toBeNull();
     expect(untrustedFolder(undefined)).toBeNull();
+  });
+});
+
+describe("gaveUpAfter", () => {
+  const MAX = 5;
+  it("counts the attempts when every automatic attempt failed its check", () => {
+    expect(gaveUpAfter(failed({ lastCheck: check(undefined) }), MAX, MAX)).toBe(MAX);
+    expect(gaveUpAfter(failed({ lastCheck: check({ code: "session-lost" }) }), MAX, MAX)).toBe(MAX);
+    expect(gaveUpAfter(failed({ lastCheck: check({ code: "answers-unwritten", detail: "disk" }) }), MAX, MAX)).toBe(MAX);
+  });
+
+  it("says nothing while attempts are left, for a stop only a person can clear, or for a step that is not failed", () => {
+    expect(gaveUpAfter(failed({ lastCheck: check(undefined) }), MAX - 1, MAX)).toBeNull();
+    expect(gaveUpAfter(failed({ lastCheck: check({ code: "untrusted", dir: "/w" }) }), MAX, MAX)).toBeNull();
+    expect(gaveUpAfter(failed({ lastCheck: check({ code: "folder-busy", runId: "run-1" }) }), MAX, MAX)).toBeNull();
+    expect(gaveUpAfter(failed({}), MAX, MAX)).toBeNull();
+    expect(gaveUpAfter({ status: "running", approved: true, answers: [], lastCheck: check(undefined) }, MAX, MAX)).toBeNull();
+    expect(gaveUpAfter(failed({ lastCheck: { ok: true, output: "", atMs: 1 } }), MAX, MAX)).toBeNull();
+    expect(gaveUpAfter(undefined, MAX, MAX)).toBeNull();
   });
 });

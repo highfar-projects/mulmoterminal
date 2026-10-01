@@ -13,7 +13,15 @@ import type { Refusal } from "../../common/blueprint/refusal.js";
 import { Refused } from "./refused.js";
 import { englishStepNotice, type StepNotice } from "../../common/blueprint/stepNotice.js";
 import { changedFiles, type FolderListing, type ChangedFiles } from "../../common/blueprint/changedFiles.js";
-import { atRoundLimit, MAX_FAILED_CHECKS, MAX_ROUNDS, nextAction, shouldRepeat, type ExecutorAction } from "../../common/blueprint/executorPolicy.js";
+import {
+  atRoundLimit,
+  MAX_FAILED_CHECKS,
+  MAX_ROUNDS,
+  nextAction,
+  shouldRepeat,
+  waitsOnBusyFolder,
+  type ExecutorAction,
+} from "../../common/blueprint/executorPolicy.js";
 import { earlierAnswers, stepPrompt } from "../../common/blueprint/stepPrompt.js";
 import { summarizeRun, type BlueprintRun, type BlueprintRunSummary } from "../../common/blueprint/run.js";
 import type { ComposedStep } from "../../common/blueprint/plan.js";
@@ -269,6 +277,9 @@ class Executor {
     // A run the server stopped mid-advance (a step started, no session yet) is picked up again.
     const idle = loadedRuns.flatMap((loaded) => (loaded && !loaded.run.activeSessionId ? [loaded.run.id] : []));
     await Promise.all(idle.map((runId) => this.serially(runId, async () => this.advance(await this.mustLoad(runId)))));
+    // A build left waiting on a busy folder across the restart: that folder may be free now.
+    const folders = [...new Set(loadedRuns.flatMap((loaded) => (loaded && waitsOnBusyFolder(loaded.run.steps, loaded.state) ? [loaded.run.projectDir] : [])))];
+    await folders.reduce((done, folder) => done.then(() => this.wakeBuildsWaitingOn(folder, null)), Promise.resolve());
   }
 
   /** The spec as it stands, its open questions, and the conversation about it. */
@@ -341,10 +352,10 @@ class Executor {
 
   // The agent's session stopped. If it stopped to ask, the state already says so and there is
   // nothing to check; otherwise the check — not the agent — decides whether the step is done.
-  private turnEnded(runId: string, sessionId: string, didError: boolean): Promise<void> {
-    return this.serially(runId, async () => {
+  private async turnEnded(runId: string, sessionId: string, didError: boolean): Promise<void> {
+    const after = await this.serially(runId, async (): Promise<Loaded | null> => {
       const loaded = await this.mustLoad(runId);
-      if (loaded.run.activeSessionId !== sessionId) return;
+      if (loaded.run.activeSessionId !== sessionId) return null;
       const released: Loaded = { run: { ...loaded.run, activeSessionId: null }, state: loaded.state };
       const session = loaded.run.sessions.findLast((entry) => entry.sessionId === sessionId);
       // Closed BEFORE advancing: a session whose turn ended can still have background work running,
@@ -355,8 +366,10 @@ class Executor {
         throw err;
       });
       if (!session || !waitsOnFailure(settled, session.stepId)) this.deps.closeSession(sessionId);
-      await this.advance(settled);
+      return this.advance(settled);
     });
+    // After this build's queue: waking another build takes that build's own queue, and must not wait on this one.
+    if (after && !isWorking(after)) await this.wakeBuildsWaitingOn(after.run.projectDir, after.run.id).catch(() => undefined);
   }
 
   private async settleAndSave(released: Loaded, session: BlueprintRun["sessions"][number] | undefined, didError: boolean): Promise<Loaded> {
@@ -400,13 +413,39 @@ class Executor {
 
   /** Another build whose agent or check is working in `folder` now, or null. A build waiting for a person is not. */
   async workingIn(folder: string, exceptRunId: string | null = null): Promise<string | null> {
+    const working = (await this.buildsIn(folder, exceptRunId)).find(isWorking);
+    return working ? working.run.id : null;
+  }
+
+  /** Every other build in `folder`, however its path is spelled. */
+  private async buildsIn(folder: string, exceptRunId: string | null): Promise<Loaded[]> {
     const canonical = await this.folderOf(folder);
     const loaded = await Promise.all((await this.deps.store.list()).map((runId) => this.deps.store.load(runId).catch(() => null)));
     const siblings = await Promise.all(
       loaded.map(async (entry) => (entry && entry.run.id !== exceptRunId && (await this.folderOf(entry.run.projectDir)) === canonical ? entry : null)),
     );
-    const working = siblings.find((entry) => entry !== null && isWorking(entry));
-    return working ? working.run.id : null;
+    return siblings.filter((entry): entry is Loaded => entry !== null);
+  }
+
+  // A build that stopped because another was working in its folder resumes by itself once that one stops working —
+  // the person was only ever asked to wait and press retry, which the executor can do. Each is retried in turn: the
+  // first takes the folder, and the rest — or all of them, when another build still works there — find it busy again
+  // and wait in the same way.
+  private async wakeBuildsWaitingOn(folder: string, exceptRunId: string | null): Promise<void> {
+    const waiting = (await this.buildsIn(folder, exceptRunId)).flatMap((entry) => {
+      const stepId = waitsOnBusyFolder(entry.run.steps, entry.state);
+      return stepId === null ? [] : [{ runId: entry.run.id, stepId }];
+    });
+    await waiting.reduce(
+      (done, { runId, stepId }) =>
+        done.then(() =>
+          this.humanEvent(runId, stepId, { type: "retry" }).then(
+            () => undefined,
+            () => undefined,
+          ),
+        ),
+      Promise.resolve(),
+    );
   }
 
   // Two builds' agents in one folder would write each other's .blueprint/ records, and every session a build
@@ -423,7 +462,8 @@ class Executor {
         () => null,
         (err: unknown): StepNotice => ({ code: "answers-unwritten", detail: err instanceof Error ? err.message : String(err) }),
       );
-      if (unwritten !== null) return this.waitsForPerson(loaded, stepId, unwritten);
+      // Most likely passing (a disk briefly full or locked): retried like a failed check, with no session to close.
+      if (unwritten !== null) return this.recordNotice(loaded, stepId, unwritten);
       const next = this.spawnFor(loaded, stepId);
       // Saved inside the lock: the next build to ask must already see this one working.
       await this.deps.store.save(next.run, next.state);
