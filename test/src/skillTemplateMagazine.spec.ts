@@ -101,7 +101,6 @@ function load(heading: string, open?: { opened: boolean }): Loaded {
       return Promise.resolve(open ?? { opened: true });
     },
   });
-  // eslint-disable-next-line sonarjs/code-eval -- the source is a file in this repository, read at test time
   new Function(script ?? "")();
   expect(onState === null ? "never registered" : "registered").toBe("registered");
   return {

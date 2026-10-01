@@ -76,7 +76,6 @@ function runPage(script: string): void {
     add(type, listener, options as boolean);
   };
   try {
-    // eslint-disable-next-line sonarjs/code-eval -- the source is a file in this repository, read at test time
     new Function(script)();
   } finally {
     document.addEventListener = add;
