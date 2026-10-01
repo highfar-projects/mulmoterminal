@@ -34,6 +34,15 @@ function entryFor(req: Request, res: Response, deps: TreeRouteDeps): { abs: stri
   return { abs };
 }
 
+/** The entry the request names when it exists, or null with a 403 or 404 already sent. */
+function existingEntryFor(req: Request, res: Response, deps: TreeRouteDeps): { abs: string } | null {
+  const entry = entryFor(req, res, deps);
+  if (!entry) return null;
+  if (entryExists(entry.abs)) return entry;
+  res.status(404).json({ error: "not found" });
+  return null;
+}
+
 function mountCreate(app: Express, deps: TreeRouteDeps): void {
   // `path` is the directory the entry goes in ("" for the root); the name is the body's.
   app.post("/api/files/browse/create", (req, res) => {
@@ -58,9 +67,8 @@ function mountRename(app: Express, deps: TreeRouteDeps): void {
   app.post("/api/files/browse/rename", (req, res) => {
     const { name } = requestBody(req.body);
     if (!validEntryName(name)) return res.status(400).json({ error: "body.name (a single name) required" });
-    const entry = entryFor(req, res, deps);
+    const entry = existingEntryFor(req, res, deps);
     if (!entry) return;
-    if (!entryExists(entry.abs)) return res.status(404).json({ error: "not found" });
     try {
       if (renameEntry(entry.abs, path.join(path.dirname(entry.abs), name)) === "exists") {
         return res.status(409).json({ error: "a file or folder with that name already exists" });
@@ -81,9 +89,8 @@ function mountTrash(app: Express, deps: TreeRouteDeps): void {
   app.post("/api/files/browse/trash", (req, res) => {
     const layout = (deps.trash ?? systemTrash)();
     if (!layout) return res.status(501).json({ error: "no Trash on this system" });
-    const entry = entryFor(req, res, deps);
+    const entry = existingEntryFor(req, res, deps);
     if (!entry) return;
-    if (!entryExists(entry.abs)) return res.status(404).json({ error: "not found" });
     try {
       if (moveToTrash(entry.abs, layout, new Date()) === "other-volume") {
         return res.status(409).json({ error: "it is on another volume than the Trash, so it was left in place" });
