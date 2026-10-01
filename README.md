@@ -279,6 +279,11 @@ npx github:highfar-projects/mulmoterminal#main     # the same, pinned to the new
 ```
 
 - **`git` must be installed** — npm clones the repository to install it.
+- **npm 11 or later.** npm 10.2.1 stops during the install with `Cannot read properties of null
+  (reading 'edgesOut')` and exits 1, with only a TLS warning on screen (measured on Windows,
+  2026-10-01; npm 11.6.2 installs the same commit). Node 24 ships npm 11, but Volta can pin an older
+  one: check `npm -v`, and with Volta start it as
+  `volta run --npm 11.6.2 npx github:highfar-projects/mulmoterminal`.
 - **The first start takes a few minutes**: npm installs the build tools and builds the web UI
   (`prepare` → `scripts/build-if-missing.mjs`). Later starts reuse npm's cache.
 - **No update notice from npm.** The registry's `mulmoterminal` is upstream's, so the startup check
