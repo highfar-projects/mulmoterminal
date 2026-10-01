@@ -22,6 +22,7 @@ import type { PaletteCollectionAction } from "./paletteCollectionActionList";
 import type { PaletteLaunchDir } from "./paletteLaunchDirs";
 import { paletteStartId, type PaletteStart } from "./paletteStarts";
 import { paletteResumeId, type PaletteResume } from "./paletteResumes";
+import { closedCellId, type ClosedCell } from "./recentlyClosed";
 import type { PaletteWikiPage } from "./paletteWikiPages";
 import { paletteGithubItemId, type PaletteGithubItem } from "./paletteGithubItems";
 import { promptFirstLine, type PalettePrompt } from "./palettePrompts";
@@ -149,6 +150,13 @@ export interface ResumeRow extends RowCommon {
   icon: string;
 }
 
+/** A cell closed recently, to open again (#2800). */
+export interface ReopenRow extends RowCommon {
+  kind: "reopen";
+  closed: ClosedCell;
+  icon: string;
+}
+
 /** A directory to open a new terminal in (#2484). */
 export interface LaunchRow extends RowCommon {
   kind: "launch";
@@ -168,6 +176,7 @@ export type PaletteRow =
   | LaunchRow
   | StartRow
   | ResumeRow
+  | ReopenRow
   | WikiRow
   | HandoffRow
   | GithubRow
@@ -178,6 +187,8 @@ export type PaletteRow =
 const LAUNCH_ICON = "add_box";
 
 const RESUME_ICON = "history";
+
+const REOPEN_ICON = "undo";
 
 const PROMPT_ICON = "chat";
 
@@ -198,6 +209,8 @@ export interface PaletteSources {
   /** Where a start runs, as it reads; null lists no starts. */
   startDir: string | null;
   resumes: readonly PaletteResume[];
+  /** The cells closed recently, newest first, less any the grid has open again. */
+  closedCells: readonly ClosedCell[];
   wikiPages: readonly PaletteWikiPage[];
   githubItems: readonly PaletteGithubItem[];
   prompts: readonly PalettePrompt[];
@@ -215,6 +228,11 @@ export interface PaletteSources {
 
 const TERMINAL_ICON = "terminal";
 
+/** A past conversation to resume, or a closed cell to reopen: the rows that bring a session back. */
+const isConversationRow = (row: PaletteRow): row is ResumeRow | ReopenRow => row.kind === "resume" || row.kind === "reopen";
+const conversationRowKey = (row: ResumeRow | ReopenRow): string =>
+  row.kind === "resume" ? `resume:${paletteResumeId(row.resume)}` : `reopen:${closedCellId(row.closed)}`;
+
 /** A key that tells the rows apart across kinds, for `v-for` and tests. */
 export const rowKey = (row: PaletteRow): string => {
   if (row.kind === "action") return row.action;
@@ -229,7 +247,7 @@ export const rowKey = (row: PaletteRow): string => {
   if (row.kind === "prompt") return `prompt:${row.prompt.index}`;
   if (row.kind === "github") return `github:${paletteGithubItemId(row.item)}`;
   if (row.kind === "handoff") return `handoff:${row.action}`;
-  if (row.kind === "resume") return `resume:${paletteResumeId(row.resume)}`;
+  if (isConversationRow(row)) return conversationRowKey(row);
   if (isMenuRow(row)) return menuRowKey(row);
   return row.kind === "screen" ? `screen:${row.screen}` : `terminal:${row.uid}`;
 };
@@ -260,6 +278,8 @@ export interface PaletteText {
   githubItem: (kind: PaletteGithubItem["kind"], number: number, title: string) => string;
   handoff: (action: SeededFilesPanel, query: string) => string;
   resumeDetail: (resume: PaletteResume) => string;
+  reopenLabel: (title: string) => string;
+  reopenDetail: (closed: ClosedCell) => string;
   gridFull: string;
   currentChoice: string;
   switchChoice: string;
@@ -301,13 +321,14 @@ type Candidate =
   | { kind: "launch"; dir: PaletteLaunchDir; name: string; full: boolean }
   | { kind: "start"; start: PaletteStart; dir: string; name: string; full: boolean }
   | { kind: "resume"; resume: PaletteResume; name: string; full: boolean }
+  | { kind: "reopen"; closed: ClosedCell; name: string; full: boolean }
   | { kind: "wiki"; page: PaletteWikiPage; name: string }
   | { kind: "github"; item: PaletteGithubItem; name: string }
   | { kind: "prompt"; prompt: PalettePrompt; name: string }
   | MenuCandidate;
 
 /** What starts a terminal: an agent or a launcher here, a past conversation, a new terminal elsewhere. */
-function startCandidates({ launchDirs, starts, startDir, resumes, gridFull }: PaletteSources, text: PaletteText): [string, Candidate][] {
+function startCandidates({ launchDirs, starts, startDir, resumes, closedCells, gridFull }: PaletteSources, text: PaletteText): [string, Candidate][] {
   const startsHere = (startDir === null ? [] : starts).map((start): [string, Candidate] => {
     const name = startName(start, text);
     return [`${name} ${paletteStartId(start)}`, { kind: "start", start, dir: startDir ?? "", name, full: gridFull }];
@@ -316,11 +337,15 @@ function startCandidates({ launchDirs, starts, startDir, resumes, gridFull }: Pa
     const name = text.resumeLabel(resume.title);
     return [`${name} ${paletteResumeId(resume)}`, { kind: "resume", resume, name, full: gridFull }];
   });
+  const reopens = closedCells.map((closed): [string, Candidate] => {
+    const name = text.reopenLabel(closed.title);
+    return [`${name} ${closed.cwd ?? ""} ${closedCellId(closed)}`, { kind: "reopen", closed, name, full: gridFull }];
+  });
   const newTerminals = launchDirs.map((dir): [string, Candidate] => [
     `${text.newTerminalIn(dir.label)} ${dir.path}`,
     { kind: "launch", dir, name: text.newTerminalIn(dir.label), full: gridFull },
   ]);
-  return [...startsHere, ...resumesHere, ...newTerminals];
+  return [...startsHere, ...resumesHere, ...reopens, ...newTerminals];
 }
 
 /** What the palette jumps into: a Wiki page, a PR or an Issue. */
@@ -402,6 +427,15 @@ function resumeRow({ resume, full }: Extract<Candidate, { kind: "resume" }>, lab
   return { kind: "resume", resume, icon: RESUME_ICON, label, description: text.resumeDetail(resume), disabledReason: full ? text.gridFull : null };
 }
 
+function reopenRow({ closed, full }: Extract<Candidate, { kind: "reopen" }>, label: HighlightPart[], text: PaletteText): ReopenRow {
+  return { kind: "reopen", closed, icon: REOPEN_ICON, label, description: text.reopenDetail(closed), disabledReason: full ? text.gridFull : null };
+}
+
+type ConversationCandidate = Extract<Candidate, { kind: "resume" | "reopen" }>;
+const isConversationCandidate = (candidate: Candidate): candidate is ConversationCandidate => candidate.kind === "resume" || candidate.kind === "reopen";
+const conversationRow = (candidate: ConversationCandidate, label: HighlightPart[], text: PaletteText): ResumeRow | ReopenRow =>
+  candidate.kind === "resume" ? resumeRow(candidate, label, text) : reopenRow(candidate, label, text);
+
 function startRow({ start, dir, full }: Extract<Candidate, { kind: "start" }>, label: HighlightPart[], text: PaletteText): StartRow {
   const disabledReason = full ? text.gridFull : null;
   return { kind: "start", start, icon: START_ICONS[start.kind], label, description: text.startDetail(dir), disabledReason };
@@ -414,7 +448,7 @@ function rowOf(candidate: Candidate, indexes: number[], keymap: Keymap, state: P
   );
   if (candidate.kind === "script" || candidate.kind === "skill") return menuRow(candidate, label);
   if (candidate.kind === "start") return startRow(candidate, label, text);
-  if (candidate.kind === "resume") return resumeRow(candidate, label, text);
+  if (isConversationCandidate(candidate)) return conversationRow(candidate, label, text);
   if (candidate.kind === "wiki") return wikiRow(candidate, label, text);
   if (candidate.kind === "github") return githubRow(candidate, label);
   if (candidate.kind === "prompt")
@@ -521,7 +555,7 @@ const HANDOFF_ICONS: Record<SeededFilesPanel, string> = { "files-find": "search"
 
 // `>` means "run something": the grid's actions and the terminal's commands alike (#2465), and the
 // Run and Skill menus' entries (#2697).
-const RUN_KINDS: ReadonlySet<Candidate["kind"]> = new Set(["action", "command", "collection", "launch", "start", "resume", "script", "skill"]);
+const RUN_KINDS: ReadonlySet<Candidate["kind"]> = new Set(["action", "command", "collection", "launch", "start", "resume", "reopen", "script", "skill"]);
 function inScope(kind: Candidate["kind"], only: ScopedKind | null): boolean {
   if (only === "action") return RUN_KINDS.has(kind);
   return kind === only;

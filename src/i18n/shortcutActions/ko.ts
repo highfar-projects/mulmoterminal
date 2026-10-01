@@ -57,6 +57,7 @@ export const shortcutActionsKo = {
   orderPriority: "터미널 순서를 우선순위로",
   pageNext: "터미널 다음 페이지로",
   pagePrev: "터미널 이전 페이지로",
+  terminalReopen: "마지막으로 닫은 터미널 다시 열기",
   copy: "터미널에서 선택한 내용 복사",
   paste: "터미널에 붙여넣기",
 };

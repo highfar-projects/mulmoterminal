@@ -24,6 +24,7 @@ export const KEYMAP_ACTIONS = [
   "terminal-new-here",
   "terminal-new-adjacent",
   "terminal-close",
+  "terminal-reopen",
   "terminal-restart",
   "terminal-move-prev",
   "terminal-move-next",

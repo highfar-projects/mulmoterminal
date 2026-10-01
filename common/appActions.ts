@@ -26,6 +26,7 @@ export const APP_ACTIONS = [
   ...ORDER_ACTIONS,
   "page-next",
   "page-prev",
+  "terminal-reopen",
 ] as const satisfies readonly KeymapAction[];
 
 // The ones the command palette already has a row for — a screen, a Settings section, the sound /

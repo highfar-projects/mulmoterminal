@@ -1252,6 +1252,7 @@ is refused there, and one the browser keeps for itself is saved with a warning. 
 | `view-toggle` | Switch the **enlarged view** between the roster and the thumbnail strip | no |
 | `order-auto` / `order-manual` / `order-priority` | Set the **cell order** (the toolbar's order menu) | no |
 | `page-next` / `page-prev` | Show the **next / previous page** of the tiled grid (9 terminals a page). Does nothing past the last page or before the first; also in the command palette | no |
+| `terminal-reopen` | **Reopen the terminal closed most recently**, beside the current one. An agent's conversation is resumed; a shell comes back as a new shell in the same directory. Every recently closed terminal is also in the command palette as "Reopen: …" | no |
 | `copy` | **Copy** the terminal's selection. Acts only when something IS selected — with no selection the key reaches the shell untouched, which is what makes `Ctrl+C` bindable here without losing **interrupt** | no |
 | `paste` | **Paste** into the terminal | no |
 
@@ -1273,7 +1274,7 @@ cursor is the "current terminal", so they are the pair that needs *nothing* enla
 
 {: .warning }
 > **`terminal-close` closes immediately, with no confirmation** — the same as clicking the cell's close button, which
-> ends that session. Bind it to something you won't hit by accident.
+> ends that session. Bind it to something you won't hit by accident. `terminal-reopen` brings the last one back.
 
 {: .warning }
 > **`terminal-restart` also acts immediately.** It kills the agent even mid-turn, and the conversation

@@ -57,6 +57,7 @@ export const shortcutActionsEn = {
   orderPriority: "Order terminals by project priority",
   pageNext: "Go to the next page of terminals",
   pagePrev: "Go to the previous page of terminals",
+  terminalReopen: "Reopen the last closed terminal",
   copy: "Copy the terminal selection",
   paste: "Paste into the terminal",
 };
