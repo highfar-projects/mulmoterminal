@@ -1,6 +1,7 @@
-// What the design step must leave in an app made from a collection, as pure rules over what the files say. The
-// answer picks MulmoTerminal's own look or a template; a template is MulmoTerminal's classes with their colours and
-// corners redefined, so every design is written with the same classes and only the template's @theme differs.
+// What the design step must leave in an app made from a collection. The answer picks MulmoTerminal's own look or a
+// template; a template is MulmoTerminal's classes with their colours and corners redefined, so every design is written
+// with the same classes and only the template's @theme differs. Whether Tailwind runs and which colours won is read
+// from the BUILT CSS, not from the sources: a build is what the person gets, and no comment or stray import can fake it.
 
 export const SAME_AS_MULMOTERMINAL = "MulmoTerminal と同じ";
 
@@ -16,28 +17,37 @@ export const DESIGNS = [
 export const designOf = (answer) => DESIGNS.find((design) => design.option === (answer ?? SAME_AS_MULMOTERMINAL)) ?? null;
 
 const PACKAGES = ["tailwindcss", "@tailwindcss/vite", "material-symbols"];
-// Classes every screen in MulmoTerminal's look has: the main button and the icon font.
-export const SIGNATURE_CLASSES = ["bg-indigo-600", "material-symbols-outlined"];
+// The main button of MulmoTerminal's look: present in the built CSS only when Tailwind ran over screens that use it.
+const MAIN_BUTTON_RULE = /\.bg-indigo-600\s*\{/u;
+const ICON_FONT = /font-family:\s*["']?Material Symbols Outlined/u;
+// The tokens a template redefines; the ones the build kept must hold the chosen design's values.
+const DESIGN_TOKEN = /^--(?:color-(?:indigo|slate|gray)-\d+|color-white|radius-[\w-]+)$/u;
 
-const TAILWIND_IMPORT = /@import\s+["']tailwindcss["']/u;
-// Only what a file does counts, not what its comments say: a template's own header mentions the Tailwind import, and
-// a class or an import left in a comment styles nothing. A `//` counts as a comment only at a line's start or after a
-// space, so the `//` of a URL in a string is kept.
+// A class or an icon name left in a comment shows nothing. A `//` counts as a comment only at a line's start or after
+// a space, so the `//` of a URL in a string is kept.
 const withoutComments = (text) =>
   String(text)
     .replaceAll("\r\n", "\n")
     .replaceAll(/\/\*[\s\S]*?\*\//gu, "")
     .replaceAll(/<!--[\s\S]*?-->/gu, "")
     .replaceAll(/(^|\s)\/\/.*$/gmu, "$1");
-const live = (files) => files.map((file) => ({ path: file.path, text: withoutComments(file.text) }));
-const escaped = (text) => text.replaceAll(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-const MAIN_COLOUR_OVERRIDE = /--color-indigo-\d+\s*:/u;
 
-/** The @theme block of a template file, as written; null when it has none. */
-export const themeBlock = (text) => {
-  const match = /@theme\s*\{[^}]*\}/u.exec(String(text).replaceAll("\r\n", "\n"));
-  return match ? match[0] : null;
+/** A CSS value as minification leaves it comparable: `oklch(0.52 0.13 35)` and `oklch(52% .13 35)` are one value. */
+export const canonicalValue = (value) => {
+  const text = String(value).trim().toLowerCase();
+  const oklch = /^oklch\(\s*([\d.]+)(%?)\s+([\d.]+)\s+([\d.]+)\s*\)$/u.exec(text);
+  if (oklch) return `oklch(${Number(oklch[1]) / (oklch[2] ? 100 : 1)} ${Number(oklch[3])} ${Number(oklch[4])})`;
+  const length = /^([\d.]+)([a-z%]*)$/u.exec(text);
+  return length ? `${Number(length[1])}${length[2]}` : text.replaceAll(/\s+/gu, "");
 };
+
+/** Every `--name: value` a stylesheet declares, comments aside, in order (a name may repeat). */
+export const declarations = (css) =>
+  withoutComments(css)
+    .split(/[;{}]/u)
+    .map((part) => part.trim())
+    .filter((part) => part.startsWith("--") && part.includes(":"))
+    .map((part) => ({ name: part.slice(0, part.indexOf(":")).trim(), value: part.slice(part.indexOf(":") + 1).trim() }));
 
 const dependencyProblems = (packageJson) => {
   const declared = { ...packageJson?.dependencies, ...packageJson?.devDependencies };
@@ -45,37 +55,47 @@ const dependencyProblems = (packageJson) => {
   return missing.length > 0 ? [`package.json does not depend on ${missing.join(", ")}`] : [];
 };
 
-// The plugin is imported under some name and that name is called, as `plugins: [tailwindcss()]` does.
-const usesTailwindPlugin = (text) => {
-  const imported = /import\s+([A-Za-z_$][\w$]*)\s+from\s+["']@tailwindcss\/vite["']/u.exec(text);
-  return imported !== null && new RegExp(`\\b${escaped(imported[1])}\\s*\\(`, "u").test(text.slice(imported.index + imported[0].length));
-};
+// The values each design token must have in the build: the template's, or Tailwind's own theme for MulmoTerminal's.
+const expectedTokens = (design, template, tailwindTheme) =>
+  new Map(
+    declarations(design.theme === null ? tailwindTheme : template)
+      .filter((token) => DESIGN_TOKEN.test(token.name))
+      .map((token) => [token.name, canonicalValue(token.value)]),
+  );
 
-const viteProblems = (viteConfigs) =>
-  viteConfigs.some((config) => usesTailwindPlugin(config.text)) ? [] : ["no vite.config uses @tailwindcss/vite: add tailwindcss() to its plugins"];
+function tokenProblems(design, builtCss, expected) {
+  const wrong = declarations(builtCss).filter((token) => expected.has(token.name) && canonicalValue(token.value) !== expected.get(token.name));
+  const names = [...new Set(wrong.map((token) => token.name))];
+  if (names.length === 0) return [];
+  const given = `the built CSS gives ${names.join(", ")} other values than`;
+  return design.theme === null
+    ? [`${given} Tailwind's own: MulmoTerminal's look redefines no colour or corner, so remove the @theme that sets them`]
+    : [`${given} design/themes/${design.theme}.css: import it right after "tailwindcss", unchanged, and redefine nothing else`];
+}
 
-// The template's block must be in the stylesheet that imports Tailwind, or in a file that stylesheet imports.
-const themeProblems = (design, styles, template) => {
-  const entries = styles.filter((style) => TAILWIND_IMPORT.test(style.text));
-  if (entries.length === 0) return ['no stylesheet has @import "tailwindcss"'];
-  if (design.theme === null) {
-    const overriding = styles.filter((style) => MAIN_COLOUR_OVERRIDE.test(style.text)).map((style) => style.path);
-    return overriding.length > 0 ? [`${overriding.join(", ")} redefines the indigo colours; MulmoTerminal's look keeps Tailwind's own`] : [];
+function builtProblems(design, builtCss, template, tailwindTheme) {
+  if (builtCss === null) return ["no built CSS under dist/: yarn build did not produce the app's stylesheet"];
+  const css = withoutComments(builtCss);
+  if (!MAIN_BUTTON_RULE.test(css)) {
+    return [
+      "the built CSS has no .bg-indigo-600 rule: Tailwind is not running in the build (tailwindcss() in vite.config's plugins, @import \"tailwindcss\" in the stylesheet), or no screen uses MulmoTerminal's main button",
+    ];
   }
-  const block = themeBlock(template);
-  const holders = styles.filter((style) => block !== null && style.text.includes(block));
-  const imported = (holder) =>
-    entries.some((entry) => entry === holder || new RegExp(`@import\\s+["'](?:[^"']*/)?${escaped(holder.path.split("/").pop())}["']`, "u").test(entry.text));
-  if (holders.length === 0) return [`no stylesheet holds design/themes/${design.theme}.css unchanged`];
-  return holders.some(imported) ? [] : [`${holders[0].path} holds the template but no stylesheet that imports tailwindcss imports it`];
-};
+  const expected = expectedTokens(design, template, tailwindTheme);
+  const source = design.theme === null ? "node_modules/tailwindcss/theme.css" : `design/themes/${design.theme}.css`;
+  if (!expected.has("--color-indigo-600")) return [`cannot read the design's colours (${source})`];
+  return [
+    ...(ICON_FONT.test(css) ? [] : ["the built CSS has no Material Symbols Outlined font: import material-symbols/outlined.css where the app starts"]),
+    ...tokenProblems(design, builtCss, expected),
+  ];
+}
 
-const classProblems = (sources, icon) => {
-  const text = sources.map((source) => source.text).join("\n");
-  const missing = SIGNATURE_CLASSES.filter((name) => !text.includes(name));
-  const iconProblem = icon && !text.includes(icon) ? [`the screens never show the collection's icon "${icon}"`] : [];
-  const quoted = missing.map((name) => JSON.stringify(name)).join(", ");
-  return [...(missing.length > 0 ? [`the screens never use ${quoted}`] : []), ...iconProblem];
+const usageProblems = (sources, icon) => {
+  const text = sources.map((source) => withoutComments(source.text)).join("\n");
+  return [
+    ...(text.includes("material-symbols-outlined") ? [] : ['the screens never use "material-symbols-outlined"']),
+    ...(icon && !text.includes(icon) ? [`the screens never show the collection's icon "${icon}"`] : []),
+  ];
 };
 
 const recordProblems = (design, designMd) => {
@@ -84,17 +104,17 @@ const recordProblems = (design, designMd) => {
 };
 
 /**
- * Every way the app falls short of the chosen design. `styles`, `sources` and `viteConfigs` are { path, text }; `icon` is
- * the starting collection's icon (may be missing); `template` is the chosen template's text.
+ * Every way the app falls short of the chosen design. `builtCss` is the build's stylesheets joined (null when there
+ * are none); `tailwindTheme` is the app's node_modules/tailwindcss/theme.css; `template` the chosen template's text;
+ * `sources` the screens' files as { path, text }; `icon` the starting collection's icon (may be missing).
  */
-export function designProblems({ answer, packageJson, viteConfigs, styles, sources, designMd, icon, template }) {
+export function designProblems({ answer, packageJson, builtCss, tailwindTheme, template, sources, designMd, icon }) {
   const design = designOf(answer);
   if (design === null) return [`.blueprint/answers.json: the design "${answer}" is not one this pack has`];
   return [
     ...dependencyProblems(packageJson),
-    ...viteProblems(live(viteConfigs)),
-    ...themeProblems(design, live(styles), template),
-    ...classProblems(live(sources), icon),
+    ...builtProblems(design, builtCss, template, tailwindTheme),
+    ...usageProblems(sources, icon),
     ...recordProblems(design, designMd),
   ];
 }

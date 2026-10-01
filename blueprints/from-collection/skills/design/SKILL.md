@@ -29,11 +29,13 @@ should look the same. The design is the `design` answer in `.blueprint/answers.j
 5. **`DESIGN.md`** at the app's root, for the person and for every later step: the design chosen (its answer, word
    for word), the template file if any, and the rule that new screens use `design/mulmoterminal.md`'s classes — so
    the screens later steps add look like the rest.
-6. Run `yarn build` and the tests, and fix what the markup change broke without weakening a test.
+6. Run `yarn build` and the tests, and fix what the markup change broke without weakening a test. Keep Vite's output
+   in a folder named `dist` (`dist/`, `dist/client/`, `client/dist/`): the check reads the built stylesheet there.
 
-Done when the check passes: Tailwind and the icon font are wired in, the chosen template (or none) is in the
-stylesheet, the screens use MulmoTerminal's main button, its icons and the collection's icon, `DESIGN.md`
-names the design, and `yarn build` succeeds.
+Done when the check passes: `yarn build` succeeds, and the stylesheet it wrote has MulmoTerminal's main button
+(`.bg-indigo-600`), the Material Symbols font, and the chosen design's colour and corner values (Tailwind's own for
+`MulmoTerminal と同じ`, the template's otherwise); the screens use `material-symbols-outlined` and the collection's
+icon; `DESIGN.md` names the design.
 
 ## Always
 

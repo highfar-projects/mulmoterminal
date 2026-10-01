@@ -1,5 +1,5 @@
 #!/bin/sh
-# The screens follow the design the build chose (design.mjs), and the app still builds with it.
+# The app builds, and what the build produced follows the design the build chose (design.mjs reads the built CSS).
 set -eu
-node --no-warnings "$(dirname "$0")/design.mjs"
 yarn build
+node --no-warnings "$(dirname "$0")/design.mjs"

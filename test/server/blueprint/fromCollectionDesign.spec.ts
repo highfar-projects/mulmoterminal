@@ -1,21 +1,23 @@
 // @vitest-environment node
 // The design step of the from-collection pack: the answers the question offers, the templates they take, and what the
-// check holds an app to for each.
+// check holds an app to for each. The built CSS here is written the way Vite minifies Tailwind's output.
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import {
   DESIGNS,
   SAME_AS_MULMOTERMINAL,
-  SIGNATURE_CLASSES,
+  canonicalValue,
+  declarations,
   designOf,
   designProblems,
-  themeBlock,
 } from "../../../blueprints/from-collection/checks/designRules.mjs";
 
 const PACK = path.join(import.meta.dirname, "..", "..", "..", "blueprints", "from-collection");
 const readPack = (file: string): string => readFileSync(path.join(PACK, file), "utf8");
 const template = (theme: string): string => readPack(`design/themes/${theme}.css`);
+const TAILWIND_THEME = readFileSync(createRequire(import.meta.url).resolve("tailwindcss/theme.css"), "utf8");
 
 interface HearingQuestion {
   id: string;
@@ -27,20 +29,33 @@ const isHearing = (value: unknown): value is { questions: HearingQuestion[] } =>
 const hearing: unknown = JSON.parse(readPack("hearing.json"));
 const designQuestion = isHearing(hearing) ? hearing.questions.find((question) => question.id === "design") : undefined;
 
-const TAILWIND_ENTRY = { path: "client/src/style.css", text: '@import "tailwindcss";\n' };
-const SCREEN = { path: "client/src/App.vue", text: `<button class="bg-indigo-600 text-white"><span class="material-symbols-outlined">add</span></button>` };
-const HEADER = { path: "client/src/Header.vue", text: `<div class="bg-indigo-50"><span class="material-symbols-outlined">menu_book</span></div>` };
+// A value as Vite's minifier writes it: oklch's lightness as a percentage, no leading zeros.
+const minified = (value: string): string =>
+  value.replace(/^oklch\(0\.(\d+)/u, (_match, digits: string) => "oklch(" + Number("0." + digits) * 100 + "%").replaceAll(/(^|[\s(])0\./gu, "$1.");
+const tokenValue = (css: string, name: string): string => declarations(css).find((token) => token.name === name)?.value ?? "";
+// A build's stylesheet holding these tokens, MulmoTerminal's main button and the icon font.
+const built = (source: string, names = ["--color-indigo-600", "--color-slate-50", "--radius-lg"]): string =>
+  [
+    "@layer theme{:root,:host{" + names.map((name) => name + ":" + minified(tokenValue(source, name))).join(";") + "}}",
+    ".bg-indigo-600{background-color:var(--color-indigo-600)}",
+    '@font-face{font-family:"Material Symbols Outlined";src:url(./x.woff2)}',
+  ].join("");
+
+const SCREEN = {
+  path: "client/src/App.vue",
+  text: `<button class="bg-indigo-600 text-white"><span class="material-symbols-outlined">menu_book</span></button>`,
+};
 
 // An app that follows MulmoTerminal's look for a collection with a book icon.
 const followingApp = {
   answer: SAME_AS_MULMOTERMINAL,
   packageJson: { devDependencies: { tailwindcss: "^4", "@tailwindcss/vite": "^4", "material-symbols": "^0.40" } },
-  viteConfigs: [{ path: "vite.config.ts", text: 'import tailwindcss from "@tailwindcss/vite";\nplugins: [vue(), tailwindcss()]' }],
-  styles: [TAILWIND_ENTRY],
-  sources: [SCREEN, HEADER],
+  builtCss: built(TAILWIND_THEME),
+  tailwindTheme: TAILWIND_THEME,
+  template: null,
+  sources: [SCREEN],
   designMd: `# Design\n\n${SAME_AS_MULMOTERMINAL}\n`,
   icon: "menu_book",
-  template: null,
 };
 
 describe("the design question", () => {
@@ -50,14 +65,14 @@ describe("the design question", () => {
     expect(DESIGNS[0]).toEqual({ option: SAME_AS_MULMOTERMINAL, theme: null });
   });
 
-  it("has a template file with an @theme block for every template it names", () => {
+  it("has a template file defining the main colour for every template it names", () => {
     DESIGNS.flatMap((design) => (design.theme ? [design.theme] : [])).forEach((theme) => {
-      expect(themeBlock(template(theme)), theme).toMatch(/--color-indigo-600:/u);
+      expect(tokenValue(template(theme), "--color-indigo-600"), theme).toMatch(/^oklch\(/u);
     });
   });
 
   it("has templates that differ from each other", () => {
-    const blocks = DESIGNS.flatMap((design) => (design.theme ? [themeBlock(template(design.theme))] : []));
+    const blocks = DESIGNS.flatMap((design) => (design.theme ? [tokenValue(template(design.theme), "--color-indigo-600")] : []));
     expect(new Set(blocks).size).toBe(blocks.length);
   });
 
@@ -77,6 +92,20 @@ describe("designOf", () => {
   });
 });
 
+describe("canonicalValue", () => {
+  it("reads a minified value as the one written", () => {
+    expect(canonicalValue("oklch(52% .13 35)")).toBe(canonicalValue("oklch(0.52 0.13 35)"));
+    expect(canonicalValue(".875rem")).toBe(canonicalValue("0.875rem"));
+    expect(canonicalValue("oklch(51.1% .262 276.966)")).toBe(canonicalValue("oklch(51.1% 0.262 276.966)"));
+  });
+
+  it("tells different values apart", () => {
+    expect(canonicalValue("oklch(52% .13 35)")).not.toBe(canonicalValue("oklch(0.52 0.13 36)"));
+    expect(canonicalValue("1rem")).not.toBe(canonicalValue("1px"));
+    expect(canonicalValue("#fff")).toBe("#fff");
+  });
+});
+
 describe("designProblems", () => {
   it("passes an app that follows MulmoTerminal's look", () => {
     expect(designProblems(followingApp)).toEqual([]);
@@ -93,56 +122,50 @@ describe("designProblems", () => {
     expect(designProblems({ ...followingApp, packageJson: null })[0]).toContain("tailwindcss, @tailwindcss/vite, material-symbols");
   });
 
-  it("needs the Tailwind plugin in a vite config", () => {
-    expect(designProblems({ ...followingApp, viteConfigs: [{ path: "vite.config.ts", text: "plugins: [vue()]" }] })).toEqual([
-      "no vite.config uses @tailwindcss/vite: add tailwindcss() to its plugins",
+  it("needs a build", () => {
+    expect(designProblems({ ...followingApp, builtCss: null })).toEqual(["no built CSS under dist/: yarn build did not produce the app's stylesheet"]);
+  });
+
+  it("needs Tailwind to have made the main button's rule, whatever the sources or their comments say", () => {
+    const untouched = "body{margin:0}/* .bg-indigo-600{} */";
+    const problems = designProblems({ ...followingApp, builtCss: untouched });
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain("the built CSS has no .bg-indigo-600 rule");
+  });
+
+  it("needs the icon font in the build", () => {
+    const fontless = built(TAILWIND_THEME).replace(/@font-face\{[^}]*\}/u, "");
+    expect(designProblems({ ...followingApp, builtCss: fontless })).toEqual([
+      "the built CSS has no Material Symbols Outlined font: import material-symbols/outlined.css where the app starts",
     ]);
-    expect(designProblems({ ...followingApp, viteConfigs: [] })).toHaveLength(1);
   });
 
-  it("takes the plugin under any name, and not one that is only imported or only in a comment", () => {
-    const vite = (text: string) => designProblems({ ...followingApp, viteConfigs: [{ path: "vite.config.ts", text }] });
-    expect(vite('import tw from "@tailwindcss/vite";\nexport default { plugins: [tw()] };')).toEqual([]);
-    expect(vite('import tailwindcss from "@tailwindcss/vite";\nexport default { plugins: [] };')).toHaveLength(1);
-    expect(vite('// import tailwindcss from "@tailwindcss/vite";\nplugins: [tailwindcss()]')).toHaveLength(1);
-    expect(vite('/* import tailwindcss from "@tailwindcss/vite"; tailwindcss() */')).toHaveLength(1);
+  it("refuses MulmoTerminal's look with a colour or a corner redefined", () => {
+    const redefined = `${built(TAILWIND_THEME)}:root{--color-indigo-600:oklch(52% .13 35);--radius-lg:2rem}`;
+    const [problem] = designProblems({ ...followingApp, builtCss: redefined });
+    expect(problem).toBe(
+      "the built CSS gives --color-indigo-600, --radius-lg other values than Tailwind's own: MulmoTerminal's look redefines no colour or corner, so remove the @theme that sets them",
+    );
   });
 
-  it("does not count what only a comment says", () => {
-    const commented = [{ path: "a.vue", text: '<!-- <button class="bg-indigo-600"> -->\n// material-symbols-outlined menu_book\n/* menu_book */' }];
+  it("says when the design's colours cannot be read", () => {
+    expect(designProblems({ ...followingApp, tailwindTheme: null })).toEqual(["cannot read the design's colours (node_modules/tailwindcss/theme.css)"]);
+  });
+
+  it("needs the icon font's class and the collection's icon in the screens, comments aside", () => {
+    const commented = [{ path: "a.vue", text: '<!-- <span class="material-symbols-outlined"> -->\n// menu_book\n/* menu_book */' }];
     expect(designProblems({ ...followingApp, sources: commented })).toEqual([
-      'the screens never use "bg-indigo-600", "material-symbols-outlined"',
+      'the screens never use "material-symbols-outlined"',
       'the screens never show the collection\'s icon "menu_book"',
     ]);
-    expect(designProblems({ ...followingApp, styles: [{ path: "a.css", text: '/* @import "tailwindcss"; */' }] })).toEqual([
-      'no stylesheet has @import "tailwindcss"',
-    ]);
+    expect(designProblems({ ...followingApp, sources: [{ path: "a.vue", text: '<span class="material-symbols-outlined">add</span>' }], icon: null })).toEqual(
+      [],
+    );
   });
 
   it("keeps the // of a URL in a string", () => {
-    const linked = { path: "b.vue", text: `<a href="https://example.com" class="bg-indigo-600"><span class="material-symbols-outlined">menu_book</span></a>` };
+    const linked = { path: "b.vue", text: `<a href="https://example.com"><span class="material-symbols-outlined">menu_book</span></a>` };
     expect(designProblems({ ...followingApp, sources: [linked] })).toEqual([]);
-  });
-
-  it("needs a stylesheet that imports Tailwind", () => {
-    expect(designProblems({ ...followingApp, styles: [{ path: "a.css", text: "body { margin: 0 }" }] })).toEqual(['no stylesheet has @import "tailwindcss"']);
-  });
-
-  it("refuses redefined colours in MulmoTerminal's look", () => {
-    const styles = [TAILWIND_ENTRY, { path: "theme.css", text: "@theme { --color-indigo-600: red; }" }];
-    expect(designProblems({ ...followingApp, styles })).toEqual(["theme.css redefines the indigo colours; MulmoTerminal's look keeps Tailwind's own"]);
-  });
-
-  it("names each signature class the screens never use", () => {
-    expect(designProblems({ ...followingApp, sources: [{ path: "a.vue", text: "menu_book" }] })).toEqual([
-      'the screens never use "bg-indigo-600", "material-symbols-outlined"',
-    ]);
-    expect(SIGNATURE_CLASSES).toContain("material-symbols-outlined");
-  });
-
-  it("needs the collection's icon, and asks for none when the collection has none", () => {
-    expect(designProblems({ ...followingApp, sources: [SCREEN] })).toEqual(['the screens never show the collection\'s icon "menu_book"']);
-    expect(designProblems({ ...followingApp, sources: [SCREEN], icon: null })).toEqual([]);
   });
 
   it("needs DESIGN.md naming the design", () => {
@@ -153,57 +176,34 @@ describe("designProblems", () => {
   describe("with a template", () => {
     const soft = DESIGNS.find((design) => design.theme === "soft");
     const answer = soft?.option ?? "";
-    const withTemplate = { ...followingApp, answer, template: template("soft"), designMd: answer };
+    const withTemplate = {
+      ...followingApp,
+      answer,
+      template: template("soft"),
+      designMd: answer,
+      builtCss: built(template("soft"), ["--color-indigo-600", "--color-slate-50", "--color-white", "--radius-lg"]),
+    };
 
-    it("passes the template copied into the stylesheet that imports Tailwind", () => {
-      expect(designProblems({ ...withTemplate, styles: [{ path: "style.css", text: `@import "tailwindcss";\n${template("soft")}` }] })).toEqual([]);
+    it("passes a build that carries the template's values", () => {
+      expect(designProblems(withTemplate)).toEqual([]);
     });
 
-    it("does not take the template's own comment, which mentions the Tailwind import, for an import", () => {
-      expect(template("soft")).toContain('@import "tailwindcss"');
-      expect(designProblems({ ...withTemplate, styles: [{ path: "src/soft.css", text: template("soft") }] })).toEqual([
-        'no stylesheet has @import "tailwindcss"',
+    it("refuses a build that kept Tailwind's own colours: the template was not imported", () => {
+      const [problem] = designProblems({ ...withTemplate, builtCss: built(TAILWIND_THEME) });
+      expect(problem).toContain("other values than design/themes/soft.css");
+    });
+
+    it("refuses another template, and a template changed by one value", () => {
+      expect(designProblems({ ...withTemplate, builtCss: built(template("calm")) })[0]).toContain("design/themes/soft.css");
+      const edited = withTemplate.builtCss.replace("--radius-lg:.875rem", "--radius-lg:.9rem");
+      expect(edited).not.toBe(withTemplate.builtCss);
+      expect(designProblems({ ...withTemplate, builtCss: edited })).toEqual([
+        'the built CSS gives --radius-lg other values than design/themes/soft.css: import it right after "tailwindcss", unchanged, and redefine nothing else',
       ]);
     });
 
-    it("passes the template copied to its own file that the entry imports, with CRLF line ends", () => {
-      const styles = [
-        { path: "src/style.css", text: '@import "tailwindcss";\n@import "./soft.css";\n' },
-        { path: "src/soft.css", text: template("soft").replaceAll("\n", "\r\n") },
-      ];
-      expect(designProblems({ ...withTemplate, styles })).toEqual([]);
-    });
-
-    it("refuses a template that is not imported, changed, or another one", () => {
-      const notImported = [TAILWIND_ENTRY, { path: "src/soft.css", text: template("soft") }];
-      expect(designProblems({ ...withTemplate, styles: notImported })).toEqual([
-        "src/soft.css holds the template but no stylesheet that imports tailwindcss imports it",
-      ]);
-      const changed = [{ path: "style.css", text: `@import "tailwindcss";\n${template("soft").replace("0.975", "0.97")}` }];
-      expect(designProblems({ ...withTemplate, styles: changed })).toEqual(["no stylesheet holds design/themes/soft.css unchanged"]);
-      const commentedImport = [
-        { path: "src/style.css", text: '@import "tailwindcss";\n/* @import "./soft.css"; */\n' },
-        { path: "src/soft.css", text: template("soft") },
-      ];
-      expect(designProblems({ ...withTemplate, styles: commentedImport })).toEqual([
-        "src/soft.css holds the template but no stylesheet that imports tailwindcss imports it",
-      ]);
-      const lookAlike = [
-        { path: "src/style.css", text: '@import "tailwindcss";\n@import "./not-soft.css";\n' },
-        { path: "src/soft.css", text: template("soft") },
-      ];
-      expect(designProblems({ ...withTemplate, styles: lookAlike })).toEqual([
-        "src/soft.css holds the template but no stylesheet that imports tailwindcss imports it",
-      ]);
-      const bare = [
-        { path: "src/style.css", text: '@import "tailwindcss";\n@import "soft.css";\n' },
-        { path: "src/soft.css", text: template("soft") },
-      ];
-      expect(designProblems({ ...withTemplate, styles: bare })).toEqual([]);
-      const commentedOut = [{ path: "style.css", text: `@import "tailwindcss";\n/* ${themeBlock(template("soft"))} */` }];
-      expect(designProblems({ ...withTemplate, styles: commentedOut })).toEqual(["no stylesheet holds design/themes/soft.css unchanged"]);
-      const other = [{ path: "style.css", text: `@import "tailwindcss";\n${template("calm")}` }];
-      expect(designProblems({ ...withTemplate, styles: other })).toEqual(["no stylesheet holds design/themes/soft.css unchanged"]);
+    it("says when the template cannot be read", () => {
+      expect(designProblems({ ...withTemplate, template: null })).toEqual(["cannot read the design's colours (design/themes/soft.css)"]);
     });
   });
 });
