@@ -6,6 +6,7 @@
 import { computed, ref, shallowRef, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import MarkdownProse from "./MarkdownProse.vue";
+import FullScreenOverlay from "./FullScreenOverlay.vue";
 import { useSkillsView } from "../composables/useSkillsView";
 import { useEscapeToClose } from "../composables/useEscapeToClose";
 import { loadSkillCatalog, loadSkillDoc } from "../composables/useSkillCatalog";
@@ -69,8 +70,8 @@ async function pick(source: SkillSource, skill: CatalogSkill): Promise<void> {
 </script>
 
 <template>
-  <div v-if="isOpen" class="fixed inset-x-0 top-10 bottom-0 z-50 flex flex-col bg-deep" role="region" :aria-label="t('skillsView.region')">
-    <header class="flex flex-none items-center gap-2.5 border-b border-border bg-panel px-4 py-2">
+  <FullScreenOverlay v-if="isOpen" :region-label="t('skillsView.region')" :close-label="t('skillsView.close')" @close="close">
+    <template #header>
       <span class="font-sans text-[14px] font-[650] text-fg">{{ t("skillsView.title") }}</span>
       <input
         v-model="query"
@@ -80,17 +81,7 @@ async function pick(source: SkillSource, skill: CatalogSkill): Promise<void> {
         :aria-label="t('skillsView.search')"
         class="w-[320px] max-w-[50vw] rounded-[4px] border border-border bg-base px-2 py-1 font-sans text-[12px] text-fg"
       />
-      <span class="flex-1"></span>
-      <button
-        type="button"
-        class="h-6 w-[26px] cursor-pointer rounded-md border border-border bg-base text-[14px] text-secondary hover:bg-hover hover:text-fg"
-        :data-tip="t('tips.overlays.close')"
-        :aria-label="t('skillsView.close')"
-        @click="close"
-      >
-        <span class="material-symbols-outlined" aria-hidden="true">close</span>
-      </button>
-    </header>
+    </template>
 
     <p v-if="loadFailed" class="m-0 p-4 font-sans text-[13px] text-err-text">{{ t("skillsView.loadFailed") }}</p>
     <p v-else-if="!catalog" class="m-0 p-4 font-sans text-[13px] text-dim">{{ t("skillsView.loading") }}</p>
@@ -145,5 +136,5 @@ async function pick(source: SkillSource, skill: CatalogSkill): Promise<void> {
         </template>
       </section>
     </div>
-  </div>
+  </FullScreenOverlay>
 </template>

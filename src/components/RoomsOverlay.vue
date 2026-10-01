@@ -16,6 +16,7 @@ import { deleteRoom, listRooms, loadRoom, sendRoomMessage } from "../composables
 import { relativeTime } from "./cellDisplay";
 import type { RoomMessage } from "../../common/roomMessage";
 import { useI18n } from "vue-i18n";
+import FullScreenOverlay from "./FullScreenOverlay.vue";
 
 const { t } = useI18n();
 
@@ -137,21 +138,11 @@ async function forget(id: string): Promise<void> {
 </script>
 
 <template>
-  <div v-if="isOpen" class="fixed inset-x-0 top-10 bottom-0 z-50 flex flex-col bg-deep" role="region" :aria-label="t('tips.overlays.roomsRegion')">
-    <header class="flex flex-none items-center gap-2.5 border-b border-border bg-panel px-4 py-2">
+  <FullScreenOverlay v-if="isOpen" :region-label="t('tips.overlays.roomsRegion')" :close-label="t('tips.overlays.closeRooms')" @close="close">
+    <template #header>
       <span class="text-[14px] font-[650] text-fg">Rooms</span>
       <span v-if="room" class="truncate font-mono text-[12px] text-dim">{{ room }}</span>
-      <span class="flex-1"></span>
-      <button
-        type="button"
-        class="h-6 w-[26px] cursor-pointer rounded-md border border-border bg-base text-[14px] text-secondary hover:bg-hover hover:text-fg"
-        :data-tip="t('tips.overlays.close')"
-        :aria-label="t('tips.overlays.closeRooms')"
-        @click="close"
-      >
-        <span class="material-symbols-outlined" aria-hidden="true">close</span>
-      </button>
-    </header>
+    </template>
 
     <div class="flex min-h-0 flex-1">
       <nav class="w-[260px] flex-none overflow-y-auto border-r border-border bg-panel p-1" :aria-label="t('tips.overlays.rooms')">
@@ -230,5 +221,5 @@ async function forget(id: string): Promise<void> {
         </template>
       </section>
     </div>
-  </div>
+  </FullScreenOverlay>
 </template>
