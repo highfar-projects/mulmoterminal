@@ -10,7 +10,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from "vue";
 import { finderRow, rankPaths } from "./filePathMatch";
 import type { FilesPanelSeed } from "../composables/filesPanelSeed";
-import { menuFocusMove } from "./filesRowActions";
+import { usePickerPanelKeys } from "../composables/usePickerPanelKeys";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
@@ -21,9 +21,6 @@ const { t } = useI18n();
 /** How many rows are ranked into view. More than fills the panel: the list scrolls, and a reader
  *  who has typed two characters is still scanning rather than reading. */
 const MAX_RESULTS = 50;
-
-/** The keys that move the selection. See `onKeydown` for why the list is this short. */
-const LIST_KEYS = ["ArrowUp", "ArrowDown"];
 
 const props = defineProps<{ cwd: string | null; seed?: FilesPanelSeed | undefined }>();
 const emit = defineEmits<{ pick: [pathRel: string]; close: [] }>();
@@ -104,33 +101,7 @@ watch(active, (index) => {
   listEl.value?.querySelector(`[data-index="${index}"]`)?.scrollIntoView({ block: "nearest" });
 });
 
-function onKeydown(event: KeyboardEvent): void {
-  if (event.isComposing) return; // an IME candidate list owns the arrows and Enter while composing
-  if (event.key === "Escape") {
-    event.preventDefault();
-    emit("close");
-    return;
-  }
-  if (event.key === "Enter") {
-    event.preventDefault();
-    pick(active.value);
-    return;
-  }
-  // The ARROWS only. `menuFocusMove` also answers Home and End, and in a row menu that is right —
-  // here the keyboard is in a text field, where both belong to the caret the user is editing with.
-  if (!LIST_KEYS.includes(event.key)) return;
-  const to = menuFocusMove(event.key, active.value, rows.value.length);
-  if (to === null) return;
-  event.preventDefault();
-  active.value = to;
-}
-
-// Clicking anywhere else is "not this after all". Pointerdown rather than click, so the pane
-// underneath does not also act on the same gesture.
-function onOutside(event: PointerEvent): void {
-  const target = event.target instanceof Node ? event.target : null;
-  if (!panel.value?.contains(target)) emit("close");
-}
+const { onKeydown, onOutside } = usePickerPanelKeys({ panel, active, rowCount: () => rows.value.length, pick, close: () => emit("close") });
 
 onMounted(() => {
   void load();
