@@ -14,7 +14,7 @@ import { mkdirSync, writeFileSync, existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { initArtifactsBackend } from "../../../server/backends/artifacts.js";
 import { initOpenPathBackend, resetOpenPathBackend } from "../../../server/backends/openPath.js";
-import { RENDER_BUDGET_MS } from "@mulmoclaude/shapescript-plugin/render";
+import { RENDER_BUDGET_MS } from "@gui-chat-plugin/shapescript/render";
 import { RENDER_SHAPE_SCRIPT, runRenderShapeScript } from "../../../server/infra/shapescript-render-tool.js";
 import { makeTempDir } from "../../support/tempDir";
 

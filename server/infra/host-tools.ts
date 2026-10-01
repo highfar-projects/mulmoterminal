@@ -64,9 +64,9 @@ export const SPAWN_BACKGROUND_CHAT: ToolDefinition = {
 // renderShapeScript is a host tool for the same reason manageCollection is: its
 // execute needs server internals a plugin is not handed (the workspace artifacts
 // root). The tool's model-facing contract comes from
-// @mulmoclaude/shapescript-plugin/render — see shapescript-render-tool.ts.
+// @gui-chat-plugin/shapescript/render — see shapescript-render-tool.ts.
 // exportShapeScriptUsdz likewise: same artifacts root, same `path` routing, and the
-// whole tool from @mulmoclaude/shapescript-plugin — see shapescript-usdz-tool.ts.
+// whole tool from @gui-chat-plugin/shapescript — see shapescript-usdz-tool.ts.
 // manageShapeScript too, plus the remote-host session it reaches the gallery through —
 // see shapescript-manage-tool.ts.
 export const HOST_TOOL_DEFINITIONS: ToolDefinition[] = [

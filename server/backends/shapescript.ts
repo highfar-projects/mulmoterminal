@@ -1,4 +1,4 @@
-// Host wiring for @mulmoclaude/shapescript-plugin (presentShapeScript). The tool-call
+// Host wiring for @gui-chat-plugin/shapescript (presentShapeScript). The tool-call
 // path — save a new `.shape` under artifacts/shapes, or present one that already
 // exists — runs through the generic package loader (plugins.json `packages` →
 // /api/plugin/presentShapeScript with the FileOps context from
@@ -15,7 +15,7 @@
 // Same shape as backends/html.ts — deliberately, since the two plugins share this
 // contract; read that file's comments for the reasoning behind each step.
 import type { Express, Request, Response, NextFunction } from "express";
-import { executeShapeScriptDispatch, isShapeScriptDispatchArgs } from "@mulmoclaude/shapescript-plugin";
+import { executeShapeScriptDispatch, isShapeScriptDispatchArgs } from "@gui-chat-plugin/shapescript";
 import { artifactsFileOps } from "./artifacts.js";
 import { shapeScriptByPath } from "./openPath.js";
 import { publishFileChange } from "./fileChange.js";

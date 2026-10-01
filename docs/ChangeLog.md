@@ -8,6 +8,10 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+### ShapeScript comes from `@gui-chat-plugin/shapescript`
+
+- The ShapeScript plugin moved out of MulmoClaude into [receptron/gui-chat-plugins](https://github.com/receptron/gui-chat-plugins) ([gui-chat-plugins#13](https://github.com/receptron/gui-chat-plugins/pull/13)), and MulmoTerminal now takes it from there as `@gui-chat-plugin/shapescript@8.0.0` instead of `@mulmoclaude/shapescript-plugin@7.1.0`. The tools and the view are the same. 8.0.0 also fixes two things the move's review found: a script could inject markup into the page `renderShapeScript` rasterises (through `</script>` in an object name), and the published types needed `@types/three` without declaring it.
+
 ## mulmoterminal@8.1.0 — 2026-10-01
 
 > **Setup guide:** [8.1.0 — See what a document task changed, and more examples to try](https://receptron.github.io/mulmoterminal/guide/en/v8.1.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v8.1.0.html))
