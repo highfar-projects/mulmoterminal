@@ -20,7 +20,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { classifyFilePath } from "@mulmoclaude/core/artifacts";
 import { MARKDOWN_EXTENSIONS, HTML_EXTENSIONS } from "@mulmoclaude/core/files";
 import { isPresentableHtmlPath } from "@mulmoclaude/html-plugin";
-import { SHAPE_EXTENSIONS } from "@mulmoclaude/shapescript-plugin";
+import { SHAPE_EXTENSIONS } from "@gui-chat-plugin/shapescript";
 import { isRecord } from "../../common/isRecord.js";
 import { SESSION_ID_RE } from "../config/env.js";
 import { isSamePath } from "../infra/path-within.js";

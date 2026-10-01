@@ -8,7 +8,7 @@
     "@mulmoclaude/html-plugin",
     "@mulmoclaude/google-plugin",
     "@mulmoclaude/mulmoscript-plugin",
-    "@mulmoclaude/shapescript-plugin"
+    "@gui-chat-plugin/shapescript"
   ],
   "servers": ["@mulmoclaude/x-plugin"],
   "local": []

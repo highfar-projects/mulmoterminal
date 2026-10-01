@@ -11,7 +11,7 @@
 import { describe, it, expect } from "vitest";
 import type { Firestore } from "firebase/firestore";
 import type { FirebaseStorage } from "firebase/storage";
-import { NOT_CONNECTED_MESSAGE, SHAPE_LICENSE, SHAPE_POST_KEYS, shapePostFrom, type ShapePostDoc } from "@mulmoclaude/shapescript-plugin";
+import { NOT_CONNECTED_MESSAGE, SHAPE_LICENSE, SHAPE_POST_KEYS, shapePostFrom, type ShapePostDoc } from "@gui-chat-plugin/shapescript";
 import {
   MANAGE_SHAPE_SCRIPT,
   galleryWriterFrom,

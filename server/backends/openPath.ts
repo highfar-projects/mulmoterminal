@@ -21,7 +21,7 @@
 // tool call that opened them.
 import { realpath } from "node:fs/promises";
 import { createByPathFileOps, resolveHtmlFileRequestPath, HTML_EXTENSIONS, MARKDOWN_EXTENSIONS } from "@mulmoclaude/core/files";
-import { SHAPE_EXTENSIONS } from "@mulmoclaude/shapescript-plugin";
+import { SHAPE_EXTENSIONS } from "@gui-chat-plugin/shapescript";
 import { STORY_SCRIPT_EXTENSIONS } from "@mulmoclaude/mulmoscript-plugin";
 import type { FileOps } from "gui-chat-protocol";
 
