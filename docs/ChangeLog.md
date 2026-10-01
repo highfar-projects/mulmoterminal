@@ -8,9 +8,36 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
-### ShapeScript comes from `@gui-chat-plugin/shapescript`
+## mulmoterminal@8.2.0 — 2026-10-01
+
+> **Setup guide:** [8.2.0 — Blueprint steps repair themselves, and closed cells can be reopened](https://receptron.github.io/mulmoterminal/guide/en/v8.2.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v8.2.0.html))
+
+### Blueprints: a failing step recovers by itself (#2811)
+
+- [#2812](https://github.com/receptron/mulmoterminal/pull/2812) — on a retry the prompt names the check script and tells the agent to read it, never change it, when the output does not say how to fix the failure. The actions check (`from-collection/checks/actions.sh`) lists the test titles it read and its counting rule (`it` / `test` imported from vitest; `describe` does not count), and the actions skills mention the describe pitfall.
+- [#2813](https://github.com/receptron/mulmoterminal/pull/2813) — a step gets five attempts instead of three, and from the fourth each attempt is a repair: the run keeps every failed check's output since the step last started afresh (`failureOutputs`), and the prompt shows them all and asks the agent to work out why every attempt still failed. A run that stopped at the old limit of three resumes with repairs.
+- [#2814](https://github.com/receptron/mulmoterminal/pull/2814) — a build waiting on a folder another build holds (`folder-busy`) is retried when that build stops working, one at a time under the folder lock, and on startup. Failing to write `.blueprint/answers.json` is retried like a failed check instead of stopping. A step that used up its attempts says so on the run page, with what **Try again** does. Untrusted folders still stop for a person.
+
+### Terminals
+
+- [#2802](https://github.com/receptron/mulmoterminal/pull/2802) ([#2800](https://github.com/receptron/mulmoterminal/issues/2800)) — recently closed cells are listed in the command palette as "Reopen: …" and reopened beside the current terminal (an agent resumes its conversation; a shell comes back fresh in the same directory). A new keymap / header action `terminal-reopen` reopens the newest one. The list is kept in the browser.
+- [#2801](https://github.com/receptron/mulmoterminal/pull/2801) ([#2799](https://github.com/receptron/mulmoterminal/issues/2799)) — the toolbar's right-side icons are grouped so buttons that come and go no longer move the permanent ones; the command palette and Settings stay at the right end. Update is an icon with an accent dot instead of a text pill, and its popover text is localized.
+
+### Shared apps
+
+- [#2804](https://github.com/receptron/mulmoterminal/pull/2804) ([#2803](https://github.com/receptron/mulmoterminal/issues/2803)) — two templates: `class-seats` (a class with a capacity; visitors see seats left, never who booked; cancelling at the desk) and `schedule-poll` (one anonymous answer per participant, correctable until the organiser moves the deadline).
+
+### Blueprints: chaff
+
+- [#2806](https://github.com/receptron/mulmoterminal/pull/2806) ([#2805](https://github.com/receptron/mulmoterminal/issues/2805)) — the document blueprints pin chaffjs 0.18. preferred-term's fix line now names the spelling to use; the new experimental rule is not read by any check.
+
+### ShapeScript comes from `@gui-chat-plugin/shapescript` ([#2810](https://github.com/receptron/mulmoterminal/pull/2810))
 
 - The ShapeScript plugin moved out of MulmoClaude into [receptron/gui-chat-plugins](https://github.com/receptron/gui-chat-plugins) ([gui-chat-plugins#13](https://github.com/receptron/gui-chat-plugins/pull/13)), and MulmoTerminal now takes it from there as `@gui-chat-plugin/shapescript@8.0.0` instead of `@mulmoclaude/shapescript-plugin@7.1.0`. The tools and the view are the same. 8.0.0 also fixes two things the move's review found: a script could inject markup into the page `renderShapeScript` rasterises (through `</script>` in an object name), and the published types needed `@types/three` without declaring it.
+
+### Dependencies
+
+- [#2798](https://github.com/receptron/mulmoterminal/pull/2798) — dependency updates.
 
 ## mulmoterminal@8.1.0 — 2026-10-01
 

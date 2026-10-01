@@ -8,8 +8,8 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **8.1.0 is out.** A Blueprints document task's finished screen compares each document with its original,
-> and more examples let you try the tasks without documents of your own. [Setup guide](v8.1.0.html)
+> **8.2.0 is out.** A Blueprints step whose check keeps failing now repairs itself before it stops,
+> and a closed cell can be reopened from the command palette. [Setup guide](v8.2.0.html)
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching

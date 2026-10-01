@@ -44,7 +44,7 @@ early warning, not the thing holding the line.
 
 ## What you can build
 
-Seven shapes are written out in full as templates. Ask for the thing you want in your own words —
+These shapes are written out in full as templates. Ask for the thing you want in your own words —
 the agent picks the shape — but knowing they exist tells you what is cheap to ask for.
 
 | The thing you want | The shape | What is special about it |
@@ -53,6 +53,8 @@ the agent picks the shape — but knowing they exist tells you what is cheap to 
 | A booking a named person approves, and only their own — a salon, an interview, a repair | **salon** | One booking per slot, decided by the platform rather than by counting. This is what an `assignee` role is for |
 | First come, first served with a waiting list — a gym class, a workshop | **gym** | A server-stamped arrival time, a per-class opening time, and a queue that promotes itself |
 | A bookable unit you can list in advance — a meeting room, a desk, equipment on loan | **meeting-room** | The slots exist as records; taking one is claiming its id |
+| A class with a capacity, where people see how many seats are left but not who booked | **class-seats** | A class of N is N seat records; cancelling is done at the front desk |
+| A scheduling poll — which candidate dates work for everyone | **schedule-poll** | One answer per person, correctable until the deadline; moving the deadline closes it |
 | A page that moves while people are watching — a live poll, a lecture, a stand-up quiz | **live-poll** | The audience's page redraws as votes land, with no reload |
 | A work board with a roster — people register once, then claim tasks; the owner adds and frees work | **project-board** | A desk for the owner, and the one that shows how "have I already registered?" is answered properly |
 | A log only added to, never rewritten — a shift handover, an incident timeline, a class question board, a chat room | **append-feed** | Rows are only ever appended, and only their author may remove one |

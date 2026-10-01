@@ -70,7 +70,7 @@ A small app that records the books in your house and who has borrowed which, bui
    - When you are happy with it, press **Approve**.
 5. The steps then run in order. For the step in progress you see what the agent is doing and how long it has taken. In the list on the left, the builds waiting for your approval or answer, and those that stopped, gather at the top under **Waiting for you**. A build you no longer want to see can be moved out of the way with **Put away** at the top of its page; it goes into the closed **Put away** group at the bottom of the list, nothing is deleted, and **Back to the list** returns it.
    - **Has a question for you**: write an answer and press **Send**.
-   - If a step stops, read **What the check reported** and press **Try again**.
+   - A step whose check fails compares its earlier failures and repairs itself. A step waiting for another build's folder resumes by itself when that build stops. If a step still stops, read **What the check reported** and press **Try again**.
    - Just before the end comes a **Security review** step. The agent reads what was built against OWASP Top 10:2025, fixes what can be exploited, adds tests, and writes `.blueprint/security-review.md`. The check starts the app and sends it the requests an attack would (a foreign `Host` as in DNS rebinding, a change from another site, a malformed JSON body) and requires each to be refused; it also audits the dependencies (`yarn audit`). On Firebase the review comes before publishing to production, and ends by redeploying dev and confirming the page still renders.
 6. **Every step is done.** means you are finished. Right under it is **how to start using the app** (`.blueprint/start-here.md`): how to start it (`yarn start`) and the address to open, a checklist that tries each must-have in turn, and where the data lives. Work down it. The folder's `README.md` has the details. On Firebase it gives the production URL and how to make the next change (try it on dev, then publish).
 
@@ -161,7 +161,7 @@ The Firebase base uses two Firebase projects, one for development and a separate
 |---|---|
 | **Start** is refused with "Claude Code does not trust … yet" | Press **Open Claude Code here** under the message and answer the trust prompt (see [Trust a folder for the builds first](#trust)), and check the folder has not become a git repository |
 | **Start** is refused with "… does not exist. A new folder is made only inside a folder that already exists." | Only the last folder is made. Create the parent first, or choose a place inside an existing folder |
-| A step stopped | **What the check reported** says why; **Try again** retries it |
+| A step stopped | It tried five times by itself and the check still fails. **What the check reported** says why; **Try again** sends it back to repairing |
 | A change is refused with `… run by the MulmoTerminal on port …` | Another MulmoTerminal on this machine is running. Use that one, or stop it |
 | You want to clear a build's record | Delete that build's folder under `~/.mulmoterminal/blueprints/runs/`. The app's own folder is left as it is |
 
