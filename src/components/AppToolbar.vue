@@ -297,64 +297,79 @@ const FEATURE_ACTIONS: Record<FeatureMenuEntry, () => void> = {
     <div v-if="paletteSearchBox" class="hidden min-w-0 flex-1 justify-center px-2 md:flex">
       <PaletteSearchBox />
     </div>
-    <NotificationBell class="ml-auto" />
-    <RemoteHostControl />
-    <div v-if="updateBadge" ref="updateRoot" class="relative mr-1 flex-none">
-      <button
-        type="button"
-        class="inline-flex items-center gap-1 rounded-full border border-accent px-2 py-0.5 text-[12px] leading-none text-accent hover:bg-selected"
-        :class="{ 'bg-selected': updateOpen }"
-        :data-tip="updateBadge.text"
-        :aria-label="updateBadge.text"
-        :aria-expanded="updateOpen"
-        aria-haspopup="true"
-        @click="toggleUpdate"
-      >
-        <span class="material-symbols-outlined text-[15px] leading-none" aria-hidden="true">upgrade</span>
-        Update
-      </button>
-      <div
-        v-if="updateOpen"
-        class="absolute right-0 top-full z-50 mt-1 w-64 rounded-md border border-border bg-panel p-3 text-[13px] text-fg shadow-lg"
-        role="group"
-        :aria-label="t('tips.toolbar.updateAvailable')"
-      >
-        <p class="mb-2 font-semibold">A newer version is available</p>
-        <template v-if="updateBadge.command">
-          <p class="mb-1 text-muted">Run this to update:</p>
-          <div class="flex items-center gap-2">
-            <code class="min-w-0 flex-1 overflow-x-auto rounded bg-selected px-2 py-1 font-mono text-[12px] whitespace-nowrap">{{ updateBadge.command }}</code>
-            <button type="button" class="flex-none rounded border border-border px-2 py-1 text-[12px] hover:bg-selected" @click="copyUpdateCommand">
-              {{ copied ? "Copied" : "Copy" }}
-            </button>
-          </div>
-        </template>
-        <p v-else class="text-muted">{{ updateBadge.text }}</p>
+    <!-- Grouped left to right: transient asks, status, view and sound, app-wide. The ones that come
+         and go sit at the START of a group, so appearing or leaving never moves a permanent icon;
+         the palette and Settings stay at the right end on every screen. -->
+    <div class="ml-auto flex flex-none items-center">
+      <div v-if="updateBadge" ref="updateRoot" class="relative flex-none">
+        <button
+          type="button"
+          class="relative inline-flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded-md border-0 p-0 text-accent hover:bg-hover"
+          :class="{ 'bg-selected': updateOpen }"
+          :data-tip="updateBadge.text"
+          :aria-label="t('tips.toolbar.updateAvailable')"
+          :aria-expanded="updateOpen"
+          aria-haspopup="true"
+          @click="toggleUpdate"
+        >
+          <span class="material-symbols-outlined text-[19px] leading-none" aria-hidden="true">upgrade</span>
+          <span class="absolute right-[5px] top-[5px] h-[6px] w-[6px] rounded-full bg-accent" aria-hidden="true" />
+        </button>
+        <div
+          v-if="updateOpen"
+          class="absolute right-0 top-full z-50 mt-1 w-64 rounded-md border border-border bg-panel p-3 text-[13px] text-fg shadow-lg"
+          role="group"
+          :aria-label="t('tips.toolbar.updateAvailable')"
+        >
+          <p class="mb-2 font-semibold">{{ t("tips.toolbar.updateNewer") }}</p>
+          <template v-if="updateBadge.command">
+            <p class="mb-1 text-muted">{{ t("tips.toolbar.updateRun") }}</p>
+            <div class="flex items-center gap-2">
+              <code class="min-w-0 flex-1 overflow-x-auto rounded bg-selected px-2 py-1 font-mono text-[12px] whitespace-nowrap">{{
+                updateBadge.command
+              }}</code>
+              <button type="button" class="flex-none rounded border border-border px-2 py-1 text-[12px] hover:bg-selected" @click="copyUpdateCommand">
+                {{ copied ? t("tips.toolbar.updateCopied") : t("tips.toolbar.updateCopy") }}
+              </button>
+            </div>
+          </template>
+          <p v-else class="text-muted">{{ updateBadge.text }}</p>
+        </div>
       </div>
+      <!-- Grid only: star this project on GitHub. It retires itself once starred (or once the
+           user has opened the repo page), so it is a one-time ask rather than a fixture. -->
+      <LauncherButton v-if="starVisible" icon="star" :title="starTitle" :label="starTitle" :active="starConfirming" @click="activateStar" />
+      <NotificationBell :class="{ 'ml-2': updateBadge || starVisible }" />
+      <RemoteHostControl />
+      <!-- Zoomed-grid only: switch the expanded terminal's side panel between the cockpit roster and
+           the thumbnail strip. -->
+      <LauncherButton
+        v-if="showViewToggle && onGridRoute"
+        class="ml-2"
+        :icon="listMode ? 'view_carousel' : 'view_agenda'"
+        :title="listMode ? t('tips.toolbar.showStrip') : t('tips.toolbar.showRoster')"
+        :label="listMode ? t('tips.toolbar.showStrip') : t('tips.toolbar.showRoster')"
+        @click="emit('toggle-view')"
+      />
+      <LauncherButton
+        :class="{ 'ml-2': !(showViewToggle && onGridRoute) }"
+        :icon="soundButton.icon"
+        :title="soundLabel"
+        :label="soundLabel"
+        :active="soundButton.active"
+        :tone="soundButton.tone"
+        :aria-pressed="soundEnabled"
+        @click="toggleSound"
+      />
+      <LauncherButton
+        class="ml-2"
+        icon="keyboard_command_key"
+        :title="t('commandPalette.open')"
+        :label="t('commandPalette.open')"
+        @click="openCommandPalette"
+      />
+      <LauncherButton icon="settings" :title="t('tips.toolbar.settings')" :label="t('tips.toolbar.settings')" @click="emit('settings')" />
     </div>
-    <!-- Grid only: star this project on GitHub. It retires itself once starred (or once the
-         user has opened the repo page), so it is a one-time ask rather than a fixture. -->
-    <LauncherButton v-if="starVisible" icon="star" :title="starTitle" :label="starTitle" :active="starConfirming" @click="activateStar" />
-    <LauncherButton
-      :icon="soundButton.icon"
-      :title="soundLabel"
-      :label="soundLabel"
-      :active="soundButton.active"
-      :tone="soundButton.tone"
-      :aria-pressed="soundEnabled"
-      @click="toggleSound"
-    />
-    <!-- Zoomed-grid only: switch the expanded terminal's side panel between the cockpit roster and
-         the thumbnail strip. Sits at the right end (next to Settings) and hides when nothing is expanded. -->
-    <LauncherButton
-      v-if="showViewToggle && onGridRoute"
-      :icon="listMode ? 'view_carousel' : 'view_agenda'"
-      :title="listMode ? t('tips.toolbar.showStrip') : t('tips.toolbar.showRoster')"
-      :label="listMode ? t('tips.toolbar.showStrip') : t('tips.toolbar.showRoster')"
-      @click="emit('toggle-view')"
-    />
-    <LauncherButton icon="keyboard_command_key" :title="t('commandPalette.open')" :label="t('commandPalette.open')" @click="openCommandPalette" />
-    <LauncherButton icon="settings" :title="t('tips.toolbar.settings')" :label="t('tips.toolbar.settings')" @click="emit('settings')" />
     <CommandPalette v-if="paletteOpen" />
   </header>
 </template>
