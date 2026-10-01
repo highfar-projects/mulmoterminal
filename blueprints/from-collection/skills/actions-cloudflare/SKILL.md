@@ -47,6 +47,7 @@ name, every `manual` has a README heading naming it, a `.dev.vars` (if any) is i
 ## Always
 
 - Read `.blueprint/spec.md` first. It is the agreed specification; do not widen it.
+- A screen or button you add follows `DESIGN.md`: the same classes as the screens already there.
 - When you need a decision, ask it through the blueprint question tool and stop. Do not guess.
 - Do not run `git init`: a new repository loses the folder's trust and the next unattended step stops at Claude
   Code's trust prompt. The user adds git themselves after the build if they want it.

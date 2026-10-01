@@ -46,6 +46,15 @@
       "check": "sh \"$BLUEPRINT_BASE/checks/emulator-test.sh\" features"
     },
     {
+      "id": "design",
+      "insertAfter": "data-rules",
+      "bases": ["firebase"],
+      "title": "見た目を合わせる",
+      "description": "選んだ見た目（MulmoTerminal と同じ、またはひな形）で画面をそろえる。MulmoTerminal のコレクションの画面と同じ部品とクラスを Tailwind で使い、元のコレクションのアイコンを見出しに引き継ぐ。決まりを DESIGN.md に残す。",
+      "skill": "skills/design",
+      "check": "sh \"$BLUEPRINT_USECASE/checks/design.sh\""
+    },
+    {
       "id": "acceptance",
       "insertAfter": "data-rules",
       "bases": ["firebase"],
@@ -146,6 +155,15 @@
       "skill": "skills/import-production-supabase",
       "check": "sh \"$BLUEPRINT_USECASE/checks/import-supabase.sh\" linked",
       "gates": ["deploy-production", "credential"]
+    },
+    {
+      "id": "design",
+      "insertAfter": "auth",
+      "bases": ["local", "cloudflare", "supabase"],
+      "title": "見た目を合わせる",
+      "description": "選んだ見た目（MulmoTerminal と同じ、またはひな形）で画面をそろえる。MulmoTerminal のコレクションの画面と同じ部品とクラスを Tailwind で使い、元のコレクションのアイコンを見出しに引き継ぐ。決まりを DESIGN.md に残す。",
+      "skill": "skills/design",
+      "check": "sh \"$BLUEPRINT_USECASE/checks/design.sh\""
     }
   ]
 }

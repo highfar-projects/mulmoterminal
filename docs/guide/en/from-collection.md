@@ -73,6 +73,7 @@ The questions are in Japanese, as the pack writes them.
 | 役割は分けますか — roles | Admins and members, say. Asked only with an account per person |
 | 扱う情報でいちばん気をつけるもの — the most sensitive data | Decides storage and how strict backups are |
 | 画面の言葉 — the app's language | Japanese, English, or both |
+| 見た目 — the look | The same as MulmoTerminal (the default), or a template: soft, crisp, calm. See [The look](#design) |
 
 ## What is copied
 
@@ -155,17 +156,27 @@ step titles are in Japanese, as the packs write them; they are translated here.
 | 5 | **Move the records** | Sign-in | **Move the records** | **Move the records** |
 | 6 | API | Data shape and security rules | API | Screens |
 | 7 | Screens | **Move the records (emulators)** | Screens | Sign-in |
-| 8 | Sign-in | Features and screens | Sign-in | Start it and check |
-| 9 | Start it and check | Prove the must-haves by tests | Start it and check | Prove the must-haves by tests |
-| 10 | Prove the must-haves by tests | Make the actions features | Prove the must-haves by tests | Make the actions features |
-| 11 | Make the actions features | Publish for development | Make the actions features | Security check |
-| 12 | Security check | App Check and a budget alert (approve) | Security check | Publish to Supabase and Cloudflare (approve) |
-| 13 | How to use it, and backups | Security check | Publish to Cloudflare (approve) | **Move the records to production** (approve) |
-| 14 | | Publish to production (approve) | **Move the records to production** (approve) | How to use it, and handover |
-| 15 | | **Move the records to production** (approve) | How to use it, and handover | |
+| 8 | Sign-in | Features and screens | Sign-in | **Match the look** |
+| 9 | **Match the look** | **Match the look** | **Match the look** | Start it and check |
+| 10 | Start it and check | Prove the must-haves by tests | Start it and check | Prove the must-haves by tests |
+| 11 | Prove the must-haves by tests | Make the actions features | Prove the must-haves by tests | Make the actions features |
+| 12 | Make the actions features | Publish for development | Make the actions features | Security check |
+| 13 | Security check | App Check and a budget alert (approve) | Security check | Publish to Supabase and Cloudflare (approve) |
+| 14 | How to use it, and backups | Security check | Publish to Cloudflare (approve) | **Move the records to production** (approve) |
+| 15 |  | Publish to production (approve) | **Move the records to production** (approve) | How to use it, and handover |
+| 16 |  | **Move the records to production** (approve) | How to use it, and handover |  |
 
 In each step an agent works, then a machine check runs (tests, a build, reading the data back). If it fails, the
 agent fixes it and the check runs again.
+
+## The look {#design}
+
+The question 見た目 (the look) chooses how the app looks.
+
+- **The same as MulmoTerminal** (the default): the app looks as the collection does when you open it in MulmoTerminal — the same header, toolbar, table, kanban, calendar and record panel, in the same colours, with the collection's icon in the header.
+- **Soft**, **crisp** or **calm**: templates that keep those shapes and change only the colours and how round the corners are. Soft is warm paper with round corners, crisp is white and near-black with small corners, calm is deep green on soft grey.
+
+The step 見た目を合わせる (match the look) restyles the screens the earlier steps built. The choice is written to `DESIGN.md` in the app's folder, and the screens later steps add follow it.
 
 ## How the records move
 

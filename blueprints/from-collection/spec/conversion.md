@@ -31,6 +31,7 @@
 - `displayField` は一覧の見出し。`kanbanField` はその enum の列ごとのカンバン画面。`calendarField`（`calendarEndField`・`calendarTimeField`）はカレンダー画面。
 - `completionField` / `completionDoneValues` は完了の状態。`triggerField`（`triggerLeadDays`・`notifyWhen`）は期日の知らせ。知らせ方は画面の中で出す（メールなどは「未定」）。
 - カスタムビュー（`views/*.html`）は HTML を読み、同じ情報と操作を持つ画面（Vue）として書き直す。HTML はそのまま使わない。
+- 見た目は答えの「見た目」に従い、工程「見た目を合わせる」でそろえる。仕様書には、どの見た目にしたかと、見出しに出すコレクションのアイコンを書く。
 
 ## 操作
 

@@ -1,0 +1,45 @@
+/* Design template "落ち着いた" (calm): a deep green main colour on soft grey-green, medium corners.
+ * Copy this file into the app unchanged and import it right after `@import "tailwindcss";`. It redefines the
+ * colours and corners MulmoTerminal's classes use (indigo for the main colour, slate and gray for the neutrals),
+ * so screens written with those classes take this design without changing a class. */
+@theme {
+  --color-indigo-50: oklch(0.975 0.013 165);
+  --color-indigo-100: oklch(0.945 0.027 165);
+  --color-indigo-200: oklch(0.885 0.045 165);
+  --color-indigo-300: oklch(0.805 0.068 165);
+  --color-indigo-400: oklch(0.705 0.085 165);
+  --color-indigo-500: oklch(0.6 0.09 165);
+  --color-indigo-600: oklch(0.52 0.09 165);
+  --color-indigo-700: oklch(0.45 0.083 165);
+  --color-indigo-800: oklch(0.38 0.072 165);
+  --color-indigo-900: oklch(0.31 0.058 165);
+  --color-indigo-950: oklch(0.24 0.045 165);
+  --color-slate-50: oklch(0.975 0.002 170);
+  --color-slate-100: oklch(0.945 0.003 170);
+  --color-slate-200: oklch(0.885 0.005 170);
+  --color-slate-300: oklch(0.805 0.007 170);
+  --color-slate-400: oklch(0.705 0.009 170);
+  --color-slate-500: oklch(0.6 0.01 170);
+  --color-slate-600: oklch(0.52 0.01 170);
+  --color-slate-700: oklch(0.45 0.009 170);
+  --color-slate-800: oklch(0.38 0.008 170);
+  --color-slate-900: oklch(0.31 0.007 170);
+  --color-slate-950: oklch(0.24 0.005 170);
+  --color-gray-50: oklch(0.975 0.002 170);
+  --color-gray-100: oklch(0.945 0.003 170);
+  --color-gray-200: oklch(0.885 0.005 170);
+  --color-gray-300: oklch(0.805 0.007 170);
+  --color-gray-400: oklch(0.705 0.009 170);
+  --color-gray-500: oklch(0.6 0.01 170);
+  --color-gray-600: oklch(0.52 0.01 170);
+  --color-gray-700: oklch(0.45 0.009 170);
+  --color-gray-800: oklch(0.38 0.008 170);
+  --color-gray-900: oklch(0.31 0.007 170);
+  --color-gray-950: oklch(0.24 0.005 170);
+  --color-white: oklch(0.995 0.004 160);
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+}
