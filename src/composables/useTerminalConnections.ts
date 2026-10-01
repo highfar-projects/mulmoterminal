@@ -822,6 +822,8 @@ export function terminate(key: string) {
   release(key);
 }
 
+const SUBMIT_TEXT_MS = 60;
+
 // Submit a GUI-originated message into the PTY (text + a SEPARATE delayed submit — a
 // same-burst text+submit reads as a paste in Claude's TUI). The submit byte follows the
 // connection's `terminalSubmit` mapping (ESC+CR for a Claude cell in esc-cr mode), so a GUI
@@ -833,25 +835,27 @@ export function terminate(key: string) {
 export function submitText(key: string, text: string): boolean {
   const c = conns.get(key);
   if (!c) return false;
+  return writeThenSubmit(c, text, (guarded) => guarded, SUBMIT_TEXT_MS);
+}
+
+// The shared body of the two GUI submits: write `wrap(guarded text)`, then the submit byte after
+// `submitDelayMs`, both pinned to the socket captured now. The `false` used to be the whole answer,
+// and only one caller ever read it — the rest pressed a button into a closed socket and showed
+// nothing (#1315), so a closed socket is reported here, where every host passes.
+function writeThenSubmit(c: Conn, text: string, wrap: (guarded: string) => string, submitDelayMs: number): boolean {
   const sock = c.ws;
-  // The `false` used to be the whole answer, and only one caller ever read it — the rest pressed
-  // a button into a closed socket and showed nothing (#1315). Saying so here reaches every host,
-  // including the ones written after this line.
   if (!sock || sock.readyState !== WebSocket.OPEN) {
     reportDroppedInput(c);
     return false;
   }
   const submit = submitBytesFor(c);
-  // A GUI-originated submit is a submit like any other, so it gets the same return to the bottom
-  // as a typed Enter (#1546) — otherwise pressing a send button while scrolled up leaves the
-  // answer being written somewhere the user cannot see.
+  // A GUI-originated submit is a submit like a typed Enter, so it returns to the latest output the
+  // same way (#1546, Codex on #1547) — otherwise the answer is written somewhere the user cannot see.
   if (scrollsToBottomOnSubmit()) c.wheel.restoreToBottom();
-  sock.send(JSON.stringify({ type: "input", data: submittableFor(c, text) }));
+  sock.send(JSON.stringify({ type: "input", data: wrap(submittableFor(c, text)) }));
   setTimeout(() => {
-    if (c.ws === sock && sock.readyState === WebSocket.OPEN) {
-      sock.send(JSON.stringify({ type: "input", data: submit }));
-    }
-  }, 60);
+    if (c.ws === sock && sock.readyState === WebSocket.OPEN) sock.send(JSON.stringify({ type: "input", data: submit }));
+  }, submitDelayMs);
   return true;
 }
 
@@ -883,24 +887,10 @@ export function pasteText(key: string, text: string): boolean {
 const PASTE_SUBMIT_MS = 200;
 export function pasteAndSubmit(key: string, text: string): boolean {
   const c = conns.get(key);
-  const sock = c?.ws;
   if (!text || !c) return false; // nothing to deliver — not a drop (#1315)
-  if (!sock || sock.readyState !== WebSocket.OPEN) {
-    reportDroppedInput(c);
-    return false;
-  }
-  const submit = submitBytesFor(c);
-  // A paste-and-submit is a submit like a typed Enter or a send button, so it returns to the
-  // latest output the same way (#1546) — otherwise this path leaves the answer being written
-  // somewhere the user cannot see (Codex on #1547).
-  if (scrollsToBottomOnSubmit()) c.wheel.restoreToBottom();
   // The guard's space rides INSIDE the paste, where the TUI takes it as text — after the
   // terminator it would be a keystroke, and an open completion menu is what reads those (#1142).
-  sock.send(JSON.stringify({ type: "input", data: `${PASTE_START}${submittableFor(c, text)}${PASTE_END}` }));
-  setTimeout(() => {
-    if (c.ws === sock && sock.readyState === WebSocket.OPEN) sock.send(JSON.stringify({ type: "input", data: submit }));
-  }, PASTE_SUBMIT_MS);
-  return true;
+  return writeThenSubmit(c, text, (guarded) => `${PASTE_START}${guarded}${PASTE_END}`, PASTE_SUBMIT_MS);
 }
 
 // The slots whose conversation another cell can read. A snapshot, not a reactive view:
