@@ -15,6 +15,7 @@ import { settingsControlsJa } from "./settingsControls/ja";
 import { shortcutsJa } from "./shortcuts/ja";
 import { filesTreeJa } from "./filesTree/ja";
 import { previewCodeCopyJa } from "./previewCodeCopy/ja";
+import { skillsViewJa } from "./skillsView/ja";
 
 // 日本語。`Messages` は en.ts の形そのものなので、キーを一つ落とすと型エラーになる — 実行時に
 // 英語へフォールバックして気づかない、という状態にはならない。
@@ -597,6 +598,7 @@ export const ja: Messages = {
     items: {
       rooms: { label: "Rooms", detail: "端末どうしの円卓の会話" },
       blueprints: { label: "設計図", detail: "テンプレートからアプリや文書を段階的に作る" },
+      skills: { label: "Skills", detail: "~/.claude/skills と各フォルダのスキルを一覧・検索" },
       worklog: { label: "Worklog", detail: "wiki にある開発作業ログ（#worklog）" },
     },
   },
@@ -639,6 +641,7 @@ export const ja: Messages = {
   settingsControls: settingsControlsJa,
   ...filesTreeJa,
   ...previewCodeCopyJa,
+  ...skillsViewJa,
   tips: tipsJa,
   blueprints: blueprintsJa,
 };

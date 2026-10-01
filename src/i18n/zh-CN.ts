@@ -15,6 +15,7 @@ import { settingsControlsZhCN } from "./settingsControls/zh-CN";
 import { shortcutsZhCN } from "./shortcuts/zh-CN";
 import { filesTreeZhCN } from "./filesTree/zh-CN";
 import { previewCodeCopyZhCN } from "./previewCodeCopy/zh-CN";
+import { skillsViewZhCN } from "./skillsView/zh-CN";
 
 // 简体中文。`Messages` 就是 en.ts 的形状，少一个键就会编译失败 —— 不会出现运行时悄悄回退到
 // 英文、而谁都没发现的状态。
@@ -580,6 +581,7 @@ export const zhCN: Messages = {
     items: {
       rooms: { label: "Rooms", detail: "终端之间的圆桌对话" },
       blueprints: { label: "蓝图", detail: "按模板逐步构建应用或文档" },
+      skills: { label: "Skills", detail: "列出并搜索 ~/.claude/skills 和各文件夹中的技能" },
       worklog: { label: "Worklog", detail: "wiki 中的开发工作日志（#worklog）" },
     },
   },
@@ -622,6 +624,7 @@ export const zhCN: Messages = {
   settingsControls: settingsControlsZhCN,
   ...filesTreeZhCN,
   ...previewCodeCopyZhCN,
+  ...skillsViewZhCN,
   tips: tipsZhCN,
   blueprints: blueprintsZhCN,
 };

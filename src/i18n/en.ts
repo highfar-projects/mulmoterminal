@@ -28,6 +28,7 @@ import { settingsControlsEn } from "./settingsControls/en";
 import { shortcutsEn } from "./shortcuts/en";
 import { filesTreeEn } from "./filesTree/en";
 import { previewCodeCopyEn } from "./previewCodeCopy/en";
+import { skillsViewEn } from "./skillsView/en";
 export const en = {
   settings: {
     title: "Settings",
@@ -617,6 +618,7 @@ export const en = {
     items: {
       rooms: { label: "Rooms", detail: "Round-table conversations between terminals" },
       blueprints: { label: "Blueprints", detail: "Build an app or documents step by step from a template" },
+      skills: { label: "Skills", detail: "Every skill in ~/.claude/skills and in your folders, with search" },
       worklog: { label: "Worklog", detail: "The dev work log in the wiki (#worklog)" },
     },
   },
@@ -659,6 +661,7 @@ export const en = {
   settingsControls: settingsControlsEn,
   ...filesTreeEn,
   ...previewCodeCopyEn,
+  ...skillsViewEn,
   tips: tipsEn,
   blueprints: blueprintsEn,
 } as const;
