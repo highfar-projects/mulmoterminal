@@ -387,6 +387,24 @@ describeSh("from-collection: the actions check", { timeout: IMPORT_CHECK_TIMEOUT
     expect(result.stderr).toContain("books.actions.done is to be built, and test/actions.test.ts has no test titled with it");
   });
 
+  it("says which titles it read and how it reads them, so the one fixing it is not left guessing", () => {
+    project(`${VITEST_IMPORT}describe("books.actions", () => { it("tidy", () => {}); it("done", () => {}); });`, README);
+    const result = runActionsCheck();
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('The test titles test/actions.test.ts declares, as this check reads them: "tidy", "done".');
+    expect(result.stderr).toContain("A describe(...) name does not count");
+  });
+
+  it("names no titles when there are none", () => {
+    project(VITEST_IMPORT, README);
+    expect(runActionsCheck().stderr).toContain("as this check reads them: (none).");
+  });
+
+  it("gives no hint about titles when every feature is tested", () => {
+    project(TESTS, "# App");
+    expect(runActionsCheck().stderr).not.toContain("as this check reads them");
+  });
+
   it("fails when a manual step is not in the README", () => {
     project(TESTS, "# App");
     const result = runActionsCheck();

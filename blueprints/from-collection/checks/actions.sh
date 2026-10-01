@@ -44,7 +44,16 @@ const problems = entries.flatMap(({ name, decision }) => {
   if (decision === "manual" && !inHeading(name)) return [`${name} is left to a person, and README.md has no heading naming it`];
   return [];
 });
-if (problems.length > 0) { console.error(problems.join("\n")); process.exit(1); }
+// Said with the titles it read and the rule it reads them by, so the one fixing it sees what is missing rather than guessing.
+const untested = entries.some(({ name, decision }) => decision === "feature" && !inTestTitle(name));
+const hint = untested
+  ? [
+      "",
+      `The test titles ${tests} declares, as this check reads them: ${titles.length === 0 ? "(none)" : titles.map((title) => JSON.stringify(title)).join(", ")}.`,
+      "Only the title of a test counts: the first argument, written as a plain string, of it(...) or test(...) imported from \"vitest\" in that file. A describe(...) name does not count, so put the whole name in each test title.",
+    ]
+  : [];
+if (problems.length > 0) { console.error([...problems, ...hint].join("\n")); process.exit(1); }
 process.stdout.write(String(entries.filter((entry) => entry.decision === "feature").length));
 ' "$file" "$tests" "$titles")
 [ "$features" -gt 0 ] || exit 0
