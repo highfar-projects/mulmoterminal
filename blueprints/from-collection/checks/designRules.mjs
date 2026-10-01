@@ -17,8 +17,8 @@ export const DESIGNS = [
 export const designOf = (answer) => DESIGNS.find((design) => design.option === (answer ?? SAME_AS_MULMOTERMINAL)) ?? null;
 
 const PACKAGES = ["tailwindcss", "@tailwindcss/vite", "material-symbols"];
-// The main button of MulmoTerminal's look: present in the built CSS only when Tailwind ran over screens that use it.
-const MAIN_BUTTON_RULE = /\.bg-indigo-600\s*\{/u;
+// The main button of MulmoTerminal's look, as Tailwind writes it: present only when Tailwind ran over screens using it.
+const MAIN_BUTTON_RULE = /\.bg-indigo-600\s*\{\s*background-color:\s*var\(--color-indigo-600\)/u;
 const ICON_FONT = /font-family:\s*["']?Material Symbols Outlined/u;
 // The tokens a template redefines; the ones the build kept must hold the chosen design's values.
 const DESIGN_TOKEN = /^--(?:color-(?:indigo|slate|gray)-\d+|color-white|radius-[\w-]+)$/u;
@@ -64,7 +64,10 @@ const expectedTokens = (design, template, tailwindTheme) =>
   );
 
 function tokenProblems(design, builtCss, expected) {
-  const wrong = declarations(builtCss).filter((token) => expected.has(token.name) && canonicalValue(token.value) !== expected.get(token.name));
+  const built = declarations(builtCss);
+  if (!built.some((token) => token.name === "--color-indigo-600"))
+    return ["the built CSS does not define --color-indigo-600: Tailwind's theme is not in the build"];
+  const wrong = built.filter((token) => expected.has(token.name) && canonicalValue(token.value) !== expected.get(token.name));
   const names = [...new Set(wrong.map((token) => token.name))];
   if (names.length === 0) return [];
   const given = `the built CSS gives ${names.join(", ")} other values than`;
@@ -78,7 +81,7 @@ function builtProblems(design, builtCss, template, tailwindTheme) {
   const css = withoutComments(builtCss);
   if (!MAIN_BUTTON_RULE.test(css)) {
     return [
-      "the built CSS has no .bg-indigo-600 rule: Tailwind is not running in the build (tailwindcss() in vite.config's plugins, @import \"tailwindcss\" in the stylesheet), or no screen uses MulmoTerminal's main button",
+      "the built CSS has no .bg-indigo-600 rule as Tailwind writes it: Tailwind is not running in the build (tailwindcss() in vite.config's plugins, @import \"tailwindcss\" in the stylesheet), or no screen uses MulmoTerminal's main button",
     ];
   }
   const expected = expectedTokens(design, template, tailwindTheme);

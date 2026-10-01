@@ -133,6 +133,15 @@ describe("designProblems", () => {
     expect(problems[0]).toContain("the built CSS has no .bg-indigo-600 rule");
   });
 
+  it("needs the button's rule as Tailwind writes it, and the colour it reads", () => {
+    const handWritten = '.bg-indigo-600{background:red}@font-face{font-family:"Material Symbols Outlined"}';
+    expect(designProblems({ ...followingApp, builtCss: handWritten })[0]).toContain("the built CSS has no .bg-indigo-600 rule as Tailwind writes it");
+    const noTheme = '.bg-indigo-600{background-color:var(--color-indigo-600)}@font-face{font-family:"Material Symbols Outlined"}';
+    expect(designProblems({ ...followingApp, builtCss: noTheme })).toEqual([
+      "the built CSS does not define --color-indigo-600: Tailwind's theme is not in the build",
+    ]);
+  });
+
   it("needs the icon font in the build", () => {
     const fontless = built(TAILWIND_THEME).replace(/@font-face\{[^}]*\}/u, "");
     expect(designProblems({ ...followingApp, builtCss: fontless })).toEqual([
@@ -146,6 +155,11 @@ describe("designProblems", () => {
     expect(problem).toBe(
       "the built CSS gives --color-indigo-600, --radius-lg other values than Tailwind's own: MulmoTerminal's look redefines no colour or corner, so remove the @theme that sets them",
     );
+  });
+
+  it("leaves alone what the design does not set, such as the font or the red of an error", () => {
+    const ownFont = `${built(TAILWIND_THEME)}:root{--font-sans:"Noto Sans JP",sans-serif;--color-red-600:oklch(50% .2 25)}`;
+    expect(designProblems({ ...followingApp, builtCss: ownFont })).toEqual([]);
   });
 
   it("says when the design's colours cannot be read", () => {
