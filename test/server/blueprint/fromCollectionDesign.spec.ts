@@ -177,15 +177,9 @@ describe("designProblems", () => {
       .split("\n## ")
       .slice(1)
       .filter((section) => !section.startsWith("Minimal"));
-    const isWord = (text: string, at: number): boolean => /[\w\-[\]./]/u.test(text[at] ?? "");
+    // A class token stands alone: no class character right before or after it (so `w-9` is not found in `max-w-9xl`).
     const uses = (section: string, className: string): boolean =>
-      section
-        .split(className)
-        .slice(0, -1)
-        .some((before, index, parts) => {
-          const at = parts.slice(0, index + 1).join(className).length;
-          return !isWord(section, at - 1) && !isWord(section, at + className.length);
-        });
+      new RegExp(`(?<![\\w\\-[\\]./])${className.replaceAll(/[.*+?^${}()|[\]\\]/gu, "\\$&")}(?![\\w\\-[\\]./])`, "u").test(section);
     SCREEN_ANCHORS.forEach((anchor) => {
       expect(
         sections.filter((section) => uses(section, anchor.className)),
