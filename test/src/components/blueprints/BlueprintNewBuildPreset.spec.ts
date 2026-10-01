@@ -377,8 +377,26 @@ describe("a folder Claude Code does not trust yet", () => {
       answers: { documents: "contract.txt" },
       projectDir: "/Users/me/new",
       preset: "itaku-keiyaku",
+      language: "en",
     });
     expect(openTerminalAt).toHaveBeenCalledWith("/Users/me", null, "claude");
+  });
+
+  it("keeps the report language the person picked with the form", async () => {
+    const wrapper = await refusedOnExample();
+    await wrapper.get('[data-testid="blueprint-report-language"]').setValue("ja");
+    await wrapper.get('[data-testid="blueprint-open-trust"]').trigger("click");
+    expect(keepFormFill).toHaveBeenCalledWith(expect.objectContaining({ language: "ja" }));
+  });
+
+  it("starts a kept or follow-up form with the language it carries", async () => {
+    takeFormFill.mockReturnValueOnce({ base: "docs", usecase: "review", answers: { documents: "contract.txt" }, projectDir: "/Users/me/new", language: "ja" });
+    startRun.mockResolvedValueOnce({ ok: true, value: { runId: "run-4" } });
+    const wrapper = await mountForm();
+    expect(wrapper.get<HTMLSelectElement>('[data-testid="blueprint-report-language"]').element.value).toBe("ja");
+    await wrapper.get('[data-testid="blueprint-new-form"]').trigger("submit");
+    await flushPromises();
+    expect(startRun).toHaveBeenCalledWith(expect.objectContaining({ language: "ja" }));
   });
 
   it("stops offering it once another folder is typed, and never offers it for another refusal", async () => {

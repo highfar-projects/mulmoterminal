@@ -39,8 +39,6 @@ import BlueprintHearingField from "./BlueprintHearingField.vue";
 
 const emit = defineEmits<{ started: [runId: string] }>();
 const { t, locale } = useI18n();
-// What the agent writes to the person is in this language; it starts as the screen's, and documents keep their own.
-const reportLanguage = ref<PersonLanguage>(isPersonLanguage(locale.value) ? locale.value : "en");
 
 const packs = ref<PackList>([]);
 const base = ref("");
@@ -66,6 +64,9 @@ const appliedPreset = ref<PresetListing | null>(null);
 // waits, as an example does, for its pair's interview, and then fills the folder and the answers. Taken once, on open.
 const pendingFill = ref<FormFill | null>(takeFormFill());
 const appliedFill = ref<FormFill | null>(null);
+// What the agent writes to the person is in this language: a kept or follow-up form's, else the screen's. Documents keep
+// their own.
+const reportLanguage = ref<PersonLanguage>(pendingFill.value?.language ?? (isPersonLanguage(locale.value) ? locale.value : "en"));
 const filledNote = useTemplateRef<HTMLElement>("filledNote");
 // Where to answer Claude Code's trust prompt, when the last start was refused for want of it.
 const trustIn = ref<string | null>(null);
@@ -285,6 +286,7 @@ function openToTrust(): void {
     answers: answers.value,
     projectDir: projectDir.value,
     ...(preset === undefined ? {} : { preset }),
+    language: reportLanguage.value,
   });
   openTerminalAt(trustIn.value, null, "claude");
 }
