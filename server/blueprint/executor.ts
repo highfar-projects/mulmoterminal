@@ -478,6 +478,7 @@ class Executor {
       language: run.language,
       // The last failure is the step's lastCheck, already in the prompt; these are the ones before it.
       earlierFailures: (run.failureOutputs[stepId] ?? []).slice(0, -1),
+      failedAttempts: run.failedChecks[stepId] ?? 0,
     });
     this.deps.spawnStepSession(run.projectDir, prompt, sessionId);
     this.deps.onTurnEnded(sessionId, ({ didError }) => this.turnEnded(run.id, sessionId, didError));

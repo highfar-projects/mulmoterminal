@@ -16,3 +16,8 @@ information is what repeats a failure.
 Session-lost attempts and notices already count as failed checks, so they get the same history and repairs. Notices
 that only a person can resolve (untrusted, folder-busy, answers-unwritten) still stop at once; the next change makes
 the ones a machine can resolve recover by themselves.
+
+A run recorded before this change has the failure count without the outputs; the prompt takes the count too
+(`failedAttempts`), so its next attempt is a repair all the same. Such a run, stopped at the old limit of three, now
+has attempts left and resumes when the executor next looks at it — a build that stopped like the reported one picks
+up again with repairs.

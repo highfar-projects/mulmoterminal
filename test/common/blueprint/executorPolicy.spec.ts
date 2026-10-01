@@ -131,8 +131,8 @@ describe("stepPrompt", () => {
 
 describe("stepPrompt — earlier failures and repair attempts", () => {
   const failing = { status: "running" as const, approved: true, answers: [], lastCheck: { ok: false, output: "LAST", atMs: 1 } };
-  const prompt = (earlierFailures: readonly string[], stepState: Parameters<typeof stepPrompt>[0]["stepState"] = failing) =>
-    stepPrompt({ step: steps[1], skillFile: "/s", packDirs: { base: "/b", usecase: "/u" }, stepState, askCommand: "ASK", earlierFailures });
+  const prompt = (earlierFailures: readonly string[], stepState: Parameters<typeof stepPrompt>[0]["stepState"] = failing, failedAttempts = 0) =>
+    stepPrompt({ step: steps[1], skillFile: "/s", packDirs: { base: "/b", usecase: "/u" }, stepState, askCommand: "ASK", earlierFailures, failedAttempts });
 
   it("shows no history on a first retry", () => {
     expect(prompt([])).not.toContain("Earlier attempts failed");
@@ -144,6 +144,13 @@ describe("stepPrompt — earlier failures and repair attempts", () => {
     expect(twice.indexOf("FIRST")).toBeLessThan(twice.indexOf("LAST"));
     expect(twice).not.toContain("This is a repair attempt");
     expect(prompt(["FIRST", "SECOND"])).toContain("This is a repair attempt: 3 attempts in a row");
+  });
+
+  it("is a repair by the count alone, for a run recorded before the outputs were kept", () => {
+    const legacy = prompt([], failing, 3);
+    expect(legacy).toContain("This is a repair attempt: 3 attempts in a row");
+    expect(legacy).not.toContain("Earlier attempts failed");
+    expect(prompt([], failing, 2)).not.toContain("This is a repair attempt");
   });
 
   it("keeps only the tail of each earlier failure", () => {
