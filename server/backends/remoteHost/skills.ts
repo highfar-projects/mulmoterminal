@@ -75,7 +75,7 @@ const readSkillDescription = async (dir: string): Promise<string | null> => {
 
 // Scan one skills root for valid skills (name + description). A missing root is
 // the common case (a workspace with no `.claude/skills/`) → empty list.
-const collectSkills = async (root: string): Promise<DiscoveredSkill[]> => {
+export const collectSkills = async (root: string): Promise<DiscoveredSkill[]> => {
   let entries: string[];
   try {
     entries = await readdir(root);

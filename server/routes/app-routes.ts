@@ -79,6 +79,7 @@ import { mountShortcutsRoutes } from "../backends/shortcuts.js";
 import { mountDecisionRoutes } from "./decision-routes.js";
 import { mountWhatsNewRoutes } from "../whatsNew/routes.js";
 import { mountRoomRoutes } from "./room-routes.js";
+import { mountSkillCatalogRoutes } from "./skill-catalog-routes.js";
 import { mountTranslationRoutes } from "../backends/translation.js";
 import { mountHtmlDispatchRoute, mountHtmlFileRoute, mountHtmlPreviewRoute } from "../backends/html.js";
 import { mountShapeScriptDispatchRoute } from "../backends/shapescript.js";
@@ -412,6 +413,7 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
   // Directory-scoped reads for a terminal cell: scripts, skills, dir config, git status,
   // PR phase, resolved header, custom sound. All keyed by ?cwd= (see routes/dir-routes.ts).
   mountDirRoutes(app);
+  mountSkillCatalogRoutes(app);
   mountGuiMcpRoutes(app);
 
   // GRID-ONLY (dev_tool): POST /api/open-dir reveals a cell's working directory in the

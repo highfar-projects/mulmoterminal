@@ -15,6 +15,7 @@ import { settingsControlsKo } from "./settingsControls/ko";
 import { shortcutsKo } from "./shortcuts/ko";
 import { filesTreeKo } from "./filesTree/ko";
 import { previewCodeCopyKo } from "./previewCodeCopy/ko";
+import { skillsViewKo } from "./skillsView/ko";
 
 // 한국어. `Messages`는 en.ts의 모양 그대로라서 키를 하나라도 빠뜨리면 컴파일이 실패한다 ——
 // 실행 중에 조용히 영어로 되돌아가 아무도 눈치채지 못하는 상태는 생기지 않는다.
@@ -594,6 +595,7 @@ export const ko: Messages = {
     items: {
       rooms: { label: "Rooms", detail: "터미널끼리 나눈 원탁 대화" },
       blueprints: { label: "설계도", detail: "템플릿으로 앱이나 문서를 단계별로 만들기" },
+      skills: { label: "Skills", detail: "~/.claude/skills 와 각 폴더의 스킬을 목록·검색" },
       worklog: { label: "Worklog", detail: "wiki에 있는 개발 작업 로그 (#worklog)" },
     },
   },
@@ -636,6 +638,7 @@ export const ko: Messages = {
   settingsControls: settingsControlsKo,
   ...filesTreeKo,
   ...previewCodeCopyKo,
+  ...skillsViewKo,
   tips: tipsKo,
   blueprints: blueprintsKo,
 };
