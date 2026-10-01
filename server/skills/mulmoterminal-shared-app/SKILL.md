@@ -26,7 +26,7 @@ the user turns this down.
 
 ## Start from a template when one fits
 
-Nine shapes are written out in full — declaration, schemas, and the reasoning behind each key:
+These shapes are written out in full — declaration, schemas, and the reasoning behind each key:
 
 - **[templates/salon.md](./templates/salon.md)** — a request that a NAMED PERSON approves, and only
   their own (a salon's bookings, interviews, repairs, review assignments). This is what `assignee`
@@ -36,14 +36,23 @@ Nine shapes are written out in full — declaration, schemas, and the reasoning 
   `window.fromField` are for, and it explains why the capacity lives in the VIEW and not in the
   rules.
 - **[templates/survey.md](./templates/survey.md)** — **collecting answers**, with nothing to run out
-  of (a survey, a quiz, an application form, a sign-up with no cap). The shortest declaration of the
-  nine, and the shape most often written with a public page and nothing else — so this one is built
+  of (a survey, a quiz, an application form, a sign-up with no cap). The shortest declaration of
+  them all, and the shape most often written with a public page and nothing else — so this one is built
   around its `member` page, which is where the answers are read. It also spells out the three-way
   trade above, and what a tally may and may not claim about values a respondent typed.
 - **[templates/meeting-room.md](./templates/meeting-room.md)** — a bookable unit you can LIST IN
   ADVANCE, taken on the spot with no approval (a meeting room, a desk, equipment on loan, a parking
   space). This is what `idFrom: "field"` and `mirror` are for, and it is the one that spells out who
   refills the slots, and what a cancellation does NOT do.
+- **[templates/class-seats.md](./templates/class-seats.md)** — a class with a CAPACITY whose
+  visitors see "N left" and never who booked (a dance class, a workshop, a trial lesson). The
+  meeting-room shape once per PLACE: a class of 20 is 20 seat records, each taken like a slot, and
+  the page counts the open ones — the rules cannot count, so the capacity is the number of seats.
+  Read it for why the booking window points at the SEAT and not at the class.
+- **[templates/schedule-poll.md](./templates/schedule-poll.md)** — a SCHEDULING POLL (調整さん /
+  Doodle): candidate dates, ○△× per date, everyone sees the table, a participant corrects their own
+  answer with `view.correct`, and the organiser closes it by moving `closesAt`. Names are meant to be
+  seen here, which is the opposite of class-seats.
 - **[templates/live-poll.md](./templates/live-poll.md)** — a page that MOVES while people are looking
   at it (a live stream, a lecture, a stand-up quiz). This is what `views[].live` is for, and the only
   one whose declaration is decided by FAN-OUT: the audience may watch the questions, only the desk may
@@ -85,7 +94,7 @@ Nine shapes are written out in full — declaration, schemas, and the reasoning 
   writer branch, and an owner who skips it cannot publish at all. Read it before any app where a
   record is something a stranger is meant to sit and read.
 
-Read the matching one before writing `app.json` by hand. All nine are checked against the real
+Read the matching one before writing `app.json` by hand. All of them are checked against the real
 publish gate by this repository's tests, so what they show is what publishes — and they spend most
 of their length on the traps, which is the part you cannot recover by guessing.
 

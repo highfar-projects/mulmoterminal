@@ -420,6 +420,14 @@ export default [
     },
   },
   {
+    // These specs RUN a template's page script, which is the assertion: a page that does not run
+    // proves nothing. The script is a file in this repository, read at test time.
+    files: ["test/src/skillTemplate*.spec.ts"],
+    rules: {
+      "sonarjs/code-eval": "off",
+    },
+  },
+  {
     // The files that already exceed max-lines, listed here rather than silenced with
     // eslint-disable comments so the debt is countable in one place (CLAUDE.md forbids the
     // comments, and rightly — they hide at the scene). Delete an entry once its file is under

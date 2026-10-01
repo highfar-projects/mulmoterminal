@@ -21,6 +21,8 @@ import { describe, it, expect, beforeEach } from "vitest";
 
 import gym from "../../server/skills/mulmoterminal-shared-app/templates/gym.md?raw";
 import meetingRoom from "../../server/skills/mulmoterminal-shared-app/templates/meeting-room.md?raw";
+import classSeats from "../../server/skills/mulmoterminal-shared-app/templates/class-seats.md?raw";
+import schedulePoll from "../../server/skills/mulmoterminal-shared-app/templates/schedule-poll.md?raw";
 import salon from "../../server/skills/mulmoterminal-shared-app/templates/salon.md?raw";
 import projectBoard from "../../server/skills/mulmoterminal-shared-app/templates/project-board.md?raw";
 import survey from "../../server/skills/mulmoterminal-shared-app/templates/survey.md?raw";
@@ -68,7 +70,6 @@ function load(template: string, heading: string): Page {
   // Run rather than insert: jsdom does not execute <script> elements, and markup assigned through
   // `innerHTML` never runs them anywhere — a spec that only rendered the page would assert about
   // buttons nothing had wired.
-  // eslint-disable-next-line sonarjs/code-eval -- the source is a file in this repository, read at test time
   new Function(script ?? "")();
 
   return {
@@ -139,6 +140,26 @@ const PAGES: { name: string; open: () => Page; press: () => void }[] = [
       return page;
     },
     press: () => (document.querySelector("#grid button") as HTMLButtonElement).click(),
+  },
+  {
+    name: "class-seats.md — views/classes.html",
+    open: () => {
+      const page = load(classSeats, "views/classes.html");
+      page.tell({ classes: [{ id: "c1", title: "ジャズ", startAt: "2026-10-03T10:00" }], seats: [{ id: "c1-01", classId: "c1", state: "open" }] });
+      type("who", "山田");
+      return page;
+    },
+    press: () => (document.querySelector("#list button") as HTMLButtonElement).click(),
+  },
+  {
+    name: "schedule-poll.md — views/poll.html",
+    open: () => {
+      const page = load(schedulePoll, "views/poll.html");
+      page.tell({ polls: [{ id: "p1", title: "忘年会", dates: "12/1\n12/2", closesAt: Date.now() + 86_400_000 }], answers: [] });
+      type("name-p1", "山田");
+      return page;
+    },
+    press: () => (document.querySelector("[data-send='p1']") as HTMLButtonElement).click(),
   },
   {
     name: "project-board.md — views/board.html",
