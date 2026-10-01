@@ -21,6 +21,8 @@ export const blueprintRunSchema = z.object({
   // Checks that failed for a step since a person last retried it; what stops a failing check from
   // looping forever.
   failedChecks: z.record(z.string(), z.number().int().nonnegative()).default({}),
+  // What each of those failed checks printed, oldest first: a repair attempt is shown them all, to see what keeps failing.
+  failureOutputs: z.record(z.string(), z.array(z.string())).default({}),
   // The session working on the current step, if one is. Its turn ending is what triggers a check.
   activeSessionId: z.string().nullable().default(null),
   // `answersAtStart`: how many answers the step had when the session began, so an answer that came

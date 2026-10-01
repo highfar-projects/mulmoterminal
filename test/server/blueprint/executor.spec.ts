@@ -300,10 +300,11 @@ describe("blueprint executor", () => {
       checkResults["check-a"] = Array.from({ length: MAX_FAILED_CHECKS }, () => false);
       await create();
       for (let attempt = 1; attempt <= MAX_FAILED_CHECKS; attempt++) await endTurn(`s${attempt}`);
-      expect(closed).toEqual(["s1", "s2"]);
+      const sessions = Array.from({ length: MAX_FAILED_CHECKS }, (_, index) => `s${index + 1}`);
+      expect(closed).toEqual(sessions.slice(0, -1));
       await executor.humanEvent("run-00000001", "a", { type: "retry" });
-      expect(closed).toEqual(expect.arrayContaining(["s1", "s2", "s3"]));
-      expect(closed).not.toContain("s4");
+      expect(closed).toEqual(expect.arrayContaining(sessions));
+      expect(closed).not.toContain(`s${MAX_FAILED_CHECKS + 1}`);
     });
 
     it("closes a session before starting the retry that replaces it", async () => {

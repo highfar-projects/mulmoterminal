@@ -4,9 +4,12 @@
 import type { PlanStep } from "./plan.js";
 import type { StepState } from "./state.js";
 import { personLanguageLine, type PersonLanguage } from "./personLanguage.js";
+import { REPAIR_AFTER } from "./executorPolicy.js";
 
 // Enough of a failing check's output to act on; a build log can run far longer.
 export const CHECK_OUTPUT_PROMPT_CHARS = 4000;
+// Each earlier failure's output, shorter: what kept failing, not every line of it.
+export const EARLIER_FAILURE_PROMPT_CHARS = 1500;
 // The person's earlier answers shown to a step, newest kept: a long build with a question every round would otherwise
 // grow every later prompt without end.
 export const EARLIER_ANSWERS_PROMPT_CHARS = 6000;
@@ -24,6 +27,8 @@ export interface StepPromptInput {
   earlierAnswers?: readonly EarlierAnswer[];
   /** The language the person reads, when the build recorded it. */
   language?: PersonLanguage | null;
+  /** What the step's earlier failed checks printed, oldest first — the attempts before the last one. */
+  earlierFailures?: readonly string[];
 }
 
 /** A question a person answered while an earlier step, or an earlier round of this one, ran — with where it was asked. */
@@ -115,10 +120,30 @@ export const resolvedCheck = (check: string, packDirs: { base: string; usecase: 
 // A check's output does not always say how to fix what it found, and an agent that cannot tell fails the same way
 // until the retries run out and a person — who cannot fix it either — is left with the build. The check itself is
 // the exact rule, so the agent is pointed at it; reading has no side effects, where running some checks would.
-function failureSection(step: PlanStep, stepState: StepState | undefined, packDirs: { base: string; usecase: string }): string[] {
+// The earlier failures, and — once enough attempts in a row have failed — the instruction to stop repeating them.
+function repairLines(earlierFailures: readonly string[]): string[] {
+  if (earlierFailures.length === 0) return [];
+  const attempts = earlierFailures.length + 1;
+  const earlier = earlierFailures.flatMap((output, index) => [`Attempt ${index + 1}:`, "```", tail(output, EARLIER_FAILURE_PROMPT_CHARS), "```"]);
+  const repair =
+    attempts >= REPAIR_AFTER
+      ? [
+          `This is a repair attempt: ${attempts} attempts in a row have not passed this check, so doing what they did again will not either. Before changing anything, read the check and work out why every attempt still failed — compare what each reported — then fix that cause.`,
+        ]
+      : [];
+  return ["", "Earlier attempts failed this check too. What they reported, oldest first:", ...earlier, ...repair];
+}
+
+function failureSection(
+  step: PlanStep,
+  stepState: StepState | undefined,
+  packDirs: { base: string; usecase: string },
+  earlierFailures: readonly string[],
+): string[] {
   const check = stepState?.lastCheck;
   if (!check || check.ok) return [];
   return [
+    ...repairLines(earlierFailures),
     "",
     "The previous attempt did not pass its check. Its output:",
     "```",
@@ -129,7 +154,16 @@ function failureSection(step: PlanStep, stepState: StepState | undefined, packDi
   ];
 }
 
-export function stepPrompt({ step, skillFile, packDirs, stepState, askCommand, earlierAnswers: earlier = [], language }: StepPromptInput): string {
+export function stepPrompt({
+  step,
+  skillFile,
+  packDirs,
+  stepState,
+  askCommand,
+  earlierAnswers: earlier = [],
+  language,
+  earlierFailures = [],
+}: StepPromptInput): string {
   return [
     `Blueprint step "${step.id}": ${step.title}.`,
     step.description,
@@ -147,6 +181,6 @@ export function stepPrompt({ step, skillFile, packDirs, stepState, askCommand, e
     ...roundSection(step, stepState),
     ...earlierSection(earlier),
     ...answeredSection(stepState),
-    ...failureSection(step, stepState, packDirs),
+    ...failureSection(step, stepState, packDirs, earlierFailures),
   ].join("\n");
 }
