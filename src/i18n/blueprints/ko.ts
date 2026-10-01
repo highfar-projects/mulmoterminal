@@ -37,6 +37,8 @@ export const blueprintsKo: Messages["blueprints"] = {
     credential: "이 단계에서는 로그인이 필요합니다.",
   },
   form: {
+    reportLanguage: "보고 언어",
+    reportLanguageHint: "에이전트가 당신에게 쓰는 내용(보고·질문·답변)의 언어입니다. 문서 자체의 언어는 바뀌지 않습니다.",
     presets: "예시로 시작하기",
     presetsMore: "다른 예시 보기 ({count}개)",
     presetsFewer: "예시 접기",

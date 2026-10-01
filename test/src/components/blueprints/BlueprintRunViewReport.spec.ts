@@ -178,12 +178,12 @@ describe("what a finished build may go on to", () => {
       ],
     },
   };
-  const finishedWith = (pair: { base: string; usecase: string } | null) => {
+  const finishedWith = (pair: { base: string; usecase: string } | null, language: string | null = null) => {
     listPacks.mockResolvedValue(packs);
     const finished = runView("passed");
     loadRun.mockResolvedValue({
       ...finished,
-      value: { ...finished.value, run: { ...finished.value.run, answers: { audience: "新しく入った人", kind: "記事" } } },
+      value: { ...finished.value, run: { ...finished.value.run, answers: { audience: "新しく入った人", kind: "記事" }, language } },
     });
     loadReport.mockResolvedValue({ ok: true, value: { path: null, markdown: null, changed: { files: ["STYLE.md", "chaff.yaml"], more: false }, pair } });
   };
@@ -202,6 +202,14 @@ describe("what a finished build may go on to", () => {
       projectDir: "/work/docs",
       after: "規約をつくる",
     });
+  });
+
+  it("keeps the finished build's report language for the next one", async () => {
+    finishedWith({ base: "docs", usecase: "style" }, "ja");
+    const wrapper = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
+    await flushPromises();
+    await wrapper.get('[data-testid="blueprint-next-step"]').trigger("click");
+    expect(blueprintsViewFollowUp).toHaveBeenCalledWith(expect.objectContaining({ usecase: "write", language: "ja" }));
   });
 
   it("offers nothing when the report does not say which packs ran", async () => {
