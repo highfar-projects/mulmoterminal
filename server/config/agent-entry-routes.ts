@@ -8,6 +8,7 @@ import { isAccountAgent } from "../../common/agentAccounts.js";
 import { buildProvider } from "../../common/providerEntries.js";
 import type { AppConfig } from "./app-config.js";
 import { requestBody } from "../routes/requestBody.js";
+import { appendOnDisk } from "./on-disk-entry.js";
 
 export interface OnDiskChange {
   /** Why the change cannot be made to this config, or null to make it. Asked under the lock. An object
@@ -28,14 +29,7 @@ export function mountAgentEntryRoutes(app: Express, mutate: MutateOnDisk, onAcco
     // Built against the list under the lock, so the id it derives is free in THAT list.
     const build = (base: AppConfig) => buildCustomAgent(text(body.label), text(body.command), base.customAgents);
     void mutate(res, {
-      refuse: (base) => {
-        const built = build(base);
-        return "problem" in built ? built.problem : null;
-      },
-      update: (base) => {
-        const built = build(base);
-        return { customAgents: "entry" in built ? [...base.customAgents, built.entry] : base.customAgents };
-      },
+      ...appendOnDisk("customAgents", build),
       answer: (next) => res.json({ customAgents: next.customAgents }),
     });
   });
@@ -55,14 +49,7 @@ export function mountAgentEntryRoutes(app: Express, mutate: MutateOnDisk, onAcco
     const agent = body.agent;
     const build = (base: AppConfig) => buildAccount(text(body.label), agent, text(body.home), base.accounts);
     return void mutate(res, {
-      refuse: (base) => {
-        const built = build(base);
-        return "problem" in built ? built.problem : null;
-      },
-      update: (base) => {
-        const built = build(base);
-        return { accounts: "entry" in built ? [...base.accounts, built.entry] : base.accounts };
-      },
+      ...appendOnDisk("accounts", build),
       answer: (next) => {
         // A new account's home has none of the bundled skills yet — the same step POST /api/config takes.
         onAccountsChanged();
@@ -101,14 +88,7 @@ function mountProviderRoutes(app: Express, mutate: MutateOnDisk): void {
         base.providers.map((provider) => provider.id),
       );
     return void mutate(res, {
-      refuse: (base) => {
-        const built = build(base);
-        return "problem" in built ? built.problem : null;
-      },
-      update: (base) => {
-        const built = build(base);
-        return { providers: "entry" in built ? [...base.providers, built.entry] : base.providers };
-      },
+      ...appendOnDisk("providers", build),
       answer: (next) => res.json({ providers: next.providers }),
     });
   });

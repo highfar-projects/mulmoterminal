@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, afterEach } from "vitest";
-import { mkdirSync, writeFileSync, symlinkSync, existsSync, readFileSync, rmSync, realpathSync } from "node:fs";
+import { mkdirSync, writeFileSync, symlinkSync, existsSync, readFileSync, readdirSync, rmSync, realpathSync } from "node:fs";
 import path from "node:path";
 import express from "express";
 import { makeTempDir } from "../../support/tempDir.js";
@@ -109,6 +109,14 @@ describe("/api/files/browse/trash", () => {
     expect((await post(serve(root, { kind: "mac", files: tmp() }), `/api/files/browse/trash?${q("../a.md")}`, {})).status).toBe(403);
     expect((await post(serve(root, { kind: "mac", files: tmp() }), `/api/files/browse/trash?${q("")}`, {})).status).toBe(403);
     expect(existsSync(path.join(root, "a.md"))).toBe(true);
+  });
+
+  it("answers 404 for an entry that is not there, and leaves the Trash empty", async () => {
+    const trash = tmp();
+    const res = await post(serve(tmp(), { kind: "mac", files: trash }), `/api/files/browse/trash?${q("none.md")}`, {});
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: "not found" });
+    expect(readdirSync(trash)).toEqual([]);
   });
 });
 
