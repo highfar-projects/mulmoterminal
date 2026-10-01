@@ -47,14 +47,11 @@ const filesUnderAll = (dir, extension) =>
     return entry.name.endsWith(extension) && statSync(file).mtimeMs >= builtSince ? [readFileSync(file, "utf8")] : [];
   });
 
-// The starting collection's schema: its icon is the one MulmoTerminal shows in the header, and its fields decide
-// whether MulmoTerminal shows it as a kanban and a calendar.
-function startingSchema() {
-  const source = readJson(".blueprint/source/source.json");
-  const slug = source?.start ?? source?.collections?.[0];
-  return slug ? readJson(`.blueprint/source/collections/${slug}/schema.json`) : null;
-}
-const schema = startingSchema();
+// Every copied collection's schema (source.json lists them by slug, whether the source was a collection or a shared
+// app): each one's icon is shown in its header, and its fields decide whether there is a kanban and a calendar.
+const schemas = (readJson(".blueprint/source/source.json")?.collections ?? [])
+  .map((slug) => readJson(`.blueprint/source/collections/${slug}/schema.json`))
+  .filter((schema) => schema !== null);
 
 const answer = readJson(".blueprint/answers.json")?.design;
 const design = designOf(answer);
@@ -65,8 +62,8 @@ const problems = designProblems({
   tailwindTheme: readText(path.join("node_modules", "tailwindcss", "theme.css")),
   sources: filesUnder(".", [".vue", ".ts", ".tsx"]),
   designMd: readText("DESIGN.md"),
-  icon: typeof schema?.icon === "string" ? schema.icon : null,
-  views: { kanban: Boolean(schema?.kanbanField), calendar: Boolean(schema?.calendarField) },
+  icons: schemas.map((schema) => schema.icon).filter((icon) => typeof icon === "string" && icon !== ""),
+  views: { kanban: schemas.some((schema) => schema.kanbanField), calendar: schemas.some((schema) => schema.calendarField) },
   template: design?.theme ? readText(path.join(THEMES, `${design.theme}.css`)) : null,
 });
 problems.forEach((problem) => console.error(problem));

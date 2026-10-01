@@ -115,11 +115,11 @@ function builtProblems(design, builtCss, template, tailwindTheme, views) {
   ];
 }
 
-const usageProblems = (sources, icon) => {
+const usageProblems = (sources, icons) => {
   const text = sources.map((source) => withoutComments(source.text)).join("\n");
   return [
     ...(text.includes("material-symbols-outlined") ? [] : ['the screens never use "material-symbols-outlined"']),
-    ...(icon && !text.includes(icon) ? [`the screens never show the collection's icon "${icon}"`] : []),
+    ...[...new Set(icons)].filter((icon) => !text.includes(icon)).map((icon) => `the screens never show the collection's icon "${icon}"`),
   ];
 };
 
@@ -131,16 +131,16 @@ const recordProblems = (design, designMd) => {
 /**
  * Every way the app falls short of the chosen design. `builtCss` is the build's stylesheets joined (null when there
  * are none); `tailwindTheme` is the app's node_modules/tailwindcss/theme.css; `template` the chosen template's text;
- * `sources` the screens' files as { path, text }; `icon` the starting collection's icon (may be missing); `views` says
- * whether the collection has a kanban and a calendar ({ kanban, calendar }).
+ * `sources` the screens' files as { path, text }; `icons` every copied collection's icon; `views` says whether any of
+ * them has a kanban and a calendar ({ kanban, calendar }).
  */
-export function designProblems({ answer, packageJson, builtCss, tailwindTheme, template, sources, designMd, icon, views }) {
+export function designProblems({ answer, packageJson, builtCss, tailwindTheme, template, sources, designMd, icons, views }) {
   const design = designOf(answer);
   if (design === null) return [`.blueprint/answers.json: the design "${answer}" is not one this pack has`];
   return [
     ...dependencyProblems(packageJson),
     ...builtProblems(design, builtCss, template, tailwindTheme, views ?? {}),
-    ...usageProblems(sources, icon),
+    ...usageProblems(sources, icons ?? []),
     ...recordProblems(design, designMd),
   ];
 }

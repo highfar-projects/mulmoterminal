@@ -16,6 +16,6 @@ export declare function designProblems(input: {
   template: string | null;
   sources: readonly FileText[];
   designMd: string | null;
-  icon: string | null;
+  icons: readonly string[];
   views?: { kanban?: boolean; calendar?: boolean };
 }): string[];

@@ -57,7 +57,7 @@ const followingApp = {
   template: null,
   sources: [SCREEN],
   designMd: `# Design\n\n${SAME_AS_MULMOTERMINAL}\n`,
-  icon: "menu_book",
+  icons: ["menu_book"],
 };
 
 describe("the design question", () => {
@@ -218,9 +218,16 @@ describe("designProblems", () => {
       'the screens never use "material-symbols-outlined"',
       'the screens never show the collection\'s icon "menu_book"',
     ]);
-    expect(designProblems({ ...followingApp, sources: [{ path: "a.vue", text: '<span class="material-symbols-outlined">add</span>' }], icon: null })).toEqual(
+    expect(designProblems({ ...followingApp, sources: [{ path: "a.vue", text: '<span class="material-symbols-outlined">add</span>' }], icons: [] })).toEqual(
       [],
     );
+  });
+
+  it("needs every copied collection's icon, each once", () => {
+    const screens = [{ path: "a.vue", text: '<span class="material-symbols-outlined">menu_book</span>' }];
+    expect(designProblems({ ...followingApp, sources: screens, icons: ["menu_book", "person", "menu_book"] })).toEqual([
+      'the screens never show the collection\'s icon "person"',
+    ]);
   });
 
   it("keeps the // of a URL in a string", () => {
