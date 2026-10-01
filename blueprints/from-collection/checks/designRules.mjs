@@ -20,8 +20,17 @@ const PACKAGES = ["tailwindcss", "@tailwindcss/vite", "material-symbols"];
 export const SIGNATURE_CLASSES = ["bg-indigo-600", "material-symbols-outlined"];
 
 const TAILWIND_IMPORT = /@import\s+["']tailwindcss["']/u;
-// A template's own header comment says how to import Tailwind; only what a stylesheet does counts.
-const withoutComments = (text) => text.replaceAll(/\/\*[\s\S]*?\*\//gu, "");
+// Only what a file does counts, not what its comments say: a template's own header mentions the Tailwind import, and
+// a class or an import left in a comment styles nothing. A `//` counts as a comment only at a line's start or after a
+// space, so the `//` of a URL in a string is kept.
+const withoutComments = (text) =>
+  String(text)
+    .replaceAll("\r\n", "\n")
+    .replaceAll(/\/\*[\s\S]*?\*\//gu, "")
+    .replaceAll(/<!--[\s\S]*?-->/gu, "")
+    .replaceAll(/(^|\s)\/\/.*$/gmu, "$1");
+const live = (files) => files.map((file) => ({ path: file.path, text: withoutComments(file.text) }));
+const escaped = (text) => text.replaceAll(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 const MAIN_COLOUR_OVERRIDE = /--color-indigo-\d+\s*:/u;
 
 /** The @theme block of a template file, as written; null when it has none. */
@@ -36,21 +45,27 @@ const dependencyProblems = (packageJson) => {
   return missing.length > 0 ? [`package.json does not depend on ${missing.join(", ")}`] : [];
 };
 
+// The plugin is imported under some name and that name is called, as `plugins: [tailwindcss()]` does.
+const usesTailwindPlugin = (text) => {
+  const imported = /import\s+([A-Za-z_$][\w$]*)\s+from\s+["']@tailwindcss\/vite["']/u.exec(text);
+  return imported !== null && new RegExp(`\\b${escaped(imported[1])}\\s*\\(`, "u").test(text.slice(imported.index + imported[0].length));
+};
+
 const viteProblems = (viteConfigs) =>
-  viteConfigs.some((config) => config.text.includes("@tailwindcss/vite")) ? [] : ["no vite.config uses @tailwindcss/vite: add tailwindcss() to its plugins"];
+  viteConfigs.some((config) => usesTailwindPlugin(config.text)) ? [] : ["no vite.config uses @tailwindcss/vite: add tailwindcss() to its plugins"];
 
 // The template's block must be in the stylesheet that imports Tailwind, or in a file that stylesheet imports.
 const themeProblems = (design, styles, template) => {
-  const entries = styles.filter((style) => TAILWIND_IMPORT.test(withoutComments(style.text)));
+  const entries = styles.filter((style) => TAILWIND_IMPORT.test(style.text));
   if (entries.length === 0) return ['no stylesheet has @import "tailwindcss"'];
   if (design.theme === null) {
     const overriding = styles.filter((style) => MAIN_COLOUR_OVERRIDE.test(style.text)).map((style) => style.path);
     return overriding.length > 0 ? [`${overriding.join(", ")} redefines the indigo colours; MulmoTerminal's look keeps Tailwind's own`] : [];
   }
   const block = themeBlock(template);
-  const holders = styles.filter((style) => block !== null && style.text.replaceAll("\r\n", "\n").includes(block));
+  const holders = styles.filter((style) => block !== null && style.text.includes(block));
   const imported = (holder) =>
-    entries.some((entry) => entry === holder || new RegExp(`@import\\s+["'][^"']*${holder.path.split("/").pop()}["']`, "u").test(entry.text));
+    entries.some((entry) => entry === holder || new RegExp(`@import\\s+["'][^"']*${escaped(holder.path.split("/").pop())}["']`, "u").test(entry.text));
   if (holders.length === 0) return [`no stylesheet holds design/themes/${design.theme}.css unchanged`];
   return holders.some(imported) ? [] : [`${holders[0].path} holds the template but no stylesheet that imports tailwindcss imports it`];
 };
@@ -77,9 +92,9 @@ export function designProblems({ answer, packageJson, viteConfigs, styles, sourc
   if (design === null) return [`.blueprint/answers.json: the design "${answer}" is not one this pack has`];
   return [
     ...dependencyProblems(packageJson),
-    ...viteProblems(viteConfigs),
-    ...themeProblems(design, styles, template),
-    ...classProblems(sources, icon),
+    ...viteProblems(live(viteConfigs)),
+    ...themeProblems(design, live(styles), template),
+    ...classProblems(live(sources), icon),
     ...recordProblems(design, designMd),
   ];
 }

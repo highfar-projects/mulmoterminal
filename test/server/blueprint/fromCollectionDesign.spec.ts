@@ -100,6 +100,30 @@ describe("designProblems", () => {
     expect(designProblems({ ...followingApp, viteConfigs: [] })).toHaveLength(1);
   });
 
+  it("takes the plugin under any name, and not one that is only imported or only in a comment", () => {
+    const vite = (text: string) => designProblems({ ...followingApp, viteConfigs: [{ path: "vite.config.ts", text }] });
+    expect(vite('import tw from "@tailwindcss/vite";\nexport default { plugins: [tw()] };')).toEqual([]);
+    expect(vite('import tailwindcss from "@tailwindcss/vite";\nexport default { plugins: [] };')).toHaveLength(1);
+    expect(vite('// import tailwindcss from "@tailwindcss/vite";\nplugins: [tailwindcss()]')).toHaveLength(1);
+    expect(vite('/* import tailwindcss from "@tailwindcss/vite"; tailwindcss() */')).toHaveLength(1);
+  });
+
+  it("does not count what only a comment says", () => {
+    const commented = [{ path: "a.vue", text: '<!-- <button class="bg-indigo-600"> -->\n// material-symbols-outlined menu_book\n/* menu_book */' }];
+    expect(designProblems({ ...followingApp, sources: commented })).toEqual([
+      'the screens never use "bg-indigo-600", "material-symbols-outlined"',
+      'the screens never show the collection\'s icon "menu_book"',
+    ]);
+    expect(designProblems({ ...followingApp, styles: [{ path: "a.css", text: '/* @import "tailwindcss"; */' }] })).toEqual([
+      'no stylesheet has @import "tailwindcss"',
+    ]);
+  });
+
+  it("keeps the // of a URL in a string", () => {
+    const linked = { path: "b.vue", text: `<a href="https://example.com" class="bg-indigo-600"><span class="material-symbols-outlined">menu_book</span></a>` };
+    expect(designProblems({ ...followingApp, sources: [linked] })).toEqual([]);
+  });
+
   it("needs a stylesheet that imports Tailwind", () => {
     expect(designProblems({ ...followingApp, styles: [{ path: "a.css", text: "body { margin: 0 }" }] })).toEqual(['no stylesheet has @import "tailwindcss"']);
   });
@@ -157,6 +181,15 @@ describe("designProblems", () => {
       ]);
       const changed = [{ path: "style.css", text: `@import "tailwindcss";\n${template("soft").replace("0.975", "0.97")}` }];
       expect(designProblems({ ...withTemplate, styles: changed })).toEqual(["no stylesheet holds design/themes/soft.css unchanged"]);
+      const commentedImport = [
+        { path: "src/style.css", text: '@import "tailwindcss";\n/* @import "./soft.css"; */\n' },
+        { path: "src/soft.css", text: template("soft") },
+      ];
+      expect(designProblems({ ...withTemplate, styles: commentedImport })).toEqual([
+        "src/soft.css holds the template but no stylesheet that imports tailwindcss imports it",
+      ]);
+      const commentedOut = [{ path: "style.css", text: `@import "tailwindcss";\n/* ${themeBlock(template("soft"))} */` }];
+      expect(designProblems({ ...withTemplate, styles: commentedOut })).toEqual(["no stylesheet holds design/themes/soft.css unchanged"]);
       const other = [{ path: "style.css", text: `@import "tailwindcss";\n${template("calm")}` }];
       expect(designProblems({ ...withTemplate, styles: other })).toEqual(["no stylesheet holds design/themes/soft.css unchanged"]);
     });
