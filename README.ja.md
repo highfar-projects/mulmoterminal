@@ -142,12 +142,13 @@ npx github:highfar-projects/mulmoterminal#main     # 同じく、main の最新�
 ```
 
 - **`git` が必要です。** npm がリポジトリを clone してインストールするためです。
-- **npm 11 以上が必要です。** npm 10.2.1 では、インストールの途中で
-  `Cannot read properties of null (reading 'edgesOut')` で止まり、終了コード 1 で終わります。画面には
-  TLS の警告しか出ません（Windows で 2026-10-01 に確認。同じコミットが npm 11.6.2 では入ります）。
-  Node 24 には npm 11 が付いてきますが、Volta で古い npm が固定されていることがあります。`npm -v` で
-  確かめ、Volta を使っている場合は
-  `volta run --npm 11.6.2 npx github:highfar-projects/mulmoterminal` で起動してください。
+- **Node 24 に付いてくる npm を使ってください**（Node 24.21.0 なら 11.19.0）。Windows で
+  2026-10-01 に、それより古い 2 つの版ではインストールに失敗しました。どちらも、エラーの前には
+  画面に TLS の警告しか出ません。npm 10.2.1 は `Cannot read properties of null (reading 'edgesOut')`
+  で、npm 11.6.2 は `npm error code ECOMPROMISED` / `Lock compromised` で止まります。Volta では
+  Node 付属のものより古い npm が固定されていることがあるので、`npm -v` で確かめ、Volta を使っている
+  場合は `volta run --node 24.21.0 --bundled-npm npx github:highfar-projects/mulmoterminal`
+  で起動してください。
 - **初回の起動は数分かかります。** npm がビルド用のツールを入れて、画面をビルドするためです
   （`prepare` → `scripts/build-if-missing.mjs`）。2 回目からは npm のキャッシュが使われます。
 - **npm からの更新の案内は出ません。** npm の `mulmoterminal` は本家のものなので、フォークとして
