@@ -10,9 +10,8 @@ import { PORT } from "../config/env.js";
 import type { SessionAgent } from "../../common/sessionAgent.js";
 import type { ToolGroup } from "../../common/toolGroups.js";
 import { guiMcpEnv } from "./mcp-config.js";
-import { ptySpawn, ptyWouldReattach } from "./pty-spawn.js";
-import { ptyStartLine } from "./pty-exit-log.js";
-import { ptys } from "./registry.js";
+import { ptyWouldReattach } from "./pty-spawn.js";
+import { startAgentPty, type StartedAgentPty } from "./agent-pty-start.js";
 import type { PtyEntry } from "./types.js";
 
 /** What such a spawn takes beyond the session itself. */
@@ -88,18 +87,12 @@ interface DirectoryMcpStart {
   resumeConversationId: string | null;
 }
 
-/** Start the pty and register it. `spawnedAtMs` comes back because the caller wires the relay
- *  (and may have its own work to do first). */
-export function startDirectoryMcpPty(start: DirectoryMcpStart): { entry: PtyEntry; spawnedAtMs: number } {
+/** Start the pty and register it (startAgentPty). */
+export function startDirectoryMcpPty(start: DirectoryMcpStart): StartedAgentPty {
   const { sessionId, ws, cwd, agent, bin, binEnvVar, args, resumeConversationId } = start;
   // The session id reaches the GUI MCP bridge through this environment and nowhere else — the
   // config file the agent reads is shared by every session in the directory.
-  const { term, tmux, reattached } = ptySpawn(sessionId, bin, args, cwd, true, { env: guiMcpEnv(sessionId, PORT), binEnvVar });
-  const spawnedAtMs = Date.now();
+  const spawnEnv = { env: guiMcpEnv(sessionId, PORT), binEnvVar };
   const note = resumeConversationId ? `resume ${resumeConversationId}` : null;
-  console.log(ptyStartLine({ agent, pid: term.pid, cwd, tmux, reattached, sessionId, note }));
-
-  const entry: PtyEntry = { term, ws, buffer: "", cwd, tmux, active: false, agent };
-  ptys.set(sessionId, entry);
-  return { entry, spawnedAtMs };
+  return startAgentPty({ sessionId, ws, cwd, agent, file: bin, args, spawnEnv, note });
 }

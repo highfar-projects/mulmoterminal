@@ -1,0 +1,20 @@
+{
+  "manifest": {
+    "title": "An existing repository (TypeScript / JavaScript)",
+    "description": "A TypeScript / JavaScript repository on GitHub that already works. Start from a folder you cloned yourself and told Claude Code to trust."
+  },
+  "steps": {
+    "state": {
+      "title": "Check the state of the repository",
+      "description": "Checks for a GitHub origin, the gh sign-in, a clean working tree and an up-to-date default branch. Makes sure .blueprint/ is not committed."
+    },
+    "baseline": {
+      "title": "Is everything green before any change?",
+      "description": "Finds and records the commands for lint, type checking, tests and build, and checks that all of them pass with nothing changed."
+    },
+    "ci": {
+      "title": "Does CI run the same checks?",
+      "description": "Finds out and records whether CI runs the same checks on every PR. Anything missing is added as the first change, after approval."
+    }
+  }
+}

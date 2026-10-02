@@ -19,9 +19,9 @@ import { copilotMcpConfigJson } from "../agents/copilot-mcp.js";
 import { copilotHome, syncCopilotHooksFile } from "../agents/copilot-hooks-file.js";
 import type { ToolGroup } from "../../common/toolGroups.js";
 import { codexGuiMcpServers } from "./mcp-config.js";
-import { claimFullGuiMcp, ptys } from "./registry.js";
-import { ptySpawn, ptyWouldReattach } from "./pty-spawn.js";
-import { ptyStartLine } from "./pty-exit-log.js";
+import { claimFullGuiMcp } from "./registry.js";
+import { ptyWouldReattach } from "./pty-spawn.js";
+import { startAgentPty } from "./agent-pty-start.js";
 import { wireAgentPtyRelay } from "./pty-relay.js";
 import { seedPromptArgument, withSettingsCleanup } from "./session-settings.js";
 import type { PtyEntry } from "./types.js";
@@ -59,23 +59,24 @@ export function createCopilotSpawner(deps: SpawnDeps) {
 
     // A spawn that throws never reaches reap(), where the seed file is normally cleaned up — the
     // same guarantee spawn-claude takes for its settings file (#579, #1518).
-    const { entry, spawnedAtMs } = withSettingsCleanup(sessionId, () => {
-      // COPILOT_HOME is set EXPLICITLY, even though this process may already have it: a tmux pane
-      // inherits the tmux SERVER's environment, not ours (the same trap hook-settings.ts names for
-      // claude's provider block). Without it the agent would resolve a different home than the one
-      // syncCopilotHooksFile just wrote into — and since that file is the whole status mechanism,
-      // the failure is a cell that runs perfectly and never reports a thing. Measured: it is exactly
-      // what happened the first time this was driven end to end.
-      const { term, tmux, reattached } = ptySpawn(sessionId, deps.copilotBin, args, cwd, true, {
-        binEnvVar: copilotAdapter.binEnvVar,
-        env: { COPILOT_HOME: copilotHome() },
-      });
-      const at = Date.now();
-      console.log(ptyStartLine({ agent: "copilot", pid: term.pid, cwd, tmux, reattached, sessionId, note: null }));
-      const created: PtyEntry = { term, ws, buffer: "", cwd, tmux, active: false, agent: "copilot" };
-      ptys.set(sessionId, created);
-      return { entry: created, spawnedAtMs: at };
-    });
+    const { entry, spawnedAtMs } = withSettingsCleanup(sessionId, () =>
+      startAgentPty({
+        sessionId,
+        ws,
+        cwd,
+        agent: "copilot",
+        file: deps.copilotBin,
+        args,
+        // COPILOT_HOME is set EXPLICITLY, even though this process may already have it: a tmux pane
+        // inherits the tmux SERVER's environment, not ours (the same trap hook-settings.ts names for
+        // claude's provider block). Without it the agent would resolve a different home than the one
+        // syncCopilotHooksFile just wrote into — and since that file is the whole status mechanism,
+        // the failure is a cell that runs perfectly and never reports a thing. Measured: it is exactly
+        // what happened the first time this was driven end to end.
+        spawnEnv: { binEnvVar: copilotAdapter.binEnvVar, env: { COPILOT_HOME: copilotHome() } },
+        note: null,
+      }),
+    );
 
     wireAgentPtyRelay(entry, sessionId, spawnedAtMs, deps);
     return entry;

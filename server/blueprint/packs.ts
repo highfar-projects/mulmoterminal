@@ -103,7 +103,7 @@ export async function loadPackPair(roots: readonly PackRoot[], baseSlug: string,
 /** A usecase pack's interview, as written in its folder. */
 export const readHearing = async (packDir: string): Promise<Hearing> => hearingSchema.parse(await readJson(path.join(packDir, "hearing.json")));
 
-async function stepsOf(packDir: string, manifest: BlueprintManifest): Promise<{ id: string; skill: string; description?: string }[]> {
+async function stepsOf(packDir: string, manifest: BlueprintManifest): Promise<(Described & { skill: string })[]> {
   if (manifest.kind === "base") return basePlanSchema.parse(await readJson(path.join(packDir, "plan.json"))).steps;
   await readHearing(packDir);
   // Presets are optional, but a broken one is refused here rather than dropped silently when listed.

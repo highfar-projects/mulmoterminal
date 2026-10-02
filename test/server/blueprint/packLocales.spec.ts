@@ -11,14 +11,17 @@ import { packProblems, type PackRoot } from "../../../server/blueprint/packs";
 
 const PACKS = path.join(import.meta.dirname, "..", "..", "..", "blueprints");
 const ROOTS: PackRoot[] = [{ dir: PACKS, source: "builtin" }];
-const DOCUMENT_PACKS = ["docs", "adopt", "ask", "compare", "glossary", "polish", "review", "style", "summarize", "verify", "write"];
+const SHIPPED_PACKS = readdirSync(PACKS, { withFileTypes: true })
+  .filter((entry) => entry.isDirectory() && existsSync(path.join(PACKS, entry.name, "manifest.json")))
+  .map((entry) => entry.name);
 
 const readJson = (file: string): unknown => JSON.parse(readFileSync(file, "utf8"));
 const packsWithOverlay = readdirSync(PACKS).filter((slug) => existsSync(path.join(PACKS, slug, "locales", "en.json")));
 
 describe("the shipped packs' English overlays", () => {
-  it("cover every document pack", () => {
-    expect(DOCUMENT_PACKS.filter((slug) => !packsWithOverlay.includes(slug))).toEqual([]);
+  it("cover every shipped pack", () => {
+    expect(SHIPPED_PACKS.length).toBeGreaterThan(0);
+    expect(SHIPPED_PACKS.filter((slug) => !packsWithOverlay.includes(slug))).toEqual([]);
   });
 
   it.each(packsWithOverlay)("%s covers its pack exactly", async (slug) => {

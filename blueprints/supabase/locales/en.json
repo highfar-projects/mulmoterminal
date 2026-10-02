@@ -1,0 +1,48 @@
+{
+  "manifest": {
+    "title": "Supabase (Postgres + row-level permissions + Vue)",
+    "description": "Data, sign-in and who-may-do-what live in Supabase: Postgres, where row level security decides every read and write. The Vue screen talks to Supabase from the browser and is served as static files from Cloudflare. Developed and checked on this computer with the local Supabase stack in Docker, then published after approval. Free Supabase and Cloudflare accounts are enough to start."
+  },
+  "steps": {
+    "spec": {
+      "title": "Write the spec",
+      "description": "Fills in the spec templates for the base and the use case from the answers to the questions. For every table, it always says who can read it and who can write it. Anything not yet decided goes on a list."
+    },
+    "prerequisites": {
+      "title": "Check the tools",
+      "description": "Checks Node (22 or later), yarn, and that Docker Desktop is running. The Supabase CLI and wrangler are installed in the project, so they are not needed here."
+    },
+    "scaffold": {
+      "title": "App skeleton",
+      "description": "Creates the local Supabase setup, the Vue screens, the Cloudflare settings that serve the screens, and the starting point for tests run against the local Supabase, all in one folder."
+    },
+    "data": {
+      "title": "Data and permissions",
+      "description": "Turns the \"things it handles\" in the spec into Postgres tables, and uses row-level permissions (RLS) to decide who can read and who can write. Writes migrations, sample data, and tests that try each kind of user."
+    },
+    "ui": {
+      "title": "Screens",
+      "description": "Builds the screens in the spec with Vue, reading and writing Supabase from the browser."
+    },
+    "auth": {
+      "title": "Sign-in",
+      "description": "Adds the sign-in method in the spec with Supabase Auth. Sets who may sign up, as the spec says."
+    },
+    "run-check": {
+      "title": "Start it and check",
+      "description": "Builds the screens connected to the local Supabase, serves them on this computer, and checks that the screens open and are set up to reach Supabase."
+    },
+    "security": {
+      "title": "Security check",
+      "description": "Reads what was built the way an attacker would, following OWASP Top 10:2025, fixes the holes that can be exploited, confirms the fixes with tests, and writes a report. The result is checked on the local Supabase by trying to read and write every table as someone not signed in and as a user with nothing, and confirming that nothing gets through except what the spec allows."
+    },
+    "deploy": {
+      "title": "Publish to Supabase and Cloudflare",
+      "description": "Applies the migrations to the Supabase project, and publishes on Cloudflare the screens connected to the production Supabase. Checks that the published URL serves this build, points to the production Supabase, and contains no secret keys."
+    },
+    "handover": {
+      "title": "How to use it, and handover",
+      "description": "Writes in the README and the getting-started page the published URL, how to run it on this computer, the steps for the next change, and how to back up the data."
+    }
+  }
+}

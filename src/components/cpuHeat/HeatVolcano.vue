@@ -1,12 +1,13 @@
 <script setup lang="ts">
 // A volcano: smoke, then glowing lava running down its sides, then an eruption.
 import { computed, useId } from "vue";
-import { HOT, type HeatPalette } from "./heatPalette";
+import { HOT } from "./heatPalette";
 import type { StageLevel } from "./stageLevel";
+import type { HeatFigureProps } from "./heatFigure";
 import HeatGlow from "./HeatGlow.vue";
 import HeatBurst from "./HeatBurst.vue";
 
-const props = defineProps<{ level: StageLevel; palette: HeatPalette; animate: boolean }>();
+const props = defineProps<HeatFigureProps>();
 
 const bodyId = `heat-volcano-body-${useId()}`;
 const SMOKE_BY_LEVEL: Record<StageLevel, number> = { 0: 0, 1: 1, 2: 2, 3: 3, 4: 5, 5: 0 };
