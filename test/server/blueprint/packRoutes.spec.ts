@@ -39,6 +39,7 @@ const executor: BlueprintExecutor = {
   },
   workingIn: async () => null,
   specView: unused,
+  targetsView: unused,
   say: async () => ({ run: storedRun, state: { steps: {} } }),
   reportView: unused,
   recover: unused,

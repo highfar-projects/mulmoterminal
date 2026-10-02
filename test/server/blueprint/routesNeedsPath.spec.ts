@@ -29,6 +29,7 @@ const executor: BlueprintExecutor = {
   humanEvent: unused,
   ask: unused,
   specView: unused,
+  targetsView: unused,
   reportView: unused,
   say: unused,
   archive: unused,

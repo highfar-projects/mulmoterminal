@@ -26,6 +26,7 @@ describe("the locked executor's reads", () => {
       ask: unused,
       recover: unused,
       specView: unused,
+      targetsView: unused,
       say: unused,
       reportView: unused,
       workingIn: async (...args) => {

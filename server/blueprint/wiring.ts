@@ -174,6 +174,7 @@ export function lockedExecutor(executor: BlueprintExecutor): { executor: Bluepri
       list: (...args: Parameters<BlueprintExecutor["list"]>) => executor.list(...args),
       specView: (...args: Parameters<BlueprintExecutor["specView"]>) => executor.specView(...args),
       reportView: (...args: Parameters<BlueprintExecutor["reportView"]>) => executor.reportView(...args),
+      targetsView: (...args: Parameters<BlueprintExecutor["targetsView"]>) => executor.targetsView(...args),
       workingIn: (...args: Parameters<BlueprintExecutor["workingIn"]>) => executor.workingIn(...args),
       recover: owned((endSession: Parameters<BlueprintExecutor["recover"]>[0]) => executor.recover(endSession)),
       create: owned((request: Parameters<BlueprintExecutor["create"]>[0]) => executor.create(request)),

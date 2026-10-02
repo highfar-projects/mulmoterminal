@@ -18,6 +18,7 @@ import BlueprintSpecReview from "./BlueprintSpecReview.vue";
 import BlueprintChangedFiles from "./BlueprintChangedFiles.vue";
 import BlueprintOriginalsDiff from "./BlueprintOriginalsDiff.vue";
 import BlueprintNextSteps from "./BlueprintNextSteps.vue";
+import BlueprintTargets from "./BlueprintTargets.vue";
 import { filesGotoFile } from "../../composables/useFilesView";
 import { openTerminalAt } from "../../composables/useNewTerminal";
 import MarkdownProse from "../MarkdownProse.vue";
@@ -343,6 +344,8 @@ const roundOf = (step: Pick<PlanStep, "id" | "repeatWhile">) => roundNumber(step
       </section>
 
       <p v-else class="m-0 font-sans text-[14px] text-ok" data-testid="blueprint-finished">{{ t("blueprints.run.finished") }}</p>
+
+      <BlueprintTargets :run-id="runId" :steps="view.run.steps" :state="view.state" />
 
       <section v-if="finished && report?.markdown" class="flex flex-col gap-2" data-testid="blueprint-report">
         <h3 class="m-0 font-sans text-[13px] font-[650] text-fg">{{ t("blueprints.run.report") }}</h3>

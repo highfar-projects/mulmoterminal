@@ -496,6 +496,16 @@ function mountMoveRoutes(app: Express, deps: BlueprintRouteDeps): void {
   });
 }
 
+function mountTargetsRoute(app: Express, deps: BlueprintRouteDeps): void {
+  app.get("/api/blueprints/runs/:id/targets", async (req, res) => {
+    try {
+      res.json(await deps.executor.targetsView(req.params.id));
+    } catch (err) {
+      fail(res, err);
+    }
+  });
+}
+
 export function mountBlueprintRoutes(app: Express, deps: BlueprintRouteDeps): void {
   mountReadRoutes(app, deps);
   mountFolderPresentRoute(app, deps);
@@ -503,4 +513,5 @@ export function mountBlueprintRoutes(app: Express, deps: BlueprintRouteDeps): vo
   mountSourceRoute(app, deps);
   mountCreateRoute(app, deps);
   mountMoveRoutes(app, deps);
+  mountTargetsRoute(app, deps);
 }

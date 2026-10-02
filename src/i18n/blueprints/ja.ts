@@ -80,6 +80,25 @@ export const blueprintsJa: Messages["blueprints"] = {
     start: "始める",
     starting: "開始中…",
   },
+  targets: {
+    heading: "作業リスト",
+    position: "順",
+    title: "対象",
+    status: "状態",
+    phase: {
+      todo: "これから",
+      working: "作業中",
+      "needs-decision": "判断待ち",
+      done: "済み",
+      skipped: "見送り",
+    },
+    why: "なぜ",
+    proof: "同じ挙動の確かめ方",
+    files: "ファイル",
+    pr: "プルリクエスト",
+    note: "メモ",
+    unreadable: "作業リストを読めませんでした: {problem}",
+  },
   run: {
     sourceChanged:
       "元にしたコレクション（または共有アプリ）は、写しを取った後（{takenAt}）に変わっています。この作業はその写しのまま進みます。新しい内容を使うなら、同じ元から新しく作り直してください。",

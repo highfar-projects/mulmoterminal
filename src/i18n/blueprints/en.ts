@@ -81,6 +81,25 @@ export const blueprintsEn = {
     start: "Start",
     starting: "Starting…",
   },
+  targets: {
+    heading: "Work list",
+    position: "#",
+    title: "Target",
+    status: "Status",
+    phase: {
+      todo: "To do",
+      working: "In progress",
+      "needs-decision": "Needs your decision",
+      done: "Done",
+      skipped: "Left alone",
+    },
+    why: "Why",
+    proof: "How it is proved",
+    files: "Files",
+    pr: "Pull request",
+    note: "Note",
+    unreadable: "The work list could not be read: {problem}",
+  },
   run: {
     sourceChanged:
       "The source has changed since its copy was taken ({takenAt}). This build keeps working from that copy. To use the newer data, start a new build from the same source.",
