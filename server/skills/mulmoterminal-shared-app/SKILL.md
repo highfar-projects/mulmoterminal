@@ -739,6 +739,12 @@ Every line of that is load-bearing, and publish refuses the declaration without 
     their phone, and again in an incognito window, and no address is recorded anywhere.
   - **`none`** is refused: with no session there is no uid, so `idFrom` can only be `auto` and the
     same person can submit as often as they can press the button.
+- **If the rows are public, use `idFrom: "pseudonym"` / `"pseudonym+field"` instead of the `auth.uid`
+  pair.** Same one-row-per-uid guarantee, but the id is sha256(uid + ":" + aid): the anonymous uid is
+  the same in every app of this project, so a public row named by it can be joined to the same
+  person's named rows elsewhere. Declare `protocol: "3.0.0"` (readers older than that refuse the app),
+  and no `uidField` beside it — publish refuses the pair, since the field would write the uid back.
+  `templates/schedule-poll.md` and `templates/tally.md` use it.
 - **`emailField` names the field their address lands in**, and it must be in `createFields`.
 - **`uidField` is the same binding without an address** — the field the rules compare with the
   submitter's own uid. Reach for it when the DOCUMENT ID is already spent on exclusivity (a claim

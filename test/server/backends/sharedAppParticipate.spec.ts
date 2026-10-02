@@ -20,8 +20,9 @@ import { viewConfigDocId } from "@receptron/sharedapp";
 import { setFirestoreAccessor, setSharedCollectionsSupport } from "@mulmoclaude/core/collection/server";
 import { chmodSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { useSharedApp } from "../../../server/infra/use-shared-app-tool.js";
-import { AID, bookingsPath, DEFAULT_ROWS, freshBag, ME, publishApp, slotsPath, type Bag } from "../../support/participateHarness.js";
+import { AID, bookingsPath, DEFAULT_ROWS, freshBag, ME, publishApp, slotsPath, submitFor, type Bag } from "../../support/participateHarness.js";
 import { makeTempDir } from "../../support/tempDir";
 
 // CREATED WITH `vi.hoisted` because the mock factory below is hoisted above the imports: a plain
@@ -492,6 +493,23 @@ describe("useSharedApp — reading somebody else's app", () => {
     expect(said).toContain("a failure, not a permission boundary");
     expect(said).toContain("unavailable");
     expect(said).not.toContain("YOUR OWN ONLY");
+  });
+
+  it("finds the reader's own row by the app's pseudonym, not by the raw uid", async () => {
+    // `idFrom: "pseudonym"` (#325): the row is named sha256(uid + ":" + aid), the value the rules
+    // require, so a row under the raw uid is not this reader's in such an app.
+    publish({ idFromUid: true });
+    const submit = submitFor({ mirror: false, idFromUid: true, idFromSlug: false, bothIdentities: false, dottedEmailField: false });
+    const config = bag.docs.store.get(`apps/${AID}/config`)?.get("public") ?? {};
+    bag.docs.put(`apps/${AID}/config`, "public", { ...config, submit: { bookings: { ...submit, idFrom: "pseudonym" } } });
+    bag.denyQuery.add(bookingsPath);
+    const pseudonym = createHash("sha256").update(`${ME.uid}:${AID}`).digest("hex");
+    bag.docs.put(bookingsPath, pseudonym, { slot: "09:00", status: "booked" });
+    bag.docs.put(bookingsPath, ME.uid, { slot: "13:00", status: "booked" });
+    const said = await run({ action: "records", slug: "sakura", cid: "bookings" });
+    expect(said).toContain("YOUR OWN ONLY");
+    expect(said).toContain("09:00");
+    expect(said).not.toContain("13:00");
   });
 
   it("does not report a broken own-row lookup as an empty own-row answer", async () => {

@@ -28,7 +28,7 @@ import { readIntentMessage, VIEW_MESSAGE, type WriteTier } from "@receptron/shar
 import { isRecord } from "../../../common/isRecord.js";
 import { previewPageKey, type PreviewAudience, type PreviewIntent, type PreviewIntentResult } from "../../../common/sharedAppPreview.js";
 import { commitIntent, itemsPath } from "./itemWrites.js";
-import { ownSelectors, ownsRow, previewSharedApp } from "./preview.js";
+import { ownSelectors, ownsRow, readerFor, previewSharedApp } from "./preview.js";
 import { sharedAppContext } from "./context.js";
 
 /** WHAT REPLACED `NOT_A_MEMBER_PAGE`.
@@ -144,7 +144,7 @@ export async function performPreviewIntent(root: string, asked: PreviewIntent): 
     const found = await handle.docs.get(itemsPath(preview.aid, cid), itemId).catch(() => null);
     if (!isRecord(found)) return null;
     const row = { ...found, id: itemId };
-    return ownsRow(want, row, handle) ? row : null;
+    return ownsRow(want, row, await readerFor(handle, preview.aid)) ? row : null;
   };
 
   // RESOLVED BEFORE THE JUDGEMENT, so the package sees the row's real status rather than nothing —

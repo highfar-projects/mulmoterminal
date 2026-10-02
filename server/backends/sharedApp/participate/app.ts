@@ -41,7 +41,7 @@ import {
   viewConfigDocId,
   type ProjectedViewWrite,
 } from "@receptron/sharedapp";
-import { capabilitiesFor, projectedWritesOf, type ViewCapability, type WriteTier } from "@receptron/sharedapp/view";
+import { pseudonymOf, capabilitiesFor, projectedWritesOf, type ViewCapability, type WriteTier } from "@receptron/sharedapp/view";
 import { firestoreHandle } from "@mulmoclaude/core/collection/server";
 import { isRecord } from "../../../../common/isRecord.js";
 import { currentFirestore } from "../../remoteHost/session.js";
@@ -147,6 +147,9 @@ export interface JoinedApp {
    *  "no published duty" — never "invent one" — and so does a document that carries none. */
   briefs: Partial<Record<BriefTier, AppBrief[]>>;
   handle: SharedAppHandle;
+  /** This reader's per-app pseudonym (`pseudonymOf(uid, aid)`), for an app whose rows are named by it.
+   *  Absent where it was never computed, and then such rows are not looked up. */
+  pseudonym?: string;
 }
 
 export type JoinedAppResult = { ok: true; app: JoinedApp } | { ok: false; problems: string[] };
@@ -250,12 +253,19 @@ function rosterTier(fromTier: ProjectedViewWrite[] | null, fromPublic: Projected
   return mergeByCid(fromTier, fromPublic);
 }
 
+/** The reader's pseudonym for this app, beside the app — computed once, so the sync own-row
+ *  selector can name rows an app keys by it. */
+const withPseudonym = async (result: JoinedAppResult, uid: string): Promise<JoinedAppResult> => {
+  if (!result.ok) return result;
+  return { ok: true, app: { ...result.app, pseudonym: await pseudonymOf(uid, result.app.aid) } };
+};
+
 /** Resolve a URL name to everything this reader can learn about the app behind it. */
 export async function joinApp(slug: string): Promise<JoinedAppResult> {
   const handle = firestoreHandle();
   if (!handle) return { ok: false, problems: [NO_SESSION] };
   try {
-    return await readApp(handle, slug);
+    return withPseudonym(await readApp(handle, slug), handle.uid);
   } catch (err) {
     // A read that BROKE, as opposed to one the rules refused — the refusals are already null above.
     // Reported rather than absorbed: every absorbed one narrows this answer silently.
@@ -475,7 +485,8 @@ export function ownSelector(app: JoinedApp, cid: string): { fields: { field: str
   ];
   if (fields.length > 0) return { fields };
   if (raw.idFrom === "auth.uid") return { id: handle.uid };
-  if (raw.idFrom === "auth.uid+field") return "unlistable";
+  if (raw.idFrom === "pseudonym") return app.pseudonym === undefined ? null : { id: app.pseudonym };
+  if (raw.idFrom === "auth.uid+field" || raw.idFrom === "pseudonym+field") return "unlistable";
   return null;
 }
 
@@ -520,7 +531,7 @@ export async function readRecords(app: JoinedApp, cid: string, limit: number): P
       scope: "none",
       rows: [],
       note:
-        "this collection builds its ids as `uid_<field>`, and the rules grant a submitter the document they can NAME rather than a range of them — " +
+        "this collection builds its ids from you (your uid, or this app's pseudonym of it) joined to a field, and the rules grant a submitter the document they can NAME rather than a range of them — " +
         "so your rows cannot be listed at all. Name the record directly if you know which one it is",
     };
   if ("id" in want) {
