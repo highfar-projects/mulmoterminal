@@ -1,18 +1,100 @@
 {
   "kinds": [
-    { "option": "手順書・ヘルプ・マニュアル", "genre": "docs/manual" },
-    { "option": "README・開発者向けの説明", "genre": "technical/readme" },
-    { "option": "仕様書・設計書", "genre": "technical/spec" },
-    { "option": "よくある質問", "genre": "docs/faq" },
-    { "option": "用語集", "genre": "docs/glossary" },
-    { "option": "技術ブログ", "genre": "blog/tech" },
-    { "option": "会社のサイトの記事（オウンドメディア）", "genre": "blog/owned-media" },
-    { "option": "報告書・社内文書", "genre": "business/report" },
-    { "option": "提案書・企画書", "genre": "business/proposal" },
-    { "option": "議事録", "genre": "business/meeting-notes" },
-    { "option": "プレスリリース・お知らせ", "genre": "business/press-release" },
-    { "option": "契約書・利用規約", "genre": "legal/contract" },
-    { "option": "規程・社内規則", "genre": "legal/statute" },
-    { "option": "論文", "genre": "academic/paper" }
+    {
+      "option": "手順書・ヘルプ・マニュアル",
+      "genre": "docs/manual"
+    },
+    {
+      "option": "README・開発者向けの説明",
+      "genre": "technical/readme"
+    },
+    {
+      "option": "仕様書・設計書",
+      "genre": "technical/spec"
+    },
+    {
+      "option": "よくある質問",
+      "genre": "docs/faq"
+    },
+    {
+      "option": "用語集",
+      "genre": "docs/glossary"
+    },
+    {
+      "option": "技術ブログ",
+      "genre": "blog/tech"
+    },
+    {
+      "option": "会社のサイトの記事（オウンドメディア）",
+      "genre": "blog/owned-media"
+    },
+    {
+      "option": "報告書・社内文書",
+      "genre": "business/report"
+    },
+    {
+      "option": "提案書・企画書",
+      "genre": "business/proposal"
+    },
+    {
+      "option": "議事録",
+      "genre": "business/meeting-notes"
+    },
+    {
+      "option": "プレスリリース・お知らせ",
+      "genre": "business/press-release"
+    },
+    {
+      "option": "契約書・利用規約",
+      "genre": "legal/contract"
+    },
+    {
+      "option": "規程・社内規則",
+      "genre": "legal/statute"
+    },
+    {
+      "option": "論文",
+      "genre": "academic/paper"
+    },
+    {
+      "option": "ブログ（エッセイ・読み物）",
+      "genre": "blog/essay"
+    },
+    {
+      "option": "メール・手紙",
+      "genre": "business/email"
+    },
+    {
+      "option": "判決文",
+      "genre": "legal/judgment"
+    },
+    {
+      "option": "特許明細書",
+      "genre": "legal/patent"
+    },
+    {
+      "option": "小説・物語",
+      "genre": "literature/fiction"
+    },
+    {
+      "option": "文学のエッセイ・随筆",
+      "genre": "literature/essay"
+    },
+    {
+      "option": "詩",
+      "genre": "literature/poetry"
+    },
+    {
+      "option": "戯曲・脚本",
+      "genre": "literature/play"
+    },
+    {
+      "option": "演説・挨拶の原稿",
+      "genre": "speech/address"
+    },
+    {
+      "option": "書き起こし（会見・会議での発言の記録）",
+      "genre": "speech/transcript"
+    }
   ]
 }

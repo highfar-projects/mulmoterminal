@@ -64,7 +64,22 @@ describe("polish: the kinds of document", () => {
       仕様書: "technical/spec",
       "契約書・利用規約": "legal/contract",
       "規程・社内規則": "legal/statute",
+      "よくある質問（FAQ）": "docs/faq",
+      用語集: "docs/glossary",
+      判決文: "legal/judgment",
+      特許明細書: "legal/patent",
+      論文: "academic/paper",
+      "小説・物語": "literature/fiction",
+      "文学のエッセイ・随筆": "literature/essay",
+      詩: "literature/poetry",
+      "戯曲・脚本": "literature/play",
+      "演説・挨拶の原稿": "speech/address",
+      "書き起こし（会見・会議での発言の記録）": "speech/transcript",
     });
+  });
+
+  it("offer every genre chaff has", () => {
+    expect(kinds.flatMap((kind) => (kind.genre === null ? [] : [kind.genre])).sort()).toEqual([...CHAFF_GENRES].sort());
   });
 
   it("each name a genre chaff has, each only once", () => {
@@ -85,7 +100,7 @@ describe("polish: the kinds of document", () => {
   it.each([
     ["a kind left to chaff", { style: CHAFF_DEFAULT_STYLE, kind: "指定しない（chaff に任せる）" }],
     ["no kind", { style: CHAFF_DEFAULT_STYLE }],
-    ["an unknown kind", { style: CHAFF_DEFAULT_STYLE, kind: "詩" }],
+    ["an unknown kind", { style: CHAFF_DEFAULT_STYLE, kind: "短歌" }],
     ["a kind that is not text", { style: CHAFF_DEFAULT_STYLE, kind: 3 }],
     ["no answers", null],
     ["answers that are not an object", "報告書"],

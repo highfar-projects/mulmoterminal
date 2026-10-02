@@ -25,7 +25,17 @@
         "プレスリリース・お知らせ": "Press release or notice",
         "契約書・利用規約": "Contract or terms of service",
         "規程・社内規則": "Regulation or company rules",
-        "論文": "Academic paper"
+        "論文": "Academic paper",
+        "ブログ（エッセイ・読み物）": "Blog (essay, feature)",
+        "メール・手紙": "Email or letter",
+        "判決文": "Court judgment",
+        "特許明細書": "Patent specification",
+        "小説・物語": "Novel or story",
+        "文学のエッセイ・随筆": "Literary essay",
+        "詩": "Poetry",
+        "戯曲・脚本": "Play or script",
+        "演説・挨拶の原稿": "Speech or address (to be read aloud)",
+        "書き起こし（会見・会議での発言の記録）": "Transcript (what was said at a press conference or meeting)"
       }
     },
     "ci": {
