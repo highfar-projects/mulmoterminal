@@ -1,11 +1,11 @@
 <script setup lang="ts">
 // A kettle: steam from the spout, the lid rattling, then the lid blown off in a cloud of steam.
 import { computed, useId } from "vue";
-import type { HeatPalette } from "./heatPalette";
 import type { StageLevel } from "./stageLevel";
+import type { HeatFigureProps } from "./heatFigure";
 import HeatGlow from "./HeatGlow.vue";
 
-const props = defineProps<{ level: StageLevel; palette: HeatPalette; animate: boolean }>();
+const props = defineProps<HeatFigureProps>();
 
 const bodyId = `heat-kettle-body-${useId()}`;
 const STEAM_BY_LEVEL: Record<StageLevel, number> = { 0: 0, 1: 0, 2: 2, 3: 3, 4: 5, 5: 0 };
