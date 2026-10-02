@@ -1,6 +1,6 @@
 # Polish and adopt offer every kind of document chaff measures (#2852)
 
-chaffjs 0.18 measures 25 genres; polish offered 13 of them. It now offers all of them — FAQ, glossary, court judgment,
+Polish offered only some of the genres chaffjs 0.18 measures. It now offers every one — FAQ, glossary, court judgment,
 patent specification, academic paper, novel or story, literary essay, poetry, play or script, speech, transcript — and
 adopt offers the ones it lacked (blog essay, email, judgment, patent, the literature and speech genres).
 
