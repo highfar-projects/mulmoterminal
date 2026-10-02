@@ -13,8 +13,8 @@ import { accountSpawnEnv, codexSessionRoot, codexSessionSkillsDir } from "./sess
 import { codexRolloutPath } from "../agents/codex-sessions.js";
 import { trackCodexActivity } from "./codex-activity-track.js";
 import { claimedCodexRollouts, claimFullGuiMcp, codexRollouts, ptys, rememberCodexRollout } from "./registry.js";
-import { ptySpawn, ptyWouldReattach } from "./pty-spawn.js";
-import { ptyStartLine } from "./pty-exit-log.js";
+import { ptyWouldReattach } from "./pty-spawn.js";
+import { startAgentPty } from "./agent-pty-start.js";
 import { wireAgentPtyRelay } from "./pty-relay.js";
 import { attachCodexAutoRun } from "./draft-injection.js";
 import type { PtyEntry } from "./types.js";
@@ -101,16 +101,13 @@ export function createCodexSpawner(deps: SpawnDeps) {
     const guiMcpServers = codexGuiMcpServers({ sessionId, port: PORT, groups: mcpGroups, allTools });
     const permissionHook = wantsCodexPermissionHook(process.platform, initialPrompt !== null);
     const args = buildCodexArgs({ resume: resumeRolloutId, model: deps.codexModel, guiMcpServers, permissionHook });
-    const { term, tmux, reattached } = ptySpawn(sessionId, deps.codexBin, args, cwd, true, {
+    const spawnEnv = {
       binEnvVar: codexAdapter.binEnvVar,
       // The session id is what the permission hook's constant command posts under.
       env: { ...guiMcpEnv(sessionId, PORT), ...accountSpawnEnv("codex", sessionId) },
-    });
-    const spawnedAtMs = Date.now();
+    };
     const note = resumeRolloutId ? `resume ${resumeRolloutId}` : null;
-    console.log(ptyStartLine({ agent: "codex", pid: term.pid, cwd, tmux, reattached, sessionId, note }));
-    const entry: PtyEntry = { term, ws, buffer: "", cwd, tmux, active: false, agent: "codex" };
-    ptys.set(sessionId, entry);
+    const { entry, spawnedAtMs, reattached } = startAgentPty({ sessionId, ws, cwd, agent: "codex", file: deps.codexBin, args, spawnEnv, note });
     if (resumeRolloutId) {
       // Recorded on resume too, not just on the spawn that discovered it: a session resumed by the
       // rollout id itself carries no mapping yet, and one whose cell moved needs the new cwd.
