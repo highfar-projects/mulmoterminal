@@ -8,6 +8,29 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@8.4.0 — 2026-10-02
+
+> **Setup guide:** [8.4.0 — Find a skill on skills.sh, and Claude cells keep their scrollbar](https://receptron.github.io/mulmoterminal/guide/en/v8.4.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v8.4.0.html))
+
+### Skills viewer: search skills.sh (#2835)
+
+- [#2837](https://github.com/receptron/mulmoterminal/pull/2837) — the Skills viewer gets a second mode, **skills.sh**, which searches the public skills directory for skills that are not on disk and reads one before installing it: its `SKILL.md`, every file it would bring, and a warning that lists the files that can run code. Nothing is installed; the pane shows the `npx skills add <owner/repo> --skill <name>` line to copy and run, and a link to the skill's page. The server calls the two endpoints the official `npx skills` CLI uses (`skills.sh/api/search`, `skills.sh/api/download/…`) through new routes `GET /api/skills/remote/search` and `GET /api/skills/remote/skill`, and only when **Search** is pressed. Every answer is schema-checked; names that would not go safely into a URL are dropped, hits and snapshot files are capped, and the body is read through a capped reader that stops at 8 MB. A `SKILL.md` — off skills.sh, and on disk in the local mode too — is drawn with every image as a link (`MarkdownProse` `imagesAsLinks`), so a relative image cannot request this app's routes when the page renders.
+- [#2821](https://github.com/receptron/mulmoterminal/pull/2821) — the Skills viewer opens from the command palette, and through a new app action `screen-skills` from a `keymap` binding or a `run: "action"` header button.
+
+### Claude cells keep their scrollbar (#2808)
+
+- [#2833](https://github.com/receptron/mulmoterminal/pull/2833) — Claude Code can turn its fullscreen renderer on by itself when `tui` is unset, which draws on the alternate screen: the cell lost its scrollbar and a selection could not grow past one screen. A Claude spawn (plain and custom agents) now adds `CLAUDE_CODE_NO_FLICKER=0` **only when nobody chose a renderer** — no top-level `tui` in the session home's `settings.json` or the folder's `.claude/settings.json` / `.claude/settings.local.json`, and neither `CLAUDE_CODE_NO_FLICKER` nor `CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN` in the server's environment — because the variable is read before `tui` and would otherwise switch off a fullscreen someone chose. New FAQ entry `#claude-fullscreen`.
+
+### Blueprints
+
+- [#2836](https://github.com/receptron/mulmoterminal/pull/2836) — the new-build form has a **report language** select beside the usecase and base. It starts as the screen's language, names each language in its own words, and is what the build records as `run.language` (before, always the screen's). A form kept across the trust detour and a follow-up started from "Next steps" carry it. Documents keep their own language. Refs #2634.
+- [#2832](https://github.com/receptron/mulmoterminal/pull/2832), [#2834](https://github.com/receptron/mulmoterminal/pull/2834) ([#2831](https://github.com/receptron/mulmoterminal/issues/2831)) — a local-base app refused every change from its own screen under `yarn dev` with 403, because a string proxy entry gets `changeOrigin: true` from Vite and the API's same-origin guard then saw a different `Host`. The scaffold now writes the proxy as `{ target, changeOrigin: false }`, and a new check `checks/dev-proxy.mjs` loads each `vite.config.*` through Vite's resolved config (plugin `config` hooks included, `.cts`/`.cjs` names too) and flags a string entry, `changeOrigin: true`, or a proxy that sets `Host`/`Origin` itself; the scaffold check and the run-check run it.
+
+### Internal
+
+- [#2823](https://github.com/receptron/mulmoterminal/pull/2823), [#2824](https://github.com/receptron/mulmoterminal/pull/2824), [#2825](https://github.com/receptron/mulmoterminal/pull/2825), [#2826](https://github.com/receptron/mulmoterminal/pull/2826), [#2827](https://github.com/receptron/mulmoterminal/pull/2827), [#2828](https://github.com/receptron/mulmoterminal/pull/2828), [#2829](https://github.com/receptron/mulmoterminal/pull/2829) ([#2822](https://github.com/receptron/mulmoterminal/issues/2822)) — duplicated code found by the duplication scan lifted into shared helpers and components (settings editors, anchored menus, server routes, the full-screen overlay frame, the file panels' keyboard, and others), with no change in behaviour.
+- [#2830](https://github.com/receptron/mulmoterminal/pull/2830) — dependency updates.
+
 ## mulmoterminal@8.3.0 — 2026-10-01
 
 > **Setup guide:** [8.3.0 — A Skills viewer, and apps from a collection keep MulmoTerminal's look](https://receptron.github.io/mulmoterminal/guide/en/v8.3.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v8.3.0.html))

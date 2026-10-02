@@ -4,14 +4,14 @@ nav_title: Feature list
 layout: default
 parent: English
 nav_order: 6.5
-as_of: 8.3.0
-description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 8.3.0)."
+as_of: 8.4.0
+description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 8.4.0)."
 ---
 
 # Feature list
 {: .no_toc }
 
-Every capability MulmoTerminal has as of 8.3.0, one line each, grouped by area. The `(vX.Y.Z)` at the end of a line is the release it first arrived in; significant later extensions are noted inside the line by version. Fixes and internal changes are not listed — see the [ChangeLog](https://github.com/receptron/mulmoterminal/blob/main/docs/ChangeLog.md) for those, and the [Feature reference](features.html) and the page linked from each section for how to use them.
+Every capability MulmoTerminal has as of 8.4.0, one line each, grouped by area. The `(vX.Y.Z)` at the end of a line is the release it first arrived in; significant later extensions are noted inside the line by version. Fixes and internal changes are not listed — see the [ChangeLog](https://github.com/receptron/mulmoterminal/blob/main/docs/ChangeLog.md) for those, and the [Feature reference](features.html) and the page linked from each section for how to use them.
 
 - TOC
 {:toc}
@@ -61,6 +61,7 @@ More: [Basics](basics.html)
 
 More: [Agents](agents.html)
 
+- The Skills viewer's skills.sh mode searches the public directory for skills not on disk and shows a skill's `SKILL.md`, every file it brings and the ones that can run code, with the `npx skills add` line to copy; it installs nothing (v8.4.0)
 - More features → Skills lists every Claude skill on disk — `~/.claude/skills`, each enabled plugin (as `plugin:skill`), and the `.claude/skills` of each folder a terminal ran in — in three columns with search, marking a folder skill that overrides yours (v8.3.0)
 - Settings → Models and backends adds and removes custom agents, accounts and backends, validating URLs and keys (v7.2.0)
 - A claude cell says when Claude Code is too old for auto permission mode, and how to update (v6.6.0)
@@ -186,6 +187,7 @@ More: [Worktrees](worktree.html)
 
 More: [Configuration](config.html)
 
+- The Skills viewer opens from the command palette, and from a key or header button through the `screen-skills` action (v8.4.0)
 - The palette's > scope lists the acting terminal's Run-menu scripts and Skill-menu skills (v7.3.0)
 - Set shortcuts in Settings by pressing the key, with Change, Clear and clash refusal, plus recommended keys in one click (v7.2.0)
 - Each cell operation has one name usable as a header button action, keymap shortcut and palette row (v7.2.0)
@@ -293,6 +295,7 @@ More: [From a collection](from-collection.html)
 
 More: [Blueprints](blueprints.html)
 
+- The new-build form picks the language a build reports in (reports, questions, replies); documents keep their own (v8.4.0)
 - An app built from a collection looks like the collection does in MulmoTerminal by default, or takes a soft, crisp or calm template; a Match the look step applies it and writes `DESIGN.md` (v8.3.0)
 - A failing step gets five attempts, and from the fourth the agent is shown every earlier failure and asked to repair; a build waiting on a busy folder retries when it frees (v8.2.0)
 - Examples to try: polish a manual, a regulation or an English blog post, compare a revision, verify an estimate, review terms of service, and more (v8.1.0)
