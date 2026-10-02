@@ -63,6 +63,28 @@ describe("workspaceRequest", () => {
     if (request.kind === "unusable") expect(request.problem).toBe(cwdProblemMessage(file, { kind: "not-a-directory" }));
   });
 
+  // A leading `~` is the home directory, as a shell reads it; `~name` and a mid-path `~` are not.
+  it("expands a leading ~ to the home directory and answers the canonical path", () => {
+    const sub = path.basename(dir);
+    const home = path.dirname(dir);
+    expect(workspaceRequest("~", dir)).toEqual({ kind: "resolved", cwd: dir });
+    expect(workspaceRequest(`~/${sub}`, home)).toEqual({ kind: "resolved", cwd: dir });
+    expect(workspaceRequest(`~/${sub}/`, home)).toEqual({ kind: "resolved", cwd: dir });
+    expect(existingWorkspace(`~/${sub}`, home)).toBe(dir);
+  });
+
+  it("refuses ~name and a ~ that is not leading, as relative paths", () => {
+    for (const relative of ["~root", "~nobody/x", "a/~/b"]) {
+      expect(workspaceRequest(relative, dir)).toMatchObject({ kind: "unusable", requested: relative, malformed: true });
+    }
+  });
+
+  it("refuses a ~ path that does not exist, naming the expanded directory", () => {
+    const request = workspaceRequest("~/no-such-dir", dir);
+    expect(request).toMatchObject({ kind: "unusable", requested: "~/no-such-dir", malformed: false });
+    if (request.kind === "unusable") expect(request.problem).toBe(cwdProblemMessage(path.join(dir, "no-such-dir"), { kind: "missing" }));
+  });
+
   // Express hands over an array when a param repeats (?cwd=a&cwd=b). It was ASKED for, so it is
   // refused rather than quietly swapped for the default — but as a malformed request, not a
   // missing directory.
