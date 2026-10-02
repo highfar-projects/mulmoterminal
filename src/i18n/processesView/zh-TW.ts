@@ -18,7 +18,7 @@ export const processesViewZhTW = {
     killConfirm: "結束此處理程序？\n\n{command}\n（PID {pid}）\n\n先送出 SIGTERM，幾秒後仍在執行則送出 SIGKILL。",
     killFailed: "無法結束 PID {pid}。",
     killUnconfirmed: "已向 PID {pid} 送出訊號，但無法確認它已結束。",
-    paneRoot: "這是工作階段本身。要結束整個工作階段，請在 設定 > 工作階段 中操作。",
+    paneRoot: "這是工作階段本身。請在格狀檢視中關閉它的終端機；沒有在任何地方開啟的工作階段可以在 設定 > 工作階段 中結束。",
     worktrees: {
       intro: "終端機執行過的資料夾中受管理的 worktree。不會自動刪除。",
       onlyCandidates: "只顯示可刪除的",

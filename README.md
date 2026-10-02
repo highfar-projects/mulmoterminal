@@ -1767,7 +1767,8 @@ narrow and tall for one record you are discussing — and each position keeps it
   The **Processes** tab lists each tmux session with the process tree under its panes — `yarn dev`,
   vite, MCP bridges, the agent itself — with CPU, memory and how long each has run, and an **End**
   button per process (SIGTERM, then SIGKILL if the same process is still there a few seconds later).
-  A session's own shell is not offered: end the whole session from Settings. Busy and day-old
+  A session's own shell is not offered: close its terminal in the grid, or end a session that is
+  open nowhere from Settings > Sessions. Busy and day-old
   processes are highlighted, never ended for you. It reads only while the page is open. The
   **Worktrees** tab lists the managed worktrees of the folders your terminals have run in and what
   keeps each from going — uncommitted or untracked files, commits not in the base branch, a
