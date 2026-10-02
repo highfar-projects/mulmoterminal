@@ -14,7 +14,7 @@ import { dirSession, survivorSnapshot } from "../session/dir-session.js";
 import { tmuxAttachedCounts } from "../infra/tmux.js";
 import { requestBody } from "../routes/requestBody.js";
 import { expandTilde } from "../files/pathContainment.js";
-import { cleanupRowAt, worktreeCleanupRows } from "./worktree-cleanup.js";
+import { cleanupRowAt, deleteBranchIfAt, worktreeCleanupRows } from "./worktree-cleanup.js";
 import { cleanupBlockers } from "../../common/worktreeCleanup.js";
 import { rememberedSessionCwds } from "../session/registry.js";
 
@@ -60,8 +60,9 @@ function mountWorktreeCleanupRoutes(app: Express, isAllowedOrigin: WorktreeRoute
   });
 
   // Remove a cleanup candidate and its branch. Every condition that made it a candidate is read
-  // again here, not trusted from the list: a commit made since would otherwise go with `branch -D`,
-  // and a terminal that has moved in would lose its directory. 409 names what now holds it.
+  // again here, not trusted from the list, and 409 names what now holds it. The worktree goes
+  // without `--force`, so git refuses one that turned dirty; the branch goes only while it is still
+  // at the commit found merged, so a commit made in between keeps it (`branchDeleted: false`).
   app.post("/api/worktrees/cleanup/remove", async (req, res) => {
     if (!requestOriginAllowed(req, isAllowedOrigin)) return res.status(403).end();
     const { repoDir, path: worktreePath } = requestBody(req.body);
@@ -72,10 +73,11 @@ function mountWorktreeCleanupRoutes(app: Express, isAllowedOrigin: WorktreeRoute
     if (row === null) return res.status(404).json({ error: "not a managed worktree" });
     const blockers = cleanupBlockers(row);
     if (blockers.length > 0) return res.status(409).json({ blockers });
-    const result = await removeWorktree(row.repo, row.path, { deleteBranch: true });
+    const result = await removeWorktree(row.repo, row.path);
     if (!result.ok) return res.status(result.reason === "failed" ? 500 : 409).json(result);
     releaseWorktreeEnv(row.path);
-    return res.json(result);
+    const branchDeleted = row.branch !== null && (await deleteBranchIfAt(row.repo, row.branch, row.head));
+    return res.json({ ok: true, branchDeleted });
   });
 }
 

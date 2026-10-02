@@ -39,6 +39,7 @@ async function rowOf(repo: string, base: string, startPoint: string, worktree: W
     base,
     path: worktree.path,
     branch: worktree.branch,
+    head: worktree.head,
     exists,
     dirty: exists && (await isDirty(worktree.path)),
     merged: await isMerged(repo, worktree.head, startPoint),
@@ -96,4 +97,11 @@ export async function cleanupRowAt(repoDir: string, worktreePath: string): Promi
   if (worktree === undefined) return null;
   const base = await defaultBaseBranch(repo);
   return rowOf(repo, base, await baseStartPoint(repo, base), worktree, await usageFacts());
+}
+
+/** Delete `branch` only while it still points at `head`, the commit that was found merged. A commit
+ *  made after that check moves the ref, `update-ref` then refuses, and the branch stays — so the
+ *  check and the deletion cannot be split by a commit the way a `branch -D` after them could. */
+export async function deleteBranchIfAt(repo: string, branch: string, head: string): Promise<boolean> {
+  return (await git(["update-ref", "-d", `refs/heads/${branch}`, head], repo)).ok;
 }

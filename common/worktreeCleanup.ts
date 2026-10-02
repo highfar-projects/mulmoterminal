@@ -7,11 +7,13 @@ import { isRecord } from "./isRecord.js";
 import { isUnknownArray } from "./isUnknownArray.js";
 
 export interface WorktreeCleanupRow {
-  /** The main checkout — what `POST /api/worktrees/remove` takes as `repoDir`. */
+  /** The main checkout — what `POST /api/worktrees/cleanup/remove` takes as `repoDir`. */
   repo: string;
   base: string;
   path: string;
   branch: string | null;
+  /** The commit the branch was at when `merged` was decided — the only commit its deletion may take. */
+  head: string;
   exists: boolean;
   /** Uncommitted or untracked files: removing it would lose them. */
   dirty: boolean;
@@ -39,6 +41,7 @@ const isCleanupRow = (value: unknown): value is WorktreeCleanupRow =>
   typeof value.base === "string" &&
   typeof value.path === "string" &&
   (value.branch === null || typeof value.branch === "string") &&
+  typeof value.head === "string" &&
   typeof value.exists === "boolean" &&
   typeof value.dirty === "boolean" &&
   typeof value.merged === "boolean" &&

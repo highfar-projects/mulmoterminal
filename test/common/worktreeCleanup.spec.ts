@@ -2,7 +2,17 @@
 import { describe, it, expect } from "vitest";
 import { cleanupBlockers, isCleanupCandidate, readWorktreeCleanupBody, type WorktreeCleanupRow } from "../../common/worktreeCleanup";
 
-const CLEAN: WorktreeCleanupRow = { repo: "/r", base: "main", path: "/wt/a", branch: "agent/a", exists: true, dirty: false, merged: true, inUse: false };
+const CLEAN: WorktreeCleanupRow = {
+  repo: "/r",
+  base: "main",
+  path: "/wt/a",
+  branch: "agent/a",
+  head: "abc",
+  exists: true,
+  dirty: false,
+  merged: true,
+  inUse: false,
+};
 
 describe("cleanupBlockers", () => {
   it("is empty for a merged, clean, unused worktree that exists", () => {

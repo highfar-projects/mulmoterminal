@@ -26,7 +26,7 @@ const { canonicalPath } = await import("../../../server/infra/canonical-path");
 // git spells a path its own way (forward slashes, long names on Windows), so rows are matched as
 // the server matches them: canonically.
 const samePath = (a: string, b: string): boolean => canonicalPath(a) === canonicalPath(b);
-const { worktreeCleanupRows } = await import("../../../server/git/worktree-cleanup");
+const { deleteBranchIfAt, worktreeCleanupRows } = await import("../../../server/git/worktree-cleanup");
 const { mountWorktreeRoutes } = await import("../../../server/git/worktree-routes");
 
 /** POST /api/worktrees/cleanup/remove through the real route, without an HTTP server. */
@@ -159,7 +159,7 @@ describe("worktreeCleanupRows", () => {
     "removes a candidate and its branch, reading it again at removal time",
     async () => {
       const wt = await addWorktree(repo, "done");
-      expect(await removeCandidate({ repoDir: repo, path: wt.path })).toMatchObject({ status: 200, payload: { ok: true } });
+      expect(await removeCandidate({ repoDir: repo, path: wt.path })).toEqual({ status: 200, payload: { ok: true, branchDeleted: true } });
       expect(existsSync(wt.path)).toBe(false);
       expect((await git(["rev-parse", "--verify", "--quiet", "agent/done"], repo)).ok).toBe(false);
     },
@@ -181,6 +181,24 @@ describe("worktreeCleanupRows", () => {
       expect(await removeCandidate({ repoDir: repo, path: used.path })).toEqual({ status: 409, payload: { blockers: ["inUse"] } });
       expect(existsSync(ahead.path) && existsSync(used.path)).toBe(true);
       expect((await git(["rev-parse", "--verify", "--quiet", "agent/ahead"], repo)).ok).toBe(true);
+    },
+    GIT_TEST_TIMEOUT_MS,
+  );
+
+  it.skipIf(!hasGit)(
+    "deletes a branch only while it is still at the commit found merged",
+    async () => {
+      const wt = await addWorktree(repo, "moved");
+      const checked = (await worktreeCleanupRows([repo])).find((row) => samePath(row.path, wt.path));
+      if (!checked) throw new Error("worktree was not listed");
+      writeFileSync(path.join(wt.path, "late.txt"), "late\n");
+      await gitIn(wt.path, "add", "late.txt");
+      await gitIn(wt.path, "commit", "-m", "after the check");
+
+      expect(await deleteBranchIfAt(repo, "agent/moved", checked.head)).toBe(false);
+      expect((await git(["rev-parse", "--verify", "--quiet", "agent/moved"], repo)).ok).toBe(true);
+      const now = await git(["rev-parse", "agent/moved"], repo);
+      expect(await deleteBranchIfAt(repo, "agent/moved", now.stdout.trim())).toBe(true);
     },
     GIT_TEST_TIMEOUT_MS,
   );
