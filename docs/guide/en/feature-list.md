@@ -4,14 +4,14 @@ nav_title: Feature list
 layout: default
 parent: English
 nav_order: 6.5
-as_of: 8.4.0
-description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 8.4.0)."
+as_of: 8.5.0
+description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 8.5.0)."
 ---
 
 # Feature list
 {: .no_toc }
 
-Every capability MulmoTerminal has as of 8.4.0, one line each, grouped by area. The `(vX.Y.Z)` at the end of a line is the release it first arrived in; significant later extensions are noted inside the line by version. Fixes and internal changes are not listed — see the [ChangeLog](https://github.com/receptron/mulmoterminal/blob/main/docs/ChangeLog.md) for those, and the [Feature reference](features.html) and the page linked from each section for how to use them.
+Every capability MulmoTerminal has as of 8.5.0, one line each, grouped by area. The `(vX.Y.Z)` at the end of a line is the release it first arrived in; significant later extensions are noted inside the line by version. Fixes and internal changes are not listed — see the [ChangeLog](https://github.com/receptron/mulmoterminal/blob/main/docs/ChangeLog.md) for those, and the [Feature reference](features.html) and the page linked from each section for how to use them.
 
 - TOC
 {:toc}
@@ -20,6 +20,7 @@ Every capability MulmoTerminal has as of 8.4.0, one line each, grouped by area. 
 
 More: [Basics](basics.html)
 
+- The launch directory may start with `~` (v8.5.0)
 - Reopen a recently closed cell beside the current terminal from "Reopen: …" in the command palette; an agent resumes its conversation. The `terminal-reopen` action reopens the newest (v8.2.0)
 - The grid-ordering button opens an Auto / Manual / Priority menu with the current one checked (v6.6.0)
 - Pane buttons are two menus: History (prompts, conversation, timeline) and Tools (tools, canvas, collections) (v6.6.0)
@@ -295,6 +296,11 @@ More: [From a collection](from-collection.html)
 
 More: [Blueprints](blueprints.html)
 
+- A document build's review gate takes changes and answers to its open questions; the step before is checked again, and approval waits for a pass (v8.5.0)
+- Packs, form questions, examples and step names show in English on an English screen (v8.5.0)
+- Polish and adopt offer all 24 kinds of document chaff measures, each with viewpoints (v8.5.0)
+- A step's question can offer choices with their cost and a recommended one (v8.5.0)
+- The run view shows a build's work list (targets.json) as a table, a row opening its details (v8.5.0)
 - The new-build form picks the language a build reports in (reports, questions, replies); documents keep their own (v8.4.0)
 - An app built from a collection looks like the collection does in MulmoTerminal by default, or takes a soft, crisp or calm template; a Match the look step applies it and writes `DESIGN.md` (v8.3.0)
 - A failing step gets five attempts, and from the fourth the agent is shown every earlier failure and asked to repair; a build waiting on a busy folder retries when it frees (v8.2.0)
