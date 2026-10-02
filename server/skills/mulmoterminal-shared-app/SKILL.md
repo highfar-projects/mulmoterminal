@@ -59,6 +59,12 @@ These shapes are written out in full — declaration, schemas, and the reasoning
   `public.readPublished` + `publishField` are for: the rules, not the page, keep the rest away, and
   publishing is the owner's switch on `/m/{slug}/records/{cid}` — never a page's write, because
   `view.correct` sends strings and the flag is a boolean.
+- **[templates/tally.md](./templates/tally.md)** — ONLY THE TOTALS: visitors see how many chose each
+  answer and nothing else (a "which do you like?" result, a quiz's spread, an event's preference
+  poll). Not a key but a split: the counted field lives in `votes` (`public.read`, nothing else in
+  it), names and comments in `notes` (nobody's to read but the owner's), joined by the same uid, and
+  the page counts. It is also the template that sends TWO records as two presses — one write per
+  press, or the second loses the gesture mark and the preview drops it.
 - **[templates/live-poll.md](./templates/live-poll.md)** — a page that MOVES while people are looking
   at it (a live stream, a lecture, a stand-up quiz). This is what `views[].live` is for, and the only
   one whose declaration is decided by FAN-OUT: the audience may watch the questions, only the desk may
@@ -1334,8 +1340,11 @@ Four things are worth asking and the rest are not:
     `public.read: [cid]`. Every row reaches every visitor whole, so declare no `emailField` there
     (the note in `templates/schedule-poll.md` says the same).
 
-  "Show only a summary" is not one of the options: there is no mechanism for it. If the author asks
-  for it, say so plainly and let them pick from the three.
+  A fourth, **only the totals** (visitors see how many chose each answer, never who or what they
+  wrote), is not a declaration but a DATA SHAPE: keep the counted field in a world-readable
+  collection of its own and everything else in a private one, and let the public page count —
+  [templates/tally.md](./templates/tally.md). It holds up to roughly ten thousand votes, because the
+  page reads them all; say so if the author expects more.
 
   Publish refuses: a `readPublished` collection with no `publishField`; a collection in both
   `public.read` and `readPublished`; a `publishField` listed in `createFields` or `selfUpdate`; and a
