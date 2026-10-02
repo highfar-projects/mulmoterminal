@@ -4,14 +4,14 @@ nav_title: Feature list
 layout: default
 parent: English
 nav_order: 6.5
-as_of: 8.5.0
-description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 8.5.0)."
+as_of: 8.6.0
+description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 8.6.0)."
 ---
 
 # Feature list
 {: .no_toc }
 
-Every capability MulmoTerminal has as of 8.5.0, one line each, grouped by area. The `(vX.Y.Z)` at the end of a line is the release it first arrived in; significant later extensions are noted inside the line by version. Fixes and internal changes are not listed — see the [ChangeLog](https://github.com/receptron/mulmoterminal/blob/main/docs/ChangeLog.md) for those, and the [Feature reference](features.html) and the page linked from each section for how to use them.
+Every capability MulmoTerminal has as of 8.6.0, one line each, grouped by area. The `(vX.Y.Z)` at the end of a line is the release it first arrived in; significant later extensions are noted inside the line by version. Fixes and internal changes are not listed — see the [ChangeLog](https://github.com/receptron/mulmoterminal/blob/main/docs/ChangeLog.md) for those, and the [Feature reference](features.html) and the page linked from each section for how to use them.
 
 - TOC
 {:toc}
@@ -253,6 +253,9 @@ More: [Configuration](config.html)
 
 More: [From a collection](from-collection.html)
 
+- The shared-app skill asks whether visitors see what was sent: nobody, only the records the owner picks, only the totals, or everything (v8.6.0)
+- Shared-app templates `question-box` (anyone asks, the owner publishes the ones they pick) and `tally` (visitors see only the totals) (v8.6.0)
+- World-readable shared-app rows use a per-app pseudonym id, so they cannot be joined across apps (v8.6.0)
 - Shared-app templates `class-seats` (a class with a capacity; visitors see only the seats left) and `schedule-poll` (one anonymous answer per participant) (v8.2.0)
 - A shared-app publish that would remove people names them and stops unless confirmRemovals is true (v6.8.0)
 - With propagateDeletes, deleting a record deletes its Google Calendar event (v5.5.0)
@@ -349,6 +352,7 @@ More: [Blueprints](blueprints.html)
 
 More: [Feature reference](features.html)
 
+- More features → Processes shows each session's processes (with End) and the worktrees that can be removed (v8.6.0)
 - Each account's 5h and 7d usage windows show in the toolbar, named (v5.8.0)
 - Cursor cells show the input/output token badge, counted since the last restart (v4.23.0)
 - The grid header shows machine load as a percentage of cores, hideable in Settings (v4.10.0)

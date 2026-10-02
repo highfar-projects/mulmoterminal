@@ -8,6 +8,21 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@8.6.0 — 2026-10-03
+
+> **Setup guide:** [8.6.0 — See what each session runs, and shared apps that show only what you choose](https://receptron.github.io/mulmoterminal/guide/en/v8.6.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v8.6.0.html))
+
+### Processes page (#2219)
+
+- [#2871](https://github.com/receptron/mulmoterminal/pull/2871) — **More features → Processes** (`/processes`, also in the command palette) shows what mulmoterminal has left running. The Processes tab lists each tmux session with the process tree under its panes (CPU, memory, elapsed); **End** sends SIGTERM, then SIGKILL if the same process is still there after a grace period, and busy or day-old processes are highlighted but never ended for you. The Worktrees tab lists managed worktrees with what keeps each from going (missing folder, uncommitted or untracked files, commits not in the base, a terminal standing in it); one with none gets **Remove** through `POST /api/worktrees/cleanup/remove`, which checks everything again first. It reads only while the page is open.
+
+### Shared apps: what visitors see
+
+- [#2865](https://github.com/receptron/mulmoterminal/pull/2865) — a `question-box` template (#2864): anonymous questions in a collection that declares `publishField` and sits in `public.readPublished`, so visitors see only the ones the owner publishes from MulmoServer's `/m/{slug}`; the desk answers with `view.correct` and moves `asked → answered`.
+- [#2873](https://github.com/receptron/mulmoterminal/pull/2873) — a `tally` template (#2872), the fourth answer to "should visitors see what was sent": only the totals. Votes (`choice` + `status`, in `public.read`) and names and comments (private) live in separate anonymous collections joined by id; the page counts.
+- [#2863](https://github.com/receptron/mulmoterminal/pull/2863) — the preview shows only the published rows of a `readPublished` collection (#2861), filtering in production's order (published, then own, then cap), so a page tried locally never shows more than it will live.
+- [#2874](https://github.com/receptron/mulmoterminal/pull/2874), [#2875](https://github.com/receptron/mulmoterminal/pull/2875) — per-app pseudonym ids (`idFrom: "pseudonym"` / `"pseudonym+field"`, `sharedapp` 0.39.0): a world-readable row's id is `sha256(uid + ":" + aid)` and can no longer be joined to the same person's rows in another app. The host writes and finds such rows in submissions, the preview and the participant view; `APP_PROTOCOL` is 3.0.0; `schedule-poll` and `tally` use it, and a template test refuses a public collection whose id is built from the uid.
+
 ### Shared-app booking templates: the booker cancels where they can reach it (#2807)
 
 - [#2869](https://github.com/receptron/mulmoterminal/pull/2869) — `meeting-room`, `salon` and `gym` put the booker's cancellation on a `participant` page (`/p/{slug}`), which only addresses in `members` can open, so a visitor who booked from the public page could never reach it. The public page does receive the reader's own rows in `viewer.mine` (matched by `emailField` / `uidField`), but without their status, so each template follows its statuses: `meeting-room` and `class-seats` (one status) list the booker's own bookings on the public page and withdraw them there (`class-seats` gains `selfDelete`); `salon` (several statuses) sends the customer to the shop and its desk moves the booking to `cancelled`, now also from `pending`; `gym` keeps `/p/` and says only invited members reach it. Specs pin that no template taking public submissions relies on a participant page for those people, and that every withdraw has a delete declared.
@@ -16,7 +31,15 @@ Entries here are folded into the next release's heading when it ships.
 
 ### Shared-app skill: ask whether visitors see what was sent (#2862)
 
-- [#2866](https://github.com/receptron/mulmoterminal/pull/2866) — the skill asks, before building, whether the public page shows the records people send: nobody (neither `public.read` nor `public.readPublished`), only the ones the owner chooses (`publishField` + `public.readPublished`, switched per row at `/m/{slug}`), or everyone (`public.read`, no `emailField`). "Only a summary" is said to have no mechanism yet. A spec runs each choice and each refusal the skill lists through sharedapp's publish gate.
+- [#2866](https://github.com/receptron/mulmoterminal/pull/2866) — the skill asks, before building, whether the public page shows the records people send: nobody (neither `public.read` nor `public.readPublished`), only the ones the owner chooses (`publishField` + `public.readPublished`, switched per row at `/m/{slug}`), or everyone (`public.read`, no `emailField`). "Only the totals" became a fourth answer in #2873. A spec runs each choice and each refusal the skill lists through sharedapp's publish gate.
+
+### Blueprints
+
+- [#2859](https://github.com/receptron/mulmoterminal/pull/2859) — the work list says when it failed to load, with **Try again**, and refuses a repeated target id (#2858).
+
+### Dependencies
+
+- [#2860](https://github.com/receptron/mulmoterminal/pull/2860), [#2867](https://github.com/receptron/mulmoterminal/pull/2867), [#2868](https://github.com/receptron/mulmoterminal/pull/2868) — `@receptron/sharedapp` 0.37.0 (`publishField` + `readPublished`, `withdrawUntilField`), 0.38.0 (`stampField` on each collection document), 0.38.1 (refuses a `selfUpdate` that can rewrite a window ref).
 
 ## mulmoterminal@8.5.0 — 2026-10-02
 
