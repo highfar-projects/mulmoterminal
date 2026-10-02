@@ -186,6 +186,9 @@ export function stepPrompt({
     "",
     "If you need a decision from the user, run this and then stop — do not guess:",
     `  QUESTION='your question' ${askCommand}`,
+    "When the decision is a pick between a few options, put the evidence in the question and offer the options as buttons: CHOICES holds one per line, `label: what choosing it costs and risks`, and RECOMMEND names the label you would pick. Prefix them on the same line:",
+    `  QUESTION='…' CHOICES='Fix the type: …
+  Leave it: …' RECOMMEND='Fix the type' ${askCommand}`,
     `The user is not an engineer. When they must do something by hand — a console setting, a sign-in, trying the app — use the matching guide in ${packDirs.base}/guides or ${packDirs.usecase}/guides: put its steps in your question with the {{…}} placeholders filled in, rather than a bare link. The question is shown as Markdown.`,
     "",
     `When the work is done, stop. The executor then runs the step's check itself: ${step.check}`,

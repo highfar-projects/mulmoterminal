@@ -158,6 +158,17 @@ default branch. Decline when:
 Ask the person (and stop) only when a decision is theirs: a gate red for reasons outside this change, a fix
 that would change behaviour, or a target the plan did not foresee.
 
+Make it a pick, not an essay. Put the evidence in the question — the lines, the caller that reaches them,
+what you measured — and offer the options as `CHOICES`, each with what it costs and risks, and `RECOMMEND`
+the one you would take. The decisions this work stops for, and their usual options:
+
+| decision | options |
+|---|---|
+| a declared type is narrower or wider than what arrives | fix the type / narrow the code to it / leave it |
+| something looks like a bug | file an issue / leave it |
+| a fix would change behaviour | change it / keep today's behaviour |
+| a costed no | accept it / do it anyway |
+
 Done when the check passes: every finished target's PR is merged (or open, if the person merges), the clone
 is back on a clean, up-to-date default branch, every gate is green, and one more target is finished than
 before this round.

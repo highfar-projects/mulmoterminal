@@ -92,6 +92,17 @@ describe("blueprint executor", () => {
     expect(spawned[1].prompt).toContain("A: Tokyo");
   });
 
+  it("saves the choices offered with a question, and the picked label is the answer the next session reads", async () => {
+    await create();
+    const choices = [{ label: "Fix" }, { label: "Leave", description: "free", recommended: true as const }];
+    await executor.ask("run-00000001", "a", "Fix the type?", "s1", choices);
+    await endTurn("s1");
+    expect((await executor.view("run-00000001")).state.steps.a.choices).toEqual(choices);
+    await executor.humanEvent("run-00000001", "a", { type: "answer", answer: "Leave", atMs: 0 });
+    expect((await executor.view("run-00000001")).state.steps.a.choices).toBeUndefined();
+    expect(spawned[1].prompt).toContain("A: Leave");
+  });
+
   it("tells a later step what the person decided in an earlier one", async () => {
     await create();
     await executor.ask("run-00000001", "a", "Which region?", "s1");

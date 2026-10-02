@@ -91,6 +91,7 @@ export const blueprintsKo: Messages["blueprints"] = {
     rejectReason: "하지 않는 이유 (여기서 멈춥니다)",
     answer: "답변",
     answerPlaceholder: "답변 입력",
+    recommended: "추천",
     send: "보내기",
     gaveUp: "자동으로 {count}번 고치려 했지만 아직 확인을 통과하지 못했습니다. 아래가 마지막 판정 결과입니다. 「다시」를 누르면 다시 자동으로 고칩니다.",
     retry: "다시 시도",

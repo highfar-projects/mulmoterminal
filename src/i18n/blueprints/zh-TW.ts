@@ -89,6 +89,7 @@ export const blueprintsZhTW: Messages["blueprints"] = {
     rejectReason: "不執行的原因（建置將在此停止）",
     answer: "回答",
     answerPlaceholder: "輸入回答",
+    recommended: "推薦",
     send: "送出",
     gaveUp: "已自動嘗試修復 {count} 次，但檢查仍未通過。下面是最後一次的判定結果。按「重試」會再次自動修復。",
     retry: "重試",

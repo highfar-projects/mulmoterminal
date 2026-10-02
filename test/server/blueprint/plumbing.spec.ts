@@ -179,9 +179,21 @@ describe.skipIf(process.platform === "win32")("askCommand", () => {
         (err) => (err ? reject(err) : resolve()),
       ),
     );
+    await new Promise<void>((resolve, reject) =>
+      execFile(
+        "/bin/sh",
+        ["-c", `QUESTION='Fix it?' CHOICES='Fix: it'"'"'s cheap\n  Leave: free' RECOMMEND='Fix' ${askCommand(port, "run-00000001", "projects", "sess-1")}`],
+        { env: withoutQuestion },
+        (err) => (err ? reject(err) : resolve()),
+      ),
+    );
     expect(received).toEqual([
       { url: "/api/blueprints/runs/run-00000001/ask", body: { stepId: "projects", sessionId: "sess-1", question } },
       { url: "/api/blueprints/runs/run-00000001/ask", body: { stepId: "projects", sessionId: "sess-1", question: "Which region, Tokyo?" } },
+      {
+        url: "/api/blueprints/runs/run-00000001/ask",
+        body: { stepId: "projects", sessionId: "sess-1", question: "Fix it?", choices: "Fix: it's cheap\n  Leave: free", recommend: "Fix" },
+      },
     ]);
   });
 });

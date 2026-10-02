@@ -72,6 +72,29 @@ describe("applyEvent — the happy path", () => {
     });
   });
 
+  it("keeps a question's choices only as long as the question", () => {
+    const choices = [{ label: "Fix" }, { label: "Leave", recommended: true as const }];
+    const asked = run([
+      ["init", { type: "start" }],
+      ["init", { type: "ask", question: "Fix the type?", choices }],
+    ]);
+    expect(asked.steps.init).toMatchObject({ status: "awaiting-answer", question: "Fix the type?", choices });
+    expect(blueprintStateSchema.parse(JSON.parse(JSON.stringify(asked)))).toEqual(asked);
+    const reasked = run([["init", { type: "ask", question: "Which region?" }]], asked);
+    expect(reasked.steps.init.choices).toBeUndefined();
+    const answered = run([["init", { type: "answer", answer: "Fix", atMs: 5 }]], asked);
+    expect(answered.steps.init.choices).toBeUndefined();
+    expect(answered.steps.init.answers).toEqual([{ question: "Fix the type?", answer: "Fix", atMs: 5 }]);
+  });
+
+  it("treats an empty list of choices as a plain question", () => {
+    const asked = run([
+      ["init", { type: "start" }],
+      ["init", { type: "ask", question: "q", choices: [] }],
+    ]);
+    expect(asked.steps.init.choices).toBeUndefined();
+  });
+
   it("reports nothing current once every step passed", () => {
     const done = run([
       ["init", { type: "start" }],

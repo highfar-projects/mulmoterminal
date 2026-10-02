@@ -93,6 +93,7 @@ export const blueprintsEn = {
     rejectReason: "Why not? (the build stops here)",
     answer: "Answer",
     answerPlaceholder: "Your answer",
+    recommended: "Recommended",
     send: "Send",
     gaveUp:
       "The build tried to fix this {count} times by itself, and the check still does not pass. Below is the last result. Press Retry and it will try again by itself.",

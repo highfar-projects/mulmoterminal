@@ -92,6 +92,7 @@ export const blueprintsJa: Messages["blueprints"] = {
     rejectReason: "やめる理由（ここで止まります）",
     answer: "回答",
     answerPlaceholder: "回答を入力",
+    recommended: "推奨",
     send: "送る",
     gaveUp: "自動で {count} 回直そうとしましたが、まだ確かめが通りません。下が最後の判定の結果です。「もう一度」を押すと、また自動で直しにいきます。",
     retry: "もう一度",
