@@ -11,7 +11,8 @@
 
 要点は 2 つあります。
 
-**1 人 1 件はルールが守ります。** 回答の id は `uid + "_" + pollId` で、同じ日程調整に 2 回目を
+**1 人 1 件はルールが守ります。** 回答の id は「このアプリでの本人の匿名 id + `"_"` + pollId」
+（`idFrom: "pseudonym+field"`。匿名 id は uid とアプリ id のハッシュ）で、同じ日程調整に 2 回目を
 出すと既に在る文書への create になり、拒否されます。ページの「直す」ボタンは、それを避けて
 **同じ文書を書き換える**ためのものです。
 
@@ -28,7 +29,7 @@
   "aid": "(init が書きます。手で触らないこと)",
   "name": "日程調整",
   "slug": "schedule",
-  "protocol": "1.0.0",
+  "protocol": "3.0.0",
   "members": {
     "organizer@example.jp": { "*": "owner" }
   },
@@ -49,7 +50,7 @@
     "submit": {
       "answers": {
         "auth": "anonymous",
-        "idFrom": "auth.uid+field",
+        "idFrom": "pseudonym+field",
         "idField": "pollId",
         "createFields": ["pollId", "name", "marks", "comment", "status"],
         "initialStatus": "answered",
@@ -63,6 +64,11 @@
   }
 }
 ```
+
+**`idFrom: "pseudonym+field"`（`protocol: "3.0.0"`）** — 回答は全員に見えるので、id に uid を
+そのまま使うと、同じ人が別のアプリで残した名前付きの行と uid で突き合わせられます。匿名 id は
+アプリごとに違う値なので、それができません。1 人 1 件の守りは `auth.uid+field` と同じです。
+この決め方を読めるのは 3.0.0 以降の読み手なので、`protocol` もそう宣言します。
 
 **`auth: "anonymous"`** — サインイン画面を出さずに答えられます。**Firebase コンソールで
 Anonymous プロバイダを有効にする**必要があり、これはリポジトリからはできません（プロジェクト

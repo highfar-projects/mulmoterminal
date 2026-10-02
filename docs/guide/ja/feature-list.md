@@ -4,14 +4,14 @@ nav_title: 全機能リスト
 layout: default
 parent: 日本語
 nav_order: 6.5
-as_of: 8.5.0
-description: MulmoTerminal のいまある機能を、入った版つきで領域ごとに一行ずつ並べた一覧（8.5.0 時点）。
+as_of: 8.6.0
+description: MulmoTerminal のいまある機能を、入った版つきで領域ごとに一行ずつ並べた一覧（8.6.0 時点）。
 ---
 
 # 全機能リスト
 {: .no_toc }
 
-8.5.0 時点で MulmoTerminal にある機能を、領域ごとに一行ずつ並べた一覧です。行末の `(vX.Y.Z)` はその機能が最初に入った版で、その後の大きな拡張は行の中に版番号で添えています。不具合の修正や内部の変更は載せていません。それらは [ChangeLog](https://github.com/receptron/mulmoterminal/blob/main/docs/ChangeLog.md) を、詳しい使い方は[機能リファレンス](features.html)と各節の「詳しく」から辿れるページを見てください。
+8.6.0 時点で MulmoTerminal にある機能を、領域ごとに一行ずつ並べた一覧です。行末の `(vX.Y.Z)` はその機能が最初に入った版で、その後の大きな拡張は行の中に版番号で添えています。不具合の修正や内部の変更は載せていません。それらは [ChangeLog](https://github.com/receptron/mulmoterminal/blob/main/docs/ChangeLog.md) を、詳しい使い方は[機能リファレンス](features.html)と各節の「詳しく」から辿れるページを見てください。
 
 - TOC
 {:toc}
@@ -253,6 +253,9 @@ description: MulmoTerminal のいまある機能を、入った版つきで領�
 
 詳しく: [コレクションから作る](from-collection.html)
 
+- 共有アプリのスキルが、送られたものを訪問者に見せるかを聞く（見せない・選んだものだけ・集計だけ・全部） (v8.6.0)
+- 共有アプリのひな形に `question-box`（誰でも質問でき、オーナーが選んだものだけ公開）と `tally`（訪問者には集計だけを見せる）が加わる (v8.6.0)
+- 共有アプリの誰でも読める行は、アプリごとの仮名を id に使い、アプリをまたいで同じ人をたどれない (v8.6.0)
 - 共有アプリのひな形に `class-seats`（定員のある教室の予約。来た人には残りの席数だけを見せる）と `schedule-poll`（参加者ごとに一つの匿名回答の日程調整）が加わる (v8.2.0)
 - 共有アプリの公開で人が外れるときは名前を出して止める（confirmRemovals で続行） (v6.8.0)
 - propagateDeletes で、記録を消すと Google カレンダーの予定も消す (v5.5.0)
@@ -349,6 +352,7 @@ description: MulmoTerminal のいまある機能を、入った版つきで領�
 
 詳しく: [機能リファレンス](features.html)
 
+- その他の機能 → プロセス で、各セッションのプロセス（終了できる）と消せる worktree を見る (v8.6.0)
 - アカウントごとの 5h / 7d 使用枠を名前付きでツールバーに出す (v5.8.0)
 - Cursor のセルにも入出力トークンを出す（前回の再起動からの集計） (v4.23.0)
 - グリッドのヘッダーにマシンの負荷をコア数に対する % で出す（設定で消せる） (v4.10.0)

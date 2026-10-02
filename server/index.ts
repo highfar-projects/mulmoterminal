@@ -9,7 +9,7 @@ import { hideErrorStacks } from "./infra/hide-error-stacks.js";
 import { allowedToolNames, autoAllowedToolNames, toolSummaries } from "./infra/plugins-registry.js";
 import { getPlayfulEffects, getUserMcpServers, APP_CONFIG_FILE } from "./config/config-routes.js";
 import { enforceKeymap } from "./config/keymap-check.js";
-import { tmuxCancelCopyMode, tmuxPaneInMode, tmuxPanePidsAsync, tmuxRedrawClient, tmuxTerminalModes, tmuxWindowSize } from "./infra/tmux.js";
+import { tmuxCancelCopyMode, tmuxPaneInMode, tmuxPanePidsBySessionAsync, tmuxRedrawClient, tmuxTerminalModes, tmuxWindowSize } from "./infra/tmux.js";
 import { browserOriginHostnames, createIsAllowedOrigin } from "./infra/allowed-origin.js";
 import { serverErrorExit } from "./infra/server-exit.js";
 import { PORT, BIND_HOST, CLAUDE_CWD } from "./config/env.js";
@@ -190,13 +190,7 @@ const heatWatch = createHeatWatch({
   enabled: () => getPlayfulEffects() !== "off",
   connectedSessions: () => new Map([...ptys].flatMap(([id, entry]) => (entry.ws ? [[id, entry.ws] as const] : []))),
   listProcesses: () => listProcessRows(),
-  listPanePids: async () => {
-    const byPid = await tmuxPanePidsAsync();
-    if (!byPid) return null;
-    const bySession = new Map<string, number[]>();
-    byPid.forEach((id, pid) => bySession.set(id, [...(bySession.get(id) ?? []), pid]));
-    return bySession;
-  },
+  listPanePids: tmuxPanePidsBySessionAsync,
   publish: (id, level, finale) => {
     const frame: HeatFrame = { type: "heat", level, finale };
     sendFrame(ptys.get(id)?.ws, frame);

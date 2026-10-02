@@ -17,6 +17,7 @@ import GithubOverlay from "./components/GithubOverlay.vue";
 import RoomsOverlay from "./components/RoomsOverlay.vue";
 import BlueprintsOverlay from "./components/blueprints/BlueprintsOverlay.vue";
 import SkillsOverlay from "./components/SkillsOverlay.vue";
+import ProcessesOverlay from "./components/processes/ProcessesOverlay.vue";
 import FilesOverlay from "./components/FilesOverlay.vue";
 import HoverTip from "./components/HoverTip.vue";
 import ServerStoppedOverlay from "./components/ServerStoppedOverlay.vue";
@@ -106,6 +107,8 @@ const { whatsNew, dismiss: dismissWhatsNew } = useWhatsNew(useI18n().locale.valu
   <BlueprintsOverlay />
   <!-- Every skill on disk across the folders terminals ran in; opened from the feature menu. -->
   <SkillsOverlay />
+  <!-- What each session is running, and worktrees that can go; opened from the feature menu. -->
+  <ProcessesOverlay />
   <!-- Full-screen file explorer + editor; opened by the toolbar's Files button, or by a terminal
        header's Files button rooted at that terminal's own directory. -->
   <FilesOverlay />

@@ -5,22 +5,22 @@ import { featureMenuEntries } from "../../../src/components/featureMenuEntries";
 const gated = (rooms: boolean, worklog: boolean) => ({ prs: false, rooms, worklog });
 
 describe("featureMenuEntries", () => {
-  it("lists all four, in order, once everything is set up", () => {
-    expect(featureMenuEntries(gated(true, true))).toEqual(["rooms", "blueprints", "skills", "worklog"]);
+  it("lists all five, in order, once everything is set up", () => {
+    expect(featureMenuEntries(gated(true, true))).toEqual(["rooms", "blueprints", "skills", "processes", "worklog"]);
   });
 
-  it("always offers Blueprints and Skills, so the menu is never empty", () => {
-    expect(featureMenuEntries(gated(false, false))).toEqual(["blueprints", "skills"]);
+  it("always offers Blueprints, Skills and Processes, so the menu is never empty", () => {
+    expect(featureMenuEntries(gated(false, false))).toEqual(["blueprints", "skills", "processes"]);
   });
 
   it.each([
-    [true, false, ["rooms", "blueprints", "skills"]],
-    [false, true, ["blueprints", "skills", "worklog"]],
+    [true, false, ["rooms", "blueprints", "skills", "processes"]],
+    [false, true, ["blueprints", "skills", "processes", "worklog"]],
   ])("rooms=%s worklog=%s lists %j", (rooms, worklog, expected) => {
     expect(featureMenuEntries(gated(rooms, worklog))).toEqual(expected);
   });
 
   it("ignores the pull-requests gate, which is a toolbar button of its own", () => {
-    expect(featureMenuEntries({ prs: true, rooms: false, worklog: false })).toEqual(["blueprints", "skills"]);
+    expect(featureMenuEntries({ prs: true, rooms: false, worklog: false })).toEqual(["blueprints", "skills", "processes"]);
   });
 });

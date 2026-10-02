@@ -3,9 +3,10 @@
 // WHICH ROWS a preview page is handed, decided without a session: the cap a page declared, the
 // published-only filter a `public.readPublished` collection carries, and the reader's own rows. The
 // one-shot read and the listener both go through these, so a page cannot see more after a change.
+import type { PublishedConfigDoc } from "@receptron/sharedapp";
 import { describe, it, expect } from "vitest";
 
-import { capped, visibleRows } from "../../../server/backends/sharedApp/preview.js";
+import { ownSelectors, ownsRow, capped, visibleRows } from "../../../server/backends/sharedApp/preview.js";
 import { rowsFor } from "../../../server/backends/sharedApp/previewWatch.js";
 
 describe("the window a capped page is handed", () => {
@@ -81,5 +82,41 @@ describe("the rows a page is handed", () => {
     ];
     const want = { cid: "q", scope: "all" as const, publishedField: "shown", limit: { rows: 1, field: "at" } };
     expect(visibleRows(want, stamped, who).map((row) => row.id)).toEqual(["mid"]);
+  });
+});
+
+describe("rows named by the app's pseudonym", () => {
+  // `pseudonym` / `pseudonym+field` (#325): the row is the reader's when its id is their per-app
+  // pseudonym — never when it is their raw uid, which is what the rules refuse such an app.
+  const reader = { uid: "u1", email: "me@example.jp", pseudonym: "p-hash" };
+
+  it("matches the pseudonym, not the uid", () => {
+    const want = { cid: "votes", scope: "own" as const, ownDocId: "pseudonym" as const };
+    expect(ownsRow(want, { id: "p-hash" }, reader)).toBe(true);
+    expect(ownsRow(want, { id: "u1" }, reader)).toBe(false);
+    expect(ownsRow(want, { id: "p-hash" }, { uid: "u1", email: "me@example.jp" })).toBe(false);
+  });
+
+  it("rebuilds a composite id from the pseudonym when the strategy says so", () => {
+    const want = { cid: "votes", scope: "own" as const, ownIdField: "pollId", ownIdFrom: "pseudonym" as const };
+    expect(ownsRow(want, { id: "p-hash_p1", pollId: "p1" }, reader)).toBe(true);
+    expect(ownsRow(want, { id: "u1_p1", pollId: "p1" }, reader)).toBe(false);
+    // And the uid composite is untouched.
+    expect(ownsRow({ cid: "votes", scope: "own", ownIdField: "pollId" }, { id: "u1_p1", pollId: "p1" }, reader)).toBe(true);
+  });
+});
+
+describe("the own-row selector a pseudonym app is read by", () => {
+  it("names the row by the pseudonym, and a composite by the pseudonym and the field", () => {
+    const config: PublishedConfigDoc = {
+      protocol: "3.0.0",
+      enabled: true,
+      read: [],
+      publishedAt: 0,
+      submit: { votes: { idFrom: "pseudonym" }, picks: { idFrom: "pseudonym+field", idField: "pollId" } },
+    };
+    const selectors = ownSelectors(config);
+    expect(selectors.votes).toEqual({ cid: "votes", scope: "own", ownDocId: "pseudonym" });
+    expect(selectors.picks).toEqual({ cid: "picks", scope: "own", ownIdField: "pollId", ownIdFrom: "pseudonym" });
   });
 });

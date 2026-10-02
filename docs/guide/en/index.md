@@ -8,8 +8,8 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **8.5.0 is out.** A document build's approval screen takes your changes and answers to its open
-> questions, and Blueprints show in English on an English screen. [Setup guide](v8.5.0.html)
+> **8.6.0 is out.** A Processes page shows what each session runs and which worktrees can go, and shared
+> apps can show visitors only what you choose. [Setup guide](v8.6.0.html)
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching
