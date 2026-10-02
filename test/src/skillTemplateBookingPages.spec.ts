@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 //
-// The public pages of the two booking-shaped templates, RUN.
+// The pages of the booking-shaped templates, RUN.
 //
 // What the declaration gate cannot see is the half of each guarantee the page owns. `class-seats`
 // keeps names hidden and capacity enforced in the rules, but "N left" is the page counting mirror
@@ -10,6 +10,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 
 import classSeats from "../../server/skills/mulmoterminal-shared-app/templates/class-seats.md?raw";
+import meetingRoom from "../../server/skills/mulmoterminal-shared-app/templates/meeting-room.md?raw";
 import schedulePoll from "../../server/skills/mulmoterminal-shared-app/templates/schedule-poll.md?raw";
 
 type Outcome = { ok: true } | { ok: false; error: string };
@@ -183,6 +184,38 @@ describe("class-seats.md — views/desk.html", () => {
     await settle();
     expect(page.calls).toEqual([{ kind: "withdraw", cid: "bookings", id: "c1-01", values: {} }]);
     expect(page.said()).not.toBe("");
+  });
+});
+
+// The meeting room's cancellation is the desk's: a booker keyed by the slot cannot reach a page of
+// their own, so this button is the only way a slot is given back.
+describe("meeting-room.md — views/desk.html", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  const state = {
+    slots: [{ id: "r1-0900", startAt: "2026-10-05T09:00" }],
+    bookings: [{ id: "r1-0900", slot: "r1-0900", requesterName: "山田", requesterEmail: "y@example.jp", purpose: "定例", status: "booked" }],
+  };
+
+  it("lists the bookings and draws no cancel without the role's permission", () => {
+    const page = load(meetingRoom, "views/desk.html");
+    page.tell(state, { can: {} });
+    expect(document.body.textContent).toContain("山田");
+    expect(document.querySelectorAll("#rows button")).toHaveLength(0);
+  });
+
+  it("cancels on the second press, by the booking's id", async () => {
+    const page = load(meetingRoom, "views/desk.html");
+    page.tell(state, { can: { bookings: { withdrawAny: true } } });
+    click("#rows button");
+    await settle();
+    expect(page.calls).toHaveLength(0);
+    click("#rows button");
+    await settle();
+    expect(page.calls).toEqual([{ kind: "withdraw", cid: "bookings", id: "r1-0900", values: {} }]);
+    expect(page.said()).toBe("取り消しました。");
   });
 });
 

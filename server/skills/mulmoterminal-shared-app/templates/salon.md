@@ -38,7 +38,7 @@
       "statusField": "status",
       "transitions": {
         "initial": ["pending"],
-        "pending": ["approved", "rejected"],
+        "pending": ["approved", "rejected", "cancelled"],
         "approved": ["cancelled"]
       },
       "mail": {
@@ -50,8 +50,7 @@
   },
   "views": [
     { "id": "public", "audience": "public", "path": "views/booking.html", "collections": ["stylists", "services", "slots"] },
-    { "id": "desk", "audience": "member", "path": "views/desk.html", "collections": ["bookings", "slots"] },
-    { "id": "mine", "audience": "participant", "path": "views/mine.html", "collections": ["bookings"] }
+    { "id": "desk", "audience": "member", "path": "views/desk.html", "collections": ["bookings", "slots"] }
   ],
   "agents": [
     {
@@ -77,9 +76,7 @@
         "window": {
           "fromField": { "ref": "slot", "collection": "slots", "field": "opensAt" },
           "untilField": { "ref": "slot", "collection": "slots", "field": "closesAt" }
-        },
-        "selfUpdate": { "pending": ["service"] },
-        "selfTransitions": { "pending": ["cancelled"] }
+        }
       }
     }
   }
@@ -334,8 +331,8 @@ await view.assign("bookings", booking.id, "stylist@salon.jp");  // 担当の付�
 - **動くのは 1 フィールドだけ。** `transition` は `statusField`、`assign` は
   `assigneeField`。どのフィールドかを決めるのは宣言で、ページではありません
 - **遷移は宣言どおりにしか動きません。** `collections.bookings.transitions` に無い移動は
-  拒否され、理由が返ります。参加者のページ（`views/mine.html`）には**別の表**
-  （`selfTransitions`）が渡るので、同じコレクションでも描けるボタンが違います
+  拒否され、理由が返ります。客から電話やメールでキャンセルを頼まれたら、受付がここで
+  `cancelled` に動かします（下の「キャンセルは店で」）
 - **承認メールは同じ書き込みに入ります。** `collections.bookings.mail` に
   その遷移のテンプレートがあれば、レコードと 1 回で書かれます。宛先もテンプレートも
   レコードと遷移から決まるので、却下した予約に「承認しました」を送ることはできません
@@ -375,88 +372,17 @@ view.onState((data, viewer) => {
 拒否されるだけです（`not-permitted`）。`assignee` は他人の行を動かせず、
 **自分の行も渡せません**（ルールが前後の両方で本人を要求するため）。
 
-## views/mine.html — 予約した人の画面
+## キャンセルは店で — 客のキャンセルのページを作らない理由
 
-`audience: "participant"`。入口は **`/p/{slug}`** で、公開ページの下にリンクがあります。
-自分の行しか読めないので `collections` に書けるのは `bookings` だけ、渡るのも自分の予約だけです。
+予約した客が自分でキャンセルするページ（`audience: "participant"`、`/p/{slug}`）は**置きません。**
+2 つの理由で、公開ページから予約した客には届かないからです。
 
-キャンセルは同じ `transition` で、**表が違うだけ**です（本人に許されている遷移は
-`public.submit.bookings.selfTransitions`、スタッフのそれは `collections.bookings.transitions`）。
+- **`/p/` は `members` に載っている人のページです。** 客は `members` にいないので開けません
+- **公開ページは、後から客の予約を見つけられません。** 予約の id は枠の id（`idFrom: "field"`）で、
+  訪問者の uid から作られていないので、`view.mine()` は「この人の予約はどれか」に答えません
 
-```html
-<style>
-  /* Every colour is derived from ONE hue — the rules are in design.md. Change it for your app. */
-  :root {
-    --hue: 330;                                    /* plum - an appointment somebody approves */
-    --main: oklch(47% .09 var(--hue));           --fill: oklch(96% .018 var(--hue));
-    --line: oklch(47% .09 var(--hue) / .16);     --ink: oklch(23% .015 var(--hue));
-    --muted: oklch(53% .02 var(--hue));          --paper: oklch(99.4% .007 85);
-  }
-  * { box-sizing: border-box; }
-  html { background: var(--paper); color: var(--ink); color-scheme: light; }
-  body { margin: 0 auto; max-width: 44rem; padding: 28px 18px 56px; font: 15px/1.65 system-ui, "Hiragino Sans", sans-serif; }
-  h1 { margin: 0 0 18px; font-size: clamp(23px, 5vw, 31px); line-height: 1.2; letter-spacing: -.03em; }
-  label { display: block; margin: 0 0 14px; color: var(--muted); font-size: 13px; font-weight: 750; }
-  input:not([type="radio"]), textarea { display: block; width: min(22rem, 100%); margin-top: 6px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink); font: inherit; }
-  input:focus, textarea:focus { border-color: var(--main); outline: 2px solid var(--line); }
-  button { min-height: 38px; margin: 4px 6px 0 0; padding: 8px 14px; border: 0; border-radius: 10px; background: var(--main); color: var(--paper); font: inherit; font-weight: 750; cursor: pointer; touch-action: manipulation; }
-  ul { margin: 0; padding: 0; list-style: none; }
-  #grid { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 8px; }
-  #rows > div, #today li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 8px; padding: 13px 15px; border: 1px solid var(--line); border-radius: 14px; background: var(--fill); }
-  #say { min-height: 1.6em; margin: 14px 0 0; color: var(--main); font-size: 13px; font-weight: 700; }
-</style>
-<div id="rows"></div>
-<p id="say" role="status"></p>
-<script>
-  const view = window.__MC_APP_VIEW;
-  const rows = document.getElementById("rows");
-  const say = document.getElementById("say");
-
-  view.onState(({ bookings = [] }) => {
-    const mine = bookings.slice().sort((a, b) => String(a.slot ?? "").localeCompare(String(b.slot ?? "")));
-    rows.replaceChildren(
-      ...mine.map((booking) => {
-        const row = document.createElement("div");
-        const what = document.createElement("span");
-        // textContent。担当者名もメニュー名も人が入力するものです。
-        what.textContent = `${booking.slot ?? ""} ${booking.service ?? ""} — ${booking.status ?? ""}`;
-        row.appendChild(what);
-        // `selfTransitions` は pending からの cancelled だけ。approved を取り消せるのは
-        // 受付（`collections.bookings.transitions`）なので、ここに出すと必ず断られる
-        // ボタンになります。宣言に無い遷移は描かないこと。
-        if (booking.status === "pending") {
-          const off = document.createElement("button");
-          // type を書くこと。省略した <button> は submit ボタンで、サンドボックスが
-          // 送信を止める側の形です。
-          off.type = "button";
-          off.dataset.booking = booking.id;
-          off.textContent = "キャンセル";
-          row.appendChild(off);
-        }
-        return row;
-      }),
-    );
-    if (mine.length === 0) rows.textContent = "予約はありません。";
-  });
-
-  rows.addEventListener("click", async (event) => {
-    const button = event.target;
-    const id = button.dataset?.booking;
-    if (!id) return;
-    // 確認はページの中で 2 度押しにします。confirm() はサンドボックスに無視され、
-    // false が返るので「押しても何も起きないボタン」になります。
-    if (button.dataset.armed !== "yes") {
-      button.dataset.armed = "yes";
-      button.textContent = "取り消す？";
-      return;
-    }
-    const result = await view.transition("bookings", id, "cancelled");
-    say.textContent = result.ok ? "取り消しました。" : `取り消せませんでした: ${result.error ?? "unknown"}`;
-  });
-
-  view.ready();
-</script>
-```
+だからキャンセルは**店に連絡してもらい、受付が `cancelled` に動かします**（`pending` からも
+`approved` からも動かせます）。公開ページと承認メールに、キャンセルの連絡先を書いてください。
 
 ---
 
@@ -467,7 +393,8 @@ view.onState((data, viewer) => {
   注意ではなく**構造**で守っています。`bookings` を `public.read` に足すと、その瞬間に
   客の連絡先が匿名の訪問者から全部読めます
 - **枠は先着で本当に排他されます。** ジムの順位方式と違い、繰り上げは起きません
-- **顧客がキャンセルしても枠はすぐには空きません。** 受付が戻す操作が要ります（下記）
+- **キャンセルは店に連絡してもらいます。** 客が自分で取り消すページはありません（上記）。
+  受付が `cancelled` に動かしても枠はすぐには空かず、戻す操作が要ります（下記）
 
 ---
 
@@ -499,8 +426,8 @@ view.onState((data, viewer) => {
 名前でもレコードを作れてしまう）。
 
 代償として、**電話予約をスタッフが代わりに入力することはできません**。どうしても必要なら
-`emailField` を外すことになり、そのとき失うのは「マイ予約」ページ（客が自分の予約を見て
-キャンセル・変更する）です。どちらを取るかは店の判断で、コードの都合ではありません。
+`emailField` を外すことになり、そのとき失うのは「予約の連絡先が、サインインした本人の
+アドレスである」という保証です。どちらを取るかは店の判断で、コードの都合ではありません。
 
 ### 4. 承認は状態機械が縛る — 担当者も例外ではない
 
@@ -530,23 +457,22 @@ view.onState((data, viewer) => {
 「空きと言っているが実は埋まっている」で、その先には id の衝突による拒否が必ず待って
 います。**見た目が遅れるだけで、二重予約は起きません。**
 
-### 7. キャンセルは 2 段階 — 客の操作では枠は空かない
+### 7. キャンセルは 2 段階 — `cancelled` にしても枠は空かない
 
 | 誰が | どうやって | 枠は |
 |---|---|---|
-| 顧客 | `selfTransitions` で `status: "cancelled"` | **空かない**（ドキュメントが残り id を占有し続ける） |
+| 受付・担当（客の連絡を受けて） | `transition` で `status: "cancelled"` | **空かない**（ドキュメントが残り id を占有し続ける） |
 | 受付・担当 | 予約を delete（`slots` を `open` に戻す書き込みと対で） | 空く |
 
-このテンプレートでは顧客に delete を許していません。**これは制約であると同時に、たぶん
-正しい運用でもあります** — 枠が客の操作で即座に他人に開く必要はなく、受付が確認してから
-戻す方が店の実態に合う。承認メール（`booking-approved`）を出せるのも、行が残るからです。
-ただし**そう決めたことを利用者に言ってください**。「キャンセルしたのに枠が空かない」は、
-書いていなければバグに見えます。
+キャンセルを状態にして行を残すのは、**制約であると同時に、たぶん正しい運用でもあります** —
+枠が即座に他人に開く必要はなく、受付が確認してから戻す方が店の実態に合う。承認メール
+（`booking-approved`）を出せるのも、行が残るからです。ただし**そう決めたことを利用者に
+言ってください**。「キャンセルしたのに枠が空かない」は、書いていなければバグに見えます。
 
-**押したその場で枠を開けたい店は** `public.submit.bookings.selfDelete` に状態を挙げます
-（会議室のテンプレート [meeting-room.md](./meeting-room.md) がその形）。代償は行が消える
-ことで、履歴も残らず、その取り消しにメールも束ねられません。美容室で勧めないのはそのため
-です。
+**押したその場で枠を開けたい店は** `collections.bookings.writerDelete: true` を書き、受付の
+画面で `view.withdraw()` を呼びます（会議室のテンプレート [meeting-room.md](./meeting-room.md)
+がその形）。削除と枠の再オープンが 1 つのバッチになります。代償は行が消えることで、履歴も
+残らず、その取り消しにメールも束ねられません。美容室で勧めないのはそのためです。
 
 ---
 

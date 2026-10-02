@@ -282,8 +282,8 @@ this template's, not your app's. The rules behind the sheet are in [design.md](.
 
 ## 取り消しは受付で — 本人の取り消しページを作らない理由
 
-会議室（[meeting-room.md](./meeting-room.md)）は本人の取り下げページ（`/p/{slug}`）を持ちますが、
-**このテンプレートには置きません。** 2 つの理由で、外から来た予約者には届かないからです。
+会議室（[meeting-room.md](./meeting-room.md)）と同じく、本人の取り下げページ（`/p/{slug}`）は
+**置きません。** 2 つの理由で、外から来た予約者には届かないからです。
 
 - **`/p/` は `members` に載っている人のページです。** 公開ページから申し込んだ人は `members` に
   いないので、そのページを開けません

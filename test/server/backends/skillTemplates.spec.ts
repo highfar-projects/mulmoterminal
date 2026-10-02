@@ -366,4 +366,38 @@ describe("the shared-app templates", () => {
       expect.arrayContaining([".claude/skills/topics/schema.json", ".claude/skills/speakers/schema.json", ".claude/skills/messages/schema.json"]),
     );
   });
+
+  // A booker whose row is keyed by the slot (`idFrom: "field"`) cannot find it again from the public
+  // page — `view.mine` refuses that strategy — unless the page can read the rows themselves (the
+  // project board's claims are in `public.read`, with a `uidField` to recognise one's own). `/p/`
+  // opens only for addresses in `members`. So a move granted to a booker the public page cannot
+  // find is a promise nobody who booked from that page can use.
+  it("grants no own move to a booker the public page cannot find", () => {
+    for (const file of TEMPLATE_FILES) {
+      const manifest = blocksOf(file).get("app.json") as { public?: { read?: string[]; submit?: Record<string, Record<string, unknown>> } } | undefined;
+      const readable = manifest?.public?.read ?? [];
+      Object.entries(manifest?.public?.submit ?? {})
+        .filter(([cid, submit]) => submit.idFrom === "field" && !readable.includes(cid))
+        .forEach(([cid, submit]) => {
+          const moves = ["selfDelete", "selfTransitions", "selfUpdate"].filter((key) => submit[key] !== undefined);
+          expect(`${file}: ${cid} ${moves.join(", ") || "no own move"}`).toBe(`${file}: ${cid} no own move`);
+        });
+    }
+  });
+
+  // A page that withdraws from a collection the declaration lets nobody delete from draws a button
+  // every press of which is refused — and the page test cannot see it, because it is handed the
+  // capability rather than deriving it.
+  it("declares a delete for every collection a page withdraws from", () => {
+    for (const file of TEMPLATE_FILES) {
+      const text = readFileSync(path.join(TEMPLATES, file), "utf8");
+      const manifest = blocksOf(file).get("app.json") as
+        { collections?: Record<string, { writerDelete?: boolean }>; public?: { submit?: Record<string, { selfDelete?: unknown }> } } | undefined;
+      const withdrawn = new Set([...text.matchAll(/view\.withdraw\("([A-Za-z0-9_-]+)"/g)].map((match) => match[1] ?? ""));
+      withdrawn.forEach((cid) => {
+        const deletable = manifest?.collections?.[cid]?.writerDelete === true || manifest?.public?.submit?.[cid]?.selfDelete !== undefined;
+        expect(`${file}: ${cid} ${deletable ? "has a delete" : "has no delete"}`).toBe(`${file}: ${cid} has a delete`);
+      });
+    }
+  });
 });
