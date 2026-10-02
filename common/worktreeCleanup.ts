@@ -17,12 +17,24 @@ export interface WorktreeCleanupRow {
   exists: boolean;
   /** Uncommitted or untracked files: removing it would lose them. */
   dirty: boolean;
+  /** Gitignored entries, which `git worktree remove` deletes WITHOUT counting the tree as dirty — a
+   *  local `.env` as much as a `node_modules`. Not a blocker, since nearly every worktree has some;
+   *  named to the person instead. At most `IGNORED_LISTED_MAX`; `ignoredCount` is the total. */
+  ignored: string[];
+  ignoredCount: number;
   /** Every commit on it is already in the base. Ancestry, so a squash-merged branch reads as
    *  unmerged — the safe direction. */
   merged: boolean;
   /** An agent session belongs to it, or a pane of ours stands in it (a plain shell counts). */
   inUse: boolean;
 }
+
+export const IGNORED_LISTED_MAX = 20;
+
+/** The entries `git status --porcelain --ignored` marks `!!`. An ignored directory is one entry
+ *  (`node_modules/`): git does not descend into it. */
+export const parseIgnoredEntries = (porcelain: string): string[] =>
+  porcelain.split("\n").flatMap((line) => (line.startsWith("!! ") && line.length > 3 ? [line.slice(3)] : []));
 
 export const CLEANUP_BLOCKERS = ["missing", "dirty", "unmerged", "inUse"] as const;
 export type CleanupBlocker = (typeof CLEANUP_BLOCKERS)[number];
@@ -44,6 +56,9 @@ const isCleanupRow = (value: unknown): value is WorktreeCleanupRow =>
   typeof value.head === "string" &&
   typeof value.exists === "boolean" &&
   typeof value.dirty === "boolean" &&
+  isUnknownArray(value.ignored) &&
+  value.ignored.every((entry) => typeof entry === "string") &&
+  typeof value.ignoredCount === "number" &&
   typeof value.merged === "boolean" &&
   typeof value.inUse === "boolean";
 

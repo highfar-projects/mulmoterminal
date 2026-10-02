@@ -1773,7 +1773,8 @@ narrow and tall for one record you are discussing — and each position keeps it
   **Worktrees** tab lists the managed worktrees of the folders your terminals have run in and what
   keeps each from going — uncommitted or untracked files, commits not in the base branch, a
   terminal standing in it. One with none of those gets a **Remove** button (the worktree and its
-  merged branch); nothing is removed automatically.
+  merged branch); nothing is removed automatically. Gitignored files (a local `.env`, `node_modules/`)
+  do not hold a worktree back, but they go with it, so the row and the confirmation name them.
 - **Grid of parallel sessions** — the ＋ Terminal / grid view runs many sessions at once,
   auto-sizing by count across pages. Cell borders signal state at a glance — **working**
   (pulsing blue), **blocked** (amber — needs a permission / answer), **done** (blue —

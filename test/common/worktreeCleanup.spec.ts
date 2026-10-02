@@ -1,6 +1,6 @@
 // Which worktrees the Processes page offers to remove: only one with nothing to lose and nobody in it.
 import { describe, it, expect } from "vitest";
-import { cleanupBlockers, isCleanupCandidate, readWorktreeCleanupBody, type WorktreeCleanupRow } from "../../common/worktreeCleanup";
+import { cleanupBlockers, isCleanupCandidate, parseIgnoredEntries, readWorktreeCleanupBody, type WorktreeCleanupRow } from "../../common/worktreeCleanup";
 
 const CLEAN: WorktreeCleanupRow = {
   repo: "/r",
@@ -8,6 +8,8 @@ const CLEAN: WorktreeCleanupRow = {
   path: "/wt/a",
   branch: "agent/a",
   head: "abc",
+  ignored: [],
+  ignoredCount: 0,
   exists: true,
   dirty: false,
   merged: true,
@@ -47,5 +49,21 @@ describe("readWorktreeCleanupBody", () => {
 
   it.each([null, "x", {}, { worktrees: "x" }])("is null for %j", (body) => {
     expect(readWorktreeCleanupBody(body)).toBeNull();
+  });
+});
+
+describe("parseIgnoredEntries", () => {
+  it("keeps the `!!` entries as printed, a directory as one entry", () => {
+    expect(parseIgnoredEntries(["!! .env", " M src/a.ts", "?? new.txt", "!! node_modules/", "", "!! "].join("\n"))).toEqual([".env", "node_modules/"]);
+  });
+
+  it("is empty when nothing is ignored", () => {
+    expect(parseIgnoredEntries("")).toEqual([]);
+  });
+});
+
+describe("readWorktreeCleanupBody and ignored entries", () => {
+  it.each([{ ignored: "x" }, { ignored: [1] }, { ignoredCount: "1" }])("drops a row whose ignored fields are %j", (change) => {
+    expect(readWorktreeCleanupBody({ worktrees: [{ ...CLEAN, ...change }] })).toEqual([]);
   });
 });

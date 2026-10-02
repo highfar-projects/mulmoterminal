@@ -123,6 +123,21 @@ describe("worktreeCleanupRows", () => {
   );
 
   it.skipIf(!hasGit)(
+    "names gitignored files without counting them as dirty, since removal deletes them anyway",
+    async () => {
+      writeFileSync(path.join(repo, ".gitignore"), ".env\nbuild/\n");
+      await gitIn(repo, "add", ".gitignore");
+      await gitIn(repo, "commit", "-m", "ignore");
+      const wt = await addWorktree(repo, "ignored");
+      writeFileSync(path.join(wt.path, ".env"), "SECRET=1\n");
+      mkdirSync(path.join(wt.path, "build"));
+      writeFileSync(path.join(wt.path, "build", "out.js"), "x\n");
+      expect(await rowFor(wt.path)).toMatchObject({ dirty: false, ignored: [".env", "build/"], ignoredCount: 2 });
+    },
+    GIT_TEST_TIMEOUT_MS,
+  );
+
+  it.skipIf(!hasGit)(
     "counts a pane standing anywhere inside the worktree as in use",
     async () => {
       const wt = await addWorktree(repo, "used");

@@ -9,7 +9,7 @@ import { canonicalPath } from "../infra/canonical-path.js";
 import { tmuxAttachedCounts, tmuxAvailable, tmuxPaneCwdsAsync } from "../infra/tmux.js";
 import { dirSession, survivorSnapshot } from "../session/dir-session.js";
 import { ptys } from "../session/registry.js";
-import type { WorktreeCleanupRow } from "../../common/worktreeCleanup.js";
+import { IGNORED_LISTED_MAX, parseIgnoredEntries, type WorktreeCleanupRow } from "../../common/worktreeCleanup.js";
 
 // Each repo is a handful of git calls; a few at once keeps a long cwd history from forking dozens.
 const GIT_CONCURRENCY = 4;
@@ -19,6 +19,11 @@ async function reposOf(cwds: readonly string[]): Promise<string[]> {
   const existing = [...new Set(cwds)].filter((cwd) => existsSync(cwd));
   const roots = await mapConcurrent(existing, GIT_CONCURRENCY, (cwd) => repoRoot(cwd));
   return [...new Set(roots.flatMap((root) => root ?? []))].sort((a, b) => a.localeCompare(b));
+}
+
+async function ignoredEntries(worktreePath: string): Promise<string[]> {
+  const res = await git(["status", "--porcelain", "--ignored"], worktreePath);
+  return res.ok ? parseIgnoredEntries(res.stdout) : [];
 }
 
 const isMerged = async (repo: string, head: string, startPoint: string): Promise<boolean> =>
@@ -33,6 +38,7 @@ interface UsageFacts {
 async function rowOf(repo: string, base: string, startPoint: string, worktree: WorktreeInfo, usage: UsageFacts): Promise<WorktreeCleanupRow> {
   const exists = existsSync(worktree.path);
   const canonical = canonicalPath(worktree.path);
+  const ignored = exists ? await ignoredEntries(worktree.path) : [];
   const paneHere = usage.paneCwds === null || usage.paneCwds.some((cwd) => isWithin(canonical, canonicalPath(cwd)));
   return {
     repo,
@@ -42,6 +48,8 @@ async function rowOf(repo: string, base: string, startPoint: string, worktree: W
     head: worktree.head,
     exists,
     dirty: exists && (await isDirty(worktree.path)),
+    ignored: ignored.slice(0, IGNORED_LISTED_MAX),
+    ignoredCount: ignored.length,
     merged: await isMerged(repo, worktree.head, startPoint),
     inUse: paneHere || (exists && (await usage.inAgentSession(worktree.path))),
   };

@@ -30,9 +30,20 @@ async function refresh(): Promise<void> {
   rows.value = read;
 }
 
+const ignoredNames = (row: WorktreeCleanupRow): string =>
+  [
+    ...row.ignored,
+    ...(row.ignoredCount > row.ignored.length ? [t("processesView.worktrees.ignoredMore", { count: row.ignoredCount - row.ignored.length })] : []),
+  ].join(", ");
+
+function removeConfirmText(row: WorktreeCleanupRow): string {
+  const ask = t("processesView.worktrees.removeConfirm", { path: row.path, base: row.base });
+  return row.ignoredCount === 0 ? ask : `${ask}\n\n${t("processesView.worktrees.removeConfirmIgnored", { names: ignoredNames(row) })}`;
+}
+
 async function remove(row: WorktreeCleanupRow): Promise<void> {
   if (removing.value !== null) return;
-  if (!window.confirm(t("processesView.worktrees.removeConfirm", { path: row.path, base: row.base }))) return;
+  if (!window.confirm(removeConfirmText(row))) return;
   removing.value = row.path;
   removeError.value = null;
   const ok = await removeCleanupWorktree(row);
@@ -74,6 +85,9 @@ onMounted(() => void refresh());
             <span class="font-mono">{{ row.branch ?? t("processesView.worktrees.detached") }}</span>
             <span>{{ t("processesView.worktrees.base", { base: row.base }) }}</span>
             <span v-if="isCleanupCandidate(row)" class="text-ok">{{ t("processesView.worktrees.candidate") }}</span>
+            <span v-if="row.ignoredCount > 0" data-testid="worktrees-ignored" class="text-secondary" :data-tip="ignoredNames(row)">{{
+              t("processesView.worktrees.ignored", { names: ignoredNames(row) })
+            }}</span>
             <span v-for="blocker in cleanupBlockers(row)" :key="blocker" data-testid="worktrees-blocker" class="text-warn">{{
               t(`processesView.worktrees.blocker.${blocker}`)
             }}</span>
