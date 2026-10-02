@@ -71,8 +71,10 @@ const element = <T extends Element>(selector: string): T => {
 
 describe("question-box.md — app.json", () => {
   it("caps the owner's answer as well as the question, since both reach the public page", () => {
-    const [, json] = questionBox.match(/## app\.json\s*\n+```json\n([\s\S]*?)\n```/) ?? [];
-    const caps: unknown = JSON.parse(json ?? "{}").public?.submit?.questions?.maxBytes;
+    const section = questionBox.slice(questionBox.indexOf("## app.json"));
+    const open = section.indexOf("```json\n") + "```json\n".length;
+    const json = section.slice(open, section.indexOf("\n```", open));
+    const caps: unknown = JSON.parse(json).public?.submit?.questions?.maxBytes;
     expect(caps).toEqual({ text: expect.any(Number), answer: expect.any(Number) });
   });
 });
