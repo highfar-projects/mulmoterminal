@@ -12,9 +12,10 @@ import { snapshotSessions, watchForCodexSession } from "../agents/codex-session.
 import { accountSpawnEnv, codexSessionRoot, codexSessionSkillsDir } from "./session-home.js";
 import { codexRolloutPath } from "../agents/codex-sessions.js";
 import { trackCodexActivity } from "./codex-activity-track.js";
-import { claimedCodexRollouts, claimFullGuiMcp, codexRollouts, ptys, rememberCodexRollout } from "./registry.js";
+import { claimedCodexRollouts, codexRollouts, ptys, rememberCodexRollout } from "./registry.js";
 import { ptyWouldReattach } from "./pty-spawn.js";
 import { startAgentPty } from "./agent-pty-start.js";
+import { spawnWithFullGuiClaim, type FullGuiClaimRequest } from "./spawn-with-full-gui-claim.js";
 import { wireAgentPtyRelay } from "./pty-relay.js";
 import { attachCodexAutoRun } from "./draft-injection.js";
 import type { PtyEntry } from "./types.js";
@@ -97,17 +98,19 @@ export function createCodexSpawner(deps: SpawnDeps) {
     // reuses the id, and a stale claim would stand its group urls down with nothing left to serve
     // them (Codex review on #1399). claimFullGuiMcp owns both directions so neither spawn path can
     // apply half the rule.
-    const allTools = claimFullGuiMcp(sessionId, attachGuiMcp, cwd, ptyWouldReattach(sessionId, true), "codex");
-    const guiMcpServers = codexGuiMcpServers({ sessionId, port: PORT, groups: mcpGroups, allTools });
-    const permissionHook = wantsCodexPermissionHook(process.platform, initialPrompt !== null);
-    const args = buildCodexArgs({ resume: resumeRolloutId, model: deps.codexModel, guiMcpServers, permissionHook });
-    const spawnEnv = {
-      binEnvVar: codexAdapter.binEnvVar,
-      // The session id is what the permission hook's constant command posts under.
-      env: { ...guiMcpEnv(sessionId, PORT), ...accountSpawnEnv("codex", sessionId) },
-    };
-    const note = resumeRolloutId ? `resume ${resumeRolloutId}` : null;
-    const { entry, spawnedAtMs, reattached } = startAgentPty({ sessionId, ws, cwd, agent: "codex", file: deps.codexBin, args, spawnEnv, note });
+    const claim: FullGuiClaimRequest = { sessionId, attachGuiMcp, cwd, wouldReattach: ptyWouldReattach(sessionId, true), agent: "codex" };
+    const { entry, spawnedAtMs, reattached } = spawnWithFullGuiClaim(claim, (allTools) => {
+      const guiMcpServers = codexGuiMcpServers({ sessionId, port: PORT, groups: mcpGroups, allTools });
+      const permissionHook = wantsCodexPermissionHook(process.platform, initialPrompt !== null);
+      const args = buildCodexArgs({ resume: resumeRolloutId, model: deps.codexModel, guiMcpServers, permissionHook });
+      const spawnEnv = {
+        binEnvVar: codexAdapter.binEnvVar,
+        // The session id is what the permission hook's constant command posts under.
+        env: { ...guiMcpEnv(sessionId, PORT), ...accountSpawnEnv("codex", sessionId) },
+      };
+      const note = resumeRolloutId ? `resume ${resumeRolloutId}` : null;
+      return startAgentPty({ sessionId, ws, cwd, agent: "codex", file: deps.codexBin, args, spawnEnv, note });
+    });
     if (resumeRolloutId) {
       // Recorded on resume too, not just on the spawn that discovered it: a session resumed by the
       // rollout id itself carries no mapping yet, and one whose cell moved needs the new cwd.

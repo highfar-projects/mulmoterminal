@@ -19,7 +19,7 @@ import { copilotMcpConfigJson } from "../agents/copilot-mcp.js";
 import { copilotHome, syncCopilotHooksFile } from "../agents/copilot-hooks-file.js";
 import type { ToolGroup } from "../../common/toolGroups.js";
 import { codexGuiMcpServers } from "./mcp-config.js";
-import { claimFullGuiMcp } from "./registry.js";
+import { spawnWithFullGuiClaim, type FullGuiClaimRequest } from "./spawn-with-full-gui-claim.js";
 import { ptyWouldReattach } from "./pty-spawn.js";
 import { startAgentPty } from "./agent-pty-start.js";
 import { wireAgentPtyRelay } from "./pty-relay.js";
@@ -47,36 +47,38 @@ export function createCopilotSpawner(deps: SpawnDeps) {
     // MCP on one URL, a project cell carries one URL per group its DIRECTORY registered. Copilot
     // can be given either through the same per-spawn flag, so unlike agy/grok/muse there is no
     // file in the directory to keep in step.
-    const allTools = claimFullGuiMcp(sessionId, attachGuiMcp, cwd, ptyWouldReattach(sessionId, true), "copilot");
-    const mcpConfig = allTools
-      ? deps.mcpConfigJson(sessionId, "127.0.0.1")
-      : copilotMcpConfigJson(codexGuiMcpServers({ sessionId, port: PORT, groups: mcpGroups, allTools }));
+    const claim: FullGuiClaimRequest = { sessionId, attachGuiMcp, cwd, wouldReattach: ptyWouldReattach(sessionId, true), agent: "copilot" };
+    const { entry, spawnedAtMs } = spawnWithFullGuiClaim(claim, (allTools) => {
+      const mcpConfig = allTools
+        ? deps.mcpConfigJson(sessionId, "127.0.0.1")
+        : copilotMcpConfigJson(codexGuiMcpServers({ sessionId, port: PORT, groups: mcpGroups, allTools }));
 
-    // A seed this agent takes as an ARGUMENT cannot carry a newline on Windows, so it may travel in
-    // a file with the command line naming it instead (#1518, session-settings.ts).
-    const seed = initialPrompt === null ? null : seedPromptArgument(sessionId, initialPrompt);
-    const args = buildCopilotArgs({ sessionId, model: deps.copilotModel, allowAllTools: true, mcpConfig, initialPrompt: seed });
+      // A seed this agent takes as an ARGUMENT cannot carry a newline on Windows, so it may travel in
+      // a file with the command line naming it instead (#1518, session-settings.ts).
+      const seed = initialPrompt === null ? null : seedPromptArgument(sessionId, initialPrompt);
+      const args = buildCopilotArgs({ sessionId, model: deps.copilotModel, allowAllTools: true, mcpConfig, initialPrompt: seed });
 
-    // A spawn that throws never reaches reap(), where the seed file is normally cleaned up — the
-    // same guarantee spawn-claude takes for its settings file (#579, #1518).
-    const { entry, spawnedAtMs } = withSettingsCleanup(sessionId, () =>
-      startAgentPty({
-        sessionId,
-        ws,
-        cwd,
-        agent: "copilot",
-        file: deps.copilotBin,
-        args,
-        // COPILOT_HOME is set EXPLICITLY, even though this process may already have it: a tmux pane
-        // inherits the tmux SERVER's environment, not ours (the same trap hook-settings.ts names for
-        // claude's provider block). Without it the agent would resolve a different home than the one
-        // syncCopilotHooksFile just wrote into — and since that file is the whole status mechanism,
-        // the failure is a cell that runs perfectly and never reports a thing. Measured: it is exactly
-        // what happened the first time this was driven end to end.
-        spawnEnv: { binEnvVar: copilotAdapter.binEnvVar, env: { COPILOT_HOME: copilotHome() } },
-        note: null,
-      }),
-    );
+      // A spawn that throws never reaches reap(), where the seed file is normally cleaned up — the
+      // same guarantee spawn-claude takes for its settings file (#579, #1518).
+      return withSettingsCleanup(sessionId, () =>
+        startAgentPty({
+          sessionId,
+          ws,
+          cwd,
+          agent: "copilot",
+          file: deps.copilotBin,
+          args,
+          // COPILOT_HOME is set EXPLICITLY, even though this process may already have it: a tmux pane
+          // inherits the tmux SERVER's environment, not ours (the same trap hook-settings.ts names for
+          // claude's provider block). Without it the agent would resolve a different home than the one
+          // syncCopilotHooksFile just wrote into — and since that file is the whole status mechanism,
+          // the failure is a cell that runs perfectly and never reports a thing. Measured: it is exactly
+          // what happened the first time this was driven end to end.
+          spawnEnv: { binEnvVar: copilotAdapter.binEnvVar, env: { COPILOT_HOME: copilotHome() } },
+          note: null,
+        }),
+      );
+    });
 
     wireAgentPtyRelay(entry, sessionId, spawnedAtMs, deps);
     return entry;

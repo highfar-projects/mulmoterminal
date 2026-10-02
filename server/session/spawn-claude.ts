@@ -11,18 +11,11 @@ import { buildClaudeArgs } from "../agents/claude-args.js";
 import { refuseUnsupportedPermissionMode } from "../agents/claude-help-probe.js";
 import { claudeAdapter } from "../agents/claude.js";
 import { appendedSystemPrompt } from "../agents/appended-prompt.js";
-import {
-  claimFullGuiMcp,
-  customAgentSessions,
-  hookedSessions,
-  knownSessions,
-  launchChoices,
-  rememberCustomAgentSession,
-  resetSessionToolGroups,
-} from "./registry.js";
+import { customAgentSessions, hookedSessions, knownSessions, launchChoices, rememberCustomAgentSession, resetSessionToolGroups } from "./registry.js";
 import { ptyWouldReattach, type PtySpawnEnv } from "./pty-spawn.js";
 import { ptyExitLine } from "./pty-exit-log.js";
 import { startAgentPty, type StartedAgentPty } from "./agent-pty-start.js";
+import { spawnWithFullGuiClaim } from "./spawn-with-full-gui-claim.js";
 import { attachDraftInjection } from "./draft-injection.js";
 import { sendExitAndClose } from "./ws-frames.js";
 import { wireBufferedOutput } from "./output-relay.js";
@@ -293,18 +286,15 @@ export function createClaudeSpawner(deps: SpawnDeps) {
     // The all-tools claim rides the SAME probe rather than taking its own: asking twice would widen
     // exactly the window this is placed here to keep narrow. It is passed the answer instead of
     // asking, and decides for itself what a reattach means for each direction (see claimFullGuiMcp).
-    function recordCapabilitiesForThisSpawn(): void {
+    function spawnEntry(): StartedAgentPty {
       const reattaching = ptyWouldReattach(sessionId, true);
       if (!reattaching) resetSessionToolGroups(sessionId);
-      claimFullGuiMcp(sessionId, attachGuiMcp, cwd, reattaching, "claude");
-    }
-
-    function spawnEntry(): StartedAgentPty {
-      recordCapabilitiesForThisSpawn();
-      const program = sessionProgram(deps.claudeBin, sessionId, customAgentId, canResume ? resume : null, resolved.unset, deps.permissionMode);
-      const spawnEnv = { ...program.spawnEnv, env: { ...program.spawnEnv.env, ...claudeRendererEnv(sessionId, cwd) } };
-      // "claude" whatever wrapper started it — see sessionProgram.
-      return startAgentPty({ sessionId, ws, cwd, agent: "claude", file: program.file, args: [...program.prefixArgs, ...args], spawnEnv, note: program.note });
+      return spawnWithFullGuiClaim({ sessionId, attachGuiMcp, cwd, wouldReattach: reattaching, agent: "claude" }, () => {
+        const program = sessionProgram(deps.claudeBin, sessionId, customAgentId, canResume ? resume : null, resolved.unset, deps.permissionMode);
+        const spawnEnv = { ...program.spawnEnv, env: { ...program.spawnEnv.env, ...claudeRendererEnv(sessionId, cwd) } };
+        // "claude" whatever wrapper started it — see sessionProgram.
+        return startAgentPty({ sessionId, ws, cwd, agent: "claude", file: program.file, args: [...program.prefixArgs, ...args], spawnEnv, note: program.note });
+      });
     }
     // Every claude spawn above carries `--settings` with the Pre/PostToolUse hooks, so from here
     // on this session reports its own tool calls — which is what stops the MCP broker recording
