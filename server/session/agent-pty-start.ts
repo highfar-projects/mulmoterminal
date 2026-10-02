@@ -23,14 +23,16 @@ export interface AgentPtyStart {
 }
 
 /** `spawnedAtMs` comes back because the caller wires the relay (and may have its own work to do
- *  first). */
+ *  first); `reattached` because codex picks how to tail its rollout from it. */
 export interface StartedAgentPty {
   entry: PtyEntry;
   spawnedAtMs: number;
+  /** tmux attached to an agent that was already running rather than starting a new one. */
+  reattached: boolean;
 }
 
-/** Start the pty and register it. Called inside the caller's `withSettingsCleanup`, so a spawn
- *  that throws takes the session's files with it. */
+/** Start the pty and register it. A caller that wrote session files first calls this inside its
+ *  `withSettingsCleanup`, so a spawn that throws takes those files with it. */
 export function startAgentPty(start: AgentPtyStart): StartedAgentPty {
   const { sessionId, ws, cwd, agent, file, args, spawnEnv, note } = start;
   const { term, tmux, reattached } = ptySpawn(sessionId, file, args, cwd, true, spawnEnv);
@@ -38,5 +40,5 @@ export function startAgentPty(start: AgentPtyStart): StartedAgentPty {
   console.log(ptyStartLine({ agent, pid: term.pid, cwd, tmux, reattached, sessionId, note }));
   const entry: PtyEntry = { term, ws, buffer: "", cwd, tmux, active: false, agent };
   ptys.set(sessionId, entry);
-  return { entry, spawnedAtMs };
+  return { entry, spawnedAtMs, reattached };
 }
