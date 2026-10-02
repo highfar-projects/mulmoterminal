@@ -189,6 +189,7 @@ fifteen lines, are in [design.md](./design.md).
   const why = document.getElementById("why");
   const say = document.getElementById("say");
   // 取り下げた予約の id。次の onState が届くまで、一覧に戻さないために持ちます。
+  // 届いた一覧から消えたら忘れること。id は枠（席）の id なので、同じ枠を取り直すと同じ id で戻ってきます。
   const gone = new Set();
 
   // 自分の予約は viewer.mine で届きます（requesterEmail がサインインした本人のもの）。
@@ -203,6 +204,8 @@ fifteen lines, are in [design.md](./design.md).
     }
     const canWithdraw = (viewer.can?.bookings?.withdrawFrom ?? []).includes("booked");
     const slotOf = Object.fromEntries(slots.map((slot) => [slot.id, slot]));
+    const present = new Set(own.map((booking) => booking.id));
+    [...gone].filter((id) => !present.has(id)).forEach((id) => gone.delete(id));
     const rows = own.filter((booking) => !gone.has(booking.id));
     mine.replaceChildren(
       ...rows.map((booking) => {

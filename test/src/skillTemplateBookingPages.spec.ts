@@ -226,6 +226,19 @@ describe.each([
     expect(document.querySelectorAll("#mine button")).toHaveLength(0);
   });
 
+  it("shows a booking again once the same slot is booked anew, under the same id", async () => {
+    const page = load(template, heading);
+    page.tell(data, { ...may, mine: { bookings: [own] } });
+    click("#mine button");
+    click("#mine button");
+    await settle();
+    page.tell(data, { ...may, mine: { bookings: [own] } });
+    expect(document.querySelectorAll("#mine button")).toHaveLength(0);
+    page.tell(data, { ...may, mine: { bookings: [] } });
+    page.tell(data, { ...may, mine: { bookings: [own] } });
+    expect(document.querySelectorAll("#mine button")).toHaveLength(1);
+  });
+
   it("says nothing about bookings it could not look up, and offers no withdraw it may not make", () => {
     const page = load(template, heading);
     page.tell(data, may);

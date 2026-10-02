@@ -193,6 +193,7 @@ this template's, not your app's. The rules behind the sheet are in [design.md](.
   const who = document.getElementById("who");
   const say = document.getElementById("say");
   // 取り下げた予約の id。次の onState が届くまで、一覧に戻さないために持ちます。
+  // 届いた一覧から消えたら忘れること。id は枠（席）の id なので、同じ枠を取り直すと同じ id で戻ってきます。
   const gone = new Set();
   // 弾かれた席。次に押したときはここに無い席を選ぶ。ページを開き直すと忘れてよい。
   const refused = new Set();
@@ -249,6 +250,8 @@ this template's, not your app's. The rules behind the sheet are in [design.md](.
     const canWithdraw = (viewer.can?.bookings?.withdrawFrom ?? []).includes("booked");
     const classOfSeat = Object.fromEntries(latest.seats.map((seat) => [seat.id, seat.classId]));
     const lessonOf = Object.fromEntries(latest.classes.map((lesson) => [lesson.id, lesson]));
+    const present = new Set(own.map((booking) => booking.id));
+    [...gone].filter((id) => !present.has(id)).forEach((id) => gone.delete(id));
     const rows = own.filter((booking) => !gone.has(booking.id));
     mine.replaceChildren(
       ...rows.map((booking) => {
