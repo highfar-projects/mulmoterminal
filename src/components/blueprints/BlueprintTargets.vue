@@ -5,6 +5,7 @@ import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { loadTargets } from "../../composables/blueprintsApi";
 import { latestOnly } from "./latestOnly";
+import { failureText } from "./refusalText";
 import { isPullRequestUrl, targetRows, type Target, type TargetPhase } from "../../../common/blueprint/targets";
 import type { BlueprintState } from "../../../common/blueprint/state";
 import type { PlanStep } from "../../../common/blueprint/plan";
@@ -30,21 +31,25 @@ watch(
   () => {
     targets.value = null;
     problem.value = null;
+    loadError.value = null;
     openId.value = null;
   },
 );
 
-watch(
-  [() => props.runId, progressKey],
-  async ([runId]) => {
-    const ticket = reads.take();
-    const result = await loadTargets(runId);
-    if (!reads.isLatest(ticket) || !result.ok) return;
-    targets.value = result.value.targets;
-    problem.value = result.value.problem;
-  },
-  { immediate: true },
-);
+// A failed read is said, not shown as "no list yet": the two look the same otherwise.
+const loadError = ref<string | null>(null);
+
+async function load(): Promise<void> {
+  const ticket = reads.take();
+  const result = await loadTargets(props.runId);
+  if (!reads.isLatest(ticket)) return;
+  loadError.value = result.ok ? null : failureText(t, result);
+  if (!result.ok) return;
+  targets.value = result.value.targets;
+  problem.value = result.value.problem;
+}
+
+watch([() => props.runId, progressKey], () => void load(), { immediate: true });
 
 const rows = computed(() => (targets.value ? targetRows(targets.value, props.steps, props.state) : []));
 
@@ -62,7 +67,18 @@ const toggle = (id: string): void => {
 </script>
 
 <template>
-  <p v-if="problem" class="m-0 font-sans text-[12px] text-err-text" data-testid="blueprint-targets-problem">
+  <p v-if="loadError" class="m-0 flex items-center gap-2 font-sans text-[12px] text-err-text" data-testid="blueprint-targets-load-error">
+    {{ t("blueprints.targets.loadFailed", { error: loadError }) }}
+    <button
+      type="button"
+      data-testid="blueprint-targets-reload"
+      class="cursor-pointer rounded-[4px] border border-border bg-base px-2 py-0.5 font-sans text-[12px] text-fg hover:bg-hover"
+      @click="load()"
+    >
+      {{ t("blueprints.run.retry") }}
+    </button>
+  </p>
+  <p v-else-if="problem" class="m-0 font-sans text-[12px] text-err-text" data-testid="blueprint-targets-problem">
     {{ t("blueprints.targets.unreadable", { problem }) }}
   </p>
   <section v-else-if="rows.length > 0" class="flex max-w-[1280px] flex-col gap-2" data-testid="blueprint-targets">

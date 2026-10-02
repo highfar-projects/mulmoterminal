@@ -41,7 +41,7 @@ const targets: Target[] = [
 
 const listed = (list: Target[] | null, problem: string | null = null) => ({ ok: true, value: { targets: list, problem } });
 
-type Listed = ReturnType<typeof listed>;
+type Listed = ReturnType<typeof listed> | { ok: false; error: string };
 const deferred = (): { promise: Promise<Listed>; resolve: (value: Listed) => void } => {
   const box: { resolve: (value: Listed) => void } = { resolve: () => undefined };
   const promise = new Promise<Listed>((resolve) => (box.resolve = resolve));
@@ -158,5 +158,29 @@ describe("the work list in the run view", () => {
     pending.resolve(listed([{ ...targets[0], title: "the other build" }]));
     await flushPromises();
     expect(wrapper.get('[data-testid="blueprint-target"]').text()).toContain("the other build");
+  });
+
+  it("says when the list could not be loaded, and loads it again on request", async () => {
+    loadTargets.mockResolvedValueOnce({ ok: false, error: "network down" });
+    const wrapper = await mountTable(at("passed", "running"));
+    expect(wrapper.get('[data-testid="blueprint-targets-load-error"]').text()).toContain("network down");
+    expect(wrapper.find('[data-testid="blueprint-targets"]').exists()).toBe(false);
+    loadTargets.mockResolvedValueOnce(listed(targets));
+    await wrapper.get('[data-testid="blueprint-targets-reload"]').trigger("click");
+    await flushPromises();
+    expect(wrapper.find('[data-testid="blueprint-targets-load-error"]').exists()).toBe(false);
+    expect(wrapper.findAll('[data-testid="blueprint-target"]')).toHaveLength(targets.length);
+  });
+
+  it("does not let an older failed load hide a newer list", async () => {
+    const older = deferred();
+    loadTargets.mockReturnValueOnce(older.promise).mockResolvedValueOnce(listed(targets));
+    const wrapper = mount(BlueprintTargets, { props: { runId: "run-00000001", steps, state: at("passed", "awaiting-answer", 1) } });
+    await wrapper.setProps({ state: at("passed", "running", 1) });
+    await flushPromises();
+    older.resolve({ ok: false, error: "late failure" });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="blueprint-targets-load-error"]').exists()).toBe(false);
+    expect(wrapper.findAll('[data-testid="blueprint-target"]')).toHaveLength(targets.length);
   });
 });

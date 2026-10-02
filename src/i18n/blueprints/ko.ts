@@ -98,6 +98,7 @@ export const blueprintsKo: Messages["blueprints"] = {
     pr: "풀 리퀘스트",
     note: "메모",
     unreadable: "작업 목록을 읽을 수 없습니다: {problem}",
+    loadFailed: "작업 목록을 불러올 수 없습니다: {error}",
   },
   run: {
     sourceChanged: "원본이 복사 이후({takenAt})에 바뀌었습니다. 이 빌드는 그 복사본으로 계속 진행합니다. 새 내용을 쓰려면 같은 원본에서 새로 시작하세요.",

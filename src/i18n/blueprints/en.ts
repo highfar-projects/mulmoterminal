@@ -99,6 +99,7 @@ export const blueprintsEn = {
     pr: "Pull request",
     note: "Note",
     unreadable: "The work list could not be read: {problem}",
+    loadFailed: "The work list could not be loaded: {error}",
   },
   run: {
     sourceChanged:

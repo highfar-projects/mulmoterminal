@@ -26,3 +26,10 @@ one is waiting for a decision can only be learned by opening a hidden file or re
 `BlueprintTargets.vue`, in the run view above the step list: one row per target (order, title, kind,
 status), a row opens its detail (why, proof, files, pull request, note), and the row waiting for a
 decision is tinted. A pull request link is shown only for a GitHub pull-request URL.
+
+## Follow-up (#2858)
+
+- A failed `/targets` load is shown with a retry, instead of looking like "no list yet".
+- A list with a repeated `id` is reported as unreadable rather than rendered: the id is each row's
+  `:key` and open-row identity, and CLAUDE.md keeps keys as values, never positions. The pack's own
+  check already refuses a repeat, so this only meets a half-written or broken file.

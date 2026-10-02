@@ -96,6 +96,7 @@ export const blueprintsZhCN: Messages["blueprints"] = {
     pr: "拉取请求",
     note: "备注",
     unreadable: "无法读取工作清单：{problem}",
+    loadFailed: "无法加载工作清单：{error}",
   },
   run: {
     sourceChanged: "来源在复制之后（{takenAt}）已有变化。此构建仍按那份副本继续。要使用新内容，请从同一来源重新开始一个构建。",
