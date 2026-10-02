@@ -14,7 +14,8 @@
       "skill": "skills/keep",
       "check": "node \"$BLUEPRINT_USECASE/checks/replies.mjs\" keep",
       "gates": ["review"],
-      "reads": [".blueprint/replies.md"]
+      "reads": [".blueprint/replies.md"],
+      "revises": [".blueprint/replies.json"]
     }
   ]
 }

@@ -22,8 +22,8 @@ const storedRun = blueprintRunSchema.parse({
   basePackDir: path.join(PACKS_ROOT, "docs"),
   usecasePackDir: path.join(PACKS_ROOT, "polish"),
   steps: [
-    { id: "workspace", title: "フォルダと chaff を確かめる", description: "", skill: "s", check: "true", gates: [], reads: [], origin: "base" },
-    { id: "polish", title: "一つずつ整える", description: "", skill: "s", check: "true", gates: ["review"], reads: [], origin: "usecase" },
+    { id: "workspace", title: "フォルダと chaff を確かめる", description: "", skill: "s", check: "true", gates: [], reads: [], revises: [], origin: "base" },
+    { id: "polish", title: "一つずつ整える", description: "", skill: "s", check: "true", gates: ["review"], reads: [], revises: [], origin: "usecase" },
   ],
   createdAtMs: 1,
 });

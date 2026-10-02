@@ -14,7 +14,8 @@
       "skill": "skills/rules",
       "check": "node \"$BLUEPRINT_USECASE/checks/rules.mjs\"",
       "gates": ["review"],
-      "reads": [".blueprint/sources.txt"]
+      "reads": [".blueprint/sources.txt"],
+      "revises": [".blueprint/sources.json"]
     },
     {
       "id": "counter",
@@ -23,7 +24,8 @@
       "skill": "skills/counter",
       "check": "node \"$BLUEPRINT_USECASE/checks/rules.mjs\" && node \"$BLUEPRINT_USECASE/checks/counter.mjs\"",
       "gates": ["review"],
-      "reads": ["STYLE.md", "chaff.yaml"]
+      "reads": ["STYLE.md", "chaff.yaml"],
+      "revises": ["STYLE.md", "chaff.yaml"]
     },
     {
       "id": "report",

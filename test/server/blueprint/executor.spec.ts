@@ -551,6 +551,7 @@ describe("the build list", () => {
       check: "true",
       gates: [],
       reads: [],
+      revises: [],
       origin: "base" as const,
     };
     await executor.create({ projectDir: "/work/real", basePackDir: path.join(PACKS, "docs"), usecasePackDir: path.join(PACKS, "review"), steps: [workspace] });
