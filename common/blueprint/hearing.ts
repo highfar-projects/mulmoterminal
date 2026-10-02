@@ -17,6 +17,9 @@ const questionSchema = z.object({
   why: z.string().min(1),
   kind: z.enum(HEARING_KINDS),
   options: z.array(z.string().min(1)).optional(),
+  // The words the form shows for an option, by option, in the person's language; set only from a pack's locale overlay.
+  // The options stay the values the answers record and the checks compare.
+  optionLabels: z.record(z.string(), z.string().min(1)).optional(),
   required: z.boolean().default(true),
   // A text answer that is a list, one item per line: the form gives it a multi-line field, which keeps the newlines.
   lines: z.boolean().default(false),

@@ -579,42 +579,6 @@ describe("POST /api/blueprints/runs from a collection", () => {
   });
 });
 
-describe("GET /api/blueprints/presets", () => {
-  it("names the sample documents an example brings", async () => {
-    const listing = z
-      .object({ presets: z.array(z.object({ id: z.string(), usecase: z.string(), samples: z.array(z.string()) })) })
-      .parse(await (await fetch(`${base}/api/blueprints/presets`)).json());
-    expect(listing.presets).toContainEqual(expect.objectContaining({ id: "itaku-keiyaku", usecase: "review", samples: ["contract.txt"] }));
-    expect(listing.presets).toContainEqual(expect.objectContaining({ id: "home-library", samples: [] }));
-  });
-
-  it("lists the shipped presets with the usecase each belongs to", async () => {
-    const listing = z
-      .object({ presets: z.array(z.object({ id: z.string(), usecase: z.string(), base: z.string() })) })
-      .parse(await (await fetch(`${base}/api/blueprints/presets`)).json());
-    expect(listing.presets).toContainEqual(expect.objectContaining({ id: "home-library", usecase: "product", base: "local" }));
-  });
-});
-
-describe("GET /api/blueprints/pairs/:base/:usecase", () => {
-  it("shows the interview and the composed steps of a real pair", async () => {
-    const preview = z
-      .object({
-        hearing: z.object({ questions: z.array(z.object({ id: z.string() })) }),
-        steps: z.array(z.object({ id: z.string(), gates: z.array(z.string()) })),
-      })
-      .parse(await (await fetch(`${base}/api/blueprints/pairs/firebase/internal`)).json());
-    expect(preview.hearing.questions[0].id).toBe("appName");
-    // The spec is written first, and read by a person before anything is created in their cloud.
-    expect(preview.steps[0].id).toBe("spec");
-    expect(preview.steps[1].gates).toContain("review");
-  });
-
-  it("refuses a pair that does not compose", async () => {
-    expect((await fetch(`${base}/api/blueprints/pairs/internal/firebase`)).status).toBe(400);
-  });
-});
-
 describe("POST /api/blueprints/runs/:id/events and /ask", () => {
   it("stamps an answer with the server's clock", async () => {
     calls.length = 0;

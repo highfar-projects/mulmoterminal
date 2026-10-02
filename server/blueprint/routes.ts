@@ -5,7 +5,8 @@ import path from "node:path";
 import { lstat, mkdir, readFile, rmdir, stat } from "node:fs/promises";
 import type { Express, Response } from "express";
 import { z } from "zod";
-import { listPacks, listPresets, loadPackPair, readHearing, readPresets, type PackPair, type PackRoot } from "./packs.js";
+import { loadPackPair, readHearing, readPresets, type PackPair, type PackRoot } from "./packs.js";
+import { localizedPacks, localizedPair, localizedPresets } from "./packLocales.js";
 import { placeSamples, readSamples } from "./samples.js";
 import type { Sample } from "../../common/blueprint/samples.js";
 import { personLanguageSchema, type PersonLanguage } from "../../common/blueprint/personLanguage.js";
@@ -142,13 +143,16 @@ function mountFolderPresentRoute(app: Express, deps: BlueprintRouteDeps): void {
   });
 }
 
+const screenLanguageOf = (raw: unknown): string | undefined => (typeof raw === "string" && raw !== "" ? raw : undefined);
+
 function mountReadRoutes(app: Express, deps: BlueprintRouteDeps): void {
-  app.get("/api/blueprints/packs", async (_req, res) => {
-    res.json({ packs: await listPacks(deps.packRoots) });
+  // `?lang=` is the screen's language: the packs' words are laid over in it (packLocales), their values never change.
+  app.get("/api/blueprints/packs", async (req, res) => {
+    res.json({ packs: await localizedPacks(deps.packRoots, screenLanguageOf(req.query.lang)) });
   });
 
-  app.get("/api/blueprints/presets", async (_req, res) => {
-    res.json({ presets: await listPresets(deps.packRoots) });
+  app.get("/api/blueprints/presets", async (req, res) => {
+    res.json({ presets: await localizedPresets(deps.packRoots, screenLanguageOf(req.query.lang)) });
   });
 
   // A new folder for an example, beside the person's recent builds or in the workspace, that Claude Code would trust.
@@ -194,7 +198,7 @@ function mountReadRoutes(app: Express, deps: BlueprintRouteDeps): void {
 
   // What the new-build form needs for a base/usecase pair: its interview and the steps it will run.
   app.get("/api/blueprints/pairs/:base/:usecase", async (req, res) => {
-    const pair = await loadPackPair(deps.packRoots, req.params.base, req.params.usecase);
+    const pair = await localizedPair(deps.packRoots, req.params.base, req.params.usecase, screenLanguageOf(req.query.lang));
     if (!pair.ok) return res.status(400).json({ error: pair.problems.join("; ") });
     return res.json({ hearing: pair.hearing, steps: pair.steps });
   });

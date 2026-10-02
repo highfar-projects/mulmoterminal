@@ -1,0 +1,44 @@
+{
+  "manifest": {
+    "title": "Ask your documents (with where each answer is written)",
+    "description": "Ask a question of a complicated manual, regulation or contract, and the answer shows where in the documents it is written, quoting the original text. Something that is not written is answered \"not written\". chaff cite checks that each quote is in the original. After a person reads the answers, they can be kept in FAQ.md."
+  },
+  "hearing": {
+    "documents": {
+      "label": "The documents to ask (one file in this folder per line)",
+      "why": "Answers come only from these documents, with where each is written"
+    },
+    "questions": {
+      "label": "Questions (one per line)",
+      "why": "One answer for each question"
+    },
+    "keep": {
+      "label": "Keep the answers?",
+      "why": "Whether to add the checked answers to FAQ.md in this folder",
+      "options": {
+        "このフォルダの FAQ.md に書き足す": "Add them to FAQ.md in this folder",
+        "残さない（.blueprint の中だけ）": "Don't keep them (only inside .blueprint)"
+      }
+    }
+  },
+  "steps": {
+    "answer": {
+      "title": "Answer from the documents",
+      "description": "Answers each question, quoting where in the documents it is written. If it is not written, says so and records what was searched."
+    },
+    "keep": {
+      "title": "Keep the answers",
+      "description": "If you chose to keep them, adds the checked answers to FAQ.md."
+    }
+  },
+  "presets": {
+    "keihi": {
+      "title": "Ask the expense claim guide",
+      "description": "Asks the sample guide (keihi.md) 3 questions, and each answer shows where it is written, quoting the original. Something that is not written (the daily allowance for trips abroad) is answered \"not written\"."
+    },
+    "kyuka": {
+      "title": "Ask the leave regulation and guide",
+      "description": "Asks the sample leave regulation (kitei.md) and guide (tebiki.md) 3 questions. The deadline for applying differs between the regulation and the guide, so both are quoted to show the mismatch. Half-day leave is answered with a quote from the guide, and summer leave, which neither mentions, is answered \"not written\". The answers are not kept in the folder."
+    }
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "manifest": {
+    "title": "Check documents (dates, weekdays, order and totals, by machine)",
+    "description": "Pulls the dates, times and amounts out of an itinerary or a quote into a table, and the machine finds wrong weekdays, things out of order or overlapping in time, and totals that are not the sum of their items. The machine also checks that each value pulled out is written in its quote from the original, so a misreading by the AI is found too. The original is not changed."
+  },
+  "hearing": {
+    "documents": {
+      "label": "The documents to check (one file in this folder per line)",
+      "why": "Dates and amounts are pulled from these documents and backed by quotes from the original"
+    },
+    "kind": {
+      "label": "What kind of document is it?",
+      "why": "This decides which table is pulled out first (for an itinerary, the schedule; for a quote, the amounts and totals)",
+      "options": {
+        "旅程表・行程表": "Itinerary or schedule",
+        "見積書・請求書": "Quote or invoice",
+        "報告書・その他": "Report or other"
+      }
+    },
+    "year": {
+      "label": "Which year should dates without a year be read as? (optional, e.g. 2026)",
+      "why": "Without a year, the weekday cannot be checked"
+    },
+    "focus": {
+      "label": "Anything you are especially concerned about",
+      "why": "That point is pulled out first, without missing anything"
+    }
+  },
+  "steps": {
+    "extract": {
+      "title": "Pull out dates, times and amounts",
+      "description": "Pulls the document's schedule and amounts into a table. Each value carries a quote from the original, and the machine checks that the value is written in the quote and that the quote is in the original."
+    },
+    "report": {
+      "title": "Report what the machine found",
+      "description": "The machine decides the errors in weekdays, order, overlaps and totals; the report explains every one of them and says how to fix it."
+    }
+  },
+  "presets": {
+    "osaka-kyoto": {
+      "title": "Check an itinerary",
+      "description": "Pulls the dates, times and amounts out of the sample itinerary (itinerary.md), and the machine finds wrong weekdays, plans out of order, and totals that do not match. It also checks that the values pulled out are in the original."
+    },
+    "mitsumori": {
+      "title": "Check a quote",
+      "description": "Pulls the dates and amounts out of the sample quote (mitsumori.md), and the machine checks that each line's amount is unit price × quantity, that the consumption tax is 10% of the subtotal, that the subtotal is the sum of the items, that the total is the subtotal plus the tax, and that the weekdays of the dates are right. It also checks that the values pulled out are in the original."
+    }
+  }
+}

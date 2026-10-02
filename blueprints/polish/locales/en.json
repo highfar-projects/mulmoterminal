@@ -1,0 +1,104 @@
+{
+  "manifest": {
+    "title": "Polish documents (without changing what they say)",
+    "description": "Polishes the existing documents in a repository or folder one by one, to your style (STYLE.md and chaff.yaml). What they say does not change: the headings, the numbering of articles and sections, code blocks and link targets are checked by machine to be unchanged, and the originals are kept."
+  },
+  "hearing": {
+    "targets": {
+      "label": "The documents to polish (one file or folder per line, as a place inside this folder)",
+      "why": "The candidates are chosen from these"
+    },
+    "style": {
+      "label": "Which style should they follow?",
+      "why": "If this folder has the STYLE.md and chaff.yaml that \"Make a style\" wrote, the documents follow them",
+      "options": {
+        "このフォルダの規約（STYLE.md と chaff.yaml）": "This folder's style (STYLE.md and chaff.yaml)",
+        "chaff の既定のまま": "chaff's defaults"
+      }
+    },
+    "kind": {
+      "label": "What kind of documents are they?",
+      "why": "chaff measures each kind with its own yardstick (how long a sentence may be, how much bold is too much, and so on)",
+      "options": {
+        "指定しない（chaff に任せる）": "Not specified (let chaff decide)",
+        "ブログ（技術記事）": "Blog (technical article)",
+        "ブログ（エッセイ・読み物）": "Blog (essay, feature)",
+        "会社のサイトの記事（オウンドメディア）": "An article on a company site",
+        "報告書": "Report",
+        "提案書・企画書": "Proposal",
+        "メール": "Email",
+        "プレスリリース": "Press release",
+        "議事録": "Minutes",
+        "マニュアル・手順書": "Manual or procedure",
+        "README・技術文書": "README or technical document",
+        "仕様書": "Specification",
+        "契約書・利用規約": "Contract or terms of service",
+        "規程・社内規則": "Regulation or company rules"
+      }
+    },
+    "scope": {
+      "label": "How far should it fix?",
+      "why": "Only what the machine found, or also the rules in the guide (tone, spelling and so on)",
+      "options": {
+        "chaff が指摘した所だけ": "Only what chaff points out",
+        "手引き（STYLE.md）の決まりにも合わせる": "Also follow the guide's rules (STYLE.md)"
+      }
+    },
+    "shelved": {
+      "label": "Fix the shelved findings too?",
+      "why": "Findings shelved by \"Bring chaff into a document folder\" are normally kept quiet. Fixing them shrinks what is left, a little at a time",
+      "options": {
+        "新しい指摘だけ": "Only new findings",
+        "棚上げした指摘も直す": "Fix the shelved findings too"
+      }
+    },
+    "maxFiles": {
+      "label": "The most files to polish this time",
+      "why": "Keeps one run to a size; the rest wait for the next run"
+    },
+    "avoid": {
+      "label": "Files or places to leave alone",
+      "why": "Left out of the candidates"
+    }
+  },
+  "steps": {
+    "survey": {
+      "title": "Choose the documents to polish",
+      "description": "Measures the documents with chaff and lists the ones worth polishing."
+    },
+    "polish": {
+      "title": "Polish them one by one",
+      "description": "Polishes the listed documents one at a time. Keeps each original, and checks that what it says (headings, numbering, code, link targets) is unchanged and that chaff finds nothing against the style. Repeats while any are left."
+    },
+    "report": {
+      "title": "Report",
+      "description": "What was polished, what was checked, and what was left as it was."
+    }
+  },
+  "presets": {
+    "oshirase": {
+      "title": "Polish a company notice",
+      "description": "In the sample notice (oshirase.md), splits the sentences chaff finds too long so they read easily, without changing what they say. The original is kept. Run the \"Make a style\" example in the same folder first and choose its style, and the notice follows that style."
+    },
+    "houkoku": {
+      "title": "Polish a report as a report",
+      "description": "Reads the sample monthly report (houkoku.md) as a report: whether the conclusion comes first, and whether each request says who does it and by when. Where something needs adding, it is not written in; it is listed in the report as a question for the author. The original is kept."
+    },
+    "blog": {
+      "title": "Polish a blog post as a blog post",
+      "description": "Reads the sample technical blog post (blog.md) as a technical article. An opening that would fit any post is cut; a stock closing line or a closing that only summarises becomes a question for the author. No facts are added. The original is kept."
+    },
+    "tejun": {
+      "title": "Polish a procedure as a procedure",
+      "description": "Reads the sample procedure (tejun.md) as a manual. Sentences that are too long are split without changing what they say. It looks at what you need before starting, whether one step holds two actions, and how to tell a step worked; where something needs adding, it becomes a question for the author in the report. The original is kept."
+    },
+    "shayo": {
+      "title": "Polish a regulation as a regulation",
+      "description": "Reads the sample company regulation (kitei.md) as a regulation. Emphasis with nothing behind it is fixed without changing what it says. It looks at who a rule applies to, whether a duty has a deadline, what happens when it is not kept, and whether exceptions sit next to their rule; where something needs adding, it becomes a question for the author in the report. The original is kept."
+    },
+    "english-blog": {
+      "title": "Polish an English blog post",
+      "description": "Reads the sample English technical blog post (post.md) as a technical article. The post stays in English: overlong sentences are split, and an opening that would fit any post or a stock closing line is cut. Where something needs adding, such as a closing that only summarises, it becomes a question for the author in the report. The report comes back in your report language. The original is kept."
+    }
+  }
+}
