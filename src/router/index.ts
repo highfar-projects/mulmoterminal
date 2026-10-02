@@ -40,6 +40,8 @@ export const routes: RouteRecordRaw[] = [
   { path: "/blueprints/:run", name: "blueprintRun", component: Stub },
   // Every skill on disk across the folders terminals have run in (#2815).
   { path: "/skills", name: "skills", component: Stub },
+  // What each session is running, and the worktrees that can go (#2219).
+  { path: "/processes", name: "processes", component: Stub },
   // Full-screen file explorer + editor, rooted at a project dir (?cwd=). Opened from a
   // terminal header's Files button.
   { path: "/files", name: "files", component: Stub },

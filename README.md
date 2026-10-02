@@ -1763,6 +1763,18 @@ narrow and tall for one record you are discussing — and each position keeps it
   bring, and a warning listing the files that can run code. Nothing is installed from the viewer —
   it shows the `npx skills add …` line to copy and run yourself. Your search words go to skills.sh
   only when you press **Search**.
+- **Processes** — **More features** → **Processes** shows what mulmoterminal has left running.
+  The **Processes** tab lists each tmux session with the process tree under its panes — `yarn dev`,
+  vite, MCP bridges, the agent itself — with CPU, memory and how long each has run, and an **End**
+  button per process (SIGTERM, then SIGKILL if the same process is still there a few seconds later).
+  A session's own shell is not offered: close its terminal in the grid, or end a session that is
+  open nowhere from Settings > Sessions. Busy and day-old
+  processes are highlighted, never ended for you. It reads only while the page is open. The
+  **Worktrees** tab lists the managed worktrees of the folders your terminals have run in and what
+  keeps each from going — uncommitted or untracked files, commits not in the base branch, a
+  terminal standing in it. One with none of those gets a **Remove** button (the worktree and its
+  merged branch); nothing is removed automatically. Gitignored files (a local `.env`, `node_modules/`)
+  do not hold a worktree back, but they go with it, so the row and the confirmation name them.
 - **Grid of parallel sessions** — the ＋ Terminal / grid view runs many sessions at once,
   auto-sizing by count across pages. Cell borders signal state at a glance — **working**
   (pulsing blue), **blocked** (amber — needs a permission / answer), **done** (blue —

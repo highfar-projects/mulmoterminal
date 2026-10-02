@@ -74,6 +74,7 @@ import {
   devTerminalSessionsHydrated,
   hasAllGuiTools,
   allToolsSessionsHydrated,
+  sessionCwd,
 } from "../session/registry.js";
 import { mountShortcutsRoutes } from "../backends/shortcuts.js";
 import { mountDecisionRoutes } from "./decision-routes.js";
@@ -100,7 +101,9 @@ import type { createCopilotSpawner } from "../session/spawn-copilot.js";
 import type { createCursorSpawner } from "../session/spawn-cursor.js";
 import type { createTranslationWorker } from "../session/translation-worker.js";
 import type { createTitleManager } from "../session/session-title.js";
-import { tmuxHasSession, tmuxKillSession } from "../infra/tmux.js";
+import { tmuxHasSession, tmuxKillSession, tmuxPanePidsBySessionAsync } from "../infra/tmux.js";
+import { mountProcessRoutes } from "./process-routes.js";
+import { listProcessDetails } from "../infra/process-list.js";
 import type { SessionActivityDeps } from "../session/session-activity-deps.js";
 import { mountSpaFallback } from "../infra/spa-fallback.js";
 import { mountRateLimitRoutes, type RateLimitRouteDeps } from "../agents/rate-limit-routes.js";
@@ -329,6 +332,7 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
   // The agent hook endpoint (routes/hook-routes.ts). Session lifecycle, the title
   // bookkeeping and the tool stores stay here; the fan-out that reads them moves out.
   mountSessionFacingRoutes(app, deps);
+  mountProcessesPageRoutes(app, deps);
 }
 
 // The session-facing half: hooks, tool history, and everything the browser asks about a
@@ -489,5 +493,16 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
     // moment as a number (session/surviving-sessions.ts).
     survivingSessions: () => survivingSessions(Date.now(), getSessionIdleReapDays()),
     armedReapIntervalHours,
+  });
+}
+
+// The Processes page (#2219): what each session is running, and ending one of those processes.
+function mountProcessesPageRoutes(app: Express, deps: AppRouteDeps): void {
+  mountProcessRoutes(app, {
+    isAllowedOrigin: deps.isAllowedOrigin,
+    listProcesses: listProcessDetails,
+    listPanePids: tmuxPanePidsBySessionAsync,
+    cwdOf: sessionCwd,
+    sendSignal: (pid, signal) => process.kill(pid, signal),
   });
 }

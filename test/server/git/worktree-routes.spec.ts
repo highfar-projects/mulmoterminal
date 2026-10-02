@@ -70,6 +70,15 @@ describe("worktree routes: origin guard + validation", () => {
     expect(d.statusCode).toBe(403);
   });
 
+  it("403s a cleanup removal from a disallowed origin, 400s one without repoDir or path", async () => {
+    const denied = makeRes();
+    await routes(deny)["POST /api/worktrees/cleanup/remove"]({ headers: { origin: "https://evil.example" }, body: { repoDir: "/x", path: "/y" } }, denied);
+    expect(denied.statusCode).toBe(403);
+    const missing = makeRes();
+    await routes(allow)["POST /api/worktrees/cleanup/remove"]({ headers: {}, body: { repoDir: "/x" } }, missing);
+    expect(missing.statusCode).toBe(400);
+  });
+
   it("400s create when the task is missing or blank", async () => {
     const r = routes(allow);
     const a = makeRes();
