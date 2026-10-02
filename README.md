@@ -1758,6 +1758,11 @@ narrow and tall for one record you are discussing — and each position keeps it
   each enabled plugin (skills shown as `plugin:skill`), and the `.claude/skills` of each folder a
   terminal has run in (folders with none are left out). A project skill with the same name as one
   of yours is marked as overriding it. The search (name, description or folder) narrows both lists.
+  Switch to **skills.sh** to search the public directory at [skills.sh](https://skills.sh) for
+  skills you do not have yet and read one before installing it: its `SKILL.md`, every file it would
+  bring, and a warning listing the files that can run code. Nothing is installed from the viewer —
+  it shows the `npx skills add …` line to copy and run yourself. Your search words go to skills.sh
+  only when you press **Search**.
 - **Grid of parallel sessions** — the ＋ Terminal / grid view runs many sessions at once,
   auto-sizing by count across pages. Cell borders signal state at a glance — **working**
   (pulsing blue), **blocked** (amber — needs a permission / answer), **done** (blue —
