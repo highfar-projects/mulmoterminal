@@ -130,6 +130,9 @@ describe("a step written once per base", () => {
     expect(problemsOf(same, { acceptance: { title: "Tests", description: "Same" }, "acceptance@supabase": { title: "x" } })).toEqual([
       'words for step "acceptance@supabase", which the pack does not have',
     ]);
+    expect(problemsOf(same, { acceptance: { title: "Tests", description: "Same" }, "acceptance@local@typo": { title: "x" } })).toEqual([
+      'words for step "acceptance@local@typo", which the pack does not have',
+    ]);
     expect(problemsOf(same, { "acceptance@local": { title: "Tests" }, "acceptance@firebase": { title: "Tests", description: "d" } })).toEqual([
       'step "acceptance@local" has no description',
     ]);

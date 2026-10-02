@@ -99,10 +99,11 @@ function stepProblems(steps: readonly Described[], words: Readonly<Record<string
       return [same(step.id) ? `no words for step "${step.id}"` : `no words for step "${name}" (its steps differ by base)`];
     }),
   );
-  const known = (key: string): boolean => {
-    const [id, base] = key.split("@");
-    return steps.some((step) => step.id === id && (base === undefined ? same(id) || !step.bases : (step.bases ?? []).includes(base)));
-  };
+  // Every key the overlay may use, matched whole: `<id>` for a step the same on every base, `<id>@<base>` for each base.
+  const keys = new Set(
+    steps.flatMap((step) => [...(same(step.id) || !step.bases ? [step.id] : []), ...(step.bases ?? []).map((base) => stepKey(step.id, base))]),
+  );
+  const known = (key: string): boolean => keys.has(key);
   const stale = Object.keys(words ?? {})
     .filter((key) => !known(key))
     .map((key) => `words for step "${key}", which the pack does not have`);
