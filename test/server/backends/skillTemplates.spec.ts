@@ -13,7 +13,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { CollectionSchema } from "@mulmoclaude/core/collection";
 import { declarationProblems } from "../../../server/backends/sharedApp/context.js";
-import { APP_PROTOCOL, APP_PROTOCOL_BASE, parseAuthoredApp } from "@receptron/sharedapp";
+import { APP_PROTOCOL_ARTICLE, APP_PROTOCOL_BASE, parseAuthoredApp } from "@receptron/sharedapp";
 import { modalCallIn } from "../../../server/backends/sharedApp/modalCall.js";
 import { formElementIn, readyNeverCalled } from "../../../server/backends/sharedApp/viewDefects.js";
 import { readdirSync } from "node:fs";
@@ -292,8 +292,8 @@ describe("the shared-app templates", () => {
     // `plans/feat-shared-app-uid-identity.md`.
     //
     // AGAINST THE *BASE* CONTRACT, and this is the distinction the day a feature moved the number
-    // actually turned on. `APP_PROTOCOL` is the newest contract this compiler can EMIT — 2.0.0
-    // since article views, which a reader must understand to draw. `APP_PROTOCOL_BASE` is what an
+    // actually turned on. `APP_PROTOCOL_ARTICLE` (2.0.0) is the contract article views need, which a
+    // reader must understand to draw (`APP_PROTOCOL`, 3.0.0, is pseudonym ids). `APP_PROTOCOL_BASE` is what an
     // app that uses none of that keeps, and what every deployed reader already knows. A floor says
     // what the app NEEDS, so a template declaring the newer one would make every app written from
     // it refuse to draw on readers that could have drawn it perfectly well — the exact cost the
@@ -301,12 +301,12 @@ describe("the shared-app templates", () => {
     for (const file of TEMPLATE_FILES) {
       const manifest = blocksOf(file).get("app.json") as { protocol?: unknown; views?: { article?: unknown }[] } | undefined;
       // "A template that ships an article view will state its own" — the paragraph above, taken at
-      // its word. An `article` view is drawn by a reader that understands APP_PROTOCOL, so an app
+      // its word. An `article` view is drawn by a reader that understands APP_PROTOCOL_ARTICLE, so an app
       // with one has to say so and an app without one must not: the floor is read off the FEATURES
       // the declaration uses, never off which template it is. Derived here rather than listed,
       // because a list of exceptions is the per-template number this test exists to refuse.
       const drawsArticles = (manifest?.views ?? []).some((view) => view.article !== undefined);
-      const floor = drawsArticles ? APP_PROTOCOL : APP_PROTOCOL_BASE;
+      const floor = drawsArticles ? APP_PROTOCOL_ARTICLE : APP_PROTOCOL_BASE;
       expect(`${file}: ${String(manifest?.protocol)}`).toBe(`${file}: ${floor}`);
     }
   });

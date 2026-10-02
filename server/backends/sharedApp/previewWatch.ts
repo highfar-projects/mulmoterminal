@@ -22,7 +22,7 @@ import { appSchemasPath } from "@receptron/sharedapp";
 import { isRecord } from "../../../common/isRecord.js";
 import type { PreviewDataset, PreviewRecordChange } from "../../../common/sharedAppPreview.js";
 import { currentEmail, currentFirestore, currentUid } from "../remoteHost/session.js";
-import { previewSharedApp, visibleRows, type PreviewWatch } from "./preview.js";
+import { previewSharedApp, readerFor, visibleRows, type PreviewReader, type PreviewWatch } from "./preview.js";
 
 /** What the caller gets: a way to stop, or the reason there is nothing to watch.
  *
@@ -36,7 +36,7 @@ const fields = (value: unknown): Record<string, unknown> => {
   return value;
 };
 
-export const rowsFor = (docs: { id: string; data: () => unknown }[], watch: PreviewWatch, who: { uid: string; email: string }): PreviewDataset => {
+export const rowsFor = (docs: { id: string; data: () => unknown }[], watch: PreviewWatch, who: PreviewReader): PreviewDataset => {
   // The id goes ON the record, as the one-shot read does it: the rules use the document id as the
   // record's identity, and a page rendering a list needs it as a field.
   const rows = docs.map((entry) => ({ ...fields(entry.data()), id: entry.id }));
@@ -61,7 +61,7 @@ export async function watchPreviewRecords(cwd: string, emit: (change: PreviewRec
   const email = currentEmail();
   if (uid === null || email === null) return { ok: false };
 
-  const who = { uid, email };
+  const who = await readerFor({ uid, email }, preview.aid);
   const byCid = new Map<string, PreviewWatch[]>();
   for (const watch of preview.watches) {
     byCid.set(watch.want.cid, [...(byCid.get(watch.want.cid) ?? []), watch]);

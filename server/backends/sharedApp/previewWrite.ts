@@ -32,6 +32,7 @@ import {
   missingIdField,
   missingRequired,
   plannedWrite,
+  idOwnerOf,
   recordId,
   recordOf,
   writableFields,
@@ -198,7 +199,7 @@ export async function writePreviewSubmission(root: string, cid: string, values: 
         `bad-name: "${badSlug}" becomes this record's id and its URL, so it must be lowercase letters, digits and hyphens, ` +
         "start with a letter or digit, and be at most 64 characters",
     };
-  const id = recordId(spec.submit, handle.uid, record, randomUUID());
+  const id = recordId(spec.submit, await idOwnerOf(spec.submit.idFrom, handle.uid, preview.aid), record, randomUUID());
 
   const plan = plannedWrite(cid, spec.submit, id, record);
   const failed = await commitPlannedWrite(handle, preview.aid, plan);
