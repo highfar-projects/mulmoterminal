@@ -17,12 +17,12 @@ import {
   hookedSessions,
   knownSessions,
   launchChoices,
-  ptys,
   rememberCustomAgentSession,
   resetSessionToolGroups,
 } from "./registry.js";
-import { ptySpawn, ptyWouldReattach, type PtySpawnEnv } from "./pty-spawn.js";
-import { ptyExitLine, ptyStartLine } from "./pty-exit-log.js";
+import { ptyWouldReattach, type PtySpawnEnv } from "./pty-spawn.js";
+import { ptyExitLine } from "./pty-exit-log.js";
+import { startAgentPty, type StartedAgentPty } from "./agent-pty-start.js";
 import { attachDraftInjection } from "./draft-injection.js";
 import { sendExitAndClose } from "./ws-frames.js";
 import { wireBufferedOutput } from "./output-relay.js";
@@ -270,8 +270,7 @@ export function createClaudeSpawner(deps: SpawnDeps) {
     // The settings file is already on disk and may hold a provider token, so a failed
     // spawn has to take it with it — a session that never starts never reaches reap(),
     // where the cleanup normally happens (#579).
-    const entry = withSettingsCleanup(sessionId, spawnEntry);
-    const spawnedAtMs = Date.now();
+    const { entry, spawnedAtMs } = withSettingsCleanup(sessionId, spawnEntry);
 
     // A NEW claude process gets whatever the user's MCP config says NOW, so anything this id
     // learned under a previous one is stale — including a group the user has since removed.
@@ -300,15 +299,13 @@ export function createClaudeSpawner(deps: SpawnDeps) {
       claimFullGuiMcp(sessionId, attachGuiMcp, cwd, reattaching, "claude");
     }
 
-    function spawnEntry(): PtyEntry {
+    function spawnEntry(): StartedAgentPty {
       recordCapabilitiesForThisSpawn();
       const program = sessionProgram(deps.claudeBin, sessionId, customAgentId, canResume ? resume : null, resolved.unset, deps.permissionMode);
       const spawnEnv = { ...program.spawnEnv, env: { ...program.spawnEnv.env, ...claudeRendererEnv(sessionId, cwd) } };
-      const { term, tmux, reattached } = ptySpawn(sessionId, program.file, [...program.prefixArgs, ...args], cwd, true, spawnEnv);
-      console.log(ptyStartLine({ agent: "claude", pid: term.pid, cwd, tmux, reattached, sessionId, note: program.note }));
-      return { term, ws, buffer: "", cwd, tmux, active: false, agent: "claude" }; // "claude" whatever wrapper started it — see sessionProgram
+      // "claude" whatever wrapper started it — see sessionProgram.
+      return startAgentPty({ sessionId, ws, cwd, agent: "claude", file: program.file, args: [...program.prefixArgs, ...args], spawnEnv, note: program.note });
     }
-    ptys.set(sessionId, entry);
     // Every claude spawn above carries `--settings` with the Pre/PostToolUse hooks, so from here
     // on this session reports its own tool calls — which is what stops the MCP broker recording
     // its GUI calls a second time (mcp/gui-call-history.ts).
