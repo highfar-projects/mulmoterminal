@@ -36,7 +36,14 @@ export const blueprintRunSchema = z.object({
   // `outcome` on an agent entry says why its text may be empty: it wrote no reply, or its session
   // ended first. The UI words those; the server does not.
   specChat: z
-    .array(z.object({ role: z.enum(["person", "agent"]), text: z.string(), atMs: z.number(), outcome: z.enum(["reply", "no-reply", "lost"]).optional() }))
+    .array(
+      z.object({
+        role: z.enum(["person", "agent"]),
+        text: z.string(),
+        atMs: z.number(),
+        outcome: z.enum(["reply", "no-reply", "lost", "check-failed"]).optional(),
+      }),
+    )
     .default([]),
   revisionSessionId: z.string().nullable().default(null),
   // The interview answers this build started with. Every build in a folder shares .blueprint/answers.json,

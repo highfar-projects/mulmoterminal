@@ -88,7 +88,7 @@ describe("a build's steps in the screen's language", () => {
   });
 
   it("keep a build whose packs are gone as it was stored", async () => {
-    const steps = [{ id: "a", title: "工程", description: "", skill: "s", check: "true", gates: [], reads: [], origin: "usecase" as const }];
+    const steps = [{ id: "a", title: "工程", description: "", skill: "s", check: "true", gates: [], reads: [], revises: [], origin: "usecase" as const }];
     expect(await localizedRunSteps({ basePackDir: "/packs/gone", usecasePackDir: "/packs/gone-too", steps }, overlayReader("en"))).toEqual(steps);
   });
 

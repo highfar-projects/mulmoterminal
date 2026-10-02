@@ -6,7 +6,7 @@ import { stepPrompt } from "../../../common/blueprint/stepPrompt";
 import { specRevisionPrompt } from "../../../common/blueprint/specRevisionPrompt";
 import { blueprintRunSchema } from "../../../common/blueprint/run";
 
-const step = { id: "report", title: "Report", description: "", skill: "skills/report", check: "true", gates: [], reads: [] };
+const step = { id: "report", title: "Report", description: "", skill: "skills/report", check: "true", gates: [], reads: [], revises: [] };
 const stepText = (language: "en" | "ja" | null) =>
   stepPrompt({ step, skillFile: "/p/SKILL.md", packDirs: { base: "/b", usecase: "/u" }, stepState: undefined, askCommand: "ASK", language });
 const specText = (language: "ko" | null) =>

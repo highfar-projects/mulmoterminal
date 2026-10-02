@@ -14,7 +14,8 @@
       "skill": "skills/report",
       "check": "node \"$BLUEPRINT_USECASE/checks/report.mjs\"",
       "gates": ["review"],
-      "reads": [".blueprint/comparison.txt"]
+      "reads": [".blueprint/comparison.txt"],
+      "revises": [".blueprint/comparison.json"]
     }
   ]
 }

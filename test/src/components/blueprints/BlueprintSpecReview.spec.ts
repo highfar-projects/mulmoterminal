@@ -1,5 +1,5 @@
-// The specification panel at a review gate: an app build has a specification to read and talk over; a document build
-// has none, and an empty panel would send the person looking for one.
+// The panel at a review gate: an app build has a specification to read and talk over; a document build has files to
+// read instead, and keeps only the conversation, where what the person sends changes those files.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 
@@ -21,9 +21,9 @@ describe("the specification panel", () => {
     loadSpec.mockReset();
   });
 
-  it("shows the specification and where it is, when there is one", async () => {
+  it("shows the specification and where it is, at an app build's gate", async () => {
     loadSpec.mockResolvedValue(specView("# spec"));
-    const wrapper = panel();
+    const wrapper = panel(null, true);
     await flushPromises();
     expect(wrapper.find('[data-testid="blueprint-spec-review"]').exists()).toBe(true);
     expect(wrapper.text()).toContain("/work/app/.blueprint/spec.md");
@@ -71,11 +71,31 @@ describe("the specification panel", () => {
     expect(wrapper.text()).toContain("the spec could not be read");
   });
 
-  it("is not shown at a document build's gate with no specification and nothing said about one", async () => {
+  it("keeps only the conversation at a document build's gate, in its own words, and sends what the person writes", async () => {
     loadSpec.mockResolvedValue(specView(null));
+    sendSpecMessage.mockReset();
+    sendSpecMessage.mockResolvedValue({ ok: true, value: {} });
     const wrapper = panel();
     await flushPromises();
-    expect(wrapper.find('[data-testid="blueprint-spec-review"]').exists()).toBe(false);
-    expect(wrapper.text()).toBe("");
+    expect(wrapper.find('[data-testid="blueprint-spec-body"]').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain(".blueprint/spec.md");
+    expect(wrapper.text()).toContain("Send changes or answers");
+    await wrapper.get('[data-testid="blueprint-spec-input"]').setValue("集合は 9 時です");
+    await wrapper.get('[data-testid="blueprint-spec-send"]').trigger("submit");
+    await flushPromises();
+    expect(sendSpecMessage).toHaveBeenCalledWith("run-00000001", "集合は 9 時です");
+  });
+
+  it("shows a failed check after a revision, with what the check said", async () => {
+    loadSpec.mockResolvedValue(
+      specView(null, [
+        { role: "person", text: "第2章を短くして", atMs: 1 },
+        { role: "agent", text: "outline.json: part 2 has no file", atMs: 2, outcome: "check-failed" },
+      ] as never),
+    );
+    const wrapper = panel(null, false, 2);
+    await flushPromises();
+    expect(wrapper.get('[data-testid="blueprint-revision-check-failed"]').text()).toContain("The check after the change did not pass");
+    expect(wrapper.text()).toContain("outline.json: part 2 has no file");
   });
 });

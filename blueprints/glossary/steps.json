@@ -14,7 +14,8 @@
       "skill": "skills/apply",
       "check": "node \"$BLUEPRINT_USECASE/checks/glossary.mjs\" apply && node \"$BLUEPRINT_USECASE/checks/report.mjs\"",
       "gates": ["review"],
-      "reads": [".blueprint/glossary.txt"]
+      "reads": [".blueprint/glossary.txt"],
+      "revises": [".blueprint/glossary.json"]
     }
   ]
 }

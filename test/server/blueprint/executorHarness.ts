@@ -15,6 +15,7 @@ export const step = (id: string, gates: ComposedStep["gates"] = []): ComposedSte
   check: `check-${id}`,
   gates,
   reads: [],
+  revises: [],
   origin: "base",
 });
 

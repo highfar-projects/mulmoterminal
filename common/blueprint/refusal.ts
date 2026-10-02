@@ -90,9 +90,9 @@ function englishBuildRefusal(refusal: Exclude<Refusal, MarketRefusal>): string {
     case "held-elsewhere":
       return `blueprints on this machine are run by the MulmoTerminal on port ${refusal.port}; make changes there`;
     case "revision-pending":
-      return "the spec is still being revised; wait for the reply";
+      return "the changes are still being made; wait for the reply";
     case "spec-not-at-review":
-      return "the spec can be discussed only while it waits for review";
+      return "this can be talked over only while it waits for review";
     case "message-pending":
       return "the previous message is still being answered";
     case "agent-working":
