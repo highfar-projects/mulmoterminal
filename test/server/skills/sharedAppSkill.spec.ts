@@ -95,3 +95,71 @@ describe("the shared-app skill's schema advice", () => {
     expect(CollectionSchemaZ.safeParse(engine).success).toBe(true);
   });
 });
+
+describe("the skill's question about showing what was sent", () => {
+  // The skill offers the author three choices and lists what publish refuses. Each is a declaration
+  // an agent will write from that prose, so each is put through the gate here.
+  const app = (overrides: { collections?: object; public?: object; submit?: object } = {}) => ({
+    aid: "app-under-test",
+    members: { "owner@example.com": { "*": "owner" } },
+    collections: overrides.collections ?? {},
+    public: { enabled: true, submit: { questions: { auth: "anonymous", createFields: ["text"], ...overrides.submit } }, ...overrides.public },
+  });
+  const problems = (declaration: object): string[] => {
+    const parsed = parseAuthoredApp(JSON.stringify(declaration));
+    return parsed.ok ? publishProblems(parsed.app, [{ cid: "questions", primaryKey: "id" }], "owner@example.com") : parsed.problems;
+  };
+  const chosen = { collections: { questions: { publishField: "shown" } }, public: { readPublished: ["questions"] } };
+
+  it("offers three choices, and each deploys", () => {
+    expect(problems(app())).toEqual([]);
+    expect(problems(app(chosen))).toEqual([]);
+    expect(problems(app({ public: { read: ["questions"] } }))).toEqual([]);
+  });
+
+  const sender = { auth: "verifiedEmail", emailField: "email", createFields: ["text", "email"] };
+  it.each([
+    ["readPublished with no publishField", app({ public: { readPublished: ["questions"] } }), "publishField is not declared"],
+    [
+      "a collection in both read and readPublished",
+      app({ ...chosen, public: { read: ["questions"], readPublished: ["questions"] } }),
+      "public.read names it too",
+    ],
+    ["a publishField a sender creates", app({ ...chosen, submit: { createFields: ["text", "shown"] } }), "createFields includes 'shown'"],
+    [
+      "a publishField a sender updates",
+      app({
+        ...chosen,
+        submit: { ...sender, selfUpdate: { open: ["shown"] } },
+        collections: { questions: { publishField: "shown", statusField: "status", submitOnly: true } },
+      }),
+      "selfUpdate.open includes 'shown'",
+    ],
+    [
+      "a publishField named like the status field",
+      app({ ...chosen, collections: { questions: { publishField: "status", statusField: "status" } } }),
+      "also the statusField",
+    ],
+  ])("refuses %s, as the skill says", (_label, declaration, reason) => {
+    expect(problems(declaration)).toEqual([expect.stringContaining(reason)]);
+  });
+
+  // publishField may not share a name with any field that already means something to the rules.
+  it.each([
+    ["statusField", { collections: { questions: { publishField: "f", statusField: "f" } } }],
+    ["assigneeField", { collections: { questions: { publishField: "f", assigneeField: "f" } } }],
+    ["stampField", { submit: { stampField: "f" } }],
+    ["idField", { submit: { idField: "f" } }],
+    ["uidField", { submit: { uidField: "f" } }],
+    ["emailField", { submit: { auth: "verifiedEmail", emailField: "f", createFields: ["text", "f"] } }],
+  ])("refuses a publishField named like the %s", (key, overrides) => {
+    const declaration = app({ collections: { questions: { publishField: "f" } }, public: { readPublished: ["questions"] }, ...overrides });
+    expect(problems(declaration)).toContainEqual(expect.stringContaining(`which is also the ${key}`));
+  });
+
+  it("names the keys and refusals in the question", () => {
+    const question = body.slice(body.indexOf("## Before you ask the user a question"), body.indexOf("## Where people actually look"));
+    expect(question).toContain("Four things are worth asking");
+    ["`public.readPublished`", "publishField", "`public.read: [cid]`", "/m/{slug}", "no mechanism"].forEach((phrase) => expect(question).toContain(phrase));
+  });
+});

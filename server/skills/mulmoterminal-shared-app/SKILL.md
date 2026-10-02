@@ -311,7 +311,8 @@ reached for only when a custom public page is also required:
 - A **generated** public form (an app declaring no `public` view) already shows a visitor their own
   answer back, roster or not. **Writing a custom public page removes that** — the custom page
   replaces the generated form, and the data a public page may be handed is limited to
-  `public.read`, which the submitted records can never be in.
+  `public.read` (every row, to everybody) and the rows the owner published from
+  `public.readPublished` — neither hands a sender back their own answer alone.
 - So "anyone may answer" + "a public page I wrote myself" + "answerers can see their answer" is
   three things, and **only two of them are available at once**. Drop the middle one and the
   generated form serves everybody; drop the first and `/p/{slug}` serves a roster. Say so while the
@@ -874,7 +875,7 @@ entry per page, each naming **who it is for**:
   blank with nothing to say why.
 - **`collections` is declared, not inferred.** A view fed the wrong data renders perfectly and
   draws an empty page, which is the one failure nothing reports. Publish refuses a `public` page
-  fed a collection outside `public.read`, and a `participant` page fed one a participant cannot
+  fed a collection in neither `public.read` nor `public.readPublished`, and a `participant` page fed one a participant cannot
   reach at all (neither in `participantRead` nor their own row through `public.submit`).
 - **A collection that grows forever needs `limit`, or every reader pays for its whole history.**
   A view is handed its datasets WHOLE, so a chat room's page fetches every message ever posted to
@@ -1290,7 +1291,7 @@ Then `manageSharedApp` with `action: "publish"`.
 
 ## Before you ask the user a question
 
-Three things are worth asking and the rest are not:
+Four things are worth asking and the rest are not:
 
 - **their email address**, if you do not have it — nothing works without it in `members`;
 - **whether people outside the roster should be able to answer** — it decides `public.enabled`,
@@ -1308,6 +1309,29 @@ Three things are worth asking and the rest are not:
   roster. Invite-only is what the `/p/{slug}` route costs, and that route is the option to reach
   for when a custom public page is also required. The AUTHOR'S own page is not on this list: an app
   that collects records gets one, and asking makes it sound optional.
+- **whether visitors to the public page should see what was sent** — decide it before writing
+  that page, because the answer is a declaration the page is built on, not a page to rewrite later.
+  Offer three, in the author's words:
+  - **nobody sees it** (only the author reads what arrives): the collection is in neither
+    `public.read` nor `public.readPublished`;
+  - **only the ones I choose** (a question box that shows the questions it answered):
+    `collections[cid].publishField: "<a boolean field>"` and `public.readPublished: [cid]`. The owner
+    flips a row public or private with the per-row switch in the list at `/m/{slug}`; the sender
+    cannot set that field, and the rules refuse it if they try;
+  - **everyone sees everything** (a scheduling grid, where seeing every answer is the point):
+    `public.read: [cid]`. Every row reaches every visitor whole, so declare no `emailField` there
+    (the note in `templates/schedule-poll.md` says the same).
+
+  "Show only a summary" is not one of the options: there is no mechanism for it. If the author asks
+  for it, say so plainly and let them pick from the three.
+
+  Publish refuses: a `readPublished` collection with no `publishField`; a collection in both
+  `public.read` and `readPublished`; a `publishField` listed in `createFields` or `selfUpdate`; and a
+  `publishField` named like the status, assignee, stamp, id, uid or email field. A public page
+  (`audience: "public"`) may list a `readPublished` collection in its `collections`, but a public
+  agent (`agents[]`) can only watch one in `public.read` — it reads without a filter, and the rules
+  refuse an unfiltered read. In production the public page receives only the rows whose field is
+  `true`, enforced by the Firestore rules; the preview shows the same rows as production.
 
 Do not ask which storage to use, whether to make it "an app", or what to call the collection.
 
