@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, vi } from "vitest";
-import { readSkillsShSkill, searchSkillsSh, type FetchText } from "../../../server/backends/skillsSh";
+import { readCapped, readSkillsShSkill, searchSkillsSh, type FetchText } from "../../../server/backends/skillsSh";
 
 const answering = (body: unknown): FetchText & { mock: { calls: unknown[][] } } => vi.fn(async () => (typeof body === "string" ? body : JSON.stringify(body)));
 
@@ -105,5 +105,59 @@ describe("readSkillsShSkill", () => {
 
   it("is null when skills.sh has no such skill", async () => {
     expect(await readSkillsShSkill("a/b", "x", async () => null)).toBeNull();
+  });
+});
+
+// The cap is on what is READ, not on what was read: an oversized answer is dropped while it arrives.
+describe("readCapped", () => {
+  function streamed(chunks: readonly string[], init: ResponseInit = {}) {
+    const encoder = new TextEncoder();
+    const state = { pulls: 0, cancelled: false };
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        const chunk = chunks[state.pulls];
+        state.pulls += 1;
+        if (chunk === undefined) controller.close();
+        else controller.enqueue(encoder.encode(chunk));
+      },
+      cancel() {
+        state.cancelled = true;
+      },
+    });
+    return { response: new Response(body, init), state };
+  }
+
+  it("returns a body within the bound, a character split across chunks included", async () => {
+    const bytes = new TextEncoder().encode("あい");
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes.slice(0, 2));
+        controller.enqueue(bytes.slice(2));
+        controller.close();
+      },
+    });
+    expect(await readCapped(new Response(body), 10)).toBe("あい");
+  });
+
+  it("stops reading, and cancels, the moment the bound is passed", async () => {
+    const { response, state } = streamed(["12345", "67890", "abcde", "fghij", "klmno"]);
+    expect(await readCapped(response, 8)).toBeNull();
+    expect(state.cancelled).toBe(true);
+    expect(state.pulls).toBeLessThan(4);
+  });
+
+  it("refuses from the declared length without reading", async () => {
+    const { response, state } = streamed(["x"], { headers: { "content-length": "999" } });
+    expect(await readCapped(response, 8)).toBeNull();
+    expect(state.pulls).toBeLessThanOrEqual(1);
+    expect(state.cancelled).toBe(true);
+  });
+
+  it("is null for a status that is not 2xx", async () => {
+    expect(await readCapped(new Response("{}", { status: 404 }), 8)).toBeNull();
+  });
+
+  it("reads a body of exactly the bound", async () => {
+    expect(await readCapped(new Response("12345678"), 8)).toBe("12345678");
   });
 });

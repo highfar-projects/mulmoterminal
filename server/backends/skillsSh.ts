@@ -11,7 +11,7 @@ const SEARCH_LIMIT = 50;
 /** A query is a few words; anything longer is not sent anywhere. */
 export const MAX_QUERY_CHARS = 200;
 /** A whole snapshot, scripts and references included. Past this it is not read. */
-const MAX_RESPONSE_CHARS = 8 * 1024 * 1024;
+const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
 /** The same bound the local viewer puts on a SKILL.md. */
 const MAX_SKILL_DOC_CHARS = 1024 * 1024;
 const MAX_NAME_CHARS = 200;
@@ -21,11 +21,35 @@ const SKILL_FILE = "SKILL.md";
 
 export type FetchText = (url: string, signal: AbortSignal) => Promise<string | null>;
 
-/** The body of a 2xx answer; null for any other status. */
-export const fetchText: FetchText = async (url, signal) => {
-  const res = await fetch(url, { signal, headers: { accept: "application/json" } });
-  return res.ok ? res.text() : null;
-};
+/** The body of a 2xx answer, read no further than `maxBytes`; null for any other status, or for a
+ *  body that is larger — refused from its declared length when it has one, and otherwise by stopping
+ *  the read the moment the count is passed, so an oversized answer is never held whole. */
+export async function readCapped(res: Response, maxBytes: number): Promise<string | null> {
+  if (!res.ok || Number(res.headers.get("content-length") ?? 0) > maxBytes) {
+    await res.body?.cancel();
+    return null;
+  }
+  if (!res.body) return "";
+  const chunks = await readChunks(res.body.getReader(), maxBytes);
+  return chunks === null ? null : new TextDecoder().decode(Buffer.concat(chunks));
+}
+
+async function readChunks(reader: ReadableStreamDefaultReader<Uint8Array>, maxBytes: number): Promise<Uint8Array[] | null> {
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (let next = await reader.read(); !next.done; next = await reader.read()) {
+    total += next.value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(next.value);
+  }
+  return chunks;
+}
+
+export const fetchText: FetchText = async (url, signal) =>
+  readCapped(await fetch(url, { signal, headers: { accept: "application/json" } }), MAX_RESPONSE_BYTES);
 
 const searchSchema = z.object({
   skills: z.array(z.object({ source: z.string(), skillId: z.string(), name: z.string(), installs: z.number().nonnegative() })),
@@ -43,7 +67,7 @@ async function getJson(path: string, fetchImpl: FetchText): Promise<unknown> {
   const timer = setTimeout(() => abort.abort(), REQUEST_TIMEOUT_MS);
   try {
     const text = await fetchImpl(`${SKILLS_SH_ORIGIN}${path}`, abort.signal);
-    if (text === null || text.length > MAX_RESPONSE_CHARS) return null;
+    if (text === null || text.length > MAX_RESPONSE_BYTES) return null;
     return JSON.parse(text);
   } catch {
     return null;
