@@ -8,6 +8,16 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+### Shared-app booking templates: the booker cancels where they can reach it (#2807)
+
+- [#2869](https://github.com/receptron/mulmoterminal/pull/2869) — `meeting-room`, `salon` and `gym` put the booker's cancellation on a `participant` page (`/p/{slug}`), which only addresses in `members` can open, so a visitor who booked from the public page could never reach it. The public page does receive the reader's own rows in `viewer.mine` (matched by `emailField` / `uidField`), but without their status, so each template follows its statuses: `meeting-room` and `class-seats` (one status) list the booker's own bookings on the public page and withdraw them there (`class-seats` gains `selfDelete`); `salon` (several statuses) sends the customer to the shop and its desk moves the booking to `cancelled`, now also from `pending`; `gym` keeps `/p/` and says only invited members reach it. Specs pin that no template taking public submissions relies on a participant page for those people, and that every withdraw has a delete declared.
+
+  > **If you published an app from `meeting-room`, `salon` or `gym` before this release:** nothing in it changes — its records, its URLs and its declaration are as they were. But its `/p/{slug}` cancellation page was never reachable for customers who booked from the public page, and it still is not. To fix an existing app, ask the agent to move it to the new template's shape (for `meeting-room`: a "your bookings" list with withdraw on the public page) and publish again. Until then, tell customers to contact you to cancel.
+
+### Shared-app skill: ask whether visitors see what was sent (#2862)
+
+- [#2866](https://github.com/receptron/mulmoterminal/pull/2866) — the skill asks, before building, whether the public page shows the records people send: nobody (neither `public.read` nor `public.readPublished`), only the ones the owner chooses (`publishField` + `public.readPublished`, switched per row at `/m/{slug}`), or everyone (`public.read`, no `emailField`). "Only a summary" is said to have no mechanism yet. A spec runs each choice and each refusal the skill lists through sharedapp's publish gate.
+
 ## mulmoterminal@8.5.0 — 2026-10-02
 
 > **Setup guide:** [8.5.0 — Answer a blueprint's questions at the approval screen, and blueprints in English](https://receptron.github.io/mulmoterminal/guide/en/v8.5.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v8.5.0.html))
