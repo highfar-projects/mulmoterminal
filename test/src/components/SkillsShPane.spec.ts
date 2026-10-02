@@ -64,6 +64,16 @@ describe("SkillsShPane", () => {
     expect(w.find('[data-testid="skills-sh-executables"]').exists()).toBe(false);
   });
 
+  it("draws no image from the stranger's SKILL.md, so rendering it requests nothing", async () => {
+    m.load.mockResolvedValue({ markdown: "![probe](/api/skills/remote/search?q=probe)", files: [{ path: "SKILL.md", bytes: 1 }] });
+    const w = mountPane();
+    await searchFor(w, "pdf");
+    await w.find('[data-testid="skills-sh-item"]').trigger("click");
+    await flushPromises();
+    expect(w.find("section img").exists()).toBe(false);
+    expect(w.find('section a[href="/api/skills/remote/search?q=probe"]').exists()).toBe(true);
+  });
+
   it("lists the files that can run code before anything else", async () => {
     m.load.mockResolvedValue({
       markdown: "x",

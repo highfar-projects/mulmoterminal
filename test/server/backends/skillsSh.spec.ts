@@ -25,6 +25,11 @@ describe("searchSkillsSh", () => {
     expect(skills?.map((skill) => skill.skillId)).toEqual(["ok"]);
   });
 
+  it("keeps no more hits than it asked for, whatever skills.sh sends", async () => {
+    const many = Array.from({ length: 80 }, (_, index) => hit("a/b", `s${String(index)}`, 1));
+    expect(await searchSkillsSh("x", answering({ skills: many }))).toHaveLength(50);
+  });
+
   it("strips control characters from a name", async () => {
     const skills = await searchSkillsSh("x", answering({ skills: [{ ...hit("a/b", "ok", 1), name: "ok\u0007\u001b[31m" }] }));
     expect(skills?.[0]?.name).toBe("ok[31m");
@@ -90,6 +95,12 @@ describe("readSkillsShSkill", () => {
 
   it("is null when the SKILL.md is past the size bound", async () => {
     expect(await readSkillsShSkill("a/b", "x", answering({ files: [{ path: "SKILL.md", contents: "x".repeat(1024 * 1024 + 1) }] }))).toBeNull();
+  });
+
+  it("is null for a snapshot with more files than a skill has", async () => {
+    const files = [{ path: "SKILL.md", contents: "x" }, ...Array.from({ length: 500 }, (_, index) => ({ path: `f${String(index)}.md`, contents: "" }))];
+    expect(await readSkillsShSkill("a/b", "x", answering({ files }))).toBeNull();
+    expect(await readSkillsShSkill("a/b", "x", answering({ files: files.slice(0, 500) }))).not.toBeNull();
   });
 
   it("is null when skills.sh has no such skill", async () => {

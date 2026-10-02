@@ -158,7 +158,7 @@ async function copyInstall(skill: RemoteSkill): Promise<void> {
                 <li v-for="file in doc.files" :key="file.path">{{ file.path }}</li>
               </ul>
             </details>
-            <div class="max-w-[90ch] font-sans text-[13px] text-fg"><MarkdownProse :markdown="body" /></div>
+            <div class="max-w-[90ch] font-sans text-[13px] text-fg"><MarkdownProse :markdown="body" images-as-links /></div>
           </template>
         </template>
       </section>

@@ -15,6 +15,8 @@ const MAX_RESPONSE_CHARS = 8 * 1024 * 1024;
 /** The same bound the local viewer puts on a SKILL.md. */
 const MAX_SKILL_DOC_CHARS = 1024 * 1024;
 const MAX_NAME_CHARS = 200;
+/** A skill is a page and a few helpers; a snapshot past this is not one, and is not listed row by row. */
+const MAX_SNAPSHOT_FILES = 500;
 const SKILL_FILE = "SKILL.md";
 
 export type FetchText = (url: string, signal: AbortSignal) => Promise<string | null>;
@@ -59,6 +61,7 @@ export async function searchSkillsSh(query: string, fetchImpl: FetchText = fetch
   if (!parsed.success) return null;
   return parsed.data.skills
     .filter((hit) => isRemoteSource(hit.source) && isRemoteSkillId(hit.skillId))
+    .slice(0, SEARCH_LIMIT)
     .map((hit) => ({ source: hit.source, skillId: hit.skillId, name: cleanName(hit.name), installs: hit.installs }));
 }
 
@@ -69,7 +72,7 @@ export async function readSkillsShSkill(source: string, skillId: string, fetchIm
   const [owner = "", repo = ""] = source.split("/");
   const path = `/api/download/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/${encodeURIComponent(skillId)}`;
   const parsed = downloadSchema.safeParse(await getJson(path, fetchImpl));
-  if (!parsed.success) return null;
+  if (!parsed.success || parsed.data.files.length > MAX_SNAPSHOT_FILES) return null;
   const skillFile = parsed.data.files.find((file) => file.path === SKILL_FILE);
   if (!skillFile || skillFile.contents.length > MAX_SKILL_DOC_CHARS) return null;
   const files = parsed.data.files

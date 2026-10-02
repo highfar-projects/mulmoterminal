@@ -158,7 +158,7 @@ async function pick(source: SkillSource, skill: CatalogSkill): Promise<void> {
           <p class="m-0 mb-1 font-mono text-[14px] font-[650] text-fg">{{ picked.skill.id }}</p>
           <p class="m-0 mb-3 font-mono text-[11px] text-dim">{{ picked.source.dir }}</p>
           <p v-if="docFailed" data-testid="skills-doc-error" class="m-0 font-sans text-[13px] text-err-text">{{ t("skillsView.docFailed") }}</p>
-          <div v-else-if="doc !== null" class="max-w-[90ch] font-sans text-[13px] text-fg"><MarkdownProse :markdown="doc" /></div>
+          <div v-else-if="doc !== null" class="max-w-[90ch] font-sans text-[13px] text-fg"><MarkdownProse :markdown="doc" images-as-links /></div>
         </template>
       </section>
     </div>
