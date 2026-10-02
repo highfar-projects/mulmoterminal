@@ -160,6 +160,8 @@ describe("the skill's question about showing what was sent", () => {
   it("names the keys and refusals in the question", () => {
     const question = body.slice(body.indexOf("## Before you ask the user a question"), body.indexOf("## Where people actually look"));
     expect(question).toContain("Four things are worth asking");
-    ["`public.readPublished`", "publishField", "`public.read: [cid]`", "/m/{slug}", "no mechanism"].forEach((phrase) => expect(question).toContain(phrase));
+    ["`public.readPublished`", "publishField", "`public.read: [cid]`", "/m/{slug}", "templates/tally.md"].forEach((phrase) =>
+      expect(question).toContain(phrase),
+    );
   });
 });
