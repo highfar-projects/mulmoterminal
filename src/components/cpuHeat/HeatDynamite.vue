@@ -2,13 +2,14 @@
 // A bundle of dynamite with a timer that really counts down, then the blast. The timer stops at
 // 0:01 and blinks there: only stopping the process (the finale) lets it reach zero.
 import { computed, onUnmounted, ref, watch } from "vue";
-import { HOT, type HeatPalette } from "./heatPalette";
+import { HOT } from "./heatPalette";
 import type { StageLevel } from "./stageLevel";
+import type { HeatFigureProps } from "./heatFigure";
 import HeatSpark from "./HeatSpark.vue";
 import HeatBurst from "./HeatBurst.vue";
 import HeatGlow from "./HeatGlow.vue";
 
-const props = defineProps<{ level: StageLevel; palette: HeatPalette; animate: boolean }>();
+const props = defineProps<HeatFigureProps>();
 
 const START_SECONDS: Record<StageLevel, number> = { 0: 0, 1: 0, 2: 30, 3: 10, 4: 5, 5: 0 };
 const LAST_SECOND = 1;

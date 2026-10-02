@@ -1,14 +1,13 @@
 <script setup lang="ts">
 // A round bomb: the fuse lights, burns shorter, and the bomb goes off.
 import { useId } from "vue";
-import type { HeatPalette } from "./heatPalette";
-import type { StageLevel } from "./stageLevel";
+import type { HeatFigureProps } from "./heatFigure";
 import HeatSpark from "./HeatSpark.vue";
 import HeatBurst from "./HeatBurst.vue";
 import HeatGlow from "./HeatGlow.vue";
 import HeatSwell from "./HeatSwell.vue";
 
-defineProps<{ level: StageLevel; palette: HeatPalette; animate: boolean }>();
+defineProps<HeatFigureProps>();
 
 const bodyId = `heat-bomb-body-${useId()}`;
 </script>
