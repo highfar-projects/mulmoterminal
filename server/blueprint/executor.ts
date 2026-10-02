@@ -11,6 +11,7 @@ import { applyEvent, currentStep, initialState, type BlueprintState, type StepEv
 import { OPEN_QUESTIONS_FILE, SPEC_FILE, replyFile, specRevisionPrompt } from "../../common/blueprint/specRevisionPrompt.js";
 import type { Refusal } from "../../common/blueprint/refusal.js";
 import type { AskChoice } from "../../common/blueprint/askChoices.js";
+import { TARGETS_FILE, targetsViewOf, type TargetsView } from "../../common/blueprint/targets.js";
 import { Refused } from "./refused.js";
 import { englishStepNotice, type StepNotice } from "../../common/blueprint/stepNotice.js";
 import { changedFiles, type FolderListing, type ChangedFiles } from "../../common/blueprint/changedFiles.js";
@@ -290,6 +291,12 @@ class Executor {
     // A build left waiting on a busy folder across the restart: that folder may be free now.
     const folders = [...new Set(loadedRuns.flatMap((loaded) => (loaded && waitsOnBusyFolder(loaded.run.steps, loaded.state) ? [loaded.run.projectDir] : [])))];
     await folders.reduce((done, folder) => done.then(() => this.wakeBuildsWaitingOn(folder, null)), Promise.resolve());
+  }
+
+  /** The work list the build keeps in its folder, as it stands now. */
+  async targetsView(runId: string): Promise<TargetsView> {
+    const { run } = await this.mustLoad(runId);
+    return targetsViewOf(await this.deps.projectFiles.read(run.projectDir, TARGETS_FILE));
   }
 
   /** The spec as it stands, its open questions, and the conversation about it. */
@@ -583,7 +590,7 @@ class Executor {
 
 export type BlueprintExecutor = Pick<
   Executor,
-  "create" | "view" | "list" | "humanEvent" | "ask" | "recover" | "specView" | "say" | "reportView" | "workingIn" | "archive"
+  "create" | "view" | "list" | "humanEvent" | "ask" | "recover" | "specView" | "say" | "reportView" | "targetsView" | "workingIn" | "archive"
 >;
 
 /** A finished build's report: where it is, and its text (null when the usecase names none or it was not written); and the files the build wrote. */

@@ -1,0 +1,129 @@
+// The work list in the run view: a row per target with where it stands, a detail on click, the decision row marked.
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { flushPromises, mount } from "@vue/test-utils";
+import { basePlanSchema } from "../../../../common/blueprint/plan";
+import { initialState, type BlueprintState, type StepStatus } from "../../../../common/blueprint/state";
+import type { Target } from "../../../../common/blueprint/targets";
+
+const { loadTargets } = vi.hoisted(() => ({ loadTargets: vi.fn() }));
+vi.mock("../../../../src/composables/blueprintsApi", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../../src/composables/blueprintsApi")>();
+  return { ...actual, loadTargets };
+});
+
+const BlueprintTargets = (await import("../../../../src/components/blueprints/BlueprintTargets.vue")).default;
+
+const steps = basePlanSchema.parse({
+  steps: [
+    { id: "survey", title: "survey", skill: "s", check: "true" },
+    { id: "tranche", title: "tranche", skill: "s", check: "true", repeatWhile: "true" },
+  ],
+}).steps;
+
+const at = (survey: StepStatus, tranche: StepStatus, round?: number): BlueprintState => {
+  const state = initialState(steps);
+  return { steps: { survey: { ...state.steps.survey, status: survey }, tranche: { ...state.steps.tranche, status: tranche, round } } };
+};
+
+const targets: Target[] = [
+  {
+    id: "ci",
+    title: "CI に型検査を足す",
+    kind: "ci",
+    files: [".github/workflows/ci.yml"],
+    status: "done",
+    pr: "https://github.com/o/r/pull/7",
+    why: "CI が型を見ていない",
+  },
+  { id: "money", title: "金額の計算に試験", kind: "test", files: ["src/price.ts"], status: "todo", proof: "生成した注文で旧新を比べる" },
+  { id: "style", title: "体裁の値", files: ["src/a.ts"], status: "skipped", note: "論理ではない", pr: "javascript:alert(1)" },
+];
+
+const listed = (list: Target[] | null, problem: string | null = null) => ({ ok: true, value: { targets: list, problem } });
+
+const mountTable = async (state: BlueprintState) => {
+  const wrapper = mount(BlueprintTargets, { props: { runId: "run-00000001", steps, state } });
+  await flushPromises();
+  return wrapper;
+};
+
+describe("the work list in the run view", () => {
+  beforeEach(() => loadTargets.mockReset());
+
+  it("shows nothing until the build has written a list", async () => {
+    loadTargets.mockResolvedValue(listed(null));
+    const wrapper = await mountTable(at("running", "pending"));
+    expect(wrapper.find('[data-testid="blueprint-targets"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="blueprint-targets-problem"]').exists()).toBe(false);
+  });
+
+  it("says when the list cannot be read", async () => {
+    loadTargets.mockResolvedValue(listed(null, ".blueprint/targets.json is not JSON"));
+    const wrapper = await mountTable(at("passed", "running"));
+    expect(wrapper.get('[data-testid="blueprint-targets-problem"]').text()).toContain(".blueprint/targets.json is not JSON");
+  });
+
+  it("lists every target in order with where it stands, the one in progress included", async () => {
+    loadTargets.mockResolvedValue(listed(targets));
+    const wrapper = await mountTable(at("passed", "running"));
+    const rows = wrapper.findAll('[data-testid="blueprint-target"]');
+    expect(rows.map((row) => row.attributes("data-phase"))).toEqual(["done", "working", "skipped"]);
+    expect(rows[1].text()).toContain("金額の計算に試験");
+    expect(rows[1].text()).toContain("In progress");
+  });
+
+  it("tints the target waiting for a decision", async () => {
+    loadTargets.mockResolvedValue(listed(targets));
+    const wrapper = await mountTable(at("passed", "awaiting-answer"));
+    const row = wrapper.findAll('[data-testid="blueprint-target"]')[1];
+    expect(row.attributes("data-phase")).toBe("needs-decision");
+    expect(row.classes()).toContain("bg-[var(--warn-bg-subtle)]");
+    expect(row.text()).toContain("Needs your decision");
+  });
+
+  it("opens a row's detail on click and closes it on a second click", async () => {
+    loadTargets.mockResolvedValue(listed(targets));
+    const wrapper = await mountTable(at("passed", "running"));
+    const row = wrapper.findAll('[data-testid="blueprint-target"]')[0];
+    await row.trigger("click");
+    const detail = wrapper.get('[data-testid="blueprint-target-detail"]');
+    expect(detail.text()).toContain("CI が型を見ていない");
+    expect(detail.text()).toContain(".github/workflows/ci.yml");
+    expect(detail.get('[data-testid="blueprint-target-pr"]').attributes("href")).toBe("https://github.com/o/r/pull/7");
+    expect(row.attributes("aria-expanded")).toBe("true");
+    await row.trigger("click");
+    expect(wrapper.find('[data-testid="blueprint-target-detail"]').exists()).toBe(false);
+  });
+
+  it("opens a row from the keyboard", async () => {
+    loadTargets.mockResolvedValue(listed(targets));
+    const wrapper = await mountTable(at("passed", "running"));
+    await wrapper.findAll('[data-testid="blueprint-target"]')[1].trigger("keydown", { key: "Enter" });
+    expect(wrapper.get('[data-testid="blueprint-target-detail"]').text()).toContain("生成した注文で旧新を比べる");
+  });
+
+  it("does not make a link of anything but a GitHub pull request", async () => {
+    loadTargets.mockResolvedValue(listed(targets));
+    const wrapper = await mountTable(at("passed", "running"));
+    await wrapper.findAll('[data-testid="blueprint-target"]')[2].trigger("click");
+    const detail = wrapper.get('[data-testid="blueprint-target-detail"]');
+    expect(detail.text()).toContain("論理ではない");
+    expect(detail.find('[data-testid="blueprint-target-pr"]').exists()).toBe(false);
+    expect(detail.find("a").exists()).toBe(false);
+  });
+
+  it("reads the list again when a round moves on, and not on an unrelated re-render", async () => {
+    loadTargets.mockResolvedValue(listed(targets));
+    const wrapper = await mountTable(at("passed", "running", 1));
+    expect(loadTargets).toHaveBeenCalledTimes(1);
+    await wrapper.setProps({ state: at("passed", "running", 1) });
+    await flushPromises();
+    expect(loadTargets).toHaveBeenCalledTimes(1);
+    await wrapper.setProps({ state: at("passed", "running", 2) });
+    await flushPromises();
+    expect(loadTargets).toHaveBeenCalledTimes(2);
+    await wrapper.setProps({ state: at("passed", "awaiting-answer", 2) });
+    await flushPromises();
+    expect(loadTargets).toHaveBeenCalledTimes(3);
+  });
+});

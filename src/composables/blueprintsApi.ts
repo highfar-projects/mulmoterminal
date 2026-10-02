@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { originalsViewSchema, type OriginalsView } from "../../common/blueprint/originals";
 import { sourceStatusSchema, type SourceStatus } from "../../common/blueprint/sourceStatus";
+import { targetsViewSchema, type TargetsView } from "../../common/blueprint/targets";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { jsonBody } from "../jsonBody";
 import { i18n } from "../i18n";
@@ -152,6 +153,10 @@ export const loadOriginals = (runId: string): Promise<ApiResult<OriginalsView>> 
 
 /** The finished build's report, as its usecase names it; nulls when there is none. */
 export const loadReport = (runId: string): Promise<ApiResult<ReportView>> => call(reportViewSchema, `/api/blueprints/runs/${encodeURIComponent(runId)}/report`);
+
+/** The work list the build keeps in `.blueprint/targets.json`; `targets` null when it has none yet. */
+export const loadTargets = (runId: string): Promise<ApiResult<TargetsView>> =>
+  call(targetsViewSchema, `/api/blueprints/runs/${encodeURIComponent(runId)}/targets`);
 
 export const loadSpec = (runId: string): Promise<ApiResult<SpecView>> => call(specViewSchema, `/api/blueprints/runs/${encodeURIComponent(runId)}/spec`);
 

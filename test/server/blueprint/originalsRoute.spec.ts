@@ -37,6 +37,7 @@ const executor: BlueprintExecutor = {
   list: async () => [],
   workingIn: async () => null,
   specView: unused,
+  targetsView: unused,
   say: unused,
   reportView: unused,
   recover: unused,

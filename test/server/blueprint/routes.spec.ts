@@ -50,6 +50,10 @@ const executor: BlueprintExecutor = {
     return busyRun;
   },
   specView: async () => ({ spec: "# spec", openQuestions: null, chat: [], revising: false }),
+  targetsView: async (runId) => {
+    if (runId !== "run-1") throw new BlueprintRefusal(`no blueprint run ${runId}`);
+    return { targets: [{ id: "a", title: "A", files: [], status: "todo" }], problem: null };
+  },
   reportView: async (runId) => {
     if (runId !== "run-1") throw new BlueprintRefusal(`no blueprint run ${runId}`);
     return {
@@ -224,6 +228,16 @@ describe("GET /api/blueprints/runs/:id/report", () => {
       pair: { base: "docs", usecase: "review" },
     });
     expect((await fetch(`${base}/api/blueprints/runs/run-9/report`)).status).not.toBe(200);
+  });
+});
+
+describe("GET /api/blueprints/runs/:id/targets", () => {
+  it("returns the build's work list, and refuses an unknown run", async () => {
+    expect(await (await fetch(`${base}/api/blueprints/runs/run-1/targets`)).json()).toEqual({
+      targets: [{ id: "a", title: "A", files: [], status: "todo" }],
+      problem: null,
+    });
+    expect((await fetch(`${base}/api/blueprints/runs/run-9/targets`)).status).not.toBe(200);
   });
 });
 

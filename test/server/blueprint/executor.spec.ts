@@ -291,6 +291,13 @@ describe("blueprint executor", () => {
       files.set(".blueprint/spec.md", "# おうち図書館");
       expect(await executor.specView("run-00000001")).toEqual({ spec: "# おうち図書館", openQuestions: null, chat: [], revising: false });
     });
+
+    it("reads the work list from the project, and says when there is none yet", async () => {
+      await atReview();
+      expect(await executor.targetsView("run-00000001")).toEqual({ targets: null, problem: null });
+      files.set(".blueprint/targets.json", JSON.stringify({ targets: [{ id: "a", title: "A", status: "todo" }] }));
+      expect(await executor.targetsView("run-00000001")).toEqual({ targets: [{ id: "a", title: "A", files: [], status: "todo" }], problem: null });
+    });
   });
 
   describe("closing terminals the build no longer needs", () => {
