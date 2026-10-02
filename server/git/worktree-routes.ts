@@ -15,7 +15,7 @@ import { tmuxAttachedCounts } from "../infra/tmux.js";
 import { requestBody } from "../routes/requestBody.js";
 import { expandTilde } from "../files/pathContainment.js";
 import { cleanupRowAt, deleteBranchIfAt, worktreeCleanupRows } from "./worktree-cleanup.js";
-import { cleanupBlockers } from "../../common/worktreeCleanup.js";
+import { cleanupBlockers, readConfirmedIgnored, sameIgnored } from "../../common/worktreeCleanup.js";
 import { rememberedSessionCwds } from "../session/registry.js";
 
 interface WorktreeRouteOptions {
@@ -62,17 +62,21 @@ function mountWorktreeCleanupRoutes(app: Express, isAllowedOrigin: WorktreeRoute
   // Remove a cleanup candidate and its branch. Every condition that made it a candidate is read
   // again here, not trusted from the list, and 409 names what now holds it. The worktree goes
   // without `--force`, so git refuses one that turned dirty; the branch goes only while it is still
-  // at the commit found merged, so a commit made in between keeps it (`branchDeleted: false`).
+  // at the commit found merged, so a commit made in between keeps it (`branchDeleted: false`). The
+  // gitignored files it deletes must be the ones the person confirmed, or it is refused.
   app.post("/api/worktrees/cleanup/remove", async (req, res) => {
     if (!requestOriginAllowed(req, isAllowedOrigin)) return res.status(403).end();
-    const { repoDir, path: worktreePath } = requestBody(req.body);
-    if (typeof repoDir !== "string" || typeof worktreePath !== "string") {
-      return res.status(400).json({ error: "repoDir and path are required" });
+    const body = requestBody(req.body);
+    const { repoDir, path: worktreePath } = body;
+    const confirmed = readConfirmedIgnored(body);
+    if (typeof repoDir !== "string" || typeof worktreePath !== "string" || confirmed === null) {
+      return res.status(400).json({ error: "repoDir, path, and the confirmed ignored files are required" });
     }
     const row = await cleanupRowAt(fromHome(repoDir), fromHome(worktreePath));
     if (row === null) return res.status(404).json({ error: "not a managed worktree" });
     const blockers = cleanupBlockers(row);
     if (blockers.length > 0) return res.status(409).json({ blockers });
+    if (!sameIgnored(confirmed, row)) return res.status(409).json({ ignoredChanged: true, ignored: row.ignored, ignoredCount: row.ignoredCount });
     const result = await removeWorktree(row.repo, row.path);
     if (!result.ok) return res.status(result.reason === "failed" ? 500 : 409).json(result);
     releaseWorktreeEnv(row.path);

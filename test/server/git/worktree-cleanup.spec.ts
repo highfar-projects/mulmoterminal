@@ -29,6 +29,8 @@ const samePath = (a: string, b: string): boolean => canonicalPath(a) === canonic
 const { deleteBranchIfAt, worktreeCleanupRows } = await import("../../../server/git/worktree-cleanup");
 const { mountWorktreeRoutes } = await import("../../../server/git/worktree-routes");
 
+const NOTHING_IGNORED = { ignored: [], ignoredCount: 0 };
+
 /** POST /api/worktrees/cleanup/remove through the real route, without an HTTP server. */
 async function removeCandidate(body: unknown): Promise<{ status: number; payload: unknown }> {
   let handler: ((req: object, res: object) => Promise<unknown>) | undefined;
@@ -174,7 +176,7 @@ describe("worktreeCleanupRows", () => {
     "removes a candidate and its branch, reading it again at removal time",
     async () => {
       const wt = await addWorktree(repo, "done");
-      expect(await removeCandidate({ repoDir: repo, path: wt.path })).toEqual({ status: 200, payload: { ok: true, branchDeleted: true } });
+      expect(await removeCandidate({ repoDir: repo, path: wt.path, ...NOTHING_IGNORED })).toEqual({ status: 200, payload: { ok: true, branchDeleted: true } });
       expect(existsSync(wt.path)).toBe(false);
       expect((await git(["rev-parse", "--verify", "--quiet", "agent/done"], repo)).ok).toBe(false);
     },
@@ -192,13 +194,33 @@ describe("worktreeCleanupRows", () => {
       await gitIn(ahead.path, "commit", "-m", "work");
       paneCwds.value = [used.path];
 
-      expect(await removeCandidate({ repoDir: repo, path: ahead.path })).toEqual({ status: 409, payload: { blockers: ["unmerged"] } });
-      expect(await removeCandidate({ repoDir: repo, path: used.path })).toEqual({ status: 409, payload: { blockers: ["inUse"] } });
+      expect(await removeCandidate({ repoDir: repo, path: ahead.path, ...NOTHING_IGNORED })).toEqual({ status: 409, payload: { blockers: ["unmerged"] } });
+      expect(await removeCandidate({ repoDir: repo, path: used.path, ...NOTHING_IGNORED })).toEqual({ status: 409, payload: { blockers: ["inUse"] } });
       expect(existsSync(ahead.path) && existsSync(used.path)).toBe(true);
       expect((await git(["rev-parse", "--verify", "--quiet", "agent/ahead"], repo)).ok).toBe(true);
     },
     GIT_TEST_TIMEOUT_MS,
   );
+
+  it.skipIf(!hasGit)(
+    "refuses a removal when an ignored file appeared after the person confirmed, and keeps the file",
+    async () => {
+      writeFileSync(path.join(repo, ".gitignore"), ".env\n");
+      await gitIn(repo, "add", ".gitignore");
+      await gitIn(repo, "commit", "-m", "ignore");
+      const wt = await addWorktree(repo, "late-env");
+      writeFileSync(path.join(wt.path, ".env"), "SECRET=1\n");
+      const answer = await removeCandidate({ repoDir: repo, path: wt.path, ...NOTHING_IGNORED });
+      expect(answer).toEqual({ status: 409, payload: { ignoredChanged: true, ignored: [".env"], ignoredCount: 1 } });
+      expect(existsSync(path.join(wt.path, ".env"))).toBe(true);
+      expect((await removeCandidate({ repoDir: repo, path: wt.path, ignored: [".env"], ignoredCount: 1 })).status).toBe(200);
+    },
+    GIT_TEST_TIMEOUT_MS,
+  );
+
+  it("400s a removal that does not say which ignored files were confirmed", async () => {
+    expect((await removeCandidate({ repoDir: repo, path: repo })).status).toBe(400);
+  });
 
   it.skipIf(!hasGit)(
     "deletes a branch only while it is still at the commit found merged",
@@ -221,7 +243,7 @@ describe("worktreeCleanupRows", () => {
   it.skipIf(!hasGit)(
     "404s a path that is not one of the repo's managed worktrees",
     async () => {
-      expect((await removeCandidate({ repoDir: repo, path: repo })).status).toBe(404);
+      expect((await removeCandidate({ repoDir: repo, path: repo, ...NOTHING_IGNORED })).status).toBe(404);
     },
     GIT_TEST_TIMEOUT_MS,
   );

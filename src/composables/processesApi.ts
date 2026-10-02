@@ -42,5 +42,6 @@ export const loadWorktreeCleanup = (): Promise<WorktreeCleanupRow[] | null> =>
 /** The server reads the worktree again and refuses unless it is still a candidate, so a commit or a
  *  terminal since the list was read keeps it. The branch goes with it while it is still merged. */
 export async function removeCleanupWorktree(row: WorktreeCleanupRow): Promise<boolean> {
-  return (await post("/api/worktrees/cleanup/remove", { repoDir: row.repo, path: row.path }))?.ok === true;
+  const confirmed = { ignored: row.ignored, ignoredCount: row.ignoredCount };
+  return (await post("/api/worktrees/cleanup/remove", { repoDir: row.repo, path: row.path, ...confirmed }))?.ok === true;
 }

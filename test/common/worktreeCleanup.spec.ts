@@ -4,7 +4,9 @@ import {
   cleanupBlockers,
   isCleanupCandidate,
   parseIgnoredEntries,
+  readConfirmedIgnored,
   readWorktreeCleanupBody,
+  sameIgnored,
   worktreeStatus,
   type WorktreeCleanupRow,
 } from "../../common/worktreeCleanup";
@@ -88,5 +90,23 @@ describe("worktreeStatus", () => {
   it("reads a status that failed as dirty, so it blocks removal", () => {
     expect(worktreeStatus(null)).toEqual({ dirty: true, ignored: [] });
     expect(isCleanupCandidate({ ...CLEAN, ...worktreeStatus(null), ignoredCount: 0 })).toBe(false);
+  });
+});
+
+describe("confirmed ignored files", () => {
+  it("reads them from a request body, or null when absent or malformed", () => {
+    expect(readConfirmedIgnored({ ignored: [".env"], ignoredCount: 1 })).toEqual({ ignored: [".env"], ignoredCount: 1 });
+    expect(readConfirmedIgnored({})).toBeNull();
+    expect(readConfirmedIgnored({ ignored: [1], ignoredCount: 1 })).toBeNull();
+    expect(readConfirmedIgnored({ ignored: [], ignoredCount: "0" })).toBeNull();
+  });
+
+  it.each([
+    [{ ignored: [".env"], ignoredCount: 1 }, { ignored: [".env"], ignoredCount: 1 }, true],
+    [{ ignored: [], ignoredCount: 0 }, { ignored: [".env"], ignoredCount: 1 }, false],
+    [{ ignored: ["a"], ignoredCount: 21 }, { ignored: ["a"], ignoredCount: 22 }, false],
+    [{ ignored: ["a"], ignoredCount: 1 }, { ignored: ["b"], ignoredCount: 1 }, false],
+  ])("compares %j with %j: %s", (confirmed, now, same) => {
+    expect(sameIgnored(confirmed, now)).toBe(same);
   });
 });

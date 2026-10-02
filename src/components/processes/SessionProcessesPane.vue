@@ -27,8 +27,12 @@ let reading = false;
 // A refresh asked for during a read — End's, above all — must see a list read AFTER it, so it is
 // run once the current read finishes rather than dropped.
 let readAgain = false;
+// Polls stop with the pane: a read still in flight when it closes must not queue another.
+
+let unmounted = false;
 
 async function refresh(): Promise<void> {
+  if (unmounted) return;
   if (reading) {
     readAgain = true;
     return;
@@ -61,6 +65,8 @@ onMounted(() => {
   timer = setInterval(() => void refresh(), POLL_INTERVAL_MS);
 });
 onBeforeUnmount(() => {
+  unmounted = true;
+  readAgain = false;
   if (timer !== null) clearInterval(timer);
 });
 

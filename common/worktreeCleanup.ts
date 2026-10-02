@@ -44,6 +44,24 @@ export function worktreeStatus(porcelain: string | null): { dirty: boolean; igno
   return { dirty: lines.some((line) => !line.startsWith("!! ")), ignored: parseIgnoredEntries(porcelain) };
 }
 
+/** The ignored files a person was shown when they confirmed a removal. */
+export interface ConfirmedIgnored {
+  ignored: string[];
+  ignoredCount: number;
+}
+
+/** A removal request's confirmed ignored files, or null when the request does not carry them. */
+export function readConfirmedIgnored(body: Record<string, unknown>): ConfirmedIgnored | null {
+  const { ignored, ignoredCount } = body;
+  if (!isUnknownArray(ignored) || !ignored.every((entry) => typeof entry === "string") || typeof ignoredCount !== "number") return null;
+  return { ignored, ignoredCount };
+}
+
+/** Whether what would be deleted now is what was confirmed: an ignored file created since the list
+ *  was read would otherwise go without ever having been named. */
+export const sameIgnored = (confirmed: ConfirmedIgnored, now: ConfirmedIgnored): boolean =>
+  confirmed.ignoredCount === now.ignoredCount && confirmed.ignored.join("\n") === now.ignored.join("\n");
+
 export const CLEANUP_BLOCKERS = ["missing", "dirty", "unmerged", "inUse"] as const;
 export type CleanupBlocker = (typeof CLEANUP_BLOCKERS)[number];
 
