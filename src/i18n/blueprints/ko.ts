@@ -148,6 +148,7 @@ export const blueprintsKo: Messages["blueprints"] = {
   },
   spec: {
     document: {
+      checkFailed: "고친 뒤의 확인을 통과하지 못했습니다. 고친 파일이 앞 단계의 규칙에 맞지 않습니다. 아래 결과를 보고 다시 고칠 점을 보내 주세요.",
       chatTitle: "고칠 점·답변 보내기",
       empty: "위의 파일을 읽고 고칠 점이나 질문에 대한 답을 써서 보내면, 에이전트가 그 파일을 고치고 답장합니다.",
       placeholder: "고칠 점 또는 답변 (예: 출입증은 총무부에서 받습니다. 9시에 1층 안내데스크에서 모입니다)",
@@ -179,8 +180,8 @@ export const blueprintsKo: Messages["blueprints"] = {
     samplesClash: "폴더에 같은 이름의 다른 파일({files})이 있습니다. 예제에는 빈 폴더를 골라 주세요.",
     personalData: "이 원본에는 개인정보일 수 있는 항목이 있습니다: {list}. 폴더에 복사하기 전에 확인하세요.",
     heldElsewhere: "이 컴퓨터의 설계도는 포트 {port}의 MulmoTerminal이 실행하고 있습니다. 그쪽에서 조작해 주세요.",
-    revisionPending: "사양서를 아직 고치고 있습니다. 답을 기다려 주세요.",
-    specNotAtReview: "사양서에 대해 이야기할 수 있는 것은 당신의 확인을 기다리는 동안뿐입니다.",
+    revisionPending: "아직 고치는 중입니다. 답장을 기다려 주세요.",
+    specNotAtReview: "확인을 기다리는 동안에만 이야기할 수 있습니다.",
     messagePending: "이전 메시지에 아직 답하고 있습니다. 답을 기다려 주세요.",
     agentWorking: "에이전트가 이 작업을 진행 중입니다. 멈출 때까지 기다려 주세요.",
     registryUrlNotAllowed: "레지스트리 주소는 https://로 시작해야 합니다(http://는 이 컴퓨터 안에서만): {urls}",

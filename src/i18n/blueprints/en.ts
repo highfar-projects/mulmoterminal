@@ -151,6 +151,8 @@ export const blueprintsEn = {
   },
   spec: {
     document: {
+      checkFailed:
+        "The check after the change did not pass: the changed files no longer fit what the step before expects. Read the result below and send what to fix.",
       chatTitle: "Send changes or answers",
       empty: "Read the files above, then write what to change or your answers to the questions. The agent edits those files and replies.",
       placeholder: 'What to change, or your answers (e.g. "Pick up the pass at General Affairs; meet at the ground-floor reception at 9")',
@@ -182,8 +184,8 @@ export const blueprintsEn = {
     samplesClash: "The folder already has different files named {files}. Choose an empty folder for the example.",
     personalData: "This source holds what may be personal data: {list}. Check it before it is copied into the folder.",
     heldElsewhere: "Blueprints on this machine are run by the MulmoTerminal on port {port}. Make changes there.",
-    revisionPending: "The specification is still being revised. Wait for the reply.",
-    specNotAtReview: "The specification can be discussed only while it waits for you to review it.",
+    revisionPending: "Still making the changes. Wait for the reply.",
+    specNotAtReview: "This can be talked over only while it waits for you to review it.",
     messagePending: "Your previous message is still being answered. Wait for the reply.",
     agentWorking: "An agent is working on this build. Wait until it stops.",
     registryUrlNotAllowed: "A registry address must start with https:// (http:// only for this machine): {urls}",

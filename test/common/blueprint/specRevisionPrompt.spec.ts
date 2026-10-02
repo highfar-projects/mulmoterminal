@@ -9,12 +9,21 @@ describe("specRevisionPrompt", () => {
   it("revises the files a document gate names, moves an answer out of the open questions, and keeps their format", () => {
     const prompt = specRevisionPrompt({ ...base, reads: [".blueprint/brief.md", "STYLE.md"] });
     expect(prompt).toContain("The person has just read: .blueprint/brief.md, STYLE.md.");
-    expect(prompt).toContain("1. Change .blueprint/brief.md, STYLE.md to reflect it.");
+    expect(prompt).toContain("1. Change .blueprint/brief.md, STYLE.md — the files the next step reads — to reflect it.");
     expect(prompt).toContain("remove the question");
-    expect(prompt).toContain("so the step that wrote it would still accept it");
+    expect(prompt).toContain("so the step that wrote it still accepts it");
+    expect(prompt).not.toContain("is a view");
     expect(prompt).toContain("Do not touch the documents themselves");
     expect(prompt).toContain(".blueprint/reply-s2.md");
     expect(prompt).not.toContain(".blueprint/spec.md");
+  });
+
+  it("changes the records behind views, and tells the session to leave the views alone", () => {
+    const prompt = specRevisionPrompt({ ...base, reads: [".blueprint/polish.txt", "STYLE.md"], revises: [".blueprint/polish.json", "STYLE.md"] });
+    expect(prompt).toContain("1. Change .blueprint/polish.json, STYLE.md — the files the next step reads");
+    expect(prompt).toContain(".blueprint/polish.txt is a view drawn from those files: do not edit it.");
+    const two = specRevisionPrompt({ ...base, reads: [".blueprint/a.txt", ".blueprint/b.txt"], revises: [".blueprint/a.json"] });
+    expect(two).toContain(".blueprint/a.txt, .blueprint/b.txt are views drawn from those files: do not edit them.");
   });
 
   it("revises the spec when the gate names nothing to read", () => {

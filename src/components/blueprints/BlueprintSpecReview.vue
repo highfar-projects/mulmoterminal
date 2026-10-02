@@ -58,6 +58,7 @@ const chatKey = (key: string): string => (documentGate.value ? `blueprints.spec.
 const outcomeKey = (outcome: string | undefined): string | null => {
   if (outcome === "no-reply") return "blueprints.spec.noReply";
   if (outcome === "lost") return "blueprints.spec.lost";
+  if (outcome === "check-failed") return "blueprints.spec.document.checkFailed";
   return null;
 };
 </script>
@@ -91,7 +92,15 @@ const outcomeKey = (outcome: string | undefined): string | null => {
           >
             <p class="m-0 mb-1 font-sans text-[11px] text-dim">{{ entry.role === "person" ? t("blueprints.spec.you") : t("blueprints.spec.agent") }}</p>
             <p v-if="entry.role === 'person'" class="m-0 whitespace-pre-wrap font-sans">{{ entry.text }}</p>
-            <p v-else-if="outcomeKey(entry.outcome)" class="m-0 font-sans text-dim">{{ t(outcomeKey(entry.outcome) ?? "") }}</p>
+            <template v-else-if="outcomeKey(entry.outcome)">
+              <p class="m-0 font-sans text-dim" :data-testid="entry.outcome === 'check-failed' ? 'blueprint-revision-check-failed' : undefined">
+                {{ t(outcomeKey(entry.outcome) ?? "") }}
+              </p>
+              <pre
+                v-if="entry.outcome === 'check-failed' && entry.text"
+                class="m-0 mt-1 max-h-40 overflow-auto whitespace-pre-wrap font-mono text-[11px] text-secondary"
+                >{{ entry.text }}</pre>
+            </template>
             <MarkdownProse v-else :markdown="entry.text" />
           </article>
           <div v-if="revisionSessionId" class="mr-6 flex flex-col gap-1.5" data-testid="blueprint-spec-revising">

@@ -144,6 +144,7 @@ export const blueprintsZhTW: Messages["blueprints"] = {
   },
   spec: {
     document: {
+      checkFailed: "修改後的檢查沒有通過：修改後的檔案不再符合前一個步驟的要求。請查看下面的結果，再傳送需要修改的地方。",
       chatTitle: "傳送修改或回答",
       empty: "閱讀上面的檔案後，寫下需要修改的地方或對問題的回答並傳送，代理會修改這些檔案並回覆。",
       placeholder: "需要修改的地方或回答（例如：入館證在總務部領取，9 點在一樓櫃台集合）",
@@ -175,8 +176,8 @@ export const blueprintsZhTW: Messages["blueprints"] = {
     samplesClash: "資料夾中已有同名的其他檔案（{files}）。請為範例選擇一個空資料夾。",
     personalData: "此來源中有可能屬於個人資料的內容：{list}。複製到資料夾之前，請先確認。",
     heldElsewhere: "這台機器上的藍圖由連接埠 {port} 的 MulmoTerminal 執行。請在那裡操作。",
-    revisionPending: "規格文件仍在修改中。請等待回覆。",
-    specNotAtReview: "只有在等待你審閱時，才能討論規格文件。",
+    revisionPending: "仍在修改。請等待回覆。",
+    specNotAtReview: "只有在等待你確認時才能討論。",
     messagePending: "上一則訊息仍在回答中。請等待回覆。",
     agentWorking: "代理正在處理這個建置。請等它停下。",
     registryUrlNotAllowed: "登錄檔位址必須以 https:// 開頭（http:// 僅限本機）：{urls}",

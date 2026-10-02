@@ -100,6 +100,17 @@ export async function loadPackPair(roots: readonly PackRoot[], baseSlug: string,
   }
 }
 
+/**
+ * The files a step's review conversation may change, as its pack declares them now: a build stores its steps when it
+ * starts, and one started before the pack declared them has none. Empty when the pack or the step cannot be read.
+ */
+export async function declaredRevises(packDir: string, stepId: string): Promise<string[]> {
+  const read = async (file: string, schema: typeof usecaseStepsSchema | typeof basePlanSchema) =>
+    schema.parse(await readJson(path.join(packDir, file))).steps.find((step) => step.id === stepId)?.revises ?? [];
+  const usecase = await read("steps.json", usecaseStepsSchema).catch(() => []);
+  return usecase.length > 0 ? usecase : read("plan.json", basePlanSchema).catch(() => []);
+}
+
 /** A usecase pack's interview, as written in its folder. */
 export const readHearing = async (packDir: string): Promise<Hearing> => hearingSchema.parse(await readJson(path.join(packDir, "hearing.json")));
 

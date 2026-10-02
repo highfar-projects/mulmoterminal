@@ -149,6 +149,8 @@ export const blueprintsJa: Messages["blueprints"] = {
   },
   spec: {
     document: {
+      checkFailed:
+        "直したあとの確かめが通りませんでした。直したファイルが、前の工程の決まりに合っていません。下の結果を見て、もう一度直してほしいことを送ってください。",
       chatTitle: "直してほしいこと・答えを送る",
       empty: "上の「承認する前に読むもの」を読んで、直してほしいことや、質問への答えを書いて送ると、エージェントがそのファイルを直して返事をします。",
       placeholder: "直してほしいこと・質問への答え（例: 入館証は総務部で受け取ります。集合は 9 時に 1 階の受付です）",
@@ -180,8 +182,8 @@ export const blueprintsJa: Messages["blueprints"] = {
     samplesClash: "フォルダに同じ名前の別のファイル（{files}）があります。例には空のフォルダを選んでください。",
     personalData: "この元には個人情報になり得るものがあります：{list}。フォルダに写す前に確かめてください。",
     heldElsewhere: "このマシンの設計図は、ポート {port} の MulmoTerminal が動かしています。そちらで操作してください。",
-    revisionPending: "仕様書をまだ直しています。返事を待ってください。",
-    specNotAtReview: "仕様書について話せるのは、あなたの確認を待っている間だけです。",
+    revisionPending: "まだ直しています。返事を待ってください。",
+    specNotAtReview: "話せるのは、あなたの確認を待っている間だけです。",
     messagePending: "前のメッセージにまだ答えています。返事を待ってください。",
     agentWorking: "エージェントがこの作業を進めています。止まるまで待ってください。",
     registryUrlNotAllowed: "レジストリのアドレスは https:// で始めてください（http:// はこのマシンの中だけ）: {urls}",

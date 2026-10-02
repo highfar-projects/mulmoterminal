@@ -14,7 +14,8 @@
       "skill": "skills/outline",
       "check": "node \"$BLUEPRINT_USECASE/checks/parts.mjs\" outline",
       "gates": ["review"],
-      "reads": [".blueprint/brief.md"]
+      "reads": [".blueprint/brief.md"],
+      "revises": [".blueprint/brief.md"]
     },
     {
       "id": "draft",
@@ -24,7 +25,8 @@
       "check": "node \"$BLUEPRINT_USECASE/checks/parts.mjs\" progress",
       "repeatWhile": "node \"$BLUEPRINT_USECASE/checks/parts.mjs\" more",
       "gates": ["review"],
-      "reads": [".blueprint/outline.txt"]
+      "reads": [".blueprint/outline.txt"],
+      "revises": [".blueprint/outline.json"]
     },
     {
       "id": "report",

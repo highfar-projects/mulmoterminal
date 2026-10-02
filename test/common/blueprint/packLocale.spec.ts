@@ -36,6 +36,7 @@ const step = (id: string, origin: "base" | "usecase"): ComposedStep => ({
   check: "true",
   gates: [],
   reads: [],
+  revises: [],
   origin,
 });
 const overlay: PackLocale = {

@@ -31,6 +31,9 @@ export const planStepSchema = z.object({
   // Files in the build's folder the person should read before approving this step: what the steps before it made.
   // Naming any also says the gate is not a review of the spec: the run view keeps the spec panel only at gates naming none.
   reads: z.array(z.string().refine((value) => isContainedRelativePath(value, READ_SEGMENT_RE), "reads must be paths inside the folder")).default([]),
+  // The files the conversation at this gate may change: what the next step reads. A read is often a view a check wrote
+  // from one of these (polish.txt from polish.json), and changing the view would reach nothing.
+  revises: z.array(z.string().refine((value) => isContainedRelativePath(value, READ_SEGMENT_RE), "revises must be paths inside the folder")).default([]),
   // Shell command run, like `check`, after the check passes: exit 0 means there is more of the same
   // work, and the step runs again in a fresh session instead of passing. A step that works through
   // a list one item per session — a refactoring campaign, one region per change — declares one.

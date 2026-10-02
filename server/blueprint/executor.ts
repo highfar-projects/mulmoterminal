@@ -30,7 +30,7 @@ import type { ComposedStep } from "../../common/blueprint/plan.js";
 import type { HearingAnswers } from "../../common/blueprint/hearing.js";
 import type { PersonLanguage } from "../../common/blueprint/personLanguage.js";
 import type { RunStore } from "./runStore.js";
-import { readManifest } from "./packs.js";
+import { declaredRevises, readManifest } from "./packs.js";
 import { reportOf } from "../../common/blueprint/manifest.js";
 import type { CheckRequest, CheckResult } from "./checkRunner.js";
 
@@ -310,13 +310,15 @@ class Executor {
       const { run } = loaded;
       if (!(await this.trusted(run))) throw new BlueprintRefusal({ code: "untrusted", dir: run.projectDir, trustIn: run.projectDir });
       const sessionId = this.deps.newSessionId();
+      const gate = currentStep(run.steps, loaded.state);
       const prompt = specRevisionPrompt({
         chat: run.specChat,
         message,
         packDirs: { base: run.basePackDir, usecase: run.usecasePackDir },
         replyPath: replyFile(sessionId),
         language: run.language,
-        reads: currentStep(run.steps, loaded.state)?.reads ?? [],
+        reads: gate?.reads ?? [],
+        revises: await this.revisesOf(run, gate),
       });
       const specChat = [...run.specChat, { role: "person" as const, text: message, atMs: this.deps.now() }];
       const next: Loaded = { run: { ...run, revisionSessionId: sessionId, specChat }, state: loaded.state };
@@ -345,12 +347,35 @@ class Executor {
         const reply = didError ? null : ((await this.deps.projectFiles.read(run.projectDir, replyFile(sessionId))) ?? "").trim();
         await this.deps.projectFiles.remove(run.projectDir, replyFile(sessionId));
         const outcome = replyOutcome(didError, reply);
-        const specChat = [...run.specChat, { role: "agent" as const, text: reply ?? "", atMs: this.deps.now(), outcome }];
-        await this.deps.store.save({ ...run, revisionSessionId: null, specChat }, state);
+        const answered = [...run.specChat, { role: "agent" as const, text: reply ?? "", atMs: this.deps.now(), outcome }];
+        const recheck = didError ? null : await this.recheckAfterRevision(run, state);
+        const failed =
+          recheck && !recheck.ok ? [{ role: "agent" as const, text: recheck.output.trim(), atMs: this.deps.now(), outcome: "check-failed" as const }] : [];
+        await this.deps.store.save({ ...run, revisionSessionId: null, specChat: [...answered, ...failed] }, state);
       } finally {
         this.deps.closeSession(sessionId);
       }
     });
+  }
+
+  // What the conversation at `gate` may change: as the build stored it, or — for a build started before its pack
+  // declared any — as the pack declares it now, so it is never left to change the views it reads.
+  private async revisesOf(run: BlueprintRun, gate: { id: string } | null): Promise<string[]> {
+    const stored = gate ? stepOf(run, gate.id) : undefined;
+    if (!stored || stored.reads.length === 0) return [];
+    if (stored.revises.length > 0) return stored.revises;
+    return declaredRevises(stored.origin === "base" ? run.basePackDir : run.usecasePackDir, stored.id);
+  }
+
+  // A document gate's conversation changed the files the step before it wrote: that step's check runs again, which
+  // redraws the views the person reads and says whether the files still fit. An app gate (it names nothing to read) has
+  // only the spec, which no check holds.
+  private async recheckAfterRevision(run: BlueprintRun, state: BlueprintState): Promise<CheckResult | null> {
+    const gate = currentStep(run.steps, state);
+    if (!gate || gate.reads.length === 0) return null;
+    const before = run.steps[run.steps.findIndex((step) => step.id === gate.id) - 1];
+    if (!before) return null;
+    return this.deps.runCheck({ command: before.check, cwd: run.projectDir, basePackDir: run.basePackDir, usecasePackDir: run.usecasePackDir });
   }
 
   // The sessions a step used; a failed step's last one was kept open for the person to look into.

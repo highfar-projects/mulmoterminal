@@ -85,4 +85,17 @@ describe("the specification panel", () => {
     await flushPromises();
     expect(sendSpecMessage).toHaveBeenCalledWith("run-00000001", "集合は 9 時です");
   });
+
+  it("shows a failed check after a revision, with what the check said", async () => {
+    loadSpec.mockResolvedValue(
+      specView(null, [
+        { role: "person", text: "第2章を短くして", atMs: 1 },
+        { role: "agent", text: "outline.json: part 2 has no file", atMs: 2, outcome: "check-failed" },
+      ] as never),
+    );
+    const wrapper = panel(null, false, 2);
+    await flushPromises();
+    expect(wrapper.get('[data-testid="blueprint-revision-check-failed"]').text()).toContain("The check after the change did not pass");
+    expect(wrapper.text()).toContain("outline.json: part 2 has no file");
+  });
 });
