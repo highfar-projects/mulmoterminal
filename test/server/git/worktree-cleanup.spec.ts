@@ -21,7 +21,7 @@ vi.mock("../../../server/session/dir-session.js", () => ({
 }));
 vi.mock("../../../server/session/registry.js", () => ({ ptys: new Map([["p", { cwd: "/nowhere" }]]) }));
 
-const { git, worktreesRoot } = await import("../../../server/git/worktrees");
+const { git, repoRoot, worktreesRoot } = await import("../../../server/git/worktrees");
 const { canonicalPath } = await import("../../../server/infra/canonical-path");
 // git spells a path its own way (forward slashes, long names on Windows), so rows are matched as
 // the server matches them: canonically.
@@ -63,9 +63,13 @@ const gitIn = async (dir: string, ...args: string[]): Promise<void> => {
 };
 const hasGit = (await git(["--version"], process.cwd())).ok;
 
-/** A managed worktree on a new branch, without createWorktree's port and config work. */
+/** A managed worktree on a new branch, without createWorktree's port and config work. The root is
+ *  keyed off git's own spelling of the repo, as createWorktree keys it — on Windows that differs
+ *  from the temp dir's, and so would the hash in the root's name. */
 async function addWorktree(repo: string, name: string): Promise<{ path: string }> {
-  const wtPath = path.join(worktreesRoot(repo), name);
+  const toplevel = await repoRoot(repo);
+  if (toplevel === null) throw new Error(`${repo} is not a repository`);
+  const wtPath = path.join(worktreesRoot(toplevel), name);
   await gitIn(repo, "worktree", "add", "-b", `agent/${name}`, wtPath);
   return { path: wtPath };
 }
