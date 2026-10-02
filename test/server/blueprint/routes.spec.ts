@@ -40,8 +40,8 @@ const executor: BlueprintExecutor = {
     if (stepId === "refused") throw new BlueprintRefusal("cannot approve a step that is pending");
     throw new Error("unexpected");
   },
-  ask: async (runId, stepId, question, sessionId) => {
-    calls.push(["ask", runId, stepId, question, sessionId]);
+  ask: async (runId, stepId, question, sessionId, choices) => {
+    calls.push(["ask", runId, stepId, question, sessionId, choices]);
     throw new BlueprintRefusal("no agent is working on this build");
   },
   list: async () => [],
@@ -605,6 +605,39 @@ describe("POST /api/blueprints/runs/:id/events and /ask", () => {
 
   it("answers 409 to a question nobody is working on", async () => {
     expect((await post("/api/blueprints/runs/run-00000001/ask", { stepId: "x", sessionId: "s1", question: "q" })).status).toBe(409);
+  });
+
+  it("hands the executor the parsed choices, the recommended one marked", async () => {
+    calls.length = 0;
+    await post("/api/blueprints/runs/run-00000001/ask", {
+      stepId: "x",
+      sessionId: "s1",
+      question: "q",
+      choices: "Fix: cheap\nLeave: free",
+      recommend: "Leave",
+    });
+    expect(calls).toEqual([
+      [
+        "ask",
+        "run-00000001",
+        "x",
+        "q",
+        "s1",
+        [
+          { label: "Fix", description: "cheap" },
+          { label: "Leave", description: "free", recommended: true },
+        ],
+      ],
+    ]);
+  });
+
+  it("refuses choices it cannot read with 400 and the reason, before asking anyone", async () => {
+    calls.length = 0;
+    expect(await post("/api/blueprints/runs/run-00000001/ask", { stepId: "x", sessionId: "s1", question: "q", choices: "A\nB", recommend: "C" })).toEqual({
+      status: 400,
+      body: { error: 'not asked: RECOMMEND "C" is not one of the choices\' labels' },
+    });
+    expect(calls).toEqual([]);
   });
 
   it("answers 409 for a run that does not exist", async () => {

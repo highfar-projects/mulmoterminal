@@ -255,6 +255,26 @@ const roundOf = (step: Pick<PlanStep, "id" | "repeatWhile">) => roundNumber(step
           <div class="font-sans text-[13px] text-fg" data-testid="blueprint-question-text">
             <MarkdownProse :markdown="currentState.question ?? ''" />
           </div>
+          <div v-if="currentState.choices?.length" class="flex flex-col gap-1.5" data-testid="blueprint-choices">
+            <button
+              v-for="choice in currentState.choices"
+              :key="choice.label"
+              type="button"
+              data-testid="blueprint-choice"
+              class="flex cursor-pointer flex-col items-start gap-0.5 rounded-[4px] border bg-base px-3 py-2 text-left font-sans hover:bg-hover disabled:opacity-40"
+              :class="choice.recommended ? 'border-accent' : 'border-border'"
+              :disabled="sending"
+              @click="act({ type: 'answer', answer: choice.label })"
+            >
+              <span class="flex items-center gap-2 text-[13px] text-fg">
+                {{ choice.label }}
+                <span v-if="choice.recommended" data-testid="blueprint-choice-recommended" class="text-[11px] text-accent">{{
+                  t("blueprints.run.recommended")
+                }}</span>
+              </span>
+              <span v-if="choice.description" class="text-[12px] text-secondary">{{ choice.description }}</span>
+            </button>
+          </div>
           <textarea
             v-model="answer"
             data-testid="blueprint-answer"

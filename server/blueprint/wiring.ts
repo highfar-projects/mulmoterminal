@@ -50,7 +50,7 @@ const PACK_ROOTS: readonly PackRoot[] = [
   { dir: INSTALLED_PACKS_DIR, source: "installed" },
 ];
 
-// The question travels in $QUESTION and is JSON-encoded by node, so no quoting in it can break
+// The question travels in $QUESTION (its choices in $CHOICES and $RECOMMEND) and is JSON-encoded by node, so no quoting in it can break
 // the request — the agent writes prose, not JSON. node comes FIRST in a pipe: the prompt tells the
 // agent to write `QUESTION='…' <this>`, and such a prefix reaches only the first command. Inside a
 // `$(…)` it would reach nothing, which is how a real run posted empty questions.
@@ -60,7 +60,7 @@ export function askCommand(port: number | string, runId: string, stepId: string,
   // Interpolated into a shell line, so each is held to a shape that needs no quoting.
   if (!/^\d{1,5}$/.test(String(port)) || ![runId, stepId, sessionId].every((arg) => SAFE_ARG_RE.test(arg)))
     throw new Error(`unsafe ask command arguments: ${port} ${runId} ${stepId} ${sessionId}`);
-  const body = `node -e 'console.log(JSON.stringify({stepId:process.argv[1],sessionId:process.argv[2],question:process.env.QUESTION}))' ${stepId} ${sessionId}`;
+  const body = `node -e 'console.log(JSON.stringify({stepId:process.argv[1],sessionId:process.argv[2],question:process.env.QUESTION,choices:process.env.CHOICES,recommend:process.env.RECOMMEND}))' ${stepId} ${sessionId}`;
   // --fail-with-body: a refused question must fail the command AND say why, or the agent carries on
   // believing it asked.
   return `${body} | curl -sS --fail-with-body -X POST -H 'content-type: application/json' --data-binary @- http://127.0.0.1:${port}/api/blueprints/runs/${runId}/ask`;
