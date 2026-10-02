@@ -9,7 +9,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const hasSession = vi.fn<(id: string) => boolean>(() => false);
-vi.mock("../../../server/infra/tmux.js", () => ({ tmuxHasSession: (id: string) => hasSession(id) }));
+vi.mock("../../../server/infra/tmux.js", () => ({ tmuxHasSession: (id: string) => hasSession(id), tmuxIsPsmux: () => false }));
 
 const { ptyExitDisposition, handlePtyExit } = await import("../../../server/session/pty-exit.js");
 const { ptys } = await import("../../../server/session/registry.js");

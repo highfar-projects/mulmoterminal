@@ -12,6 +12,7 @@ import { binaryProblemMessage, diagnoseBinary, type BinaryDiagnosis } from "../i
 import { cwdProblemMessage, diagnoseSpawnCwd, type CwdDiagnosis } from "../infra/spawn-cwd.js";
 import { withoutUnset } from "./provider-env.js";
 import { trackPtyExit } from "./pty-kill.js";
+import { traceTmux } from "../infra/tmux-trace.js";
 import { PORT, SESSION_ID_RE } from "../config/env.js";
 import { reservedWorktreeEnv } from "../config/worktree-env.js";
 import {
@@ -263,6 +264,7 @@ export function ptySpawn(
     // this client CREATES one, and the new server keeps whatever environment it was started with for
     // its whole life — so our own bind port would reach every pane it ever opens (#1919). A PORT that
     // is NOT ours (`PORT=3000 mulmoterminal --port 34601`) is the user's and still travels (#1873).
+    traceTmux(tmuxIsPsmux(), "client-spawn", { id: sessionId, reattach: reattached, program: path.basename(file) });
     const client = spawnPty("tmux", tmuxNewSessionArgs(sessionId, file, args, cwd, env), TMUX_CLIENT_CWD, [
       ...unset,
       ...tmuxClientUnsetNames(process.env.PORT, ownBindPort()),

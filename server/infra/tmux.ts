@@ -15,6 +15,7 @@ import { PORT } from "../config/env.js";
 import { isLauncherEnvVar } from "./pty-env.js";
 import { spawnCapture, spawnCaptureAsync } from "./spawnCapture.js";
 import { splitLines } from "./split-lines.js";
+import { callerFrames, traceTmux } from "./tmux-trace.js";
 
 const SERVER_SOCKET = "mulmoterminal";
 const SESSION_PREFIX = "mt-";
@@ -39,6 +40,8 @@ export function tmuxAvailable(): boolean {
     const r = spawnCapture("tmux", ["-V"]);
     cachedAvailable = r.status === 0;
     cachedPsmux = cachedAvailable && isPsmuxVersion(r.stdout);
+    // Once per server life, so the trace reads as one run after another.
+    traceTmux(cachedPsmux, "server-start", { ppid: process.ppid });
     if (cachedAvailable) ensureConf();
   }
   return cachedAvailable;
@@ -371,7 +374,9 @@ export function tmuxHasSession(id: string): boolean {
 // every session it was told about. A kill that failed silently would take a live session's file,
 // which can hold a provider's API token (CodeRabbit on #1486).
 export function tmuxKillSession(id: string): boolean {
-  return tmux(["kill-session", "-t", tmuxSessionTarget(id)]).status === 0;
+  const ok = tmux(["kill-session", "-t", tmuxSessionTarget(id)]).status === 0;
+  traceTmux(cachedPsmux, "kill-session", { id, ok, caller: callerFrames(new Error().stack) });
+  return ok;
 }
 
 // The rendered contents of a session's pane — the visible screen plus `historyLines` of

@@ -323,6 +323,12 @@ force the DOM renderer or observe effects (`window.open`, buffer state) instead 
     (prompt history) after a reload, yet scrolled in a fresh cell. A psmux entry therefore also gets
     the byte-stream `TerminalModeTracker` (`wireBufferedOutput`), and `reattachPty` adds its modes
     to tmux's answer.
+- **On psmux the server keeps a trace of what it did to sessions** (`server/infra/tmux-trace.ts`,
+  `~/.mulmoterminal/tmux-trace.jsonl`, one JSON line per event, rotated at 1 MiB): `server-start`,
+  `server-shutdown`, `client-spawn` (and whether it meant to reattach), `client-exit` (the
+  keep/reap decision its `has-session` answer led to) and `kill-session` with the call path that
+  asked. Added because a Ctrl+C restart ended some working Claude cells (they came back via
+  `--resume`, "Interrupted") while idle ones survived, and psmux alone reattached correctly.
 - **The replay is a stream of deltas, not a screen — so the screen is asked for.** The bounded tail
   reconstructs only the cells that changed inside its window: rows painted before it opened stay
   blank, and cells written at different moments sit side by side. A TUI makes this the normal case

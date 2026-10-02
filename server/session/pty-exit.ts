@@ -11,7 +11,8 @@
 // process under memory pressure, in the reported case. Reaping there kills a tmux session with a
 // live agent in it, and forgets the title, which is what drops the row from the phone's list.
 import { ptys } from "./registry.js";
-import { tmuxHasSession } from "../infra/tmux.js";
+import { tmuxHasSession, tmuxIsPsmux } from "../infra/tmux.js";
+import { traceTmux } from "../infra/tmux-trace.js";
 
 /** What the pty's death is evidence of. */
 export type PtyExitDisposition = "reap" | "keep" | "gone";
@@ -42,6 +43,7 @@ export function handlePtyExit(sessionId: string, reap: (id: string) => void): Pt
     // shells out.
     tmuxAlive: tmuxBacked && tmuxHasSession(sessionId),
   });
+  if (tmuxBacked) traceTmux(tmuxIsPsmux(), "client-exit", { id: sessionId, disposition });
   if (disposition === "keep") {
     // The entry has to go even though the session stays: `ptys.has()` is what every reconnect path
     // reads as "there is a live pty here", and a dead one left in the table would be reused instead

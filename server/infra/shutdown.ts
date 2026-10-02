@@ -24,6 +24,8 @@
 import { stopWhisperSidecar } from "../backends/whisper.js";
 import { drainPersistQueues } from "../session/persist-drain.js";
 import { isRecord } from "../../common/isRecord.js";
+import { tmuxIsPsmux } from "./tmux.js";
+import { traceTmux } from "./tmux-trace.js";
 
 const SIGNALS = ["SIGINT", "SIGTERM"] as const;
 
@@ -82,6 +84,7 @@ function stopSidecarOnce(): void {
 }
 
 async function stopAndExit(): Promise<void> {
+  traceTmux(tmuxIsPsmux(), "server-shutdown", {});
   stopSidecarOnce();
   const drained = await drainPersistQueues();
   if (!drained) console.warn("[shutdown] gave up waiting for queued session state to reach disk; some of it is lost");
