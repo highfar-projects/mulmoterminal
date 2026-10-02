@@ -1,0 +1,67 @@
+{
+  "manifest": {
+    "title": "Make a style (from model texts)",
+    "description": "Takes \"this is how we write\" from texts or pages you want to follow, and turns it into rules a machine checks every time (chaff.yaml) and a guide you read while writing (STYLE.md). It also checks that the model texts get no findings under your own style, and that the style catches a text broken on purpose."
+  },
+  "hearing": {
+    "sources": {
+      "label": "The texts to follow (files, folders or URLs, one per line)",
+      "why": "The style is measured from these. Nothing that is not in them becomes part of the style"
+    },
+    "kind": {
+      "label": "What kind of documents are they?",
+      "why": "It decides which checks to use and how strict to start",
+      "options": {
+        "技術文書（仕様書・README・手順書）": "Technical documents (specifications, READMEs, procedures)",
+        "ブログ・記事・コラム": "Blogs, articles, columns",
+        "ビジネス文書（提案書・報告書・メール・議事録・プレスリリース）": "Business documents (proposals, reports, emails, minutes, press releases)",
+        "その他（契約書・規程・論文・本など）": "Other (contracts, regulations, papers, books and so on)"
+      }
+    },
+    "language": {
+      "label": "Language",
+      "why": "Japanese and English use different checks",
+      "options": {
+        "手本から自動で判定する": "Detect it from the model texts",
+        "日本語": "Japanese",
+        "英語": "English"
+      }
+    },
+    "audience": {
+      "label": "Who reads these texts, and what are they for?",
+      "why": "It becomes the guide's introduction, and the basis for decisions while writing"
+    },
+    "strictness": {
+      "label": "How strict should it be?",
+      "why": "Whether to match the model texts, or also lean toward fixing their weak points",
+      "options": {
+        "手本に合わせる（手本が通る範囲で）": "Match the model texts (as far as they pass)",
+        "手本より少し厳しく（手本の直すべき所は手引きに書く）": "A little stricter than the model texts (what they should fix goes in the guide)"
+      }
+    }
+  },
+  "steps": {
+    "sources": {
+      "title": "Collect the model texts",
+      "description": "Collects the model texts into .blueprint/sources/ as Markdown, and keeps a note of where each came from."
+    },
+    "rules": {
+      "title": "Write the style and the guide",
+      "description": "Measures the model texts with chaff, and writes the rules a machine checks (chaff.yaml) and the guide you read while writing (STYLE.md). Each decision keeps its reason."
+    },
+    "counter": {
+      "title": "Test that the style works",
+      "description": "Writes a text that goes against the guide on purpose, and checks that chaff points it out. When the style is changed, checks again that the model texts still pass."
+    },
+    "report": {
+      "title": "Report",
+      "description": "What became a machine rule, what was left to the guide, and what was not made part of the style."
+    }
+  },
+  "presets": {
+    "shanai": {
+      "title": "Make a style from company procedure texts",
+      "description": "Takes \"this is how we write\" from the eight sample guides (tehon-1.md to tehon-8.md), and turns it into rules a machine checks (chaff.yaml) and a guide you read while writing (STYLE.md)."
+    }
+  }
+}

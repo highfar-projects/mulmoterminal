@@ -52,7 +52,7 @@ const onText = (event: Event): void => {
       @change="onText"
     >
       <option value="" disabled>{{ t("blueprints.form.choose") }}</option>
-      <option v-for="choice in question.options ?? []" :key="choice" :value="choice">{{ choice }}</option>
+      <option v-for="choice in question.options ?? []" :key="choice" :value="choice">{{ question.optionLabels?.[choice] ?? choice }}</option>
     </select>
 
     <div v-else-if="question.kind === 'multiselect'" :id="fieldId" class="flex flex-wrap gap-1.5">
@@ -65,7 +65,7 @@ const onText = (event: Event): void => {
         :class="isChosen(choice) ? 'border-accent bg-accent-bg text-fg' : 'border-border bg-base text-secondary hover:bg-hover'"
         @click="emit('update', toggleChoice(answer, choice))"
       >
-        {{ choice }}
+        {{ question.optionLabels?.[choice] ?? choice }}
       </button>
     </div>
 

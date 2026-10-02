@@ -71,3 +71,40 @@ describe("a question that picks a collection", () => {
     expect(wrapper.emitted("update")).toEqual([["books"]]);
   });
 });
+
+describe("an option shown in the person's language", () => {
+  const [select, multi] = hearingSchema.parse({
+    questions: [
+      {
+        id: "style",
+        label: "Which style?",
+        why: "w",
+        kind: "select",
+        options: ["この規約", "既定"],
+        optionLabels: { この規約: "This style", 既定: "Defaults" },
+      },
+      { id: "goals", label: "Goals", why: "w", kind: "multiselect", options: ["速さ", "安さ"], optionLabels: { 速さ: "Speed" } },
+    ],
+  }).questions;
+
+  it("shows the option's words and hands back its value", async () => {
+    if (!select) throw new Error("fixture");
+    const wrapper = mount(BlueprintHearingField, { props: { question: select, answer: undefined } });
+    const options = wrapper.findAll("option").filter((option) => option.attributes("value") !== "");
+    expect(options.map((option) => [option.attributes("value"), option.text()])).toEqual([
+      ["この規約", "This style"],
+      ["既定", "Defaults"],
+    ]);
+    await wrapper.get("select").setValue("既定");
+    expect(wrapper.emitted("update")?.at(-1)).toEqual(["既定"]);
+  });
+
+  it("shows a multiselect's words, and the value itself for an option without words", async () => {
+    if (!multi) throw new Error("fixture");
+    const wrapper = mount(BlueprintHearingField, { props: { question: multi, answer: [] } });
+    const buttons = wrapper.findAll("button");
+    expect(buttons.map((button) => button.text())).toEqual(["Speed", "安さ"]);
+    await buttons[0]?.trigger("click");
+    expect(wrapper.emitted("update")?.at(-1)).toEqual([["速さ"]]);
+  });
+});

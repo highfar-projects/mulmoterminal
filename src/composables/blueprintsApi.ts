@@ -5,6 +5,7 @@ import { originalsViewSchema, type OriginalsView } from "../../common/blueprint/
 import { sourceStatusSchema, type SourceStatus } from "../../common/blueprint/sourceStatus";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { jsonBody } from "../jsonBody";
+import { i18n } from "../i18n";
 import { blueprintManifestSchema } from "../../common/blueprint/manifest";
 import { hearingSchema, type HearingAnswers } from "../../common/blueprint/hearing";
 import { planStepSchema } from "../../common/blueprint/plan";
@@ -48,10 +49,13 @@ async function call<T>(schema: z.ZodType<T>, url: string, init?: RequestInit, ti
 
 const postJson = (payload: unknown): RequestInit => ({ method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
 
-export const listPacks = (): Promise<ApiResult<z.infer<typeof packsSchema>>> => call(packsSchema, "/api/blueprints/packs");
+// The packs' words in the screen's language: the server lays each pack's locale overlay over what the form shows.
+const inScreenLanguage = (url: string): string => `${url}${url.includes("?") ? "&" : "?"}lang=${encodeURIComponent(String(i18n.global.locale.value))}`;
+
+export const listPacks = (): Promise<ApiResult<z.infer<typeof packsSchema>>> => call(packsSchema, inScreenLanguage("/api/blueprints/packs"));
 
 export const previewPair = (base: string, usecase: string): Promise<ApiResult<PairPreview>> =>
-  call(pairSchema, `/api/blueprints/pairs/${encodeURIComponent(base)}/${encodeURIComponent(usecase)}`);
+  call(pairSchema, inScreenLanguage(`/api/blueprints/pairs/${encodeURIComponent(base)}/${encodeURIComponent(usecase)}`));
 
 /** The files in `dir`, to pick a question's answer from; none for a folder that does not exist yet. */
 export const listFolderFiles = (dir: string): Promise<ApiResult<{ files: string[]; more: boolean }>> =>
@@ -79,7 +83,7 @@ export const listSourceCollections = (): Promise<ApiResult<{ collections: Source
 export const listKnownFolders = (): Promise<ApiResult<{ folders: string[] }>> =>
   call(z.object({ folders: z.array(z.string()) }), "/api/blueprints/known-folders");
 
-export const listPresets = (): Promise<ApiResult<{ presets: PresetListing[] }>> => call(presetsSchema, "/api/blueprints/presets");
+export const listPresets = (): Promise<ApiResult<{ presets: PresetListing[] }>> => call(presetsSchema, inScreenLanguage("/api/blueprints/presets"));
 
 export const listRuns = (): Promise<ApiResult<z.infer<typeof runsSchema>>> => call(runsSchema, "/api/blueprints/runs");
 

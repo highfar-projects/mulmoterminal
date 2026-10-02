@@ -1,0 +1,49 @@
+{
+  "manifest": {
+    "title": "Summarize (every sentence backed by the original)",
+    "description": "Summarizes a long document to the length you choose. Each sentence carries a quote from the original, and the machine checks that the quotes are in the original, that no part was quietly dropped, and that the numbers in each sentence are written in its quote. The original is not changed."
+  },
+  "hearing": {
+    "documents": {
+      "label": "The documents to summarize (one file in this folder per line)",
+      "why": "Each sentence of the summary carries a quote from these documents"
+    },
+    "length": {
+      "label": "How long should it be?",
+      "why": "This sets the most sentences. Even a long document is fitted to this length without dropping any part",
+      "options": {
+        "短く（5 文まで）": "Short (up to 5 sentences)",
+        "ふつう（10 文まで）": "Normal (up to 10 sentences)",
+        "くわしく（部分ごとに）": "Detailed (part by part)"
+      }
+    },
+    "reader": {
+      "label": "Who will read it?",
+      "why": "What that person wants to know comes first, in words they understand"
+    },
+    "focus": {
+      "label": "Anything you especially want to know",
+      "why": "That point is put first in the summary"
+    }
+  },
+  "steps": {
+    "summarize": {
+      "title": "Summarize with quotes",
+      "description": "Summarizes one sentence at a time to the chosen length, each with a quote from the original. Every part is either quoted or left out with a reason. The machine checks that the quotes are in the original and that the numbers are written in the quotes."
+    },
+    "report": {
+      "title": "Finish the summary",
+      "description": "Puts the checked summary together for the reader, with its sources and the parts that were left out."
+    }
+  },
+  "presets": {
+    "keihi": {
+      "title": "Summarize an expense guide",
+      "description": "Summarizes the sample expense claim guide (keihi.md) in up to 5 sentences. Each sentence carries a quote from the guide; none of who it covers, how to apply, payment, or what to do without a receipt is dropped, and the machine checks that amounts and numbers of days match the quotes. The original is not changed."
+    },
+    "chat-kento": {
+      "title": "Summarize a study report for a department head",
+      "description": "Summarizes the sample study report (kento.md) part by part, for a department head who was not at the meeting, with the cost and when it can be used first. Each sentence carries a quote from the report; none of the background, the options compared, the cost, what was decided, or the plan ahead is dropped, and the machine checks that amounts and dates match the quotes. The original is not changed."
+    }
+  }
+}

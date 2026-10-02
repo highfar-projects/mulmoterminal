@@ -1,0 +1,12 @@
+{
+  "manifest": {
+    "title": "A folder of documents",
+    "description": "All you need is one folder that holds your documents. No GitHub or git is needed. chaff checks the writing, run with npx."
+  },
+  "steps": {
+    "workspace": {
+      "title": "Check the folder and chaff",
+      "description": "Checks that chaff (the writing checker) runs in the document folder, and sets up .blueprint/, where the record of the work is kept."
+    }
+  }
+}
