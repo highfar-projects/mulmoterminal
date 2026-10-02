@@ -9,7 +9,7 @@ import { overlayProblems, packLocaleSchema } from "../../../common/blueprint/pac
 import { blueprintManifestSchema } from "../../../common/blueprint/manifest";
 import { hearingSchema } from "../../../common/blueprint/hearing";
 import { localizedPacks, localizedPair, localizedPresets } from "../../../server/blueprint/packLocales";
-import type { PackRoot } from "../../../server/blueprint/packs";
+import { packProblems, type PackRoot } from "../../../server/blueprint/packs";
 
 const PACKS = path.join(import.meta.dirname, "..", "..", "..", "blueprints");
 const ROOTS: PackRoot[] = [{ dir: PACKS, source: "builtin" }];
@@ -68,6 +68,19 @@ describe("the form's routes in English", () => {
     expect(packs.find((pack) => pack.slug === "polish")?.manifest.title).toBe("Polish documents (without changing what they say)");
     const presets = await localizedPresets(ROOTS, "en");
     expect(presets.find((preset) => preset.usecase === "polish" && preset.id === "blog")?.title).toBe("Polish a blog post as a blog post");
+  });
+
+  it("refuse an installed pack whose overlay leaves something out, and pass every shipped pack", async () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), "bp-locale-"));
+    cpSync(path.join(PACKS, "polish"), path.join(root, "polish"), { recursive: true });
+    const overlayFile = path.join(root, "polish", "locales", "en.json");
+    const overlay = packLocaleSchema.parse(readJson(overlayFile));
+    writeFileSync(overlayFile, JSON.stringify({ ...overlay, steps: { ...overlay.steps, gone: { title: "Gone" } }, presets: {} }));
+    const problems = await packProblems(path.join(root, "polish"));
+    expect(problems).toContain('locales/en.json: words for step "gone", which the pack does not have');
+    expect(problems).toContain('locales/en.json: no words for example "blog"');
+    const shipped = await Promise.all(packsWithOverlay.map(async (slug) => [slug, await packProblems(path.join(PACKS, slug))]));
+    expect(shipped.filter(([, found]) => found.length > 0)).toEqual([]);
   });
 
   it("show a pack whose overlay is broken as written, rather than hiding the packs", async () => {

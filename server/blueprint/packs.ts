@@ -11,7 +11,7 @@ import { blueprintManifestSchema, incompatibility, inPackOrder, BLUEPRINT_SLUG_R
 import { basePlanSchema, composePlan, usecaseStepsSchema, type ComposedStep } from "../../common/blueprint/plan.js";
 import { hearingSchema, type Hearing } from "../../common/blueprint/hearing.js";
 import { presetsFileSchema, type Preset, type PresetListing } from "../../common/blueprint/presets.js";
-import { packLocaleSchema } from "../../common/blueprint/packLocale.js";
+import { overlayProblems, packLocaleSchema } from "../../common/blueprint/packLocale.js";
 import { readSamples } from "./samples.js";
 
 export const PACK_SOURCES = ["builtin", "installed"] as const;
@@ -111,17 +111,31 @@ async function stepsOf(packDir: string, manifest: BlueprintManifest): Promise<{ 
   return usecaseStepsSchema.parse(await readJson(path.join(packDir, "steps.json"))).steps;
 }
 
+// An overlay in another language is optional, but one that is broken, stale or leaves something out is refused here
+// rather than shown half-translated on the form.
+async function overlayProblemsOf(packDir: string, manifest: BlueprintManifest, steps: readonly { id: string }[]): Promise<string[]> {
+  const file = path.join(packDir, "locales", "en.json");
+  if (!(await exists(file))) return [];
+  const usecase = manifest.kind === "usecase";
+  const problems = overlayProblems(packLocaleSchema.parse(await readJson(file)), {
+    manifest,
+    hearing: usecase ? await readHearing(packDir) : null,
+    stepIds: [...new Set(steps.map((step) => step.id))],
+    presetIds: usecase ? (await readPresets(packDir)).map((preset) => preset.id) : [],
+  });
+  return problems.map((problem) => `locales/en.json: ${problem}`);
+}
+
 /** Why a pack directory could not be run — empty when it can. What an install is held to. */
 export async function packProblems(packDir: string): Promise<string[]> {
   try {
-    const steps = await stepsOf(packDir, await readManifest(packDir));
-    // An overlay in another language is optional, but a broken one is refused here rather than ignored on the form.
-    const overlay = path.join(packDir, "locales", "en.json");
-    if (await exists(overlay)) packLocaleSchema.parse(await readJson(overlay));
+    const manifest = await readManifest(packDir);
+    const steps = await stepsOf(packDir, manifest);
+    const overlay = await overlayProblemsOf(packDir, manifest, steps);
     const missing = await Promise.all(
       steps.map(async (step) => ((await exists(path.join(packDir, step.skill, "SKILL.md"))) ? null : `step "${step.id}" has no ${step.skill}/SKILL.md`)),
     );
-    return missing.filter((problem): problem is string => problem !== null);
+    return [...missing.filter((problem): problem is string => problem !== null), ...overlay];
   } catch (err) {
     return [err instanceof Error ? err.message : String(err)];
   }
