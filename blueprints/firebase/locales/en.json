@@ -1,0 +1,48 @@
+{
+  "manifest": {
+    "title": "Firebase",
+    "description": "Firebase Hosting + Authentication + Firestore + Cloud Functions, with separate dev and production projects."
+  },
+  "steps": {
+    "spec": {
+      "title": "Write the spec",
+      "description": "Fills in the spec templates for the base and the use case from the answers to the questions. Anything not yet decided goes on a list."
+    },
+    "prerequisites": {
+      "title": "Tools and sign-in",
+      "description": "Installs the CLIs and signs in to Firebase and Google Cloud."
+    },
+    "projects": {
+      "title": "Development and production projects",
+      "description": "Sets up two Firebase projects and puts them on the pay-as-you-go (Blaze) plan."
+    },
+    "scaffold": {
+      "title": "App skeleton",
+      "description": "Creates the screens, Cloud Functions, the emulator settings and the starting point for testing the rules."
+    },
+    "auth": {
+      "title": "Sign-in",
+      "description": "Adds sign-in with Google and checks it with the Auth emulator."
+    },
+    "data-rules": {
+      "title": "Data shape and security rules",
+      "description": "Creates the collections in the spec and opens them one at a time in firestore.rules. Everything else is refused."
+    },
+    "deploy-dev": {
+      "title": "Publish for development",
+      "description": "Publishes the rules, functions and screens to the development project."
+    },
+    "protect": {
+      "title": "App Check and a budget alert",
+      "description": "Turns on App Check and sets a budget alert on the production project."
+    },
+    "security": {
+      "title": "Security check",
+      "description": "Before publishing to production, reads what was built the way an attacker would, following OWASP Top 10:2025, fixes the holes that can be exploited, confirms the fixes with emulator tests, and writes a report. The fixes are published to development again, to check that the screens still work."
+    },
+    "deploy-production": {
+      "title": "Publish to production",
+      "description": "Publishes to production the same build that was checked in development."
+    }
+  }
+}

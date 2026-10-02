@@ -32,7 +32,7 @@ Start with a local build (no Firebase). It stays entirely on your machine and ne
 
 > **Claude usage**: a build starts a Claude Code session for every step, so it uses noticeably more than an ordinary chat.
 
-> **Language**: the document-folder tasks show their names, questions, steps and examples in English; the app-building tasks are in Japanese for now. The documents may be in either language, and the agent writes to you in the report language you pick. The screens themselves follow MulmoTerminal's language setting.
+> **Language**: every task shows its name, questions, steps and examples in English. The documents may be in either language, and the agent writes to you in the report language you pick. The screens themselves follow MulmoTerminal's language setting.
 
 ## Running it
 
@@ -183,5 +183,5 @@ Comment on [issue #2246](https://github.com/receptron/mulmoterminal/issues/2246)
 - The console steps can drift out of date when the Firebase console changes. If one does not match, tell us which screen and what differed.
 - The check after publishing catches a blank page, but can miss an app stuck on its loading screen.
 - The Marketplace (installing packs from elsewhere) is a prototype; there is no official list yet.
-- The Blueprints screen's own text (buttons, statuses, refusals) follows MulmoTerminal's display language (Japanese, English, Korean, Simplified and Traditional Chinese). The bundled packs' content — the names of what they make, their questions, step names and examples — is in English for the document-folder tasks (on any screen language but Japanese); the app-building tasks are in Japanese for now. The documents themselves can be English: 「規約をつくる」 (make a style) offers 「英語」 (English) as the language, and chaff checks English text too; the example 「英語のブログ記事を整える」 polishes an English blog post.
+- The Blueprints screen's own text (buttons, statuses, refusals) follows MulmoTerminal's display language (Japanese, English, Korean, Simplified and Traditional Chinese). The bundled packs' content — the names of what they make, their questions, step names and examples — is in English on any screen language but Japanese. The documents themselves can be English: 「規約をつくる」 (make a style) offers 「英語」 (English) as the language, and chaff checks English text too; the example 「英語のブログ記事を整える」 polishes an English blog post.
 - What the agent writes to you — reports, questions, replies — is in the **report language** you pick on the new-build form. It starts as the screen's language, so you can, for example, polish an English document and read the report in Japanese. The documents keep their own language, and a task continued from "Next steps" keeps the same report language.

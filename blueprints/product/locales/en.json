@@ -1,0 +1,126 @@
+{
+  "manifest": {
+    "title": "Build anything (any kind of app)",
+    "description": "Build whatever the user describes: the interview asks what it is for, who uses it, what it handles and what they do, and the must-haves. Each must-have is proven by a test at the end. Runs on the local base (this computer only), on Firebase, on Cloudflare (published), or on Supabase with its screen on Cloudflare (published)."
+  },
+  "hearing": {
+    "appName": {
+      "label": "The app's name (a working name is fine)",
+      "why": "Shown on the screens and in the instructions"
+    },
+    "idea": {
+      "label": "What do you want to make (in a few words)?",
+      "why": "It becomes the core of what is built"
+    },
+    "problem": {
+      "label": "What problem does it solve?",
+      "why": "It decides which features are must-haves"
+    },
+    "audience": {
+      "label": "Who will use it?",
+      "why": "It decides sign-in and who can see it",
+      "options": {
+        "自分だけ": "Only me",
+        "家族・友人など少人数": "A few people, such as family or friends",
+        "社内・チーム": "My company or team",
+        "不特定の人（公開）": "Anyone (public)"
+      }
+    },
+    "things": {
+      "label": "What does it handle? (e.g. books, bookings, stock, recipes)",
+      "why": "These become the tables of data"
+    },
+    "actions": {
+      "label": "What do the people using it do? (e.g. add, search, book, see totals)",
+      "why": "These become the API and the screens"
+    },
+    "mustHaves": {
+      "label": "The features it needs from the very start",
+      "why": "At the end, a test checks each one works"
+    },
+    "later": {
+      "label": "Features that can wait",
+      "why": "Left out of the first version"
+    },
+    "signIn": {
+      "label": "How should people sign in?",
+      "why": "It decides how the app is protected",
+      "options": {
+        "なし（このパソコンからだけ使う）": "No sign-in (used only from this computer)",
+        "共有のパスワード一つ": "One shared password",
+        "一人ずつのアカウント": "An account for each person"
+      }
+    },
+    "roles": {
+      "label": "Should there be different roles? (e.g. admin and regular user)",
+      "why": "It becomes the rules for who can do what"
+    },
+    "dataSensitivity": {
+      "label": "The most sensitive information it handles",
+      "why": "It decides how strictly data is stored and backed up",
+      "options": {
+        "公開してよい情報のみ": "Only information that may be public",
+        "身内だけの情報": "Information for family or close people only",
+        "個人情報を含む": "Includes personal information",
+        "お金や健康など特に機微な情報": "Especially sensitive information, such as money or health"
+      }
+    },
+    "references": {
+      "label": "Similar services or the look you have in mind (if any)",
+      "why": "Used as a reference for the screens"
+    },
+    "uiLanguage": {
+      "label": "The language of the screens",
+      "why": "The language shown",
+      "options": {
+        "日本語": "Japanese",
+        "English": "English",
+        "両方": "Both"
+      }
+    }
+  },
+  "steps": {
+    "acceptance@local": {
+      "title": "Prove the must-haves by tests",
+      "description": "Each must-have from the interview gets a test that shows it working end to end through the API."
+    },
+    "acceptance@cloudflare": {
+      "title": "Prove the must-haves by tests",
+      "description": "Each must-have from the interview gets a test that shows it working end to end through the API."
+    },
+    "acceptance@firebase": {
+      "title": "Prove the must-haves by tests",
+      "description": "Each must-have gets a test against the emulators that walks it end to end as a signed-in user, and is refused for everyone it should be refused for."
+    },
+    "acceptance@supabase": {
+      "title": "Prove the must-haves by tests",
+      "description": "Each must-have gets a test against the local Supabase stack that walks it end to end as the user the spec names, and is refused for everyone it should be refused for."
+    },
+    "features": {
+      "title": "Features and screens",
+      "description": "Builds the spec's must-haves as screens and client-side logic, and checks with the emulators that they work inside the Firestore rules."
+    }
+  },
+  "presets": {
+    "home-library": {
+      "title": "Home library",
+      "description": "A small app to list the books at home and record who you lent them to. No sign-in; it runs on this computer only. A good size for seeing the whole way an app gets built."
+    },
+    "mini-sns": {
+      "title": "Mini social network (something like Twitter)",
+      "description": "Share short posts and read the posts of people you follow on a timeline. Sign in with a Google account; published on Firebase. Shows everything a public app has to get right."
+    },
+    "household-budget": {
+      "title": "Household budget",
+      "description": "Record income and spending, and total them by month and by category. Only you use it; it runs on this computer only."
+    },
+    "team-taskboard": {
+      "title": "Team task board",
+      "description": "Manage the team's tasks in columns: to do, in progress, done. People get in with one shared password; it runs on this computer."
+    },
+    "quote-builder": {
+      "title": "Quote maker",
+      "description": "Enter the client, items, quantities and unit prices to get a quote with consumption tax included. Each is numbered and saved, and can be printed or made into a PDF. It runs on this computer."
+    }
+  }
+}

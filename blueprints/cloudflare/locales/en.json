@@ -1,0 +1,52 @@
+{
+  "manifest": {
+    "title": "Cloudflare (Workers + D1 + Vue)",
+    "description": "Runs on Cloudflare: a Worker for the API, D1 (SQLite) for data, and a Vue screen served as static assets from the same Worker. Developed and checked on this computer with wrangler dev, then published with wrangler deploy after approval. A free Cloudflare account is enough to start."
+  },
+  "steps": {
+    "spec": {
+      "title": "Write the spec",
+      "description": "Fills in the spec templates for the base and the use case from the answers to the questions. Anything not yet decided goes on a list."
+    },
+    "prerequisites": {
+      "title": "Check the tools",
+      "description": "Checks Node (22 or later) and yarn. wrangler is installed in the project, so it is not needed here."
+    },
+    "scaffold": {
+      "title": "App skeleton",
+      "description": "Creates the Worker API, D1, the Vue screens and the starting point for tests that run on Workers, all in one folder."
+    },
+    "data": {
+      "title": "Data shape",
+      "description": "Turns the \"things it handles\" in the spec into D1 tables, and writes migrations and tests."
+    },
+    "api": {
+      "title": "API",
+      "description": "Turns the operations in the spec into a Worker API, checks what comes in, and writes tests."
+    },
+    "ui": {
+      "title": "Screens",
+      "description": "Builds the screens in the spec with Vue and connects them to the API."
+    },
+    "auth": {
+      "title": "Sign-in",
+      "description": "Adds the sign-in method in the spec. Anyone can open the published app, so without sign-in, what may be shown is limited as the spec says."
+    },
+    "run-check": {
+      "title": "Start it and check",
+      "description": "Builds it, starts it on this computer with wrangler dev, and checks that the screens and the API respond."
+    },
+    "security": {
+      "title": "Security check",
+      "description": "Reads what was built the way an attacker would, following OWASP Top 10:2025, fixes the holes that can be exploited, confirms the fixes with tests, and writes a report. The result is checked by sending the Worker running on this computer requests shaped like real attacks (changes from another site, broken JSON)."
+    },
+    "deploy": {
+      "title": "Publish to Cloudflare",
+      "description": "Creates the D1 database, applies the migrations, and publishes with wrangler deploy. Checks that the published URL serves this build."
+    },
+    "handover": {
+      "title": "How to use it, and handover",
+      "description": "Writes in the README and the getting-started page the published URL, how to run it on this computer, the steps for the next change, and how to back up the data."
+    }
+  }
+}
