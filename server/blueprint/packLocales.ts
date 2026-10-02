@@ -46,5 +46,5 @@ export async function localizedPair(roots: readonly PackRoot[], baseSlug: string
   const pair = await loadPackPair(roots, baseSlug, usecaseSlug);
   if (!pair.ok) return pair;
   const [base, usecase] = await Promise.all([readPackLocale(pair.basePackDir, screenLanguage), readPackLocale(pair.usecasePackDir, screenLanguage)]);
-  return { ...pair, hearing: localizedHearing(pair.hearing, usecase), steps: localizedSteps(pair.steps, { base, usecase }) };
+  return { ...pair, hearing: localizedHearing(pair.hearing, usecase), steps: localizedSteps(pair.steps, { base, usecase }, baseSlug) };
 }

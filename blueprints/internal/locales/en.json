@@ -1,0 +1,122 @@
+{
+  "manifest": {
+    "title": "An internal business app",
+    "description": "Only people with the company's email domain can sign in; roles decide what each can do; leavers lose access at once; every privileged action is logged."
+  },
+  "hearing": {
+    "appName": {
+      "label": "The app's name",
+      "why": "Used on the screens and as the project name"
+    },
+    "appPurpose": {
+      "label": "What does the app do? (who does what, and how)",
+      "why": "It decides the data shape and how many screens there are"
+    },
+    "domain": {
+      "label": "Your company's email domain (e.g. example.co.jp)",
+      "why": "Only people with this domain will be able to sign in"
+    },
+    "workspace": {
+      "label": "Does your company use Google Workspace?",
+      "why": "If it does, people can sign in with their company account as it is"
+    },
+    "external": {
+      "label": "Will people outside the company (clients, contractors and so on) use it too?",
+      "why": "If so, it is no longer an internal app, so you will be pointed to another blueprint"
+    },
+    "externalWho": {
+      "label": "Which outside people, and what will they do?",
+      "why": "Used to choose the other blueprint"
+    },
+    "users": {
+      "label": "About how many people will use it?",
+      "why": "A guide for the cost estimate and the budget alert"
+    },
+    "roles": {
+      "label": "The kinds of role (choose all that apply)",
+      "why": "It becomes the rules for who can do what",
+      "options": {
+        "一般": "Regular",
+        "承認者": "Approver",
+        "管理者": "Admin",
+        "閲覧のみ": "View only"
+      }
+    },
+    "dataSensitivity": {
+      "label": "The most confidential information it handles",
+      "why": "It decides how strict the audit log, the retention period and the storage place are",
+      "options": {
+        "公開してよい情報のみ": "Only information that may be public",
+        "社内限りの情報": "Information for inside the company only",
+        "個人情報を含む": "Includes personal information",
+        "人事・給与・顧客の機密情報": "Confidential HR, payroll or customer information"
+      }
+    },
+    "region": {
+      "label": "Where the data is stored",
+      "why": "It cannot be changed once created",
+      "options": {
+        "asia-northeast1（東京）": "asia-northeast1 (Tokyo)",
+        "asia-northeast2（大阪）": "asia-northeast2 (Osaka)",
+        "us-central1（米国）": "us-central1 (United States)",
+        "europe-west1（ベルギー）": "europe-west1 (Belgium)"
+      }
+    },
+    "offboarding": {
+      "label": "When someone leaves or changes jobs, must they lose access the same day?",
+      "why": "If so, a way to force out even people who are signed in is added"
+    },
+    "existingProject": {
+      "label": "Do you already have a Firebase / Google Cloud project?",
+      "why": "Whether to create a new one or use the one you have"
+    },
+    "existingProjectId": {
+      "label": "That project's ID",
+      "why": "Used for production"
+    },
+    "billingAccount": {
+      "label": "Do you have a Google Cloud billing account (a company card or similar)?",
+      "why": "Needed for Firebase's pay-as-you-go plan"
+    },
+    "budget": {
+      "label": "The monthly budget limit (yen)",
+      "why": "You are notified when spending gets close to this amount"
+    },
+    "mainScreens": {
+      "label": "The main screens (as far as you know)",
+      "why": "Decides which screens are built first"
+    }
+  },
+  "steps": {
+    "domain-restriction": {
+      "title": "Limit it to the company's domain",
+      "description": "Blocking functions refuse other domains at sign-in; the rules check the domain again."
+    },
+    "roles": {
+      "title": "Roles and permissions",
+      "description": "Roles live in custom claims, granted only by an admin-only function."
+    },
+    "offboarding": {
+      "title": "Shut out people who leave or change jobs",
+      "description": "Revoke refresh tokens, drop claims, and make the rules refuse tokens issued before the revocation."
+    },
+    "audit-log": {
+      "title": "Audit log",
+      "description": "Privileged actions are logged by functions into a collection clients cannot write."
+    },
+    "verify-dev": {
+      "title": "Is the domain limit working on development?",
+      "description": "The blocking functions are registered on the dev project, not only deployed."
+    },
+    "production-auth": {
+      "title": "Turn on the production sign-in limit first",
+      "description": "Deploy functions and rules to production and register the blocking functions before the site itself is published."
+    }
+  },
+  "presets": {
+    "ringi": {
+      "title": "Ringi (requests and approvals)",
+      "description": "Staff write up a ringi (a request for approval), and approvers approve it or send it back in turn. Only people with the company's domain can sign in, and the audit log records who approved what and when. An internal example that runs on Firebase."
+    }
+  }
+}

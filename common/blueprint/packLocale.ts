@@ -52,16 +52,61 @@ export const localizedHearing = (hearing: Hearing, overlay: PackLocale | null): 
   questions: hearing.questions.map((question) => localizedQuestion(question, overlay)),
 });
 
-/** Each step in the words of the pack that wrote it: a base step from the base's overlay, a usecase step from the usecase's. */
-export const localizedSteps = (steps: readonly ComposedStep[], overlays: { base: PackLocale | null; usecase: PackLocale | null }): ComposedStep[] =>
-  steps.map((step) => withWords(step, (step.origin === "base" ? overlays.base : overlays.usecase)?.steps?.[step.id]));
+// A usecase may write a step once per base under one id; its words for one base are keyed `<id>@<base>`.
+const stepKey = (id: string, base: string): string => `${id}@${base}`;
+
+/**
+ * Each step in the words of the pack that wrote it — a base step from the base's overlay, a usecase step from the
+ * usecase's — taking the words written for this base (`<id>@<base>`) before the step's own.
+ */
+export const localizedSteps = (
+  steps: readonly ComposedStep[],
+  overlays: { base: PackLocale | null; usecase: PackLocale | null },
+  baseSlug: string,
+): ComposedStep[] =>
+  steps.map((step) => {
+    const words = (step.origin === "base" ? overlays.base : overlays.usecase)?.steps;
+    return withWords(step, words?.[stepKey(step.id, baseSlug)] ?? words?.[step.id]);
+  });
 
 export const localizedPreset = <P extends Preset>(preset: P, overlay: PackLocale | null): P => withWords(preset, overlay?.presets?.[preset.id]);
 
 /** Something of the pack that has words to show: a step or an example, with the description it was written with. */
 export interface Described {
   id: string;
-  description?: string;
+  title?: string | undefined;
+  description?: string | undefined;
+  /** For a usecase step written once per base: the bases this one is for. */
+  bases?: readonly string[] | undefined;
+}
+
+const wordsProblems = (kind: string, name: string, item: Described, found: Titled): string[] => [
+  ...(found.title ? [] : [`${kind} "${name}" has no title`]),
+  ...(item.description && !found.description ? [`${kind} "${name}" has no description`] : []),
+];
+
+/**
+ * The steps' words: each step needs them for every base it is written for — under `<id>@<base>`, or under `<id>` when
+ * every version of that id says the same thing in the pack — and no key names a step or base the pack does not have.
+ */
+function stepProblems(steps: readonly Described[], words: Readonly<Record<string, Titled>> | undefined): string[] {
+  const same = (id: string): boolean => new Set(steps.filter((step) => step.id === id).map((step) => `${step.title}\n${step.description}`)).size <= 1;
+  const missing = steps.flatMap((step) =>
+    (step.bases ?? [null]).flatMap((base) => {
+      const name = base === null ? step.id : stepKey(step.id, base);
+      const found = words?.[name] ?? (same(step.id) ? words?.[step.id] : undefined);
+      if (found) return wordsProblems("step", name, step, found);
+      return [same(step.id) ? `no words for step "${step.id}"` : `no words for step "${name}" (its steps differ by base)`];
+    }),
+  );
+  const known = (key: string): boolean => {
+    const [id, base] = key.split("@");
+    return steps.some((step) => step.id === id && (base === undefined ? same(id) || !step.bases : (step.bases ?? []).includes(base)));
+  };
+  const stale = Object.keys(words ?? {})
+    .filter((key) => !known(key))
+    .map((key) => `words for step "${key}", which the pack does not have`);
+  return [...new Set(missing), ...stale];
 }
 
 /**
@@ -87,11 +132,10 @@ export function overlayProblems(
     named(kind, [...new Set(have.map((item) => item.id))], words);
     have.forEach((item) => {
       const found = words?.[item.id];
-      if (found && !found.title) problems.push(`${kind} "${item.id}" has no title`);
-      if (found && item.description && !found.description) problems.push(`${kind} "${item.id}" has no description`);
+      if (found) problems.push(...wordsProblems(kind, item.id, item, found));
     });
   };
-  described("step", pack.steps, overlay.steps);
+  problems.push(...stepProblems(pack.steps, overlay.steps));
   described("example", pack.presets, overlay.presets);
   pack.hearing?.questions.forEach((question) => {
     const words = overlay.hearing?.[question.id];
