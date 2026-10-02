@@ -44,6 +44,7 @@ const EXPECTED_TEMPLATES = [
   "magazine.md",
   "meeting-room.md",
   "project-board.md",
+  "question-box.md",
   "salon.md",
   "schedule-poll.md",
   "survey.md",
@@ -146,6 +147,10 @@ describe("the shared-app templates", () => {
 
   it("schedule-poll.md deploys as written", () => {
     expect(problemsFor("schedule-poll.md", "organizer@example.jp", [])).toEqual([]);
+  });
+
+  it("question-box.md deploys as written", () => {
+    expect(problemsFor("question-box.md", "owner@example.jp", [])).toEqual([]);
   });
 
   it("shows no page the sandbox would silently break", () => {
@@ -356,6 +361,7 @@ describe("the shared-app templates", () => {
     expect([...blocksOf("schedule-poll.md").keys()]).toEqual(
       expect.arrayContaining([".claude/skills/polls/schema.json", ".claude/skills/answers/schema.json"]),
     );
+    expect([...blocksOf("question-box.md").keys()]).toEqual(expect.arrayContaining([".claude/skills/questions/schema.json"]));
     expect([...blocksOf("ai-council.md").keys()]).toEqual(
       expect.arrayContaining([".claude/skills/topics/schema.json", ".claude/skills/speakers/schema.json", ".claude/skills/messages/schema.json"]),
     );
