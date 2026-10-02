@@ -230,6 +230,25 @@ Claude Code の終了時に古いほうへもう一度書き込まれ、新し�
 済みで、2 つの記録をつなぐ要望は
 [anthropics/claude-code#85004](https://github.com/anthropics/claude-code/issues/85004) にあります。
 
+
+### Claude セルでスクロールバーが消え、1 画面を超えて選択できません。なぜですか？ {#claude-fullscreen}
+
+**Claude Code がフルスクリーン表示で動いています。** フルスクリーン表示は代替画面（alternate
+screen）に描くので、スクロールバックがありません。ホイールは Claude 自身の表示をスクロールしますが、
+下のターミナルは動かないため、スクロールバーが出ず、選択も見えている画面の中に留まります。
+
+Claude Code は、設定で表示方式が決まっていないと、この表示を自分でオンにすることがあります。そこで
+**MulmoTerminal は、本人が選んでいない限り、Claude セルをフルスクリーン表示オフで起動します**。
+Claude の設定ファイル（`~/.claude/settings.json`、プロジェクトの `.claude/settings.json` /
+`.claude/settings.local.json`）のどれにも `tui` がなく、`CLAUDE_CODE_NO_FLICKER` も
+`CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN` も設定されていなければ、セルに `CLAUDE_CODE_NO_FLICKER=0` を渡します。
+
+- 従来の表示を明示的に使うなら、`~/.claude/settings.json` に `"tui": "default"` を書きます。
+- フルスクリーン表示を使うなら、`"tui": "fullscreen"` を書きます（Claude Code で `/tui fullscreen` でも
+  同じです）。MulmoTerminal はそれに手を出しません。その代わり、スクロールバーと長い選択は使えません。
+
+どちらも、変えたあとに起動したセルから効きます。動いているセルは **エージェントを再起動** で起動し直します。
+
 ---
 
 ## その他

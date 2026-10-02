@@ -36,6 +36,17 @@ vi.mock("../../../server/agents/claude-help-probe.js", () => ({ refuseUnsupporte
 // log format — which custom-agent-log.spec.ts covers.
 const customAgentSessions = new Map<string, string>();
 
+// What the renderer decision answered, and for which directory (#2808); the decision itself is
+// claude-fullscreen.spec.ts.
+let rendererEnv: Record<string, string> = {};
+const rendererAsked: string[] = [];
+vi.mock("../../../server/session/claude-fullscreen-env.js", () => ({
+  claudeRendererEnv: (_sessionId: string, cwd: string) => {
+    rendererAsked.push(cwd);
+    return rendererEnv;
+  },
+}));
+
 vi.mock("../../../server/session/registry.js", () => ({
   knownSessions: new Map(),
   launchChoices: new Map(),
@@ -115,6 +126,8 @@ const resume = (options: Record<string, unknown>, id: string) => {
 };
 
 beforeEach(() => {
+  rendererEnv = {};
+  rendererAsked.length = 0;
   configured = [nemotron];
   onDisk = false;
   spawnedFile = "";
@@ -153,6 +166,21 @@ describe("spawnClaudePty with a custom agent (#1414)", () => {
     expect(spawnedOptions.binEnvVar).toBe("CLAUDE_BIN");
     spawn({ customAgentId: "nemotron" }, freshId());
     expect(spawnedOptions.binEnvVar).toBeUndefined();
+  });
+
+  // #2808: the renderer opt-out rides the spawn env beside our own variables, for plain claude and a
+  // wrapper alike — a wrapper ends up running Claude Code too.
+  it("adds the renderer opt-out to the spawn env, asked for the cell's directory", () => {
+    rendererEnv = { CLAUDE_CODE_NO_FLICKER: "0" };
+    const plainId = freshId();
+    spawn({}, plainId);
+    expect(spawnedOptions.env).toMatchObject({ CLAUDE_CODE_NO_FLICKER: "0", MULMOTERMINAL_SESSION_ID: plainId });
+    spawn({ customAgentId: "nemotron" }, freshId());
+    expect(spawnedOptions.env).toMatchObject({ CLAUDE_CODE_NO_FLICKER: "0" });
+    expect(rendererAsked).toEqual([process.cwd(), process.cwd()]);
+    rendererEnv = {};
+    spawn({}, freshId());
+    expect(spawnedOptions.env).not.toHaveProperty("CLAUDE_CODE_NO_FLICKER");
   });
 
   // #2352: only plain claude is asked whether it takes our --permission-mode. A wrapper's command
