@@ -385,26 +385,19 @@ describe("shared app preview", () => {
   it("finds an own row named by THIS app's pseudonym of the author", async () => {
     // `idFrom: "pseudonym"` (#325): the row is sha256(uid + ":" + aid). The same author's pseudonym for
     // another app, and their raw uid, are not their row here.
-    writeApp(
-      root,
-      declaration({
-        collections: { bookings: { submitOnly: true } },
-        public: { enabled: true, read: ["notes"], submit: { bookings: { auth: "anonymous", createFields: ["note"], idFrom: "pseudonym" } } },
-      }),
-    );
-    const hash = (text: string): string => createHash("sha256").update(text).digest("hex");
-    docs.store.set(
-      `apps/${AID}/collections/bookings/items`,
-      new Map([
-        [hash(`${OWNER.uid}:${AID}`), { note: "mine" }],
-        [hash(`${OWNER.uid}:another-app`), { note: "another app's" }],
-        [OWNER.uid, { note: "raw uid" }],
-      ]),
-    );
+    const submit = { bookings: { auth: "anonymous", createFields: ["note"], idFrom: "pseudonym" } };
+    writeApp(root, declaration({ collections: { bookings: { submitOnly: true } }, public: { enabled: true, read: ["notes"], submit } }));
+    const hash = (aid: string): string => createHash("sha256").update(`${OWNER.uid}:${aid}`).digest("hex");
+    const rows: [string, Record<string, string>][] = [
+      [hash(AID), { note: "mine" }],
+      [hash("another-app"), { note: "theirs" }],
+      [OWNER.uid, { note: "uid" }],
+    ];
+    docs.store.set(`apps/${AID}/collections/bookings/items`, new Map(rows));
 
     const result = await previewSharedApp(root, stamp);
 
-    expect(result.ok && result.own).toEqual({ bookings: [{ id: hash(`${OWNER.uid}:${AID}`), note: "mine" }] });
+    expect(result.ok && result.own).toEqual({ bookings: [{ id: hash(AID), note: "mine" }] });
   });
 
   it("says nothing about a collection whose rows could not be read", async () => {
