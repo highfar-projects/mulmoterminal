@@ -15,13 +15,12 @@ import { snapshotMuseSessions, watchForMuseSession } from "../agents/muse-sessio
 import { syncMuseMcpPlugin } from "../agents/muse-mcp.js";
 import { musePluginEnv } from "../agents/muse-mcp.js";
 import { entitledToolGroups, rememberEntitledToolGroups } from "./bridge-session.js";
-import { ptySpawn, ptyWouldReattach } from "./pty-spawn.js";
-import { ptyStartLine } from "./pty-exit-log.js";
+import { ptyWouldReattach } from "./pty-spawn.js";
+import { startAgentPty } from "./agent-pty-start.js";
 import { wireAgentPtyRelay } from "./pty-relay.js";
 import { seedPromptArgument, withSettingsCleanup } from "./session-settings.js";
 import { claimedMuseSessions, ptys, rememberMuseSession } from "./registry.js";
 import type { SpawnDeps } from "./spawn-deps.js";
-import type { PtyEntry } from "./types.js";
 import type { SpawnDirectoryMcpPty } from "./spawn-directory-mcp.js";
 
 // A seed this agent takes as an ARGUMENT cannot carry a newline on Windows, so it may travel in a
@@ -101,17 +100,13 @@ export function createMuseSpawner(deps: SpawnDeps) {
     // What the MUSE process itself needs: it does inherit our environment, and without this flag it
     // loads no plugins at all — the registration would be inert rather than absent.
     const env = musePluginEnv();
+    const note = resumeConversationId ? `resume ${resumeConversationId}` : null;
     // The seed file may already be on disk (seedFor above), and a spawn that throws never reaches
     // reap() — where the cleanup normally happens. Same guarantee spawn-claude takes for its
     // settings file (#579, #1518).
-    const { term, tmux, reattached } = withSettingsCleanup(sessionId, () =>
-      ptySpawn(sessionId, deps.museBin, args, cwd, true, { env, binEnvVar: museAdapter.binEnvVar }),
+    const { entry, spawnedAtMs } = withSettingsCleanup(sessionId, () =>
+      startAgentPty({ sessionId, ws, cwd, agent: "muse", file: deps.museBin, args, spawnEnv: { env, binEnvVar: museAdapter.binEnvVar }, note }),
     );
-    const spawnedAtMs = Date.now();
-    const note = resumeConversationId ? `resume ${resumeConversationId}` : null;
-    console.log(ptyStartLine({ agent: "muse", pid: term.pid, cwd, tmux, reattached, sessionId, note }));
-    const entry: PtyEntry = { term, ws, buffer: "", cwd, tmux, active: false, agent: "muse" };
-    ptys.set(sessionId, entry);
 
     if (resumeConversationId) {
       rememberMuseSession(sessionId, resumeConversationId, cwd);
