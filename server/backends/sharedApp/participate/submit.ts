@@ -20,6 +20,7 @@ import {
   missingRequired,
   overLongFields,
   plannedWrite,
+  idOwnerOf,
   recordId,
   recordOf,
   writableFields,
@@ -184,7 +185,7 @@ export async function submitToApp(app: JoinedApp, cid: string, values: Record<st
         "start with a letter or digit, and be at most 64 characters",
     };
 
-  const id = recordId(plan.submit, app.handle.uid, record, randomUUID());
+  const id = recordId(plan.submit, await idOwnerOf(plan.submit.idFrom, app.handle.uid, app.aid), record, randomUUID());
   const write = plannedWrite(cid, plan.submit, id, record);
   const failed = await commitPlannedWrite(app.handle, app.aid, write);
   if (failed !== null) return { ok: false, reason: submitReason(failed), error: failed.error };

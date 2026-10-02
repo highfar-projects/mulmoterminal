@@ -38,7 +38,7 @@ import { isRecord } from "../../../common/isRecord.js";
 import { publicFaceOf } from "../../../common/sharedAppPublicFace.js";
 // Both from `/view`, which is where the PARENT's vocabulary lives — and where the read-back has to
 // be: the root entry reaches the compiler, and the compiler imports core's server half at runtime.
-import { ownRowsFor, projectedWritesOf, PUBLIC_WRITE_TIER, viewerFor, writableFields, type Viewer } from "@receptron/sharedapp/view";
+import { ownRowsFor, projectedWritesOf, pseudonymOf, PUBLIC_WRITE_TIER, viewerFor, writableFields, type Viewer } from "@receptron/sharedapp/view";
 import {
   previewPageKey,
   type PreviewDataset,
@@ -91,7 +91,10 @@ export interface RequestedCollection {
   scope: "all" | "own";
   emailField?: string | undefined;
   uidField?: string | undefined;
-  ownDocId?: "auth.uid" | undefined;
+  ownDocId?: "auth.uid" | "pseudonym" | undefined;
+  /** Which identity a composite id (`ownIdField`) starts with: the uid (`auth.uid+field`) or the
+   *  app's pseudonym of it (`pseudonym+field`). Absent means the uid. */
+  ownIdFrom?: "pseudonym" | undefined;
   /** The id is `uid + "_" + <this field>` (`idFrom: "auth.uid+field"`).
    *
    *  The FOURTH way a row says whose it is, and the one that was missing. It is not in
@@ -126,18 +129,32 @@ export interface RequestedCollection {
  *  every row for a page whose reader is only ever shown their own — which makes the preview show
  *  MORE than production, the one direction it must never fail in. The author is a real reader, so
  *  the honest answer is their own rows, found the same way the page will find them. */
-async function readCollection(handle: SharedAppHandle, aid: string, want: RequestedCollection): Promise<PreviewDataset> {
+/** Who is reading, in every form a row can name them by — the pseudonym being the app's own one. */
+export interface PreviewReader {
+  uid: string;
+  email: string;
+  pseudonym?: string | undefined;
+}
+
+/** The author as a reader of `aid`: the pseudonym is computed once, here, so the sync row test can use it. */
+export const readerFor = async (handle: { uid: string; email: string }, aid: string): Promise<PreviewReader> => ({
+  uid: handle.uid,
+  email: handle.email,
+  pseudonym: await pseudonymOf(handle.uid, aid),
+});
+
+async function readCollection(handle: SharedAppHandle, aid: string, want: RequestedCollection, reader: PreviewReader): Promise<PreviewDataset> {
   const docs = await handle.docs.list(`${appSchemasPath(aid)}/${want.cid}/items`);
   // The id is put ON the record. The rules use the document id as the record's identity
   // (a booking's id IS its slot), and a page that renders a list needs it as a field.
   const rows: PreviewDataset = docs.map((doc) => ({ ...(isRecord(doc.data) ? doc.data : {}), id: doc.id }));
-  return visibleRows(want, rows, handle);
+  return visibleRows(want, rows, reader);
 }
 
 /** The rows a page asking `want` is handed: published only, the reader's own only, then the cap —
  *  the order production's query applies them in (`where` before `orderBy` + `limit`). One function
  *  for the one-shot read and the listener, so the two cannot disagree about which rows a page sees. */
-export function visibleRows(want: RequestedCollection, rows: PreviewDataset, who: { uid: string; email: string }): PreviewDataset {
+export function visibleRows(want: RequestedCollection, rows: PreviewDataset, who: PreviewReader): PreviewDataset {
   const field = want.publishedField;
   const published = field === undefined ? rows : rows.filter((row) => row[field] === true);
   if (want.scope === "all") return capped(want, published);
@@ -158,13 +175,17 @@ export function visibleRows(want: RequestedCollection, rows: PreviewDataset, who
  *  and the intent path, which has to decide about a row that no list ever returned — a composite id
  *  (`auth.uid+field`) is granted by NAME and cannot be listed at all, so the page finds it through
  *  `view.mine(cid, key)` and nothing else here has seen it. */
-export function ownsRow(want: RequestedCollection, row: Record<string, unknown>, who: { uid: string; email: string }): boolean {
+export function ownsRow(want: RequestedCollection, row: Record<string, unknown>, who: PreviewReader): boolean {
   if (want.ownDocId === "auth.uid") return row.id === who.uid;
+  if (want.ownDocId === "pseudonym") return who.pseudonym !== undefined && row.id === who.pseudonym;
   // REBUILT FROM THE STORED VALUE, never a prefix match on the id. That is the rules' own shape
   // (`ownRow`'s `auth.uid+field` branch) and its comment says why: an unconditional prefix match
   // would let somebody create `<victim uid>_x` in a collection with a different strategy and grow
   // self-edit rights over it.
-  if (want.ownIdField !== undefined) return typeof row[want.ownIdField] === "string" && row.id === `${who.uid}_${String(row[want.ownIdField])}`;
+  if (want.ownIdField !== undefined) {
+    const owner = want.ownIdFrom === "pseudonym" ? who.pseudonym : who.uid;
+    return owner !== undefined && typeof row[want.ownIdField] === "string" && row.id === `${owner}_${String(row[want.ownIdField])}`;
+  }
   if (want.uidField !== undefined) return row[want.uidField] === who.uid;
   const field = want.emailField;
   if (field === undefined) return false;
@@ -262,6 +283,7 @@ async function readDatasets(
   aid: string,
   wanted: { key: string; collections: RequestedCollection[] }[],
 ): Promise<{ datasets: PreviewDatasets; unreadable: string[] }> {
+  const reader = await readerFor(handle, aid);
   const datasets: PreviewDatasets = {};
   const unreadable = new Set<string>();
   const cache = new Map<string, PreviewDataset | null>();
@@ -270,9 +292,9 @@ async function readDatasets(
     for (const want of page.collections) {
       // Keyed on the SCOPE too: the same collection read `all` for the front desk and `own` for the
       // participant is two different answers, and sharing one would hand a page rows it may not see.
-      const key = `${want.cid}:${want.scope}:${want.emailField ?? ""}:${want.uidField ?? ""}:${want.ownDocId ?? ""}:${want.limit?.rows ?? ""}:${want.limit?.field ?? ""}:${want.publishedField ?? ""}`;
+      const key = `${want.cid}:${want.scope}:${want.emailField ?? ""}:${want.uidField ?? ""}:${want.ownDocId ?? ""}:${want.ownIdField ?? ""}:${want.ownIdFrom ?? ""}:${want.limit?.rows ?? ""}:${want.limit?.field ?? ""}:${want.publishedField ?? ""}`;
       if (!cache.has(key)) {
-        cache.set(key, await readCollection(handle, aid, want).catch(() => null));
+        cache.set(key, await readCollection(handle, aid, want, reader).catch(() => null));
       }
       const rows = cache.get(key) ?? null;
       if (rows === null) unreadable.add(want.cid);
@@ -372,7 +394,7 @@ const asRequested = (value: unknown): RequestedCollection[] => {
       scope,
       ...(typeof value.emailField === "string" ? { emailField: value.emailField } : {}),
       ...(typeof value.uidField === "string" ? { uidField: value.uidField } : {}),
-      ...(value.ownDocId === "auth.uid" ? { ownDocId: "auth.uid" as const } : {}),
+      ...(value.ownDocId === "auth.uid" || value.ownDocId === "pseudonym" ? { ownDocId: value.ownDocId } : {}),
       ...askedCap(value.limit, scope),
     },
   ];
@@ -441,12 +463,14 @@ function formInputsOf(config: PublishedConfigDoc, form: PublicForm): PreviewForm
 const ownRequests = (config: PublishedConfigDoc): RequestedCollection[] =>
   Object.entries(config.submit ?? {}).map(([cid, spec]) => {
     const text = (key: string): string | undefined => (typeof spec[key] === "string" ? spec[key] : undefined);
-    const composite = spec.idFrom === "auth.uid+field" ? text("idField") : undefined;
+    const composite = spec.idFrom === "auth.uid+field" || spec.idFrom === "pseudonym+field" ? text("idField") : undefined;
     return {
       cid,
       scope: "own" as const,
       ...(spec.idFrom === "auth.uid" ? { ownDocId: "auth.uid" as const } : {}),
+      ...(spec.idFrom === "pseudonym" ? { ownDocId: "pseudonym" as const } : {}),
       ...(composite === undefined ? {} : { ownIdField: composite }),
+      ...(composite !== undefined && spec.idFrom === "pseudonym+field" ? { ownIdFrom: "pseudonym" as const } : {}),
       ...(text("uidField") === undefined ? {} : { uidField: text("uidField") }),
       ...(text("emailField") === undefined ? {} : { emailField: text("emailField") }),
     };

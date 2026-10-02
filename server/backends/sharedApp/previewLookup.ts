@@ -18,7 +18,7 @@
 // `known: false` — nobody looked — and the parent must not turn them into "you have not answered",
 // which takes a one-time action away from somebody entitled to it.
 import { appSchemasPath } from "@receptron/sharedapp";
-import { missingIdField, ownRow, recordId, type SubmitSpec } from "@receptron/sharedapp/view";
+import { idFromSubmitter, idFromSubmitterAndField, idOwnerOf, missingIdField, ownRow, recordId, type SubmitSpec } from "@receptron/sharedapp/view";
 
 import type { PreviewLookupResult } from "../../../common/sharedAppPreview.js";
 import { previewSharedApp } from "./preview.js";
@@ -42,7 +42,7 @@ const idPartOf = (submit: Record<string, unknown>): SubmitSpec => ({
  *
  *  `auto` has none — the id was random and the record is unfindable by anything the page knows —
  *  and `field` names a record the page did not create, which is a different question from "mine". */
-const buildsFromUid = (submit: SubmitSpec): boolean => submit.idFrom === "auth.uid" || submit.idFrom === "auth.uid+field";
+const buildsFromUid = (submit: SubmitSpec): boolean => idFromSubmitter(submit.idFrom) || idFromSubmitterAndField(submit.idFrom);
 
 /** The key, in the shape the id builder reads it from: a record with just that field. */
 const carrying = (submit: SubmitSpec, key: string): Record<string, unknown> => {
@@ -54,8 +54,8 @@ const carrying = (submit: SubmitSpec, key: string): Record<string, unknown> => {
 };
 
 /** The document id this ask resolves to, or null for "nothing here can be looked up". */
-const idFor = (submit: SubmitSpec, uid: string, key: string): string | null => {
-  if (!buildsFromUid(submit) || uid === "") {
+const idFor = (submit: SubmitSpec, owner: string, key: string): string | null => {
+  if (!buildsFromUid(submit) || owner === "") {
     return null;
   }
   const record = carrying(submit, key);
@@ -66,7 +66,7 @@ const idFor = (submit: SubmitSpec, uid: string, key: string): string | null => {
   }
   // The SHARED builder, and the empty `unique` is the tell that nothing here falls back to a random
   // id: every strategy admitted above builds one from the uid.
-  const id = recordId(submit, uid, record, "");
+  const id = recordId(submit, owner, record, "");
   if (id === "") {
     return null;
   }
@@ -84,7 +84,8 @@ export async function previewOwnLookup(root: string, ask: { cid: string; key: st
 
   const declared = preview.config.submit?.[ask.cid];
   if (!isRecord(declared)) return { ok: false };
-  const id = idFor(idPartOf(declared), handle.uid, ask.key);
+  const idPart = idPartOf(declared);
+  const id = idFor(idPart, handle.uid === "" ? "" : await idOwnerOf(idPart.idFrom, handle.uid, preview.aid), ask.key);
   if (id === null) return { ok: false };
 
   // A THROWN read and an ABSENT document are the two answers this file exists to keep apart, and

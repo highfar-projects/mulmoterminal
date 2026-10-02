@@ -11,6 +11,7 @@
 // things. `{ ok: false }` is "nobody looked" — the parent turns it into `known: false`, and the page
 // keeps offering the action. `{ ok: true, found: false }` is "you have not answered". A host that
 // collapses the first into the second takes a one-time action away from somebody entitled to it.
+import { createHash } from "node:crypto";
 import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -122,6 +123,31 @@ describe("looking up one of the author's own rows", () => {
     // `countedAt` is the app's and does not cross into the sandbox; `uid` is host-filled and does
     // not either. What is left is the id and what the page could have sent.
     expect(answer).toEqual({ ok: true, found: true, record: { id: `${OWNER.uid}_q1`, questionId: "q1", choice: "b" } });
+  });
+
+  it("builds the pseudonym id for an app that names rows by it", async () => {
+    // `pseudonym+field` (#325): the row is `<sha256(uid:aid)>_<key>`; a row at `<uid>_<key>` is not this
+    // reader's in such an app, and must not be the one found.
+    writeFileSync(
+      path.join(root, "app.json"),
+      JSON.stringify(
+        pollApp({ submit: { votes: { auth: "anonymous", createFields: ["questionId", "choice"], idFrom: "pseudonym+field", idField: "questionId" } } }),
+      ),
+    );
+    const pseudonym = createHash("sha256").update(`${OWNER.uid}:${AID}`).digest("hex");
+    docs.store.set(
+      votesPath,
+      new Map([
+        [`${pseudonym}_q1`, { questionId: "q1", choice: "b" }],
+        [`${OWNER.uid}_q1`, { questionId: "q1", choice: "x" }],
+      ]),
+    );
+
+    expect(await previewOwnLookup(root, { cid: "votes", key: "q1" })).toEqual({
+      ok: true,
+      found: true,
+      record: { id: `${pseudonym}_q1`, questionId: "q1", choice: "b" },
+    });
   });
 
   it("says 'you have not answered' when the row is genuinely not there", async () => {
