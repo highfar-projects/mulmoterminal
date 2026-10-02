@@ -114,3 +114,28 @@ describe("renderMarkdownProse — a trusted image origin", () => {
     expect(html).not.toContain("tracker.example");
   });
 });
+
+// A SKILL.md off skills.sh or out of a plugin is written by a stranger, and a relative image there is a
+// GET against this app's own routes the moment it renders (#2835). Every image is a link instead.
+describe("renderMarkdownProse — images as links", () => {
+  const imageCount = (html: string) => new DOMParser().parseFromString(html, "text/html").querySelectorAll("img").length;
+
+  it.each([
+    ["a same-origin route", "/api/skills/remote/search?q=probe"],
+    ["a relative path", "pic.png"],
+    ["a data image", "data:image/gif;base64,R0lGOD"],
+    ["a remote image", "https://tracker.example/p.png"],
+  ])("links %s rather than loading it", (_label, src) => {
+    const html = renderMarkdownProse(`![shot](${src})`, { imagesAsLinks: true });
+    expect(imageCount(html)).toBe(0);
+    expect(new DOMParser().parseFromString(html, "text/html").querySelector("a")?.getAttribute("href")).toBe(src);
+  });
+
+  it("links an image written as raw HTML too", () => {
+    expect(imageCount(renderMarkdownProse('<img src="/api/skills/remote/skill?source=a/b&skill=x">', { imagesAsLinks: true }))).toBe(0);
+  });
+
+  it("leaves a same-origin image as an image when not asked", () => {
+    expect(imageCount(renderMarkdownProse("![x](/local/pic.png)"))).toBe(1);
+  });
+});

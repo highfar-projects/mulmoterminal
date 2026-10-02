@@ -2,11 +2,13 @@
 // Every skill on disk, by where it lives (#2815): the user's `~/.claude/skills`, the enabled plugins,
 // then the `.claude/skills` of each folder a terminal has run in. Three columns — where, which skill,
 // its SKILL.md — because one plugin alone can bring a thousand skills, which no single list survives.
-// The search narrows the first two columns together. Read-only.
+// The search narrows the first two columns together. Read-only. A second mode searches skills.sh for
+// skills that are not on disk yet (SkillsShPane).
 import { computed, ref, shallowRef, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import MarkdownProse from "./MarkdownProse.vue";
 import FullScreenOverlay from "./FullScreenOverlay.vue";
+import SkillsShPane from "./SkillsShPane.vue";
 import { useSkillsView } from "../composables/useSkillsView";
 import { useEscapeToClose } from "../composables/useEscapeToClose";
 import { loadSkillCatalog, loadSkillDoc } from "../composables/useSkillCatalog";
@@ -24,6 +26,13 @@ const chosenSourceKey = ref<string | null>(null);
 const picked = shallowRef<{ source: SkillSource; skill: CatalogSkill } | null>(null);
 const doc = ref<string | null>(null);
 const docFailed = ref(false);
+const mode = ref<"local" | "remote">("local");
+const MODES = ["local", "remote"] as const;
+
+// The names claude would resolve `/name` to here. A plugin's skills are namespaced, so they do not count.
+const localSlugs = computed(
+  () => new Set((catalog.value?.sources ?? []).filter((source) => source.scope !== "plugin").flatMap((source) => source.skills.map((skill) => skill.slug))),
+);
 
 const sourceKey = (source: SkillSource): string => `${source.scope}:${source.plugin}:${source.dir}`;
 const shownSources = computed(() => (catalog.value ? filterSkillCatalog(catalog.value, query.value).sources : []));
@@ -53,6 +62,7 @@ watch(
   (open) => {
     picked.value = null;
     doc.value = null;
+    mode.value = "local";
     if (open) void refresh();
   },
   { immediate: true },
@@ -73,7 +83,22 @@ async function pick(source: SkillSource, skill: CatalogSkill): Promise<void> {
   <FullScreenOverlay v-if="isOpen" :region-label="t('skillsView.region')" :close-label="t('skillsView.close')" @close="close">
     <template #header>
       <span class="font-sans text-[14px] font-[650] text-fg">{{ t("skillsView.title") }}</span>
+      <div class="flex rounded-[4px] border border-border" role="group" :aria-label="t('skillsView.modes')">
+        <button
+          v-for="choice in MODES"
+          :key="choice"
+          type="button"
+          :data-testid="`skills-mode-${choice}`"
+          class="cursor-pointer border-none px-2 py-1 font-sans text-[12px] hover:bg-hover hover:text-fg"
+          :class="mode === choice ? 'bg-hover text-fg' : 'bg-transparent text-secondary'"
+          :aria-pressed="mode === choice"
+          @click="mode = choice"
+        >
+          {{ t(`skillsView.mode.${choice}`) }}
+        </button>
+      </div>
       <input
+        v-if="mode === 'local'"
         v-model="query"
         type="search"
         data-testid="skills-search"
@@ -83,7 +108,8 @@ async function pick(source: SkillSource, skill: CatalogSkill): Promise<void> {
       />
     </template>
 
-    <p v-if="loadFailed" class="m-0 p-4 font-sans text-[13px] text-err-text">{{ t("skillsView.loadFailed") }}</p>
+    <SkillsShPane v-if="mode === 'remote'" :local-slugs="localSlugs" />
+    <p v-else-if="loadFailed" class="m-0 p-4 font-sans text-[13px] text-err-text">{{ t("skillsView.loadFailed") }}</p>
     <p v-else-if="!catalog" class="m-0 p-4 font-sans text-[13px] text-dim">{{ t("skillsView.loading") }}</p>
     <p v-else-if="!catalog.sources.length" class="m-0 p-4 font-sans text-[13px] text-dim">{{ t("skillsView.empty") }}</p>
     <p v-else-if="!shownSources.length" class="m-0 p-4 font-sans text-[13px] text-dim">{{ t("skillsView.noMatch") }}</p>
@@ -132,7 +158,7 @@ async function pick(source: SkillSource, skill: CatalogSkill): Promise<void> {
           <p class="m-0 mb-1 font-mono text-[14px] font-[650] text-fg">{{ picked.skill.id }}</p>
           <p class="m-0 mb-3 font-mono text-[11px] text-dim">{{ picked.source.dir }}</p>
           <p v-if="docFailed" data-testid="skills-doc-error" class="m-0 font-sans text-[13px] text-err-text">{{ t("skillsView.docFailed") }}</p>
-          <div v-else-if="doc !== null" class="max-w-[90ch] font-sans text-[13px] text-fg"><MarkdownProse :markdown="doc" /></div>
+          <div v-else-if="doc !== null" class="max-w-[90ch] font-sans text-[13px] text-fg"><MarkdownProse :markdown="doc" images-as-links /></div>
         </template>
       </section>
     </div>

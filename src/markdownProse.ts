@@ -16,6 +16,9 @@ export interface ProseOptions {
   /** The one remote origin whose images may load. Only for markdown this repo ships (the release
    *  guides); an agent's reply never passes it, so its remote images stay links. */
   trustedImageOrigin?: string | undefined;
+  /** Every image becomes a link, a same-origin one included: for markdown a stranger wrote, where a
+   *  relative `src` is a request to this app's own routes the moment the page renders. */
+  imagesAsLinks?: boolean | undefined;
 }
 
 /** Render `markdown` to HTML that is safe to hand to `v-html`.
@@ -35,7 +38,10 @@ export function renderMarkdownProse(markdown: string, options: ProseOptions = {}
   const clean = DOMPurify.sanitize(typeof parsed === "string" ? parsed : "");
   const doc = new DOMParser().parseFromString(clean, "text/html");
   doc.body.querySelectorAll("*").forEach(keepPermittedAttributes);
-  doc.querySelectorAll("img[src]").forEach((image) => unfetchedIfRemote(image, options.trustedImageOrigin));
+  doc.querySelectorAll("img[src]").forEach((image) => {
+    if (options.imagesAsLinks === true) asLink(image);
+    else unfetchedIfRemote(image, options.trustedImageOrigin);
+  });
   doc.querySelectorAll("a[href]").forEach((link) => {
     link.setAttribute("target", "_blank");
     link.setAttribute("rel", "noopener noreferrer");
@@ -96,6 +102,11 @@ function keepPermittedAttributes(element: Element): void {
 function unfetchedIfRemote(image: Element, trustedOrigin: string | undefined): void {
   const src = image.getAttribute("src") ?? "";
   if (!isRemoteUrl(src) || (trustedOrigin !== undefined && originOf(src) === trustedOrigin)) return;
+  asLink(image);
+}
+
+function asLink(image: Element): void {
+  const src = image.getAttribute("src") ?? "";
   const link = image.ownerDocument.createElement("a");
   link.setAttribute("href", src);
   link.textContent = image.getAttribute("alt")?.trim() || src;
