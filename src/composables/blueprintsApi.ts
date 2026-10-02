@@ -85,10 +85,10 @@ export const listKnownFolders = (): Promise<ApiResult<{ folders: string[] }>> =>
 
 export const listPresets = (): Promise<ApiResult<{ presets: PresetListing[] }>> => call(presetsSchema, inScreenLanguage("/api/blueprints/presets"));
 
-export const listRuns = (): Promise<ApiResult<z.infer<typeof runsSchema>>> => call(runsSchema, "/api/blueprints/runs");
+export const listRuns = (): Promise<ApiResult<z.infer<typeof runsSchema>>> => call(runsSchema, inScreenLanguage("/api/blueprints/runs"));
 
 export const loadRun = (runId: string): Promise<ApiResult<BlueprintRunView>> =>
-  call(blueprintRunViewSchema, `/api/blueprints/runs/${encodeURIComponent(runId)}`);
+  call(blueprintRunViewSchema, inScreenLanguage(`/api/blueprints/runs/${encodeURIComponent(runId)}`));
 
 export const loadRunSource = (runId: string): Promise<ApiResult<SourceStatus>> =>
   call(sourceStatusSchema, `/api/blueprints/runs/${encodeURIComponent(runId)}/source`);

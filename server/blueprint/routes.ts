@@ -6,7 +6,7 @@ import { lstat, mkdir, readFile, rmdir, stat } from "node:fs/promises";
 import type { Express, Response } from "express";
 import { z } from "zod";
 import { loadPackPair, readHearing, readPresets, type PackPair, type PackRoot } from "./packs.js";
-import { localizedPacks, localizedPair, localizedPresets } from "./packLocales.js";
+import { localizedPacks, localizedPair, localizedPresets, localizedRunSteps, overlayReader } from "./packLocales.js";
 import { placeSamples, readSamples } from "./samples.js";
 import type { Sample } from "../../common/blueprint/samples.js";
 import { personLanguageSchema, type PersonLanguage } from "../../common/blueprint/personLanguage.js";
@@ -188,9 +188,9 @@ function mountReadRoutes(app: Express, deps: BlueprintRouteDeps): void {
     }
   });
 
-  app.get("/api/blueprints/runs", async (_req, res) => {
+  app.get("/api/blueprints/runs", async (req, res) => {
     try {
-      res.json({ runs: await deps.executor.list() });
+      res.json({ runs: await deps.executor.list(screenLanguageOf(req.query.lang)) });
     } catch (err) {
       fail(res, err);
     }
@@ -205,7 +205,9 @@ function mountReadRoutes(app: Express, deps: BlueprintRouteDeps): void {
 
   app.get("/api/blueprints/runs/:id", async (req, res) => {
     try {
-      res.json(await deps.executor.view(req.params.id));
+      const view = await deps.executor.view(req.params.id);
+      const steps = await localizedRunSteps(view.run, overlayReader(screenLanguageOf(req.query.lang)));
+      res.json({ ...view, run: { ...view.run, steps } });
     } catch (err) {
       fail(res, err);
     }
