@@ -4,6 +4,7 @@
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { loadTargets } from "../../composables/blueprintsApi";
+import { latestOnly } from "./latestOnly";
 import { isPullRequestUrl, targetRows, type Target, type TargetPhase } from "../../../common/blueprint/targets";
 import type { BlueprintState } from "../../../common/blueprint/state";
 import type { PlanStep } from "../../../common/blueprint/plan";
@@ -20,11 +21,25 @@ const progressKey = computed(() =>
   props.steps.map((step) => `${step.id}:${props.state.steps[step.id]?.status}:${props.state.steps[step.id]?.round ?? 0}`).join("|"),
 );
 
+// A load for the round before can return after the one for this round; only the newest is shown.
+const reads = latestOnly();
+
+// Another build's list must not stay on screen while this one's loads.
+watch(
+  () => props.runId,
+  () => {
+    targets.value = null;
+    problem.value = null;
+    openId.value = null;
+  },
+);
+
 watch(
   [() => props.runId, progressKey],
   async ([runId]) => {
+    const ticket = reads.take();
     const result = await loadTargets(runId);
-    if (runId !== props.runId || !result.ok) return;
+    if (!reads.isLatest(ticket) || !result.ok) return;
     targets.value = result.value.targets;
     problem.value = result.value.problem;
   },

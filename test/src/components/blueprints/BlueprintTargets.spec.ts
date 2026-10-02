@@ -41,6 +41,13 @@ const targets: Target[] = [
 
 const listed = (list: Target[] | null, problem: string | null = null) => ({ ok: true, value: { targets: list, problem } });
 
+type Listed = ReturnType<typeof listed>;
+const deferred = (): { promise: Promise<Listed>; resolve: (value: Listed) => void } => {
+  const box: { resolve: (value: Listed) => void } = { resolve: () => undefined };
+  const promise = new Promise<Listed>((resolve) => (box.resolve = resolve));
+  return { promise, resolve: (value) => box.resolve(value) };
+};
+
 const mountTable = async (state: BlueprintState) => {
   const wrapper = mount(BlueprintTargets, { props: { runId: "run-00000001", steps, state } });
   await flushPromises();
@@ -125,5 +132,31 @@ describe("the work list in the run view", () => {
     await wrapper.setProps({ state: at("passed", "awaiting-answer", 2) });
     await flushPromises();
     expect(loadTargets).toHaveBeenCalledTimes(3);
+  });
+
+  it("keeps the newer list when an older load for the same build returns last", async () => {
+    const older = deferred();
+    const newer = deferred();
+    loadTargets.mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise);
+    const wrapper = mount(BlueprintTargets, { props: { runId: "run-00000001", steps, state: at("passed", "awaiting-answer", 1) } });
+    await wrapper.setProps({ state: at("passed", "running", 1) });
+    newer.resolve(listed([{ ...targets[1], title: "after the answer" }]));
+    await flushPromises();
+    older.resolve(listed([{ ...targets[1], title: "before the answer" }]));
+    await flushPromises();
+    expect(wrapper.get('[data-testid="blueprint-target"]').text()).toContain("after the answer");
+  });
+
+  it("drops another build's list as soon as the build changes", async () => {
+    loadTargets.mockResolvedValueOnce(listed(targets));
+    const wrapper = await mountTable(at("passed", "running"));
+    const pending = deferred();
+    loadTargets.mockReturnValueOnce(pending.promise);
+    await wrapper.setProps({ runId: "run-00000002" });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="blueprint-targets"]').exists()).toBe(false);
+    pending.resolve(listed([{ ...targets[0], title: "the other build" }]));
+    await flushPromises();
+    expect(wrapper.get('[data-testid="blueprint-target"]').text()).toContain("the other build");
   });
 });
