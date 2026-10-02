@@ -256,7 +256,7 @@ describeSh("polish: the kind of document decides chaff's genre", () => {
     ["the folder's own style, whose chaff.yaml names the genre", { style: "このフォルダの規約（STYLE.md と chaff.yaml）", kind: "報告書" }],
     ["a kind left to chaff", { style: "chaff の既定のまま", kind: "指定しない（chaff に任せる）" }],
     ["no kind at all (an interview from before it was asked)", { style: "chaff の既定のまま" }],
-    ["a kind the pack does not know", { style: "chaff の既定のまま", kind: "詩" }],
+    ["a kind the pack does not know", { style: "chaff の既定のまま", kind: "短歌" }],
   ])("passes no genre for %s", (_label, extra) => {
     answers(extra);
     list([target("docs/setup.md", "todo", 0)]);

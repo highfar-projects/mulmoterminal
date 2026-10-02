@@ -124,6 +124,81 @@
       "title": "最初に動かすまでの手順があるか",
       "look": "A reader who has just found the project can get it running from the document alone: how to install it and the first command to run, in order, with each command written out. Quote where the reader is left to guess; the missing step is the writer's to supply.",
       "fix": "writer"
+    },
+    "answer-first": {
+      "title": "答えが最初の一文にあるか",
+      "look": "Each answer starts with the answer itself (yes or no, the number, the place, the step) in its first sentence; background and reasons come after. Quote an answer whose first sentence does not answer; which sentence is the answer is the writer's to say.",
+      "fix": "writer"
+    },
+    "one-question": {
+      "title": "一つの項目に、質問が一つか",
+      "look": "Each entry asks one question. Quote an entry whose question asks two or more; splitting it is the writer's, since each question needs its own answer.",
+      "fix": "writer"
+    },
+    "circular-definition": {
+      "title": "定義に、その語自身を使っていないか",
+      "look": "A definition does not explain the term with the term itself or a word built on it (「認証とは、認証を行うことである」). Quote one that does; a definition that says something new is the writer's.",
+      "fix": "writer"
+    },
+    "term-consistency": {
+      "title": "同じものを同じ言葉で呼んでいるか",
+      "look": "One thing is called by one name throughout: a defined or introduced term is not later replaced by a near synonym (本契約 / 本件契約, 当該装置 / 本装置). Quote both names; which one is meant is the writer's to say.",
+      "fix": "writer"
+    },
+    "holding-stated": {
+      "title": "結論（主文）がどこにあるか分かるか",
+      "look": "The decision itself (主文, the holding) is stated where a reader looks first and is set apart from the reasons. Quote the opening when a reader cannot find the decision there.",
+      "fix": "writer"
+    },
+    "claim-support": {
+      "title": "請求項の言葉が、明細書で説明されているか",
+      "look": "Every term a claim relies on appears in the description with what it means, or is shown in a figure. Quote a claim term the description never explains; explaining it is the writer's.",
+      "fix": "writer"
+    },
+    "reference-numbers": {
+      "title": "図の符号が、本文と合っているか",
+      "look": "Each reference numeral in the text (10, 12a) names the same part every time it appears, and each part the text names has its numeral. Quote two uses of one numeral that name different parts.",
+      "fix": "writer"
+    },
+    "contribution-stated": {
+      "title": "何が新しいかが書かれているか",
+      "look": "The paper says what it adds that was not known or done before, in its abstract or introduction. Quote the abstract when it does not; stating the contribution is the writer's.",
+      "fix": "writer"
+    },
+    "abstract-matches": {
+      "title": "要旨と結論が食い違っていないか",
+      "look": "What the abstract claims is what the conclusion reports: the same result, the same numbers, the same strength of claim. Quote both when they differ.",
+      "fix": "writer"
+    },
+    "pov-consistency": {
+      "title": "語り手の視点がぶれていないか",
+      "look": "Within a scene the narration stays with one point of view: it does not tell the thoughts of a character it is not following. Quote the line that slips; whether the slip is meant is the writer's to say.",
+      "fix": "writer"
+    },
+    "tense-consistency": {
+      "title": "時制がぶれていないか",
+      "look": "The narration keeps one tense (past or present), except where the story moves in time on purpose. Quote a switch the text gives no reason for.",
+      "fix": "writer"
+    },
+    "speaker-clear": {
+      "title": "台詞の話し手が分かるか",
+      "look": "In a run of dialogue a reader can tell who says each line. Quote a line whose speaker cannot be told; naming them is the writer's.",
+      "fix": "writer"
+    },
+    "stage-directions": {
+      "title": "ト書きが台詞と見分けられるか",
+      "look": "Stage directions are set apart from what is spoken (brackets, their own line, a mark) in the same way throughout. Quote a direction written like a spoken line.",
+      "fix": "writer"
+    },
+    "main-point-bookends": {
+      "title": "伝えたいことが、始めと終わりで示されているか",
+      "look": "A speech names its main point near its start and comes back to it at its end, so a listener who missed the middle still has it. Quote the opening or the close when it does not.",
+      "fix": "writer"
+    },
+    "speaker-labelled": {
+      "title": "すべての発言に話し手が付いているか",
+      "look": "Every turn of the transcript names who spoke, in one form throughout. Quote a turn with no speaker; who it was is a fact only the record holds.",
+      "fix": "writer"
     }
   },
   "genres": {
@@ -139,6 +214,16 @@
     "legal/contract": ["duty-owner-deadline", "breach-consequence", "exception-with-rule"],
     "legal/statute": ["scope-stated", "duty-owner-deadline", "breach-consequence", "exception-with-rule"],
     "technical/spec": ["measurable-requirement", "failure-behaviour"],
-    "technical/readme": ["prerequisites-stated", "first-run", "result-check"]
+    "technical/readme": ["prerequisites-stated", "first-run", "result-check"],
+    "docs/faq": ["answer-first", "one-question"],
+    "docs/glossary": ["circular-definition", "term-consistency"],
+    "legal/judgment": ["holding-stated", "term-consistency"],
+    "legal/patent": ["claim-support", "reference-numbers", "term-consistency"],
+    "academic/paper": ["contribution-stated", "abstract-matches", "unsourced-number", "stacked-hedging"],
+    "literature/fiction": ["pov-consistency", "tense-consistency", "speaker-clear"],
+    "literature/essay": ["padded-intro", "closing-cliche", "title-body-alignment"],
+    "literature/play": ["speaker-clear", "stage-directions"],
+    "speech/address": ["main-point-bookends", "closing-cliche", "unsourced-number"],
+    "speech/transcript": ["speaker-labelled"]
   }
 }
