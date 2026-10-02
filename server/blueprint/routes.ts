@@ -34,6 +34,7 @@ import { compareSource, retakeTarget, storedSource } from "./sourceStatus.js";
 import { BlueprintRefusal, type BlueprintExecutor, type HumanEvent } from "./executor.js";
 import { BLUEPRINT_SLUG_RE } from "../../common/blueprint/manifest.js";
 import type { Refusal } from "../../common/blueprint/refusal.js";
+import { parseAskChoices } from "../../common/blueprint/askChoices.js";
 import { refusalBody, type RefusalBody } from "./refused.js";
 import { isRecord } from "../../common/isRecord.js";
 import { expandHome, folderCandidates, folderHomes, folderPlan, trustPlace, type FolderPlan } from "./newFolder.js";
@@ -90,7 +91,13 @@ const eventSchema = z.discriminatedUnion("type", [
 
 const specMessageSchema = z.object({ message: z.string().trim().min(1) });
 const archiveSchema = z.object({ archived: z.boolean() });
-const askSchema = z.object({ stepId: z.string(), sessionId: z.string(), question: z.string().trim().min(1) });
+const askSchema = z.object({
+  stepId: z.string(),
+  sessionId: z.string(),
+  question: z.string().trim().min(1),
+  choices: z.string().optional(),
+  recommend: z.string().optional(),
+});
 
 type ParsedEvent = z.infer<typeof eventSchema>;
 
@@ -478,8 +485,10 @@ function mountMoveRoutes(app: Express, deps: BlueprintRouteDeps): void {
   app.post("/api/blueprints/runs/:id/ask", async (req, res) => {
     const parsed = askSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "expected { stepId, sessionId, question }" });
+    const offered = parseAskChoices(parsed.data.choices, parsed.data.recommend);
+    if (!offered.ok) return res.status(400).json({ error: `not asked: ${offered.reason}` });
     try {
-      await deps.executor.ask(req.params.id, parsed.data.stepId, parsed.data.question, parsed.data.sessionId);
+      await deps.executor.ask(req.params.id, parsed.data.stepId, parsed.data.question, parsed.data.sessionId, offered.choices);
       return res.json({ ok: true, message: "Asked. Stop now; the answer will come in a new session." });
     } catch (err) {
       return fail(res, err);

@@ -10,6 +10,7 @@ import { realpath } from "node:fs/promises";
 import { applyEvent, currentStep, initialState, type BlueprintState, type StepEvent } from "../../common/blueprint/state.js";
 import { OPEN_QUESTIONS_FILE, SPEC_FILE, replyFile, specRevisionPrompt } from "../../common/blueprint/specRevisionPrompt.js";
 import type { Refusal } from "../../common/blueprint/refusal.js";
+import type { AskChoice } from "../../common/blueprint/askChoices.js";
 import { Refused } from "./refused.js";
 import { englishStepNotice, type StepNotice } from "../../common/blueprint/stepNotice.js";
 import { changedFiles, type FolderListing, type ChangedFiles } from "../../common/blueprint/changedFiles.js";
@@ -251,12 +252,12 @@ class Executor {
   }
 
   /** The agent working on `stepId` needs a decision. Only that session may ask. */
-  ask(runId: string, stepId: string, question: string, sessionId: string): Promise<Loaded> {
+  ask(runId: string, stepId: string, question: string, sessionId: string, choices: AskChoice[] = []): Promise<Loaded> {
     return this.serially(runId, async () => {
       const loaded = await this.mustLoad(runId);
       if (loaded.run.activeSessionId === null) throw new BlueprintRefusal("no agent is working on this build");
       if (loaded.run.activeSessionId !== sessionId) throw new BlueprintRefusal("this session is not the one working on the step");
-      const asked = applied(loaded, stepId, { type: "ask", question });
+      const asked = applied(loaded, stepId, { type: "ask", question, choices });
       await this.deps.store.save(asked.run, asked.state);
       return asked;
     });
