@@ -14,25 +14,33 @@ async function readJson<T>(url: string, read: (body: unknown) => T | null, timeo
   }
 }
 
-async function postJson(url: string, body: object): Promise<boolean> {
+async function post(url: string, body: object): Promise<Response | null> {
   try {
     const init = { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) };
-    return (await fetchWithTimeout(url, init, SLOW_COMMAND_TIMEOUT_MS)).ok;
+    return await fetchWithTimeout(url, init, SLOW_COMMAND_TIMEOUT_MS);
   } catch {
-    return false;
+    return null;
   }
 }
 
 export const loadSessionProcesses = (): Promise<SessionProcesses[] | null> => readJson("/api/processes", readProcessesBody);
 
-/** False when the server refused or could not be reached; the next poll shows what is true. */
-export const killProcess = (process: SessionProcess): Promise<boolean> => postJson("/api/processes/kill", { pid: process.pid, startedAt: process.startedAt });
+/** "unconfirmed" is the server signalling the process but unable to see it go — `ps` stopped
+ *  answering, or it outlived SIGKILL. */
+export type KillOutcome = "ended" | "unconfirmed" | "failed";
+
+export async function killProcess(process: SessionProcess): Promise<KillOutcome> {
+  const res = await post("/api/processes/kill", { pid: process.pid, startedAt: process.startedAt });
+  if (res === null || !res.ok) return "failed";
+  return (await jsonBody(res)).ended === true ? "ended" : "unconfirmed";
+}
 
 // One git call per worktree across every remembered repo: not an ordinary read.
 export const loadWorktreeCleanup = (): Promise<WorktreeCleanupRow[] | null> =>
   readJson("/api/worktrees/cleanup", readWorktreeCleanupBody, SLOW_COMMAND_TIMEOUT_MS);
 
-/** Never `force`: a worktree that turned dirty since the list was read is refused, not discarded.
- *  The branch goes with it — it is merged, which is what made the row a candidate. */
-export const removeCleanupWorktree = (row: WorktreeCleanupRow): Promise<boolean> =>
-  postJson("/api/worktrees/remove", { repoDir: row.repo, path: row.path, deleteBranch: true, force: false });
+/** The server reads the worktree again and refuses unless it is still a candidate, so a commit or a
+ *  terminal since the list was read keeps it. The branch goes with it: it is merged. */
+export async function removeCleanupWorktree(row: WorktreeCleanupRow): Promise<boolean> {
+  return (await post("/api/worktrees/cleanup/remove", { repoDir: row.repo, path: row.path }))?.ok === true;
+}

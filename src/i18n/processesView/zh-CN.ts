@@ -17,6 +17,7 @@ export const processesViewZhCN = {
     kill: "结束",
     killConfirm: "结束此进程？\n\n{command}\n（PID {pid}）\n\n先发送 SIGTERM，几秒后仍在运行则发送 SIGKILL。",
     killFailed: "无法结束 PID {pid}。",
+    killUnconfirmed: "已向 PID {pid} 发送信号，但无法确认它已结束。",
     paneRoot: "这是会话本身。要结束整个会话，请在 设置 > 会话 中操作。",
     worktrees: {
       intro: "终端运行过的文件夹中受管理的 worktree。不会自动删除。",

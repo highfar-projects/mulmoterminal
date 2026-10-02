@@ -4,13 +4,18 @@
 // nothing. CPU is measured between reads, so it is blank until the second one.
 import { onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
 import { useI18n } from "vue-i18n";
-import { killProcess, loadSessionProcesses } from "../../composables/processesApi";
+import { killProcess, loadSessionProcesses, type KillOutcome } from "../../composables/processesApi";
 import { isHot, isLongRunning, isPaneRoot, type SessionProcess, type SessionProcesses } from "../../../common/sessionProcesses";
 import { formatCpu, formatElapsed, formatMemory } from "./processFormat";
 
 const { t } = useI18n();
 
 const POLL_INTERVAL_MS = 3_000;
+const KILL_MESSAGES: Record<KillOutcome, string | null> = {
+  ended: null,
+  unconfirmed: "processesView.killUnconfirmed",
+  failed: "processesView.killFailed",
+};
 
 const sessions = shallowRef<SessionProcesses[] | null>(null);
 const loadFailed = ref(false);
@@ -19,15 +24,25 @@ const ending = ref<number | null>(null);
 const killError = ref<string | null>(null);
 let timer: ReturnType<typeof setInterval> | null = null;
 let reading = false;
+// A refresh asked for during a read — End's, above all — must see a list read AFTER it, so it is
+// run once the current read finishes rather than dropped.
+let readAgain = false;
 
 async function refresh(): Promise<void> {
-  if (reading) return;
+  if (reading) {
+    readAgain = true;
+    return;
+  }
   reading = true;
   const read = await loadSessionProcesses();
   reading = false;
   now.value = Date.now();
   loadFailed.value = read === null;
   if (read !== null) sessions.value = read;
+  if (readAgain) {
+    readAgain = false;
+    await refresh();
+  }
 }
 
 async function end(process: SessionProcess): Promise<void> {
@@ -35,9 +50,9 @@ async function end(process: SessionProcess): Promise<void> {
   if (!window.confirm(t("processesView.killConfirm", { command: process.command, pid: process.pid }))) return;
   ending.value = process.pid;
   killError.value = null;
-  const ok = await killProcess(process);
+  const outcome = await killProcess(process);
   ending.value = null;
-  if (!ok) killError.value = t("processesView.killFailed", { pid: process.pid });
+  killError.value = KILL_MESSAGES[outcome] === null ? null : t(KILL_MESSAGES[outcome], { pid: process.pid });
   await refresh();
 }
 
@@ -55,9 +70,9 @@ const rowTone = (process: SessionProcess): string => (isHot(process) ? "text-err
 <template>
   <div class="min-h-0 flex-1 overflow-y-auto p-4">
     <p v-if="killError" data-testid="processes-kill-error" class="m-0 mb-3 font-sans text-[13px] text-err-text">{{ killError }}</p>
-    <p v-if="loadFailed && !sessions" class="m-0 font-sans text-[13px] text-err-text">{{ t("processesView.loadFailed") }}</p>
-    <p v-else-if="!sessions" class="m-0 font-sans text-[13px] text-dim">{{ t("processesView.loading") }}</p>
-    <p v-else-if="!sessions.length" class="m-0 font-sans text-[13px] text-dim">{{ t("processesView.empty") }}</p>
+    <p v-if="loadFailed" data-testid="processes-load-error" class="m-0 mb-3 font-sans text-[13px] text-err-text">{{ t("processesView.loadFailed") }}</p>
+    <p v-if="!sessions && !loadFailed" class="m-0 font-sans text-[13px] text-dim">{{ t("processesView.loading") }}</p>
+    <p v-else-if="sessions && !sessions.length" class="m-0 font-sans text-[13px] text-dim">{{ t("processesView.empty") }}</p>
     <section v-for="session in sessions ?? []" :key="session.sessionId" data-testid="processes-session" class="mb-5">
       <p class="m-0 mb-1 flex items-baseline gap-2">
         <span class="truncate font-mono text-[12px] font-[650] text-fg">{{ session.cwd ?? t("processesView.unknownDir") }}</span>

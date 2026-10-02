@@ -6,7 +6,7 @@ import { baseStartPoint, defaultBaseBranch, git, isDirty, listWorktrees, repoRoo
 import { mapConcurrent } from "../infra/mapConcurrent.js";
 import { isWithin } from "../infra/path-within.js";
 import { canonicalPath } from "../infra/canonical-path.js";
-import { tmuxAttachedCounts, tmuxPaneCwdsAsync } from "../infra/tmux.js";
+import { tmuxAttachedCounts, tmuxAvailable, tmuxPaneCwdsAsync } from "../infra/tmux.js";
 import { dirSession, survivorSnapshot } from "../session/dir-session.js";
 import { ptys } from "../session/registry.js";
 import type { WorktreeCleanupRow } from "../../common/worktreeCleanup.js";
@@ -25,14 +25,15 @@ const isMerged = async (repo: string, head: string, startPoint: string): Promise
   head !== "" && (await git(["merge-base", "--is-ancestor", head, startPoint], repo)).ok;
 
 interface UsageFacts {
-  paneCwds: readonly string[];
+  /** Null when nobody can say where panes are: then every worktree counts as in use. */
+  paneCwds: readonly string[] | null;
   inAgentSession: (dir: string) => Promise<boolean>;
 }
 
 async function rowOf(repo: string, base: string, startPoint: string, worktree: WorktreeInfo, usage: UsageFacts): Promise<WorktreeCleanupRow> {
   const exists = existsSync(worktree.path);
   const canonical = canonicalPath(worktree.path);
-  const paneHere = usage.paneCwds.some((cwd) => isWithin(canonical, canonicalPath(cwd)));
+  const paneHere = usage.paneCwds === null || usage.paneCwds.some((cwd) => isWithin(canonical, canonicalPath(cwd)));
   return {
     repo,
     base,
@@ -52,16 +53,21 @@ async function repoRows(repo: string, usage: UsageFacts): Promise<WorktreeCleanu
   return mapConcurrent(worktrees, GIT_CONCURRENCY, (worktree) => rowOf(repo, base, startPoint, worktree, usage));
 }
 
-/** Every managed worktree of the repos behind `cwds`. Without an answer from tmux, the directories
- *  this process's own terminals started in stand in for where panes are — reading "no panes" there
- *  would offer a worktree a shell is standing in. */
-export async function worktreeCleanupRows(cwds: readonly string[]): Promise<WorktreeCleanupRow[]> {
-  const repos = await reposOf(cwds);
+/** Without tmux nothing outlives a restart, so this process's own terminals are every pane there is.
+ *  With tmux and no answer from it, a shell that survived a restart could be standing anywhere, and
+ *  this process's terminals do not include it — so nothing can be shown to be unused. */
+async function paneCwdsOrUnknown(): Promise<readonly string[] | null> {
+  const listed = await tmuxPaneCwdsAsync();
+  if (listed !== null) return listed;
+  return tmuxAvailable() ? null : [...ptys.values()].map((entry) => entry.cwd);
+}
+
+async function usageFacts(): Promise<UsageFacts> {
   const tmuxCounts = tmuxAttachedCounts();
   const running = await survivorSnapshot();
   const now = Date.now();
-  const usage: UsageFacts = {
-    paneCwds: (await tmuxPaneCwdsAsync()) ?? [...ptys.values()].map((entry) => entry.cwd),
+  return {
+    paneCwds: await paneCwdsOrUnknown(),
     // dirSession also answers with a finished conversation that could be resumed; only a RUNNING
     // one holds the worktree.
     inAgentSession: async (dir) => {
@@ -69,6 +75,25 @@ export async function worktreeCleanupRows(cwds: readonly string[]): Promise<Work
       return session !== null && (session.attached || running.has(session.id));
     },
   };
+}
+
+/** Every managed worktree of the repos behind `cwds`. */
+export async function worktreeCleanupRows(cwds: readonly string[]): Promise<WorktreeCleanupRow[]> {
+  const repos = await reposOf(cwds);
+  const usage = await usageFacts();
   const perRepo = await mapConcurrent(repos, GIT_CONCURRENCY, (repo) => repoRows(repo, usage));
   return perRepo.flat();
+}
+
+/** One managed worktree read again, for the moment it is about to be removed: the list the page
+ *  showed may be minutes old, and a commit or a terminal since then must stop the removal. Null
+ *  when `worktreePath` is not a managed worktree of `repoDir`. */
+export async function cleanupRowAt(repoDir: string, worktreePath: string): Promise<WorktreeCleanupRow | null> {
+  const repo = await repoRoot(repoDir);
+  if (repo === null) return null;
+  const target = canonicalPath(worktreePath);
+  const worktree = (await listWorktrees(repo)).find((candidate) => canonicalPath(candidate.path) === target);
+  if (worktree === undefined) return null;
+  const base = await defaultBaseBranch(repo);
+  return rowOf(repo, base, await baseStartPoint(repo, base), worktree, await usageFacts());
 }

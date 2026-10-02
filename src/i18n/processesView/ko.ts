@@ -17,6 +17,7 @@ export const processesViewKo = {
     kill: "종료",
     killConfirm: "이 프로세스를 종료할까요?\n\n{command}\n(PID {pid})\n\nSIGTERM을 보내고, 몇 초 뒤에도 남아 있으면 SIGKILL을 보냅니다.",
     killFailed: "PID {pid}을(를) 종료하지 못했습니다.",
+    killUnconfirmed: "PID {pid}에 시그널을 보냈지만 종료되었는지 확인하지 못했습니다.",
     paneRoot: "세션 자체입니다. 세션 전체를 종료하려면 설정 > 세션에서 하세요.",
     worktrees: {
       intro: "터미널을 연 적이 있는 폴더의 관리 중인 worktree입니다. 자동으로 삭제하지 않습니다.",

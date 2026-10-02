@@ -14,7 +14,8 @@ import { dirSession, survivorSnapshot } from "../session/dir-session.js";
 import { tmuxAttachedCounts } from "../infra/tmux.js";
 import { requestBody } from "../routes/requestBody.js";
 import { expandTilde } from "../files/pathContainment.js";
-import { worktreeCleanupRows } from "./worktree-cleanup.js";
+import { cleanupRowAt, worktreeCleanupRows } from "./worktree-cleanup.js";
+import { cleanupBlockers } from "../../common/worktreeCleanup.js";
 import { rememberedSessionCwds } from "../session/registry.js";
 
 interface WorktreeRouteOptions {
@@ -50,6 +51,34 @@ async function worktreeListing(cwd: string) {
   return { isGit: true, base: await defaultBaseBranch(repo), worktrees };
 }
 
+// The Processes page's worktree list (#2219) and its removal.
+function mountWorktreeCleanupRoutes(app: Express, isAllowedOrigin: WorktreeRouteOptions["isAllowedOrigin"], fromHome: (dir: string) => string): void {
+  // Every managed worktree of the repos terminals have run in, with what keeps each from being
+  // removed (#2219). Read-only; removal is the route below, which reads the worktree again.
+  app.get("/api/worktrees/cleanup", async (_req, res) => {
+    res.json({ worktrees: await worktreeCleanupRows(await rememberedSessionCwds()) });
+  });
+
+  // Remove a cleanup candidate and its branch. Every condition that made it a candidate is read
+  // again here, not trusted from the list: a commit made since would otherwise go with `branch -D`,
+  // and a terminal that has moved in would lose its directory. 409 names what now holds it.
+  app.post("/api/worktrees/cleanup/remove", async (req, res) => {
+    if (!requestOriginAllowed(req, isAllowedOrigin)) return res.status(403).end();
+    const { repoDir, path: worktreePath } = requestBody(req.body);
+    if (typeof repoDir !== "string" || typeof worktreePath !== "string") {
+      return res.status(400).json({ error: "repoDir and path are required" });
+    }
+    const row = await cleanupRowAt(fromHome(repoDir), fromHome(worktreePath));
+    if (row === null) return res.status(404).json({ error: "not a managed worktree" });
+    const blockers = cleanupBlockers(row);
+    if (blockers.length > 0) return res.status(409).json({ blockers });
+    const result = await removeWorktree(row.repo, row.path, { deleteBranch: true });
+    if (!result.ok) return res.status(result.reason === "failed" ? 500 : 409).json(result);
+    releaseWorktreeEnv(row.path);
+    return res.json(result);
+  });
+}
+
 export function mountWorktreeRoutes(app: Express, { isAllowedOrigin, homeDir = os.homedir() }: WorktreeRouteOptions): void {
   const fromHome = homeExpander(homeDir);
   // Repo status + the managed worktrees for a cell's chosen dir (each with `dirty`
@@ -72,11 +101,7 @@ export function mountWorktreeRoutes(app: Express, { isAllowedOrigin, homeDir = o
     res.json(cwd ? await worktreeDiff(cwd) : { isWorktree: false, base: null, ahead: 0, dirty: 0, files: [], patch: "", truncated: false });
   });
 
-  // Every managed worktree of the repos terminals have run in, with what keeps each from being
-  // removed (#2219). Read-only; removal is the route below, which re-checks dirtiness itself.
-  app.get("/api/worktrees/cleanup", async (_req, res) => {
-    res.json({ worktrees: await worktreeCleanupRows(await rememberedSessionCwds()) });
-  });
+  mountWorktreeCleanupRoutes(app, isAllowedOrigin, fromHome);
 
   app.post("/api/worktrees/create", async (req, res) => {
     if (!requestOriginAllowed(req, isAllowedOrigin)) return res.status(403).end();

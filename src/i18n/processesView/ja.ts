@@ -17,6 +17,7 @@ export const processesViewJa = {
     kill: "終了",
     killConfirm: "このプロセスを終了しますか？\n\n{command}\n（PID {pid}）\n\nSIGTERM を送り、数秒たっても残っていれば SIGKILL を送ります。",
     killFailed: "PID {pid} を終了できませんでした。",
+    killUnconfirmed: "PID {pid} にシグナルを送りましたが、終了したか確認できませんでした。",
     paneRoot: "セッションそのものです。セッションごと終了するには 設定 > セッション から。",
     worktrees: {
       intro: "ターミナルを開いたことのあるフォルダの、管理下の worktree です。自動では削除しません。",

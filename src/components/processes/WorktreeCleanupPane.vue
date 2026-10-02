@@ -11,7 +11,7 @@ const { t } = useI18n();
 
 const rows = shallowRef<WorktreeCleanupRow[] | null>(null);
 const loadFailed = ref(false);
-const onlyCandidates = ref(true);
+const onlyCandidates = ref(false);
 const removing = ref<string | null>(null);
 const removeError = ref<string | null>(null);
 

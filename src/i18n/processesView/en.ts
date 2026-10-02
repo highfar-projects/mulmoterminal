@@ -17,6 +17,7 @@ export const processesViewEn = {
     kill: "End",
     killConfirm: "End this process?\n\n{command}\n(PID {pid})\n\nIt gets SIGTERM, then SIGKILL if it is still running a few seconds later.",
     killFailed: "Could not end PID {pid}.",
+    killUnconfirmed: "Sent the signal to PID {pid}, but could not confirm it ended.",
     paneRoot: "The session itself. End the whole session from Settings > Sessions.",
     worktrees: {
       intro: "Managed worktrees of the folders your terminals have run in. Nothing is removed automatically.",
