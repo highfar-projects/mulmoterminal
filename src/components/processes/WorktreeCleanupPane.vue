@@ -17,9 +17,15 @@ const removeError = ref<string | null>(null);
 
 const shownRows = computed(() => (rows.value ?? []).filter((row) => !onlyCandidates.value || isCleanupCandidate(row)));
 
+// Refresh, then Remove, starts two reads that can finish in either order; only the latest one may
+// set the list, or a slow earlier read shows a worktree that was just removed.
+let latestRead = 0;
+
 async function refresh(): Promise<void> {
+  const thisRead = ++latestRead;
   loadFailed.value = false;
   const read = await loadWorktreeCleanup();
+  if (thisRead !== latestRead) return;
   loadFailed.value = read === null;
   rows.value = read;
 }
