@@ -143,6 +143,12 @@ export const blueprintsZhCN: Messages["blueprints"] = {
     kindUsecase: "做什么",
   },
   spec: {
+    document: {
+      chatTitle: "发送修改或回答",
+      empty: "阅读上面的文件后，写下需要修改的地方或对问题的回答并发送，代理会修改这些文件并回复。",
+      placeholder: "需要修改的地方或回答（例如：入馆证在总务部领取，9 点在一楼前台集合）",
+      revising: "正在修改…",
+    },
     title: "规格说明",
     openQuestions: "尚未决定",
     chatTitle: "讨论规格",

@@ -150,6 +150,12 @@ export const blueprintsEn = {
     kindUsecase: "What it makes",
   },
   spec: {
+    document: {
+      chatTitle: "Send changes or answers",
+      empty: "Read the files above, then write what to change or your answers to the questions. The agent edits those files and replies.",
+      placeholder: 'What to change, or your answers (e.g. "Pick up the pass at General Affairs; meet at the ground-floor reception at 9")',
+      revising: "Making the changes…",
+    },
     title: "Specification",
     openQuestions: "Not decided yet",
     chatTitle: "Talk the spec over",

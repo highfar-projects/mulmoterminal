@@ -148,6 +148,12 @@ export const blueprintsJa: Messages["blueprints"] = {
     kindUsecase: "作るものの種類",
   },
   spec: {
+    document: {
+      chatTitle: "直してほしいこと・答えを送る",
+      empty: "上の「承認する前に読むもの」を読んで、直してほしいことや、質問への答えを書いて送ると、エージェントがそのファイルを直して返事をします。",
+      placeholder: "直してほしいこと・質問への答え（例: 入館証は総務部で受け取ります。集合は 9 時に 1 階の受付です）",
+      revising: "直しています…",
+    },
     title: "仕様書",
     openQuestions: "決めていないこと",
     chatTitle: "仕様について話す",

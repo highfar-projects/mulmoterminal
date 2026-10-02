@@ -316,6 +316,7 @@ class Executor {
         packDirs: { base: run.basePackDir, usecase: run.usecasePackDir },
         replyPath: replyFile(sessionId),
         language: run.language,
+        reads: currentStep(run.steps, loaded.state)?.reads ?? [],
       });
       const specChat = [...run.specChat, { role: "person" as const, text: message, atMs: this.deps.now() }];
       const next: Loaded = { run: { ...run, revisionSessionId: sessionId, specChat }, state: loaded.state };

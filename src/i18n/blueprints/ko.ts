@@ -147,6 +147,12 @@ export const blueprintsKo: Messages["blueprints"] = {
     kindUsecase: "만드는 것",
   },
   spec: {
+    document: {
+      chatTitle: "고칠 점·답변 보내기",
+      empty: "위의 파일을 읽고 고칠 점이나 질문에 대한 답을 써서 보내면, 에이전트가 그 파일을 고치고 답장합니다.",
+      placeholder: "고칠 점 또는 답변 (예: 출입증은 총무부에서 받습니다. 9시에 1층 안내데스크에서 모입니다)",
+      revising: "고치는 중…",
+    },
     title: "사양서",
     openQuestions: "아직 정하지 않은 것",
     chatTitle: "사양에 대해 이야기하기",

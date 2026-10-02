@@ -15,13 +15,37 @@ type ChatEntry = BlueprintRun["specChat"][number];
 const transcript = (chat: readonly ChatEntry[]): string[] =>
   chat.length === 0 ? [] : ["", "The conversation so far:", ...chat.map((entry) => `${entry.role === "person" ? "User" : "You"}: ${entry.text}`)];
 
-export function specRevisionPrompt(input: {
+type RevisionInput = {
   chat: readonly ChatEntry[];
   message: string;
   packDirs: { base: string; usecase: string };
   replyPath: string;
   language?: PersonLanguage | null;
-}): string {
+  /** The files the gate asks the person to read; a document build's gate names them in place of the spec. */
+  reads?: readonly string[];
+};
+
+// A document build has no spec: its gate asks the person to read what the earlier steps wrote (the brief, the style,
+// the outline), and the person's message changes those files — an answer to an open question becomes a fact there.
+function documentRevisionPrompt(input: RevisionInput, reads: readonly string[]): string {
+  return [
+    "You are revising, with the person they are for, the files the earlier steps of a document build wrote, BEFORE the next step uses them.",
+    `The person has just read: ${reads.join(", ")}. The interview answers are in .blueprint/answers.json.`,
+    `Base pack: ${input.packDirs.base}. Usecase pack: ${input.packDirs.usecase}.`,
+    ...personLanguageLine(input.language),
+    ...transcript(input.chat),
+    "",
+    `The person now says: ${input.message}`,
+    "",
+    `1. Change ${reads.join(", ")} to reflect it. When the person answers an open question (決まっていないこと, Open questions), write the answer where the file keeps what is decided or known, and remove the question. Keep each file's sections and format, so the step that wrote it would still accept it; change nothing the person did not ask for.`,
+    "2. Do not touch the documents themselves, or any other file.",
+    `3. Write your reply to the person in ${input.replyPath}: in their language, short — what you changed, and anything you still need them to decide.`,
+    "4. Stop.",
+  ].join("\n");
+}
+
+export function specRevisionPrompt(input: RevisionInput): string {
+  if (input.reads && input.reads.length > 0) return documentRevisionPrompt(input, input.reads);
   return [
     "You are refining the specification of an app with its owner, BEFORE anything is built.",
     `The spec is ${SPEC_FILE}; undecided points are in ${OPEN_QUESTIONS_FILE}; the interview answers are in .blueprint/answers.json.`,

@@ -50,12 +50,10 @@ async function send(): Promise<void> {
   await refresh();
 }
 
-// Hidden only at a document gate (it names reads) where neither the run record nor this panel's read shows a spec, a
-// conversation or a revision: a failed read never hides a conversation, and a stale record never hides a fresh one.
-const shown = computed(
-  () =>
-    props.expectsSpec || props.revisionSessionId !== null || props.chatCount > 0 || (view.value?.chat.length ?? 0) > 0 || (view.value?.spec ?? null) !== null,
-);
+// A document build's gate names files to read in place of a spec: the conversation stays — what the person sends
+// changes those files — and the spec column and its file line go.
+const documentGate = computed(() => !props.expectsSpec);
+const chatKey = (key: string): string => (documentGate.value ? `blueprints.spec.document.${key}` : `blueprints.spec.${key}`);
 
 const outcomeKey = (outcome: string | undefined): string | null => {
   if (outcome === "no-reply") return "blueprints.spec.noReply";
@@ -65,9 +63,9 @@ const outcomeKey = (outcome: string | undefined): string | null => {
 </script>
 
 <template>
-  <div v-if="shown" class="flex flex-col gap-2">
-    <div class="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(300px,2fr)]" data-testid="blueprint-spec-review">
-      <section class="flex min-w-0 flex-col gap-3">
+  <div class="flex flex-col gap-2">
+    <div class="grid gap-4" :class="documentGate ? '' : 'lg:grid-cols-[minmax(0,3fr)_minmax(300px,2fr)]'" data-testid="blueprint-spec-review">
+      <section v-if="!documentGate" class="flex min-w-0 flex-col gap-3">
         <h3 class="m-0 font-sans text-[13px] font-[650] text-fg">{{ t("blueprints.spec.title") }}</h3>
         <div class="max-h-[60vh] overflow-y-auto rounded-md border border-border bg-base p-4 font-sans text-[13px] text-fg" data-testid="blueprint-spec-body">
           <MarkdownProse v-if="view?.spec" :markdown="view.spec" />
@@ -82,9 +80,9 @@ const outcomeKey = (outcome: string | undefined): string | null => {
       </section>
 
       <section class="flex min-w-0 flex-col gap-2">
-        <h3 class="m-0 font-sans text-[13px] font-[650] text-fg">{{ t("blueprints.spec.chatTitle") }}</h3>
+        <h3 class="m-0 font-sans text-[13px] font-[650] text-fg">{{ t(chatKey("chatTitle")) }}</h3>
         <div class="flex max-h-[60vh] flex-col gap-2 overflow-y-auto" data-testid="blueprint-spec-chat">
-          <p v-if="!view?.chat.length" class="m-0 font-sans text-[12px] text-dim">{{ t("blueprints.spec.empty") }}</p>
+          <p v-if="!view?.chat.length" class="m-0 font-sans text-[12px] text-dim">{{ t(chatKey("empty")) }}</p>
           <article
             v-for="(entry, index) in view?.chat ?? []"
             :key="`${entry.atMs}-${entry.role}-${index}`"
@@ -99,7 +97,7 @@ const outcomeKey = (outcome: string | undefined): string | null => {
           <div v-if="revisionSessionId" class="mr-6 flex flex-col gap-1.5" data-testid="blueprint-spec-revising">
             <p class="m-0 flex items-center gap-1.5 font-sans text-[12px] text-secondary">
               <span class="material-symbols-outlined animate-spin text-[14px] text-accent" aria-hidden="true">progress_activity</span>
-              {{ t("blueprints.spec.revising") }}
+              {{ t(chatKey("revising")) }}
             </p>
             <BlueprintLiveActivity :key="revisionSessionId" :session-id="revisionSessionId" />
           </div>
@@ -109,8 +107,8 @@ const outcomeKey = (outcome: string | undefined): string | null => {
             v-model="draft"
             data-testid="blueprint-spec-input"
             rows="3"
-            :placeholder="t('blueprints.spec.placeholder')"
-            :aria-label="t('blueprints.spec.chatTitle')"
+            :placeholder="t(chatKey('placeholder'))"
+            :aria-label="t(chatKey('chatTitle'))"
             :disabled="revisionSessionId !== null"
             class="rounded-[4px] border border-border bg-input px-2 py-1.5 font-sans text-[13px] text-fg disabled:opacity-50"
             @keydown.enter.meta.prevent="send"
@@ -131,6 +129,6 @@ const outcomeKey = (outcome: string | undefined): string | null => {
         </form>
       </section>
     </div>
-    <p class="m-0 font-sans text-[11px] text-dim">{{ t("blueprints.run.specFile", { file: `${projectDir}/${SPEC_FILE}` }) }}</p>
+    <p v-if="!documentGate" class="m-0 font-sans text-[11px] text-dim">{{ t("blueprints.run.specFile", { file: `${projectDir}/${SPEC_FILE}` }) }}</p>
   </div>
 </template>

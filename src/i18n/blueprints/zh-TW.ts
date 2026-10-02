@@ -143,6 +143,12 @@ export const blueprintsZhTW: Messages["blueprints"] = {
     kindUsecase: "做什麼",
   },
   spec: {
+    document: {
+      chatTitle: "傳送修改或回答",
+      empty: "閱讀上面的檔案後，寫下需要修改的地方或對問題的回答並傳送，代理會修改這些檔案並回覆。",
+      placeholder: "需要修改的地方或回答（例如：入館證在總務部領取，9 點在一樓櫃台集合）",
+      revising: "正在修改…",
+    },
     title: "規格文件",
     openQuestions: "尚未決定",
     chatTitle: "討論規格",
