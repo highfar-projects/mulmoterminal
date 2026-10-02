@@ -819,6 +819,12 @@ an update, which the public submission path never allows. Firestore decides that
   (the queue rule reads the document after the write, and there is none). An app that wants the
   record kept names no status and sends its people to the desk. Say which one the user is
   choosing — it is not a detail they discover later.
+  **And the button belongs on the PUBLIC page.** `/p/` opens only for addresses in `members`, and a
+  visitor who booked from the public page is not one. The public page receives their own rows in
+  `viewer.mine` (matched by `emailField` or `uidField`) — but only the fields they sent and the id,
+  never the status. That is enough where a booking has one status (`meeting-room.md`,
+  `class-seats.md`); where it has several, the page cannot tell which rows may be withdrawn, and the
+  desk cancels instead (`salon.md`).
   **Do not give a participant both.** `selfTransitions` to `cancelled` alongside
   `selfDelete: ["booked"]` reads as two ways to cancel and is a one-way trap: the transition
   lands the row in a status `selfDelete` no longer names, so the person has, with a documented

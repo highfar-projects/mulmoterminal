@@ -46,8 +46,7 @@
   },
   "views": [
     { "id": "public", "audience": "public", "path": "views/grid.html", "collections": ["rooms", "slots"] },
-    { "id": "desk", "audience": "member", "path": "views/desk.html", "collections": ["bookings", "slots"] },
-    { "id": "mine", "audience": "participant", "path": "views/mine.html", "collections": ["bookings"] }
+    { "id": "desk", "audience": "member", "path": "views/desk.html", "collections": ["bookings", "slots"] }
   ],
   "public": {
     "enabled": true,
@@ -180,14 +179,57 @@ fifteen lines, are in [design.md](./design.md).
 <label>用件 <input id="why" maxlength="60" /></label>
 <p id="say" role="status"></p>
 <div id="grid"></div>
+<h2>あなたの予約</h2>
+<ul id="mine"></ul>
 <script>
   const view = window.__MC_APP_VIEW;
   const grid = document.getElementById("grid");
+  const mine = document.getElementById("mine");
   const who = document.getElementById("who");
   const why = document.getElementById("why");
   const say = document.getElementById("say");
-  view.onState(({ rooms = [], slots = [] }) => {
+  // 取り下げた予約の id。次の onState が届くまで、一覧に戻さないために持ちます。
+  // 届いた一覧から消えたら忘れること。id は枠（席）の id なので、同じ枠を取り直すと同じ id で戻ってきます。
+  const gone = new Set();
+
+  // 自分の予約は viewer.mine で届きます（requesterEmail がサインインした本人のもの）。
+  // 届くのは送ったフィールドと id だけで、状態は来ません。このアプリの予約は booked の
+  // 1 つだけなので、withdrawFrom に booked があれば全部に取り下げを出せます。
+  // viewer.mine.bookings が無いのは「調べられなかった」で、「予約が無い」ではありません。
+  const drawMine = (slots, name, viewer) => {
+    const own = viewer.mine?.bookings;
+    if (own === undefined) {
+      mine.replaceChildren();
+      return;
+    }
+    const canWithdraw = (viewer.can?.bookings?.withdrawFrom ?? []).includes("booked");
+    const slotOf = Object.fromEntries(slots.map((slot) => [slot.id, slot]));
+    const present = new Set(own.map((booking) => booking.id));
+    [...gone].filter((id) => !present.has(id)).forEach((id) => gone.delete(id));
+    const rows = own.filter((booking) => !gone.has(booking.id));
+    mine.replaceChildren(
+      ...rows.map((booking) => {
+        const slot = slotOf[booking.slot];
+        const row = document.createElement("li");
+        const what = document.createElement("span");
+        what.textContent = `${slot?.startAt ?? booking.slot} ${name[slot?.room] ?? ""} ${booking.purpose ?? ""}`;
+        row.append(what);
+        if (canWithdraw) {
+          const off = document.createElement("button");
+          off.type = "button";
+          off.dataset.id = booking.id;
+          off.textContent = "取り下げる";
+          row.append(off);
+        }
+        return row;
+      }),
+    );
+    if (rows.length === 0) mine.textContent = "予約はありません。";
+  };
+
+  view.onState(({ rooms = [], slots = [] }, viewer = {}) => {
     const name = Object.fromEntries(rooms.map((room) => [room.id, room.title ?? room.id]));
+    drawMine(slots, name, viewer);
     grid.replaceChildren(
       ...slots
         .filter((slot) => slot.state === "open")
@@ -230,6 +272,27 @@ fifteen lines, are in [design.md](./design.md).
     }
     say.textContent = result.error ? `予約できませんでした: ${result.error}` : "その枠は取られました。";
   });
+  mine.addEventListener("click", async (event) => {
+    const button = event.target;
+    const id = button.dataset?.id;
+    if (!id) return;
+    // 確認はページの中で。confirm() はサンドボックスに無視され、false が
+    // 返るので、「確認しているつもりで何も起きないボタン」になります。
+    // 1 回目は文言を変えるだけ、2 回目で書きます。
+    if (button.dataset.armed !== "yes") {
+      button.dataset.armed = "yes";
+      button.textContent = "取り下げる（枠はすぐ他の人が取れるようになります）";
+      return;
+    }
+    const result = await view.withdraw("bookings", id);
+    if (result.ok) {
+      gone.add(id);
+      button.closest("li")?.remove();
+      say.textContent = "取り下げました。";
+      return;
+    }
+    say.textContent = result.error ? `取り下げられませんでした: ${result.error}` : "取り下げられませんでした。";
+  });
   view.ready();
 </script>
 ```
@@ -257,81 +320,23 @@ fifteen lines, are in [design.md](./design.md).
 押してから書きます。ビューの HTML は信頼されていないためで、読み込んだ瞬間に `submit()` を
 呼ぶページがあっても勝手に予約は入りません。
 
-## views/mine.html — 自分の予約と、取り下げ
+## 自分の予約と、取り下げ — 公開ページで
 
-`audience: "participant"`、入口は `/p/{slug}`。**ここに取り下げのボタンを描かないと、
-本人には取り消す手段が何もありません** — このテンプレートは本人の状態遷移を持たないので
-（下の「取り消しには 2 通りある」）、`withdraw` がその唯一の出口です。
+上の `grid.html` が、空き枠と一緒に**サインインした本人の予約**を出し、そこで取り下げます。
+**ここに取り下げのボタンを描かないと、本人には取り消す手段が何もありません** — このテンプレートは
+本人の状態遷移を持たないので（下の「取り消しには 2 通りある」）、`withdraw` がその唯一の出口です。
 
-`viewer.can.<cid>.withdrawFrom` は**取り下げてよい状態の一覧**で、真偽値ではありません。
-その状態にある行にだけボタンを出します。
-
-```html
-<style>
-  /* Every colour is derived from ONE hue — the rules are in design.md. Change it for your app. */
-  :root {
-    --hue: 230;                                    /* blue - a room, booked and released */
-    --main: oklch(47% .09 var(--hue));           --fill: oklch(96% .018 var(--hue));
-    --line: oklch(47% .09 var(--hue) / .16);     --ink: oklch(23% .015 var(--hue));
-    --muted: oklch(53% .02 var(--hue));          --paper: oklch(99.4% .007 85);
-  }
-  * { box-sizing: border-box; }
-  html { background: var(--paper); color: var(--ink); color-scheme: light; }
-  body { margin: 0 auto; max-width: 44rem; padding: 28px 18px 56px; font: 15px/1.65 system-ui, "Hiragino Sans", sans-serif; }
-  h1 { margin: 0 0 18px; font-size: clamp(23px, 5vw, 31px); line-height: 1.2; letter-spacing: -.03em; }
-  label { display: block; margin: 0 0 14px; color: var(--muted); font-size: 13px; font-weight: 750; }
-  input:not([type="radio"]), textarea { display: block; width: min(22rem, 100%); margin-top: 6px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink); font: inherit; }
-  input:focus, textarea:focus { border-color: var(--main); outline: 2px solid var(--line); }
-  button { min-height: 38px; margin: 4px 6px 0 0; padding: 8px 14px; border: 0; border-radius: 10px; background: var(--main); color: var(--paper); font: inherit; font-weight: 750; cursor: pointer; touch-action: manipulation; }
-  ul { margin: 0; padding: 0; list-style: none; }
-  #grid { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 8px; }
-  #rows > div, #mine li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 8px; padding: 13px 15px; border: 1px solid var(--line); border-radius: 14px; background: var(--fill); }
-  #say, #count { min-height: 1.6em; margin: 14px 0 0; color: var(--main); font-size: 13px; font-weight: 700; }
-</style>
-<ul id="mine"></ul>
-<p id="say" role="status"></p>
-<script>
-  const view = window.__MC_APP_VIEW;
-  const list = document.getElementById("mine");
-  const say = document.getElementById("say");
-  view.onState(({ bookings = [] }, viewer = {}) => {
-    const withdrawable = viewer.can?.bookings?.withdrawFrom ?? [];
-    list.replaceChildren(
-      ...bookings.map((booking) => {
-        const row = document.createElement("li");
-        row.textContent = `${booking.slot} ${booking.purpose ?? ""} — ${booking.status}`;
-        if (withdrawable.includes(booking.status)) {
-          const button = document.createElement("button");
-          button.dataset.id = booking.id;
-          button.textContent = "取り下げる";
-          row.append(button);
-        }
-        return row;
-      }),
-    );
-  });
-  list.addEventListener("click", async (event) => {
-    const button = event.target;
-    const id = button.dataset?.id;
-    if (!id) return;
-    // 確認はページの中で。confirm() はサンドボックスに無視され、false が
-    // 返るので、「確認しているつもりで何も起きないボタン」になります。
-    // 1 回目は文言を変えるだけ、2 回目で書きます。
-    if (button.dataset.armed !== "yes") {
-      button.dataset.armed = "yes";
-      button.textContent = "取り下げる（枠はすぐ他の人が取れるようになります）";
-      return;
-    }
-    const result = await view.withdraw("bookings", id);
-    if (!result.ok) say.textContent = result.error ? `取り下げられませんでした: ${result.error}` : "取り下げられませんでした。";
-  });
-  view.ready();
-</script>
-```
-
+- **自分の予約は `viewer.mine.bookings` で届きます。** `requesterEmail` がサインインした本人の
+  アドレスなので、親がその行を引いて渡します。届くのは**送ったフィールドと id だけ**で、
+  状態（`status`）は来ません。このアプリの状態は `booked` の 1 つだけなので困りませんが、
+  状態がいくつもあるアプリ（[salon.md](./salon.md)）ではこの形は取れません
+- **`viewer.mine.bookings` が無いのは「調べられなかった」**で、「予約が無い」ではありません。
+  サインインしていないときもそうです。そのときは何も描きません
+- **`/p/{slug}`（`audience: "participant"`）に置かないこと。** そこを開けるのは `members` に
+  載っている人だけで、公開ページから予約した人は開けません
 - **`withdraw` は行き先を持ちません。** 行が消えるので、動く先がない
 - **戻せません。** 取り下げた瞬間に枠は他の人のものになりうるので、確認は**ページが**出す
-  こと（参加者の操作に親は確認を挟みません）。ただし `confirm()` は使えません —
+  こと（本人の操作に親は確認を挟みません）。ただし `confirm()` は使えません —
   サンドボックスが無視するので、押しても何も起きないボタンになります
 - **`can.withdrawFrom` が空なら宣言していないということ。** `selfDelete` を書いていないか、
   ルールがまだ deploy されていないか、アプリを publish し直していないかのいずれかです

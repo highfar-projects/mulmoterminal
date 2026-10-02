@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 //
-// The public pages of the two booking-shaped templates, RUN.
+// The pages of the booking-shaped templates, RUN.
 //
 // What the declaration gate cannot see is the half of each guarantee the page owns. `class-seats`
 // keeps names hidden and capacity enforced in the rules, but "N left" is the page counting mirror
@@ -10,6 +10,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 
 import classSeats from "../../server/skills/mulmoterminal-shared-app/templates/class-seats.md?raw";
+import meetingRoom from "../../server/skills/mulmoterminal-shared-app/templates/meeting-room.md?raw";
 import schedulePoll from "../../server/skills/mulmoterminal-shared-app/templates/schedule-poll.md?raw";
 
 type Outcome = { ok: true } | { ok: false; error: string };
@@ -183,6 +184,69 @@ describe("class-seats.md — views/desk.html", () => {
     await settle();
     expect(page.calls).toEqual([{ kind: "withdraw", cid: "bookings", id: "c1-01", values: {} }]);
     expect(page.said()).not.toBe("");
+  });
+});
+
+// A booker cancels on the public page they booked from: `/p/` opens only for the roster. Their own
+// rows arrive in `viewer.mine` without a status, which is why these two templates (one status each)
+// can offer it and the ones with several statuses cannot.
+describe.each([
+  {
+    name: "meeting-room.md — views/grid.html",
+    template: meetingRoom,
+    heading: "views/grid.html",
+    data: { rooms: [{ id: "r1", title: "A室" }], slots: [{ id: "r1-0900", room: "r1", startAt: "2026-10-05T09:00", state: "taken" }] },
+    own: { id: "r1-0900", slot: "r1-0900", requesterName: "山田", purpose: "定例" },
+    shown: "A室",
+  },
+  {
+    name: "class-seats.md — views/classes.html",
+    template: classSeats,
+    heading: "views/classes.html",
+    data: { classes: [{ id: "c1", title: "ジャズ入門", startAt: "2026-10-05T19:00" }], seats: [{ id: "c1-01", classId: "c1", state: "taken" }] },
+    own: { id: "c1-01", seat: "c1-01", requesterName: "山田" },
+    shown: "ジャズ入門",
+  },
+])("$name — the booker's own cancel", ({ template, heading, data, own, shown }) => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+  });
+  const may = { can: { bookings: { withdrawFrom: ["booked"] } } };
+
+  it("lists the reader's own booking and withdraws it on the second press", async () => {
+    const page = load(template, heading);
+    page.tell(data, { ...may, mine: { bookings: [own] } });
+    expect(document.getElementById("mine")?.textContent).toContain(shown);
+    click("#mine button");
+    await settle();
+    expect(page.calls).toHaveLength(0);
+    click("#mine button");
+    await settle();
+    expect(page.calls).toEqual([{ kind: "withdraw", cid: "bookings", id: own.id, values: {} }]);
+    expect(document.querySelectorAll("#mine button")).toHaveLength(0);
+  });
+
+  it("shows a booking again once the same slot is booked anew, under the same id", async () => {
+    const page = load(template, heading);
+    page.tell(data, { ...may, mine: { bookings: [own] } });
+    click("#mine button");
+    click("#mine button");
+    await settle();
+    page.tell(data, { ...may, mine: { bookings: [own] } });
+    expect(document.querySelectorAll("#mine button")).toHaveLength(0);
+    page.tell(data, { ...may, mine: { bookings: [] } });
+    page.tell(data, { ...may, mine: { bookings: [own] } });
+    expect(document.querySelectorAll("#mine button")).toHaveLength(1);
+  });
+
+  it("says nothing about bookings it could not look up, and offers no withdraw it may not make", () => {
+    const page = load(template, heading);
+    page.tell(data, may);
+    expect(document.getElementById("mine")?.textContent).toBe("");
+    page.tell(data, { can: {}, mine: { bookings: [own] } });
+    expect(document.querySelectorAll("#mine button")).toHaveLength(0);
+    page.tell(data, { ...may, mine: { bookings: [] } });
+    expect(document.getElementById("mine")?.textContent).toBe("予約はありません。");
   });
 });
 
