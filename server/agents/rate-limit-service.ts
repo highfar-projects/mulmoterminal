@@ -5,7 +5,7 @@
 // with a single seam, and the object this returns is exactly what the /api/rate-limits routes
 // take. index.ts keeps the call and the moment it happens.
 import { createRateLimitStore } from "./rate-limit-store.js";
-import { startRateLimitProbe } from "./rate-limit-probe.js";
+import { PROBE_ENV, startRateLimitProbe } from "./rate-limit-probe.js";
 import { newProbeSessionId } from "./probe-session.js";
 import { writeProbeScreen } from "./probe-stall.js";
 import { removeProbeTranscript } from "./probe-transcript.js";
@@ -55,7 +55,7 @@ const startAccountClaudeProbe = (home: string, probeReportKey: string, onSettled
   const sessionId = newProbeSessionId();
   return startRateLimitProbe({
     // The account's own login: the same variable its cells are started with (session-home.ts).
-    spawn: (args, cwd) => spawnPty(AGENT_BINS.claude, args, cwd, [], homeEnv("claude", home)),
+    spawn: (args, cwd) => spawnPty(AGENT_BINS.claude, args, cwd, [], { ...homeEnv("claude", home), ...PROBE_ENV }),
     host: "localhost",
     port: PORT,
     cwd: CLAUDE_CWD,
@@ -124,7 +124,7 @@ export function createRateLimitService(): RateLimitRouteDeps {
     store.noteProbeStarted(Date.now());
     const sessionId = newProbeSessionId();
     stopClaudeRateLimitProbe = startRateLimitProbe({
-      spawn: (args, cwd) => spawnPty(AGENT_BINS.claude, args, cwd),
+      spawn: (args, cwd) => spawnPty(AGENT_BINS.claude, args, cwd, [], PROBE_ENV),
       host: "localhost",
       port: PORT,
       cwd: CLAUDE_CWD,

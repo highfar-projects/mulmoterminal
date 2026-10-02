@@ -29,6 +29,19 @@ export const PROBE_TIMEOUT_MS = 90_000;
 // to leave it alone, not a reason to keep the two copies in sync.
 export const PROBE_PROMPT = "reply with the single character: .";
 
+/**
+ * Environment every probe spawn adds: the classic renderer, never fullscreen. Fork-only.
+ *
+ * Claude Code (2.1.287, measured in its bundle) arms a "fullscreen boot canary" on every fullscreen
+ * launch: the launch is recorded as pending in `.claude.json` until it has run 10 s past its first
+ * frame or exits normally. A launch that is killed first counts as a strike on the next start, and
+ * two strikes in one version set `fullscreenAutoDisabled` — every later Claude on that login then
+ * starts inline, where psmux turns the wheel into copy-mode instead of scrolling. A probe is killed
+ * seconds after its status line answers, so each successful probe was a strike, and fullscreen went
+ * off a couple of probes after every Claude update. The classic renderer arms no canary.
+ */
+export const PROBE_ENV: Readonly<Record<string, string>> = { CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN: "1" };
+
 export interface ProbePty {
   pid: number;
   kill(signal?: string): void;

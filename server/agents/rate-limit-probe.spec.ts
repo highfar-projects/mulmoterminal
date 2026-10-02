@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { startRateLimitProbe, probeArgs, probeHeader, PROBE_PROMPT } from "./rate-limit-probe";
+import { startRateLimitProbe, probeArgs, probeHeader, PROBE_ENV, PROBE_PROMPT } from "./rate-limit-probe";
 import { createRateLimitStore } from "./rate-limit-store";
 import { killPty } from "../session/pty-kill";
 
@@ -273,5 +273,13 @@ describe("ending the probe when its answer lands", () => {
     const { store, killed } = wire();
     store.reportCodex(windows, 1000);
     expect(killed).not.toHaveBeenCalled();
+  });
+});
+
+// A probe is killed seconds after it answers; in fullscreen that counted as a crash and, twice in one
+// Claude version, switched fullscreen off for every later session on the login.
+describe("PROBE_ENV", () => {
+  it("starts the probe on the classic renderer, which arms no fullscreen boot canary", () => {
+    expect(PROBE_ENV).toEqual({ CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN: "1" });
   });
 });
