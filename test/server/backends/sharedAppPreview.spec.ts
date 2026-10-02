@@ -15,6 +15,7 @@
 //   IT NEEDS NO SLUG. The name is the one irreversible write out of a namespace everybody shares,
 //   and nothing can ask whether one is free without consuming it. A preview that reserved one would
 //   burn a name per abandoned app.
+import { createHash } from "node:crypto";
 import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -379,6 +380,31 @@ describe("shared app preview", () => {
     const result = await previewSharedApp(root, stamp);
 
     expect(result.ok && result.own).toEqual({ bookings: [{ id: `${OWNER.uid}_q1`, note: "q1" }] });
+  });
+
+  it("finds an own row named by THIS app's pseudonym of the author", async () => {
+    // `idFrom: "pseudonym"` (#325): the row is sha256(uid + ":" + aid). The same author's pseudonym for
+    // another app, and their raw uid, are not their row here.
+    writeApp(
+      root,
+      declaration({
+        collections: { bookings: { submitOnly: true } },
+        public: { enabled: true, read: ["notes"], submit: { bookings: { auth: "anonymous", createFields: ["note"], idFrom: "pseudonym" } } },
+      }),
+    );
+    const hash = (text: string): string => createHash("sha256").update(text).digest("hex");
+    docs.store.set(
+      `apps/${AID}/collections/bookings/items`,
+      new Map([
+        [hash(`${OWNER.uid}:${AID}`), { note: "mine" }],
+        [hash(`${OWNER.uid}:another-app`), { note: "another app's" }],
+        [OWNER.uid, { note: "raw uid" }],
+      ]),
+    );
+
+    const result = await previewSharedApp(root, stamp);
+
+    expect(result.ok && result.own).toEqual({ bookings: [{ id: hash(`${OWNER.uid}:${AID}`), note: "mine" }] });
   });
 
   it("says nothing about a collection whose rows could not be read", async () => {

@@ -94,8 +94,9 @@ export interface PreviewWriter {
  *
  *  - `rules` — the write was made and the database refused it. THIS is the answer the run exists
  *    to bring back, and the only one that says anything about what a visitor would get.
- *  - `taken` — the id was already in use. Under `idFrom: "auth.uid"` that means the AUTHOR has a
- *    record here, which says nothing about a visitor: they have a different uid and would succeed.
+ *  - `taken` — the id was already in use. Where the id is built from the submitter (`auth.uid`,
+ *    `pseudonym`) that means the AUTHOR has a record here, which says nothing about a visitor: their
+ *    id differs and they would succeed.
  *  - `host` — this side never got as far as writing: no session, a projection that would not
  *    build, a field the form requires and the page did not send. About the app or the run, not
  *    about the rules. */

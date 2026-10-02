@@ -531,7 +531,7 @@ export async function readRecords(app: JoinedApp, cid: string, limit: number): P
       scope: "none",
       rows: [],
       note:
-        "this collection builds its ids as `uid_<field>`, and the rules grant a submitter the document they can NAME rather than a range of them — " +
+        "this collection builds its ids from you (your uid, or this app's pseudonym of it) joined to a field, and the rules grant a submitter the document they can NAME rather than a range of them — " +
         "so your rows cannot be listed at all. Name the record directly if you know which one it is",
     };
   if ("id" in want) {
