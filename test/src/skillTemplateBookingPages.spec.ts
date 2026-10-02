@@ -187,35 +187,53 @@ describe("class-seats.md — views/desk.html", () => {
   });
 });
 
-// The meeting room's cancellation is the desk's: a booker keyed by the slot cannot reach a page of
-// their own, so this button is the only way a slot is given back.
-describe("meeting-room.md — views/desk.html", () => {
+// A booker cancels on the public page they booked from: `/p/` opens only for the roster. Their own
+// rows arrive in `viewer.mine` without a status, which is why these two templates (one status each)
+// can offer it and the ones with several statuses cannot.
+describe.each([
+  {
+    name: "meeting-room.md — views/grid.html",
+    template: meetingRoom,
+    heading: "views/grid.html",
+    data: { rooms: [{ id: "r1", title: "A室" }], slots: [{ id: "r1-0900", room: "r1", startAt: "2026-10-05T09:00", state: "taken" }] },
+    own: { id: "r1-0900", slot: "r1-0900", requesterName: "山田", purpose: "定例" },
+    shown: "A室",
+  },
+  {
+    name: "class-seats.md — views/classes.html",
+    template: classSeats,
+    heading: "views/classes.html",
+    data: { classes: [{ id: "c1", title: "ジャズ入門", startAt: "2026-10-05T19:00" }], seats: [{ id: "c1-01", classId: "c1", state: "taken" }] },
+    own: { id: "c1-01", seat: "c1-01", requesterName: "山田" },
+    shown: "ジャズ入門",
+  },
+])("$name — the booker's own cancel", ({ template, heading, data, own, shown }) => {
   beforeEach(() => {
     document.body.innerHTML = "";
   });
+  const may = { can: { bookings: { withdrawFrom: ["booked"] } } };
 
-  const state = {
-    slots: [{ id: "r1-0900", startAt: "2026-10-05T09:00" }],
-    bookings: [{ id: "r1-0900", slot: "r1-0900", requesterName: "山田", requesterEmail: "y@example.jp", purpose: "定例", status: "booked" }],
-  };
-
-  it("lists the bookings and draws no cancel without the role's permission", () => {
-    const page = load(meetingRoom, "views/desk.html");
-    page.tell(state, { can: {} });
-    expect(document.body.textContent).toContain("山田");
-    expect(document.querySelectorAll("#rows button")).toHaveLength(0);
-  });
-
-  it("cancels on the second press, by the booking's id", async () => {
-    const page = load(meetingRoom, "views/desk.html");
-    page.tell(state, { can: { bookings: { withdrawAny: true } } });
-    click("#rows button");
+  it("lists the reader's own booking and withdraws it on the second press", async () => {
+    const page = load(template, heading);
+    page.tell(data, { ...may, mine: { bookings: [own] } });
+    expect(document.getElementById("mine")?.textContent).toContain(shown);
+    click("#mine button");
     await settle();
     expect(page.calls).toHaveLength(0);
-    click("#rows button");
+    click("#mine button");
     await settle();
-    expect(page.calls).toEqual([{ kind: "withdraw", cid: "bookings", id: "r1-0900", values: {} }]);
-    expect(page.said()).toBe("取り消しました。");
+    expect(page.calls).toEqual([{ kind: "withdraw", cid: "bookings", id: own.id, values: {} }]);
+    expect(document.querySelectorAll("#mine button")).toHaveLength(0);
+  });
+
+  it("says nothing about bookings it could not look up, and offers no withdraw it may not make", () => {
+    const page = load(template, heading);
+    page.tell(data, may);
+    expect(document.getElementById("mine")?.textContent).toBe("");
+    page.tell(data, { can: {}, mine: { bookings: [own] } });
+    expect(document.querySelectorAll("#mine button")).toHaveLength(0);
+    page.tell(data, { ...may, mine: { bookings: [] } });
+    expect(document.getElementById("mine")?.textContent).toBe("予約はありません。");
   });
 });
 

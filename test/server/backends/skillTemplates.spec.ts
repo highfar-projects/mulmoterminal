@@ -367,21 +367,22 @@ describe("the shared-app templates", () => {
     );
   });
 
-  // A booker whose row is keyed by the slot (`idFrom: "field"`) cannot find it again from the public
-  // page — `view.mine` refuses that strategy — unless the page can read the rows themselves (the
-  // project board's claims are in `public.read`, with a `uidField` to recognise one's own). `/p/`
-  // opens only for addresses in `members`. So a move granted to a booker the public page cannot
-  // find is a promise nobody who booked from that page can use.
-  it("grants no own move to a booker the public page cannot find", () => {
+  // `/p/{slug}` opens only for addresses in `members`. A template whose public page takes records
+  // from anybody, and then puts what those people do next on a participant page, promises them a
+  // page they cannot open. Allowed only where the submitters ARE the roster (`audience:
+  // "participant"` on the submission) or the template says it invites them, and why.
+  const INVITES_ITS_PARTICIPANTS: Record<string, string> = {
+    "gym.md": "a members' gym: its read-access section invites each member, and says what a gym that does not loses",
+  };
+  it("puts nothing for a public submitter on a page only the roster opens", () => {
     for (const file of TEMPLATE_FILES) {
-      const manifest = blocksOf(file).get("app.json") as { public?: { read?: string[]; submit?: Record<string, Record<string, unknown>> } } | undefined;
-      const readable = manifest?.public?.read ?? [];
-      Object.entries(manifest?.public?.submit ?? {})
-        .filter(([cid, submit]) => submit.idFrom === "field" && !readable.includes(cid))
-        .forEach(([cid, submit]) => {
-          const moves = ["selfDelete", "selfTransitions", "selfUpdate"].filter((key) => submit[key] !== undefined);
-          expect(`${file}: ${cid} ${moves.join(", ") || "no own move"}`).toBe(`${file}: ${cid} no own move`);
-        });
+      const manifest = blocksOf(file).get("app.json") as
+        { views?: { id?: string; audience?: string }[]; public?: { enabled?: boolean; submit?: Record<string, { audience?: string }> } } | undefined;
+      const participantViews = (manifest?.views ?? []).filter((view) => view.audience === "participant").map((view) => view.id);
+      const openSubmit = Object.values(manifest?.public?.submit ?? {}).some((submit) => submit.audience !== "participant");
+      const verdict =
+        participantViews.length === 0 || !openSubmit || file in INVITES_ITS_PARTICIPANTS ? "reachable" : `unreachable ${participantViews.join(", ")}`;
+      expect(`${file}: ${verdict}`).toBe(`${file}: reachable`);
     }
   });
 
@@ -397,6 +398,12 @@ describe("the shared-app templates", () => {
       withdrawn.forEach((cid) => {
         const deletable = manifest?.collections?.[cid]?.writerDelete === true || manifest?.public?.submit?.[cid]?.selfDelete !== undefined;
         expect(`${file}: ${cid} ${deletable ? "has a delete" : "has no delete"}`).toBe(`${file}: ${cid} has a delete`);
+      });
+      // The reader's OWN withdrawal is `selfDelete` alone; the desk's `writerDelete` does not grant it.
+      const ownWithdrawn = new Set([...text.matchAll(/can\?\.([A-Za-z0-9_-]+)\?\.withdrawFrom/g)].map((match) => match[1] ?? ""));
+      ownWithdrawn.forEach((cid) => {
+        const own = manifest?.public?.submit?.[cid]?.selfDelete !== undefined;
+        expect(`${file}: ${cid} ${own ? "has selfDelete" : "has no selfDelete"}`).toBe(`${file}: ${cid} has selfDelete`);
       });
     }
   });

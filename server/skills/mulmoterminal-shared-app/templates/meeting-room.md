@@ -13,8 +13,8 @@
 **連続 2 コマは 2 件の申込みで、まとめて取ることはできません。** ビューが呼べるのは 1 件ずつの
 `submit()` だけで、複数を 1 つの書き込みにする API はありません。1 コマ目が通って 2 コマ目が
 取られている、という中途半端な結果は起こりえます。刻み幅を会議の実態に合わせる（60 分会議が
-多いなら 60 分枠にする）か、2 コマ目が取れなかったら 1 コマ目の取り消しを受付に頼むよう
-ページに書く（下の「取り消しは受付で」）か、どちらかを最初に決めてください。
+多いなら 60 分枠にする）か、2 コマ目が取れなかったら 1 コマ目を取り下げるようページに書く
+（下の `withdraw`）か、どちらかを最初に決めてください。
 
 **承認しない。** `initialStatus` を確定の状態にして、遷移は「取り消し」だけ。受付は必要な
 ときだけ介入します。
@@ -40,8 +40,7 @@
     "bookings": {
       "submitOnly": true,
       "statusField": "status",
-      "transitions": { "initial": ["booked"] },
-      "writerDelete": true
+      "transitions": { "initial": ["booked"] }
     },
     "slots": { "mirrorOf": "bookings" }
   },
@@ -65,7 +64,9 @@
         "window": {
           "fromField": { "ref": "slot", "collection": "slots", "field": "opensAt" },
           "untilField": { "ref": "slot", "collection": "slots", "field": "closesAt" }
-        }
+        },
+        "selfUpdate": { "booked": ["purpose", "attendees"] },
+        "selfDelete": ["booked"]
       }
     }
   }
@@ -178,14 +179,54 @@ fifteen lines, are in [design.md](./design.md).
 <label>用件 <input id="why" maxlength="60" /></label>
 <p id="say" role="status"></p>
 <div id="grid"></div>
+<h2>あなたの予約</h2>
+<ul id="mine"></ul>
 <script>
   const view = window.__MC_APP_VIEW;
   const grid = document.getElementById("grid");
+  const mine = document.getElementById("mine");
   const who = document.getElementById("who");
   const why = document.getElementById("why");
   const say = document.getElementById("say");
-  view.onState(({ rooms = [], slots = [] }) => {
+  // 取り下げた予約の id。次の onState が届くまで、一覧に戻さないために持ちます。
+  const gone = new Set();
+
+  // 自分の予約は viewer.mine で届きます（requesterEmail がサインインした本人のもの）。
+  // 届くのは送ったフィールドと id だけで、状態は来ません。このアプリの予約は booked の
+  // 1 つだけなので、withdrawFrom に booked があれば全部に取り下げを出せます。
+  // viewer.mine.bookings が無いのは「調べられなかった」で、「予約が無い」ではありません。
+  const drawMine = (slots, name, viewer) => {
+    const own = viewer.mine?.bookings;
+    if (own === undefined) {
+      mine.replaceChildren();
+      return;
+    }
+    const canWithdraw = (viewer.can?.bookings?.withdrawFrom ?? []).includes("booked");
+    const slotOf = Object.fromEntries(slots.map((slot) => [slot.id, slot]));
+    const rows = own.filter((booking) => !gone.has(booking.id));
+    mine.replaceChildren(
+      ...rows.map((booking) => {
+        const slot = slotOf[booking.slot];
+        const row = document.createElement("li");
+        const what = document.createElement("span");
+        what.textContent = `${slot?.startAt ?? booking.slot} ${name[slot?.room] ?? ""} ${booking.purpose ?? ""}`;
+        row.append(what);
+        if (canWithdraw) {
+          const off = document.createElement("button");
+          off.type = "button";
+          off.dataset.id = booking.id;
+          off.textContent = "取り下げる";
+          row.append(off);
+        }
+        return row;
+      }),
+    );
+    if (rows.length === 0) mine.textContent = "予約はありません。";
+  };
+
+  view.onState(({ rooms = [], slots = [] }, viewer = {}) => {
     const name = Object.fromEntries(rooms.map((room) => [room.id, room.title ?? room.id]));
+    drawMine(slots, name, viewer);
     grid.replaceChildren(
       ...slots
         .filter((slot) => slot.state === "open")
@@ -228,6 +269,27 @@ fifteen lines, are in [design.md](./design.md).
     }
     say.textContent = result.error ? `予約できませんでした: ${result.error}` : "その枠は取られました。";
   });
+  mine.addEventListener("click", async (event) => {
+    const button = event.target;
+    const id = button.dataset?.id;
+    if (!id) return;
+    // 確認はページの中で。confirm() はサンドボックスに無視され、false が
+    // 返るので、「確認しているつもりで何も起きないボタン」になります。
+    // 1 回目は文言を変えるだけ、2 回目で書きます。
+    if (button.dataset.armed !== "yes") {
+      button.dataset.armed = "yes";
+      button.textContent = "取り下げる（枠はすぐ他の人が取れるようになります）";
+      return;
+    }
+    const result = await view.withdraw("bookings", id);
+    if (result.ok) {
+      gone.add(id);
+      button.closest("li")?.remove();
+      say.textContent = "取り下げました。";
+      return;
+    }
+    say.textContent = result.error ? `取り下げられませんでした: ${result.error}` : "取り下げられませんでした。";
+  });
   view.ready();
 </script>
 ```
@@ -255,23 +317,26 @@ fifteen lines, are in [design.md](./design.md).
 押してから書きます。ビューの HTML は信頼されていないためで、読み込んだ瞬間に `submit()` を
 呼ぶページがあっても勝手に予約は入りません。
 
-## 取り消しは受付で — 本人の取り消しページを作らない理由
+## 自分の予約と、取り下げ — 公開ページで
 
-予約した本人が取り消すページ（`audience: "participant"`、`/p/{slug}`）は**置きません。** 2 つの理由で、
-公開ページから予約した人には届かないからです。
+上の `grid.html` が、空き枠と一緒に**サインインした本人の予約**を出し、そこで取り下げます。
+**ここに取り下げのボタンを描かないと、本人には取り消す手段が何もありません** — このテンプレートは
+本人の状態遷移を持たないので（下の「取り消しには 2 通りある」）、`withdraw` がその唯一の出口です。
 
-- **`/p/` は `members` に載っている人のページです。** 公開ページから予約した人は `members` に
-  いないので、そのページを開けません
-- **公開ページは、後から自分の予約を見つけられません。** 予約の id は枠の id（`idFrom: "field"`）で、
-  訪問者の uid から作られていないので、`view.mine()` は「この人の予約はどれか」に答えません
-
-だから取り消しは**受付が行います**。`bookings` の `writerDelete: true` が、受付の画面に取り消しの
-ボタンを出させるもので、押すと**予約の削除と枠の再オープンが 1 つのバッチ**になり、その枠は
-すぐ他の人が取れるようになります。公開ページには「取り消しは受付へ」と連絡先を書いてください。
-
-予約する人が全員社員で、名簿（`members`）に載せられるなら、本人の取り消しページを足せます。
-そのときは `public.submit.bookings.selfDelete: ["booked"]` と、`viewer.can.bookings.withdrawFrom`
-にある状態の行に `view.withdraw()` のボタンを出す `participant` のページを書きます。
+- **自分の予約は `viewer.mine.bookings` で届きます。** `requesterEmail` がサインインした本人の
+  アドレスなので、親がその行を引いて渡します。届くのは**送ったフィールドと id だけ**で、
+  状態（`status`）は来ません。このアプリの状態は `booked` の 1 つだけなので困りませんが、
+  状態がいくつもあるアプリ（[salon.md](./salon.md)）ではこの形は取れません
+- **`viewer.mine.bookings` が無いのは「調べられなかった」**で、「予約が無い」ではありません。
+  サインインしていないときもそうです。そのときは何も描きません
+- **`/p/{slug}`（`audience: "participant"`）に置かないこと。** そこを開けるのは `members` に
+  載っている人だけで、公開ページから予約した人は開けません
+- **`withdraw` は行き先を持ちません。** 行が消えるので、動く先がない
+- **戻せません。** 取り下げた瞬間に枠は他の人のものになりうるので、確認は**ページが**出す
+  こと（本人の操作に親は確認を挟みません）。ただし `confirm()` は使えません —
+  サンドボックスが無視するので、押しても何も起きないボタンになります
+- **`can.withdrawFrom` が空なら宣言していないということ。** `selfDelete` を書いていないか、
+  ルールがまだ deploy されていないか、アプリを publish し直していないかのいずれかです
 
 ## views/desk.html — 受付の画面
 
@@ -282,8 +347,8 @@ publish されます。総務の Mac が閉じたままでも、受付が自分�
 契約は公開ビューと同じ（`window.__MC_APP_VIEW` / `onState` / `ready`）。渡されるものだけが
 違い、`collections` に書いたものが**その人の資格情報で**読まれます。
 
-このアプリの受付は**読んで、頼まれたら取り消す画面**です。予約の状態は `booked` 一つで、
-`transitions` は `initial` だけなので、受付が押すボタンは「取り消す」だけです（上の「取り消しは受付で」）。
+このアプリの受付は**読む画面**です。予約の状態は `booked` 一つで、`transitions` は `initial`
+だけ — つまり受付が押すボタンはありません（枠を空けるのは本人の取り下げ、下記）。
 
 ```html
 <style>
@@ -310,15 +375,12 @@ publish されます。総務の Mac が閉じたままでも、受付が自分�
 <label>日付 <input id="day" type="date" /></label>
 <p id="count" role="status"></p>
 <div id="rows"></div>
-<p id="say" role="status"></p>
 <script>
   const view = window.__MC_APP_VIEW;
   const rows = document.getElementById("rows");
   const count = document.getElementById("count");
   const day = document.getElementById("day");
-  const say = document.getElementById("say");
   let latest = { bookings: [], slots: [] };
-  let canWithdraw = false;
 
   const draw = () => {
     const when = day.value;
@@ -340,39 +402,17 @@ publish されます。総務の Mac が閉じたままでも、受付が自分�
         const why = document.createElement("span");
         why.textContent = booking.purpose ?? "";
         row.append(time, who, why);
-        if (canWithdraw) {
-          const off = document.createElement("button");
-          off.type = "button";
-          off.dataset.id = booking.id;
-          off.textContent = "取り消す";
-          row.append(off);
-        }
         return row;
       }),
     );
   };
 
-  view.onState(({ bookings = [], slots = [] }, viewer = {}) => {
+  view.onState(({ bookings = [], slots = [] }) => {
     latest = { bookings, slots };
-    canWithdraw = viewer.can?.bookings?.withdrawAny === true;
     draw();
   });
   // 絞り込みは手元だけの操作。onState を待つ必要はなく、待つと最初の描画が出ません。
   day.addEventListener("change", draw);
-  rows.addEventListener("click", async (event) => {
-    const button = event.target;
-    const id = button.dataset?.id;
-    if (!id) return;
-    // 確認はページの中で。confirm() はサンドボックスに無視されます。
-    // 1 回目は文言を変えるだけ、2 回目で書きます。
-    if (button.dataset.armed !== "yes") {
-      button.dataset.armed = "yes";
-      button.textContent = "取り消す（枠はすぐ他の人が取れるようになります）";
-      return;
-    }
-    const result = await view.withdraw("bookings", id);
-    say.textContent = result.ok ? "取り消しました。" : result.error ? `取り消せませんでした: ${result.error}` : "取り消せませんでした。";
-  });
   view.ready();
 </script>
 ```
@@ -386,18 +426,26 @@ publish されます。総務の Mac が閉じたままでも、受付が自分�
 
 | やり方 | 何が起きるか | 枠 | 記録 | 通知 |
 |---|---|---|---|---|
-| **状態遷移**（`transitions` で `cancelled` へ） | 状態が変わるだけ | **空かない**（受付が消すまで） | 残る | 出せる |
-| **削除**（`writerDelete`、受付の `withdraw`） | **行が消える** | **その場で開く** | 残らない | 出せない |
+| **状態遷移**（`selfTransitions` で `cancelled` へ） | 状態が変わるだけ | **空かない**（受付が消すまで） | 残る | 出せる |
+| **取り下げ**（`selfDelete`） | **行が消える** | **その場で開く** | 残らない | 出せない |
+
+**両方を本人に渡してはいけません。** このテンプレートが `selfTransitions` を持たないのは
+そのためです。両方あると、本人が先に「取り消し」を押した時点で行は `cancelled` になり、
+`selfDelete: ["booked"]` はもうその行に効きません — **本人の操作で、受付にしか片づけられない
+枠ができてしまう**。しかも `withdraw` を描いていないページや、宣言より古い publish 済みの
+ページからでも、`transition` は文書化された呼び出しとして通ります。
+どちらか一方だけを宣言してください。
 
 - **押したら空いてほしい**（会議室、席、機材）→ このテンプレートのまま。`transitions` は
-  `initial` だけ、状態は `booked` の 1 つ、取り消しは受付の削除だけ
-- **記録を残したい**（有料の貸出、社外向け、無断キャンセルの常習を見たい）→ `cancelled` への
-  遷移を足し、枠を空ける削除は受付があとで行う形（美容室の [salon.md](./salon.md) がそれ）。
-  **「取り消しは即時、枠が再び開くのは受付が処理してから」と最初に言うこと**
+  `initial` だけ、状態は `booked` の 1 つ、本人の出口は `withdraw` だけ
+- **記録を残したい**（有料の貸出、社外向け、無断キャンセルの常習を見たい）→ `selfDelete` を
+  書かず、`selfTransitions` で `cancelled` に落とす形（美容室の
+  [salon.md](./salon.md) がそれ）。枠を空けるのは受付の操作になるので、**「取り消しは即時、
+  枠が再び開くのは受付が処理してから」と最初に言うこと**
 
-受付の削除は**予約の削除と枠の再オープンが 1 つのバッチ**です。片方だけの書き込みはルールが
-拒否するので、「予約は消えたのに枠は埋まったまま」も「枠は開いたのに予約が残っている」も
-作れません。
+`selfDelete` を入れると、本人の取り下げは**削除と枠の再オープンが 1 つのバッチ**になります。
+片方だけの書き込みはルールが拒否するので、「予約は消えたのに枠は埋まったまま」も
+「枠は開いたのに予約が残っている」も作れません。
 
 **メールが出せないのは仕組み上の限界**です。メールの規則は書き込み後の文書を読んで
 「その遷移が本当に起きた」を確かめるので、消える行には束ねようがありません。
