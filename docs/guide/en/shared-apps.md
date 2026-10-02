@@ -55,6 +55,7 @@ the agent picks the shape — but knowing they exist tells you what is cheap to 
 | A bookable unit you can list in advance — a meeting room, a desk, equipment on loan | **meeting-room** | The slots exist as records; taking one is claiming its id |
 | A class with a capacity, where people see how many seats are left but not who booked | **class-seats** | A class of N is N seat records; cancelling is done at the front desk |
 | A scheduling poll — which candidate dates work for everyone | **schedule-poll** | One answer per person, correctable until the deadline; moving the deadline closes it |
+| A question box — anyone asks without signing in, and only the answered ones are shown | **question-box** | Questions are seen by the owner only; the owner decides one by one which reach the public page |
 | A page that moves while people are watching — a live poll, a lecture, a stand-up quiz | **live-poll** | The audience's page redraws as votes land, with no reload |
 | A work board with a roster — people register once, then claim tasks; the owner adds and frees work | **project-board** | A desk for the owner, and the one that shows how "have I already registered?" is answered properly |
 | A log only added to, never rewritten — a shift handover, an incident timeline, a class question board, a chat room | **append-feed** | Rows are only ever appended, and only their author may remove one |

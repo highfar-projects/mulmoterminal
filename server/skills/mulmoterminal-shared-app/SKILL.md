@@ -53,6 +53,12 @@ These shapes are written out in full — declaration, schemas, and the reasoning
   Doodle): candidate dates, ○△× per date, everyone sees the table, a participant corrects their own
   answer with `view.correct`, and the organiser closes it by moving `closesAt`. Names are meant to be
   seen here, which is the opposite of class-seats.
+- **[templates/question-box.md](./templates/question-box.md)** — a QUESTION BOX: anyone sends a
+  question with no sign-in, the owner answers on `/m/`, and only the rows the owner chose to publish
+  reach the public page (a talk's Q&A, a shop's FAQ, an anonymous question box). This is what
+  `public.readPublished` + `publishField` are for: the rules, not the page, keep the rest away, and
+  publishing is the owner's switch on `/m/{slug}/records/{cid}` — never a page's write, because
+  `view.correct` sends strings and the flag is a boolean.
 - **[templates/live-poll.md](./templates/live-poll.md)** — a page that MOVES while people are looking
   at it (a live stream, a lecture, a stand-up quiz). This is what `views[].live` is for, and the only
   one whose declaration is decided by FAN-OUT: the audience may watch the questions, only the desk may
