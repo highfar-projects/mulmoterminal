@@ -33,7 +33,18 @@
         "README・技術文書": "README or technical document",
         "仕様書": "Specification",
         "契約書・利用規約": "Contract or terms of service",
-        "規程・社内規則": "Regulation or company rules"
+        "規程・社内規則": "Regulation or company rules",
+        "よくある質問（FAQ）": "FAQ",
+        "用語集": "Glossary",
+        "判決文": "Court judgment",
+        "特許明細書": "Patent specification",
+        "論文": "Academic paper",
+        "小説・物語": "Novel or story",
+        "文学のエッセイ・随筆": "Literary essay",
+        "詩": "Poetry",
+        "戯曲・脚本": "Play or script",
+        "演説・挨拶の原稿": "Speech or address (to be read aloud)",
+        "書き起こし（会見・会議での発言の記録）": "Transcript (what was said at a press conference or meeting)"
       }
     },
     "scope": {

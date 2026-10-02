@@ -52,7 +52,7 @@ describeSh("adopt: the survey", () => {
   it.each<[string, Record<string, unknown>, Record<string, unknown>, string]>([
     ["a count chaff does not report", {}, { genre: "docs/manual", findings: 5 }, '"findings" is 5, but chaff reports 2'],
     ["another genre than the kind's", {}, { genre: "blog/tech", findings: 2 }, '"genre" must be docs/manual'],
-    ["a kind the pack does not know", { kind: "詩" }, { genre: "docs/manual", findings: 2 }, "is not one of the kinds"],
+    ["a kind the pack does not know", { kind: "短歌" }, { genre: "docs/manual", findings: 2 }, "is not one of the kinds"],
     ["a place outside the folder", { places: "../elsewhere" }, { genre: "docs/manual", findings: 2 }, "outside this folder: ../elsewhere"],
     ["a place that is not there", { places: "missing.md" }, { genre: "docs/manual", findings: 2 }, "not in this folder: missing.md"],
   ])("refuses %s", (_label, answers, record, message) => {
