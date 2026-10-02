@@ -62,7 +62,8 @@
         "window": {
           "fromField": { "ref": "seat", "collection": "seats", "field": "opensAt" },
           "untilField": { "ref": "seat", "collection": "seats", "field": "closesAt" }
-        }
+        },
+        "selfDelete": ["booked"]
       }
     }
   }
@@ -180,15 +181,20 @@ this template's, not your app's. The rules behind the sheet are in [design.md](.
   #say { min-height: 1.6em; margin: 14px 0 0; color: var(--main); font-size: 13px; font-weight: 700; }
 </style>
 <h1>クラス予約</h1>
-<p>取り消しは受付へご連絡ください。</p>
 <label>お名前 <input id="who" maxlength="40" /></label>
 <p id="say" role="status"></p>
 <div id="list"></div>
+<h2>あなたの予約</h2>
+<ul id="mine"></ul>
 <script>
   const view = window.__MC_APP_VIEW;
   const list = document.getElementById("list");
+  const mine = document.getElementById("mine");
   const who = document.getElementById("who");
   const say = document.getElementById("say");
+  // 取り下げた予約の id。次の onState が届くまで、一覧に戻さないために持ちます。
+  // 届いた一覧から消えたら忘れること。id は枠（席）の id なので、同じ枠を取り直すと同じ id で戻ってきます。
+  const gone = new Set();
   // 弾かれた席。次に押したときはここに無い席を選ぶ。ページを開き直すと忘れてよい。
   const refused = new Set();
   let latest = { classes: [], seats: [] };
@@ -231,9 +237,46 @@ this template's, not your app's. The rules behind the sheet are in [design.md](.
     );
   };
 
-  view.onState(({ classes = [], seats = [] }) => {
+  // 自分の予約は viewer.mine で届きます（requesterEmail がサインインした本人のもの）。
+  // 届くのは送ったフィールドと id だけで、状態は来ません。予約の状態は booked の 1 つなので、
+  // withdrawFrom に booked があれば全部に取り下げを出せます。
+  // viewer.mine.bookings が無いのは「調べられなかった」で、「予約が無い」ではありません。
+  const drawMine = (viewer) => {
+    const own = viewer.mine?.bookings;
+    if (own === undefined) {
+      mine.replaceChildren();
+      return;
+    }
+    const canWithdraw = (viewer.can?.bookings?.withdrawFrom ?? []).includes("booked");
+    const classOfSeat = Object.fromEntries(latest.seats.map((seat) => [seat.id, seat.classId]));
+    const lessonOf = Object.fromEntries(latest.classes.map((lesson) => [lesson.id, lesson]));
+    const present = new Set(own.map((booking) => booking.id));
+    [...gone].filter((id) => !present.has(id)).forEach((id) => gone.delete(id));
+    const rows = own.filter((booking) => !gone.has(booking.id));
+    mine.replaceChildren(
+      ...rows.map((booking) => {
+        const lesson = lessonOf[classOfSeat[booking.seat]];
+        const row = document.createElement("li");
+        const what = document.createElement("span");
+        what.textContent = lesson ? `${lesson.startAt} ${lesson.title}` : booking.seat;
+        row.append(what);
+        if (canWithdraw) {
+          const off = document.createElement("button");
+          off.type = "button";
+          off.dataset.id = booking.id;
+          off.textContent = "取り下げる";
+          row.append(off);
+        }
+        return row;
+      }),
+    );
+    if (rows.length === 0) mine.textContent = "予約はありません。";
+  };
+
+  view.onState(({ classes = [], seats = [] }, viewer = {}) => {
     latest = { classes, seats };
     draw();
+    drawMine(viewer);
   });
 
   list.addEventListener("click", async (event) => {
@@ -267,6 +310,27 @@ this template's, not your app's. The rules behind the sheet are in [design.md](.
     const reason = result.error ? `申し込めませんでした: ${result.error}` : "申し込めませんでした。";
     say.textContent = `${reason} 席が先に埋まった場合は、もう一度押すと別の席で申し込みます。`;
   });
+
+  mine.addEventListener("click", async (event) => {
+    const button = event.target;
+    const id = button.dataset?.id;
+    if (!id) return;
+    // 確認はページの中で。confirm() はサンドボックスに無視されます。
+    // 1 回目は文言を変えるだけ、2 回目で書きます。
+    if (button.dataset.armed !== "yes") {
+      button.dataset.armed = "yes";
+      button.textContent = "取り下げる（席はすぐ他の人が取れるようになります）";
+      return;
+    }
+    const result = await view.withdraw("bookings", id);
+    if (result.ok) {
+      gone.add(id);
+      button.closest("li")?.remove();
+      say.textContent = "取り下げました。";
+      return;
+    }
+    say.textContent = result.error ? `取り下げられませんでした: ${result.error}` : "取り下げられませんでした。";
+  });
   view.ready();
 </script>
 ```
@@ -280,19 +344,20 @@ this template's, not your app's. The rules behind the sheet are in [design.md](.
   全申込みを見張ることになり、publish が拒否します。「残り」はページを開いたときと、自分が申し
   込んだ後に更新されます。予約開始の瞬間に人が集まるクラスなら、そうページに書いてください
 
-## 取り消しは受付で — 本人の取り消しページを作らない理由
+## 取り消しは 2 か所 — 本人は公開ページで、受付は受付の画面で
 
-会議室（[meeting-room.md](./meeting-room.md)）は本人の取り下げページ（`/p/{slug}`）を持ちますが、
-**このテンプレートには置きません。** 2 つの理由で、外から来た予約者には届かないからです。
+**本人は、上の `classes.html` の「あなたの予約」で取り下げます。** 自分の予約は
+`viewer.mine.bookings` で届きます（`requesterEmail` がサインインした本人のアドレスなので、
+親がその行を引いて渡します）。`selfDelete: ["booked"]` が本人の取り下げで、押すと**予約の削除と
+席の再オープンが 1 つのバッチ**になり、その席はすぐ他の人が取れるようになります。
 
-- **`/p/` は `members` に載っている人のページです。** 公開ページから申し込んだ人は `members` に
-  いないので、そのページを開けません
-- **公開ページは、後から自分の予約を見つけられません。** 予約の id は席の id（`idFrom: "field"`）で、
-  訪問者の uid から作られていないので、「この人の予約はどれか」を引く手段がありません
+- 届くのは**送ったフィールドと id だけ**で、状態は来ません。このアプリの予約は `booked` の
+  1 つだけなので、`withdrawFrom` に `booked` があれば全部に取り下げを出せます
+- **`/p/{slug}`（`audience: "participant"`）に置かないこと。** そこを開けるのは `members` に
+  載っている人だけで、公開ページから申し込んだ人は開けません
 
-だから取り消しは**受付が行います**。`bookings` の `writerDelete: true` が、受付の画面に取り消しの
-ボタンを出させるもので、押すと**予約の削除と席の再オープンが 1 つのバッチ**になり、その席は
-すぐ他の人が取れるようになります。公開ページには「取り消しは受付へ」と連絡先を書いてください。
+**受付は、連絡を受けた予約を `desk.html` で消します。** `bookings` の `writerDelete: true` が
+そのボタンを出させるもので、本人の取り下げと同じく席はすぐ開きます。
 
 ## views/desk.html — 受付の画面
 
@@ -408,6 +473,5 @@ this template's, not your app's. The rules behind the sheet are in [design.md](.
 - **キャンセル待ち。** 満席の後に並ぶ場所がありません。並ばせたいなら、順位で見せるジム
   （[gym.md](./gym.md)）を使ってください。代わりに参加者同士が申込みを読める形になります
 - **「お一人様 1 席」の強制。** 表示はできても強制はできません
-- **予約した本人による取り消し。** 上の「取り消しは受付で」を参照
 - **席を選ばせる**（映画館の座席表）。これは会議室と同じ形で、席を訪問者に選ばせれば書けます
   — その場合は `views/classes.html` の `pickSeat` の代わりに席のボタンを並べてください

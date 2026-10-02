@@ -366,4 +366,45 @@ describe("the shared-app templates", () => {
       expect.arrayContaining([".claude/skills/topics/schema.json", ".claude/skills/speakers/schema.json", ".claude/skills/messages/schema.json"]),
     );
   });
+
+  // `/p/{slug}` opens only for addresses in `members`. A template whose public page takes records
+  // from anybody, and then puts what those people do next on a participant page, promises them a
+  // page they cannot open. Allowed only where the submitters ARE the roster (`audience:
+  // "participant"` on the submission) or the template says it invites them, and why.
+  const INVITES_ITS_PARTICIPANTS: Record<string, string> = {
+    "gym.md": "a members' gym: its read-access section invites each member, and says what a gym that does not loses",
+  };
+  it("puts nothing for a public submitter on a page only the roster opens", () => {
+    for (const file of TEMPLATE_FILES) {
+      const manifest = blocksOf(file).get("app.json") as
+        { views?: { id?: string; audience?: string }[]; public?: { enabled?: boolean; submit?: Record<string, { audience?: string }> } } | undefined;
+      const participantViews = (manifest?.views ?? []).filter((view) => view.audience === "participant").map((view) => view.id);
+      const openSubmit = Object.values(manifest?.public?.submit ?? {}).some((submit) => submit.audience !== "participant");
+      const verdict =
+        participantViews.length === 0 || !openSubmit || file in INVITES_ITS_PARTICIPANTS ? "reachable" : `unreachable ${participantViews.join(", ")}`;
+      expect(`${file}: ${verdict}`).toBe(`${file}: reachable`);
+    }
+  });
+
+  // A page that withdraws from a collection the declaration lets nobody delete from draws a button
+  // every press of which is refused — and the page test cannot see it, because it is handed the
+  // capability rather than deriving it.
+  it("declares a delete for every collection a page withdraws from", () => {
+    for (const file of TEMPLATE_FILES) {
+      const text = readFileSync(path.join(TEMPLATES, file), "utf8");
+      const manifest = blocksOf(file).get("app.json") as
+        { collections?: Record<string, { writerDelete?: boolean }>; public?: { submit?: Record<string, { selfDelete?: unknown }> } } | undefined;
+      const withdrawn = new Set([...text.matchAll(/view\.withdraw\("([A-Za-z0-9_-]+)"/g)].map((match) => match[1] ?? ""));
+      withdrawn.forEach((cid) => {
+        const deletable = manifest?.collections?.[cid]?.writerDelete === true || manifest?.public?.submit?.[cid]?.selfDelete !== undefined;
+        expect(`${file}: ${cid} ${deletable ? "has a delete" : "has no delete"}`).toBe(`${file}: ${cid} has a delete`);
+      });
+      // The reader's OWN withdrawal is `selfDelete` alone; the desk's `writerDelete` does not grant it.
+      const ownWithdrawn = new Set([...text.matchAll(/can\?\.([A-Za-z0-9_-]+)\?\.withdrawFrom/g)].map((match) => match[1] ?? ""));
+      ownWithdrawn.forEach((cid) => {
+        const own = manifest?.public?.submit?.[cid]?.selfDelete !== undefined;
+        expect(`${file}: ${cid} ${own ? "has selfDelete" : "has no selfDelete"}`).toBe(`${file}: ${cid} has selfDelete`);
+      });
+    }
+  });
 });
