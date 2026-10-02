@@ -42,9 +42,18 @@ export function spawnCapture(bin: string, args: string[], options: { env?: NodeJ
 //
 // execFile, not exec: the arguments stay an array, so nothing built from a request body is ever
 // parsed by a shell. The timeout kills the child rather than waiting on it forever.
-export async function spawnCaptureAsync(bin: string, args: string[], options: { cwd?: string; timeoutMs?: number } = {}): Promise<Captured> {
+export async function spawnCaptureAsync(
+  bin: string,
+  args: string[],
+  options: { cwd?: string; timeoutMs?: number; env?: NodeJS.ProcessEnv } = {},
+): Promise<Captured> {
   try {
-    const { stdout, stderr } = await execFileAsync(bin, args, { encoding: "utf8", cwd: options.cwd, timeout: options.timeoutMs ?? DEFAULT_TIMEOUT_MS });
+    const { stdout, stderr } = await execFileAsync(bin, args, {
+      encoding: "utf8",
+      cwd: options.cwd,
+      env: options.env,
+      timeout: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    });
     return { status: 0, stdout, stderr };
   } catch (e) {
     // A non-zero exit and a timeout both land here; both carry whatever the child managed to

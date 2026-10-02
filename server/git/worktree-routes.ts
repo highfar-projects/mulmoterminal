@@ -14,6 +14,8 @@ import { dirSession, survivorSnapshot } from "../session/dir-session.js";
 import { tmuxAttachedCounts } from "../infra/tmux.js";
 import { requestBody } from "../routes/requestBody.js";
 import { expandTilde } from "../files/pathContainment.js";
+import { worktreeCleanupRows } from "./worktree-cleanup.js";
+import { rememberedSessionCwds } from "../session/registry.js";
 
 interface WorktreeRouteOptions {
   isAllowedOrigin: (origin: string | undefined, remoteAddress: string | undefined) => boolean;
@@ -68,6 +70,12 @@ export function mountWorktreeRoutes(app: Express, { isAllowedOrigin, homeDir = o
   app.get("/api/worktrees/diff", async (req, res) => {
     const cwd = typeof req.query.cwd === "string" ? fromHome(req.query.cwd) : "";
     res.json(cwd ? await worktreeDiff(cwd) : { isWorktree: false, base: null, ahead: 0, dirty: 0, files: [], patch: "", truncated: false });
+  });
+
+  // Every managed worktree of the repos terminals have run in, with what keeps each from being
+  // removed (#2219). Read-only; removal is the route below, which re-checks dirtiness itself.
+  app.get("/api/worktrees/cleanup", async (_req, res) => {
+    res.json({ worktrees: await worktreeCleanupRows(await rememberedSessionCwds()) });
   });
 
   app.post("/api/worktrees/create", async (req, res) => {

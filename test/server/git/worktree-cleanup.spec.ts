@@ -1,0 +1,109 @@
+// @vitest-environment node
+// The facts behind the Processes page's worktree list, read from a real repository: merged or not,
+// dirty or not, and in use when a pane stands in it. The session sources are stubbed; git is not.
+import { makeTempDir } from "../../support/tempDir.js";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { rmDirRetrying, GIT_TEST_TIMEOUT_MS } from "./wtTestUtil.js";
+
+const paneCwds = vi.hoisted(() => ({ value: [] as string[] | null }));
+vi.mock("../../../server/infra/tmux.js", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  tmuxAttachedCounts: () => null,
+  tmuxPaneCwdsAsync: async () => paneCwds.value,
+}));
+vi.mock("../../../server/session/dir-session.js", () => ({
+  dirSession: async () => null,
+  survivorSnapshot: async () => new Set<string>(),
+}));
+vi.mock("../../../server/session/registry.js", () => ({ ptys: new Map([["p", { cwd: "/nowhere" }]]) }));
+
+const { git, worktreesRoot } = await import("../../../server/git/worktrees");
+const { worktreeCleanupRows } = await import("../../../server/git/worktree-cleanup");
+
+const gitIn = async (dir: string, ...args: string[]): Promise<void> => {
+  const result = await git(args, dir);
+  if (!result.ok) throw new Error(`git ${args.join(" ")} failed in ${dir}`);
+};
+const hasGit = (await git(["--version"], process.cwd())).ok;
+
+/** A managed worktree on a new branch, without createWorktree's port and config work. */
+async function addWorktree(repo: string, name: string): Promise<{ path: string }> {
+  const wtPath = path.join(worktreesRoot(repo), name);
+  await gitIn(repo, "worktree", "add", "-b", `agent/${name}`, wtPath);
+  return { path: wtPath };
+}
+
+describe("worktreeCleanupRows", () => {
+  let home = "";
+  let repo = "";
+
+  beforeEach(async () => {
+    home = makeTempDir("mt-wtc-home-");
+    process.env.MULMOTERMINAL_HOME = home;
+    repo = makeTempDir("mt-wtc-repo-");
+    paneCwds.value = [];
+    if (!hasGit) return;
+    await gitIn(repo, "init", "-b", "main");
+    await gitIn(repo, "config", "user.email", "t@t.t");
+    await gitIn(repo, "config", "user.name", "t");
+    writeFileSync(path.join(repo, "a.txt"), "a\n");
+    await gitIn(repo, "add", "a.txt");
+    await gitIn(repo, "commit", "-m", "init");
+  });
+
+  afterEach(() => {
+    delete process.env.MULMOTERMINAL_HOME;
+    rmDirRetrying(home);
+    rmDirRetrying(repo);
+  });
+
+  const rowFor = async (wtPath: string) => (await worktreeCleanupRows([repo])).find((row) => row.path === wtPath);
+
+  it.skipIf(!hasGit)(
+    "reads merged, dirty, and unmerged worktrees apart",
+    async () => {
+      const merged = await addWorktree(repo, "merged");
+      const dirty = await addWorktree(repo, "dirty");
+      const ahead = await addWorktree(repo, "ahead");
+      writeFileSync(path.join(dirty.path, "untracked.txt"), "x\n");
+      writeFileSync(path.join(ahead.path, "b.txt"), "b\n");
+      await gitIn(ahead.path, "add", "b.txt");
+      await gitIn(ahead.path, "commit", "-m", "work");
+
+      const rows = await worktreeCleanupRows([repo]);
+      const rowAt = (wtPath: string) => rows.find((row) => row.path === wtPath);
+      expect(rowAt(merged.path)).toMatchObject({ repo, base: "main", exists: true, dirty: false, merged: true, inUse: false });
+      expect(rowAt(dirty.path)).toMatchObject({ dirty: true, merged: true });
+      expect(rowAt(ahead.path)).toMatchObject({ dirty: false, merged: false });
+    },
+    GIT_TEST_TIMEOUT_MS,
+  );
+
+  it.skipIf(!hasGit)(
+    "counts a pane standing anywhere inside the worktree as in use",
+    async () => {
+      const wt = await addWorktree(repo, "used");
+      const sub = path.join(wt.path, "src");
+      mkdirSync(sub);
+      paneCwds.value = [sub];
+      expect((await rowFor(wt.path))?.inUse).toBe(true);
+    },
+    GIT_TEST_TIMEOUT_MS,
+  );
+
+  it.skipIf(!hasGit)(
+    "falls back to this process's terminals when tmux cannot answer",
+    async () => {
+      const wt = await addWorktree(repo, "unknown");
+      paneCwds.value = null;
+      expect((await rowFor(wt.path))?.inUse).toBe(false);
+    },
+    GIT_TEST_TIMEOUT_MS,
+  );
+
+  it("lists nothing for folders that are gone or not repositories", async () => {
+    expect(await worktreeCleanupRows([path.join(home, "missing"), home])).toEqual([]);
+  });
+});
