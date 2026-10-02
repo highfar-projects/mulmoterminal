@@ -1,6 +1,6 @@
 // The form asks for the packs in the screen's language, so the server can lay their English words over them.
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { listPacks, listPresets, listRuns, loadRun, previewPair } from "../../../src/composables/blueprintsApi";
+import { archiveRun, listPacks, listPresets, listRuns, loadRun, previewPair, sendEvent, sendSpecMessage } from "../../../src/composables/blueprintsApi";
 import { i18n } from "../../../src/i18n";
 
 const urls: string[] = [];
@@ -37,6 +37,18 @@ describe("the pack calls", () => {
     await listRuns();
     answering({});
     await loadRun("run-1");
-    expect(urls).toEqual(["/api/blueprints/runs?lang=en", "/api/blueprints/runs/run-1?lang=en"]);
+    answering({});
+    await sendEvent("run-1", "s", { type: "approve" });
+    answering({});
+    await archiveRun("run-1", true);
+    answering({});
+    await sendSpecMessage("run-1", "hi");
+    expect(urls).toEqual([
+      "/api/blueprints/runs?lang=en",
+      "/api/blueprints/runs/run-1?lang=en",
+      "/api/blueprints/runs/run-1/events?lang=en",
+      "/api/blueprints/runs/run-1/archive?lang=en",
+      "/api/blueprints/runs/run-1/spec/messages?lang=en",
+    ]);
   });
 });

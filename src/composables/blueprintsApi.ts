@@ -106,11 +106,11 @@ export const startRun = (request: {
 export type PersonEvent = { type: "approve" } | { type: "reject"; reason: string } | { type: "answer"; answer: string } | { type: "retry" };
 
 export const sendEvent = (runId: string, stepId: string, event: PersonEvent): Promise<ApiResult<BlueprintRunView>> =>
-  call(blueprintRunViewSchema, `/api/blueprints/runs/${encodeURIComponent(runId)}/events`, postJson({ ...event, stepId }));
+  call(blueprintRunViewSchema, inScreenLanguage(`/api/blueprints/runs/${encodeURIComponent(runId)}/events`), postJson({ ...event, stepId }));
 
 /** Puts a build away from the list (or brings it back); nothing about the build itself changes. */
 export const archiveRun = (runId: string, archived: boolean): Promise<ApiResult<BlueprintRunView>> =>
-  call(blueprintRunViewSchema, `/api/blueprints/runs/${encodeURIComponent(runId)}/archive`, postJson({ archived }));
+  call(blueprintRunViewSchema, inScreenLanguage(`/api/blueprints/runs/${encodeURIComponent(runId)}/archive`), postJson({ archived }));
 
 const urlsSchema = z.object({ urls: z.array(z.string()) });
 
@@ -156,4 +156,4 @@ export const loadReport = (runId: string): Promise<ApiResult<ReportView>> => cal
 export const loadSpec = (runId: string): Promise<ApiResult<SpecView>> => call(specViewSchema, `/api/blueprints/runs/${encodeURIComponent(runId)}/spec`);
 
 export const sendSpecMessage = (runId: string, message: string): Promise<ApiResult<BlueprintRunView>> =>
-  call(blueprintRunViewSchema, `/api/blueprints/runs/${encodeURIComponent(runId)}/spec/messages`, postJson({ message }));
+  call(blueprintRunViewSchema, inScreenLanguage(`/api/blueprints/runs/${encodeURIComponent(runId)}/spec/messages`), postJson({ message }));

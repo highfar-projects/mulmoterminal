@@ -31,7 +31,7 @@ const listedIn: (string | undefined)[] = [];
 const executor: BlueprintExecutor = {
   create: unused,
   view: async () => ({ run: storedRun, state: { steps: {} } }),
-  humanEvent: unused,
+  humanEvent: async () => ({ run: storedRun, state: { steps: {} } }),
   ask: unused,
   list: async (screenLanguage) => {
     listedIn.push(screenLanguage);
@@ -39,10 +39,10 @@ const executor: BlueprintExecutor = {
   },
   workingIn: async () => null,
   specView: unused,
-  say: unused,
+  say: async () => ({ run: storedRun, state: { steps: {} } }),
   reportView: unused,
   recover: unused,
-  archive: unused,
+  archive: async () => ({ run: storedRun, state: { steps: {} } }),
 };
 
 let server: Server;
@@ -140,6 +140,19 @@ describe("a build's view and the list in the screen's language", () => {
   it("shows the stored steps in English for ?lang=en, and as stored without it", async () => {
     expect(await titlesOf("/api/blueprints/runs/run-00000001?lang=en")).toEqual(["Check the folder and chaff", "Polish them one by one"]);
     expect(await titlesOf("/api/blueprints/runs/run-00000001")).toEqual(["フォルダと chaff を確かめる", "一つずつ整える"]);
+  });
+
+  it("answers an action on a build in English too, so the screen does not flip back to the stored words", async () => {
+    const posted = async (route: string, body: unknown) =>
+      z
+        .object({ run: z.object({ steps: z.array(z.object({ title: z.string() })) }) })
+        .parse(await (await fetch(`${base}${route}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })).json())
+        .run.steps.map((step) => step.title);
+    const english = ["Check the folder and chaff", "Polish them one by one"];
+    expect(await posted("/api/blueprints/runs/run-00000001/events?lang=en", { type: "approve", stepId: "polish" })).toEqual(english);
+    expect(await posted("/api/blueprints/runs/run-00000001/archive?lang=en", { archived: true })).toEqual(english);
+    expect(await posted("/api/blueprints/runs/run-00000001/spec/messages?lang=en", { message: "hi" })).toEqual(english);
+    expect(await posted("/api/blueprints/runs/run-00000001/archive", { archived: false })).toEqual(["フォルダと chaff を確かめる", "一つずつ整える"]);
   });
 
   it("hands the screen's language to the list", async () => {

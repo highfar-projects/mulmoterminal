@@ -6,7 +6,7 @@ import { lstat, mkdir, readFile, rmdir, stat } from "node:fs/promises";
 import type { Express, Response } from "express";
 import { z } from "zod";
 import { loadPackPair, readHearing, readPresets, type PackPair, type PackRoot } from "./packs.js";
-import { localizedPacks, localizedPair, localizedPresets, localizedRunSteps, overlayReader } from "./packLocales.js";
+import { localizedPacks, localizedPair, localizedPresets, localizedRunView } from "./packLocales.js";
 import { placeSamples, readSamples } from "./samples.js";
 import type { Sample } from "../../common/blueprint/samples.js";
 import { personLanguageSchema, type PersonLanguage } from "../../common/blueprint/personLanguage.js";
@@ -205,9 +205,7 @@ function mountReadRoutes(app: Express, deps: BlueprintRouteDeps): void {
 
   app.get("/api/blueprints/runs/:id", async (req, res) => {
     try {
-      const view = await deps.executor.view(req.params.id);
-      const steps = await localizedRunSteps(view.run, overlayReader(screenLanguageOf(req.query.lang)));
-      res.json({ ...view, run: { ...view.run, steps } });
+      res.json(await localizedRunView(await deps.executor.view(req.params.id), screenLanguageOf(req.query.lang)));
     } catch (err) {
       fail(res, err);
     }
@@ -432,7 +430,8 @@ function mountMoveRoutes(app: Express, deps: BlueprintRouteDeps): void {
     const parsed = eventSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "expected { type: approve | reject | answer | retry, stepId, … }" });
     try {
-      return res.json(await deps.executor.humanEvent(req.params.id, parsed.data.stepId, humanEventOf(parsed.data, deps.now())));
+      const view = await deps.executor.humanEvent(req.params.id, parsed.data.stepId, humanEventOf(parsed.data, deps.now()));
+      return res.json(await localizedRunView(view, screenLanguageOf(req.query.lang)));
     } catch (err) {
       return fail(res, err);
     }
@@ -459,7 +458,7 @@ function mountMoveRoutes(app: Express, deps: BlueprintRouteDeps): void {
     const parsed = archiveSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "expected { archived: boolean }" });
     try {
-      return res.json(await deps.executor.archive(req.params.id, parsed.data.archived));
+      return res.json(await localizedRunView(await deps.executor.archive(req.params.id, parsed.data.archived), screenLanguageOf(req.query.lang)));
     } catch (err) {
       return fail(res, err);
     }
@@ -470,7 +469,7 @@ function mountMoveRoutes(app: Express, deps: BlueprintRouteDeps): void {
     const parsed = specMessageSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "expected { message }" });
     try {
-      return res.json(await deps.executor.say(req.params.id, parsed.data.message));
+      return res.json(await localizedRunView(await deps.executor.say(req.params.id, parsed.data.message), screenLanguageOf(req.query.lang)));
     } catch (err) {
       return fail(res, err);
     }

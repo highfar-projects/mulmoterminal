@@ -50,6 +50,14 @@ export async function localizedPair(roots: readonly PackRoot[], baseSlug: string
   return { ...pair, hearing: localizedHearing(pair.hearing, usecase), steps: localizedSteps(pair.steps, { base, usecase }, baseSlug) };
 }
 
+/** A build's view with its steps in the screen's language: what every route that answers with a build sends. */
+export async function localizedRunView<V extends { run: { basePackDir: string; usecasePackDir: string; steps: readonly ComposedStep[] } }>(
+  view: V,
+  screenLanguage: string | undefined,
+): Promise<V> {
+  return { ...view, run: { ...view.run, steps: await localizedRunSteps(view.run, overlayReader(screenLanguage)) } };
+}
+
 /** Reads each pack's overlay once, however many builds share the pack. */
 export type OverlayReader = (packDir: string) => Promise<PackLocale | null>;
 
