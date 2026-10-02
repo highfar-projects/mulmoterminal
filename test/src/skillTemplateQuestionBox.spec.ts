@@ -69,6 +69,14 @@ const element = <T extends Element>(selector: string): T => {
   return found as T;
 };
 
+describe("question-box.md — app.json", () => {
+  it("caps the owner's answer as well as the question, since both reach the public page", () => {
+    const [, json] = questionBox.match(/## app\.json\s*\n+```json\n([\s\S]*?)\n```/) ?? [];
+    const caps: unknown = JSON.parse(json ?? "{}").public?.submit?.questions?.maxBytes;
+    expect(caps).toEqual({ text: expect.any(Number), answer: expect.any(Number) });
+  });
+});
+
 describe("question-box.md — views/box.html", () => {
   it("sends the question alone, and says it will appear once answered", async () => {
     const page = load("views/box.html");

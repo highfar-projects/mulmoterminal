@@ -1,4 +1,4 @@
-# テンプレート: 質問箱（誰でも質問でき、答えたものだけを公開する）
+# テンプレート: 質問箱（誰でも質問でき、持ち主が選んだものだけを公開する）
 
 **いつ使うか** — 誰でも名乗らずに質問を送れて、持ち主が答え、**選んだ質問と答えだけ**を公開
 ページに載せるもの。講演や配信への質問、お店やサークルへの「よくある質問」、マシュマロや
@@ -49,7 +49,7 @@
         "stampField": "askedAt",
         "initialStatus": "asked",
         "validate": { "required": ["text"] },
-        "maxBytes": { "text": 2000 }
+        "maxBytes": { "text": 2000, "answer": 6000 }
       }
     }
   }
@@ -74,7 +74,8 @@ Google のサインインを求める画面が出ます。
 質問箱では 2 つ目の質問が拒否されるのは不自然です。
 
 **`maxBytes`** — 長文の貼り付けを止めます。UTF-8 のバイト数なので、日本語は 1 文字 3 バイト
-前後（2000 なら 600〜700 字）。
+前後（2000 なら 600〜700 字）。`answer` は質問する人が書かない欄ですが、ここに書いた上限は
+持ち主の `view.correct` にも効きます。答えも公開ページに丸ごと出るので、上限を置いておく。
 
 ## .claude/skills/questions/schema.json
 
@@ -130,7 +131,7 @@ Google のサインインを求める画面が出ます。
   .muted { color: var(--muted); }
 </style>
 <h1>質問箱</h1>
-<p class="muted">名前は要りません。答えたものから、ここに載せていきます。</p>
+<p class="muted">名前は要りません。選んだ質問を、ここに載せていきます。</p>
 <textarea id="text" maxlength="600" placeholder="質問をどうぞ"></textarea>
 <button id="send" type="button">送る</button>
 <p id="say" role="status"></p>
@@ -178,7 +179,7 @@ Google のサインインを求める画面が出ます。
     send.disabled = false;
     if (result.ok) {
       text.value = "";
-      say.textContent = "届きました。答えが公開されたら、ここに載ります。";
+      say.textContent = "届きました。公開されたら、ここに載ります。";
       return;
     }
     // 確認ダイアログで「やめる」を押した人には何も出しません。失敗ではないので。
@@ -221,7 +222,7 @@ Google のサインインを求める画面が出ます。
   .q { margin: 0 0 8px; font-weight: 750; white-space: pre-wrap; }
   .meta { margin: 0 0 8px; color: var(--muted); font-size: 12px; }
   textarea { display: block; width: 100%; min-height: 5em; margin: 0 0 8px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink); font: inherit; resize: vertical; }
-  button { min-height: 40px; padding: 8px 14px; border: 0; border-radius: 10px; background: var(--main); color: var(--paper); font: inherit; font-weight: 750; cursor: pointer; touch-action: manipulation; }
+  button { min-height: 44px; padding: 8px 14px; border: 0; border-radius: 10px; background: var(--main); color: var(--paper); font: inherit; font-weight: 750; cursor: pointer; touch-action: manipulation; }
   .muted { color: var(--muted); }
   #say { min-height: 1.6em; color: var(--main); font-size: 13px; font-weight: 700; }
 </style>
@@ -293,7 +294,9 @@ MulmoServer の **`/m/{slug}/records/questions`**（`/m/{slug}` の「記録」�
 行ごとに「公開ページに出す」「公開をやめる」のボタンがあります。押したのは持ち主（と編集者）
 だけが書ける書き込みで、押した瞬間から公開ページに出る・消えるが切り替わります。
 
-答えを書く前に出すこともできます。公開ページには「答えを準備中です」と出ます。
+**答えを書く前に出すこともできます**（「質問だけ先に載せて、答えは後で」）。公開ページには質問と
+「答えを準備中です」が出ます。答えたものだけを載せたいなら、答えを保存してから出すこと —
+ルールが見ているのは `published` だけで、答えの有無は見ていません。
 
 ## この形が向かないもの
 
