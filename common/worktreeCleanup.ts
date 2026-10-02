@@ -36,6 +36,14 @@ export const IGNORED_LISTED_MAX = 20;
 export const parseIgnoredEntries = (porcelain: string): string[] =>
   porcelain.split("\n").flatMap((line) => (line.startsWith("!! ") && line.length > 3 ? [line.slice(3)] : []));
 
+/** Dirty and ignored from ONE `git status --porcelain --ignored`. Null output is a status that
+ *  failed: then nothing is known to be safe to lose, so it reads as dirty — a blocker. */
+export function worktreeStatus(porcelain: string | null): { dirty: boolean; ignored: string[] } {
+  if (porcelain === null) return { dirty: true, ignored: [] };
+  const lines = porcelain.split("\n").filter((line) => line.trim() !== "");
+  return { dirty: lines.some((line) => !line.startsWith("!! ")), ignored: parseIgnoredEntries(porcelain) };
+}
+
 export const CLEANUP_BLOCKERS = ["missing", "dirty", "unmerged", "inUse"] as const;
 export type CleanupBlocker = (typeof CLEANUP_BLOCKERS)[number];
 

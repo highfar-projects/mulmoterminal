@@ -1,6 +1,13 @@
 // Which worktrees the Processes page offers to remove: only one with nothing to lose and nobody in it.
 import { describe, it, expect } from "vitest";
-import { cleanupBlockers, isCleanupCandidate, parseIgnoredEntries, readWorktreeCleanupBody, type WorktreeCleanupRow } from "../../common/worktreeCleanup";
+import {
+  cleanupBlockers,
+  isCleanupCandidate,
+  parseIgnoredEntries,
+  readWorktreeCleanupBody,
+  worktreeStatus,
+  type WorktreeCleanupRow,
+} from "../../common/worktreeCleanup";
 
 const CLEAN: WorktreeCleanupRow = {
   repo: "/r",
@@ -65,5 +72,21 @@ describe("parseIgnoredEntries", () => {
 describe("readWorktreeCleanupBody and ignored entries", () => {
   it.each([{ ignored: "x" }, { ignored: [1] }, { ignoredCount: "1" }])("drops a row whose ignored fields are %j", (change) => {
     expect(readWorktreeCleanupBody({ worktrees: [{ ...CLEAN, ...change }] })).toEqual([]);
+  });
+});
+
+describe("worktreeStatus", () => {
+  it.each([
+    ["", { dirty: false, ignored: [] }],
+    ["!! .env\n!! node_modules/\n", { dirty: false, ignored: [".env", "node_modules/"] }],
+    ["?? new.txt\n!! .env\n", { dirty: true, ignored: [".env"] }],
+    [" M src/a.ts\n", { dirty: true, ignored: [] }],
+  ])("reads %j", (porcelain, expected) => {
+    expect(worktreeStatus(porcelain)).toEqual(expected);
+  });
+
+  it("reads a status that failed as dirty, so it blocks removal", () => {
+    expect(worktreeStatus(null)).toEqual({ dirty: true, ignored: [] });
+    expect(isCleanupCandidate({ ...CLEAN, ...worktreeStatus(null), ignoredCount: 0 })).toBe(false);
   });
 });

@@ -2,14 +2,14 @@
 // a terminal has run in, with what would be lost or interrupted by removing it. The verdict is
 // common/worktreeCleanup.ts; this only reads git, tmux and the session records.
 import { existsSync } from "node:fs";
-import { baseStartPoint, defaultBaseBranch, git, isDirty, listWorktrees, repoRoot, type WorktreeInfo } from "./worktrees.js";
+import { baseStartPoint, defaultBaseBranch, git, listWorktrees, repoRoot, type WorktreeInfo } from "./worktrees.js";
 import { mapConcurrent } from "../infra/mapConcurrent.js";
 import { isWithin } from "../infra/path-within.js";
 import { canonicalPath } from "../infra/canonical-path.js";
 import { tmuxAttachedCounts, tmuxAvailable, tmuxPaneCwdsAsync } from "../infra/tmux.js";
 import { dirSession, survivorSnapshot } from "../session/dir-session.js";
 import { ptys } from "../session/registry.js";
-import { IGNORED_LISTED_MAX, parseIgnoredEntries, type WorktreeCleanupRow } from "../../common/worktreeCleanup.js";
+import { IGNORED_LISTED_MAX, worktreeStatus, type WorktreeCleanupRow } from "../../common/worktreeCleanup.js";
 
 // Each repo is a handful of git calls; a few at once keeps a long cwd history from forking dozens.
 const GIT_CONCURRENCY = 4;
@@ -21,9 +21,9 @@ async function reposOf(cwds: readonly string[]): Promise<string[]> {
   return [...new Set(roots.flatMap((root) => root ?? []))].sort((a, b) => a.localeCompare(b));
 }
 
-async function ignoredEntries(worktreePath: string): Promise<string[]> {
+async function statusOf(worktreePath: string): Promise<{ dirty: boolean; ignored: string[] }> {
   const res = await git(["status", "--porcelain", "--ignored"], worktreePath);
-  return res.ok ? parseIgnoredEntries(res.stdout) : [];
+  return worktreeStatus(res.ok ? res.stdout : null);
 }
 
 const isMerged = async (repo: string, head: string, startPoint: string): Promise<boolean> =>
@@ -38,7 +38,7 @@ interface UsageFacts {
 async function rowOf(repo: string, base: string, startPoint: string, worktree: WorktreeInfo, usage: UsageFacts): Promise<WorktreeCleanupRow> {
   const exists = existsSync(worktree.path);
   const canonical = canonicalPath(worktree.path);
-  const ignored = exists ? await ignoredEntries(worktree.path) : [];
+  const status = exists ? await statusOf(worktree.path) : { dirty: false, ignored: [] };
   const paneHere = usage.paneCwds === null || usage.paneCwds.some((cwd) => isWithin(canonical, canonicalPath(cwd)));
   return {
     repo,
@@ -47,9 +47,9 @@ async function rowOf(repo: string, base: string, startPoint: string, worktree: W
     branch: worktree.branch,
     head: worktree.head,
     exists,
-    dirty: exists && (await isDirty(worktree.path)),
-    ignored: ignored.slice(0, IGNORED_LISTED_MAX),
-    ignoredCount: ignored.length,
+    dirty: status.dirty,
+    ignored: status.ignored.slice(0, IGNORED_LISTED_MAX),
+    ignoredCount: status.ignored.length,
     merged: await isMerged(repo, worktree.head, startPoint),
     inUse: paneHere || (exists && (await usage.inAgentSession(worktree.path))),
   };
