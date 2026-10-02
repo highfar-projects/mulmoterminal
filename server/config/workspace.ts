@@ -1,9 +1,11 @@
 import { statSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { CLAUDE_CWD } from "./env.js";
 import { canonicalDir } from "../infra/path-within.js";
 import { cwdProblemMessage, diagnoseSpawnCwd } from "../infra/spawn-cwd.js";
 import { describeValue } from "../../common/readString.js";
+import { expandTilde } from "../files/pathContainment.js";
 
 // Validate a client-supplied workspace dir: an absolute path naming an existing directory, or
 // null. There is deliberately no variant that answers the DEFAULT workspace for a directory it
@@ -23,9 +25,12 @@ import { describeValue } from "../../common/readString.js";
 // Lexical and NOT realpath, deliberately: the announcing side of the dir-config channel spells
 // the directory with `path.dirname`, which is lexical too, and canonicalizing only one side
 // physically would re-open the very mismatch below.
-export function existingWorkspace(cwd: string | null): string | null {
-  if (!cwd || !path.isAbsolute(cwd)) return null;
-  const dir = canonicalDir(cwd);
+// A leading `~` is the user's home, as a shell would read it — typed into the launch form, it is
+// what the user meant, and the canonical path returned is what the cell then shows.
+export function existingWorkspace(cwd: string | null, homeDir: string = os.homedir()): string | null {
+  const expanded = cwd ? expandTilde(cwd, homeDir) : cwd;
+  if (!expanded || !path.isAbsolute(expanded)) return null;
+  const dir = canonicalDir(expanded);
   try {
     return statSync(dir).isDirectory() ? dir : null;
   } catch {
@@ -55,10 +60,11 @@ export type WorkspaceRequest =
 // Absoluteness is this layer's own rule and not diagnoseSpawnCwd's: a child process resolves a
 // relative cwd against OUR working directory perfectly well, so it is not a spawn problem — it is
 // a client sending something no part of this app has a basis to interpret.
-function unusableWorkspace(requested: string): WorkspaceRequest {
-  if (!path.isAbsolute(requested))
+function unusableWorkspace(requested: string, homeDir: string): WorkspaceRequest {
+  const expanded = expandTilde(requested, homeDir);
+  if (!path.isAbsolute(expanded))
     return { kind: "unusable", requested, problem: `${requested} is not an absolute path, so it names no directory on this machine.`, malformed: true };
-  const dir = canonicalDir(requested);
+  const dir = canonicalDir(expanded);
   // The fallback covers the one case the diagnosis calls fine and `existingWorkspace` did not:
   // a probe that could not answer (a permission error, a broken mount). Saying so beats a
   // refusal with no reason attached.
@@ -70,10 +76,10 @@ function unusableWorkspace(requested: string): WorkspaceRequest {
 // how a browser spells the same thing) asks for no particular directory. Anything else was asked
 // for on purpose — including a non-string, which is what `?cwd=a&cwd=b` arrives as — so it is
 // answered about or refused, never quietly swapped for the default.
-export function workspaceRequest(cwd: unknown): WorkspaceRequest {
+export function workspaceRequest(cwd: unknown, homeDir: string = os.homedir()): WorkspaceRequest {
   if (cwd === undefined || cwd === null || cwd === "") return { kind: "default", cwd: CLAUDE_CWD };
   if (typeof cwd !== "string")
     return { kind: "unusable", requested: describeValue(cwd), problem: "The working directory must be given exactly once, as a path.", malformed: true };
-  const resolved = existingWorkspace(cwd);
-  return resolved ? { kind: "resolved", cwd: resolved } : unusableWorkspace(cwd);
+  const resolved = existingWorkspace(cwd, homeDir);
+  return resolved ? { kind: "resolved", cwd: resolved } : unusableWorkspace(cwd, homeDir);
 }
