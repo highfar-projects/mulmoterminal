@@ -875,7 +875,7 @@ entry per page, each naming **who it is for**:
   blank with nothing to say why.
 - **`collections` is declared, not inferred.** A view fed the wrong data renders perfectly and
   draws an empty page, which is the one failure nothing reports. Publish refuses a `public` page
-  fed a collection outside `public.read`, and a `participant` page fed one a participant cannot
+  fed a collection in neither `public.read` nor `public.readPublished`, and a `participant` page fed one a participant cannot
   reach at all (neither in `participantRead` nor their own row through `public.submit`).
 - **A collection that grows forever needs `limit`, or every reader pays for its whole history.**
   A view is handed its datasets WHOLE, so a chat room's page fetches every message ever posted to

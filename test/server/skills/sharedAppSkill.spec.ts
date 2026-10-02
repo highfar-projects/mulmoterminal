@@ -144,6 +144,19 @@ describe("the skill's question about showing what was sent", () => {
     expect(problems(declaration)).toEqual([expect.stringContaining(reason)]);
   });
 
+  // publishField may not share a name with any field that already means something to the rules.
+  it.each([
+    ["statusField", { collections: { questions: { publishField: "f", statusField: "f" } } }],
+    ["assigneeField", { collections: { questions: { publishField: "f", assigneeField: "f" } } }],
+    ["stampField", { submit: { stampField: "f" } }],
+    ["idField", { submit: { idField: "f" } }],
+    ["uidField", { submit: { uidField: "f" } }],
+    ["emailField", { submit: { auth: "verifiedEmail", emailField: "f", createFields: ["text", "f"] } }],
+  ])("refuses a publishField named like the %s", (key, overrides) => {
+    const declaration = app({ collections: { questions: { publishField: "f" } }, public: { readPublished: ["questions"] }, ...overrides });
+    expect(problems(declaration)).toContainEqual(expect.stringContaining(`which is also the ${key}`));
+  });
+
   it("names the keys and refusals in the question", () => {
     const question = body.slice(body.indexOf("## Before you ask the user a question"), body.indexOf("## Where people actually look"));
     expect(question).toContain("Four things are worth asking");
