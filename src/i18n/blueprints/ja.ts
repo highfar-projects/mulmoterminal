@@ -98,6 +98,7 @@ export const blueprintsJa: Messages["blueprints"] = {
     pr: "プルリクエスト",
     note: "メモ",
     unreadable: "作業リストを読めませんでした: {problem}",
+    loadFailed: "作業リストを読み込めませんでした: {error}",
   },
   run: {
     sourceChanged:

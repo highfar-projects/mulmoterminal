@@ -96,6 +96,7 @@ export const blueprintsZhTW: Messages["blueprints"] = {
     pr: "拉取請求",
     note: "備註",
     unreadable: "無法讀取工作清單：{problem}",
+    loadFailed: "無法載入工作清單：{error}",
   },
   run: {
     sourceChanged: "來源在複製之後（{takenAt}）已有變更。此建置仍依那份副本繼續。要使用新內容，請從同一來源重新開始一個建置。",

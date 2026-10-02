@@ -51,6 +51,11 @@ describe("targetsViewOf — reading the file", () => {
     ["a target with an unknown status", '{"targets":[{"id":"a","title":"A","status":"doing"}]}', ".blueprint/targets.json does not hold a list of targets"],
     ["a target with no title", '{"targets":[{"id":"a","status":"todo"}]}', ".blueprint/targets.json does not hold a list of targets"],
     ["null", "null", ".blueprint/targets.json does not hold a list of targets"],
+    [
+      "two targets with the same id",
+      '{"targets":[{"id":"a","title":"A","status":"todo"},{"id":"a","title":"B","status":"done"}]}',
+      ".blueprint/targets.json lists a target id twice",
+    ],
   ])("reports %s instead of throwing", (_label, raw, problem) => {
     expect(targetsViewOf(raw)).toEqual({ targets: null, problem });
   });

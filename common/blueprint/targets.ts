@@ -45,6 +45,9 @@ export function targetsViewOf(raw: string | null): TargetsView {
   if (!json.ok) return { targets: null, problem: `${TARGETS_FILE} is not JSON` };
   const parsed = targetsFileSchema.safeParse(json.value);
   if (!parsed.success) return { targets: null, problem: `${TARGETS_FILE} does not hold a list of targets` };
+  // The id is each row's identity on screen; the pack's own check refuses a repeat for the same reason.
+  const ids = parsed.data.targets.map((target) => target.id);
+  if (new Set(ids).size !== ids.length) return { targets: null, problem: `${TARGETS_FILE} lists a target id twice` };
   return { targets: parsed.data.targets, problem: null };
 }
 
