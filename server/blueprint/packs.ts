@@ -114,7 +114,7 @@ export async function declaredRevises(packDir: string, stepId: string): Promise<
 /** A usecase pack's interview, as written in its folder. */
 export const readHearing = async (packDir: string): Promise<Hearing> => hearingSchema.parse(await readJson(path.join(packDir, "hearing.json")));
 
-async function stepsOf(packDir: string, manifest: BlueprintManifest): Promise<(Described & { skill: string })[]> {
+async function stepsOf(packDir: string, manifest: BlueprintManifest): Promise<(Described & { skill: string; reads: string[]; revises: string[] })[]> {
   if (manifest.kind === "base") return basePlanSchema.parse(await readJson(path.join(packDir, "plan.json"))).steps;
   await readHearing(packDir);
   // Presets are optional, but a broken one is refused here rather than dropped silently when listed.
@@ -143,10 +143,15 @@ export async function packProblems(packDir: string): Promise<string[]> {
     const manifest = await readManifest(packDir);
     const steps = await stepsOf(packDir, manifest);
     const overlay = await overlayProblemsOf(packDir, manifest, steps);
+    // A gate that names files to read but none it may change would have its conversation edit those reads — often
+    // views a check redraws — and the edit would be lost.
+    const undeclared = steps
+      .filter((step) => step.reads.length > 0 && step.revises.length === 0)
+      .map((step) => `step "${step.id}" names files to read but no files its review may change (revises)`);
     const missing = await Promise.all(
       steps.map(async (step) => ((await exists(path.join(packDir, step.skill, "SKILL.md"))) ? null : `step "${step.id}" has no ${step.skill}/SKILL.md`)),
     );
-    return [...missing.filter((problem): problem is string => problem !== null), ...overlay];
+    return [...missing.filter((problem): problem is string => problem !== null), ...undeclared, ...overlay];
   } catch (err) {
     return [err instanceof Error ? err.message : String(err)];
   }

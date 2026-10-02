@@ -181,6 +181,7 @@ export const blueprintsZhTW: Messages["blueprints"] = {
     specNotAtReview: "只有在等待你確認時才能討論。",
     messagePending: "上一則訊息仍在回答中。請等待回覆。",
     agentWorking: "代理正在處理這個建置。請等它停下。",
+    revisionCheckFailed: "修改後的檔案沒有通過前一個步驟的檢查。請在確認前傳送需要修改的地方。",
     registryUrlNotAllowed: "登錄檔位址必須以 https:// 開頭（http:// 僅限本機）：{urls}",
     registryUnknown: "{url} 不是這台機器讀取的登錄檔。請先新增它。",
     packNotListed: "{url} 中沒有名為「{slug}」的套件。請重新讀取清單後再試。",

@@ -9,6 +9,7 @@ import path from "node:path";
 import { realpath } from "node:fs/promises";
 import { applyEvent, currentStep, initialState, type BlueprintState, type StepEvent } from "../../common/blueprint/state.js";
 import { OPEN_QUESTIONS_FILE, SPEC_FILE, replyFile, specRevisionPrompt } from "../../common/blueprint/specRevisionPrompt.js";
+import { lastRevisionCheckFailed } from "../../common/blueprint/revisionCheck.js";
 import type { Refusal } from "../../common/blueprint/refusal.js";
 import type { AskChoice } from "../../common/blueprint/askChoices.js";
 import { Refused } from "./refused.js";
@@ -227,6 +228,7 @@ class Executor {
     return this.serially(runId, async () => {
       const before = await this.mustLoad(runId);
       if (before.run.revisionSessionId !== null) throw new BlueprintRefusal({ code: "revision-pending" });
+      if (event.type === "approve" && lastRevisionCheckFailed(before.run.specChat)) throw new BlueprintRefusal({ code: "revision-check-failed" });
       const loaded = applied(before, stepId, event);
       if (event.type === "retry") this.closeSessionsOf(before.run, stepId);
       // A person's retry is a fresh start for the automatic retries, too.
@@ -349,7 +351,8 @@ class Executor {
         await this.deps.projectFiles.remove(run.projectDir, replyFile(sessionId));
         const outcome = replyOutcome(didError, reply);
         const answered = [...run.specChat, { role: "agent" as const, text: reply ?? "", atMs: this.deps.now(), outcome }];
-        const recheck = didError ? null : await this.recheckAfterRevision(run, state);
+        // Even after a lost session: it may have changed the files before it ended.
+        const recheck = await this.recheckAfterRevision(run, state);
         const failed =
           recheck && !recheck.ok ? [{ role: "agent" as const, text: recheck.output.trim(), atMs: this.deps.now(), outcome: "check-failed" as const }] : [];
         await this.deps.store.save({ ...run, revisionSessionId: null, specChat: [...answered, ...failed] }, state);

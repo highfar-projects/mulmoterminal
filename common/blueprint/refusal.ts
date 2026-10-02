@@ -24,6 +24,7 @@ export const refusalSchema = z.discriminatedUnion("code", [
   z.object({ code: z.literal("spec-not-at-review") }),
   z.object({ code: z.literal("message-pending") }),
   z.object({ code: z.literal("agent-working") }),
+  z.object({ code: z.literal("revision-check-failed") }),
   z.object({ code: z.literal("registry-url-not-allowed"), urls: z.array(z.string()).readonly() }),
   z.object({ code: z.literal("registry-unknown"), url: z.string() }),
   z.object({ code: z.literal("pack-not-listed"), url: z.string(), slug: z.string() }),
@@ -97,6 +98,8 @@ function englishBuildRefusal(refusal: Exclude<Refusal, MarketRefusal>): string {
       return "the previous message is still being answered";
     case "agent-working":
       return "an agent is working on the build";
+    case "revision-check-failed":
+      return "the files changed in the conversation do not pass the check of the step that wrote them; send what to fix before approving";
   }
 }
 
