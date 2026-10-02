@@ -20,6 +20,7 @@ const REFUSAL_KEYS: Record<RefusalCode, RefusalKey> = {
   "spec-not-at-review": "specNotAtReview",
   "message-pending": "messagePending",
   "agent-working": "agentWorking",
+  "revision-check-failed": "revisionCheckFailed",
   "registry-url-not-allowed": "registryUrlNotAllowed",
   "registry-unknown": "registryUnknown",
   "pack-not-listed": "packNotListed",

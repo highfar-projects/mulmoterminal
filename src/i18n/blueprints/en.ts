@@ -189,6 +189,7 @@ export const blueprintsEn = {
     specNotAtReview: "This can be talked over only while it waits for you to review it.",
     messagePending: "Your previous message is still being answered. Wait for the reply.",
     agentWorking: "An agent is working on this build. Wait until it stops.",
+    revisionCheckFailed: "The changed files do not pass the check of the step that wrote them. Send what to fix before approving.",
     registryUrlNotAllowed: "A registry address must start with https:// (http:// only for this machine): {urls}",
     registryUnknown: "{url} is not one of the registries this machine reads. Add it first.",
     packNotListed: '{url} does not list a pack named "{slug}". Reload the list and try again.',

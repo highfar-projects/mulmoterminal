@@ -26,6 +26,7 @@ const SAMPLES: Record<RefusalCode, Refusal> = {
   "spec-not-at-review": { code: "spec-not-at-review" },
   "message-pending": { code: "message-pending" },
   "agent-working": { code: "agent-working" },
+  "revision-check-failed": { code: "revision-check-failed" },
   "registry-url-not-allowed": { code: "registry-url-not-allowed", urls: ["http://example.com/r.json", "file:///tmp/r.json"] },
   "registry-unknown": { code: "registry-unknown", url: "https://example.com/r.json" },
   "pack-not-listed": { code: "pack-not-listed", url: "https://example.com/r.json", slug: "acme-tool" },

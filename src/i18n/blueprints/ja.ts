@@ -187,6 +187,7 @@ export const blueprintsJa: Messages["blueprints"] = {
     specNotAtReview: "話せるのは、あなたの確認を待っている間だけです。",
     messagePending: "前のメッセージにまだ答えています。返事を待ってください。",
     agentWorking: "エージェントがこの作業を進めています。止まるまで待ってください。",
+    revisionCheckFailed: "直したファイルが、前の工程の確かめに通っていません。承認する前に、直してほしいことを送ってください。",
     registryUrlNotAllowed: "レジストリのアドレスは https:// で始めてください（http:// はこのマシンの中だけ）: {urls}",
     registryUnknown: "{url} はこのマシンが読むレジストリに入っていません。先に追加してください。",
     packNotListed: "{url} には「{slug}」というパックがありません。一覧を読み直してからもう一度試してください。",

@@ -185,6 +185,7 @@ export const blueprintsKo: Messages["blueprints"] = {
     specNotAtReview: "확인을 기다리는 동안에만 이야기할 수 있습니다.",
     messagePending: "이전 메시지에 아직 답하고 있습니다. 답을 기다려 주세요.",
     agentWorking: "에이전트가 이 작업을 진행 중입니다. 멈출 때까지 기다려 주세요.",
+    revisionCheckFailed: "고친 파일이 앞 단계의 확인을 통과하지 못했습니다. 승인하기 전에 고칠 점을 보내 주세요.",
     registryUrlNotAllowed: "레지스트리 주소는 https://로 시작해야 합니다(http://는 이 컴퓨터 안에서만): {urls}",
     registryUnknown: "{url}는 이 컴퓨터가 읽는 레지스트리가 아닙니다. 먼저 추가해 주세요.",
     packNotListed: "{url}에는 「{slug}」라는 팩이 없습니다. 목록을 다시 읽은 뒤 다시 시도해 주세요.",

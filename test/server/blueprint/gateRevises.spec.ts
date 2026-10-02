@@ -3,10 +3,11 @@
 // (polish.txt from polish.json); the conversation must change the record, which is what the next step reads, and the
 // check of the step before the gate is run again to rewrite the view and hold the record to it.
 import { describe, expect, it } from "vitest";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { basePlanSchema, composePlan, usecaseStepsSchema } from "../../../common/blueprint/plan";
-import { declaredRevises } from "../../../server/blueprint/packs";
+import { declaredRevises, packProblems } from "../../../server/blueprint/packs";
 
 const PACKS = path.join(import.meta.dirname, "..", "..", "..", "blueprints");
 const readJson = (file: string): unknown => JSON.parse(readFileSync(file, "utf8"));
@@ -64,5 +65,15 @@ describe("a document gate's revisable files", () => {
     expect(await declaredRevises(path.join(PACKS, "style"), "counter")).toEqual(["STYLE.md", "chaff.yaml"]);
     expect(await declaredRevises(path.join(PACKS, "write"), "no-such-step")).toEqual([]);
     expect(await declaredRevises(path.join(PACKS, "no-such-pack"), "draft")).toEqual([]);
+  });
+
+  it("are required of an installed pack whose gate names files to read", async () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), "bp-revises-"));
+    cpSync(path.join(PACKS, "polish"), path.join(root, "polish"), { recursive: true });
+    const file = path.join(root, "polish", "steps.json");
+    const steps = usecaseStepsSchema.parse(readJson(file));
+    writeFileSync(file, JSON.stringify({ steps: steps.steps.map(({ revises: _revises, ...step }) => step) }));
+    expect(await packProblems(path.join(root, "polish"))).toContain('step "polish" names files to read but no files its review may change (revises)');
+    expect(await packProblems(path.join(PACKS, "polish"))).toEqual([]);
   });
 });

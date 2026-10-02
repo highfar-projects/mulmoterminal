@@ -181,6 +181,7 @@ export const blueprintsZhCN: Messages["blueprints"] = {
     specNotAtReview: "只有在等待你确认时才能讨论。",
     messagePending: "上一条消息仍在回答中。请等待回复。",
     agentWorking: "代理正在处理这个构建。请等它停下。",
+    revisionCheckFailed: "修改后的文件没有通过前一个步骤的检查。请在确认前发送需要修改的地方。",
     registryUrlNotAllowed: "注册表地址必须以 https:// 开头（http:// 仅限本机）：{urls}",
     registryUnknown: "{url} 不是这台机器读取的注册表。请先添加它。",
     packNotListed: "{url} 中没有名为“{slug}”的包。请重新读取列表后再试。",

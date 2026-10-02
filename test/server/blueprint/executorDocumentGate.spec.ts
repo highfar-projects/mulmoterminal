@@ -86,12 +86,34 @@ describe("talking a document build's files over at its review gate", () => {
     expect(fakes.checksRun).toEqual([]);
   });
 
-  it("runs no check when the document revision's session was lost", async () => {
+  it("checks the files again even after a lost session, which may have changed them before it ended", async () => {
     await atBriefGate();
     fakes.checksRun.length = 0;
+    fakes.checkResults["check-brief"] = [false];
     await endTurnOf(fakes)("s2", true);
-    expect(fakes.checksRun).toEqual([]);
-    expect((await executor.view("run-00000001")).run.specChat.at(-1)?.outcome).toBe("lost");
+    expect(fakes.checksRun).toEqual(["check-brief"]);
+    expect((await executor.view("run-00000001")).run.specChat.map((entry) => entry.outcome)).toEqual([undefined, "lost", "check-failed"]);
+  });
+
+  it("refuses approval while the last revision's files fail the check, and takes it once a later revision passes", async () => {
+    await atBriefGate();
+    fakes.checkResults["check-brief"] = [false];
+    fakes.files.set(".blueprint/reply-s2.md", "短くしました。");
+    await endTurnOf(fakes)("s2");
+    await expect(executor.humanEvent("run-00000001", "outline", { type: "approve" })).rejects.toMatchObject({ refusal: { code: "revision-check-failed" } });
+    await executor.say("run-00000001", "形を戻して");
+    fakes.files.set(".blueprint/reply-s3.md", "戻しました。");
+    await endTurnOf(fakes)("s3");
+    await executor.humanEvent("run-00000001", "outline", { type: "approve" });
+    expect((await executor.view("run-00000001")).state.steps.outline?.status).not.toBe("awaiting-approval");
+  });
+
+  it("still lets the person stop a build whose revision failed the check", async () => {
+    await atBriefGate();
+    fakes.checkResults["check-brief"] = [false];
+    await endTurnOf(fakes)("s2");
+    await executor.humanEvent("run-00000001", "outline", { type: "reject", reason: "やめる" });
+    expect((await executor.view("run-00000001")).state.steps.outline).toMatchObject({ status: "failed", reason: "やめる" });
   });
 
   it("takes the files to change from the pack for a build started before the pack declared them", async () => {

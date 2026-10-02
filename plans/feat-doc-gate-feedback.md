@@ -24,3 +24,12 @@ the records it reads).
 Checked on a real write build: answers sent at the brief gate moved into the brief's facts; at the outline gate the
 session changed `outline.json`, the re-check redrew `outline.txt` with the reordering and additions, and the written
 document carried every answer with no blanks left.
+
+## Follow-up (#2855's review)
+
+- Approval is refused (`revision-check-failed`) while the conversation's last entry is a failed re-check
+  (`lastRevisionCheckFailed`): the next step would start from records the check rejects. A later revision that passes
+  clears it, and stopping the build is still allowed.
+- The re-check runs after a lost session too: it may have changed the files before it ended.
+- `packProblems` refuses a pack whose gate names files to read but declares no `revises`, so an installed pack cannot
+  send its conversation to edit views.
