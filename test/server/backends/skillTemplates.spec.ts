@@ -48,6 +48,7 @@ const EXPECTED_TEMPLATES = [
   "salon.md",
   "schedule-poll.md",
   "survey.md",
+  "tally.md",
 ];
 
 /** The hue as CSS reads it — a NUMBER, in which `25` and `25.0` are one colour and `0` and `360`
@@ -151,6 +152,10 @@ describe("the shared-app templates", () => {
 
   it("question-box.md deploys as written", () => {
     expect(problemsFor("question-box.md", "owner@example.jp", [])).toEqual([]);
+  });
+
+  it("tally.md deploys as written", () => {
+    expect(problemsFor("tally.md", "owner@example.jp", [])).toEqual([]);
   });
 
   it("shows no page the sandbox would silently break", () => {
@@ -362,6 +367,7 @@ describe("the shared-app templates", () => {
       expect.arrayContaining([".claude/skills/polls/schema.json", ".claude/skills/answers/schema.json"]),
     );
     expect([...blocksOf("question-box.md").keys()]).toEqual(expect.arrayContaining([".claude/skills/questions/schema.json"]));
+    expect([...blocksOf("tally.md").keys()]).toEqual(expect.arrayContaining([".claude/skills/votes/schema.json", ".claude/skills/notes/schema.json"]));
     expect([...blocksOf("ai-council.md").keys()]).toEqual(
       expect.arrayContaining([".claude/skills/topics/schema.json", ".claude/skills/speakers/schema.json", ".claude/skills/messages/schema.json"]),
     );
