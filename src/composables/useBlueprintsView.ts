@@ -1,5 +1,6 @@
 // Navigation seam for the full-screen blueprint overlay — same shape as useRoomsView. The open BUILD
 // is the URL, so a build waiting for its owner's approval can be linked to and reloaded.
+import { personLanguageSchema } from "../../common/blueprint/personLanguage";
 import { computed, shallowRef, type ComputedRef } from "vue";
 import { z } from "zod";
 import { hearingAnswersSchema } from "../../common/blueprint/hearing";
@@ -34,6 +35,7 @@ const formFillSchema = z.object({
   projectDir: z.string(),
   after: z.string().optional(),
   preset: z.string().optional(),
+  language: personLanguageSchema.optional(),
 });
 
 /**

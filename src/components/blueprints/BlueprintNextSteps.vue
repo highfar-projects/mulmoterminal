@@ -5,11 +5,19 @@ import { onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { listPacks, type PackList } from "../../composables/blueprintsApi";
 import { blueprintsViewFollowUp } from "../../composables/useBlueprintsView";
+import type { PersonLanguage } from "../../../common/blueprint/personLanguage";
 import { nextOptions, usecaseTitle, type NextOption } from "./nextSteps";
 import type { HearingAnswers } from "../../../common/blueprint/hearing";
 
 // `answers` and `changedFiles`: the finished build's own, for the steps that carry them over.
-const props = defineProps<{ pair: { base: string; usecase: string }; projectDir: string; answers: HearingAnswers; changedFiles: readonly string[] }>();
+// `language`: the finished build's report language, which the next one keeps.
+const props = defineProps<{
+  pair: { base: string; usecase: string };
+  projectDir: string;
+  answers: HearingAnswers;
+  changedFiles: readonly string[];
+  language: PersonLanguage | null;
+}>();
 const { t } = useI18n();
 
 const packs = ref<PackList>([]);
@@ -29,6 +37,7 @@ function goOn(option: NextOption): void {
     answers: option.answers,
     projectDir: props.projectDir,
     after: usecaseTitle(packs.value, props.pair.usecase),
+    ...(props.language === null ? {} : { language: props.language }),
   });
 }
 </script>

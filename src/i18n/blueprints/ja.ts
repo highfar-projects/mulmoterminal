@@ -37,6 +37,8 @@ export const blueprintsJa: Messages["blueprints"] = {
     credential: "この工程ではサインインが必要です。",
   },
   form: {
+    reportLanguage: "報告の言語",
+    reportLanguageHint: "エージェントがあなたに書くもの（報告・質問・返事）の言語です。文書そのものの言語は変わりません。",
     presets: "例から始める",
     presetsMore: "ほかの例を見る（{count} 件）",
     presetsFewer: "例をたたむ",
