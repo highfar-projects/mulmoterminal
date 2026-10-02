@@ -110,6 +110,9 @@ export interface RequestedCollection {
    *  own machine. What it must not do is show MORE than the published page will — the one direction
    *  this whole file is not allowed to be wrong in — so the same window is taken after the read. */
   limit?: { rows: number; field: string } | undefined;
+  /** Only rows whose this field is `true` (`public.readPublished`). The rules refuse the anonymous
+   *  page any other listing, and the author reading as themselves would otherwise see every row. */
+  publishedField?: string | undefined;
 }
 
 /** One collection's records, read with the author's own credentials.
@@ -128,10 +131,19 @@ async function readCollection(handle: SharedAppHandle, aid: string, want: Reques
   // The id is put ON the record. The rules use the document id as the record's identity
   // (a booking's id IS its slot), and a page that renders a list needs it as a field.
   const rows: PreviewDataset = docs.map((doc) => ({ ...(isRecord(doc.data) ? doc.data : {}), id: doc.id }));
-  if (want.scope === "all") return capped(want, rows);
+  return visibleRows(want, rows, handle);
+}
+
+/** The rows a page asking `want` is handed: published only, the reader's own only, then the cap —
+ *  the order production's query applies them in (`where` before `orderBy` + `limit`). One function
+ *  for the one-shot read and the listener, so the two cannot disagree about which rows a page sees. */
+export function visibleRows(want: RequestedCollection, rows: PreviewDataset, who: { uid: string; email: string }): PreviewDataset {
+  const field = want.publishedField;
+  const published = field === undefined ? rows : rows.filter((row) => row[field] === true);
+  if (want.scope === "all") return capped(want, published);
   return capped(
     want,
-    rows.filter((row) => ownsRow(want, row, handle)),
+    published.filter((row) => ownsRow(want, row, who)),
   );
 }
 
@@ -258,7 +270,7 @@ async function readDatasets(
     for (const want of page.collections) {
       // Keyed on the SCOPE too: the same collection read `all` for the front desk and `own` for the
       // participant is two different answers, and sharing one would hand a page rows it may not see.
-      const key = `${want.cid}:${want.scope}:${want.emailField ?? ""}:${want.uidField ?? ""}:${want.ownDocId ?? ""}:${want.limit?.rows ?? ""}:${want.limit?.field ?? ""}`;
+      const key = `${want.cid}:${want.scope}:${want.emailField ?? ""}:${want.uidField ?? ""}:${want.ownDocId ?? ""}:${want.limit?.rows ?? ""}:${want.limit?.field ?? ""}:${want.publishedField ?? ""}`;
       if (!cache.has(key)) {
         cache.set(key, await readCollection(handle, aid, want).catch(() => null));
       }
@@ -456,10 +468,12 @@ const publicRequests = (config: PublishedConfigDoc): RequestedCollection[] => {
   // `constructor` and `toString` are valid collection names and would otherwise reach a prototype
   // member.
   const caps = config.view?.limit;
+  const published = config.readPublished;
   return (config.view?.collections ?? config.read).map((cid) => ({
     cid,
     scope: "all" as const,
     ...askedCap(caps !== undefined && Object.hasOwn(caps, cid) ? caps[cid] : undefined, "all"),
+    ...(published !== undefined && Object.hasOwn(published, cid) ? { publishedField: published[cid] } : {}),
   }));
 };
 
