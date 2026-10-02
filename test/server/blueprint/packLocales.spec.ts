@@ -5,9 +5,7 @@ import { describe, expect, it } from "vitest";
 import { existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, writeFileSync, cpSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { overlayProblems, packLocaleSchema } from "../../../common/blueprint/packLocale";
-import { blueprintManifestSchema } from "../../../common/blueprint/manifest";
-import { hearingSchema } from "../../../common/blueprint/hearing";
+import { packLocaleSchema } from "../../../common/blueprint/packLocale";
 import { localizedPacks, localizedPair, localizedPresets } from "../../../server/blueprint/packLocales";
 import { packProblems, type PackRoot } from "../../../server/blueprint/packs";
 
@@ -16,13 +14,6 @@ const ROOTS: PackRoot[] = [{ dir: PACKS, source: "builtin" }];
 const DOCUMENT_PACKS = ["docs", "adopt", "ask", "compare", "glossary", "polish", "review", "style", "summarize", "verify", "write"];
 
 const readJson = (file: string): unknown => JSON.parse(readFileSync(file, "utf8"));
-const idsOf = (file: string, key: string): string[] => {
-  const parsed = existsSync(file) ? readJson(file) : null;
-  const list = typeof parsed === "object" && parsed !== null && key in parsed ? (parsed as Record<string, unknown>)[key] : [];
-  return [
-    ...new Set((Array.isArray(list) ? list : []).flatMap((entry) => (typeof entry === "object" && entry !== null && "id" in entry ? [String(entry.id)] : []))),
-  ];
-};
 const packsWithOverlay = readdirSync(PACKS).filter((slug) => existsSync(path.join(PACKS, slug, "locales", "en.json")));
 
 describe("the shipped packs' English overlays", () => {
@@ -30,18 +21,8 @@ describe("the shipped packs' English overlays", () => {
     expect(DOCUMENT_PACKS.filter((slug) => !packsWithOverlay.includes(slug))).toEqual([]);
   });
 
-  it.each(packsWithOverlay)("%s covers its pack exactly", (slug) => {
-    const dir = path.join(PACKS, slug);
-    const manifest = blueprintManifestSchema.parse(readJson(path.join(dir, "manifest.json")));
-    const overlay = packLocaleSchema.parse(readJson(path.join(dir, "locales", "en.json")));
-    const hearingFile = path.join(dir, "hearing.json");
-    const problems = overlayProblems(overlay, {
-      manifest,
-      hearing: existsSync(hearingFile) ? hearingSchema.parse(readJson(hearingFile)) : null,
-      stepIds: manifest.kind === "base" ? idsOf(path.join(dir, "plan.json"), "steps") : idsOf(path.join(dir, "steps.json"), "steps"),
-      presetIds: idsOf(path.join(dir, "presets.json"), "presets"),
-    });
-    expect(problems).toEqual([]);
+  it.each(packsWithOverlay)("%s covers its pack exactly", async (slug) => {
+    expect(await packProblems(path.join(PACKS, slug))).toEqual([]);
   });
 });
 
@@ -70,7 +51,7 @@ describe("the form's routes in English", () => {
     expect(presets.find((preset) => preset.usecase === "polish" && preset.id === "blog")?.title).toBe("Polish a blog post as a blog post");
   });
 
-  it("refuse an installed pack whose overlay leaves something out, and pass every shipped pack", async () => {
+  it("refuse an installed pack whose overlay leaves something out", async () => {
     const root = mkdtempSync(path.join(os.tmpdir(), "bp-locale-"));
     cpSync(path.join(PACKS, "polish"), path.join(root, "polish"), { recursive: true });
     const overlayFile = path.join(root, "polish", "locales", "en.json");
@@ -79,8 +60,6 @@ describe("the form's routes in English", () => {
     const problems = await packProblems(path.join(root, "polish"));
     expect(problems).toContain('locales/en.json: words for step "gone", which the pack does not have');
     expect(problems).toContain('locales/en.json: no words for example "blog"');
-    const shipped = await Promise.all(packsWithOverlay.map(async (slug) => [slug, await packProblems(path.join(PACKS, slug))]));
-    expect(shipped.filter(([, found]) => found.length > 0)).toEqual([]);
   });
 
   it("show a pack whose overlay is broken as written, rather than hiding the packs", async () => {

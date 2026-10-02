@@ -11,7 +11,7 @@ import { blueprintManifestSchema, incompatibility, inPackOrder, BLUEPRINT_SLUG_R
 import { basePlanSchema, composePlan, usecaseStepsSchema, type ComposedStep } from "../../common/blueprint/plan.js";
 import { hearingSchema, type Hearing } from "../../common/blueprint/hearing.js";
 import { presetsFileSchema, type Preset, type PresetListing } from "../../common/blueprint/presets.js";
-import { overlayProblems, packLocaleSchema } from "../../common/blueprint/packLocale.js";
+import { overlayProblems, packLocaleSchema, type Described } from "../../common/blueprint/packLocale.js";
 import { readSamples } from "./samples.js";
 
 export const PACK_SOURCES = ["builtin", "installed"] as const;
@@ -103,7 +103,7 @@ export async function loadPackPair(roots: readonly PackRoot[], baseSlug: string,
 /** A usecase pack's interview, as written in its folder. */
 export const readHearing = async (packDir: string): Promise<Hearing> => hearingSchema.parse(await readJson(path.join(packDir, "hearing.json")));
 
-async function stepsOf(packDir: string, manifest: BlueprintManifest): Promise<{ id: string; skill: string }[]> {
+async function stepsOf(packDir: string, manifest: BlueprintManifest): Promise<{ id: string; skill: string; description?: string }[]> {
   if (manifest.kind === "base") return basePlanSchema.parse(await readJson(path.join(packDir, "plan.json"))).steps;
   await readHearing(packDir);
   // Presets are optional, but a broken one is refused here rather than dropped silently when listed.
@@ -113,15 +113,15 @@ async function stepsOf(packDir: string, manifest: BlueprintManifest): Promise<{ 
 
 // An overlay in another language is optional, but one that is broken, stale or leaves something out is refused here
 // rather than shown half-translated on the form.
-async function overlayProblemsOf(packDir: string, manifest: BlueprintManifest, steps: readonly { id: string }[]): Promise<string[]> {
+async function overlayProblemsOf(packDir: string, manifest: BlueprintManifest, steps: readonly Described[]): Promise<string[]> {
   const file = path.join(packDir, "locales", "en.json");
   if (!(await exists(file))) return [];
   const usecase = manifest.kind === "usecase";
   const problems = overlayProblems(packLocaleSchema.parse(await readJson(file)), {
     manifest,
     hearing: usecase ? await readHearing(packDir) : null,
-    stepIds: [...new Set(steps.map((step) => step.id))],
-    presetIds: usecase ? (await readPresets(packDir)).map((preset) => preset.id) : [],
+    steps,
+    presets: usecase ? await readPresets(packDir) : [],
   });
   return problems.map((problem) => `locales/en.json: ${problem}`);
 }

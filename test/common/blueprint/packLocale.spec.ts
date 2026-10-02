@@ -91,7 +91,7 @@ describe("laying an overlay over a pack", () => {
 });
 
 describe("overlayProblems", () => {
-  const pack = { manifest, hearing, stepIds: ["survey"], presetIds: ["blog"] };
+  const pack = { manifest, hearing, steps: [{ id: "survey", description: "選ぶ" }], presets: [{ id: "blog", description: "" }] };
 
   it("passes an overlay that covers the pack exactly", () => {
     expect(overlayProblems(overlay, pack)).toEqual([]);
@@ -101,11 +101,22 @@ describe("overlayProblems", () => {
     const partial: PackLocale = { hearing: { style: { label: "Which style", options: { この規約: "This style" } } } };
     expect(overlayProblems(partial, pack)).toEqual([
       "no title",
+      "no description",
       'no words for question "limit"',
       'no words for step "survey"',
       'no words for example "blog"',
       'question "style" needs both a label and a why',
       'no words for option of "style" "既定"',
+    ]);
+  });
+
+  it("names an empty entry, and a description the pack has and the overlay does not", () => {
+    const thin: PackLocale = { ...overlay, manifest: { title: "Polish" }, steps: { survey: {} }, presets: { blog: { description: "Only a description" } } };
+    expect(overlayProblems(thin, pack)).toEqual([
+      "no description",
+      'step "survey" has no title',
+      'step "survey" has no description',
+      'example "blog" has no title',
     ]);
   });
 
