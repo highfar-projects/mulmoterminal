@@ -3,7 +3,7 @@
 **いつ使うか** — 訪問者に「みんなはどう答えたか」の**件数と割合だけ**を見せ、誰が何と書いたかは
 見せないもの。「どれが好き？」の結果発表、診断の分布、イベントの希望調査。
 
-- 答える人は**サインイン画面なし**（`auth: "anonymous"`）、**1 人 1 票**（`idFrom: "auth.uid"`）
+- 答える人は**サインイン画面なし**（`auth: "anonymous"`）、**1 人 1 票**（`idFrom: "pseudonym"`）
 - 公開ページは票を読んで、**ページの中で**選択肢ごとに数える
 - 名前やコメントは**別のコレクション**に入り、持ち主にしか見えない
 
@@ -23,7 +23,7 @@
   "aid": "(init が書きます。手で触らないこと)",
   "name": "どれが好き？",
   "slug": "tally",
-  "protocol": "1.0.0",
+  "protocol": "3.0.0",
   "members": {
     "owner@example.jp": { "*": "owner" }
   },
@@ -48,7 +48,7 @@
     "submit": {
       "votes": {
         "auth": "anonymous",
-        "idFrom": "auth.uid",
+        "idFrom": "pseudonym",
         "createFields": ["choice", "status"],
         "initialStatus": "voted",
         "validate": {
@@ -58,7 +58,7 @@
       },
       "notes": {
         "auth": "anonymous",
-        "idFrom": "auth.uid",
+        "idFrom": "pseudonym",
         "createFields": ["name", "comment", "status"],
         "initialStatus": "sent",
         "maxBytes": { "name": 120, "comment": 1200 }
@@ -73,7 +73,11 @@
 
 **`notes` は `public.read` に入れない。** それで持ち主（と、ロールを持つ人）だけが読めます。
 
-**同じ人の票とメモは同じ id（uid）を持ちます。** 持ち主の画面は id で突き合わせて 1 人分に
+**`idFrom: "pseudonym"`（`protocol: "3.0.0"`）** — 票の id は uid ではなく、uid とアプリ id の
+ハッシュ（このアプリでの匿名 id）です。票は全員に見えるので、uid のままだと、同じ人が別の
+アプリで残した名前付きの行と突き合わせられます。1 人 1 票の守りは `auth.uid` と同じです。
+
+**同じ人の票とメモは同じ id（匿名 id）を持ちます。** 持ち主の画面は id で突き合わせて 1 人分に
 まとめます。
 
 **`validate.keyFields` が選択肢を固定します。** 一覧に無い値はルールが拒否するので、件数が
@@ -129,7 +133,7 @@
 分けておくと、メモだけが失敗したときも、メモだけを送り直せば済みます。
 
 **もう投票したかは `onState` の中で訊きます**（`view.mine`）。押してから訊くと、続く書き込みが
-押下の扱いになりません。`idFrom: "auth.uid"` の id は uid そのものなので、キーは何でも構いません
+押下の扱いになりません。`idFrom: "pseudonym"` の id は本人の匿名 id そのものなので、キーは何でも構いません
 （空文字だけはブリッジが弾くので 1 文字渡す）。
 
 ```html
