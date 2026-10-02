@@ -114,7 +114,7 @@
     "graphai": "^2.0.18",
     "gui-chat-protocol": "^2.3.0",
     "marked": "^18.0.14",
-    "material-symbols": "^0.47.5",
+    "material-symbols": "^0.47.6",
     "mulmocast": "^2.12.1",
     "node-pty": "1.2.0-beta.15",
     "puppeteer": "^25.12.0",
