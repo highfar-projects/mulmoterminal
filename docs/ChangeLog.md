@@ -8,6 +8,37 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@8.5.0 — 2026-10-02
+
+> **Setup guide:** [8.5.0 — Answer a blueprint's questions at the approval screen, and blueprints in English](https://receptron.github.io/mulmoterminal/guide/en/v8.5.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v8.5.0.html))
+
+### Blueprints: send changes and answers at a document gate
+
+- [#2855](https://github.com/receptron/mulmoterminal/pull/2855) — a document build's review gate gets the conversation an app build's spec review already had, under its own words ("Send changes or answers"). Each gate declares the files its conversation may change (`revises`, beside `reads`): most reads are views a check draws from a JSON record, so the session is told to change the records and leave the views alone; a build started before its pack declared `revises` reads them from the pack. When a revision ends, the check of the step before the gate runs again, redrawing the views, and a failure is added to the conversation (`check-failed`) with the check's output.
+- [#2857](https://github.com/receptron/mulmoterminal/pull/2857) — approval is refused (`revision-check-failed`) while the conversation's last entry is a failed re-check, until a later revision passes; stopping the build stays allowed. The re-check also runs after a lost revision session, and an installed pack whose gate names reads but no `revises` is refused.
+
+### Blueprints in English (#2634)
+
+- [#2838](https://github.com/receptron/mulmoterminal/pull/2838) — the document packs carry `locales/en.json` overlays: names, descriptions, interview questions and option labels, step names and examples. Overlays replace words only, never values, so stored answers are the same in either language; a broken or stale overlay is refused when a pack is installed.
+- [#2843](https://github.com/receptron/mulmoterminal/pull/2843) — the same for the app packs.
+- [#2847](https://github.com/receptron/mulmoterminal/pull/2847) — the build list and the run view show step names in the screen's language (`?lang=`).
+
+### Blueprints: more kinds of document, questions with choices, and the work list
+
+- [#2853](https://github.com/receptron/mulmoterminal/pull/2853) — polish and adopt offer every genre chaff measures (24 kinds; 11 added: owned media, press release, meeting notes, statute, FAQ, glossary, judgment, patent, play, speech, transcript), each with viewpoints for reading it. A spec pins the list to chaff's genres.
+- [#2856](https://github.com/receptron/mulmoterminal/pull/2856) — the run view shows the work list a build keeps in `.blueprint/targets.json` as a table under the current step: order, title, kind and status, the row waiting for a decision tinted, and a click opening its why, proof, files, pull request and note (#2851). Read through `GET /api/blueprints/runs/:id/targets`; a malformed file is reported, never thrown.
+- [#2854](https://github.com/receptron/mulmoterminal/pull/2854) — a step's agent can offer a question as `CHOICES` with what each costs and a `RECOMMEND`; the run view shows one button per choice and keeps the free-text answer. Malformed choices are refused with a 400 the agent can read.
+
+### Launch form
+
+- [#2842](https://github.com/receptron/mulmoterminal/pull/2842) — a launch directory starting with `~` is expanded to the home directory, in the launch form and in the worktree routes.
+
+### Fixes and internals
+
+- [#2849](https://github.com/receptron/mulmoterminal/pull/2849) — a Claude, Codex or Copilot spawn that throws releases the full-GUI-MCP ("all tools") claim it recorded (#2848).
+- [#2839](https://github.com/receptron/mulmoterminal/pull/2839), [#2844](https://github.com/receptron/mulmoterminal/pull/2844), [#2845](https://github.com/receptron/mulmoterminal/pull/2845), [#2846](https://github.com/receptron/mulmoterminal/pull/2846) — duplicated session/ws route preambles, heat figure props and agent PTY starts moved into shared pieces (#2822), no behaviour change.
+- [#2840](https://github.com/receptron/mulmoterminal/pull/2840) — the feature reference lists the Skills viewer.
+
 ## mulmoterminal@8.4.0 — 2026-10-02
 
 > **Setup guide:** [8.4.0 — Find a skill on skills.sh, and Claude cells keep their scrollbar](https://receptron.github.io/mulmoterminal/guide/en/v8.4.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v8.4.0.html))
