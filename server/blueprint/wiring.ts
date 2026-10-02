@@ -133,7 +133,7 @@ export function mountBlueprints(app: Express, spawnClaudePty: SpawnClaude, reap:
 // Taking the lock recovers the runs, so a server that takes over from a dead holder first settles the
 // sessions that holder left behind. Every change re-reads the lock: one lost to another server is
 // noticed, and refused, rather than acted on. Reads work either way.
-function lockedExecutor(executor: BlueprintExecutor): { executor: BlueprintExecutor; ensureOwner: () => Promise<void> } {
+export function lockedExecutor(executor: BlueprintExecutor): { executor: BlueprintExecutor; ensureOwner: () => Promise<void> } {
   const self = { pid: process.pid, port: String(PORT), token: randomUUID() };
   let owning: Promise<void> | null = null;
   const refuseFor = (holder: { port: string }): BlueprintRefusal => new BlueprintRefusal({ code: "held-elsewhere", port: holder.port });
@@ -169,11 +169,12 @@ function lockedExecutor(executor: BlueprintExecutor): { executor: BlueprintExecu
   return {
     ensureOwner,
     executor: {
-      view: (runId) => executor.view(runId),
-      list: () => executor.list(),
-      specView: (runId) => executor.specView(runId),
-      reportView: (runId) => executor.reportView(runId),
-      workingIn: (folder) => executor.workingIn(folder),
+      // Every argument forwarded as given: a wrapper that names fewer parameters still type-checks and drops the rest.
+      view: (...args: Parameters<BlueprintExecutor["view"]>) => executor.view(...args),
+      list: (...args: Parameters<BlueprintExecutor["list"]>) => executor.list(...args),
+      specView: (...args: Parameters<BlueprintExecutor["specView"]>) => executor.specView(...args),
+      reportView: (...args: Parameters<BlueprintExecutor["reportView"]>) => executor.reportView(...args),
+      workingIn: (...args: Parameters<BlueprintExecutor["workingIn"]>) => executor.workingIn(...args),
       recover: owned((endSession: Parameters<BlueprintExecutor["recover"]>[0]) => executor.recover(endSession)),
       create: owned((request: Parameters<BlueprintExecutor["create"]>[0]) => executor.create(request)),
       humanEvent: owned((...args: Parameters<BlueprintExecutor["humanEvent"]>) => executor.humanEvent(...args)),

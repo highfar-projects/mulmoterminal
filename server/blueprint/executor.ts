@@ -23,6 +23,8 @@ import {
   type ExecutorAction,
 } from "../../common/blueprint/executorPolicy.js";
 import { earlierAnswers, stepPrompt } from "../../common/blueprint/stepPrompt.js";
+import { localizedManifest } from "../../common/blueprint/packLocale.js";
+import { localizedRunSteps, overlayReader } from "./packLocales.js";
 import { summarizeRun, type BlueprintRun, type BlueprintRunSummary } from "../../common/blueprint/run.js";
 import type { ComposedStep } from "../../common/blueprint/plan.js";
 import type { HearingAnswers } from "../../common/blueprint/hearing.js";
@@ -192,24 +194,31 @@ class Executor {
     return { path: path.join(run.projectDir, report), markdown: await this.deps.projectFiles.read(run.projectDir, report), changed, pair };
   }
 
-  /** Every build, newest first. One that cannot be read is left out rather than failing the list. */
-  async list(): Promise<BlueprintRunSummary[]> {
+  /**
+   * Every build, newest first, its words in the screen's language (`localizedRunSteps`). One that cannot be read is left
+   * out rather than failing the list.
+   */
+  async list(screenLanguage?: string): Promise<BlueprintRunSummary[]> {
     const loaded = (await Promise.all((await this.deps.store.list()).map((runId) => this.deps.store.load(runId).catch(() => null)))).filter(
       (entry): entry is Loaded => entry !== null,
     );
     // Each usecase pack read once per listing, however many builds share it.
     const dirs = [...new Set(loaded.map((entry) => entry.run.usecasePackDir))];
+    const read = overlayReader(screenLanguage);
     const titleOf = async (dir: string): Promise<[string, string | null]> => [
       dir,
       await readManifest(dir).then(
-        (manifest) => (manifest.kind === "usecase" ? manifest.title : null),
+        async (manifest) => (manifest.kind === "usecase" ? localizedManifest(manifest, await read(dir)).title : null),
         () => null,
       ),
     ];
     const titles = new Map(await Promise.all(dirs.map(titleOf)));
-    return loaded
-      .map((entry) => summarizeRun(entry.run, entry.state, titles.get(entry.run.usecasePackDir) ?? null))
-      .sort((a, b) => b.createdAtMs - a.createdAtMs);
+    const summaries = await Promise.all(
+      loaded.map(async (entry) =>
+        summarizeRun({ ...entry.run, steps: await localizedRunSteps(entry.run, read) }, entry.state, titles.get(entry.run.usecasePackDir) ?? null),
+      ),
+    );
+    return summaries.sort((a, b) => b.createdAtMs - a.createdAtMs);
   }
 
   /** A person approved, rejected, answered or asked to retry. */

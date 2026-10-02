@@ -12,6 +12,7 @@ import {
   type PackLocale,
 } from "../../common/blueprint/packLocale.js";
 import type { PresetListing } from "../../common/blueprint/presets.js";
+import type { ComposedStep } from "../../common/blueprint/plan.js";
 import { listPacks, listPresets, loadPackPair, packDirOf, type PackPair, type PackRoot, type PackSummary } from "./packs.js";
 
 /** A pack's overlay for the screen language, or null — none written, or the screen reads the pack as written. */
@@ -47,4 +48,38 @@ export async function localizedPair(roots: readonly PackRoot[], baseSlug: string
   if (!pair.ok) return pair;
   const [base, usecase] = await Promise.all([readPackLocale(pair.basePackDir, screenLanguage), readPackLocale(pair.usecasePackDir, screenLanguage)]);
   return { ...pair, hearing: localizedHearing(pair.hearing, usecase), steps: localizedSteps(pair.steps, { base, usecase }, baseSlug) };
+}
+
+/** A build's view with its steps in the screen's language: what every route that answers with a build sends. */
+export async function localizedRunView<V extends { run: { basePackDir: string; usecasePackDir: string; steps: readonly ComposedStep[] } }>(
+  view: V,
+  screenLanguage: string | undefined,
+): Promise<V> {
+  return { ...view, run: { ...view.run, steps: await localizedRunSteps(view.run, overlayReader(screenLanguage)) } };
+}
+
+/** Reads each pack's overlay once, however many builds share the pack. */
+export type OverlayReader = (packDir: string) => Promise<PackLocale | null>;
+
+export function overlayReader(screenLanguage: string | undefined): OverlayReader {
+  const read = new Map<string, Promise<PackLocale | null>>();
+  return (packDir) => {
+    const known = read.get(packDir);
+    if (known) return known;
+    const reading = readPackLocale(packDir, screenLanguage);
+    read.set(packDir, reading);
+    return reading;
+  };
+}
+
+/**
+ * A build's steps in the screen's language: its packs' overlays laid over the titles it stored when it started, with the
+ * words written for its base first. The base is the base pack's folder name, which is its slug.
+ */
+export async function localizedRunSteps(
+  run: { basePackDir: string; usecasePackDir: string; steps: readonly ComposedStep[] },
+  read: OverlayReader,
+): Promise<ComposedStep[]> {
+  const [base, usecase] = await Promise.all([read(run.basePackDir), read(run.usecasePackDir)]);
+  return localizedSteps(run.steps, { base, usecase }, path.basename(run.basePackDir));
 }

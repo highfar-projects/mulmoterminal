@@ -6,7 +6,7 @@ import { existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, writeFil
 import os from "node:os";
 import path from "node:path";
 import { packLocaleSchema } from "../../../common/blueprint/packLocale";
-import { localizedPacks, localizedPair, localizedPresets } from "../../../server/blueprint/packLocales";
+import { localizedPacks, localizedPair, localizedPresets, localizedRunSteps, overlayReader } from "../../../server/blueprint/packLocales";
 import { packProblems, type PackRoot } from "../../../server/blueprint/packs";
 
 const PACKS = path.join(import.meta.dirname, "..", "..", "..", "blueprints");
@@ -72,5 +72,33 @@ describe("the form's routes in English", () => {
     writeFileSync(path.join(root, "polish", "locales", "en.json"), "{ not json");
     const packs = await localizedPacks([{ dir: root, source: "installed" }], "en");
     expect(packs.find((pack) => pack.slug === "polish")?.manifest.title).toBe("文書を整える（書いてあることは変えずに）");
+  });
+});
+
+describe("a build's steps in the screen's language", () => {
+  it("lay the packs' words over the Japanese titles a build stored, the base's own words first", async () => {
+    const pair = await localizedPair(ROOTS, "firebase", "from-collection", "ja");
+    if (!pair.ok) throw new Error(pair.problems.join("; "));
+    const run = { basePackDir: path.join(PACKS, "firebase"), usecasePackDir: path.join(PACKS, "from-collection"), steps: pair.steps };
+    const english = await localizedRunSteps(run, overlayReader("en"));
+    expect(english.find((step) => step.id === "spec")?.title).toBe("Write the spec");
+    expect(english.find((step) => step.id === "import")?.title).toBe("Move the records (emulators)");
+    expect(english.map((step) => step.id)).toEqual(pair.steps.map((step) => step.id));
+    expect(await localizedRunSteps(run, overlayReader("ja"))).toEqual(pair.steps);
+  });
+
+  it("keep a build whose packs are gone as it was stored", async () => {
+    const steps = [{ id: "a", title: "工程", description: "", skill: "s", check: "true", gates: [], reads: [], origin: "usecase" as const }];
+    expect(await localizedRunSteps({ basePackDir: "/packs/gone", usecasePackDir: "/packs/gone-too", steps }, overlayReader("en"))).toEqual(steps);
+  });
+
+  it("read each pack's overlay once, however many builds share it", async () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), "bp-locale-"));
+    cpSync(path.join(PACKS, "polish"), path.join(root, "polish"), { recursive: true });
+    const read = overlayReader("en");
+    const first = await read(path.join(root, "polish"));
+    writeFileSync(path.join(root, "polish", "locales", "en.json"), "{ not json");
+    expect(await read(path.join(root, "polish"))).toBe(first);
+    expect(first?.manifest?.title).toBe("Polish documents (without changing what they say)");
   });
 });

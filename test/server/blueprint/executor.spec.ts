@@ -525,6 +525,22 @@ describe("the build list", () => {
     expect(titleIn("/work/docs")).toContain("文書を読み解く");
     expect(titleIn("/work/app")).toBeNull();
     expect(titleIn("/work/base")).toBeNull();
+    const workspace = {
+      id: "workspace",
+      title: "フォルダと chaff を確かめる",
+      description: "",
+      skill: "s",
+      check: "true",
+      gates: [],
+      reads: [],
+      origin: "base" as const,
+    };
+    await executor.create({ projectDir: "/work/real", basePackDir: path.join(PACKS, "docs"), usecasePackDir: path.join(PACKS, "review"), steps: [workspace] });
+    const english = await executor.list("en");
+    expect(english.find((summary) => summary.projectDir === "/work/docs")?.usecaseTitle).toBe(
+      "Read documents closely (find contradictions and gaps, propose fixes)",
+    );
+    expect(english.find((summary) => summary.projectDir === "/work/real")?.current?.title).toBe("Check the folder and chaff");
   });
 });
 

@@ -9,23 +9,40 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { mountBlueprintRoutes } from "../../../server/blueprint/routes";
 import type { BlueprintExecutor } from "../../../server/blueprint/executor";
+import { blueprintRunSchema } from "../../../common/blueprint/run";
 
 const PACKS_ROOT = path.join(import.meta.dirname, "..", "..", "..", "blueprints");
 const unused = async (): Promise<never> => {
   throw new Error("not used here");
 };
+// A polish build as it was stored when it started: its steps' titles in the packs' own Japanese.
+const storedRun = blueprintRunSchema.parse({
+  id: "run-00000001",
+  projectDir: "/work/docs",
+  basePackDir: path.join(PACKS_ROOT, "docs"),
+  usecasePackDir: path.join(PACKS_ROOT, "polish"),
+  steps: [
+    { id: "workspace", title: "フォルダと chaff を確かめる", description: "", skill: "s", check: "true", gates: [], reads: [], origin: "base" },
+    { id: "polish", title: "一つずつ整える", description: "", skill: "s", check: "true", gates: ["review"], reads: [], origin: "usecase" },
+  ],
+  createdAtMs: 1,
+});
+const listedIn: (string | undefined)[] = [];
 const executor: BlueprintExecutor = {
   create: unused,
-  view: unused,
-  humanEvent: unused,
+  view: async () => ({ run: storedRun, state: { steps: {} } }),
+  humanEvent: async () => ({ run: storedRun, state: { steps: {} } }),
   ask: unused,
-  list: async () => [],
+  list: async (screenLanguage) => {
+    listedIn.push(screenLanguage);
+    return [];
+  },
   workingIn: async () => null,
   specView: unused,
-  say: unused,
+  say: async () => ({ run: storedRun, state: { steps: {} } }),
   reportView: unused,
   recover: unused,
-  archive: unused,
+  archive: async () => ({ run: storedRun, state: { steps: {} } }),
 };
 
 let server: Server;
@@ -110,5 +127,38 @@ describe("the form's routes in the screen's language", () => {
       .object({ hearing: z.object({ questions: z.array(z.object({ id: z.string(), label: z.string() })) }) })
       .parse(await json("/api/blueprints/pairs/docs/polish?lang=en"));
     expect(preview.hearing.questions.find((question) => question.id === "style")?.label).toBe("Which style should they follow?");
+  });
+});
+
+describe("a build's view and the list in the screen's language", () => {
+  const titlesOf = async (url: string) =>
+    z
+      .object({ run: z.object({ steps: z.array(z.object({ id: z.string(), title: z.string() })) }) })
+      .parse(await (await fetch(`${base}${url}`)).json())
+      .run.steps.map((step) => step.title);
+
+  it("shows the stored steps in English for ?lang=en, and as stored without it", async () => {
+    expect(await titlesOf("/api/blueprints/runs/run-00000001?lang=en")).toEqual(["Check the folder and chaff", "Polish them one by one"]);
+    expect(await titlesOf("/api/blueprints/runs/run-00000001")).toEqual(["フォルダと chaff を確かめる", "一つずつ整える"]);
+  });
+
+  it("answers an action on a build in English too, so the screen does not flip back to the stored words", async () => {
+    const posted = async (route: string, body: unknown) =>
+      z
+        .object({ run: z.object({ steps: z.array(z.object({ title: z.string() })) }) })
+        .parse(await (await fetch(`${base}${route}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })).json())
+        .run.steps.map((step) => step.title);
+    const english = ["Check the folder and chaff", "Polish them one by one"];
+    expect(await posted("/api/blueprints/runs/run-00000001/events?lang=en", { type: "approve", stepId: "polish" })).toEqual(english);
+    expect(await posted("/api/blueprints/runs/run-00000001/archive?lang=en", { archived: true })).toEqual(english);
+    expect(await posted("/api/blueprints/runs/run-00000001/spec/messages?lang=en", { message: "hi" })).toEqual(english);
+    expect(await posted("/api/blueprints/runs/run-00000001/archive", { archived: false })).toEqual(["フォルダと chaff を確かめる", "一つずつ整える"]);
+  });
+
+  it("hands the screen's language to the list", async () => {
+    listedIn.length = 0;
+    await fetch(`${base}/api/blueprints/runs?lang=en`);
+    await fetch(`${base}/api/blueprints/runs`);
+    expect(listedIn).toEqual(["en", undefined]);
   });
 });
