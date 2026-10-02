@@ -1281,10 +1281,10 @@
   resolved "https://registry.yarnpkg.com/@gui-chat-plugin/common/-/common-0.1.0.tgz#96d8a7a1cf1a2a806bbc2ee5ba296b69a59b0350"
   integrity sha512-OF+/XxKWBU50ijjygO+QrMsJjKn+2b1jtA7ouerBJThFT6sR1ZSwJDp+wj6FKBMXY8pPveJcXCBDQHl/qILmrg==
 
-"@gui-chat-plugin/shapescript@^8.2.0":
-  version "8.2.0"
-  resolved "https://registry.yarnpkg.com/@gui-chat-plugin/shapescript/-/shapescript-8.2.0.tgz#317ee15d422a16ccbbb00316575832820a136701"
-  integrity sha512-bFxTJ5Yk/V7XQKxSA5nYytOKHfPK2S9s9HnhqrhmbxJdjdga8w1gd5wdBVZKF/HNqgtsMT7AIlMON1cQaLDaiw==
+"@gui-chat-plugin/shapescript@^8.2.1":
+  version "8.2.1"
+  resolved "https://registry.yarnpkg.com/@gui-chat-plugin/shapescript/-/shapescript-8.2.1.tgz#93bfd9184c1e2d9a84ff209fa7baf46041245bce"
+  integrity sha512-7XGU+ddXFNaTAfTXtBZSaInGe1k1yawJoqJ209FUr/JVAExWFtXxUADcls6ToC0mjY/p8V29+my+qiWXqqH+KQ==
   dependencies:
     "@gui-chat-plugin/common" "^0.1.0"
     "@types/three" "^0.186.0"
