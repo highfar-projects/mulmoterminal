@@ -464,6 +464,14 @@ export interface ReadRecords {
   more?: boolean;
 }
 
+/** The `uidField` query: by the uid, or — under `uidForm: "pseudonym"` — by this reader's pseudonym for
+ *  the app. Nothing where that pseudonym was never computed, so no row is claimed on a guess. */
+const uidSelector = (field: string, form: unknown, uid: string, pseudonym: string | undefined): { field: string; value: string }[] => {
+  if (form !== "pseudonym") return [{ field, value: uid }];
+  if (pseudonym === undefined) return [];
+  return [{ field, value: pseudonym }];
+};
+
 /** The own-row selector this collection declares, out of the PUBLISHED submit block.
  *
  *  These are the same three the rules identify an own row by (`ownRow`), asked in the only terms a
@@ -480,7 +488,7 @@ export function ownSelector(app: JoinedApp, cid: string): { fields: { field: str
   // submissions hold the uid — and querying one field only would hide half of what is theirs, as an
   // empty answer rather than as an error.
   const fields = [
-    ...(typeof raw.uidField === "string" ? [{ field: raw.uidField, value: handle.uid }] : []),
+    ...(typeof raw.uidField === "string" ? uidSelector(raw.uidField, raw.uidForm, handle.uid, app.pseudonym) : []),
     ...(typeof raw.emailField === "string" ? [{ field: raw.emailField, value: handle.email }] : []),
   ];
   if (fields.length > 0) return { fields };

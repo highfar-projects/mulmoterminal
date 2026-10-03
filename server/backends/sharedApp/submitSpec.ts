@@ -22,6 +22,9 @@ export function submitSpecOf(raw: Record<string, unknown>): SubmitSpec {
     // Filled by `recordOf` from the session, exactly as the address is. Read off the PUBLISHED
     // declaration for the reason the stamp is: `uidOk` tests the submit block.
     uidField: text("uidField"),
+    // What that field holds — the uid, or the app's pseudonym of it. Dropped, the record would carry
+    // the raw uid where the rules require the pseudonym.
+    uidForm: text("uidForm"),
     initialStatus: text("initialStatus"),
     idFrom: text("idFrom"),
     idField: text("idField"),

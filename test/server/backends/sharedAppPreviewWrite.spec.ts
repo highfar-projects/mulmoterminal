@@ -306,6 +306,26 @@ describe("shared app preview writes", () => {
     expect(written).toEqual([pseudonym]);
   });
 
+  it("writes a uidForm field as the author's pseudonym for the app, not their uid", async () => {
+    writeCollection("bookings", {
+      requesterName: { type: "string", label: "Name", required: true },
+      requesterEmail: { type: "email", label: "Email", required: true },
+      slot: { type: "string", label: "Slot", required: true },
+      status: { type: "enum", label: "Status", values: ["booked"] },
+      uid: { type: "string", label: "Who" },
+    });
+    writeApp(bookingApp({ submit: { uidField: "uid", uidForm: "pseudonym", createFields: ["requesterName", "requesterEmail", "slot", "status", "uid"] } }));
+
+    const result = await writePreviewSubmission(root, "bookings", { requesterName: "客", slot: "roomA-1000" });
+
+    expect(result.ok === false ? result.error : "").toBe("");
+    const written = batched.find((op) => op.startsWith("set apps/")) ?? "";
+    const pseudonym = createHash("sha256")
+      .update(OWNER.uid + ":" + AID)
+      .digest("hex");
+    expect(written).toContain(`"uid":"${pseudonym}"`);
+  });
+
   it("makes the id the thing being claimed, and pairs the mirror in ONE batch", async () => {
     const result = await writePreviewSubmission(root, "bookings", { requesterName: "客", slot: "roomA-1000" });
 

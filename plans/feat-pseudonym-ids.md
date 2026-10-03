@@ -12,3 +12,11 @@ find and own those rows the same way:
 - template test: article templates declare `APP_PROTOCOL_ARTICLE` (2.0.0); `APP_PROTOCOL` is 3.0.0
 
 Templates and SKILL.md switch to the pseudonym strategies in a separate change.
+
+## uidForm (a uidField that holds the pseudonym, sharedapp 0.41.0)
+
+- `submitSpec` keeps `uidForm` (dropped, the record would carry the uid)
+- writes: participant submit and preview submission hand `recordOf` the pseudonym (the joined app's,
+  `readerFor`)
+- own rows: participant `ownSelector` queries the field by the pseudonym; preview `ownsRow` compares it;
+  `asRequested` / `ownRequests` carry `uidForm`, and it is part of the read cache key
