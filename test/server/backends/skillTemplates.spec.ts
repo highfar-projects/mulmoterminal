@@ -313,15 +313,17 @@ describe("the shared-app templates", () => {
   it("names a PUBLIC row built from its submitter by the app's pseudonym, not by the uid", () => {
     // The anonymous uid is the same in every app of the project, so a world-readable row whose id is
     // the uid can be joined to the same person's named rows elsewhere (receptron/mulmoserver#325).
-    // project-board is the one left: its `assignments` carry the raw uid in `uidField` and the board
-    // joins them to `names` by it, so moving `names` alone would break the join — tracked on #325.
-    const stillOnUid = new Set(["project-board.md"]);
-    const exposed = TEMPLATE_FILES.filter((file) => !stillOnUid.has(file)).flatMap((file) => {
-      const manifest = blocksOf(file).get("app.json") as { public?: { read?: string[]; submit?: Record<string, { idFrom?: string }> } } | undefined;
+    // And a uidField on such a row must hold the pseudonym too (`uidForm`), or the uid is in a field.
+    const exposed = TEMPLATE_FILES.flatMap((file) => {
+      const manifest = blocksOf(file).get("app.json") as
+        { public?: { read?: string[]; submit?: Record<string, { idFrom?: string; uidField?: string; uidForm?: string }> } } | undefined;
       const open = new Set(manifest?.public?.read ?? []);
       return Object.entries(manifest?.public?.submit ?? {})
-        .filter(([cid, submit]) => open.has(cid) && (submit.idFrom === "auth.uid" || submit.idFrom === "auth.uid+field"))
-        .map(([cid]) => `${file}: ${cid}`);
+        .filter(([cid]) => open.has(cid))
+        .flatMap(([cid, submit]) => [
+          ...(submit.idFrom === "auth.uid" || submit.idFrom === "auth.uid+field" ? [`${file}: ${cid} id`] : []),
+          ...(submit.uidField !== undefined && submit.uidForm !== "pseudonym" ? [`${file}: ${cid} uidField`] : []),
+        ]);
     });
     expect(exposed).toEqual([]);
   });
