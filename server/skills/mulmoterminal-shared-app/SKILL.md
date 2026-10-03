@@ -743,8 +743,11 @@ Every line of that is load-bearing, and publish refuses the declaration without 
   pair.** Same one-row-per-uid guarantee, but the id is sha256(uid + ":" + aid): the anonymous uid is
   the same in every app of this project, so a public row named by it can be joined to the same
   person's named rows elsewhere. Declare `protocol: "3.0.0"` (readers older than that refuse the app),
-  and no `uidField` beside it — publish refuses the pair, since the field would write the uid back.
-  `templates/schedule-poll.md` and `templates/tally.md` use it.
+  and no plain `uidField` beside it — publish refuses the pair, since the field would write the uid
+  back. Where the id is spent on something else (a claimed task: `idFrom: "field"`) and identity has
+  to live in `uidField`, add `uidForm: "pseudonym"` so the field holds the pseudonym instead.
+  `templates/schedule-poll.md`, `templates/tally.md`, `templates/project-board.md` and
+  `templates/magazine.md` use them.
 - **`emailField` names the field their address lands in**, and it must be in `createFields`.
 - **`uidField` is the same binding without an address** — the field the rules compare with the
   submitter's own uid. Reach for it when the DOCUMENT ID is already spent on exclusivity (a claim

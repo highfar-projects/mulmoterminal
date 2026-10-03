@@ -52,7 +52,7 @@ the more surprising one to discover you do not have.
 {
   "name": "Field Notes",
   "slug": "field-notes",
-  "protocol": "2.0.0",
+  "protocol": "3.0.0",
   "members": {
     "editor@example.com": {
       "*": "owner",
@@ -114,6 +114,7 @@ the more surprising one to discover you do not have.
         "auth": "verifiedEmail",
         "audience": "participant",
         "uidField": "byUid",
+        "uidForm": "pseudonym",
         "createFields": ["slug", "title", "summary", "body", "tags", "byline", "byUid", "status", "publishedAt"],
         "initialStatus": "published",
         "validate": {
@@ -174,6 +175,10 @@ new one. That is why the stamp cannot be a field the author picks: a record miss
 field is not sorted last by Firestore, it is dropped from the query entirely. The page sorts what
 it was handed as well, which is not the same job — delivery order is not guaranteed, least of all
 on a subscription.
+
+`uidForm: "pseudonym"` — `byUid` holds the publisher's pseudonym for this app, not their uid. Every
+article is world-readable, and a uid in it would match the same account's rows in any other app of
+the project; the pseudonym differs per app. It needs readers at protocol 3.0.0, hence `protocol`.
 
 `uidField: "byUid"` — the publisher's uid, filled in by the host for the same reason. A uid and
 not an email, because every field of this collection is readable by the world, and `emailField`
