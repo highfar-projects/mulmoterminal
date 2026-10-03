@@ -1325,7 +1325,7 @@ Then `manageSharedApp` with `action: "publish"`.
 
 ## Before you ask the user a question
 
-Five things are worth asking and the rest are not:
+Six things are worth asking and the rest are not:
 
 - **their email address**, if you do not have it — nothing works without it in `members`;
 - **whether people outside the roster should be able to answer** — it decides `public.enabled`,
@@ -1379,6 +1379,18 @@ Five things are worth asking and the rest are not:
   ship with it on — and a booking or a roster-only app is not. Publish refuses it beside `agents[]` (a copy would run somebody's agent),
   and refuses while a roster address or the owner's uid is written anywhere in the declaration, a
   schema or a page — take it out of the text rather than turning `forkable` off.
+
+- **whether people should see it widely on social networks** (`"shareCard": { "collection": cid,
+  "textField": field }`). Ask it in these words, never "spread it on SNS" — nothing is ever posted:
+  > **SNS で多くの人に見てもらう** — オンにすると、X や LINE などにこのページのリンクを貼ったとき、
+  > 内容の一部（お題や質問など）が画像入りのカードとして表示されます。こちらから SNS に投稿することは
+  > ありません。カードになるのは、あなたが公開した項目だけです。一度 SNS に表示されたカードは、
+  > あとから公開をやめても SNS 側に残ることがあります。
+
+  If the request already says it should spread, turn it on without asking. YOU choose the field: the one
+  a stranger should read on the card (a question's text, a theme). The collection must be one visitors
+  read (`public.read` or `public.readPublished`) and the field text — publish refuses anything else. The
+  app then lives at `/s/{slug}`. A booking or a roster has no use for it; the question box ships with it on.
 
 Do not ask which storage to use, whether to make it "an app", or what to call the collection.
 

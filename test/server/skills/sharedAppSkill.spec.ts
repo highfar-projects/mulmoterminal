@@ -159,9 +159,17 @@ describe("the skill's question about showing what was sent", () => {
 
   it("names the keys and refusals in the question", () => {
     const question = body.slice(body.indexOf("## Before you ask the user a question"), body.indexOf("## Where people actually look"));
-    expect(question).toContain("Five things are worth asking");
-    ["`public.readPublished`", "publishField", "`public.read: [cid]`", "/m/{slug}", "templates/tally.md", '`"forkable": true`', "staff pages included"].forEach(
-      (phrase) => expect(question).toContain(phrase),
-    );
+    expect(question).toContain("Six things are worth asking");
+    [
+      "`public.readPublished`",
+      "publishField",
+      "`public.read: [cid]`",
+      "/m/{slug}",
+      "templates/tally.md",
+      '`"forkable": true`',
+      "staff pages included",
+      "SNS で多くの人に見てもらう",
+      'never "spread it on SNS"',
+    ].forEach((phrase) => expect(question).toContain(phrase));
   });
 });
