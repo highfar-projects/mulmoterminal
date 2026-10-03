@@ -25,6 +25,7 @@ import { PUBLIC_VIEW_DOC } from "./publicView.js";
 import type { SharedAppFailure } from "./context.js";
 import { runWrites } from "./writes.js";
 import { existingForkDocs, forkWithdrawals } from "./forkWrites.js";
+import { bannerRemoval } from "./bannerWrites.js";
 import { setSlugPublished } from "./slug.js";
 import { SIGN_IN_STEP } from "./signInStep.js";
 
@@ -104,6 +105,7 @@ export async function unpublishSharedApp(root: string): Promise<UnpublishResult>
         },
       },
       ...forkWithdrawals(handle, aid, fork.ids),
+      ...bannerRemoval(handle, aid),
       // THE MEMBERS' AND PARTICIPANTS' PAGES STAY, and that is a change of meaning rather than an
       // omission. They used to come down here, because `live:` meant "published" and a take-down
       // took the published things away — the roster went on working from the `staged:` copy at

@@ -157,6 +157,9 @@ const declaration = (extra: Record<string, unknown> = {}): Record<string, unknow
   ...extra,
 });
 
+/** No public page and no banner is written for these declarations, so both documents are cleared. */
+const NO_PAGE = [`delete apps/${AID}/config/view`, `delete apps/${AID}/config/banner`];
+
 const stamp = { now: () => 1_700_000_000_000, resolveCommit: () => Promise.resolve({ commit: "c0ffee", dirty: false }) };
 
 let root = "";
@@ -189,13 +192,7 @@ describe("shared app publish / unpublish", () => {
     // The `delete` is unconditional and that is the point: `config/{docId}` is world-readable
     // forever, so a view withdrawn from the declaration and merely not rewritten stays fetchable.
     // An app that never had one pays one idempotent delete for the guarantee.
-    expect(docs.writes).toEqual([
-      `set apps/${AID}`,
-      `set apps/${AID}/collections/bookings`,
-      `set apps/${AID}/config/public`,
-      `delete apps/${AID}/config/view`,
-      `set apps/${AID}`,
-    ]);
+    expect(docs.writes).toEqual([`set apps/${AID}`, `set apps/${AID}/collections/bookings`, `set apps/${AID}/config/public`, ...NO_PAGE, `set apps/${AID}`]);
     expect(docs.doc(`apps/${AID}/collections`, "bookings")).toMatchObject({ publishedBy: OWNER.email, publishedCommit: "c0ffee" });
     expect(docs.app()?.public).toMatchObject({ enabled: true });
     expect(docs.app()?.memberEmails).toEqual([OWNER.email]);
@@ -468,7 +465,7 @@ describe("shared app publish / unpublish", () => {
     const result = await unpublishSharedApp(root);
     expect(result.ok === true && result.wasOpen).toBe(true);
     // The page comes down with the settings, for the reason the publish above deletes it.
-    expect(docs.writes).toEqual([`set apps/${AID}`, `delete apps/${AID}/config/public`, `delete apps/${AID}/config/view`]);
+    expect(docs.writes).toEqual([`set apps/${AID}`, `delete apps/${AID}/config/public`, ...NO_PAGE]);
     expect(docs.app()).not.toHaveProperty("public");
     // The roster goes on using the app while it is closed, so its schemas stay.
     expect(docs.doc(`apps/${AID}/collections`, "bookings")).toBeDefined();
@@ -565,7 +562,7 @@ describe("shared app publish / unpublish", () => {
     expect(docs.writes).toEqual([
       `set apps/${AID}/collections/bookings`,
       `set apps/${AID}/config/public`,
-      `delete apps/${AID}/config/view`,
+      ...NO_PAGE,
       `set apps/${AID}`,
       "set appSlugs/sakura-hair",
       `set apps/${AID}`,
@@ -575,7 +572,7 @@ describe("shared app publish / unpublish", () => {
     await unpublishSharedApp(root);
     expect(docs.doc("appSlugs", "sakura-hair")).toEqual({ aid: AID, published: false });
     // Reversed: what grants is taken away first.
-    expect(docs.writes).toEqual([`set apps/${AID}`, "set appSlugs/sakura-hair", `delete apps/${AID}/config/public`, `delete apps/${AID}/config/view`]);
+    expect(docs.writes).toEqual([`set apps/${AID}`, "set appSlugs/sakura-hair", `delete apps/${AID}/config/public`, ...NO_PAGE]);
   });
 
   it("does not make the name resolve when the app is not open to anonymous visitors", async () => {

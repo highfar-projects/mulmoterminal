@@ -54,6 +54,7 @@ import { recordRefusal, scanRecords, type RecordScan } from "./records.js";
 import { oversizeProblem, publicFormOf, publicInputProblems, type PublicForm } from "./publicForm.js";
 import { allTierWrites, pageIdsOf, planTierWrites, type PlannedTier } from "./appViews.js";
 import { forkWrites, planFork, type ForkPlan } from "./forkWrites.js";
+import { bannerWrites, readBanner, type Banner } from "./bannerWrites.js";
 import { PUBLIC_VIEW_DOC, declaredView, readAppViewFile, type ViewFile } from "./publicView.js";
 import { frozenKeyProblems } from "./exclusivity.js";
 import { scopedFieldProblems } from "./scopedFields.js";
@@ -104,7 +105,7 @@ interface PublishStepsInput {
   form: PublicForm;
   view: ViewFile | null;
   /** Every page this run writes: the tiers, and the forkable copy (see `planPages`). */
-  pages: { tiers: readonly PlannedTier[]; fork: ForkPlan };
+  pages: { tiers: readonly PlannedTier[]; fork: ForkPlan; banner: Banner | null };
   /** Written already by `claimApp`, byte for byte, when this publish created the app document to
    *  make the record scan answerable. Writing it twice is harmless and saying so is not: the
    *  second write is skipped so the step list reads as what actually happened. */
@@ -174,6 +175,8 @@ function publishSteps({ handle, aid, stamp, face, slug, form, view, pages, estab
     // The copy a visitor may make, or its withdrawal. Data like the pages above, so before the app
     // document and the authorization.
     ...forkWrites(handle, aid, pages.fork, stamp.publishedAt),
+    // The theme's banner (receptron/mulmoserver#336), or its removal — data, like the pages.
+    ...bannerWrites(handle, aid, pages.banner, face.public !== undefined, stamp.publishedAt),
     // The app document WITHOUT `public`: the rule configuration lands beside the schemas it was
     // projected with, so the public write path is never judged by one version's constraints
     // against another's schema. Skipped when `claimApp` wrote exactly this a moment ago.
@@ -421,11 +424,13 @@ async function planPages(
     view: ViewFile | null;
     liveOwner: unknown;
   },
-): Promise<{ ok: true; tiers: PlannedTier[]; warnings: string[]; fork: ForkPlan } | SharedAppFailure> {
+): Promise<{ ok: true; tiers: PlannedTier[]; warnings: string[]; fork: ForkPlan; banner: Banner | null } | SharedAppFailure> {
   const tiers = await planTierWrites(handle, aid, request);
   if (!tiers.ok) return tiers;
   const fork = await planFork(handle, aid, { ...request, tiers: tiers.tiers });
-  return fork.ok ? { ...tiers, fork: fork.plan } : fork;
+  if (!fork.ok) return fork;
+  const banner = await readBanner(request.root, request.authored);
+  return banner.ok ? { ...tiers, fork: fork.plan, banner: banner.banner } : { ok: false, partial: false, problems: banner.problems };
 }
 
 async function runPublish(root: string, opts: SharedAppOptions, ran: RunState): Promise<PublishResult> {
