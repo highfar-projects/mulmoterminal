@@ -65,6 +65,13 @@ These shapes are written out in full — declaration, schemas, and the reasoning
   it), names and comments in `notes` (nobody's to read but the owner's), joined by the same per-app pseudonym, and
   the page counts. It is also the template that sends TWO records as two presses — one write per
   press, or the second loses the gesture mark and the preview drops it.
+- **[templates/survey-results.md](./templates/survey-results.md)** — a SURVEY WHOSE CHOICE TOTALS
+  ARE PUBLIC: the survey.md form, plus per-question counts and shares shown to a respondent after
+  they answer, while the address, name and free text stay with the owner. The tally split again:
+  the chosen answers in `tallies` (`public.read`, `answers` + `status` only, no `emailField`), the
+  rest in `responses` (private), joined by pseudonym. Read it for why the public page counts only
+  declared questions and choices and never draws a string it read from a tally — `answers` is free
+  text anyone can write. Showing results is the author's choice; survey.md stays the default.
 - **[templates/live-poll.md](./templates/live-poll.md)** — a page that MOVES while people are looking
   at it (a live stream, a lecture, a stand-up quiz). This is what `views[].live` is for, and the only
   one whose declaration is decided by FAN-OUT: the audience may watch the questions, only the desk may
@@ -746,7 +753,7 @@ Every line of that is load-bearing, and publish refuses the declaration without 
   and no plain `uidField` beside it — publish refuses the pair, since the field would write the uid
   back. Where the id is spent on something else (a claimed task: `idFrom: "field"`) and identity has
   to live in `uidField`, add `uidForm: "pseudonym"` so the field holds the pseudonym instead.
-  `templates/schedule-poll.md`, `templates/tally.md`, `templates/project-board.md` and
+  `templates/schedule-poll.md`, `templates/tally.md`, `templates/survey-results.md`, `templates/project-board.md` and
   `templates/magazine.md` use them.
 - **`emailField` names the field their address lands in**, and it must be in `createFields`.
 - **`uidField` is the same binding without an address** — the field the rules compare with the
@@ -1353,7 +1360,8 @@ Four things are worth asking and the rest are not:
   wrote), is not a declaration but a DATA SHAPE: keep the counted field in a world-readable
   collection of its own and everything else in a private one, and let the public page count —
   [templates/tally.md](./templates/tally.md). It holds up to roughly ten thousand votes, because the
-  page reads them all; say so if the author expects more.
+  page reads them all; say so if the author expects more. A multi-question survey whose totals are
+  public is the same split: [templates/survey-results.md](./templates/survey-results.md).
 
   Publish refuses: a `readPublished` collection with no `publishField`; a collection in both
   `public.read` and `readPublished`; a `publishField` listed in `createFields` or `selfUpdate`; and a
