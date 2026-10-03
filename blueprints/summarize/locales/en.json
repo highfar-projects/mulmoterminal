@@ -6,7 +6,8 @@
   "hearing": {
     "documents": {
       "label": "The documents to summarize (one file in this folder per line)",
-      "why": "Each sentence of the summary carries a quote from these documents"
+      "why": "Each sentence of the summary carries a quote from these documents",
+      "placeholder": "e.g.\nminutes/2026-09-weekly-meeting.md"
     },
     "length": {
       "label": "How long should it be?",
@@ -19,11 +20,13 @@
     },
     "reader": {
       "label": "Who will read it?",
-      "why": "What that person wants to know comes first, in words they understand"
+      "why": "What that person wants to know comes first, in words they understand",
+      "placeholder": "e.g. A manager who was not at the meeting"
     },
     "focus": {
       "label": "Anything you especially want to know",
-      "why": "That point is put first in the summary"
+      "why": "That point is put first in the summary",
+      "placeholder": "e.g. what was decided, and who does what next"
     }
   },
   "steps": {

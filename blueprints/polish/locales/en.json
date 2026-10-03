@@ -6,7 +6,8 @@
   "hearing": {
     "targets": {
       "label": "The documents to polish (one file or folder per line, as a place inside this folder)",
-      "why": "The candidates are chosen from these"
+      "why": "The candidates are chosen from these",
+      "placeholder": "e.g.\ndocs/\nREADME.md"
     },
     "style": {
       "label": "Which style should they follow?",
@@ -69,7 +70,8 @@
     },
     "avoid": {
       "label": "Files or places to leave alone",
-      "why": "Left out of the candidates"
+      "why": "Left out of the candidates",
+      "placeholder": "e.g. docs/legal/ (already reviewed by legal)"
     }
   },
   "steps": {

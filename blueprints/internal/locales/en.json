@@ -6,15 +6,18 @@
   "hearing": {
     "appName": {
       "label": "The app's name",
-      "why": "Used on the screens and as the project name"
+      "why": "Used on the screens and as the project name",
+      "placeholder": "e.g. Equipment Loans"
     },
     "appPurpose": {
       "label": "What does the app do? (who does what, and how)",
-      "why": "It decides the data shape and how many screens there are"
+      "why": "It decides the data shape and how many screens there are",
+      "placeholder": "e.g. Staff book equipment such as meeting-room projectors, and the office team records when it goes out and comes back"
     },
     "domain": {
       "label": "Your company's email domain (e.g. example.co.jp)",
-      "why": "Only people with this domain will be able to sign in"
+      "why": "Only people with this domain will be able to sign in",
+      "placeholder": "e.g. example.com"
     },
     "workspace": {
       "label": "Does your company use Google Workspace?",
@@ -26,7 +29,8 @@
     },
     "externalWho": {
       "label": "Which outside people, and what will they do?",
-      "why": "Used to choose the other blueprint"
+      "why": "Used to choose the other blueprint",
+      "placeholder": "e.g. A supplier's contact checks how their orders from us are progressing"
     },
     "users": {
       "label": "About how many people will use it?",
@@ -72,7 +76,8 @@
     },
     "existingProjectId": {
       "label": "That project's ID",
-      "why": "Used for production"
+      "why": "Used for production",
+      "placeholder": "e.g. my-company-tools"
     },
     "billingAccount": {
       "label": "Do you have a Google Cloud billing account (a company card or similar)?",
@@ -84,7 +89,8 @@
     },
     "mainScreens": {
       "label": "The main screens (as far as you know)",
-      "why": "Decides which screens are built first"
+      "why": "Decides which screens are built first",
+      "placeholder": "e.g. the equipment list, a booking form, the office team's loan log"
     }
   },
   "steps": {

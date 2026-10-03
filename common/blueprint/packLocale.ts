@@ -14,7 +14,10 @@ export const packLocaleSchema = z
   .object({
     manifest: titled.optional(),
     hearing: z
-      .record(z.string(), z.object({ label: text.optional(), why: text.optional(), options: z.record(z.string(), text).optional() }).strict())
+      .record(
+        z.string(),
+        z.object({ label: text.optional(), why: text.optional(), placeholder: text.optional(), options: z.record(z.string(), text).optional() }).strict(),
+      )
       .optional(),
     steps: z.record(z.string(), titled).optional(),
     presets: z.record(z.string(), titled).optional(),
@@ -44,6 +47,7 @@ function localizedQuestion(question: HearingQuestion, overlay: PackLocale | null
     ...question,
     ...(words.label ? { label: words.label } : {}),
     ...(words.why ? { why: words.why } : {}),
+    ...(words.placeholder ? { placeholder: words.placeholder } : {}),
     ...(words.options ? { optionLabels: words.options } : {}),
   };
 }

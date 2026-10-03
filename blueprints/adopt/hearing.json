@@ -4,6 +4,7 @@
       "id": "places",
       "label": "chaff に見させる文書（このフォルダの中のフォルダかファイルを 1 行に 1 つ）",
       "why": "ここにある文書の今の指摘を棚に上げ、以後はここの新しい指摘だけが出る",
+      "placeholder": "例:\ndocs/\nREADME.md",
       "kind": "text",
       "lines": true,
       "pick": "files"

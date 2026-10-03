@@ -6,15 +6,18 @@
   "hearing": {
     "appName": {
       "label": "The app's name (a working name is fine)",
-      "why": "Shown on the screens and in the instructions"
+      "why": "Shown on the screens and in the instructions",
+      "placeholder": "e.g. Recipe Box"
     },
     "idea": {
       "label": "What do you want to make (in a few words)?",
-      "why": "It becomes the core of what is built"
+      "why": "It becomes the core of what is built",
+      "placeholder": "e.g. A recipe-sharing app for the family"
     },
     "problem": {
       "label": "What problem does it solve?",
-      "why": "It decides which features are must-haves"
+      "why": "It decides which features are must-haves",
+      "placeholder": "e.g. Our recipes are scattered across notes and bookmarks, and we cannot find one when we want to cook it"
     },
     "audience": {
       "label": "Who will use it?",
@@ -28,19 +31,23 @@
     },
     "things": {
       "label": "What does it handle? (e.g. books, bookings, stock, recipes)",
-      "why": "These become the tables of data"
+      "why": "These become the tables of data",
+      "placeholder": "e.g. recipes, ingredients, shopping lists"
     },
     "actions": {
       "label": "What do the people using it do? (e.g. add, search, book, see totals)",
-      "why": "These become the API and the screens"
+      "why": "These become the API and the screens",
+      "placeholder": "e.g. add a recipe, search by ingredient, make a shopping list"
     },
     "mustHaves": {
       "label": "The features it needs from the very start",
-      "why": "At the end, a test checks each one works"
+      "why": "At the end, a test checks each one works",
+      "placeholder": "e.g. adding and editing recipes, searching by title and ingredient"
     },
     "later": {
       "label": "Features that can wait",
-      "why": "Left out of the first version"
+      "why": "Left out of the first version",
+      "placeholder": "e.g. automatic photo touch-up, meal suggestions"
     },
     "signIn": {
       "label": "How should people sign in?",
@@ -53,7 +60,8 @@
     },
     "roles": {
       "label": "Should there be different roles? (e.g. admin and regular user)",
-      "why": "It becomes the rules for who can do what"
+      "why": "It becomes the rules for who can do what",
+      "placeholder": "e.g. An admin can delete any recipe; family members can edit only their own"
     },
     "dataSensitivity": {
       "label": "The most sensitive information it handles",
@@ -67,7 +75,8 @@
     },
     "references": {
       "label": "Similar services or the look you have in mind (if any)",
-      "why": "Used as a reference for the screens"
+      "why": "Used as a reference for the screens",
+      "placeholder": "e.g. A list like a recipe site's, with large photos"
     },
     "uiLanguage": {
       "label": "The language of the screens",

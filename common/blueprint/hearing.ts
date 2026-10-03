@@ -23,6 +23,10 @@ const questionSchema = z.object({
   required: z.boolean().default(true),
   // A text answer that is a list, one item per line: the form gives it a multi-line field, which keeps the newlines.
   lines: z.boolean().default(false),
+  // A text answer that is one value (a name, an id, a year): the form gives it one line rather than the multi-line field.
+  short: z.boolean().default(false),
+  // An example answer the empty field shows; never submitted.
+  placeholder: z.string().min(1).optional(),
   // Where the answer is picked from: "files" — a one-per-line answer whose lines are files in the build's folder;
   // "collection" — one line naming a collection the build starts from, whose copy is placed in the folder;
   // "records" — yes or no, whether that copy takes the collection's records (and the files they point at) too.
@@ -63,15 +67,23 @@ function needsPathProblems(question: HearingQuestion): string[] {
   return problems;
 }
 
-function questionProblems(question: HearingQuestion, earlier: ReadonlySet<string>): string[] {
+// Whether the shape the form gives an answer (one line, one per line, a pick) fits the answer's kind.
+function answerShapeProblems(question: HearingQuestion): string[] {
   const problems: string[] = [];
-  if (earlier.has(question.id)) problems.push(`duplicate question id "${question.id}"`);
-  if (needsOptions(question) && !question.options?.length) problems.push(`"${question.id}" is a ${question.kind} with no options`);
   if (question.lines && question.kind !== "text") problems.push(`"${question.id}" is a ${question.kind}, and only a text answer can be one per line`);
+  if (question.short && (question.kind !== "text" || question.lines)) problems.push(`"${question.id}" is short, which only a one-line text answer can be`);
   if (question.pick === "files" && !question.lines) problems.push(`"${question.id}" picks files but is not one per line`);
   if (question.pick === "collection" && (question.kind !== "text" || question.lines))
     problems.push(`"${question.id}" picks a collection, which is one line of text`);
   if (question.pick === "records" && question.kind !== "boolean") problems.push(`"${question.id}" decides whether records are copied, which is yes or no`);
+  return problems;
+}
+
+function questionProblems(question: HearingQuestion, earlier: ReadonlySet<string>): string[] {
+  const problems: string[] = [];
+  if (earlier.has(question.id)) problems.push(`duplicate question id "${question.id}"`);
+  if (needsOptions(question) && !question.options?.length) problems.push(`"${question.id}" is a ${question.kind} with no options`);
+  problems.push(...answerShapeProblems(question));
   if (question.showIf && !earlier.has(question.showIf.id)) problems.push(`"${question.id}" depends on "${question.showIf.id}", which is not asked before it`);
   problems.push(...needsPathProblems(question));
   const defaultProblem = question.default === undefined ? null : kindProblem(question, question.default);

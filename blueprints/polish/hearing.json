@@ -4,6 +4,7 @@
       "id": "targets",
       "label": "整えたい文書（ファイル・フォルダを 1 行に 1 つ。このフォルダの中の場所で）",
       "why": "候補はこの中から選ぶ",
+      "placeholder": "例:\ndocs/\nREADME.md",
       "kind": "text",
       "lines": true,
       "pick": "files"
@@ -96,6 +97,7 @@
       "id": "avoid",
       "label": "触らないでほしいファイルや場所（任意）",
       "why": "候補から外す",
+      "placeholder": "例: docs/legal/（法務が確認済みのため）",
       "kind": "text",
       "required": false
     }
