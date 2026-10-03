@@ -172,4 +172,10 @@ describe("the skill's question about showing what was sent", () => {
       'never "spread it on SNS"',
     ].forEach((phrase) => expect(question).toContain(phrase));
   });
+
+  it("teaches the page theme with its safe grammar, and no longer says a theme needs an article", () => {
+    expect(body).toContain("### 2e. Dress the public page");
+    for (const phrase of ['"bar": ["#ff3399"', "`#rgb` / `#rrggbb`", "views/banner.svg", "at most 300 kB"]) expect(body).toContain(phrase);
+    expect(body).not.toContain("publish refuses `theme` on an app that declares no `article` block");
+  });
 });

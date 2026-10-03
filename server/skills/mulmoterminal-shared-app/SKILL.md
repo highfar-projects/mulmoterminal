@@ -381,8 +381,8 @@ Four more things this shape settles:
   of the records, so the two are not the same line.
 - **`byline` is a string somebody typed**, not an identity the rules hold. Never put an address in
   it — the field is drawn to the whole world.
-- **`theme.hue` colours the article page and nothing else.** Your own pages carry their own CSS, and
-  publish refuses `theme` on an app that declares no `article` block.
+- **`theme.hue` colours the article page.** Your own pages carry their own CSS. The rest of `theme`
+  dresses the page around every app — see 2e.
 
 `type: "article"` is REFUSED. It used to mean "the platform draws this page", and it took the index
 with it — an app that published articles had no public face of its own. If you meet one in an
@@ -430,6 +430,36 @@ Run `check` after writing one. Then run `describe` **as the audience that will s
 know that the author's own `describe` is usually the owner's, so it shows the member briefs and not
 what a public visitor would see. That is the identity limit of one signed-in account per machine,
 not a fault in the app.
+
+### 2e. Dress the public page — as loud as the user likes
+
+The platform draws a bar above the app's own page (name, share, account, menu). `theme` dresses it and
+the page around the app, in the spirit of an old mobile site:
+
+```json
+{
+  "theme": {
+    "bar": ["#ff3399", "#ffcc00"],
+    "barText": "#ffffff",
+    "background": ["#fff0f8", "#e0f7ff"],
+    "icon": "🌸",
+    "ticker": "★☆ 本日オープン！ ☆★",
+    "banner": "views/banner.svg"
+  }
+}
+```
+
+- `bar` / `background`: one colour, or a gradient of two or three. **Colours are `#rgb` / `#rrggbb`
+  only** — publish refuses anything else (names, `rgb()`, CSS). Without `barText` the bar's text is
+  chosen dark or light from the bar's brightness.
+- `icon`: one character beside the app's name, and on the share card. `ticker`: a marquee under the
+  bar (at most 120 characters; it stops on a tap and for reduced motion).
+- `banner`: one PNG / JPEG / WebP / **SVG** directly in `views/`, at most 300 kB. Publish checks the
+  bytes really are that picture and writes them for the page, which shows it through `<img>` (an
+  SVG's script never runs there). Write the SVG yourself for a crisp, small banner.
+- The share card takes the bar's colours and the icon too.
+- Inside your own page, draw anything — inline `<svg>` and `data:` images work; the page cannot load
+  outside URLs.
 
 ### 3. RUN THE PAGE. Not reading it — running it.
 
