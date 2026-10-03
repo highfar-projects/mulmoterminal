@@ -39,6 +39,31 @@ describe("isTypedInput", () => {
     expect(isTypedInput("\x1b[O")).toBe(false);
   });
 
+  // tmux queries every client that attaches, so a cell reconnecting after its PTY was reaped is
+  // answered by xterm.js with nobody at the keyboard. These are the replies captured on that path.
+  it("rejects the replies xterm.js sends to tmux's attach-time queries", () => {
+    const replies = ["\x1b[?1;2c", "\x1b[>0;276;0c", "\x1b]10;rgb:e0e0/e0e0/e0e0\x1b\\", "\x1b]11;rgb:1a1a/1a1a/2e2e\x1b\\", "\x1b]11;rgb:1a1a/1a1a/2e2e\x07"];
+    for (const data of [...replies, replies.join("")]) {
+      expect(isTypedInput(data)).toBe(false);
+    }
+  });
+
+  it("rejects a cursor position report", () => {
+    expect(isTypedInput("\x1b[12;40R")).toBe(false);
+  });
+
+  // The reply scanner holds an unfinished tail for a socket that may split it; xterm.js never splits
+  // a reply, so in the browser that tail is a whole keystroke — Alt+[ is exactly ESC[.
+  it("counts a key that looks like the start of a reply", () => {
+    for (const data of ["\x1b[", "\x1b]", "\x1b[?", "\x1b"]) {
+      expect(isTypedInput(data)).toBe(true);
+    }
+  });
+
+  it("counts a reply with something typed beside it", () => {
+    expect(isTypedInput("\x1b[?1;2ca")).toBe(true);
+  });
+
   // A CSI sequence that is neither is still the user: arrow keys, Home/End and function keys all
   // arrive this way, and treating "starts with ESC[" as not-typing would swallow them.
   it("counts arrow keys and other CSI keystrokes", () => {
