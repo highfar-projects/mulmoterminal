@@ -62,7 +62,7 @@ These shapes are written out in full — declaration, schemas, and the reasoning
 - **[templates/tally.md](./templates/tally.md)** — ONLY THE TOTALS: visitors see how many chose each
   answer and nothing else (a "which do you like?" result, a quiz's spread, an event's preference
   poll). Not a key but a split: the counted field lives in `votes` (`public.read`, nothing else in
-  it), names and comments in `notes` (nobody's to read but the owner's), joined by the same uid, and
+  it), names and comments in `notes` (nobody's to read but the owner's), joined by the same per-app pseudonym, and
   the page counts. It is also the template that sends TWO records as two presses — one write per
   press, or the second loses the gesture mark and the preview drops it.
 - **[templates/live-poll.md](./templates/live-poll.md)** — a page that MOVES while people are looking
@@ -71,7 +71,7 @@ These shapes are written out in full — declaration, schemas, and the reasoning
   watch the votes, and the shape that would let both is refused by publish. **In English**, because
   the strings in its pages are what a stranger reads.
 - **[templates/project-board.md](./templates/project-board.md)** — the same work-claiming board with
-  a ROSTER and an owner's desk: people register a name once (`names`, `idFrom: "auth.uid"`), then
+  a ROSTER and an owner's desk: people register a name once (`names`, `idFrom: "pseudonym"`), then
   take work; the owner adds and removes tasks and frees an abandoned one from `/m/`. This is what
   `writerDelete` is for, and the one that spells out `view.mine()`'s three states — "you have not
   registered" and "nobody looked" are different answers, and treating them alike shows the
@@ -99,7 +99,7 @@ These shapes are written out in full — declaration, schemas, and the reasoning
   back issues, a research log, release notes, a review column). This is what **`views[].article`**
   is for — the platform draws the article page, so the app declares which fields are the title, the
   body and the byline, and `idFrom: "slug"` makes the writer's chosen name the document id and
-  freezes it. It is the only sample that states a `protocol` of its own, the only one whose `limit`
+  freezes it. It is the article-view sample, so its `protocol` floor is at least `2.0.0` (its pseudonym byline makes it `3.0.0`); the only one whose `limit`
   is a COST — publish works it out in bytes and refuses the declaration when it is too large — and
   the one that explains why the owner has to hold
   `participant` on their own collection — `audience` forces `submitOnly`, `submitOnly` closes the
