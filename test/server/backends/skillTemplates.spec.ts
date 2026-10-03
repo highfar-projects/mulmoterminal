@@ -360,6 +360,14 @@ describe("the shared-app templates", () => {
     }
   });
 
+  it("draws share cards only from the template made for it, and says the card stays on SNS", () => {
+    // `shareCard` puts a row's text on an image anyone can see (receptron/mulmoserver#336).
+    const declaresCard = (manifest: unknown): boolean => typeof manifest === "object" && manifest !== null && "shareCard" in manifest;
+    const carded = TEMPLATE_FILES.filter((file) => declaresCard(blocksOf(file).get("app.json")));
+    expect(carded).toEqual(["question-box.md"]);
+    expect(readFileSync(path.join(TEMPLATES, "question-box.md"), "utf8")).toContain("SNS 側に残ることがあります");
+  });
+
   it("makes every template choose its own colour rather than inherit one", () => {
     // A template is copied VERBATIM — the same reason the canvas rule above is asserted here. So
     // whatever colour a template ships is the colour of every app written from it, and seven
