@@ -186,7 +186,7 @@ mulmoserver の `rules_submit.ts` に「a WRITER creates through a closed window
   "fields": {
     "id": { "type": "string", "label": "ID", "primary": true, "required": true },
     "taskId": { "type": "string", "label": "作業", "required": true },
-    "uid": { "type": "string", "label": "担当者の uid", "required": true },
+    "uid": { "type": "string", "label": "担当者（このアプリでの匿名 id）", "required": true },
     "status": { "type": "string", "label": "状態", "required": true }
   }
 }
@@ -219,7 +219,7 @@ mulmoserver の `rules_submit.ts` に「a WRITER creates through a closed window
 
 **そしてその約束は、「登録欄を先に出す」では守れません。** ページが握っている「この人は
 登録済みか」は 3 状態で、3 つ目が `viewer.mine` の来ない「分からない」です。分からないから
-と通すと、uid だけを持つ担当行ができる — 板には `holderName` の既定値（「担当者」）が出る
+と通すと、匿名 id だけを持つ担当行ができる — 板には `holderName` の既定値（「担当者」）が出る
 だけなので、名前の無い担当が普通の担当と同じ顔で並び、**どこにもエラーが出ません**。実際に
 公開済みのアプリ 2 本がそうなりました。`viewer.mine` が公開ページに届くようになったのは
 mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちています。
@@ -932,7 +932,7 @@ editor ではないか、**アプリを再 publish していない**かのどれ
 ## なぜ付け替えられないのか
 
 「A さんの担当を B さんに移す」は、この形では**できません**。ルールが `uidField` を
-create のときだけ許し、そのあと凍結するからです — 誰も、オーナーも、他人の uid を
+create のときだけ許し、そのあと凍結するからです — 誰も、オーナーも、他人の匿名 id を
 書き込めません。書けたら「本人が送った行」という意味がなくなります。
 
 できるのは 2 手です: **オーナーが外す（`writerDelete`）→ B さんが取る**。板は空きに戻るので、
@@ -956,7 +956,7 @@ B さんの操作は普通の「これをやります」になります。
 - **`["tasks"]`** — 作業一覧だけ。取ることはできますが、他人の担当は見えません。**`idIn` は
   read とは無関係**なので、これでも先着の衝突は効きます。
 
-**uid は不透明でも「同じ人」を追える識別子**です。同じアプリの複数の行が同じ uid を持てば、
+**匿名 id は不透明でも、このアプリの中では「同じ人」を追える識別子**です。同じアプリの複数の行が同じ匿名 id を持てば、
 同じ人の仕事だと分かります。板の目的そのものなので普通は問題になりませんが、
 「誰がやったか分からないようにしたい」板には向きません。
 

@@ -17,8 +17,8 @@ block, and that single key changes three things at once:
 - **The document id becomes the URL.** `idFrom: "slug"` takes the id from a field the writer
   chooses, and the rules freeze it. An article's address is decided once, by the person writing it,
   and can never be edited — only replaced by a different article.
-- **The app states its own protocol.** Article views are `2.0.0`; every other template here says
-  `1.0.0`. This is the one place a template declares something newer, and the reason is in the
+- **The app states its own protocol.** Article views need `2.0.0`, and the pseudonym in `byUid`
+  (`uidForm: "pseudonym"`) needs `3.0.0`, so this template declares `3.0.0`. The reason is in the
   traps below.
 - **The index is a cost, in bytes, that publish will refuse.** The world's index reads whole
   records — a rule cannot hide a field — so `limit` times the declared field caps is a real number
@@ -180,8 +180,8 @@ on a subscription.
 article is world-readable, and a uid in it would match the same account's rows in any other app of
 the project; the pseudonym differs per app. It needs readers at protocol 3.0.0, hence `protocol`.
 
-`uidField: "byUid"` — the publisher's uid, filled in by the host for the same reason. A uid and
-not an email, because every field of this collection is readable by the world, and `emailField`
+`uidField: "byUid"` — who published, filled in by the host for the same reason (the publisher's
+pseudonym for this app, as above — never the uid itself). An opaque id and not an email, because every field of this collection is readable by the world, and `emailField`
 here would print every contributor's address beside their article forever.
 
 `selfUpdate` / `selfDelete` — a writer may rewrite the listed fields of their own published
@@ -220,7 +220,7 @@ desk's view of the collection is narrower than the public page's, which it is no
     "body": { "type": "markdown", "label": "Body (Markdown)", "required": true },
     "tags": { "type": "string", "label": "Tags (comma separated)" },
     "byline": { "type": "string", "label": "Byline" },
-    "byUid": { "type": "string", "label": "Published by (uid)" },
+    "byUid": { "type": "string", "label": "Published by (app pseudonym)" },
     "status": { "type": "enum", "label": "Status", "values": ["published"], "default": "published" },
     "publishedAt": { "type": "datetime", "label": "Published at" }
   }
@@ -1916,13 +1916,14 @@ Two things follow. Raising `limit` to 16 puts this declaration at 977,600 — un
 index, the only real answer is a second collection carrying title and summary alone; there is no
 declaration that makes the index cheap.
 
-### 3. `protocol` is `2.0.0` here and `1.0.0` in every other template
+### 3. `protocol` is `3.0.0` here, and it follows the features
 
 The floor says what a reader must understand to draw this app. Article views arrived in `2.0.0`,
-so an app with one has to say so; every other shape here keeps `1.0.0` because declaring a newer
-floor than you use makes older readers refuse an app they could have drawn perfectly well.
+and a pseudonym in a `uidField` (`uidForm`) in `3.0.0`; this app uses both, so it says `3.0.0`.
+An app that uses neither keeps `1.0.0`, because declaring a newer floor than you use makes older
+readers refuse an app they could have drawn perfectly well.
 
-Do not copy this line into an app that has no `article` view.
+Do not copy this line into an app without those features — declare what yours uses.
 
 ### 4. The URL is the document id, so it is decided once
 
