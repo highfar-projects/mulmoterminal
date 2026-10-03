@@ -26,14 +26,20 @@
 
 | コレクション | 誰の行かの決め方 | なぜそれか |
 |---|---|---|
-| `names` | **ドキュメント id が uid そのもの**（`idFrom: "auth.uid"`） | 1 人 1 行を強制できる。2 度目の登録は「既に在る文書への create」になって拒否される |
-| `assignments` | **`uidField` のフィールド**（`uid`） | id は**作業 id**に使い切っている（排他）ので、身元はフィールドに置くしかない |
+| `names` | **ドキュメント id がこのアプリでの本人の匿名 id**（`idFrom: "pseudonym"`） | 1 人 1 行を強制できる。2 度目の登録は「既に在る文書への create」になって拒否される |
+| `assignments` | **`uidField` のフィールド**（`uid`、中身は同じ匿名 id — `uidForm: "pseudonym"`） | id は**作業 id**に使い切っている（排他）ので、身元はフィールドに置くしかない |
 | `tasks` | 誰の行でもない | オーナーだけが作る。参加者は読むだけ |
 
 `assignments` が `emailField` ではなく `uidField` なのは、**行を公開するとその行の全フィールドが
 公開される**からです（ルールはフィールドを隠せません・原則 5）。担当者が見える板を公開するなら、
 `emailField` の板は名前と一緒にメールアドレスを配ることになり、`uidField` の板は配りません。
 板に出す名前は `names` から引きます。
+
+**uid そのものは、どの行にも書きません。** 板は全員に見えるので、uid を id や欄に置くと、同じ
+Google アカウントが別のアプリで残した行と突き合わせられます。匿名 id（uid とアプリ id の
+ハッシュ）はアプリごとに違う値なので、それができません。`names` の id と `assignments.uid` は
+同じ匿名 id なので、ページの突き合わせ（担当者名を引く）はそのまま成り立ちます。
+3.0.0 以降の読み手が要るので、`protocol` も `3.0.0` です。
 
 ---
 
@@ -44,7 +50,7 @@
   "aid": "(init が書きます。手で触らないこと)",
   "name": "プロジェクトの作業板",
   "slug": "project-board",
-  "protocol": "1.0.0",
+  "protocol": "3.0.0",
   "members": {
     "owner@example.com": { "*": "owner" }
   },
@@ -78,13 +84,14 @@
       },
       "names": {
         "auth": "verifiedEmail",
-        "idFrom": "auth.uid",
+        "idFrom": "pseudonym",
         "createFields": ["name"],
         "validate": { "required": ["name"] }
       },
       "assignments": {
         "auth": "verifiedEmail",
         "uidField": "uid",
+        "uidForm": "pseudonym",
         "idFrom": "field",
         "idField": "taskId",
         "idIn": { "collection": "tasks" },
@@ -160,8 +167,8 @@ mulmoserver の `rules_submit.ts` に「a WRITER creates through a closed window
 }
 ```
 
-**`id` は本人の uid です**（`idFrom: "auth.uid"`）。フィールドは名前 1 つだけ — アドレスも
-uid も**書きません**。uid は id として既に在るので、フィールドに置くと同じ値が 2 箇所に載ります。
+**`id` はこのアプリでの本人の匿名 id です**（`idFrom: "pseudonym"`）。フィールドは名前 1 つだけ —
+アドレスも uid も**書きません**。身元は id として既に在るので、フィールドに置くと同じ値が 2 箇所に載ります。
 
 これが 1 人 1 行を成立させている仕掛けでもあります。2 度目の登録は既に在る文書への create に
 なり、公開の経路は create しか許していないので拒否される。**名前の変更はできません** —
@@ -179,7 +186,7 @@ uid も**書きません**。uid は id として既に在るので、フィー�
   "fields": {
     "id": { "type": "string", "label": "ID", "primary": true, "required": true },
     "taskId": { "type": "string", "label": "作業", "required": true },
-    "uid": { "type": "string", "label": "担当者の uid", "required": true },
+    "uid": { "type": "string", "label": "担当者（このアプリでの匿名 id）", "required": true },
     "status": { "type": "string", "label": "状態", "required": true }
   }
 }
@@ -194,7 +201,7 @@ uid も**書きません**。uid は id として既に在るので、フィー�
 
 | 操作 | 誰が | どう宣言されているか |
 |---|---|---|
-| 名前を登録する | **メールを確認済み**のサインイン（`auth: "verifiedEmail"`） | `public.submit.names`（id が uid なので 1 人 1 行） |
+| 名前を登録する | **メールを確認済み**のサインイン（`auth: "verifiedEmail"`） | `public.submit.names`（id が本人の匿名 id なので 1 人 1 行） |
 | 作業を取る | 同上。**ルールは登録の有無を見ません** — 名簿に行が在ることを確かめるのはページ | `public.submit.assignments`（id 衝突で先着 1 人） |
 | 完了にする / 戻す | 取った本人 | `selfTransitions: { doing: ["done"], done: ["doing"] }` |
 | 担当を降りる | 取った本人・`doing` のときだけ | `selfDelete: ["doing"]` |
@@ -212,15 +219,15 @@ uid も**書きません**。uid は id として既に在るので、フィー�
 
 **そしてその約束は、「登録欄を先に出す」では守れません。** ページが握っている「この人は
 登録済みか」は 3 状態で、3 つ目が `viewer.mine` の来ない「分からない」です。分からないから
-と通すと、uid だけを持つ担当行ができる — 板には `holderName` の既定値（「担当者」）が出る
+と通すと、匿名 id だけを持つ担当行ができる — 板には `holderName` の既定値（「担当者」）が出る
 だけなので、名前の無い担当が普通の担当と同じ顔で並び、**どこにもエラーが出ません**。実際に
 公開済みのアプリ 2 本がそうなりました。`viewer.mine` が公開ページに届くようになったのは
 mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちています。
 
 **まず、`view.mine` に訊いてください**（下の `askHost`）。これが 3 つ目の状態を潰す本命です。
 
-`view.mine` は合成 id（`auth.uid+field`）のためのもの、と読めますが、`idFrom: "auth.uid"` でも
-使えます — その id は uid そのもので、`recordId` はレコードを見ないからです。**つまりキーは
+`view.mine` は合成 id（`auth.uid+field`）のためのもの、と読めますが、`idFrom: "pseudonym"` でも
+使えます — その id は本人の匿名 id そのもので、`recordId` はレコードを見ないからです。**つまりキーは
 答えに影響しません。** ただし空文字だけはブリッジが `invalid-lookup` として弾くので、何か
 1 文字渡します。返るのは `{ known, found, record }` で、`record` は `viewer.mine` と同じ投影
 なので、名前を画面に出すのにも足ります。
@@ -234,7 +241,7 @@ mulmoserver の 2026-08-19 で、それ以前は全員がこの枝に落ちて�
 1 押しに書くと、登録だけが書かれて取るのが黙って落ちます。`viewer.mine` も `lookup` も無い
 ホストのためにその枝を残すなら、登録に 1 押し・取るのに 1 押しに分けてください。
 
-**そして登録が成立したときだけ取らせてください。** 拒否には「既に登録済み」（id が uid なので
+**そして登録が成立したときだけ取らせてください。** 拒否には「既に登録済み」（id が本人の匿名 id なので
 2 度目の create は必ず拒否される）と「一時的な失敗」が同じ顔（生の Firestore メッセージ）で
 返ってきて、ページには見分けがつきません。通すと、名前の行が無いまま担当行だけができる —
 塞ごうとしている当のものなので、止める側に倒します。
@@ -400,7 +407,7 @@ fifteen lines, are in [design.md](./design.md).
 
     /** `viewer.mine` が答えないときに、**ホストへ直接訊きます**。
      *
-     *  `idFrom: "auth.uid"` の id は uid そのもので、`recordId` はレコードを見ません — つまり
+     *  `idFrom: "pseudonym"` の id は本人の匿名 id そのもので、`recordId` はレコードを見ません — つまり
      *  この照会に**キーは要りません**。ただし空文字だけはブリッジが `invalid-lookup` として弾く
      *  ので、何か 1 文字渡します。答えない runtime や、`lookup` を配線していないホスト
      *  （`manageSharedApp` の `preview`）は `known: false` を返すので、**確定したときだけ**覚えます。
@@ -925,7 +932,7 @@ editor ではないか、**アプリを再 publish していない**かのどれ
 ## なぜ付け替えられないのか
 
 「A さんの担当を B さんに移す」は、この形では**できません**。ルールが `uidField` を
-create のときだけ許し、そのあと凍結するからです — 誰も、オーナーも、他人の uid を
+create のときだけ許し、そのあと凍結するからです — 誰も、オーナーも、他人の匿名 id を
 書き込めません。書けたら「本人が送った行」という意味がなくなります。
 
 できるのは 2 手です: **オーナーが外す（`writerDelete`）→ B さんが取る**。板は空きに戻るので、
@@ -949,7 +956,7 @@ B さんの操作は普通の「これをやります」になります。
 - **`["tasks"]`** — 作業一覧だけ。取ることはできますが、他人の担当は見えません。**`idIn` は
   read とは無関係**なので、これでも先着の衝突は効きます。
 
-**uid は不透明でも「同じ人」を追える識別子**です。同じアプリの複数の行が同じ uid を持てば、
+**匿名 id は不透明でも、このアプリの中では「同じ人」を追える識別子**です。同じアプリの複数の行が同じ匿名 id を持てば、
 同じ人の仕事だと分かります。板の目的そのものなので普通は問題になりませんが、
 「誰がやったか分からないようにしたい」板には向きません。
 

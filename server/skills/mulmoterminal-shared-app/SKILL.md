@@ -62,7 +62,7 @@ These shapes are written out in full — declaration, schemas, and the reasoning
 - **[templates/tally.md](./templates/tally.md)** — ONLY THE TOTALS: visitors see how many chose each
   answer and nothing else (a "which do you like?" result, a quiz's spread, an event's preference
   poll). Not a key but a split: the counted field lives in `votes` (`public.read`, nothing else in
-  it), names and comments in `notes` (nobody's to read but the owner's), joined by the same uid, and
+  it), names and comments in `notes` (nobody's to read but the owner's), joined by the same per-app pseudonym, and
   the page counts. It is also the template that sends TWO records as two presses — one write per
   press, or the second loses the gesture mark and the preview drops it.
 - **[templates/live-poll.md](./templates/live-poll.md)** — a page that MOVES while people are looking
@@ -71,7 +71,7 @@ These shapes are written out in full — declaration, schemas, and the reasoning
   watch the votes, and the shape that would let both is refused by publish. **In English**, because
   the strings in its pages are what a stranger reads.
 - **[templates/project-board.md](./templates/project-board.md)** — the same work-claiming board with
-  a ROSTER and an owner's desk: people register a name once (`names`, `idFrom: "auth.uid"`), then
+  a ROSTER and an owner's desk: people register a name once (`names`, `idFrom: "pseudonym"`), then
   take work; the owner adds and removes tasks and frees an abandoned one from `/m/`. This is what
   `writerDelete` is for, and the one that spells out `view.mine()`'s three states — "you have not
   registered" and "nobody looked" are different answers, and treating them alike shows the
@@ -99,7 +99,7 @@ These shapes are written out in full — declaration, schemas, and the reasoning
   back issues, a research log, release notes, a review column). This is what **`views[].article`**
   is for — the platform draws the article page, so the app declares which fields are the title, the
   body and the byline, and `idFrom: "slug"` makes the writer's chosen name the document id and
-  freezes it. It is the only sample that states a `protocol` of its own, the only one whose `limit`
+  freezes it. It is the article-view sample, so its `protocol` floor is at least `2.0.0` (its pseudonym byline makes it `3.0.0`); the only one whose `limit`
   is a COST — publish works it out in bytes and refuses the declaration when it is too large — and
   the one that explains why the owner has to hold
   `participant` on their own collection — `audience` forces `submitOnly`, `submitOnly` closes the
@@ -743,8 +743,11 @@ Every line of that is load-bearing, and publish refuses the declaration without 
   pair.** Same one-row-per-uid guarantee, but the id is sha256(uid + ":" + aid): the anonymous uid is
   the same in every app of this project, so a public row named by it can be joined to the same
   person's named rows elsewhere. Declare `protocol: "3.0.0"` (readers older than that refuse the app),
-  and no `uidField` beside it — publish refuses the pair, since the field would write the uid back.
-  `templates/schedule-poll.md` and `templates/tally.md` use it.
+  and no plain `uidField` beside it — publish refuses the pair, since the field would write the uid
+  back. Where the id is spent on something else (a claimed task: `idFrom: "field"`) and identity has
+  to live in `uidField`, add `uidForm: "pseudonym"` so the field holds the pseudonym instead.
+  `templates/schedule-poll.md`, `templates/tally.md`, `templates/project-board.md` and
+  `templates/magazine.md` use them.
 - **`emailField` names the field their address lands in**, and it must be in `createFields`.
 - **`uidField` is the same binding without an address** — the field the rules compare with the
   submitter's own uid. Reach for it when the DOCUMENT ID is already spent on exclusivity (a claim
