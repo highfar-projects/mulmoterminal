@@ -4,6 +4,7 @@
       "id": "documents",
       "label": "確かめる文書（このフォルダの中のファイルを 1 行に 1 つ）",
       "why": "日付や金額はこの文書から抜き出し、原文の引用で裏づける",
+      "placeholder": "例:\ndocs/イベント案内.md",
       "kind": "text",
       "lines": true,
       "pick": "files"
@@ -19,13 +20,16 @@
       "id": "year",
       "label": "年が書いていない日付は何年として読みますか（任意、例: 2026）",
       "why": "年が無いと曜日が合っているか確かめられない",
+      "placeholder": "例: 2026",
       "kind": "text",
+      "short": true,
       "required": false
     },
     {
       "id": "focus",
       "label": "特に気になっていること（任意）",
       "why": "その点を先に、漏れなく抜き出す",
+      "placeholder": "例: 申込みの締切と参加費",
       "kind": "text",
       "required": false
     }

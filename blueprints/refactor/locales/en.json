@@ -29,11 +29,13 @@
     },
     "focus": {
       "label": "Places you are especially concerned about",
-      "why": "Moves those candidates up the list"
+      "why": "Moves those candidates up the list",
+      "placeholder": "e.g. the calculations under src/billing/ — every fix breaks something elsewhere"
     },
     "avoid": {
       "label": "Files or places to leave alone",
-      "why": "Left out of the candidates"
+      "why": "Left out of the candidates",
+      "placeholder": "e.g. src/generated/ (generated code)"
     }
   },
   "steps": {

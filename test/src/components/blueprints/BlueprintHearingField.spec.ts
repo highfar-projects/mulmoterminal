@@ -1,4 +1,4 @@
-// A list answer, one item per line, keeps its lines: a single-line input would drop them.
+// A list or a sentence keeps its lines: a single-line input would drop them. Only a one-value answer is one line.
 import { describe, it, expect, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 
@@ -7,10 +7,11 @@ vi.mock("../../../../src/composables/blueprintsApi", async (actual) => ({ ...(aw
 import BlueprintHearingField from "../../../../src/components/blueprints/BlueprintHearingField.vue";
 import { hearingSchema } from "../../../../common/blueprint/hearing";
 
-const [listQuestion, lineQuestion, fileQuestion, sourceQuestion] = hearingSchema.parse({
+const [listQuestion, sentenceQuestion, shortQuestion, fileQuestion, sourceQuestion] = hearingSchema.parse({
   questions: [
-    { id: "questions", label: "質問（1 行に 1 つ）", why: "w", kind: "text", lines: true },
-    { id: "topic", label: "何について", why: "w", kind: "text" },
+    { id: "questions", label: "質問（1 行に 1 つ）", why: "w", kind: "text", lines: true, placeholder: "例: 期限は？" },
+    { id: "topic", label: "何について", why: "w", kind: "text", placeholder: "例: 経費精算の手引き" },
+    { id: "appName", label: "アプリの名前", why: "w", kind: "text", short: true, placeholder: "例: 蔵書メモ" },
     { id: "documents", label: "文書（このフォルダの中のファイルを 1 行に 1 つ）", why: "w", kind: "text", lines: true, pick: "files" },
     { id: "source", label: "元にするコレクション", why: "w", kind: "text", pick: "collection" },
   ],
@@ -26,11 +27,34 @@ describe("a one-per-line text question", () => {
     expect(wrapper.emitted("update")?.at(-1)).toEqual(["期限は？\n日当は？\n領収書は？"]);
   });
 
-  it("leaves an ordinary text question a single-line input", () => {
-    if (!lineQuestion) throw new Error("fixture");
-    const wrapper = mount(BlueprintHearingField, { props: { question: lineQuestion, answer: "手引き" } });
+  it("gives a sentence answer a multi-line field too", async () => {
+    if (!sentenceQuestion) throw new Error("fixture");
+    const wrapper = mount(BlueprintHearingField, { props: { question: sentenceQuestion, answer: "手引き" } });
+    expect(wrapper.find("input").exists()).toBe(false);
+    const field = wrapper.get<HTMLTextAreaElement>("textarea");
+    expect(field.element.value).toBe("手引き");
+    await field.setValue("手引き\n新人向け");
+    expect(wrapper.emitted("update")?.at(-1)).toEqual(["手引き\n新人向け"]);
+  });
+
+  it("leaves a short question a single-line input", () => {
+    if (!shortQuestion) throw new Error("fixture");
+    const wrapper = mount(BlueprintHearingField, { props: { question: shortQuestion, answer: "蔵書" } });
     expect(wrapper.find("textarea").exists()).toBe(false);
-    expect(wrapper.get<HTMLInputElement>("input").element.value).toBe("手引き");
+    expect(wrapper.get<HTMLInputElement>("input").element.value).toBe("蔵書");
+  });
+});
+
+describe("an example answer", () => {
+  it.each([
+    ["list", () => listQuestion, "textarea", "例: 期限は？"],
+    ["sentence", () => sentenceQuestion, "textarea", "例: 経費精算の手引き"],
+    ["short", () => shortQuestion, "input", "例: 蔵書メモ"],
+  ] as const)("is shown in an empty %s field", (_, question, tag, placeholder) => {
+    const asked = question();
+    if (!asked) throw new Error("fixture");
+    const wrapper = mount(BlueprintHearingField, { props: { question: asked, answer: undefined } });
+    expect(wrapper.get(tag).attributes("placeholder")).toBe(placeholder);
   });
 });
 

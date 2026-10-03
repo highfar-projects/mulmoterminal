@@ -6,7 +6,8 @@
   "hearing": {
     "places": {
       "label": "The documents for chaff to watch (one folder or file in this folder per line)",
-      "why": "Today's findings in these documents are shelved, and from then on only new findings here appear"
+      "why": "Today's findings in these documents are shelved, and from then on only new findings here appear",
+      "placeholder": "e.g.\ndocs/\nREADME.md"
     },
     "kind": {
       "label": "What kind of documents are they?",

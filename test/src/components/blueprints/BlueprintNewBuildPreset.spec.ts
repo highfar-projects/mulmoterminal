@@ -520,7 +520,7 @@ describe("a source that carries personal data", () => {
 
   it("stops offering to confirm once an answer changes: the list was of what the old answers would copy", async () => {
     const wrapper = await refused();
-    await wrapper.get('[data-testid="blueprint-question"] input').setValue("other.txt");
+    await wrapper.get('[data-testid="blueprint-question"] textarea').setValue("other.txt");
     await flushPromises();
     expect(wrapper.find('[data-testid="blueprint-copy-personal-data"]').exists()).toBe(false);
   });

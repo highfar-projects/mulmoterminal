@@ -6,7 +6,8 @@
   "hearing": {
     "sources": {
       "label": "The texts to follow (files, folders or URLs, one per line)",
-      "why": "The style is measured from these. Nothing that is not in them becomes part of the style"
+      "why": "The style is measured from these. Nothing that is not in them becomes part of the style",
+      "placeholder": "e.g.\ndocs/blog/\nhttps://example.com/style-guide"
     },
     "kind": {
       "label": "What kind of documents are they?",
@@ -29,7 +30,8 @@
     },
     "audience": {
       "label": "Who reads these texts, and what are they for?",
-      "why": "It becomes the guide's introduction, and the basis for decisions while writing"
+      "why": "It becomes the guide's introduction, and the basis for decisions while writing",
+      "placeholder": "e.g. A tech blog for engineers outside the company, written to get them to try the product"
     },
     "strictness": {
       "label": "How strict should it be?",

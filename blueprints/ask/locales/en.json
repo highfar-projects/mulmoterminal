@@ -6,11 +6,13 @@
   "hearing": {
     "documents": {
       "label": "The documents to ask (one file in this folder per line)",
-      "why": "Answers come only from these documents, with where each is written"
+      "why": "Answers come only from these documents, with where each is written",
+      "placeholder": "e.g.\ndocs/employee-handbook.md\ndocs/expenses-guide.md"
     },
     "questions": {
       "label": "Questions (one per line)",
-      "why": "One answer for each question"
+      "why": "One answer for each question",
+      "placeholder": "e.g.\nWhat is the daily allowance for a business trip?\nBy when must an expense claim be filed?"
     },
     "keep": {
       "label": "Keep the answers?",

@@ -4,19 +4,24 @@
       "id": "appName",
       "label": "アプリの名前",
       "why": "画面とプロジェクト名に使う",
-      "kind": "text"
+      "placeholder": "例: 備品貸し出し",
+      "kind": "text",
+      "short": true
     },
     {
       "id": "appPurpose",
       "label": "何をするアプリですか（誰が、何を、どうする）",
       "why": "データの形と画面の数が決まる",
+      "placeholder": "例: 社員が会議室のプロジェクターなどの備品を予約し、総務が貸し出しと返却を記録する",
       "kind": "text"
     },
     {
       "id": "domain",
       "label": "会社のメールアドレスのドメイン（例: example.co.jp）",
       "why": "このドメインの人だけがログインできるようにする",
-      "kind": "text"
+      "placeholder": "例: example.co.jp",
+      "kind": "text",
+      "short": true
     },
     {
       "id": "workspace",
@@ -34,6 +39,7 @@
       "id": "externalWho",
       "label": "どんな社外の人が、何をしますか",
       "why": "別の設計図を選ぶ材料にする",
+      "placeholder": "例: 取引先の担当者が、自社あての発注の進み具合を見る",
       "kind": "text",
       "showIf": {
         "id": "external",
@@ -83,7 +89,9 @@
       "id": "existingProjectId",
       "label": "そのプロジェクト ID",
       "why": "本番用として使う",
+      "placeholder": "例: my-company-tools",
       "kind": "text",
+      "short": true,
       "showIf": {
         "id": "existingProject",
         "equals": true
@@ -105,6 +113,7 @@
       "id": "mainScreens",
       "label": "主な画面（分かる範囲で）",
       "why": "最初に作る画面を決める",
+      "placeholder": "例: 備品の一覧、予約の入力、総務用の貸し出し記録",
       "kind": "text",
       "required": false
     }

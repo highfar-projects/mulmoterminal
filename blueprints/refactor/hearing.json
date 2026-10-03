@@ -31,6 +31,7 @@
       "id": "focus",
       "label": "特に気になっている場所（任意）",
       "why": "候補の順位を上げる",
+      "placeholder": "例: src/billing/ の計算まわり。修正のたびに別の場所が壊れる",
       "kind": "text",
       "required": false
     },
@@ -38,6 +39,7 @@
       "id": "avoid",
       "label": "触らないでほしいファイルや場所（任意）",
       "why": "候補から外す",
+      "placeholder": "例: src/generated/（自動生成のため）",
       "kind": "text",
       "required": false
     }

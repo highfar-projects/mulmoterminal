@@ -14,7 +14,10 @@ export const packLocaleSchema = z
   .object({
     manifest: titled.optional(),
     hearing: z
-      .record(z.string(), z.object({ label: text.optional(), why: text.optional(), options: z.record(z.string(), text).optional() }).strict())
+      .record(
+        z.string(),
+        z.object({ label: text.optional(), why: text.optional(), placeholder: text.optional(), options: z.record(z.string(), text).optional() }).strict(),
+      )
       .optional(),
     steps: z.record(z.string(), titled).optional(),
     presets: z.record(z.string(), titled).optional(),
@@ -44,6 +47,7 @@ function localizedQuestion(question: HearingQuestion, overlay: PackLocale | null
     ...question,
     ...(words.label ? { label: words.label } : {}),
     ...(words.why ? { why: words.why } : {}),
+    ...(words.placeholder ? { placeholder: words.placeholder } : {}),
     ...(words.options ? { optionLabels: words.options } : {}),
   };
 }
@@ -141,6 +145,8 @@ export function overlayProblems(
   pack.hearing?.questions.forEach((question) => {
     const words = overlay.hearing?.[question.id];
     if (words && (!words.label || !words.why)) problems.push(`question "${question.id}" needs both a label and a why`);
+    if (words && question.placeholder && !words.placeholder) problems.push(`question "${question.id}" has an example answer, and its words do not`);
+    if (words?.placeholder && !question.placeholder) problems.push(`words give question "${question.id}" an example answer the pack does not have`);
     named(`option of "${question.id}"`, question.options ?? [], words?.options);
   });
   return problems;

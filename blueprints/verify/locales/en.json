@@ -6,7 +6,8 @@
   "hearing": {
     "documents": {
       "label": "The documents to check (one file in this folder per line)",
-      "why": "Dates and amounts are pulled from these documents and backed by quotes from the original"
+      "why": "Dates and amounts are pulled from these documents and backed by quotes from the original",
+      "placeholder": "e.g.\ndocs/event-announcement.md"
     },
     "kind": {
       "label": "What kind of document is it?",
@@ -19,11 +20,13 @@
     },
     "year": {
       "label": "Which year should dates without a year be read as? (optional, e.g. 2026)",
-      "why": "Without a year, the weekday cannot be checked"
+      "why": "Without a year, the weekday cannot be checked",
+      "placeholder": "e.g. 2026"
     },
     "focus": {
       "label": "Anything you are especially concerned about",
-      "why": "That point is pulled out first, without missing anything"
+      "why": "That point is pulled out first, without missing anything",
+      "placeholder": "e.g. the sign-up deadline and the fee"
     }
   },
   "steps": {

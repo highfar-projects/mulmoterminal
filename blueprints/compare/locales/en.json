@@ -6,15 +6,18 @@
   "hearing": {
     "old": {
       "label": "The old version (one file in this folder)",
-      "why": "What to compare from. Each article is matched to the new version"
+      "why": "What to compare from. Each article is matched to the new version",
+      "placeholder": "e.g. contracts/service-agreement-2025.md"
     },
     "new": {
       "label": "The new version (one file in this folder)",
-      "why": "What to compare to"
+      "why": "What to compare to",
+      "placeholder": "e.g. contracts/service-agreement-2026.md"
     },
     "focus": {
       "label": "Anything to look at especially",
-      "why": "Changes about that point are written first and in more detail"
+      "why": "Changes about that point are written first and in more detail",
+      "placeholder": "e.g. whether the payment and termination terms changed"
     }
   },
   "steps": {

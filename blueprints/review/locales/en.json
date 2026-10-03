@@ -6,7 +6,8 @@
   "hearing": {
     "documents": {
       "label": "The documents to read (one file per line, inside this folder)",
-      "why": "Findings and quotes are made against these documents"
+      "why": "Findings and quotes are made against these documents",
+      "placeholder": "e.g.\ndocs/design.md"
     },
     "kind": {
       "label": "What kind of document is it?",
@@ -20,7 +21,8 @@
     },
     "focus": {
       "label": "Anything you are especially concerned about",
-      "why": "That point is read first, and more deeply"
+      "why": "That point is read first, and more deeply",
+      "placeholder": "e.g. whether any case of permissions is left out"
     },
     "proposals": {
       "label": "How far should it go?",
