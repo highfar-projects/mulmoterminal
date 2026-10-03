@@ -63,6 +63,8 @@ export const PRESENT_PATH_EXTENSIONS = new Map<string, readonly string[]>([
   ["renderShapeScript", SHAPE_EXTENSIONS],
   // exportShapeScriptUsdz too — third taker of the same `path`.
   ["exportShapeScriptUsdz", SHAPE_EXTENSIONS],
+  // exportShapeScriptStl — the same `path`, for a printable STL.
+  ["exportShapeScriptStl", SHAPE_EXTENSIONS],
   // manageShapeScript (publish / update by `path`) — fourth.
   ["manageShapeScript", SHAPE_EXTENSIONS],
 ]);

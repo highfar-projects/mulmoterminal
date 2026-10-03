@@ -74,6 +74,7 @@ import { GUI_SERVER_ID } from "../common/toolGroups.js";
 import { onListening } from "./infra/on-listening.js";
 import { installProcessGuards } from "./infra/process-guards.js";
 import { setProcessTitle } from "../bin/process-title.js";
+import { enableShapeScriptManifold } from "./infra/shapescript-csg.js";
 
 // Register the top-level uncaughtException/unhandledRejection guards before any async boot
 // work runs, so a single unhandled error can't silently kill the backend and disconnect
@@ -419,6 +420,9 @@ pubsub = createPubSub(listeners, isAllowedOrigin);
 // lazily because the registry it reaches is built further down — a feeds refresh cannot dispatch
 // before the scheduler that triggers it is registered.
 await initBackends({ pubsub, spawnClaudePty, retain: (sessionId) => scheduledSessions.register(sessionId) });
+
+// ShapeScript CSG through manifold before the first request (infra/shapescript-csg.ts).
+await enableShapeScriptManifold();
 
 // Let a phone drive MulmoTerminal over the Firestore command channel
 // (backends/remoteHost/hostBindings.ts).

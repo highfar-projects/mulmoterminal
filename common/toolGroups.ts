@@ -97,6 +97,8 @@ const GROUP_BY_TOOL = new Map<string, ToolGroup>([
   // And the third of the set: a cell that can show and check a model should be able to
   // hand it out as a file the user opens in AR.
   ["exportShapeScriptUsdz", "render"],
+  // And the printable STL beside it: the same model handed out as a file a slicer takes.
+  ["exportShapeScriptStl", "render"],
 
   // presentCollection RENDERS, but it renders collection data and only makes sense next to
   // manageCollection — a cell offered the view without the store gets a tool it cannot fill.
@@ -227,6 +229,10 @@ export const LEGACY_GUI_SERVER_IDS: readonly string[] = ["mulmoterminal-gui"];
 //
 // `exportShapeScriptUsdz` clears the same bar more easily: no process at all, just the
 // model's geometry serialised to one file under the workspace artifacts.
+// `exportShapeScriptStl` likewise: manifold runs in this process (WebAssembly), nothing
+// is fetched, and the result is one file under the workspace artifacts. It can burn CPU
+// for a minute on a lattice of tens of thousands of parts, which is cost of the
+// render-tool kind, not of the kind this list keeps off.
 export const AUTO_ALLOWED_TOOLS: readonly string[] = [
   "presentForm",
   "presentChart",
@@ -234,6 +240,7 @@ export const AUTO_ALLOWED_TOOLS: readonly string[] = [
   "presentShapeScript",
   "renderShapeScript",
   "exportShapeScriptUsdz",
+  "exportShapeScriptStl",
 ];
 
 /** Tools that must keep the agent's permission prompt on EVERY claude session, including the
