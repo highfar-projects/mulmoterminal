@@ -47,6 +47,8 @@ interface ForkInput {
   view: ViewFile | null;
   tiers: readonly PlannedTier[];
   stamp: PublishStamp;
+  /** The live app document's owner uid, when there is one — it can differ from the publisher's. */
+  liveOwner?: unknown;
 }
 
 /** Every page the copy is made of: the public one and every tier's. */
@@ -58,8 +60,19 @@ function pagesOf(authored: AuthoredApp, view: ViewFile | null, tiers: readonly P
 }
 
 /** Refusals for a forkable app — before anything is written, like the rest of publish's gate. */
-function sourceProblems(authored: AuthoredApp, source: ForkSourceDoc, pages: ForkPage[]): string[] {
-  const named = forkSourceProblems(authored, source, pages);
+/** Every uid that owns this app: `app.json` rarely says, so the publisher's and the live document's
+ *  are what the source must not carry. */
+const ownerUids = (input: ForkInput): string[] => [
+  ...new Set([
+    input.stamp.uid,
+    ...(typeof input.liveOwner === "string" ? [input.liveOwner] : []),
+    ...(input.authored.owner === undefined ? [] : [input.authored.owner]),
+  ]),
+];
+
+function sourceProblems(input: ForkInput, source: ForkSourceDoc, pages: ForkPage[]): string[] {
+  // The package's scan reads the owner off the declaration, so it is asked once per owner uid.
+  const named = [...new Set(ownerUids(input).flatMap((owner) => forkSourceProblems({ ...input.authored, owner }, source, pages)))];
   const bytes = Buffer.byteLength(JSON.stringify(source), "utf8");
   const oversize =
     bytes <= MAX_FORK_SOURCE_BYTES
@@ -70,7 +83,13 @@ function sourceProblems(authored: AuthoredApp, source: ForkSourceDoc, pages: For
   return [...named, ...oversize];
 }
 
-async function existingForkDocs(handle: SharedAppHandle, aid: string): Promise<{ ok: true; ids: string[] } | SharedAppFailure> {
+/** The fork documents there are now — what a publish that stops offering the copy, and an
+ *  unpublish, must remove (`config/*` stays world-readable whatever else is closed). */
+export async function existingForkDocs(
+  handle: SharedAppHandle,
+  aid: string,
+  operation: "publish" | "unpublish" = "publish",
+): Promise<{ ok: true; ids: string[] } | SharedAppFailure> {
   try {
     const docs = await handle.docs.list(appConfigPath(aid));
     return { ok: true, ids: docs.map((doc) => doc.id).filter((id) => id === FORK_SOURCE_DOC || id.startsWith(FORK_VIEW_PREFIX)) };
@@ -79,7 +98,7 @@ async function existingForkDocs(handle: SharedAppHandle, aid: string): Promise<{
       ok: false,
       partial: false,
       problems: [
-        `publish failed while reading apps/${aid}/config: ${err instanceof Error ? err.message : String(err)}`,
+        `${operation} failed while reading apps/${aid}/config: ${err instanceof Error ? err.message : String(err)}`,
         "Nothing was written. This read is what lets a copy that is no longer offered be removed.",
       ],
     };
@@ -92,7 +111,7 @@ export async function planFork(handle: SharedAppHandle, aid: string, input: Fork
   if (input.authored.forkable !== true) return { ok: true, plan: { source: null, pages: [], stale: existing.ids } };
   const pages = pagesOf(input.authored, input.view, input.tiers);
   const source = { ...projectForkSource(input.authored, input.schemas, input.stamp.publishedAt), form: input.form };
-  const problems = sourceProblems(input.authored, source, pages);
+  const problems = sourceProblems(input, source, pages);
   if (problems.length > 0) return { ok: false, partial: false, problems };
   const keep = new Set([FORK_SOURCE_DOC, ...pages.map((page) => forkViewDocId(page.id))]);
   return { ok: true, plan: { source, pages, stale: existing.ids.filter((id) => !keep.has(id)) } };
@@ -110,12 +129,17 @@ export function forkWrites(handle: SharedAppHandle, aid: string, plan: ForkPlan,
   const forkSource = plan.source;
   const source =
     forkSource === null ? [] : [{ what: `the forkable copy (${at}/${FORK_SOURCE_DOC})`, run: () => handle.docs.set(at, FORK_SOURCE_DOC, forkSource) }];
-  const withdrawn = [...plan.stale].sort((left, right) => Number(right === FORK_SOURCE_DOC) - Number(left === FORK_SOURCE_DOC));
-  const removals = withdrawn.map((id) => ({
+  return [...pages, ...source, ...forkWithdrawals(handle, aid, plan.stale)];
+}
+
+/** Removing fork documents, the source first, so nobody is offered a copy whose pages are going. */
+export function forkWithdrawals(handle: SharedAppHandle, aid: string, stale: readonly string[]): WriteStep[] {
+  const at = appConfigPath(aid);
+  const withdrawn = [...stale].sort((left, right) => Number(right === FORK_SOURCE_DOC) - Number(left === FORK_SOURCE_DOC));
+  return withdrawn.map((id) => ({
     what: `removing ${at}/${id}`,
     run: async () => {
       await handle.docs.delete(at, id);
     },
   }));
-  return [...pages, ...source, ...removals];
 }

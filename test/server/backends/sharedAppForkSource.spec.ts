@@ -9,6 +9,7 @@ import path from "node:path";
 import { setFirestoreAccessor, setSharedCollectionsSupport, type FirestoreDocs, type FirestoreDoc } from "@mulmoclaude/core/collection/server";
 import { initCollectionsBackend } from "../../../server/backends/collections.js";
 import { publishSharedApp } from "../../../server/backends/sharedApp/publish.js";
+import { unpublishSharedApp } from "../../../server/backends/sharedApp/unpublish.js";
 import { makeTempDir } from "../../support/tempDir";
 import { fakeServerTimestamp } from "../../support/serverTimestamp.js";
 
@@ -180,5 +181,32 @@ describe("forkable at publish", () => {
     expect(!result.ok && result.problems.join(" ")).toContain(STAFF);
     expect(docs.ids(CONFIG)).toEqual([]);
     expect(docs.ids(`apps/${AID}/collections`)).toEqual([]);
+  });
+
+  it("refuses while a page carries the publisher's uid, which app.json never states", async () => {
+    writePage("desk.html", `<p>owner ${OWNER.uid}</p>`);
+    const result = await publishSharedApp(root, stamp);
+    expect(result.ok).toBe(false);
+    expect(docs.ids(CONFIG).filter((id) => id.startsWith("fork"))).toEqual([]);
+  });
+
+  it("refuses while a page carries the live app's owner uid, when somebody else publishes", async () => {
+    await publishSharedApp(root, stamp);
+    const app = docs.doc("apps", AID);
+    if (app) app.owner = "uid-first-owner";
+    writePage("desk.html", "<p>ask uid-first-owner</p>");
+    const result = await publishSharedApp(root, stamp);
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.problems.join(" ")).toContain("uid-first-owner");
+  });
+
+  it("unpublish takes the copy down with the app, the source first", async () => {
+    await publishSharedApp(root, stamp);
+    docs.writes.length = 0;
+    expect((await unpublishSharedApp(root)).ok).toBe(true);
+    expect(docs.ids(CONFIG).filter((id) => id.startsWith("fork"))).toEqual([]);
+    const deletes = docs.writes.filter((entry) => entry.startsWith(`delete ${CONFIG}/fork`));
+    expect(deletes[0]).toBe(`delete ${CONFIG}/fork`);
+    expect(deletes).toHaveLength(3);
   });
 });

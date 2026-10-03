@@ -412,7 +412,15 @@ async function takeName(request: SlugRequest, established: boolean, ran: RunStat
 async function planPages(
   handle: SharedAppHandle,
   aid: string,
-  request: { root: string; authored: AuthoredApp; stamp: PublishStamp; schemas: ReturnType<typeof schemasOf>; form: PublicForm; view: ViewFile | null },
+  request: {
+    root: string;
+    authored: AuthoredApp;
+    stamp: PublishStamp;
+    schemas: ReturnType<typeof schemasOf>;
+    form: PublicForm;
+    view: ViewFile | null;
+    liveOwner: unknown;
+  },
 ): Promise<{ ok: true; tiers: PlannedTier[]; warnings: string[]; fork: ForkPlan } | SharedAppFailure> {
   const tiers = await planTierWrites(handle, aid, request);
   if (!tiers.ok) return tiers;
@@ -458,7 +466,7 @@ async function runPublish(root: string, opts: SharedAppOptions, ran: RunState): 
   const page = await pageGate(root, authored, existingApp, handle, stamp.publishedAt);
   if (!page.ok) return { ok: false, partial: established, problems: page.problems };
 
-  const pages = await planPages(handle, aid, { root, authored, stamp, schemas: schemasOf(collections), form, view: page.view });
+  const pages = await planPages(handle, aid, { root, authored, stamp, schemas: schemasOf(collections), form, view: page.view, liveOwner: existingApp?.owner });
   if (!pages.ok) return { ...pages, partial: established };
 
   const named = await takeName({ handle, aid, root, wanted: authored.slug, held, appDoc: stillOpen(appDoc, existingApp) }, established, ran);
