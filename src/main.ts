@@ -12,6 +12,7 @@ import { installFileDropGuard } from "./composables/useFileDropGuard";
 import { installPageZoomGuard } from "./composables/usePageZoomGuard";
 import { router } from "./router";
 import { i18n } from "./i18n";
+import { enableManifoldCsg } from "@gui-chat-plugin/shapescript";
 import App from "./App.vue";
 
 // Apply the persisted theme to <html> before mount so there's no flash of the
@@ -33,5 +34,14 @@ installPageZoomGuard();
 // shell (route still at the start location) — and TerminalView.onMounted would
 // attach the durable "single" PTY — before the route flips to the grid, leaking a
 // hidden Claude session. router.isReady() guarantees the initial URL is honored first.
+//
+// ShapeScript's CSG runs through manifold here as on the server
+// (server/infra/shapescript-csg.ts), so a model is built by one engine wherever it
+// is shown. Its WebAssembly is loaded before mount, because the View converts
+// synchronously the moment a card renders; a failed load leaves three-bvh-csg in
+// place and never holds the app back.
+const manifoldReady = enableManifoldCsg().catch((err: unknown) => {
+  console.warn(`[shapescript] manifold did not load, CSG stays on three-bvh-csg: ${err instanceof Error ? err.message : String(err)}`);
+});
 const app = createApp(App).use(router).use(i18n);
-void router.isReady().then(() => app.mount("#app"));
+void Promise.all([router.isReady(), manifoldReady]).then(() => app.mount("#app"));

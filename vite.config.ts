@@ -26,7 +26,10 @@ export default defineConfig({
   // defined" at runtime. Exclude it from pre-bundling so it's served as ESM source
   // (no esbuild split), and define the @intlify compile-time feature flags the
   // esm-bundler build expects (Vite's vue plugin only defines the __VUE_*__ flags).
-  optimizeDeps: { exclude: ["vue-i18n"] },
+  // manifold-3d finds its WebAssembly beside its own module
+  // (`new URL("manifold.wasm", import.meta.url)`); pre-bundled into .vite/deps that
+  // file is not there, so it is served from node_modules as is.
+  optimizeDeps: { exclude: ["vue-i18n", "manifold-3d"] },
   define: {
     __VUE_I18N_FULL_INSTALL__: "true",
     __VUE_I18N_LEGACY_API__: "false",
