@@ -8,11 +8,38 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@8.7.0 — 2026-10-03
+
+> **Setup guide:** [8.7.0 — Surveys that show their results, printable STL, and a set-aside cell that stays put](https://receptron.github.io/mulmoterminal/guide/en/v8.7.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v8.7.0.html))
+
+### Shared apps: a survey whose results respondents see (#2882)
+
+- [#2884](https://github.com/receptron/mulmoterminal/pull/2884) — a `survey-results` template: the `survey` form, plus per-question choice counts and shares shown to a respondent after they answer, while the address, name and free text stay with the owner. The `tally` split again: the chosen answers live in `tallies` (`public.read`, `answers` + `status` only, no `emailField`), everything else in a private `responses`, joined by the per-app pseudonym (`protocol` 3.0.0). `answers` is free text the rules never inspect, so the public page counts only declared questions and choices and never draws a string it read from a tally; the owner's `/m/` page keeps undeclared values, marked as such. Answering and sending the name/comment are two presses (one write each), `tallies` first. `survey` stays the default and points to the new template.
+
+### Shared apps: no uid in a world-readable row (receptron/mulmoserver#325)
+
+- [#2879](https://github.com/receptron/mulmoterminal/pull/2879) — `uidForm: "pseudonym"` (`sharedapp` 0.41.0): a `uidField` can hold the submitter's per-app pseudonym instead of the uid. The host writes it in participant submissions and the preview, and finds the reader's own rows by it.
+- [#2880](https://github.com/receptron/mulmoterminal/pull/2880) — `project-board` (`names` by pseudonym id, `assignments.uid` with `uidForm`) and `magazine` (`articles.byUid` with `uidForm`) stop publishing the uid; both declare `protocol` 3.0.0. The template test now also refuses a public `uidField` without `uidForm`. Apps already published from the old templates keep their uid ids until rebuilt.
+
+### Set aside: a cell no longer wakes on a reconnect (#2885)
+
+- [#2886](https://github.com/receptron/mulmoterminal/pull/2886) — a set-aside cell came back to full strength with nobody typing after its socket had been down for more than 30 seconds. Its PTY had been reaped, the reconnect attached a new tmux client, tmux queried it (device attributes, colours) and xterm.js's answers counted as typing. The browser now uses the server's reply classifier (`common/terminalReplies.ts`, #1693) and ignores a finished emulator reply; a key that only starts like one (Alt+[ is `ESC[`) still wakes the cell. The shared list also gained the rest of the replies xterm.js writes (DEC private cursor position, `ESC[0n`, mode reports, window size reports, OSC 4, DECRQSS), so these no longer count as the user typing since a question on the server either. Shift+F3 has the shape of a cursor position report and does not wake a set-aside cell.
+
 ### ShapeScript: printable STL export, and CSG through manifold
 
-- New host tool **`exportShapeScriptStl`** (`@gui-chat-plugin/shapescript@8.2.1`) writes a model as one watertight solid for a 3D printer: every top-level part merged (no `union` needed), in millimetres (`unitScale`: mm per unit, default 1), Z up, resting on Z = 0. It answers the file's absolute path and a printability report — size, parts merged and skipped, bodies, genus, volume, non-manifold edges after a slicer-style merge, and warnings for parts that only touch, parts with nothing to print, and loose pieces. A 10 x 10 x 10 cube lattice (4,961 parts) exports in about 7 s; the language prompt tells the agent to write such lattices as loose parts at `detail 8`.
+- [#2876](https://github.com/receptron/mulmoterminal/pull/2876) — new host tool **`exportShapeScriptStl`** (`@gui-chat-plugin/shapescript@8.2.1`) writes a model as one watertight solid for a 3D printer: every top-level part merged (no `union` needed), in millimetres (`unitScale`: mm per unit, default 1), Z up, resting on Z = 0. It answers the file's absolute path and a printability report — size, parts merged and skipped, bodies, genus, volume, non-manifold edges after a slicer-style merge, and warnings for parts that only touch, parts with nothing to print, and loose pieces. A 10 x 10 x 10 cube lattice (4,961 parts) exports in about 7 s; the language prompt tells the agent to write such lattices as loose parts at `detail 8`.
 - ShapeScript's CSG (`union`, `difference`, `intersection`, `xor`, `stencil`) now runs through **manifold** in both the server and the browser, so a model is built by one engine wherever it is shown or exported. Results are watertight and keep each operand's colour; it is 2-3x faster on the shipped models, and a lattice inside a `union` now previews (10 x 10 x 10 in about 8 s) where it used to be refused at the time limit. On the shipped models the renders differ from before in at most 0.12% of pixels. manifold's WebAssembly (about 210 KB gzipped) loads before the app mounts; if it ever fails to load, CSG stays on three-bvh-csg as before.
 - `renderShapeScript` no longer fails with "Navigating frame was detached" on large models. The render page received the whole scene in one response, and Chromium drops a response of about 100 MB or more, so every 20 x 20 x 20 lattice failed. The scene now arrives in parts of at most 16 MB; those lattices render in about 11-17 s (shapescript 8.2.1).
+
+### Blueprints: room to answer (#2881)
+
+- [#2883](https://github.com/receptron/mulmoterminal/pull/2883) — free-text interview questions are a resizable multi-line field (3 rows; 4 for one-per-line lists) instead of a one-line input at 12px; inputs, selects and labels go to 14px. A question whose answer is one value declares `short: true` in `hearing.json` and keeps one line (the schema refuses it elsewhere). A question can carry a `placeholder` (an example answer), replaced by a pack's `locales/en.json` like `label` / `why`; every text question in all 14 packs has one, in Japanese and English.
+
+### Dependencies
+
+- [#2877](https://github.com/receptron/mulmoterminal/pull/2877), [#2888](https://github.com/receptron/mulmoterminal/pull/2888) — `@receptron/sharedapp` 0.40.0 (publish writes `publishField` on each collection document), 0.41.0 with #2879, then 0.43.0: an app can declare `forkable` (0.42.0, the fork source for MulmoServer's copy-an-app page) and a `@receptron/sharedapp/browser` entry (0.43.0). MulmoTerminal does not yet write the fork source on publish.
+- [#2887](https://github.com/receptron/mulmoterminal/pull/2887) — `@gui-chat-plugin/shapescript` 8.2.2 (an internal refactor, no change in behaviour).
+- [#2878](https://github.com/receptron/mulmoterminal/pull/2878) — routine updates: `@google/genai` 2.27, `@modelcontextprotocol/sdk` 1.32, `@mulmoclaude/core` 5.8.1, `@mulmoclaude/accounting-plugin` 4.0.2, `material-symbols`, `vue-i18n`, `eslint`, `vue-tsc`, `@types/node`.
 
 ## mulmoterminal@8.6.0 — 2026-10-03
 
