@@ -360,12 +360,12 @@ describe("the shared-app templates", () => {
     }
   });
 
-  it("draws share cards only from the template made for it, and says the card stays on SNS", () => {
+  it("draws share cards only from the templates made to spread, and says the card stays on SNS", () => {
     // `shareCard` puts a row's text on an image anyone can see (receptron/mulmoserver#336).
     const declaresCard = (manifest: unknown): boolean => typeof manifest === "object" && manifest !== null && "shareCard" in manifest;
     const carded = TEMPLATE_FILES.filter((file) => declaresCard(blocksOf(file).get("app.json")));
-    expect(carded).toEqual(["question-box.md"]);
-    expect(readFileSync(path.join(TEMPLATES, "question-box.md"), "utf8")).toContain("SNS 側に残ることがあります");
+    expect(carded).toEqual(["question-box.md", "survey-results.md", "tally.md"]);
+    for (const file of carded) expect(readFileSync(path.join(TEMPLATES, file), "utf8"), file).toContain("SNS 側に残ることがあります");
   });
 
   it("makes every template choose its own colour rather than inherit one", () => {

@@ -1387,10 +1387,13 @@ Six things are worth asking and the rest are not:
   > ありません。カードになるのは、あなたが公開した項目だけです。一度 SNS に表示されたカードは、
   > あとから公開をやめても SNS 側に残ることがあります。
 
-  If the request already says it should spread, turn it on without asking. YOU choose the field: the one
-  a stranger should read on the card (a question's text, a theme). The collection must be one visitors
-  read (`public.read` or `public.readPublished`) and the field text — publish refuses anything else. The
-  app then lives at `/s/{slug}`. A booking or a roster has no use for it; the question box ships with it on.
+  If the request already says it should spread, turn it on without asking. Every card-carrying app gets
+  a card for itself (its `title`, or its name). Name a row field only when one row's text is what a
+  stranger should read (a question box): YOU choose it, the collection must be one visitors read
+  (`public.read` or `public.readPublished`) and the field text — publish refuses anything else. An app
+  that shows totals (tally, public-results survey) declares `"shareCard": {}` or `{ "title": "..." }`.
+  The app then lives at `/s/{slug}`. A booking or a roster has no use for it; the question box, tally and
+  survey-results templates ship with it on.
 
 Do not ask which storage to use, whether to make it "an app", or what to call the collection.
 
