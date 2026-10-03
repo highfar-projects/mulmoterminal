@@ -348,6 +348,18 @@ describe("the shared-app templates", () => {
     expect(exposed).toEqual([]);
   });
 
+  it("offers a copy only from the templates made to spread, and says what it costs", () => {
+    // `forkable` makes every page — the staff ones included — world-readable (receptron/mulmoserver#332).
+    // A play app wants to spread; a booking or a roster must not hand its desk to strangers.
+    const isForkable = (manifest: unknown): boolean =>
+      typeof manifest === "object" && manifest !== null && "forkable" in manifest && manifest.forkable === true;
+    const forkable = TEMPLATE_FILES.filter((file) => isForkable(blocksOf(file).get("app.json")));
+    expect(forkable).toEqual(["question-box.md", "survey-results.md", "tally.md"]);
+    for (const file of forkable) {
+      expect(readFileSync(path.join(TEMPLATES, file), "utf8"), file).toContain("それらのページも誰でも読めるようになります");
+    }
+  });
+
   it("makes every template choose its own colour rather than inherit one", () => {
     // A template is copied VERBATIM — the same reason the canvas rule above is asserted here. So
     // whatever colour a template ships is the colour of every app written from it, and seven

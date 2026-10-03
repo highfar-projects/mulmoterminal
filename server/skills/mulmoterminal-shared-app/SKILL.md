@@ -1375,8 +1375,8 @@ Five things are worth asking and the rest are not:
   "make your own": a Google sign-in and a name, and the visitor gets the same app with themselves as
   owner and no records. Say the cost in the author's words before turning it on: **every page of the
   app, the staff pages included, becomes readable by anyone**, because the copy is made of them. Off
-  unless asked; a question box, a tally or a public-results survey is where it fits, a booking or a
-  roster-only app is not. Publish refuses it beside `agents[]` (a copy would run somebody's agent),
+  unless asked; a question box, a tally or a public-results survey is where it fits — their templates
+  ship with it on — and a booking or a roster-only app is not. Publish refuses it beside `agents[]` (a copy would run somebody's agent),
   and refuses while a roster address or the owner's uid is written anywhere in the declaration, a
   schema or a page — take it out of the text rather than turning `forkable` off.
 
