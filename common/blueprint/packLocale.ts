@@ -145,6 +145,8 @@ export function overlayProblems(
   pack.hearing?.questions.forEach((question) => {
     const words = overlay.hearing?.[question.id];
     if (words && (!words.label || !words.why)) problems.push(`question "${question.id}" needs both a label and a why`);
+    if (words && question.placeholder && !words.placeholder) problems.push(`question "${question.id}" has an example answer, and its words do not`);
+    if (words?.placeholder && !question.placeholder) problems.push(`words give question "${question.id}" an example answer the pack does not have`);
     named(`option of "${question.id}"`, question.options ?? [], words?.options);
   });
   return problems;

@@ -170,6 +170,17 @@ describe("overlayProblems", () => {
     ]);
   });
 
+  it("names an example answer on one side only", () => {
+    const limit = { label: "Most files", why: "Keeps a run small" };
+    expect(overlayProblems({ ...overlay, hearing: { ...overlay.hearing, limit } }, pack)).toEqual([
+      'question "limit" has an example answer, and its words do not',
+    ]);
+    const style = { ...overlay.hearing?.style, placeholder: "e.g. ours" };
+    expect(overlayProblems({ ...overlay, hearing: { ...overlay.hearing, style } }, pack)).toEqual([
+      'words give question "style" an example answer the pack does not have',
+    ]);
+  });
+
   it("names words for things the pack does not have", () => {
     const stale: PackLocale = {
       ...overlay,
