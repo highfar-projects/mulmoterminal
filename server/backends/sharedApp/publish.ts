@@ -53,6 +53,7 @@ import {
 import { recordRefusal, scanRecords, type RecordScan } from "./records.js";
 import { oversizeProblem, publicFormOf, publicInputProblems, type PublicForm } from "./publicForm.js";
 import { allTierWrites, pageIdsOf, planTierWrites, type PlannedTier } from "./appViews.js";
+import { forkWrites, planFork, type ForkPlan } from "./forkWrites.js";
 import { PUBLIC_VIEW_DOC, declaredView, readAppViewFile, type ViewFile } from "./publicView.js";
 import { frozenKeyProblems } from "./exclusivity.js";
 import { scopedFieldProblems } from "./scopedFields.js";
@@ -102,7 +103,8 @@ interface PublishStepsInput {
   slug: string | undefined;
   form: PublicForm;
   view: ViewFile | null;
-  tiers: readonly PlannedTier[];
+  /** Every page this run writes: the tiers, and the forkable copy (see `planPages`). */
+  pages: { tiers: readonly PlannedTier[]; fork: ForkPlan };
   /** Written already by `claimApp`, byte for byte, when this publish created the app document to
    *  make the record scan answerable. Writing it twice is harmless and saying so is not: the
    *  second write is skipped so the step list reads as what actually happened. */
@@ -112,7 +114,7 @@ interface PublishStepsInput {
   live: Record<string, unknown> | null;
 }
 
-function publishSteps({ handle, aid, stamp, face, slug, form, view, tiers, established, live }: PublishStepsInput): WriteStep[] {
+function publishSteps({ handle, aid, stamp, face, slug, form, view, pages, established, live }: PublishStepsInput): WriteStep[] {
   return [
     ...face.schemas.map(({ cid, doc }) => ({
       what: `the schema for '${cid}' (apps/${aid}/collections/${cid})`,
@@ -168,7 +170,10 @@ function publishSteps({ handle, aid, stamp, face, slug, form, view, tiers, estab
     // publish drops them. Before the app document and the authorization, like everything else that
     // is only DATA: a run that stops here leaves an app whose pages are newer than its roster,
     // which is the direction to be wrong in.
-    ...allTierWrites(handle, aid, tiers, stamp),
+    ...allTierWrites(handle, aid, pages.tiers, stamp),
+    // The copy a visitor may make, or its withdrawal. Data like the pages above, so before the app
+    // document and the authorization.
+    ...forkWrites(handle, aid, pages.fork, stamp.publishedAt),
     // The app document WITHOUT `public`: the rule configuration lands beside the schemas it was
     // projected with, so the public write path is never judged by one version's constraints
     // against another's schema. Skipped when `claimApp` wrote exactly this a moment ago.
@@ -401,6 +406,20 @@ async function takeName(request: SlugRequest, established: boolean, ran: RunStat
   return { ok: true, slug: reserved?.slug ?? request.held };
 }
 
+/** Every page this publish writes, read off disk and paired with what is already there — the
+ *  members' and participants' tiers, and the forkable copy made of them — so a page withdrawn from
+ *  `views` (or a copy no longer offered) is removed rather than left readable. */
+async function planPages(
+  handle: SharedAppHandle,
+  aid: string,
+  request: { root: string; authored: AuthoredApp; stamp: PublishStamp; schemas: ReturnType<typeof schemasOf>; form: PublicForm; view: ViewFile | null },
+): Promise<{ ok: true; tiers: PlannedTier[]; warnings: string[]; fork: ForkPlan } | SharedAppFailure> {
+  const tiers = await planTierWrites(handle, aid, request);
+  if (!tiers.ok) return tiers;
+  const fork = await planFork(handle, aid, { ...request, tiers: tiers.tiers });
+  return fork.ok ? { ...tiers, fork: fork.plan } : fork;
+}
+
 async function runPublish(root: string, opts: SharedAppOptions, ran: RunState): Promise<PublishResult> {
   // Before anything reads the declaration: the app has to HAVE an id, and publish refuses rather
   // than minting one (`requireAid`). The id is written where the declaration is — `init`, and the
@@ -439,9 +458,7 @@ async function runPublish(root: string, opts: SharedAppOptions, ran: RunState): 
   const page = await pageGate(root, authored, existingApp, handle, stamp.publishedAt);
   if (!page.ok) return { ok: false, partial: established, problems: page.problems };
 
-  // The members' and participants' pages, read off disk and paired with what is already there, so
-  // a page withdrawn from `views` is removed rather than left readable.
-  const pages = await planTierWrites(handle, aid, { root, authored, stamp });
+  const pages = await planPages(handle, aid, { root, authored, stamp, schemas: schemasOf(collections), form, view: page.view });
   if (!pages.ok) return { ...pages, partial: established };
 
   const named = await takeName({ handle, aid, root, wanted: authored.slug, held, appDoc: stillOpen(appDoc, existingApp) }, established, ran);
@@ -457,7 +474,7 @@ async function runPublish(root: string, opts: SharedAppOptions, ran: RunState): 
     slug,
     form,
     view: page.view,
-    tiers: pages.tiers,
+    pages,
     // Already written, byte for byte: `claimApp` wrote this projection, and a reservation made
     // just now rewrote the same thing with the name on it.
     established,

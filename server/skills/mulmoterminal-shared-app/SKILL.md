@@ -1325,7 +1325,7 @@ Then `manageSharedApp` with `action: "publish"`.
 
 ## Before you ask the user a question
 
-Four things are worth asking and the rest are not:
+Five things are worth asking and the rest are not:
 
 - **their email address**, if you do not have it — nothing works without it in `members`;
 - **whether people outside the roster should be able to answer** — it decides `public.enabled`,
@@ -1370,6 +1370,15 @@ Four things are worth asking and the rest are not:
   agent (`agents[]`) can only watch one in `public.read` — it reads without a filter, and the rules
   refuse an unfiltered read. In production the public page receives only the rows whose field is
   `true`, enforced by the Firestore rules; the preview shows the same rows as production.
+
+- **whether a visitor may make their own copy** (`"forkable": true`). The public page then offers
+  "make your own": a Google sign-in and a name, and the visitor gets the same app with themselves as
+  owner and no records. Say the cost in the author's words before turning it on: **every page of the
+  app, the staff pages included, becomes readable by anyone**, because the copy is made of them. Off
+  unless asked; a question box, a tally or a public-results survey is where it fits, a booking or a
+  roster-only app is not. Publish refuses it beside `agents[]` (a copy would run somebody's agent),
+  and refuses while a roster address or the owner's uid is written anywhere in the declaration, a
+  schema or a page — take it out of the text rather than turning `forkable` off.
 
 Do not ask which storage to use, whether to make it "an app", or what to call the collection.
 
