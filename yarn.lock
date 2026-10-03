@@ -1271,10 +1271,10 @@
   resolved "https://registry.yarnpkg.com/@gui-chat-plugin/common/-/common-0.1.0.tgz#96d8a7a1cf1a2a806bbc2ee5ba296b69a59b0350"
   integrity sha512-OF+/XxKWBU50ijjygO+QrMsJjKn+2b1jtA7ouerBJThFT6sR1ZSwJDp+wj6FKBMXY8pPveJcXCBDQHl/qILmrg==
 
-"@gui-chat-plugin/shapescript@^8.2.1":
-  version "8.2.1"
-  resolved "https://registry.yarnpkg.com/@gui-chat-plugin/shapescript/-/shapescript-8.2.1.tgz#93bfd9184c1e2d9a84ff209fa7baf46041245bce"
-  integrity sha512-7XGU+ddXFNaTAfTXtBZSaInGe1k1yawJoqJ209FUr/JVAExWFtXxUADcls6ToC0mjY/p8V29+my+qiWXqqH+KQ==
+"@gui-chat-plugin/shapescript@^8.2.2":
+  version "8.2.2"
+  resolved "https://registry.yarnpkg.com/@gui-chat-plugin/shapescript/-/shapescript-8.2.2.tgz#8ea909c107f0e16f52c441f6908327af36911607"
+  integrity sha512-NeicNoDipPUqh8BeLaL7d+ORRGxO1WXVzvUA/Em0Itmn6Zp0iU2USosHTrRhbcXpnC9LxHUqssVzEYZ2TTnCRw==
   dependencies:
     "@gui-chat-plugin/common" "^0.1.0"
     "@types/three" "^0.186.0"
@@ -2309,10 +2309,10 @@
     modern-tar "^0.8.4"
     yargs "^18.0.0"
 
-"@receptron/sharedapp@^0.41.0":
-  version "0.41.0"
-  resolved "https://registry.yarnpkg.com/@receptron/sharedapp/-/sharedapp-0.41.0.tgz#04b6c04608b9d1b53bfc5b39746026a9182f78b1"
-  integrity sha512-lSaPTxNaJ0REjpJbPx6Lfh+piilVyL5mywKTkJPFwlcat2nWEn4S6m1GDFPUn7pbxem+82IX6hHyFiSlk7bm8w==
+"@receptron/sharedapp@^0.43.0":
+  version "0.43.0"
+  resolved "https://registry.yarnpkg.com/@receptron/sharedapp/-/sharedapp-0.43.0.tgz#8bf4e5767df6e20452bb405109f36e6e5b10ef9a"
+  integrity sha512-y2PLjg98MqsCHoQ+mPtwqVxSNPeJW2jqwHxAKinj5mylVVyMMYILCa/gVPfNXfkP8BYioysPCUOXrdChLpLFUw==
   dependencies:
     zod "^4.6.5"
 

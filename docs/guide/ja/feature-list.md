@@ -4,14 +4,14 @@ nav_title: 全機能リスト
 layout: default
 parent: 日本語
 nav_order: 6.5
-as_of: 8.6.0
-description: MulmoTerminal のいまある機能を、入った版つきで領域ごとに一行ずつ並べた一覧（8.6.0 時点）。
+as_of: 8.7.0
+description: MulmoTerminal のいまある機能を、入った版つきで領域ごとに一行ずつ並べた一覧（8.7.0 時点）。
 ---
 
 # 全機能リスト
 {: .no_toc }
 
-8.6.0 時点で MulmoTerminal にある機能を、領域ごとに一行ずつ並べた一覧です。行末の `(vX.Y.Z)` はその機能が最初に入った版で、その後の大きな拡張は行の中に版番号で添えています。不具合の修正や内部の変更は載せていません。それらは [ChangeLog](https://github.com/receptron/mulmoterminal/blob/main/docs/ChangeLog.md) を、詳しい使い方は[機能リファレンス](features.html)と各節の「詳しく」から辿れるページを見てください。
+8.7.0 時点で MulmoTerminal にある機能を、領域ごとに一行ずつ並べた一覧です。行末の `(vX.Y.Z)` はその機能が最初に入った版で、その後の大きな拡張は行の中に版番号で添えています。不具合の修正や内部の変更は載せていません。それらは [ChangeLog](https://github.com/receptron/mulmoterminal/blob/main/docs/ChangeLog.md) を、詳しい使い方は[機能リファレンス](features.html)と各節の「詳しく」から辿れるページを見てください。
 
 - TOC
 {:toc}
@@ -253,6 +253,7 @@ description: MulmoTerminal のいまある機能を、入った版つきで領�
 
 詳しく: [コレクションから作る](from-collection.html)
 
+- 共有アプリのひな形に `survey-results` が加わる（答えた人に設問ごとの集計を見せ、メール・名前・ご意見はオーナーだけが読む） (v8.7.0)
 - 共有アプリのスキルが、送られたものを訪問者に見せるかを聞く（見せない・選んだものだけ・集計だけ・全部） (v8.6.0)
 - 共有アプリのひな形に `question-box`（誰でも質問でき、オーナーが選んだものだけ公開）と `tally`（訪問者には集計だけを見せる）が加わる (v8.6.0)
 - 共有アプリの誰でも読める行は、アプリごとの仮名を id に使い、アプリをまたいで同じ人をたどれない (v8.6.0)
@@ -261,6 +262,7 @@ description: MulmoTerminal のいまある機能を、入った版つきで領�
 - propagateDeletes で、記録を消すと Google カレンダーの予定も消す (v5.5.0)
 - エージェントが ShapeScript のモデルを公開ギャラリーに載せ、更新・削除・一覧できる（manageShapeScript） (v4.22.0)
 - ShapeScript の結果のソースをボタンでクリップボードにコピーする (v4.22.0)
+- エージェントが ShapeScript のモデルを 3D プリンタ用の閉じた STL で書き出し、印刷できるかの報告を返す（exportShapeScriptStl） (v8.7.0)
 - ShapeScript のモデルを USDZ・GLB・STL で書き出す（4.26 で1つの Download メニュー） (v4.20.0)
 - ShapeScript は本家の言語に従い、4.21 で材質・関数・文字など全機能と全サンプルを使える (v4.20.0)
 - コレクションから始めた会話は、開いたコレクションの下か横のタブ付きペインで動き、ヘッダーにそのアイコンが出る (v4.19.0)
@@ -299,6 +301,7 @@ description: MulmoTerminal のいまある機能を、入った版つきで領�
 
 詳しく: [設計図](blueprints.html)
 
+- ヒアリングの自由記述は大きさを変えられる複数行の欄で、設問ごとに記入例が出る (v8.7.0)
 - 文書のビルドの承認で、直してほしいことと「決まっていないこと」への答えを送れる。直したあと前の工程を確かめ直し、通るまで承認できない (v8.5.0)
 - 画面が英語のとき、パック・フォームの質問・例・工程名を英語で出す (v8.5.0)
 - 整える作業と chaff の導入で、chaff の測る 24 種類の文書をすべて選べ、それぞれに読む観点がある (v8.5.0)

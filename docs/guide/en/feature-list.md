@@ -4,14 +4,14 @@ nav_title: Feature list
 layout: default
 parent: English
 nav_order: 6.5
-as_of: 8.6.0
-description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 8.6.0)."
+as_of: 8.7.0
+description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 8.7.0)."
 ---
 
 # Feature list
 {: .no_toc }
 
-Every capability MulmoTerminal has as of 8.6.0, one line each, grouped by area. The `(vX.Y.Z)` at the end of a line is the release it first arrived in; significant later extensions are noted inside the line by version. Fixes and internal changes are not listed — see the [ChangeLog](https://github.com/receptron/mulmoterminal/blob/main/docs/ChangeLog.md) for those, and the [Feature reference](features.html) and the page linked from each section for how to use them.
+Every capability MulmoTerminal has as of 8.7.0, one line each, grouped by area. The `(vX.Y.Z)` at the end of a line is the release it first arrived in; significant later extensions are noted inside the line by version. Fixes and internal changes are not listed — see the [ChangeLog](https://github.com/receptron/mulmoterminal/blob/main/docs/ChangeLog.md) for those, and the [Feature reference](features.html) and the page linked from each section for how to use them.
 
 - TOC
 {:toc}
@@ -253,6 +253,7 @@ More: [Configuration](config.html)
 
 More: [From a collection](from-collection.html)
 
+- Shared-app template `survey-results`: respondents see each question's totals after answering; addresses, names and comments stay with the owner (v8.7.0)
 - The shared-app skill asks whether visitors see what was sent: nobody, only the records the owner picks, only the totals, or everything (v8.6.0)
 - Shared-app templates `question-box` (anyone asks, the owner publishes the ones they pick) and `tally` (visitors see only the totals) (v8.6.0)
 - World-readable shared-app rows use a per-app pseudonym id, so they cannot be joined across apps (v8.6.0)
@@ -261,6 +262,7 @@ More: [From a collection](from-collection.html)
 - With propagateDeletes, deleting a record deletes its Google Calendar event (v5.5.0)
 - Agents post ShapeScript models to the public gallery, and update, delete, get and list them via manageShapeScript (v4.22.0)
 - A Copy button puts a ShapeScript result's source on the clipboard (v4.22.0)
+- Agents export a ShapeScript model as one watertight STL for a 3D printer, with a printability report (exportShapeScriptStl) (v8.7.0)
 - Export a ShapeScript model as USDZ, GLB or STL, from one Download menu since 4.26 (v4.20.0)
 - ShapeScript follows the upstream language, with materials, functions, text and all upstream examples since 4.21 (v4.20.0)
 - Collection chats run in a tabbed pane docked below or beside the collection, its icon in their headers (v4.19.0)
@@ -299,6 +301,7 @@ More: [From a collection](from-collection.html)
 
 More: [Blueprints](blueprints.html)
 
+- Interview free-text answers are multi-line and resizable, each question with an example answer (v8.7.0)
 - A document build's review gate takes changes and answers to its open questions; the step before is checked again, and approval waits for a pass (v8.5.0)
 - Packs, form questions, examples and step names show in English on an English screen (v8.5.0)
 - Polish and adopt offer all 24 kinds of document chaff measures, each with viewpoints (v8.5.0)
