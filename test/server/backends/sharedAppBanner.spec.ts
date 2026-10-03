@@ -127,4 +127,12 @@ describe("the banner at publish", () => {
     expect((await unpublishSharedApp(root)).ok).toBe(true);
     expect(docs.doc(CONFIG, "banner")).toBeUndefined();
   });
+
+  it("closing the app removes the banner even when the file it names is broken", async () => {
+    writeApp(declaration({ banner: "views/banner.png" }));
+    await publishSharedApp(root, stamp);
+    writeApp(declaration({ banner: "views/missing.png" }, false));
+    expect((await publishSharedApp(root, stamp)).ok).toBe(true);
+    expect(docs.doc(CONFIG, "banner")).toBeUndefined();
+  });
 });

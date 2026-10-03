@@ -36,7 +36,9 @@ const declaredKindOf = (file: string): string | undefined => BANNER_TYPES[path.e
 
 export async function readBanner(root: string, authored: AuthoredApp): Promise<{ ok: true; banner: Banner | null } | { ok: false; problems: string[] }> {
   const declared = authored.theme?.banner;
-  if (declared === undefined) return { ok: true, banner: null };
+  // A declaration that closes the app shows no banner, so nothing is read: its removal must not hang on
+  // a file that may be missing or broken, or the app would stay open with the old banner beside it.
+  if (declared === undefined || authored.public === undefined) return { ok: true, banner: null };
   const inside = await containedPath(root, declared, "theme.banner");
   if (!inside.ok) return inside;
   const opened = await openContained(inside.full, declared, "theme.banner", BANNER_MAX_BYTES);
