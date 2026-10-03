@@ -33,7 +33,7 @@ const onChange = (event: Event): void => {
     <select
       :id="fieldId"
       :value="answer"
-      class="w-full max-w-[420px] rounded-[4px] border border-border bg-input px-2 py-1.5 font-sans text-[12px] text-fg"
+      class="w-full max-w-[480px] rounded-[4px] border border-border bg-input px-2.5 py-2 font-sans text-[14px] text-fg"
       @change="onChange"
     >
       <option value="" disabled>{{ t("blueprints.form.pickCollection") }}</option>

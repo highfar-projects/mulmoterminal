@@ -25,7 +25,7 @@ const manifest = blueprintManifestSchema.parse({
 const hearing = hearingSchema.parse({
   questions: [
     { id: "style", label: "どの規約", why: "合わせる", kind: "select", options: ["この規約", "既定"] },
-    { id: "limit", label: "上限", why: "区切る", kind: "number" },
+    { id: "limit", label: "上限", why: "区切る", kind: "number", placeholder: "例: 20" },
   ],
 });
 const step = (id: string, origin: "base" | "usecase"): ComposedStep => ({
@@ -43,7 +43,7 @@ const overlay: PackLocale = {
   manifest: { title: "Polish", description: "Polishes" },
   hearing: {
     style: { label: "Which style", why: "To follow", options: { この規約: "This style", 既定: "Defaults" } },
-    limit: { label: "Most files", why: "Keeps a run small" },
+    limit: { label: "Most files", why: "Keeps a run small", placeholder: "e.g. 20" },
   },
   steps: { survey: { title: "Choose", description: "Chooses" } },
   presets: { blog: { title: "A blog post" } },
@@ -68,7 +68,7 @@ describe("laying an overlay over a pack", () => {
       options: ["この規約", "既定"],
       optionLabels: { この規約: "This style", 既定: "Defaults" },
     });
-    expect(limit).toMatchObject({ label: "Most files", why: "Keeps a run small" });
+    expect(limit).toMatchObject({ label: "Most files", why: "Keeps a run small", placeholder: "e.g. 20" });
     expect(limit.optionLabels).toBeUndefined();
     expect(localizedPreset({ id: "blog", title: "ブログ", description: "説明", base: "docs", answers: {} }, overlay)).toMatchObject({
       title: "A blog post",
@@ -167,6 +167,17 @@ describe("overlayProblems", () => {
       'step "survey" has no title',
       'step "survey" has no description',
       'example "blog" has no title',
+    ]);
+  });
+
+  it("names an example answer on one side only", () => {
+    const limit = { label: "Most files", why: "Keeps a run small" };
+    expect(overlayProblems({ ...overlay, hearing: { ...overlay.hearing, limit } }, pack)).toEqual([
+      'question "limit" has an example answer, and its words do not',
+    ]);
+    const style = { ...overlay.hearing?.style, placeholder: "e.g. ours" };
+    expect(overlayProblems({ ...overlay, hearing: { ...overlay.hearing, style } }, pack)).toEqual([
+      'words give question "style" an example answer the pack does not have',
     ]);
   });
 

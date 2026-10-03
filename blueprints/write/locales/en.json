@@ -18,19 +18,23 @@
     },
     "topic": {
       "label": "What will it be about?",
-      "why": "This is where the brief and the outline start"
+      "why": "This is where the brief and the outline start",
+      "placeholder": "e.g. How to use the new expenses system"
     },
     "audience": {
       "label": "Who will read it, and what should they be able to do after reading it?",
-      "why": "This decides what to write and what to leave out"
+      "why": "This decides what to write and what to leave out",
+      "placeholder": "e.g. New staff. After reading, they can file an expense claim on their own"
     },
     "points": {
       "label": "Things that must be in it (one per line)",
-      "why": "These become the main points of the brief, and are checked to be in it when the writing is done"
+      "why": "These become the main points of the brief, and are checked to be in it when the writing is done",
+      "placeholder": "e.g.\nClaims are due on the 25th of each month\nAttach a photo of each receipt"
     },
     "sources": {
       "label": "Sources to refer to (one file, folder or URL per line; leave empty if none)",
-      "why": "Facts are taken from these, and sentences taken from them are checked, as quotes, to be in the original"
+      "why": "Facts are taken from these, and sentences taken from them are checked, as quotes, to be in the original",
+      "placeholder": "e.g.\ndocs/expenses-policy.md\nhttps://example.com/manual"
     },
     "length": {
       "label": "Length",

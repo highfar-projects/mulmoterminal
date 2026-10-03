@@ -4,6 +4,7 @@
       "id": "documents",
       "label": "用語を集める文書（このフォルダの中のファイルを 1 行に 1 つ）",
       "why": "定義された語と書き方をこの文書から集め、原文の引用で裏付ける",
+      "placeholder": "例:\ndocs/仕様書.md\ndocs/用語メモ.md",
       "kind": "text",
       "lines": true,
       "pick": "files"

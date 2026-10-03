@@ -4,18 +4,22 @@
       "id": "appName",
       "label": "アプリの名前（仮でよい）",
       "why": "画面と説明書に出す",
-      "kind": "text"
+      "placeholder": "例: レシピ帳",
+      "kind": "text",
+      "short": true
     },
     {
       "id": "idea",
       "label": "何を作りたいですか（一言で）",
       "why": "作るものの芯になる",
+      "placeholder": "例: 家族で使うレシピの共有アプリ",
       "kind": "text"
     },
     {
       "id": "problem",
       "label": "どんな困りごとを解決しますか",
       "why": "必須の機能を選ぶ基準になる",
+      "placeholder": "例: レシピがメモ帳やブックマークに散らばっていて、作りたいときに見つからない",
       "kind": "text"
     },
     {
@@ -29,24 +33,28 @@
       "id": "things",
       "label": "扱うものは何ですか（例: 本、予約、在庫、レシピ）",
       "why": "データの表になる",
+      "placeholder": "例: レシピ、材料、買い物リスト",
       "kind": "text"
     },
     {
       "id": "actions",
       "label": "使う人は何をしますか（例: 登録する、探す、予約する、集計を見る）",
       "why": "API と画面になる",
+      "placeholder": "例: レシピを登録する、材料で探す、買い物リストを作る",
       "kind": "text"
     },
     {
       "id": "mustHaves",
       "label": "これだけは最初から必要、という機能",
       "why": "最後に一つずつ動くことを試験で確かめる",
+      "placeholder": "例: レシピの登録と編集、題名と材料での検索",
       "kind": "text"
     },
     {
       "id": "later",
       "label": "あとでよい機能",
       "why": "最初の版から外しておく",
+      "placeholder": "例: 写真の自動補正、献立の提案",
       "kind": "text",
       "required": false
     },
@@ -61,6 +69,7 @@
       "id": "roles",
       "label": "役割は分けますか（例: 管理者と一般）",
       "why": "だれが何をできるかの規則になる",
+      "placeholder": "例: 管理者はすべてのレシピを消せる。家族は自分のレシピだけ直せる",
       "kind": "text",
       "showIf": {
         "id": "signIn",
@@ -78,6 +87,7 @@
       "id": "references",
       "label": "似ているサービスやイメージ（あれば）",
       "why": "画面の作りの参考にする",
+      "placeholder": "例: クックパッドのような一覧画面。写真が大きく見えるとよい",
       "kind": "text",
       "required": false
     },

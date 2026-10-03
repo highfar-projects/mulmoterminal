@@ -4,6 +4,7 @@
       "id": "sources",
       "label": "手本にしたい文章（ファイル・フォルダ・URL を、1 行に 1 つ）",
       "why": "規約はここから測る。手本に無いことは規約にしない",
+      "placeholder": "例:\ndocs/blog/\nhttps://example.com/style-guide",
       "kind": "text",
       "lines": true,
       "pick": "files"
@@ -32,6 +33,7 @@
       "id": "audience",
       "label": "誰が読み、何のための文章ですか",
       "why": "手引きの前書きになり、書くときの判断の基準になる",
+      "placeholder": "例: 社外のエンジニア向けの技術ブログ。製品を試してもらうための記事",
       "kind": "text"
     },
     {

@@ -4,6 +4,7 @@
       "id": "documents",
       "label": "質問する相手の文書（このフォルダの中のファイルを 1 行に 1 つ）",
       "why": "答えはこの文書だけから出し、どこに書いてあるかを示す",
+      "placeholder": "例:\ndocs/就業規則.md\ndocs/経費精算の手引き.md",
       "kind": "text",
       "lines": true,
       "pick": "files"
@@ -12,6 +13,7 @@
       "id": "questions",
       "label": "質問（1 行に 1 つ）",
       "why": "質問ごとに一つ答える",
+      "placeholder": "例:\n出張の日当はいくらですか\n経費の申請はいつまでに出しますか",
       "kind": "text",
       "lines": true
     },

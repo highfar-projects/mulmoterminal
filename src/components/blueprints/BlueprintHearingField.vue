@@ -12,6 +12,8 @@ const props = defineProps<{ question: HearingQuestion; answer: HearingAnswer | u
 const emit = defineEmits<{ update: [answer: HearingAnswer | undefined] }>();
 const { t } = useI18n();
 
+const FIELD_CLASS = "w-full rounded-[4px] border border-border bg-input px-2.5 py-2 font-sans text-[14px] text-fg placeholder:text-dim";
+
 const fieldId = computed(() => `blueprint-q-${props.question.id}`);
 const textValue = computed(() => (typeof props.answer === "string" || typeof props.answer === "number" ? String(props.answer) : ""));
 const isChosen = (choice: string): boolean => Array.isArray(props.answer) && props.answer.includes(choice);
@@ -24,9 +26,9 @@ const onText = (event: Event): void => {
 
 <template>
   <div class="flex flex-col gap-1" data-testid="blueprint-question">
-    <label :for="fieldId" class="font-sans text-[13px] text-fg">
+    <label :for="fieldId" class="font-sans text-[14px] text-fg">
       {{ question.label }}
-      <span v-if="!question.required" class="text-[11px] text-dim">({{ t("blueprints.form.optional") }})</span>
+      <span v-if="!question.required" class="text-[12px] text-dim">({{ t("blueprints.form.optional") }})</span>
     </label>
 
     <div v-if="question.kind === 'boolean'" :id="fieldId" class="flex gap-1.5" role="radiogroup">
@@ -36,7 +38,7 @@ const onText = (event: Event): void => {
         type="button"
         role="radio"
         :aria-checked="answer === choice"
-        class="cursor-pointer rounded-[4px] border px-3 py-1 font-sans text-[12px]"
+        class="cursor-pointer rounded-[4px] border px-3 py-1.5 font-sans text-[13px]"
         :class="answer === choice ? 'border-accent bg-accent-bg text-fg' : 'border-border bg-base text-secondary hover:bg-hover'"
         @click="emit('update', choice)"
       >
@@ -44,13 +46,7 @@ const onText = (event: Event): void => {
       </button>
     </div>
 
-    <select
-      v-else-if="question.kind === 'select'"
-      :id="fieldId"
-      :value="textValue"
-      class="w-full max-w-[420px] rounded-[4px] border border-border bg-input px-2 py-1.5 font-sans text-[12px] text-fg"
-      @change="onText"
-    >
+    <select v-else-if="question.kind === 'select'" :id="fieldId" :value="textValue" :class="[FIELD_CLASS, 'max-w-[480px]']" @change="onText">
       <option value="" disabled>{{ t("blueprints.form.choose") }}</option>
       <option v-for="choice in question.options ?? []" :key="choice" :value="choice">{{ question.optionLabels?.[choice] ?? choice }}</option>
     </select>
@@ -61,7 +57,7 @@ const onText = (event: Event): void => {
         :key="choice"
         type="button"
         :aria-pressed="isChosen(choice)"
-        class="cursor-pointer rounded-[4px] border px-3 py-1 font-sans text-[12px]"
+        class="cursor-pointer rounded-[4px] border px-3 py-1.5 font-sans text-[13px]"
         :class="isChosen(choice) ? 'border-accent bg-accent-bg text-fg' : 'border-border bg-base text-secondary hover:bg-hover'"
         @click="emit('update', toggleChoice(answer, choice))"
       >
@@ -76,13 +72,14 @@ const onText = (event: Event): void => {
       @update="(picked) => emit('update', picked)"
     />
 
-    <!-- A list answer needs a multi-line field: a single-line input cannot take a newline, and drops the ones it is given. -->
+    <!-- A list or a sentence needs a multi-line field: a single-line input cannot take a newline, and drops the ones it is given. -->
     <textarea
-      v-else-if="question.lines"
+      v-else-if="question.kind === 'text' && !question.short"
       :id="fieldId"
       :value="textValue"
-      rows="4"
-      class="w-full max-w-[560px] rounded-[4px] border border-border bg-input px-2 py-1.5 font-sans text-[12px] text-fg"
+      :placeholder="question.placeholder"
+      :rows="question.lines ? 4 : 3"
+      :class="[FIELD_CLASS, 'max-w-[720px] resize-y leading-relaxed']"
       @input="onText"
     ></textarea>
 
@@ -91,7 +88,8 @@ const onText = (event: Event): void => {
       :id="fieldId"
       :type="question.kind === 'number' ? 'number' : 'text'"
       :value="textValue"
-      class="w-full max-w-[560px] rounded-[4px] border border-border bg-input px-2 py-1.5 font-sans text-[12px] text-fg"
+      :placeholder="question.placeholder"
+      :class="[FIELD_CLASS, 'max-w-[720px]']"
       @input="onText"
     />
 
@@ -102,6 +100,6 @@ const onText = (event: Event): void => {
       :answer="textValue"
       @update="(picked) => emit('update', picked)"
     />
-    <p class="m-0 font-sans text-[11px] text-dim">{{ question.why }}</p>
+    <p class="m-0 font-sans text-[12px] text-dim">{{ question.why }}</p>
   </div>
 </template>

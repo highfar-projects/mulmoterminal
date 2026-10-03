@@ -7,12 +7,25 @@
       "kind": "select",
       "options": ["記事・ブログ・コラム", "論文・レポート", "規程・契約書・約款", "マニュアル・手順書", "本（章に分けて書く）", "その他"]
     },
-    { "id": "topic", "label": "何について書きますか", "why": "要旨と構成の出発点になる", "kind": "text" },
-    { "id": "audience", "label": "誰が読み、読んだあと何ができるようになればよいですか", "why": "何を書き、何を省くかの基準になる", "kind": "text" },
+    {
+      "id": "topic",
+      "label": "何について書きますか",
+      "why": "要旨と構成の出発点になる",
+      "placeholder": "例: 新しい経費精算システムの使い方",
+      "kind": "text"
+    },
+    {
+      "id": "audience",
+      "label": "誰が読み、読んだあと何ができるようになればよいですか",
+      "why": "何を書き、何を省くかの基準になる",
+      "placeholder": "例: 新しく入った社員。読んだあと一人で経費を申請できるようになる",
+      "kind": "text"
+    },
     {
       "id": "points",
       "label": "必ず入れたいこと（1 行に 1 つ）",
       "why": "要旨の要点になり、書き終えたときに入っているかを確かめる",
+      "placeholder": "例:\n申請の締切は毎月 25 日\n領収書は写真で添付する",
       "kind": "text",
       "lines": true
     },
@@ -20,6 +33,7 @@
       "id": "sources",
       "label": "参照する資料（ファイル・フォルダ・URL を 1 行に 1 つ。無ければ空で）",
       "why": "事実はここから取り、取った文は引用として原文にあることを確かめる",
+      "placeholder": "例:\ndocs/経費規程.md\nhttps://example.com/manual",
       "kind": "text",
       "lines": true,
       "pick": "files",
@@ -38,7 +52,9 @@
       "why": "このフォルダに「規約をつくる」で作った STYLE.md と chaff.yaml があれば、それに沿って書く",
       "kind": "select",
       "options": ["このフォルダの規約（STYLE.md と chaff.yaml）", "chaff の既定のまま"],
-      "needsPath": { "このフォルダの規約（STYLE.md と chaff.yaml）": ["STYLE.md", "chaff.yaml"] }
+      "needsPath": {
+        "このフォルダの規約（STYLE.md と chaff.yaml）": ["STYLE.md", "chaff.yaml"]
+      }
     }
   ]
 }

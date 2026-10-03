@@ -6,7 +6,8 @@
   "hearing": {
     "documents": {
       "label": "The documents to collect terms from (one file per line, inside this folder)",
-      "why": "Defined terms and spellings are collected from these documents and backed by quotes from the original"
+      "why": "Defined terms and spellings are collected from these documents and backed by quotes from the original",
+      "placeholder": "e.g.\ndocs/spec.md\ndocs/terms.md"
     },
     "write": {
       "label": "Put how to align the spellings it found into chaff.yaml?",

@@ -14,11 +14,13 @@
     },
     "appName": {
       "label": "The app's name (empty: the collection's name)",
-      "why": "Shown on the screens and in the instructions"
+      "why": "Shown on the screens and in the instructions",
+      "placeholder": "e.g. Book Notes"
     },
     "whyApp": {
       "label": "Why make it an app? (What does the collection not do?)",
-      "why": "This is how the must-haves are chosen. If you only want to copy what the collection has, say so"
+      "why": "This is how the must-haves are chosen. If you only want to copy what the collection has, say so",
+      "placeholder": "e.g. My family should be able to add books from their phones. As a collection, it only works on this computer"
     },
     "audience": {
       "label": "Who will use it?",
@@ -32,11 +34,13 @@
     },
     "mustHaves": {
       "label": "Features it must have from the start (empty: everything the collection can do)",
-      "why": "At the end, each one is proved to work by a test"
+      "why": "At the end, each one is proved to work by a test",
+      "placeholder": "e.g. add a book, search by title, mark whether it is lent out"
     },
     "later": {
       "label": "Features that can wait",
-      "why": "They are left out of the first version"
+      "why": "They are left out of the first version",
+      "placeholder": "e.g. reading charts, adding a book by its barcode"
     },
     "signIn": {
       "label": "How should people sign in?",
@@ -49,7 +53,8 @@
     },
     "roles": {
       "label": "Should there be roles? (for example, admin and regular user)",
-      "why": "These become the rules for who can do what"
+      "why": "These become the rules for who can do what",
+      "placeholder": "e.g. An admin can edit every book; family members can edit only the books they added"
     },
     "dataSensitivity": {
       "label": "The most sensitive information it handles",
