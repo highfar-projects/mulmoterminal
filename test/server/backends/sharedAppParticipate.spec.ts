@@ -512,6 +512,20 @@ describe("useSharedApp — reading somebody else's app", () => {
     expect(said).not.toContain("13:00");
   });
 
+  it("finds the reader's own rows by the pseudonym in a uidForm field", async () => {
+    publish({ bothIdentities: true });
+    const config = bag.docs.store.get(`apps/${AID}/config`)?.get("public") ?? {};
+    const submit = submitFor({ mirror: true, idFromUid: false, idFromSlug: false, bothIdentities: true, dottedEmailField: false });
+    bag.docs.put(`apps/${AID}/config`, "public", { ...config, submit: { bookings: { ...submit, emailField: undefined, uidForm: "pseudonym" } } });
+    bag.denyQuery.add(bookingsPath);
+    const pseudonym = createHash("sha256").update(`${ME.uid}:${AID}`).digest("hex");
+    bag.docs.put(bookingsPath, "09:00", { slot: "09:00", uid: pseudonym, status: "booked" });
+    bag.docs.put(bookingsPath, "13:00", { slot: "13:00", uid: ME.uid, status: "booked" });
+    const said = await run({ action: "records", slug: "sakura", cid: "bookings" });
+    expect(said).toContain("09:00");
+    expect(said).not.toContain("13:00");
+  });
+
   it("does not report a broken own-row lookup as an empty own-row answer", async () => {
     // `idFrom: "auth.uid"`: the reader's row is NAMED, so the fallback is a get rather than a
     // query. An empty answer here means "you have not got one", and a blip must not borrow that

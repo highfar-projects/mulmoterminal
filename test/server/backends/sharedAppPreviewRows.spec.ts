@@ -113,10 +113,26 @@ describe("the own-row selector a pseudonym app is read by", () => {
       enabled: true,
       read: [],
       publishedAt: 0,
-      submit: { votes: { idFrom: "pseudonym" }, picks: { idFrom: "pseudonym+field", idField: "pollId" } },
+      submit: {
+        votes: { idFrom: "pseudonym" },
+        picks: { idFrom: "pseudonym+field", idField: "pollId" },
+        claims: { idFrom: "field", idField: "taskId", uidField: "holder", uidForm: "pseudonym" },
+      },
     };
     const selectors = ownSelectors(config);
     expect(selectors.votes).toEqual({ cid: "votes", scope: "own", ownDocId: "pseudonym" });
     expect(selectors.picks).toEqual({ cid: "picks", scope: "own", ownIdField: "pollId", ownIdFrom: "pseudonym" });
+    expect(selectors.claims).toEqual({ cid: "claims", scope: "own", uidField: "holder", uidForm: "pseudonym" });
+  });
+});
+
+describe("rows whose uidField holds the pseudonym (uidForm)", () => {
+  const reader = { uid: "u1", email: "me@example.jp", pseudonym: "p-hash" };
+  it("owns the row whose field holds this reader's pseudonym, not their uid", () => {
+    const want = { cid: "claims", scope: "own" as const, uidField: "holder", uidForm: "pseudonym" as const };
+    expect(ownsRow(want, { id: "t1", holder: "p-hash" }, reader)).toBe(true);
+    expect(ownsRow(want, { id: "t2", holder: "u1" }, reader)).toBe(false);
+    expect(ownsRow(want, { id: "t1", holder: "p-hash" }, { uid: "u1", email: "me@example.jp" })).toBe(false);
+    expect(ownsRow({ cid: "claims", scope: "own", uidField: "holder" }, { id: "t2", holder: "u1" }, reader)).toBe(true);
   });
 });

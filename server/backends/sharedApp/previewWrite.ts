@@ -44,7 +44,7 @@ import type { PreviewWrittenRecord } from "../../../common/sharedAppPreview.js";
 import { currentFirestore } from "../remoteHost/session.js";
 import { commitPlannedWrite, itemsPath, TAKEN } from "./itemWrites.js";
 import { submitSpecOf } from "./submitSpec.js";
-import { previewSharedApp } from "./preview.js";
+import { readerFor, previewSharedApp } from "./preview.js";
 import { sharedAppContext, type SharedAppHandle } from "./context.js";
 
 export interface PreviewWriteSuccess {
@@ -176,7 +176,7 @@ export async function writePreviewSubmission(root: string, cid: string, values: 
   // shared decision holds no Firestore, so the sentinel comes from the SDK this host resolved —
   // and it is handed over whether or not the app declares a `stampField`, because that is the
   // declaration's answer rather than this module's.
-  const record = recordOf(fields, spec.drawn, spec.submit, values, { uid: handle.uid, email: handle.email }, serverTimestamp);
+  const record = recordOf(fields, spec.drawn, spec.submit, values, await readerFor(handle, preview.aid), serverTimestamp);
 
   // ASKED BEFORE THE ID IS BUILT, because both ways an absent id field went wrong were silent.
   // `idFrom: "field"` produced `""`, which is not a document id and fails at the SDK with a message

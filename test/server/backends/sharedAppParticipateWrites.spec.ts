@@ -119,6 +119,20 @@ describe("useSharedApp — writing to somebody else's app", () => {
     expect(bag.batched.join("\n")).not.toContain(`${bookingsPath}/${ME.uid}`);
   });
 
+  it("writes a uidForm app's uidField as the app's pseudonym, never the uid", async () => {
+    // `uidForm: "pseudonym"` (#325): the rules compare uidField with sha256(uid + ":" + aid).
+    publish({ bothIdentities: true });
+    const config = bag.docs.store.get(`apps/${AID}/config`)?.get("public") ?? {};
+    const submit = submitFor({ mirror: true, idFromUid: false, idFromSlug: false, bothIdentities: true, dottedEmailField: false });
+    bag.docs.put(`apps/${AID}/config`, "public", { ...config, submit: { bookings: { ...submit, uidForm: "pseudonym" } } });
+    bag.docs.put(slotsPath, "10:00", { state: "open" });
+    await run({ action: "submit", slug: "sakura", cid: "bookings", values: { slot: "10:00" } });
+    const pseudonym = createHash("sha256").update(`${ME.uid}:${AID}`).digest("hex");
+    const written = bag.batched.find((op) => op.startsWith(`set ${bookingsPath}/`)) ?? "";
+    expect(written).toContain(`"uid":"${pseudonym}"`);
+    expect(written).not.toContain(`"uid":"${ME.uid}"`);
+  });
+
   it("refuses a slot somebody already holds, inside the transaction", async () => {
     publish();
     bag.docs.put(slotsPath, "10:00", { state: "taken" });

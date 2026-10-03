@@ -161,7 +161,14 @@ export async function submitToApp(app: JoinedApp, cid: string, values: Record<st
   // `serverTimestamp` is what this host offers where the rules require GOOGLE's clock, and it is
   // handed over whether or not the app declares a `stampField` — that is the declaration's answer
   // rather than this module's.
-  const record = recordOf(plan.fields, plan.drawn, plan.submit, values, { uid: app.handle.uid, email: app.handle.email }, serverTimestamp);
+  const record = recordOf(
+    plan.fields,
+    plan.drawn,
+    plan.submit,
+    values,
+    { uid: app.handle.uid, email: app.handle.email, ...(app.pseudonym === undefined ? {} : { pseudonym: app.pseudonym }) },
+    serverTimestamp,
+  );
 
   // ASKED BEFORE THE ID IS BUILT, because both ways an absent id field goes wrong are silent:
   // `idFrom: "field"` produces `""`, and `auth.uid+field` produces `"<uid>_"` — a valid id, one per

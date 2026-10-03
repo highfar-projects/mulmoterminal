@@ -91,6 +91,8 @@ export interface RequestedCollection {
   scope: "all" | "own";
   emailField?: string | undefined;
   uidField?: string | undefined;
+  /** `uidField` holds the reader's per-app pseudonym rather than their uid. */
+  uidForm?: "pseudonym" | undefined;
   ownDocId?: "auth.uid" | "pseudonym" | undefined;
   /** Which identity a composite id (`ownIdField`) starts with: the uid (`auth.uid+field`) or the
    *  app's pseudonym of it (`pseudonym+field`). Absent means the uid. */
@@ -186,7 +188,8 @@ export function ownsRow(want: RequestedCollection, row: Record<string, unknown>,
     const owner = want.ownIdFrom === "pseudonym" ? who.pseudonym : who.uid;
     return owner !== undefined && typeof row[want.ownIdField] === "string" && row.id === `${owner}_${String(row[want.ownIdField])}`;
   }
-  if (want.uidField !== undefined) return row[want.uidField] === who.uid;
+  if (want.uidField !== undefined)
+    return want.uidForm === "pseudonym" ? who.pseudonym !== undefined && row[want.uidField] === who.pseudonym : row[want.uidField] === who.uid;
   const field = want.emailField;
   if (field === undefined) return false;
   return row[field] === who.email;
@@ -292,7 +295,7 @@ async function readDatasets(
     for (const want of page.collections) {
       // Keyed on the SCOPE too: the same collection read `all` for the front desk and `own` for the
       // participant is two different answers, and sharing one would hand a page rows it may not see.
-      const key = `${want.cid}:${want.scope}:${want.emailField ?? ""}:${want.uidField ?? ""}:${want.ownDocId ?? ""}:${want.ownIdField ?? ""}:${want.ownIdFrom ?? ""}:${want.limit?.rows ?? ""}:${want.limit?.field ?? ""}:${want.publishedField ?? ""}`;
+      const key = `${want.cid}:${want.scope}:${want.emailField ?? ""}:${want.uidField ?? ""}:${want.uidForm ?? ""}:${want.ownDocId ?? ""}:${want.ownIdField ?? ""}:${want.ownIdFrom ?? ""}:${want.limit?.rows ?? ""}:${want.limit?.field ?? ""}:${want.publishedField ?? ""}`;
       if (!cache.has(key)) {
         cache.set(key, await readCollection(handle, aid, want, reader).catch(() => null));
       }
@@ -394,6 +397,7 @@ const asRequested = (value: unknown): RequestedCollection[] => {
       scope,
       ...(typeof value.emailField === "string" ? { emailField: value.emailField } : {}),
       ...(typeof value.uidField === "string" ? { uidField: value.uidField } : {}),
+      ...(value.uidForm === "pseudonym" ? { uidForm: "pseudonym" as const } : {}),
       ...(value.ownDocId === "auth.uid" || value.ownDocId === "pseudonym" ? { ownDocId: value.ownDocId } : {}),
       ...askedCap(value.limit, scope),
     },
@@ -472,6 +476,7 @@ const ownRequests = (config: PublishedConfigDoc): RequestedCollection[] =>
       ...(composite === undefined ? {} : { ownIdField: composite }),
       ...(composite !== undefined && spec.idFrom === "pseudonym+field" ? { ownIdFrom: "pseudonym" as const } : {}),
       ...(text("uidField") === undefined ? {} : { uidField: text("uidField") }),
+      ...(text("uidForm") === "pseudonym" ? { uidForm: "pseudonym" as const } : {}),
       ...(text("emailField") === undefined ? {} : { emailField: text("emailField") }),
     };
   });
