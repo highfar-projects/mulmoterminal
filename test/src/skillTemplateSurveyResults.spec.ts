@@ -141,6 +141,29 @@ describe("survey-results.md — views/survey.html", () => {
     expect(page.said()).toContain("1 問");
   });
 
+  it("sends nothing while there is no question to answer", async () => {
+    const page = load("views/survey.html");
+    page.tell({ questions: [], tallies: [] }, notAnswered);
+    click("#send");
+    await settle();
+    expect(page.calls).toEqual([]);
+    expect(page.said()).toContain("設問がまだありません");
+  });
+
+  it("starts one write for a double press, not two", async () => {
+    const page = load("views/survey.html");
+    page.tell({ questions: QUESTIONS, tallies: [] }, notAnswered);
+    pick("q1", "良い");
+    pick("q2", "はい");
+    click("#send");
+    click("#send");
+    await settle();
+    click("#send-response");
+    click("#send-response");
+    await settle();
+    expect(page.calls.map((call) => call.cid)).toEqual(["tallies", "responses"]);
+  });
+
   it("shows no result before this visitor answered", () => {
     load("views/survey.html").tell({ questions: QUESTIONS, tallies: [tallyOf({ q1: "良い", q2: "はい" })] }, notAnswered);
     expect(isHidden("result")).toBe(true);

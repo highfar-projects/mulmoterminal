@@ -359,6 +359,19 @@ MulmoTerminal のプレビューはそれを書きません。分けておくと
     if (mine.responded === null) askHost("responses", "responded");
   });
 
+  // 送信中にもう一度押されたら何もしない。2 本目は 1 本目が通ったあとに拒否され、
+  // 「受け付けました」をエラーで上書きします。
+  let sending = false;
+  const submitOnce = async (cid, values) => {
+    if (sending) return null;
+    sending = true;
+    try {
+      return await view.submit(cid, values);
+    } finally {
+      sending = false;
+    }
+  };
+
   const report = (result, done) => {
     if (result.ok) {
       say.textContent = done;
@@ -375,6 +388,11 @@ MulmoTerminal のプレビューはそれを書きません。分けておくと
 
   document.getElementById("send").addEventListener("click", async () => {
     if (mine.tallied === true) return;
+    // 設問が 1 つも無いまま送ると "{}" が通り、その人の 1 件はあとで設問を足しても埋まりません。
+    if (questions.length === 0) {
+      say.textContent = "設問がまだありません。";
+      return;
+    }
     const missing = questions.filter((question) => answerOf(question) === "");
     if (missing.length > 0) {
       say.textContent = `${missing.length} 問、まだ選んでいません。`;
@@ -383,7 +401,8 @@ MulmoTerminal のプレビューはそれを書きません。分けておくと
     // 送るのは選んだ答えだけ。tallies は全員に見えるので、名前もご意見もここには入れません。
     // status は親が入れるので送りません。
     const answers = JSON.stringify(Object.fromEntries(questions.map((question) => [question.id, answerOf(question)])));
-    if (report(await view.submit("tallies", { answers }), "答えを受け付けました。")) {
+    const result = await submitOnce("tallies", { answers });
+    if (result && report(result, "答えを受け付けました。")) {
       mine.tallied = true;
       tallies = [...tallies, { answers }];
       draw();
@@ -394,7 +413,8 @@ MulmoTerminal のプレビューはそれを書きません。分けておくと
     // email と answeredAt は親が入れるので送りません。失敗しても答えは数に入っているので、
     // ここだけをもう一度押せば済みます。
     const values = { name: document.getElementById("who").value.trim(), comment: document.getElementById("comment").value.trim() };
-    if (report(await view.submit("responses", values), "ありがとうございました。")) {
+    const result = await submitOnce("responses", values);
+    if (result && report(result, "ありがとうございました。")) {
       mine.responded = true;
       draw();
     }
