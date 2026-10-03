@@ -48,8 +48,10 @@ describe("isTypedInput", () => {
     }
   });
 
-  it("rejects a cursor position report", () => {
-    expect(isTypedInput("\x1b[12;40R")).toBe(false);
+  it("rejects the other replies xterm.js writes on the same channel", () => {
+    for (const data of ["\x1b[12;40R", "\x1b[?12;40R", "\x1b[0n", "\x1b[?2026;2$y", "\x1b[8;24;80t", "\x1b]4;1;rgb:cdcd/3131/3131\x1b\\", "\x1bP1$r0m\x1b\\"]) {
+      expect(isTypedInput(data)).toBe(false);
+    }
   });
 
   // The reply scanner holds an unfinished tail for a socket that may split it; xterm.js never splits
