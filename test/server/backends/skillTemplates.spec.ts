@@ -47,6 +47,7 @@ const EXPECTED_TEMPLATES = [
   "question-box.md",
   "salon.md",
   "schedule-poll.md",
+  "survey-results.md",
   "survey.md",
   "tally.md",
 ];
@@ -156,6 +157,25 @@ describe("the shared-app templates", () => {
 
   it("tally.md deploys as written", () => {
     expect(problemsFor("tally.md", "owner@example.jp", [])).toEqual([]);
+  });
+
+  it("survey-results.md deploys as written", () => {
+    expect(problemsFor("survey-results.md", "owner@example.jp", [])).toEqual([]);
+  });
+
+  it("survey-results.md keeps everything but the chosen answers out of the world-readable collection", () => {
+    // `tallies` is in `public.read`, so every field it carries is published to anyone. Its whole
+    // promise is that the address, the name and the free text live in `responses`, which is not.
+    const manifest = blocksOf("survey-results.md").get("app.json") as {
+      public?: { read?: string[]; submit?: Record<string, { createFields?: string[]; emailField?: string }> };
+    };
+    const read = manifest.public?.read ?? [];
+    const tallies = manifest.public?.submit?.tallies;
+    expect(read).toContain("tallies");
+    expect(read).not.toContain("responses");
+    expect([...(tallies?.createFields ?? [])].sort()).toEqual(["answers", "status"]);
+    expect(tallies?.emailField).toBeUndefined();
+    expect(manifest.public?.submit?.responses?.emailField).toBe("email");
   });
 
   it("shows no page the sandbox would silently break", () => {
@@ -385,6 +405,9 @@ describe("the shared-app templates", () => {
     );
     expect([...blocksOf("question-box.md").keys()]).toEqual(expect.arrayContaining([".claude/skills/questions/schema.json"]));
     expect([...blocksOf("tally.md").keys()]).toEqual(expect.arrayContaining([".claude/skills/votes/schema.json", ".claude/skills/notes/schema.json"]));
+    expect([...blocksOf("survey-results.md").keys()]).toEqual(
+      expect.arrayContaining([".claude/skills/questions/schema.json", ".claude/skills/tallies/schema.json", ".claude/skills/responses/schema.json"]),
+    );
     expect([...blocksOf("ai-council.md").keys()]).toEqual(
       expect.arrayContaining([".claude/skills/topics/schema.json", ".claude/skills/speakers/schema.json", ".claude/skills/messages/schema.json"]),
     );
