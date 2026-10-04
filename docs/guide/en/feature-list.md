@@ -4,14 +4,14 @@ nav_title: Feature list
 layout: default
 parent: English
 nav_order: 6.5
-as_of: 8.7.0
-description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 8.7.0)."
+as_of: 8.8.0
+description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 8.8.0)."
 ---
 
 # Feature list
 {: .no_toc }
 
-Every capability MulmoTerminal has as of 8.7.0, one line each, grouped by area. The `(vX.Y.Z)` at the end of a line is the release it first arrived in; significant later extensions are noted inside the line by version. Fixes and internal changes are not listed — see the [ChangeLog](https://github.com/receptron/mulmoterminal/blob/main/docs/ChangeLog.md) for those, and the [Feature reference](features.html) and the page linked from each section for how to use them.
+Every capability MulmoTerminal has as of 8.8.0, one line each, grouped by area. The `(vX.Y.Z)` at the end of a line is the release it first arrived in; significant later extensions are noted inside the line by version. Fixes and internal changes are not listed — see the [ChangeLog](https://github.com/receptron/mulmoterminal/blob/main/docs/ChangeLog.md) for those, and the [Feature reference](features.html) and the page linked from each section for how to use them.
 
 - TOC
 {:toc}
@@ -253,6 +253,9 @@ More: [Configuration](config.html)
 
 More: [From a collection](from-collection.html)
 
+- A shared app can let a visitor make their own empty copy from its public page (forkable); the question box, tally and survey-results templates ship with it (v8.8.0)
+- A shared app can show a card when its link is shared on a social network: one for the app, or one per published row (shareCard) (v8.8.0)
+- A shared app's public page can carry its own bar and background colours, icon, ticker and banner picture (theme) (v8.8.0)
 - Shared-app template `survey-results`: respondents see each question's totals after answering; addresses, names and comments stay with the owner (v8.7.0)
 - The shared-app skill asks whether visitors see what was sent: nobody, only the records the owner picks, only the totals, or everything (v8.6.0)
 - Shared-app templates `question-box` (anyone asks, the owner publishes the ones they pick) and `tally` (visitors see only the totals) (v8.6.0)

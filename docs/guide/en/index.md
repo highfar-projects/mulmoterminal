@@ -8,8 +8,8 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **8.7.0 is out.** Surveys that show respondents the results, ShapeScript models exported as printable STL,
-> and a set-aside cell that no longer wakes on a reconnect. [Setup guide](v8.7.0.html)
+> **8.8.0 is out.** Shared apps a visitor can copy for themselves, cards when their link is shared, page colours and
+> a banner, and a full-width Conversation pane that stays inside the window. [Setup guide](v8.8.0.html)
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching

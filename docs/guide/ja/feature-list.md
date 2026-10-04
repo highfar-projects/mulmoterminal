@@ -4,14 +4,14 @@ nav_title: 全機能リスト
 layout: default
 parent: 日本語
 nav_order: 6.5
-as_of: 8.7.0
-description: MulmoTerminal のいまある機能を、入った版つきで領域ごとに一行ずつ並べた一覧（8.7.0 時点）。
+as_of: 8.8.0
+description: MulmoTerminal のいまある機能を、入った版つきで領域ごとに一行ずつ並べた一覧（8.8.0 時点）。
 ---
 
 # 全機能リスト
 {: .no_toc }
 
-8.7.0 時点で MulmoTerminal にある機能を、領域ごとに一行ずつ並べた一覧です。行末の `(vX.Y.Z)` はその機能が最初に入った版で、その後の大きな拡張は行の中に版番号で添えています。不具合の修正や内部の変更は載せていません。それらは [ChangeLog](https://github.com/receptron/mulmoterminal/blob/main/docs/ChangeLog.md) を、詳しい使い方は[機能リファレンス](features.html)と各節の「詳しく」から辿れるページを見てください。
+8.8.0 時点で MulmoTerminal にある機能を、領域ごとに一行ずつ並べた一覧です。行末の `(vX.Y.Z)` はその機能が最初に入った版で、その後の大きな拡張は行の中に版番号で添えています。不具合の修正や内部の変更は載せていません。それらは [ChangeLog](https://github.com/receptron/mulmoterminal/blob/main/docs/ChangeLog.md) を、詳しい使い方は[機能リファレンス](features.html)と各節の「詳しく」から辿れるページを見てください。
 
 - TOC
 {:toc}
@@ -253,6 +253,9 @@ description: MulmoTerminal のいまある機能を、入った版つきで領�
 
 詳しく: [コレクションから作る](from-collection.html)
 
+- 共有アプリで、公開ページを見た人が空のコピーを自分の分として作れる（forkable）。質問箱・集計・survey-results のひな形は最初から有効 (v8.8.0)
+- 共有アプリのリンクを SNS に貼ると、アプリのカード、または公開した行ごとのカードが出る（shareCard） (v8.8.0)
+- 共有アプリの公開ページに、帯と背景の色・アイコン・流れる一行・バナー画像を付けられる（theme） (v8.8.0)
 - 共有アプリのひな形に `survey-results` が加わる（答えた人に設問ごとの集計を見せ、メール・名前・ご意見はオーナーだけが読む） (v8.7.0)
 - 共有アプリのスキルが、送られたものを訪問者に見せるかを聞く（見せない・選んだものだけ・集計だけ・全部） (v8.6.0)
 - 共有アプリのひな形に `question-box`（誰でも質問でき、オーナーが選んだものだけ公開）と `tally`（訪問者には集計だけを見せる）が加わる (v8.6.0)

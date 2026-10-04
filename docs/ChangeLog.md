@@ -8,6 +8,37 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@8.8.0 — 2026-10-04
+
+> **Setup guide:** [8.8.0 — Apps others can copy, share cards, page themes, and a full-width Conversation that fits](https://receptron.github.io/mulmoterminal/guide/en/v8.8.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v8.8.0.html))
+
+### Shared apps: a visitor can make their own copy (receptron/mulmoserver#332)
+
+- [#2889](https://github.com/receptron/mulmoterminal/pull/2889) — publishing an app that declares `"forkable": true` writes the copy MulmoServer's public page offers as "自分のを作る" / "Make your own": `config/fork:view:{id}` for every page (public, member and participant), then the source `config/fork`. An app that is not forkable has every fork document removed, source first, and a withdrawn view takes its copy with it. Publish refuses a source over the one-document limit, and a source or page that names a roster address or the owner uid. The skill asks whether a visitor may make their own copy, and says that declaring it makes every page, the staff pages included, readable by anyone.
+- [#2890](https://github.com/receptron/mulmoterminal/pull/2890) — the question box, tally and survey-results templates ship with `"forkable": true`, each with a paragraph on what it costs and how to turn it off. The template test pins the forkable set to exactly these three.
+
+### Shared apps: share cards for social networks (receptron/mulmoserver#336)
+
+- [#2893](https://github.com/receptron/mulmoterminal/pull/2893) — an app can declare `shareCard` (`@receptron/sharedapp` 0.44.0). The question box declares `{ "collection": "questions", "textField": "text" }`: its page moves to `/s/...`, each published question becomes a card with no sender's name, nothing is ever posted for the user, and a card already shown on a social network can stay there after unpublishing. The skill asks whether people should see the app widely on social networks; publish refuses a card collection visitors cannot read or a non-text field.
+- [#2894](https://github.com/receptron/mulmoterminal/pull/2894) — `shareCard` can also be `{}` or `{ title }`, a card for the app alone (`sharedapp` 0.45.0). The tally and survey-results templates declare `{}`, since their useful card is the app's own.
+
+### Shared apps: a page theme (receptron/mulmoserver#336)
+
+- [#2897](https://github.com/receptron/mulmoterminal/pull/2897) — `theme` carries bar, barText, background, icon, ticker and banner (`sharedapp` 0.47.0). Publish reads `theme.banner` through the same contained, no-symlink open the public page's HTML uses, sizes it before reading, checks that its bytes are the picture its name says (PNG, JPEG, WebP, SVG), and writes it to `config/banner` while the app is public; it is removed when undeclared, closed or unpublished. The skill gains "Dress the public page" (hex colours only, banner kinds and size), and no longer says publish refuses `theme` without an article page.
+- [#2898](https://github.com/receptron/mulmoterminal/pull/2898) — the shared-app guide gains "Spread it, and dress it up" / 「広める・飾る」: `forkable`, `shareCard`, the bar's Share menu, and `theme`.
+
+### Grid: a full-width right pane fits the window again (#2899)
+
+- [#2900](https://github.com/receptron/mulmoterminal/pull/2900) — opening the Conversation pane full width with a long unbreakable line in the conversation pushed the pane, and its reload / expand / close buttons, past the right edge of the window. A flex item whose width is `auto` cannot shrink below its content's widest line, and Tools, Prompts, Conversation, Collections and Question were all sized that way. Their size now comes from one helper that adds `min-width: 0` in full and split mode. Measured on the real app, before and after, at several window widths.
+
+### Blueprints
+
+- [#2892](https://github.com/receptron/mulmoterminal/pull/2892) ([#2891](https://github.com/receptron/mulmoterminal/issues/2891)) — the document tasks run chaffjs 0.21. In 0.21 a too-long sentence is a note rather than a warning, so the polish `oshirase` and `tejun` samples and the adopt `help-pages` sample each gained a finding 0.21 reports as a warning (an empty intensifier, a "here" link, a dropped-ら verb form), and their descriptions no longer promise to split long sentences.
+
+### Dependencies
+
+- [#2895](https://github.com/receptron/mulmoterminal/pull/2895), [#2896](https://github.com/receptron/mulmoterminal/pull/2896) — `@receptron/sharedapp` 0.45.0 and 0.47.0, with the share-card and page-theme changes above.
+
 ## mulmoterminal@8.7.0 — 2026-10-03
 
 > **Setup guide:** [8.7.0 — Surveys that show their results, printable STL, and a set-aside cell that stays put](https://receptron.github.io/mulmoterminal/guide/en/v8.7.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v8.7.0.html))
