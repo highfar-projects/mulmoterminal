@@ -355,6 +355,79 @@ terms rather than expecting it as the end of building.
 
 ---
 
+## Spread it, and dress it up
+
+An app with a public page (`/a/<slug>`) can change how it spreads and how it looks **by adding to
+its declaration**. Ask the agent; it writes `app.json`, and the change takes effect **at the next
+publish**.
+
+### Let a visitor make their own — `forkable`
+
+With `"forkable": true` the public page says "**You can make this app your own**" and offers a
+"**Make your own**" button. The visitor signs in with Google, picks a name, and gets **the same app
+with themselves as owner**. No records come with it. The copy appears under their **My apps**,
+where "Publish" and "Unpublish" open and close it.
+
+**What it costs: every page of the app becomes readable by anyone**, the staff pages included,
+because the copy is made from them. It fits a question box, a tally or a public-results survey —
+their templates ship with it on — and not a booking or a roster-only app.
+
+Publish refuses it beside `agents[]` (a copy would run somebody's agent), and while a roster
+address or the owner's uid is written anywhere in the declaration, a schema or a page. Take that
+text out rather than turning `forkable` off.
+
+### Let social networks show it — `shareCard`
+
+Declare `shareCard` and a link pasted into X or LINE unfurls into **a card with a picture**.
+**Nothing is ever posted for you**, and only what you published can appear on a card.
+
+- The app's address becomes `/s/<slug>` (opening `/a/<slug>` moves there).
+- `{}` gives a card with the app's name; `{ "title": "..." }` one with that headline. Right for a
+  tally or a survey that shows its totals.
+- `{ "collection": "...", "textField": "..." }` gives **a card per row** (`/s/<slug>/<id>`), for when
+  one row's text is what a stranger should read — a question in a question box. Only a text field of
+  a collection visitors can read (`public.read` or `public.readPublished`) qualifies, and a row that
+  is not public gets no card.
+- **A card a social network has already shown may stay there after you unpublish.**
+
+An app with cards gets a **Share** button in the bar at the top of its page: "Post on X", "Send on
+LINE", "Copy the link" and "Share with another app". The address it sends is the `/s/` one.
+
+### Dress the page — `theme`
+
+As loud as you like, in the spirit of an old mobile site.
+
+```json
+{
+  "theme": {
+    "bar": ["#ff3399", "#ffcc00"],
+    "barText": "#ffffff",
+    "background": ["#fff0f8", "#e0f7ff"],
+    "icon": "🌸",
+    "ticker": "★☆ Now open! ☆★",
+    "banner": "views/banner.svg"
+  }
+}
+```
+
+| key | what it changes |
+|---|---|
+| `bar` | the bar at the top: one colour, or a gradient of two or three |
+| `barText` | the bar's text colour; left out, dark or white is chosen from the bar's brightness |
+| `background` | the ground behind the page: one colour, or a gradient |
+| `icon` | one character (an emoji is fine) beside the app's name, and on the share card |
+| `ticker` | a line scrolling under the bar (at most 120 characters); a tap stops it, and it stays still for reduced motion |
+| `banner` | a picture under the bar: a PNG / JPEG / WebP / SVG directly in `views/`, at most 300 kB |
+
+- **Colours are `#rgb` or `#rrggbb` only.** Names, `rgb()` and CSS are refused at publish.
+- Publish checks the banner's bytes really are that kind of picture, and the page shows it through
+  `<img>`, so an SVG's script never runs. Ask the agent to draw an SVG for a small, crisp banner.
+- The share card takes the bar's colours, the ground and the icon too.
+- Inside the app's own page you can draw anything — inline `<svg>` and `data:` images work; the page
+  cannot load outside URLs.
+
+---
+
 ## Things that surprise people
 
 **Capacity is drawn, not enforced.** The platform's rules cannot count rows — there is no query in
