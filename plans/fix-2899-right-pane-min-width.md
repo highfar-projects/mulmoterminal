@@ -19,8 +19,8 @@ and does not overflow.
 ## Fix
 
 The five identical style expressions become `rightPaneStyle(full, splitWidthPx)` in
-`src/components/rightPaneStyle.ts`, which adds `minWidth: 0` in both modes. In split mode the basis is fixed and the
-pane does not shrink, so a zero minimum never changes its width.
+`src/components/rightPaneStyle.ts`, which adds `minWidth: 0` in both modes. Split mode keeps its fixed basis, but the
+automatic minimum could still enlarge a pane past it (the split overflow above); a zero minimum stops that.
 
 Not changed: the pane opening full first, and split after a reload (out of scope per the issue).
 
@@ -28,6 +28,6 @@ Not changed: the pane opening full first, and split after a reload (out of scope
 
 - the same real-app run after the fix: the section ends at the window's edge and the close button is inside it at
   800, 1200 and 1600; split is the configured pane width; close closes the pane; the long line wraps;
-- `test/src/components/rightPaneStyle.spec.ts` pins the two shapes and that `TerminalGrid.vue` holds no
-  `width: 'auto'` of its own; dropping `minWidth` from the helper, or putting the old expression back at a call
-  site, turns it red.
+- `test/src/components/rightPaneStyle.spec.ts` pins the two shapes, that `TerminalGrid.vue` holds no
+  `width: 'auto'` of its own, and that each of the five panes is sized through the helper; dropping `minWidth` from
+  the helper, or giving any one pane another style, turns it red.
