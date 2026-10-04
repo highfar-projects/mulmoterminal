@@ -39,6 +39,7 @@ import CollectionsPane from "./CollectionsPane.vue";
 import ToolsPane from "./ToolsPane.vue";
 import PromptsPane from "./PromptsPane.vue";
 import TranscriptPane from "./TranscriptPane.vue";
+import { rightPaneStyle } from "./rightPaneStyle";
 import {
   clampPaneWidth,
   clampSecondary,
@@ -1746,13 +1747,11 @@ function onRosterDragLeave(event: DragEvent) {
           @toggle-expand="togglePaneExpanded"
           @close="setRightPane(null, paneUid)"
         />
-        <!-- `width: auto` only while full: the pane sets its own w-[340px], and a fixed width
-             beside `flex: 1` is the one combination where the class outlives the layout. -->
         <ToolsPane
           v-else-if="rightPane === 'tools'"
           :session-id="expandedSessionId"
           :expanded="paneFull"
-          :style="paneFull ? { flex: '1 1 0%', width: 'auto' } : { flex: `0 0 ${paneWidth}px` }"
+          :style="rightPaneStyle(paneFull, paneWidth)"
           class="border-l border-border"
           @toggle-expand="togglePaneExpanded"
           @close="setRightPane(null, paneUid)"
@@ -1767,7 +1766,7 @@ function onRosterDragLeave(event: DragEvent) {
           :cwd="expandedCwd"
           :agent="expandedAgent"
           :expanded="paneFull"
-          :style="paneFull ? { flex: '1 1 0%', width: 'auto' } : { flex: `0 0 ${paneWidth}px` }"
+          :style="rightPaneStyle(paneFull, paneWidth)"
           class="border-l border-border"
           @toggle-expand="togglePaneExpanded"
           @close="setRightPane(null, paneUid)"
@@ -1783,7 +1782,7 @@ function onRosterDragLeave(event: DragEvent) {
           :cwd="expandedCwd"
           :agent="expandedAgent"
           :expanded="paneFull"
-          :style="paneFull ? { flex: '1 1 0%', width: 'auto' } : { flex: `0 0 ${paneWidth}px` }"
+          :style="rightPaneStyle(paneFull, paneWidth)"
           class="border-l border-border"
           @toggle-expand="togglePaneExpanded"
           @close="setRightPane(null, paneUid)"
@@ -1794,7 +1793,7 @@ function onRosterDragLeave(event: DragEvent) {
           v-else-if="rightPane === 'collections'"
           :cwd="expandedCwd"
           :expanded="paneFull"
-          :style="paneFull ? { flex: '1 1 0%', width: 'auto' } : { flex: `0 0 ${paneWidth}px` }"
+          :style="rightPaneStyle(paneFull, paneWidth)"
           class="border-l border-border"
           @toggle-expand="togglePaneExpanded"
           @close="setRightPane(null, paneUid)"
@@ -1806,7 +1805,7 @@ function onRosterDragLeave(event: DragEvent) {
           :event="expandedQuestion"
           :failure="answerFailure"
           :expanded="paneFull"
-          :style="paneFull ? { flex: '1 1 0%', width: 'auto' } : { flex: `0 0 ${paneWidth}px` }"
+          :style="rightPaneStyle(paneFull, paneWidth)"
           @answer="answerQuestion"
           @say="sayInsteadOfChoosing"
           @toggle-expand="togglePaneExpanded"
