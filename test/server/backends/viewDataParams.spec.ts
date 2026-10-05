@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { parseListParam } from "../../../server/backends/viewDataParams.js";
 
