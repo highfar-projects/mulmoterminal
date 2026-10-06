@@ -236,8 +236,14 @@ out costs the bottom of the list.
   prompt?: string;           //  │
   icon?: string;             //  │ the dir's image as an <img src> (#1556)
   githubUrl?: string;        // ─┘ the repository ROOT, never /tree/<branch> (#832)
+  mobileFilesProject?: string; // the opaque project id to pass to listMobileFiles (#2915)
 }
 ```
+
+`mobileFilesProject` is set only when the DEEPEST project containing the session's directory
+declares `mobileFiles` — a registered sub-project that shares nothing does not fall back to the
+enclosing workspace's files. It is an id, never a path, the same one `listMobileFileProjects`
+returns.
 
 `icon` is the src itself, not an `iconId`: one screen carries one image, so there is nothing to
 deduplicate it against. Same two sources and the same per-image cap as the list above.

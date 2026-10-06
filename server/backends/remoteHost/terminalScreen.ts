@@ -223,6 +223,9 @@ export interface SessionScreenMeta {
   // The directory's own image, ready for an `<img src>` (#1556). The src itself rather than an
   // id into a table: one screen carries one icon, so there is nothing to deduplicate against.
   icon?: string;
+  // The opaque id of this session's project when that project shares files with the phone
+  // (#2915), so the screen can link straight to them. Absent when it shares none.
+  mobileFilesProject?: string;
 }
 
 export interface SessionScreen extends SessionScreenMeta {
@@ -265,6 +268,8 @@ export interface ScreenMetaSources {
   memoOf: (id: string) => string;
   summaryOf: (id: string) => string;
   promptOf: (id: string) => string;
+  // The project id whose shared files this cwd's screen links to, "" when none (#2915).
+  mobileFilesProjectOf: (cwd: string) => string;
   // The memo store's boot read. Awaited BEFORE memoOf, or a screen pulled during startup is
   // told the note is gone — which is indistinguishable from the user having erased it (#1110).
   memosHydrated: Promise<void>;
@@ -283,6 +288,7 @@ export async function buildScreenMeta(id: string, sources: ScreenMetaSources): P
     summary: sources.summaryOf(id),
     prompt: sources.promptOf(id),
     githubUrl: githubUrl ?? "",
+    mobileFilesProject: cwd ? sources.mobileFilesProjectOf(cwd) : "",
   });
 }
 
