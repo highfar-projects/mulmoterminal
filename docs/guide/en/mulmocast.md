@@ -98,8 +98,10 @@ render the video from the GUI panel as usual.
 The first render downloads a headless Chrome for Remotion (around 90 MB), once.
 
 The code Claude Code wrote is kept next to the beat's images, in `<beat>_remotion/<hash>.tsx`, and
-reused while the prompt, brief and narration stay the same. A longer or shorter narration only
-re-renders it.
+reused as long as nothing it was written from changes: the prompt, the narration's wording, the
+brief, the scene's place in the video, and the canvas size and fps. Change any of those — including
+adding a beat before it — and the scene is written again. Audio that only got longer or shorter
+(another voice, another speed) re-renders the same code without asking Claude Code.
 
 ### Things to know
 
