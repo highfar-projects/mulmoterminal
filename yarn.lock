@@ -1942,10 +1942,10 @@
   resolved "https://registry.yarnpkg.com/@mulmoclaude/common/-/common-1.4.0.tgz#068ef0d2ae75a487a601d4244d0c9536ee73397a"
   integrity sha512-1SYF7y5vRXPUDjdkczvlP6mOjwNwKvC46w9zT4Rqv/cWnG3G3Zo2nksAxnrL9ExL4zIZt6aCWeLg+0uCf2FicQ==
 
-"@mulmoclaude/core@^5.9.0":
-  version "5.9.0"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/core/-/core-5.9.0.tgz#e268bb2a9df9c6942c4623d3412a928d106fd40a"
-  integrity sha512-/BqDeL0t2EyAs/At3aqa7IElVX+LqBibDeQ1NWaV2kKqWKV79EOh8XeL1b8oUQwO/GOSrnX2GvoeXbgrGoYe9w==
+"@mulmoclaude/core@^5.10.1":
+  version "5.10.1"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/core/-/core-5.10.1.tgz#92be98862b0cc5d9271c5d297e9c210ac4ae3139"
+  integrity sha512-ml9/dcsozmBGonlvK9s/gB6rhxAIHTMviKiF9v2iAsOPcUDn7Eq3L0M+qRBxv8mjV01KCxWuJ9zVXNj/j6oPqw==
   dependencies:
     "@duckdb/node-api" "^1.5.6-r.1"
     "@gui-chat-plugin/common" "^0.1.0"
@@ -1995,10 +1995,10 @@
     js-yaml "^5.4.2"
     marked "^18.0.14"
 
-"@mulmoclaude/mulmoscript-plugin@^5.0.1":
-  version "5.0.1"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/mulmoscript-plugin/-/mulmoscript-plugin-5.0.1.tgz#914e40b1e329a94a2f3b392debc0826f54fc7263"
-  integrity sha512-x/TWpYWXd5+CxjEY3bYxm+5v7hkqZl0DXbD1liRCEiFS4/8CUhxr2AHOGvK2RZLB5YCRpg4rNv2DiP2n+wM7BA==
+"@mulmoclaude/mulmoscript-plugin@^5.1.0":
+  version "5.1.0"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/mulmoscript-plugin/-/mulmoscript-plugin-5.1.0.tgz#63e11ffd35690b78429ea3f8bae62b3baaa8b29e"
+  integrity sha512-aHTFj9JGjJyY1QetHeMKA6a1RxcOEulQR463FT8+oA7i9RfsYXzWrJoRbVdtahVLr7KBV3pmMQF7fmo7c+DRlQ==
 
 "@mulmoclaude/x-plugin@^1.0.4":
   version "1.0.4"

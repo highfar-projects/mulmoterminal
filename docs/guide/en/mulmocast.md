@@ -92,7 +92,8 @@ are talking to. So:
 
 ### 4. Make a video
 
-Agents do not suggest `remotion` beats on their own yet. Ask for one by name — for example
+Agents use a `remotion` beat only when you ask for one, since they cannot tell whether the packages
+are installed. Ask by name — for example
 *"make the second beat a remotion scene: …"* — or write the beat into the script yourself, then
 render the video from the GUI panel as usual.
 
