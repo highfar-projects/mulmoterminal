@@ -9,6 +9,8 @@ const m = vi.hoisted(() => ({ subscribe: vi.fn() }));
 vi.mock("../../../src/composables/usePubSub", () => ({ usePubSub: () => ({ subscribe: m.subscribe }) }));
 
 import { makeBrowserPluginRuntime } from "../../../src/composables/pluginRuntime";
+import { PLUGIN_DISPATCH_TIMEOUT_MS } from "../../../src/composables/pluginDispatchDeadline";
+import { SLOW_COMMAND_TIMEOUT_MS } from "../../../src/utils/fetchWithTimeout";
 
 // Stand in for the socket: remember the channel the runtime subscribed to and hand
 // back a way to push a raw frame down it, as usePubSub's callback would.
@@ -62,6 +64,49 @@ describe("makeBrowserPluginRuntime dispatch", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500, statusText: "Server Error", text: () => Promise.resolve("boom") }));
 
     await expect(runtime().dispatch({ kind: "list" })).rejects.toThrow("plugin/presentDocument dispatch failed (500): boom");
+  });
+});
+
+// A movie render answers only when it is done. The browser used to give up at a minute and show
+// the abort as a failure while the server went on to finish (#2908).
+describe("makeBrowserPluginRuntime dispatch deadline", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  // Settles only when its signal aborts, the way a request the server is still working on does.
+  const fetchThatWaits = () =>
+    vi.fn(
+      (_url: string, init?: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new DOMException("signal is aborted without reason", "AbortError")));
+        }),
+    );
+
+  it("is still waiting after the minute that used to cut it off", async () => {
+    vi.stubGlobal("fetch", fetchThatWaits());
+    const settled = vi.fn();
+    void runtime().dispatch({ kind: "generateMovie" }).then(settled, settled);
+
+    await vi.advanceTimersByTimeAsync(SLOW_COMMAND_TIMEOUT_MS + 1_000);
+    expect(settled).not.toHaveBeenCalled();
+  });
+
+  it("gives up at the plugin deadline with a timeout, not a bare abort", async () => {
+    vi.stubGlobal("fetch", fetchThatWaits());
+    const outcome = runtime()
+      .dispatch({ kind: "generateMovie" })
+      .catch((err: unknown) => err);
+
+    await vi.advanceTimersByTimeAsync(PLUGIN_DISPATCH_TIMEOUT_MS);
+    const err = await outcome;
+    expect(String(err)).toContain("plugin/presentDocument gave no answer within 60 minutes");
+    expect(String(err)).not.toContain("aborted without reason");
   });
 });
 

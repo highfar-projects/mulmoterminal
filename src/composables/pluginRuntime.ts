@@ -16,7 +16,8 @@ import { defineComponent, h, markRaw, provide, ref, type Component, type Ref } f
 import { PLUGIN_RUNTIME_KEY, type BrowserPluginRuntime, type SubscribeOptions } from "gui-chat-protocol/vue";
 import { usePubSub } from "./usePubSub";
 import { isOpenablePluginUrl } from "./pluginUrlPolicy";
-import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
+import { fetchWithTimeout } from "../utils/fetchWithTimeout";
+import { PLUGIN_DISPATCH_TIMEOUT_MS, pluginDispatchError } from "./pluginDispatchDeadline";
 
 function pluginChannelName(scope: string, eventName: string): string {
   return `plugin:${scope}:${eventName}`;
@@ -36,7 +37,7 @@ function makeOpenUrl(scope: string): BrowserPluginRuntime["openUrl"] {
 function makeDispatch(toolName: string): BrowserPluginRuntime["dispatch"] {
   const url = `/api/plugin/${encodeURIComponent(toolName)}`;
 
-  async function post(args: object): Promise<unknown> {
+  async function request(args: object): Promise<unknown> {
     const res = await fetchWithTimeout(
       url,
       {
@@ -44,7 +45,7 @@ function makeDispatch(toolName: string): BrowserPluginRuntime["dispatch"] {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(args ?? {}),
       },
-      SLOW_COMMAND_TIMEOUT_MS,
+      PLUGIN_DISPATCH_TIMEOUT_MS,
     );
     if (!res.ok) {
       const text = await res.text().catch(() => "");
@@ -52,6 +53,14 @@ function makeDispatch(toolName: string): BrowserPluginRuntime["dispatch"] {
     }
     const raw: unknown = await res.json();
     return raw;
+  }
+
+  async function post(args: object): Promise<unknown> {
+    try {
+      return await request(args);
+    } catch (err) {
+      throw pluginDispatchError(toolName, err, PLUGIN_DISPATCH_TIMEOUT_MS);
+    }
   }
 
   async function dispatch(args: object): Promise<unknown>;
