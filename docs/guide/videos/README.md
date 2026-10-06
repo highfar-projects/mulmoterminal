@@ -9,6 +9,8 @@ Captured from the same **throwaway demo instance** the screenshots use — a scr
 | `launch-demo-en.mp4` | 1:32 | 3.3 MB | One agent, then a grid of them — **working / done / needs you** in colour, the cockpit roster holding what each session asked and answered, and picking whichever cell is lit. English narration |
 | `launch-demo-ja.mp4` | 1:34 | 3.4 MB | The same footage, Japanese narration. The screen is the English one — only the voice differs |
 | `launch-demo-poster.png` | — | 315 KB | The `poster` of both guide embeds: the 24 s frame — the coloured grid under the `working / done / needs you` title card. One file serves both languages because the picture is the same |
+| `v9.0.0-remotion.mp4` | 0:10 | 0.7 MB | Two `remotion` scenes made from the GUI panel with 9.0.0 (a circle drawn around a word; Script → Scene → Movie cards). No sound. Embedded in `en/ja/mulmocast.md` and linked from `en/ja/v9.0.0.md` |
+| `v9.0.0-remotion-poster.png` | — | 280 KB | Its poster: the 7 s frame (the three cards) |
 
 Both videos are 1280x720, h264 + aac; the poster is the same 1280x720.
 

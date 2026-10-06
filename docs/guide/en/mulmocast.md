@@ -23,6 +23,13 @@ shows, Claude Code writes it as a [Remotion](https://www.remotion.dev) component
 renders it into the beat's video — motion, SVG paths, 3D (three.js), noise and shader effects.
 Since 2.14.0 you can also hand it a finished component instead (see [step 5](#remotion-code)).
 
+<video controls playsinline muted preload="metadata" poster="../videos/v9.0.0-remotion-poster.png" style="width: 100%; max-width: 900px; border-radius: 6px;">
+  <source src="../videos/v9.0.0-remotion.mp4" type="video/mp4">
+  <a href="../videos/v9.0.0-remotion.mp4">Watch the two example scenes (MP4)</a> — this browser can't play it inline.
+</video>
+
+*Two scenes rendered from the GUI panel: a circle drawn around a word, then three cards joined by arrows (10 s, no sound).*
+
 ```json
 {
   "remotionParams": { "brief": "Deep navy background, off-white text, one cyan accent." },

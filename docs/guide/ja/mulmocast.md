@@ -23,6 +23,13 @@ Claude Code がそれを [Remotion](https://www.remotion.dev) のコンポーネ
 動画に描画します。動き、SVG のパス、3D（three.js）、ノイズ、シェーダーの効果まで使えます。
 2.14.0 からは、出来上がったコンポーネントをそのまま渡すこともできます（[5.](#remotion-code)）。
 
+<video controls playsinline muted preload="metadata" poster="../videos/v9.0.0-remotion-poster.png" style="width: 100%; max-width: 900px; border-radius: 6px;">
+  <source src="../videos/v9.0.0-remotion.mp4" type="video/mp4">
+  <a href="../videos/v9.0.0-remotion.mp4">例の二つの場面を見る（MP4）</a> — このブラウザではその場で再生できません。
+</video>
+
+*GUI パネルから作った二つの場面。言葉の周りに円が描かれ、続いて三枚のカードが矢印でつながります（10 秒、音声なし）。*
+
 ```json
 {
   "remotionParams": { "brief": "深い紺の背景、オフホワイトの文字、強調色はシアン一色。" },

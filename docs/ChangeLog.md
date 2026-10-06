@@ -8,6 +8,33 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@9.0.0 — 2026-10-07
+
+> **Setup guide:** [9.0.0 — Remotion scenes in MulmoCast videos, choosing files for your phone, and movies that no longer "fail" after a minute](https://receptron.github.io/mulmoterminal/guide/en/v9.0.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v9.0.0.html))
+
+### MulmoCast: Remotion scenes (#2904)
+
+- [#2906](https://github.com/receptron/mulmoterminal/pull/2906) — mulmocast 2.13.0's `remotion` beat (`claude -p` writes each scene as a Remotion component) needs optional packages this app does not install. A new guide page, `docs/guide/{en,ja}/mulmocast.md`, says to install them into `~/node_modules` — an npx entry is replaced every release, and Node finds a parent folder's `node_modules` from any of them (verified with a real render from an npx copy of mulmocast). `npx mulmoterminal@latest init` gains a line, checked from mulmocast's own location: `✓ remotion`, or `○ optional` with what is missing and a link to the guide. A package that hides its `package.json` behind `exports` counts as installed; a malformed one does not. README requirements gain an Optional row.
+- [#2907](https://github.com/receptron/mulmoterminal/pull/2907) — `@mulmoclaude/mulmoscript-plugin` 5.1.0, whose tool description tells agents about `remotion` beats (only when the user asks, slow and costly, not with `moviePrompt`, `remotionParams.brief`), and `@mulmoclaude/core` 5.10.1, which that plugin declares. Core 5.10's opt-in prompt split needs no wiring here.
+- [#2912](https://github.com/receptron/mulmoterminal/pull/2912) — mulmocast 2.14.0: a `remotion` beat can take a finished component as `code` (rendered as is, without `claude -p`), and `mulmocast/remotion` exports the package list. The `init` check now reads that list from the mulmocast it would render with, instead of a copy pinned by a spec to an internal file; its stricter resolve rule stays.
+- [#2914](https://github.com/receptron/mulmoterminal/pull/2914) — the guide documents `code` (`kind: "path"` relative to the script, or `"text"`; one self-contained file; no review or repair) and corrects the browser download: Remotion keeps its headless Chrome in the `node_modules/.remotion` of the folder the server runs from — MulmoTerminal's install folder — so the first render after each update downloads it again (#2909). Both checked: Remotion's `getDownloadsCacheDir` and three renders, and a `code` beat rendered with a `claude` on PATH that was never called.
+
+### MulmoCast: a long movie no longer shows a false failure (#2908)
+
+- [#2910](https://github.com/receptron/mulmoterminal/pull/2910) — every plugin dispatch was bounded at a minute (`SLOW_COMMAND_TIMEOUT_MS`), and mulmoscript's `generateMovie` answers only when the render is done, so a longer movie was aborted in the browser and shown as "Movie generation failed: signal is aborted without reason" while the server finished it. Plugin dispatch now has its own deadline, `PLUGIN_DISPATCH_TIMEOUT_MS` (an hour; MulmoClaude sets none), and an abort at it reads as a timeout that may still be running on the server. Verified in the app with a two-scene Remotion movie that took longer than a minute.
+
+### Phone: choose which files it may open (#2911)
+
+- [#2913](https://github.com/receptron/mulmoterminal/pull/2913) — a project declares `mobileFiles: { dirs, extensions }` in `.mulmoterminal.json`; nothing is shared otherwise. `dirs` are contained in the project (lexical and realpath, symlinks out refused) and `extensions` narrowed to md / markdown / html / htm / pdf / png / jpg / jpeg / gif / webp. Three remote-host commands: `listMobileFileProjects`, `listMobileFiles` (newest first, paged, metadata only) and `getMobileFile` (re-checked against the declaration on every call). Small md / html go inline, html behind a CSP placed at the very start; anything larger, and pdf / images, is staged in the owner's Storage under `downloads/{uid}/<uuid>` and deleted by a per-object timer (an hour), a sweep on the next list or open, and a bucket lifecycle rule. Settings shows the key as **Phone files**; it is set in the file only. The phone screen is receptron/mulmoserver#343.
+
+### Collections: custom-view data honours `ids` and `fields` (#2901)
+
+- [#2902](https://github.com/receptron/mulmoterminal/pull/2902) — `GET /api/collections/:slug/view-data` ignored its query and returned every record with every field. It now reads through `manageCollection`'s `getItems`, as MulmoClaude does: `?ids=` narrows rows (unknown ids come back in `missing`), `?fields=` narrows columns (the primary key always included), and the response is `{ collection, count, items, missing?, warning? }`. An unprojected read of more than `MAX_UNSELECTIVE_ITEMS` records is now a 400, as under MulmoClaude; a collection deleted after its token was minted answers 400 instead of 404.
+
+### Dependencies
+
+- [#2903](https://github.com/receptron/mulmoterminal/pull/2903) — `mulmocast` 2.13.0, `@mulmocast/types` 2.13.0, `@mulmoclaude/core` 5.9.0, `@modelcontextprotocol/sdk` 1.32.1, `marked` 18.1.0, `typescript-eslint` 8.71.1.
+
 ## mulmoterminal@8.8.0 — 2026-10-04
 
 > **Setup guide:** [8.8.0 — Apps others can copy, share cards, page themes, and a full-width Conversation that fits](https://receptron.github.io/mulmoterminal/guide/en/v8.8.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v8.8.0.html))

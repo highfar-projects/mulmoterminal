@@ -4,14 +4,14 @@ nav_title: Feature list
 layout: default
 parent: English
 nav_order: 6.5
-as_of: 8.8.0
-description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 8.8.0)."
+as_of: 9.0.0
+description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 9.0.0)."
 ---
 
 # Feature list
 {: .no_toc }
 
-Every capability MulmoTerminal has as of 8.8.0, one line each, grouped by area. The `(vX.Y.Z)` at the end of a line is the release it first arrived in; significant later extensions are noted inside the line by version. Fixes and internal changes are not listed — see the [ChangeLog](https://github.com/receptron/mulmoterminal/blob/main/docs/ChangeLog.md) for those, and the [Feature reference](features.html) and the page linked from each section for how to use them.
+Every capability MulmoTerminal has as of 9.0.0, one line each, grouped by area. The `(vX.Y.Z)` at the end of a line is the release it first arrived in; significant later extensions are noted inside the line by version. Fixes and internal changes are not listed — see the [ChangeLog](https://github.com/receptron/mulmoterminal/blob/main/docs/ChangeLog.md) for those, and the [Feature reference](features.html) and the page linked from each section for how to use them.
 
 - TOC
 {:toc}
@@ -103,6 +103,7 @@ More: [Conversations](conversation.html)
 
 More: [Phone](phone.html)
 
+- A project chooses which of its files (md / html / pdf / pictures) the phone may list and open, under `mobileFiles` in `.mulmoterminal.json`; the phone screen comes with a MulmoServer update (v9.0.0)
 - Phone terminal rows are named from the conversation instead of a bare UUID (v5.7.0)
 - Page back through a Claude transcript on the phone; codex, cursor and copilot added in 4.25 (v4.10.0)
 - Answer Claude's AskUserQuestion from the phone on a card with option buttons and optional free text (v4.8.3)
@@ -251,8 +252,9 @@ More: [Configuration](config.html)
 
 ## Canvas, collections and decks
 
-More: [From a collection](from-collection.html)
+More: [From a collection](from-collection.html) · [MulmoCast videos](mulmocast.html)
 
+- MulmoCast `remotion` scenes: Claude Code writes a beat as a Remotion animation, or you pass one you wrote (`code`); the optional packages are yours to install and `init` checks them (v9.0.0)
 - A shared app can let a visitor make their own empty copy from its public page (forkable); the question box, tally and survey-results templates ship with it (v8.8.0)
 - A shared app can show a card when its link is shared on a social network: one for the app, or one per published row (shareCard) (v8.8.0)
 - A shared app's public page can carry its own bar and background colours, icon, ticker and banner picture (theme) (v8.8.0)
