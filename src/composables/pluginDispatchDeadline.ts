@@ -1,7 +1,4 @@
-// A plugin's dispatch can stand for work that takes minutes — mulmoscript's generateMovie answers
-// only when the whole render is done, and a remotion scene alone calls `claude -p` several times —
-// so it has its own deadline rather than SLOW_COMMAND_TIMEOUT_MS. MulmoClaude sets none; this host
-// keeps one because a request without a bound can do nothing forever (#1393).
+// A movie render answers only when done, so a minute is too short; MulmoClaude sets no bound, this host keeps one so a hung request still ends.
 export const PLUGIN_DISPATCH_TIMEOUT_MS = 60 * 60_000;
 
 const MS_PER_MINUTE = 60_000;
