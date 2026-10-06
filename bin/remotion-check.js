@@ -5,26 +5,7 @@
 
 import { createRequire } from "node:module";
 import { join } from "node:path";
-
-// A copy of REMOTION_PACKAGES in mulmocast's lib/utils/remotion/packages.js, which the package does
-// not export. A spec pins the two together.
-export const REMOTION_PACKAGES = [
-  "remotion",
-  "@remotion/bundler",
-  "@remotion/renderer",
-  "react",
-  "react-dom",
-  "@remotion/three",
-  "three",
-  "@react-three/fiber",
-  "@remotion/effects",
-  "@remotion/paths",
-  "@remotion/noise",
-  "@remotion/shapes",
-  "@remotion/transitions",
-  "@remotion/motion-blur",
-  "@remotion/layout-utils",
-];
+import { pathToFileURL } from "node:url";
 
 const GUIDE_URL = "https://receptron.github.io/mulmoterminal/guide/en/mulmocast.html#remotion";
 const WHY = "Remotion scenes in MulmoCast videos";
@@ -49,15 +30,32 @@ export function resolverFromMulmocast(pkgDir) {
   }
 }
 
-export function missingRemotionPackages(isResolvable) {
-  return REMOTION_PACKAGES.filter((name) => !isResolvable(name));
+/** mulmocast's own list of what a remotion beat needs, or null when mulmocast or that export is missing. */
+export async function remotionPackagesFromMulmocast(pkgDir) {
+  try {
+    const entry = createRequire(join(pkgDir, "package.json")).resolve("mulmocast/remotion");
+    const { REMOTION_PACKAGES } = await import(pathToFileURL(entry).href);
+    return Array.isArray(REMOTION_PACKAGES) && REMOTION_PACKAGES.every((name) => typeof name === "string") ? REMOTION_PACKAGES : null;
+  } catch {
+    return null;
+  }
 }
 
-export function remotionCheckLine(missing) {
+export function missingRemotionPackages(packages, isResolvable) {
+  return packages.filter((name) => !isResolvable(name));
+}
+
+export function remotionCheckLine(missing, total) {
   if (missing.length === 0) return `  ✓ remotion — ${WHY}`;
   const head =
-    missing.length === REMOTION_PACKAGES.length
-      ? `  ○ remotion — optional (${WHY})`
-      : `  ○ remotion — optional (${WHY}), installed only in part; missing: ${missing.join(", ")}`;
+    missing.length === total ? `  ○ remotion — optional (${WHY})` : `  ○ remotion — optional (${WHY}), installed only in part; missing: ${missing.join(", ")}`;
   return `${head}\n      → ${GUIDE_URL}`;
+}
+
+/** The `init` line for remotion, or null when mulmocast cannot be asked. */
+export async function remotionCheck(pkgDir) {
+  const isResolvable = resolverFromMulmocast(pkgDir);
+  const packages = await remotionPackagesFromMulmocast(pkgDir);
+  if (!isResolvable || !packages) return null;
+  return remotionCheckLine(missingRemotionPackages(packages, isResolvable), packages.length);
 }

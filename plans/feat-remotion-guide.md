@@ -23,8 +23,8 @@ adds remotion's `node_modules` to webpack's `resolve.modules` (`remotionNodeModu
 
 1. `bin/remotion-check.js` — which remotion packages are missing as seen FROM mulmocast's own
    location (the same `createRequire(...).resolve("<name>/package.json")` mulmocast's pre-flight
-   does), and the `init` line for it. The package list is a copy: mulmocast does not export it, so
-   a spec pins the copy to `node_modules/mulmocast/lib/utils/remotion/packages.js`.
+   does), and the `init` line for it. The package list comes from mulmocast's own
+   `mulmocast/remotion` export (2.14.0+); before that export existed it was a pinned copy.
 2. `npx mulmoterminal@latest init` prints the line after the PATH tools: `✓`, or `○ optional`
    with what is missing and a link to the guide.
 3. README requirements table: an Optional row.
