@@ -14,6 +14,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { computeUpdateNotice, isUpdateCheckDisabled } from "./update-check.js";
 import { detectNpxCacheDir, npxCacheHintLines } from "./npx-cache-hint.js";
+import { missingRemotionPackages, remotionCheckLine, resolverFromMulmocast } from "./remotion-check.js";
 import { configuredRemoteServer, sshTunnelHintLines } from "./ssh-hint.js";
 import { planAfterServerExit } from "./server-supervision.js";
 import { waitUntilReady } from "./wait-ready.js";
@@ -254,6 +255,8 @@ async function runInit(initArgs) {
   }
 
   [...PATH_TOOLS, fileDialogTool()].filter(Boolean).forEach((tool) => console.log(toolCheckLine(tool)));
+  const remotionResolvable = resolverFromMulmocast(PKG_DIR);
+  if (remotionResolvable) console.log(remotionCheckLine(missingRemotionPackages(remotionResolvable)));
 
   // Config half: derive working-dir presets from Claude history + write config.json.
   console.log("");
