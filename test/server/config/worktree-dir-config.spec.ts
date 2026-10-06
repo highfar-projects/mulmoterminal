@@ -47,7 +47,7 @@ const PROJECT = {
 // a key out a decision instead of an omission.
 // `decks` sits with `skills` / `buttons` / `chips`: a header MENU's contents, which a worktree
 // composes for itself. It still gets the workspace's own stories directory, so the menu is not empty.
-const DELIBERATELY_NOT_INHERITED = ["sound", "sounds", "addDirs", "buttons", "commands", "chips", "skills", "decks", "appendSystemPrompt"];
+const DELIBERATELY_NOT_INHERITED = ["sound", "sounds", "addDirs", "buttons", "commands", "chips", "skills", "decks", "mobileFiles", "appendSystemPrompt"];
 
 describe("every directory setting is inherited or deliberately not", () => {
   it("accounts for every key the loader reads", () => {

@@ -16,7 +16,8 @@ import {
   type DirConfigSource,
   type DirConfigExtras,
 } from "../../common/dirConfigSource.js";
-import { resolveFileWithinDir } from "./dir-file.js";
+import { resolveDirWithinDir, resolveFileWithinDir } from "./dir-file.js";
+import type { MobileFileExtension } from "../../common/mobileFiles.js";
 import { resolveDirIcon, dirIconImage, dirIconNamed, dirIconRef, type DirIcon, type DirIconSetting } from "./dir-icon.js";
 import { resolveDirBackground, type DirBackground } from "./dir-background.js";
 import { DIR_BACKGROUND_ROUTE, type PublicDirBackground } from "../../common/dirBackground.js";
@@ -53,6 +54,7 @@ import {
   dirOrderPriorityField,
   dirSkillsField,
   dirDecksField,
+  dirMobileFilesField,
   dirProviderField,
   dirModelField,
   dirAppendSystemPromptField,
@@ -98,6 +100,9 @@ export interface DirConfig extends DirChrome {
   // this dir doesn't filter, so the menu shows every discovered skill.
   skills: string[] | null;
   decks: string[] | null;
+  // What the phone may see (#2911): each declared directory already resolved to an absolute path
+  // and contained in this one. null when nothing survived, so the project stays invisible.
+  mobileFiles: MobileFilesConfig | null;
   // Which backend/model this directory's sessions run on (#579). Never a secret.
   provider: string | null;
   model: string | null;
@@ -191,6 +196,7 @@ const EMPTY: DirConfig = {
   commands: [],
   skills: null,
   decks: null,
+  mobileFiles: null,
   provider: null,
   model: null,
   addDirs: null,
@@ -231,6 +237,20 @@ function readConfigObject(file: string): Record<string, unknown> {
   }
 }
 
+export interface MobileFilesConfig {
+  dirs: string[];
+  extensions: MobileFileExtension[];
+}
+
+// A declared directory that escapes the project, does not exist, or is a file is dropped here, so
+// the key lands in Settings' "ignored" list rather than widening what the phone can reach.
+export function resolveMobileFiles(base: string, input: unknown): MobileFilesConfig | null {
+  const declared = dirMobileFilesField.parse(input);
+  if (!declared) return null;
+  const dirs = declared.dirs.flatMap((ref) => resolveDirWithinDir(base, ref) ?? []);
+  return dirs.length ? { dirs: [...new Set(dirs)], extensions: declared.extensions } : null;
+}
+
 export function loadDirConfig(cwd: string): DirConfig {
   try {
     const base = path.resolve(cwd);
@@ -261,6 +281,7 @@ export function loadDirConfig(cwd: string): DirConfig {
       commands: sanitizeButtons(raw.commands) ?? [],
       skills: dirSkillsField.parse(raw.skills),
       decks: dirDecksField.parse(raw.decks),
+      mobileFiles: resolveMobileFiles(base, raw.mobileFiles),
       provider: dirProviderField.parse(raw.provider),
       model: dirModelField.parse(raw.model),
       addDirs: resolveAddDirs(raw.addDirs, base, (p) => statSync(p).isDirectory()),
@@ -375,12 +396,14 @@ export interface DirConfigDetail {
 const chipLabel = (chip: HeaderChip): string => (typeof chip === "string" ? chip : chip.label);
 
 function dirConfigExtras(cwd: string): DirConfigExtras {
-  const { provider, model, skills, decks, addDirs, appendSystemPrompt, buttons, chips, commands, icon, worktreeEnv } = loadDirConfig(cwd);
+  const { provider, model, skills, decks, mobileFiles, addDirs, appendSystemPrompt, buttons, chips, commands, icon, worktreeEnv } = loadDirConfig(cwd);
   return {
     provider,
     model,
     skills,
     decks,
+    mobileFileDirs: (mobileFiles?.dirs ?? []).map((dir) => path.relative(cwd, dir) || "."),
+    mobileFileExtensions: mobileFiles?.extensions ?? [],
     addDirs,
     appendSystemPrompt,
     buttonLabels: (buttons ?? []).map((button) => button.label),

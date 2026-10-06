@@ -28,6 +28,8 @@ import { createHealthNotice } from "./healthNotice.js";
 import { createRemoteHostHandlers, type RemoteHostHandlerDeps } from "./handlers/index.js";
 import { createSaveAttachment } from "./attachmentStore.js";
 import { buildIngestAttachments } from "./ingestAttachments.js";
+import { randomUUID } from "node:crypto";
+import { createMobileFileStager, firebaseStagingStorage } from "./mobileFileStaging.js";
 import { onExpire } from "./onExpire.js";
 import { currentFirestore, currentStorage, currentUid, exportSession, reconnectErrorStatus, restore, signIn, signOut } from "./session.js";
 import { mountRemoteHostRoutes as mountRoutes } from "./routes.js";
@@ -45,16 +47,24 @@ let lifecycle: RemoteHostLifecycle | null = null;
 let health: RunnerHealth = { state: "offline", lastError: null, changedAt: 0 };
 export const currentHealth = (): RunnerHealth => health;
 
-// Everything the handlers need except `ingest`, which this module builds itself — it has to
-// read the LIVE session's storage/uid, which only exist once a connection is up. Derived
-// rather than restated so a new handler dependency cannot be added in one place only.
-export type RemoteHostBackendDeps = Omit<RemoteHostHandlerDeps, "ingest">;
+// Everything the handlers need except `ingest` and `mobileFileStager`, which this module builds
+// itself — they read the LIVE session's storage/uid, which only exist once a connection is up.
+// Derived rather than restated so a new handler dependency cannot be added in one place only.
+export type RemoteHostBackendDeps = Omit<RemoteHostHandlerDeps, "ingest" | "mobileFileStager">;
 
 export function initRemoteHostBackend(deps: RemoteHostBackendDeps): void {
   // Ingest pulls the phone's staged uploads (Firebase Storage, signed in as the
   // user) into data/attachments/ and hands startChat path-only attachments. Reads
   // the LIVE session's storage/uid (both change per (re)connect — see session.ts).
   const ingest = buildIngestAttachments({ storage: currentStorage, uid: currentUid, saveAttachment: createSaveAttachment(deps.workspace) });
+  const mobileFileStager = createMobileFileStager({
+    storage: firebaseStagingStorage(currentStorage),
+    uid: currentUid,
+    now: Date.now,
+    newId: randomUUID,
+    schedule: (run, delayMs) => setTimeout(run, delayMs).unref(),
+    warn: (message) => console.warn(message),
+  });
   const log = {
     info: (msg: string) => console.log(PREFIX, msg),
     warn: (msg: string) => console.warn(PREFIX, msg),
@@ -95,6 +105,7 @@ export function initRemoteHostBackend(deps: RemoteHostBackendDeps): void {
       spawnChat: deps.spawnChat,
       spawnIssueSeed: deps.spawnIssueSeed,
       ingest,
+      mobileFileStager,
       listTerminalSessions: deps.listTerminalSessions,
       captureTerminalScreen: deps.captureTerminalScreen,
       captureTerminalTranscript: deps.captureTerminalTranscript,

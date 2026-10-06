@@ -62,6 +62,7 @@ describe("createRemoteHostHandlers · getFeed", () => {
       workspace: ws,
       spawnChat: () => ({ chatId: "x" }),
       ingest: async () => ({ attachments: [], cleanupStaging: async () => {} }),
+      mobileFileStager: { stage: async () => ({ storagePath: "unused", expiresAtMs: 0 }), sweepExpired: async () => undefined },
       spawnIssueSeed: async () => ({ sessionId: "unused-session", agent: "claude" as const, seedRuns: false }),
       listTerminalSessions: async () => ({ sessions: [], icons: {} }),
       captureTerminalScreen: async () => ({ screen: "", suggestion: "", quickCommands: [] }),

@@ -17,7 +17,7 @@ import { toJsonObject, type CommandHandlers } from "@mulmoclaude/core/remote-hos
 import { listProjectRoots, type ProjectSummary } from "../../../infra/project-root.js";
 import { lastSegment, pathSegments } from "../../../../common/pathSegments.js";
 
-export const listCollectionProjects: CommandHandlers["listCollectionProjects"] = async () => toJsonObject({ projects: disambiguated(listProjectRoots()) });
+export const listCollectionProjects: CommandHandlers["listCollectionProjects"] = async () => toJsonObject({ projects: projectChoices(listProjectRoots()) });
 
 /** How many parent directories a duplicated label may borrow to become distinct. Two is enough to
  *  separate `~/mulmoclaude` from `~/git/ai/mulmoclaude`, which is the real case; a cap is what
@@ -37,7 +37,7 @@ const MAX_BORROWED_SEGMENTS = 2;
  *  rule exists so a command or an artifact never publishes the user's home directory). If two
  *  still collide after `MAX_BORROWED_SEGMENTS`, the id's first characters break the tie — ugly,
  *  but ugly and distinct beats pretty and ambiguous. */
-function disambiguated(projects: ProjectSummary[]): { id: string; label: string }[] {
+export function projectChoices(projects: ProjectSummary[]): { id: string; label: string }[] {
   const named = projects.map((project) => ({ id: project.id, cwd: project.cwd, label: pathFreeLabel(project) }));
   const counts = new Map<string, number>();
   for (const project of named) counts.set(project.label, (counts.get(project.label) ?? 0) + 1);

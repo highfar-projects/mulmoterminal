@@ -46,8 +46,9 @@ Issue: #2911（表示側は receptron/mulmoserver#343）
      `data:` URL に埋め込み、収まらなかった数を `omitted` で返す。
    - それ以外: Storage `users/{uid}/downloads/{uuid}` に `uploadBytes` し、`{ kind, storagePath, bytes }` を返す。
 5. **コマンド登録** — `handlers/index.ts` に `listMobileFiles` / `getMobileFile`。
-6. **文書** — `docs/remote-host-protocol.md` のコマンド表と型、`docs/guide/{en,ja}/config.md` の
-   プロジェクト設定、`server/skills/mulmoterminal-dirs` に `mobileFiles` を追記。
+6. **Settings** — Directory settings に「Phone files」の行を出す。編集フォームには載せない（ファイルだけで設定）。
+7. **文書** — `docs/remote-host-protocol.md` のコマンド表と型、`docs/guide/{en,ja}/config.md` の
+   プロジェクト設定、`decks` と同じく `server/skills/mulmoterminal-config` が持ち、`mulmoterminal-dirs` からは参照だけ。
 
 ## テスト
 
@@ -69,8 +70,8 @@ Issue: #2911（表示側は receptron/mulmoserver#343）
 
 - 保持時間は定数 `MOBILE_FILE_TTL_MS`（1時間）。
 - **ホストが消す**: アップロード時にタイマーで削除を予約する。
-- **ホスト再起動の取りこぼし**: 起動時に `users/{uid}/downloads/` を `listAll` で一覧し、
-  `timeCreated` が保持時間を過ぎた物を消す。
+- **ホスト再起動の取りこぼし**: スマホが次に一覧を開くか取得したときに `users/{uid}/downloads/` を
+  `listAll` で一覧し、`timeCreated` が保持時間を過ぎた物を消す（全件を一覧するので間隔を空けて実行）。
 - **消し忘れ防止（必須）**: バケットのライフサイクル規則で `downloads/` を1日で自動削除する。
   ホストのタイマーと起動時の掃除はどちらもホストが動いていることが前提なので、それが崩れても
   1日を超えて残らないことはこの規則が保証する。ライフサイクル規則は日単位でしか指定できないため、

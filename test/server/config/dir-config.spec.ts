@@ -41,6 +41,7 @@ const EMPTY = {
   commands: [],
   skills: null,
   decks: null,
+  mobileFiles: null,
   provider: null,
   model: null,
   addDirs: null,
@@ -178,6 +179,7 @@ describe("loadDirConfig", () => {
       commands: [],
       skills: ["review", "commit"], // trimmed, deduped, empties dropped
       decks: ["decks/talk.json"], // the same treatment
+      mobileFiles: null,
       provider: null,
       model: null,
       addDirs: null,
@@ -285,6 +287,40 @@ describe("loadDirConfig", () => {
     const arr = withConfig([1, 2, 3]);
     expect(loadDirConfig(arr.dir)).toEqual(EMPTY);
     arr.cleanup();
+  });
+});
+
+describe("mobileFiles", () => {
+  it("resolves declared directories inside the project and narrows the extensions", () => {
+    const { dir, cleanup } = withConfig({ mobileFiles: { dirs: ["output", " output ", "docs/out"], extensions: [".MD", "pdf", "env"] } });
+    mkdirSync(path.join(dir, "output"));
+    mkdirSync(path.join(dir, "docs", "out"), { recursive: true });
+    expect(loadDirConfig(dir).mobileFiles).toEqual({ dirs: [path.join(dir, "output"), path.join(dir, "docs", "out")], extensions: ["md", "pdf"] });
+    cleanup();
+  });
+
+  it.each([
+    ["a climb out", { dirs: ["../"], extensions: ["md"] }],
+    ["an absolute path", { dirs: ["/tmp"], extensions: ["md"] }],
+    ["a missing directory", { dirs: ["nope"], extensions: ["md"] }],
+    ["a file, not a directory", { dirs: ["file.md"], extensions: ["md"] }],
+    ["no allowed extension", { dirs: ["output"], extensions: ["env", "sh"] }],
+    ["an empty list", { dirs: [], extensions: ["md"] }],
+    ["a malformed value", "output"],
+  ])("drops the whole key for %s", (_label, value) => {
+    const { dir, cleanup } = withConfig({ mobileFiles: value });
+    mkdirSync(path.join(dir, "output"));
+    writeFileSync(path.join(dir, "file.md"), "x");
+    expect(loadDirConfig(dir).mobileFiles).toBeNull();
+    cleanup();
+  });
+
+  it("refuses a directory that is a symlink out of the project", () => {
+    const outside = tmp();
+    const { dir, cleanup } = withConfig({ mobileFiles: { dirs: ["link"], extensions: ["md"] } });
+    symlinkSync(outside, path.join(dir, "link"));
+    expect(loadDirConfig(dir).mobileFiles).toBeNull();
+    cleanup();
   });
 });
 
@@ -506,6 +542,8 @@ describe("dirConfigDetail", () => {
       model: null,
       skills: null,
       decks: null,
+      mobileFileDirs: [],
+      mobileFileExtensions: [],
       addDirs: null,
       appendSystemPrompt: null,
       buttonLabels: [],

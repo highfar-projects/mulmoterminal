@@ -39,9 +39,13 @@ describe("DIR_FORM_FIELDS", () => {
 
 // Every key a directory's config holds can be set from the form (#2722). A key added to the loader
 // fails here until the form offers it — or until this says, with a reason, why it does not.
+// `mobileFiles` decides what leaves this machine for the phone (#2911); it is written in the file
+// on purpose, where a reviewer of the repository sees it, rather than clicked on in a form.
+const NOT_IN_FORM = ["mobileFiles"];
+
 describe("DIR_FORM_KEYS", () => {
   it("is every key the loader reads", () => {
-    expect([...DIR_FORM_KEYS].sort()).toEqual([...DIR_CONFIG_KEYS].sort());
+    expect([...DIR_FORM_KEYS].sort()).toEqual([...DIR_CONFIG_KEYS].filter((key) => !NOT_IN_FORM.includes(key)).sort());
   });
 });
 
