@@ -1,5 +1,5 @@
 // Handing the phone a file too large for the command document (#2911): the host puts it in the
-// OWNER's Storage area, `users/{uid}/downloads/`, and deletes it again within the hour.
+// OWNER's Storage area, `downloads/{uid}/`, and deletes it again within the hour.
 //
 // Three layers of deletion, because each one depends on something the next does not:
 //   1. a timer per object, armed at upload — needs this process to stay up;
@@ -45,7 +45,9 @@ export interface StagedObject {
   expiresAtMs: number;
 }
 
-export const downloadsPrefix = (uid: string): string => `users/${uid}/downloads`;
+// `downloads/` LEADS, not `users/{uid}/`: the bucket's lifecycle rule matches by prefix only, and
+// the one-day backstop has to name every user's staged files at once.
+export const downloadsPrefix = (uid: string): string => `downloads/${uid}`;
 
 export function createMobileFileStager(deps: StagingDeps) {
   const cache = new Map<string, StagedObject>();

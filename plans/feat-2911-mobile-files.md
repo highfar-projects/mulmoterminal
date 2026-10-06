@@ -44,7 +44,7 @@ Issue: #2911（表示側は receptron/mulmoserver#343）
      一覧に載っていたかどうかには頼らない（スマホが送る値は信用しない）。
    - md / html で本文が上限以下: `{ kind, inline: text }`。相対パスの画像は上限の残りの範囲で
      `data:` URL に埋め込み、収まらなかった数を `omitted` で返す。
-   - それ以外: Storage `users/{uid}/downloads/{uuid}` に `uploadBytes` し、`{ kind, storagePath, bytes }` を返す。
+   - それ以外: Storage `downloads/{uid}/{uuid}` に `uploadBytes` し、`{ kind, storagePath, bytes }` を返す。
 5. **コマンド登録** — `handlers/index.ts` に `listMobileFiles` / `getMobileFile`。
 6. **Settings** — Directory settings に「Phone files」の行を出す。編集フォームには載せない（ファイルだけで設定）。
 7. **文書** — `docs/remote-host-protocol.md` のコマンド表と型、`docs/guide/{en,ja}/config.md` の
@@ -70,7 +70,7 @@ Issue: #2911（表示側は receptron/mulmoserver#343）
 
 - 保持時間は定数 `MOBILE_FILE_TTL_MS`（1時間）。
 - **ホストが消す**: アップロード時にタイマーで削除を予約する。
-- **ホスト再起動の取りこぼし**: スマホが次に一覧を開くか取得したときに `users/{uid}/downloads/` を
+- **ホスト再起動の取りこぼし**: スマホが次に一覧を開くか取得したときに `downloads/{uid}/` を
   `listAll` で一覧し、`timeCreated` が保持時間を過ぎた物を消す（全件を一覧するので間隔を空けて実行）。
 - **消し忘れ防止（必須）**: バケットのライフサイクル規則で `downloads/` を1日で自動削除する。
   ホストのタイマーと起動時の掃除はどちらもホストが動いていることが前提なので、それが崩れても
@@ -84,7 +84,7 @@ Issue: #2911（表示側は receptron/mulmoserver#343）
 本人（同じ Google アカウント）以外が、一覧・中身・Storage の物のどれにも届かないことを守る。
 
 - **コマンドチャネル**: 既存の `users/{uid}/hosts/...` を使う。`firestore.rules` で本人の uid に限定済みで、新しい経路は作らない。
-- **Storage の規則**: `users/{uid}/downloads/{objectId}` は読む・一覧・書く・消すのすべてを
+- **Storage の規則**: `downloads/{uid}/{objectId}` は読む・一覧・書く・消すのすべてを
   `request.auth.uid == uid` に限定する。書き込みは許可した種類とサイズだけにする。
   それ以外は既存の「すべて拒否」に落ちる。
 - **規則のテスト（mulmoserver#343）**: `test/rules/rules_shapes.ts` と同じ形で、別の uid と未ログインからの

@@ -385,7 +385,7 @@ type MobileFileContent =
   (`sandbox="allow-scripts"`, no `allow-same-origin`) as it is. Markdown arrives raw — render it
   through the phone's sanitising renderer. Relative images inside a declared directory are already
   `data:` URLs; `omittedImages` counts the ones that were not.
-- **`storage`** names an object under `users/{uid}/downloads/`. Read it with the signed-in user's
+- **`storage`** names an object under `downloads/{uid}/`. Read it with the signed-in user's
   own credentials (`getBlob`) — **never `getDownloadURL`**, whose token URL anyone holding it can
   open. The host deletes it at `expiresAt` (an hour), sweeps leftovers when the phone next lists or
   opens, and the bucket's lifecycle rule removes anything older than a day.

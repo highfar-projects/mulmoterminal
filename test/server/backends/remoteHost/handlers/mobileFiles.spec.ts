@@ -18,7 +18,7 @@ function setup(config: unknown) {
   const stager: MobileFileStager = {
     stage: async (key, read, contentType) => {
       staged.push({ path: key.absolutePath, contentType, bytes: (await read()).length });
-      return { storagePath: `users/u/downloads/id-${staged.length}`, expiresAtMs: Date.UTC(2026, 0, 1) };
+      return { storagePath: `downloads/u/id-${staged.length}`, expiresAtMs: Date.UTC(2026, 0, 1) };
     },
     sweepExpired: async () => undefined,
   };
@@ -100,7 +100,7 @@ describe("getMobileFile", () => {
     const { handlers, write, staged } = setup({ dirs: ["output"], extensions: ["pdf"] });
     write("output/a.pdf", "%PDF");
     const result = await call(handlers, "getMobileFile", { path: "output/a.pdf" });
-    expect(result).toMatchObject({ delivery: "storage", kind: "pdf", storagePath: "users/u/downloads/id-1", contentType: "application/pdf", bytes: 4 });
+    expect(result).toMatchObject({ delivery: "storage", kind: "pdf", storagePath: "downloads/u/id-1", contentType: "application/pdf", bytes: 4 });
     expect(staged).toHaveLength(1);
   });
 

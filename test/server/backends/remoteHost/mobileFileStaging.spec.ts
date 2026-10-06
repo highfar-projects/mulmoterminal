@@ -42,8 +42,8 @@ describe("createMobileFileStager", () => {
   it("uploads under the owner's downloads prefix with a random name, and arms deletion at the TTL", async () => {
     const { stager, uploads, timers, clock } = harness();
     const staged = await stager.stage(key, read, "application/pdf");
-    expect(staged).toEqual({ storagePath: "users/user-1/downloads/id-1", expiresAtMs: clock.now + MOBILE_FILE_TTL_MS });
-    expect(uploads).toEqual(["users/user-1/downloads/id-1"]);
+    expect(staged).toEqual({ storagePath: "downloads/user-1/id-1", expiresAtMs: clock.now + MOBILE_FILE_TTL_MS });
+    expect(uploads).toEqual(["downloads/user-1/id-1"]);
     expect(timers.map((timer) => timer.delayMs)).toEqual([MOBILE_FILE_TTL_MS]);
   });
 
@@ -82,7 +82,7 @@ describe("createMobileFileStager", () => {
     await stager.stage(key, read, "application/pdf");
     timers[0]?.run();
     await settle();
-    expect(removed).toEqual(["users/user-1/downloads/id-1"]);
+    expect(removed).toEqual(["downloads/user-1/id-1"]);
     await stager.stage(key, read, "application/pdf");
     expect(uploads).toHaveLength(2);
   });
@@ -90,13 +90,13 @@ describe("createMobileFileStager", () => {
   it("sweeps only what is past its hour, and not more often than its interval", async () => {
     const { stager, removed, clock, lists } = harness({
       listed: [
-        { storagePath: "users/user-1/downloads/old", createdAtMs: 1_000_000 - MOBILE_FILE_TTL_MS },
-        { storagePath: "users/user-1/downloads/fresh", createdAtMs: 1_000_000 - 1 },
-        { storagePath: "users/user-1/downloads/unknown", createdAtMs: Number.NaN },
+        { storagePath: "downloads/user-1/old", createdAtMs: 1_000_000 - MOBILE_FILE_TTL_MS },
+        { storagePath: "downloads/user-1/fresh", createdAtMs: 1_000_000 - 1 },
+        { storagePath: "downloads/user-1/unknown", createdAtMs: Number.NaN },
       ],
     });
     await stager.sweepExpired();
-    expect(removed).toEqual(["users/user-1/downloads/old"]);
+    expect(removed).toEqual(["downloads/user-1/old"]);
     await stager.sweepExpired();
     expect(lists()).toBe(1);
     clock.now += MOBILE_FILE_TTL_MS;
