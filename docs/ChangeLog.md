@@ -8,6 +8,10 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+### Phone: open a terminal's shared files from the terminal (#2915)
+
+- [#2916](https://github.com/receptron/mulmoterminal/pull/2916) — `getTerminalScreen` gains `mobileFilesProject`, the opaque id of the project the session works in, so the phone's terminal page can link straight to that project's shared files. It is the deepest project (the workspace or a registered directory) containing the session's directory, and only when that project itself declares `mobileFiles`: a sub-project that shares nothing does not fall back to the enclosing workspace's files. Only the id travels, never a path, and the key is omitted when there is nothing to link. The phone side is receptron/mulmoserver#346 (the folder button on the terminal page, and the files icon moved beside Issues) and #348 (the way back to the terminal).
+
 ## mulmoterminal@9.0.0 — 2026-10-07
 
 > **Setup guide:** [9.0.0 — Remotion scenes in MulmoCast videos, choosing files for your phone, and movies that no longer "fail" after a minute](https://receptron.github.io/mulmoterminal/guide/en/v9.0.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v9.0.0.html))
