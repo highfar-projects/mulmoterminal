@@ -63,6 +63,7 @@ describe("resolveRequestedFile", () => {
     ["a climb out", "output/../notes.md"],
     ["an absolute path", "/etc/hosts"],
     ["a backslash path", "output\\a.md"],
+    ["a file under node_modules", "output/node_modules/a.md"],
     ["an empty path", ""],
     ["a missing file", "output/none.md"],
   ])("refuses %s", async (_label, requested) => {
@@ -70,6 +71,7 @@ describe("resolveRequestedFile", () => {
     write("notes.md");
     write("output/a.html");
     write("output/.a.md");
+    write("output/node_modules/a.md");
     expect(await resolveRequestedFile(root, config, requested)).toBeNull();
   });
 

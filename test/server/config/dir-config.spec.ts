@@ -315,6 +315,14 @@ describe("mobileFiles", () => {
     cleanup();
   });
 
+  it.each([[".git"], ["node_modules/pkg"], ["out/.cache"], ["link-to-hidden"]])("drops a hidden or vendored root (%s)", (ref) => {
+    const { dir, cleanup } = withConfig({ mobileFiles: { dirs: [ref], extensions: ["md"] } });
+    [".git", "node_modules/pkg", "out/.cache", ".hidden"].forEach((sub) => mkdirSync(path.join(dir, sub), { recursive: true }));
+    symlinkSync(path.join(dir, ".hidden"), path.join(dir, "link-to-hidden"));
+    expect(loadDirConfig(dir).mobileFiles).toBeNull();
+    cleanup();
+  });
+
   it("refuses a directory that is a symlink out of the project", () => {
     const outside = tmp();
     const { dir, cleanup } = withConfig({ mobileFiles: { dirs: ["link"], extensions: ["md"] } });

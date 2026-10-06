@@ -1,6 +1,14 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { extensionOf, isServableMobilePath, mobileFileContentType, mobileFileKind, normalizeMobileFileExtensions } from "../../common/mobileFiles";
+import {
+  MOBILE_FILE_EXTENSIONS,
+  MOBILE_FILE_EXTENSION_PATTERN,
+  extensionOf,
+  isServableMobilePath,
+  mobileFileContentType,
+  mobileFileKind,
+  normalizeMobileFileExtensions,
+} from "../../common/mobileFiles";
 
 describe("normalizeMobileFileExtensions", () => {
   it("trims, lowercases, drops a leading dot and dedupes", () => {
@@ -52,7 +60,26 @@ describe("isServableMobilePath", () => {
     expect(isServableMobilePath(input, md)).toBe(false);
   });
 
-  it.each([".secret.md", ".git/x.md", "a/.hidden/b.md", "../a.md", "a/../b.md", "a//b.md", "/a.md", ""])("refuses %j", (input) => {
-    expect(isServableMobilePath(input, md)).toBe(false);
+  it.each(["node_modules/x.md", "a/node_modules/b.md", ".secret.md", ".git/x.md", "a/.hidden/b.md", "../a.md", "a/../b.md", "a//b.md", "/a.md", ""])(
+    "refuses %j",
+    (input) => {
+      expect(isServableMobilePath(input, md)).toBe(false);
+    },
+  );
+});
+
+describe("MOBILE_FILE_EXTENSION_PATTERN", () => {
+  it("accepts exactly what normalizeMobileFileExtensions keeps, in any spelling", () => {
+    MOBILE_FILE_EXTENSIONS.forEach((extension) => {
+      [extension, `.${extension}`, extension.toUpperCase(), ` .${extension} `].forEach((written) => {
+        expect(MOBILE_FILE_EXTENSION_PATTERN.test(written)).toBe(true);
+        expect(normalizeMobileFileExtensions([written])).toEqual([extension]);
+      });
+    });
+  });
+
+  it.each(["svg", "env", "json", "mdx", "..md", "md.", "", "h tml"])("refuses %j, as the loader does", (written) => {
+    expect(MOBILE_FILE_EXTENSION_PATTERN.test(written)).toBe(false);
+    expect(normalizeMobileFileExtensions([written])).toEqual([]);
   });
 });

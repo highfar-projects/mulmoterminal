@@ -43,7 +43,7 @@ import { ACCOUNT_AGENTS, type AgentAccount } from "../../common/agentAccounts.js
 import { MAX_HEADER_CHIPS } from "../../common/headerChips.js";
 import { MAX_HEADER_BUTTONS } from "../../common/headerButtonEntries.js";
 import { VIEW_TARGETS } from "../../common/viewTargets.js";
-import { MAX_MOBILE_FILE_DIRS, MOBILE_FILE_EXTENSIONS, normalizeMobileFileExtensions } from "../../common/mobileFiles.js";
+import { MAX_MOBILE_FILE_DIRS, MOBILE_FILE_EXTENSION_PATTERN, normalizeMobileFileExtensions } from "../../common/mobileFiles.js";
 
 // ---- shared constants ---------------------------------------------------------------------
 
@@ -603,7 +603,7 @@ const writableDirConfigSchema = z.object({
   mobileFiles: z
     .object({
       dirs: z.array(nonEmptyText).min(1).max(MAX_MOBILE_FILE_DIRS),
-      extensions: z.array(z.enum(MOBILE_FILE_EXTENSIONS)).min(1),
+      extensions: z.array(z.string().regex(MOBILE_FILE_EXTENSION_PATTERN)).min(1),
     })
     .optional(),
   // Which backend this directory's sessions run on (#579). `provider` names an entry in the

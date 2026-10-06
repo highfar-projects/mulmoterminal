@@ -8,7 +8,7 @@
 import { readdir, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 
-import { isServableMobilePath, mobileFileKind, type MobileFileEntry } from "../../../common/mobileFiles.js";
+import { isExcludedSegment, isServableMobilePath, mobileFileKind, type MobileFileEntry } from "../../../common/mobileFiles.js";
 import type { MobileFilesConfig } from "../../config/dir-config.js";
 import { isWithin } from "../../infra/path-within.js";
 
@@ -16,8 +16,6 @@ import { isWithin } from "../../infra/path-within.js";
 export const MAX_WALK_DEPTH = 6;
 /** How many directory entries one listing may examine before it stops and says it was truncated. */
 export const MAX_WALK_ENTRIES = 5000;
-/** Never descended into: rebuilt from a lockfile, and large enough to spend the whole budget. */
-const SKIPPED_DIRS = new Set(["node_modules"]);
 
 const toPosix = (relative: string): string => relative.split(path.sep).join("/");
 
@@ -35,10 +33,10 @@ async function walkDir(declaredDir: string, dir: string, depth: number, config: 
       return;
     }
     state.examined += 1;
-    if (entry.name.startsWith(".") || entry.isSymbolicLink()) continue;
+    if (isExcludedSegment(entry.name) || entry.isSymbolicLink()) continue;
     const absolute = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (depth < MAX_WALK_DEPTH && !SKIPPED_DIRS.has(entry.name)) await walkDir(declaredDir, absolute, depth + 1, config, state);
+      if (depth < MAX_WALK_DEPTH) await walkDir(declaredDir, absolute, depth + 1, config, state);
       continue;
     }
     if (entry.isFile() && isServableMobilePath(toPosix(path.relative(declaredDir, absolute)), config.extensions)) {

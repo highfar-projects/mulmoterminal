@@ -4,7 +4,7 @@
 // terminal falls back to the global theme/sound. Field validation lives in the zod
 // schemas of config-schema.ts; the path-confinement check for `sound` (the security
 // surface) stays here because it touches the filesystem.
-import { existsSync, statSync } from "node:fs";
+import { existsSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { sanitizeButtons, sanitizeChips } from "./header-config.js";
 import { EMPTY_DIR_CHROME, type DirChrome } from "../../common/dirChrome.js";
@@ -17,7 +17,7 @@ import {
   type DirConfigExtras,
 } from "../../common/dirConfigSource.js";
 import { resolveDirWithinDir, resolveFileWithinDir } from "./dir-file.js";
-import type { MobileFileExtension } from "../../common/mobileFiles.js";
+import { isExcludedSegment, type MobileFileExtension } from "../../common/mobileFiles.js";
 import { resolveDirIcon, dirIconImage, dirIconNamed, dirIconRef, type DirIcon, type DirIconSetting } from "./dir-icon.js";
 import { resolveDirBackground, type DirBackground } from "./dir-background.js";
 import { DIR_BACKGROUND_ROUTE, type PublicDirBackground } from "../../common/dirBackground.js";
@@ -242,12 +242,23 @@ export interface MobileFilesConfig {
   extensions: MobileFileExtension[];
 }
 
-// A declared directory that escapes the project, does not exist, or is a file is dropped here, so
-// the key lands in Settings' "ignored" list rather than widening what the phone can reach.
+// Whether a contained directory sits, as written or once its links are followed, under a hidden or
+// vendored segment — declaring `.git` must not open what the walk would never list.
+function isExcludedRoot(base: string, dir: string): boolean {
+  try {
+    const segments = [path.relative(base, dir), path.relative(realpathSync.native(base), realpathSync.native(dir))].flatMap((rel) => rel.split(path.sep));
+    return segments.some((segment) => segment !== "" && isExcludedSegment(segment));
+  } catch {
+    return true;
+  }
+}
+
+// A declared directory that escapes the project, does not exist, is a file, or is hidden is dropped
+// here, so the key lands in Settings' "ignored" list rather than widening what the phone can reach.
 export function resolveMobileFiles(base: string, input: unknown): MobileFilesConfig | null {
   const declared = dirMobileFilesField.parse(input);
   if (!declared) return null;
-  const dirs = declared.dirs.flatMap((ref) => resolveDirWithinDir(base, ref) ?? []);
+  const dirs = declared.dirs.flatMap((ref) => resolveDirWithinDir(base, ref) ?? []).filter((dir) => !isExcludedRoot(base, dir));
   return dirs.length ? { dirs: [...new Set(dirs)], extensions: declared.extensions } : null;
 }
 

@@ -30,6 +30,10 @@ const isMobileFileExtension = (value: string): value is MobileFileExtension => M
 
 export const MAX_MOBILE_FILE_DIRS = 16;
 
+/** One `extensions` entry as a person writes it — any case, an optional leading dot. The editor's
+ *  schema needs a pattern rather than a list, and a spec pins it to MOBILE_FILE_EXTENSIONS. */
+export const MOBILE_FILE_EXTENSION_PATTERN = /^\s*\.?(?:md|markdown|html?|pdf|png|jpe?g|gif|webp)\s*$/i;
+
 /** The extension of the last path segment, lowercased, without the dot; "" when there is none. */
 export function extensionOf(relativePath: string): string {
   const name = relativePath.split("/").pop() ?? "";
@@ -58,12 +62,15 @@ export function normalizeMobileFileExtensions(input: unknown): MobileFileExtensi
   return [...new Set(cleaned)];
 }
 
+/** A path segment the phone never sees into: hidden (`.env`, `.git`) or a vendored dependency tree. */
+export const isExcludedSegment = (segment: string): boolean => segment.startsWith(".") || segment === "node_modules";
+
 /** Whether a path (POSIX, relative to a declared directory) names a file the phone may see:
- *  no segment hidden (a `.env`, anything under `.git`), no empty or `..` segment, and an
- *  extension the project declared. */
+ *  no excluded segment (`.env`, anything under `.git` or `node_modules`), no empty or `..`
+ *  segment, and an extension the project declared. */
 export function isServableMobilePath(relativePath: string, extensions: readonly MobileFileExtension[]): boolean {
   const segments = relativePath.split("/");
-  if (segments.some((segment) => segment === "" || segment === ".." || segment.startsWith("."))) return false;
+  if (segments.some((segment) => segment === "" || segment === ".." || isExcludedSegment(segment))) return false;
   const extension = extensionOf(relativePath);
   return isMobileFileExtension(extension) && extensions.includes(extension);
 }
