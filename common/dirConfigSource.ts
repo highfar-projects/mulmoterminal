@@ -33,6 +33,7 @@ export const DIR_CONFIG_KEYS = [
   "commands",
   "skills",
   "decks",
+  "mobileFiles",
   "provider",
   "model",
   "addDirs",
@@ -76,6 +77,10 @@ export interface DirConfigExtras {
   model: string | null;
   skills: string[] | null;
   decks: string[] | null;
+  // What the phone may see (#2911): the declared directories relative to this one, and the
+  // extensions that survived the host's allowlist. Empty when the key is absent or was dropped.
+  mobileFileDirs: string[];
+  mobileFileExtensions: string[];
   addDirs: string[] | null;
   // Tri-state on purpose: `false` is a setting this file made, and the preview has to show it as
   // one. Carried here because a boolean cannot be read back off the per-cell config the way a
@@ -99,6 +104,8 @@ export const EMPTY_DIR_CONFIG_EXTRAS: DirConfigExtras = {
   model: null,
   skills: null,
   decks: null,
+  mobileFileDirs: [],
+  mobileFileExtensions: [],
   addDirs: null,
   appendSystemPrompt: null,
   buttonLabels: [],

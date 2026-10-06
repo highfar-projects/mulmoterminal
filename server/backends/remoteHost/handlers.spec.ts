@@ -12,6 +12,7 @@ import { initCollectionsBackend } from "../collections.js";
 import type { AnswerFailure, AnswerResult } from "../../../common/askQuestion.js";
 
 const unusedTerminalDeps = {
+  mobileFileStager: { stage: async () => ({ storagePath: "unused", expiresAtMs: 0 }), sweepExpired: async () => undefined },
   spawnIssueSeed: async () => ({ sessionId: "unused-session", agent: "claude" as const, seedRuns: false }),
   listTerminalSessions: async () => ({ sessions: [], icons: {} }),
   captureTerminalScreen: async () => ({ screen: "", suggestion: "", quickCommands: [] }),
@@ -92,6 +93,10 @@ describe("createRemoteHostHandlers", () => {
   it("startChat rejects an empty message without spawning", async () => {
     await expect(handlers.startChat({ message: "   " })).rejects.toThrow(/message is required/);
     expect(spawned).toEqual([]);
+  });
+
+  it("serves the phone's file commands (#2911)", () => {
+    expect(Object.keys(handlers)).toEqual(expect.arrayContaining(["listMobileFileProjects", "listMobileFiles", "getMobileFile"]));
   });
 
   it("startChat ingests attachments and references their saved paths in the prompt", async () => {

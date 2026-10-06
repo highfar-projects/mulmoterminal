@@ -175,7 +175,7 @@ Open it in the Files pane and the editor knows this file's keys: it offers them 
 
 To get to it from Settings: **Settings → Directory settings**, expand a directory, and press **Open in Files** beside its file — or, where it has none yet, **Create .mulmoterminal.json and open it**, which writes an empty `{}` first. Either one closes Settings and opens the file in the full-screen Files view.
 
-Or change it without opening the file: under the values, **Change here** has a row each for the name, the seven colours, the header's status style and its colour per status, the terminal theme and its palette, font size, font family, grid priority, the model its sessions start on, the closing-summary switch, extra directories (`addDirs`), the icon, the terminal background, the attention sounds, the header's buttons, chips and command-palette entries (the same editors as the global ones), the Skill menu, the Mulmo menu's decks and the per-worktree variables — every key the file can hold. **This checkout only** moves a key into `.mulmoterminal.local.json`, and **Share** moves it back. From a terminal, the path menu (click the directory in its header) has **This directory's settings**, which opens Settings with that directory's row open. Setting any status colour here replaces the global set of status colours for that directory, as `headerStatusColors` in the file always has. The status colours and the palette are saved as a whole set, so an entry the app already ignores there (an unknown palette key, a value that is not a colour) is dropped by the next save from the form. A change is saved as soon as you leave the field (or pick the colour) and applies at once; **Use global** removes that key so the global setting applies again. Keys the form does not show are left as they are. A key `.mulmoterminal.local.json` already holds is written there, marked *this checkout only*.
+Or change it without opening the file: under the values, **Change here** has a row each for the name, the seven colours, the header's status style and its colour per status, the terminal theme and its palette, font size, font family, grid priority, the model its sessions start on, the closing-summary switch, extra directories (`addDirs`), the icon, the terminal background, the attention sounds, the header's buttons, chips and command-palette entries (the same editors as the global ones), the Skill menu, the Mulmo menu's decks and the per-worktree variables — every key the file can hold except `mobileFiles`, which is set in the file only. **This checkout only** moves a key into `.mulmoterminal.local.json`, and **Share** moves it back. From a terminal, the path menu (click the directory in its header) has **This directory's settings**, which opens Settings with that directory's row open. Setting any status colour here replaces the global set of status colours for that directory, as `headerStatusColors` in the file always has. The status colours and the palette are saved as a whole set, so an entry the app already ignores there (an unknown palette key, a value that is not a colour) is dropped by the next save from the form. A change is saved as soon as you leave the field (or pick the colour) and applies at once; **Use global** removes that key so the global setting applies again. Keys the form does not show are left as they are. A key `.mulmoterminal.local.json` already holds is written there, marked *this checkout only*.
 
 ### Which model to use
 
@@ -653,6 +653,29 @@ Two sources, and it never searches your disk:
   64 in total, skipping any that is no longer on disk. Those are read **once at startup**, so a
   repository opened for the first time needs a restart. Any other deck is still one right-click away
   in the file tree (**Open in the Canvas**).
+
+### Files the phone may open (`mobileFiles`) {#mobile-files}
+
+Which of this project's files the phone (the mulmoserver remote) can list and open — a report an
+agent wrote, a PDF, a chart image. **Nothing is shared until you add this key**, the workspace
+included.
+
+```json
+{ "mobileFiles": { "dirs": ["output"], "extensions": ["md", "html", "pdf", "png"] } }
+```
+
+- **`dirs`** — directories relative to this file, and inside it. `../`, an absolute path, a symlink
+  that leads out, or a directory that is not there is dropped; if none is left, the key is ignored
+  (Settings → Directory settings lists it under *ignored*).
+- **`extensions`** — only `md`, `markdown`, `html`, `htm`, `pdf`, `png`, `jpg`, `jpeg`, `gif` and
+  `webp` can be shared. Anything else you list is dropped.
+- Hidden files and folders (`.env`, `.git/`) and `node_modules` are never shown.
+- On the phone the list comes first, newest file at the top; a file is sent only when you open it.
+  A small markdown or html file travels with the reply. A larger file is placed in **your own**
+  storage area, readable only by your account, and deleted after an hour.
+- An html page is shown with every network request blocked, and the images it names are embedded
+  if they are inside a declared directory.
+- A worktree does not inherit this key.
 
 ### Closing summary for this directory (`appendSystemPrompt`)
 

@@ -40,6 +40,7 @@ const FIXTURES: Record<string, unknown> = {
   commands: [{ id: "c1", label: "Release", run: "shell", cmd: "make release" }],
   skills: ["review"],
   decks: ["decks/talk.json"],
+  mobileFiles: { dirs: ["sibling"], extensions: ["md"] },
   provider: "openrouter",
   model: "opus",
   addDirs: ["./sibling"], // created below — a path that doesn't exist is dropped by the loader

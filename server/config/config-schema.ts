@@ -43,6 +43,7 @@ import { ACCOUNT_AGENTS, type AgentAccount } from "../../common/agentAccounts.js
 import { MAX_HEADER_CHIPS } from "../../common/headerChips.js";
 import { MAX_HEADER_BUTTONS } from "../../common/headerButtonEntries.js";
 import { VIEW_TARGETS } from "../../common/viewTargets.js";
+import { MAX_MOBILE_FILE_DIRS, MOBILE_FILE_EXTENSION_PATTERN, normalizeMobileFileExtensions } from "../../common/mobileFiles.js";
 
 // ---- shared constants ---------------------------------------------------------------------
 
@@ -362,6 +363,20 @@ export const dirDecksField = z
   .nullable()
   .catch(null);
 
+// What the phone may see of this directory (#2911): directories relative to the file, and the
+// extensions inside them. Declared rather than discovered, like `decks`, and narrowed to the
+// host's allowlist here; the directories are resolved and contained by dir-config.ts. Null when
+// either list ends up empty, which leaves the project invisible to the phone.
+export const dirMobileFilesField = z
+  .object({ dirs: z.array(z.string()), extensions: z.array(z.string()) })
+  .transform(({ dirs, extensions }) => {
+    const cleanedDirs = [...new Set(dirs.map((d) => d.trim()).filter(Boolean))].slice(0, MAX_MOBILE_FILE_DIRS);
+    const cleanedExtensions = normalizeMobileFileExtensions(extensions);
+    return cleanedDirs.length && cleanedExtensions.length ? { dirs: cleanedDirs, extensions: cleanedExtensions } : null;
+  })
+  .nullable()
+  .catch(null);
+
 // Extra directories a session may read/edit — Claude Code's `--add-dir` (#908), the
 // terminal-side answer to opening several folders in one VS Code workspace. Relative
 // entries resolve against the directory holding the config, which is what a reader of
@@ -584,6 +599,13 @@ const writableDirConfigSchema = z.object({
   // Header Mulmo-menu decks: paths, relative to this file, of mulmoScripts kept in this
   // repository. The workspace's own `artifacts/stories` is always offered; this adds to it.
   decks: z.array(nonEmptyText).max(MAX_DECK_DECLARATIONS).optional(),
+  // Directories (relative to this file) and extensions the phone may list and open (#2911).
+  mobileFiles: z
+    .object({
+      dirs: z.array(nonEmptyText).min(1).max(MAX_MOBILE_FILE_DIRS),
+      extensions: z.array(z.string().regex(MOBILE_FILE_EXTENSION_PATTERN)).min(1),
+    })
+    .optional(),
   // Which backend this directory's sessions run on (#579). `provider` names an entry in the
   // global config's `providers`; `model` alone picks a different model on Anthropic itself.
   provider: nonEmptyText.optional(),

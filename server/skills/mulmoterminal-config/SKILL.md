@@ -1,6 +1,6 @@
 ---
 name: mulmoterminal-config
-description: The way into configuring MulmoTerminal, and the way to find out how it is configured now. Use for a broad or unsure request — "configure MulmoTerminal", "set this up", "customize this", "what can I change?", first-run setup — and route to the skill that owns the area. Also answers "how is this set up right now?", "why isn't my setting working?", "did that take effect?" by reading the live config — the global `~/.mulmoterminal/config.json`, each project's `.mulmoterminal.json`, and what the app ACTUALLY parsed from them — including keys it dropped in validation, which is the difference between a setting you never made and one that silently never applied. Owns the global settings that have no skill of their own — work comments on an issue (issueWorkComments), the PR clone footer (prWorkdirFooter), the closing summary (appendSystemPrompt), the decision digest (decisionDigest), the periodic dev-work log (worklogEnabled), roster row length (cockpitLines), the grid header's load read-out (showLoadAverage), a search box in the middle of the top bar (paletteSearchBox), an experimental switch for a server on another machine (remoteServer), the occasional terminal theatre (playfulEffects), pinned collections on the toolbar (toolbarPins), a self-hosted GitLab (gitlabHosts), a project's Skill menu (skills), and a project's Mulmo menu (decks). When the request names another area, go straight to that skill instead — mulmoterminal-dirs (colours, grid order, project names, font size), mulmoterminal-theme (your own colour scheme), mulmoterminal-header (buttons and chips), mulmoterminal-keys (shortcuts, copy-on-select, Enter behaviour), mulmoterminal-model (other models and backends, and your own command for starting Claude Code), mulmoterminal-notify (sounds and push).
+description: The way into configuring MulmoTerminal, and the way to find out how it is configured now. Use for a broad or unsure request — "configure MulmoTerminal", "set this up", "customize this", "what can I change?", first-run setup — and route to the skill that owns the area. Also answers "how is this set up right now?", "why isn't my setting working?", "did that take effect?" by reading the live config — the global `~/.mulmoterminal/config.json`, each project's `.mulmoterminal.json`, and what the app ACTUALLY parsed from them — including keys it dropped in validation, which is the difference between a setting you never made and one that silently never applied. Owns the global settings that have no skill of their own — work comments on an issue (issueWorkComments), the PR clone footer (prWorkdirFooter), the closing summary (appendSystemPrompt), the decision digest (decisionDigest), the periodic dev-work log (worklogEnabled), roster row length (cockpitLines), the grid header's load read-out (showLoadAverage), a search box in the middle of the top bar (paletteSearchBox), an experimental switch for a server on another machine (remoteServer), the occasional terminal theatre (playfulEffects), pinned collections on the toolbar (toolbarPins), a self-hosted GitLab (gitlabHosts), a project's Skill menu (skills), a project's Mulmo menu (decks), and the files a project shows on the phone (mobileFiles). When the request names another area, go straight to that skill instead — mulmoterminal-dirs (colours, grid order, project names, font size), mulmoterminal-theme (your own colour scheme), mulmoterminal-header (buttons and chips), mulmoterminal-keys (shortcuts, copy-on-select, Enter behaviour), mulmoterminal-model (other models and backends, and your own command for starting Claude Code), mulmoterminal-notify (sounds and push).
 ---
 
 # Configuring MulmoTerminal — start here
@@ -145,7 +145,7 @@ State these when they matter; they are the ones that cost people an afternoon.
 
 ## The settings that live here
 
-None is big enough to warrant its own skill. **All of them also have a Settings control** (`skills` and `decks` per project, in Settings → Directory settings → Change here) — offer that first, and use these when the user would rather be told the key, or is
+None is big enough to warrant its own skill. **All of them but `mobileFiles` also have a Settings control** (`skills` and `decks` per project, in Settings → Directory settings → Change here) — offer that first, and use these when the user would rather be told the key, or is
 setting up a machine without opening the browser.
 
 ### `skills` — the header's Skill menu, per project
@@ -186,6 +186,26 @@ asking the agent. Two sources, and it never searches the disk:
   the file tree ("Open in the Canvas").
 - **Why you list them:** searching for decks finds whatever parses as one, which in a real
   workspace was 217 test fixtures from a checked-out repository against 33 real decks.
+
+### `mobileFiles` — files the phone may open, per project
+
+What the phone (the mulmoserver remote) may list and open from this project. **Nothing is shared
+until this key is set** — the workspace included.
+
+```json
+{ "mobileFiles": { "dirs": ["output"], "extensions": ["md", "html", "pdf", "png"] } }
+```
+
+- `dirs` — directories **relative to this file**, inside it. `../`, an absolute path, a symlink
+  out, a missing directory or a file are dropped; if none survives, the whole key is dropped and
+  shows under *ignored* in Settings → Directory settings.
+- `extensions` — narrowed to what the host serves: `md`, `markdown`, `html`, `htm`, `pdf`, `png`,
+  `jpg`, `jpeg`, `gif`, `webp`. Anything else (`env`, `json`, `svg`) is dropped.
+- Hidden files and directories (`.env`, `.git/`) and `node_modules` are never listed, at any depth.
+- No Settings control: the file is the only way to set it. Settings shows it as **Phone files**.
+- A worktree does not inherit it — a worktree shares nothing until its own file says so.
+- Files that do not fit a command document are put in the user's own Storage area for an hour and
+  deleted. Images a document names are embedded only when they sit in a declared directory.
 
 ### `appendSystemPrompt` — the closing summary
 

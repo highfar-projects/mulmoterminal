@@ -47,6 +47,8 @@ const TINTED_COLOR_KEYS = ["badgeColor", "headerColor", "headerTextColor", "cell
 // verbatim it would silently grant a different set of directories. `buttons` / `commands` / `chips` / `skills` /
 // `decks` are the header's own contents, which a worktree composes for itself; a worktree still
 // gets the workspace's stories directory in its Mulmo menu, so that one is not left empty.
+// `mobileFiles` decides what leaves this machine for the phone, so a worktree shares nothing
+// until its own file says so.
 
 /** Each status entry's colours rotated, written in the object form the config accepts. Entries the
  *  project did not set stay unset, so the worktree's file says what the project's said. */

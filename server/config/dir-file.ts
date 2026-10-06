@@ -6,7 +6,7 @@
 // anything outside its own tree. Two keys already need exactly this (`sound`, `icon`), and the
 // second was written by copying the first; the copy is what this file exists to stop, because a
 // containment rule that is fixed on one side and not the other is not a containment rule.
-import { existsSync, statSync, realpathSync } from "node:fs";
+import { existsSync, statSync, realpathSync, type Stats } from "node:fs";
 import path from "node:path";
 import { isWithin } from "../infra/path-within.js";
 
@@ -18,11 +18,20 @@ import { isWithin } from "../infra/path-within.js";
  *  lexical check only constrains the path string, so a symlink sitting inside the directory
  *  and pointing out of it would otherwise pass. */
 export function resolveFileWithinDir(cwd: string, ref: string): string | null {
+  return resolveWithinDir(cwd, ref, (stats) => stats.isFile());
+}
+
+/** The same four checks for a config value that names a DIRECTORY inside `cwd` (`mobileFiles.dirs`). */
+export function resolveDirWithinDir(cwd: string, ref: string): string | null {
+  return resolveWithinDir(cwd, ref, (stats) => stats.isDirectory());
+}
+
+function resolveWithinDir(cwd: string, ref: string, isWantedKind: (stats: Stats) => boolean): string | null {
   if (path.isAbsolute(ref)) return null;
   const base = path.resolve(cwd);
   const resolved = path.resolve(base, ref);
   if (!isWithin(base, resolved)) return null;
-  if (!existsSync(resolved) || !statSync(resolved).isFile()) return null;
+  if (!existsSync(resolved) || !isWantedKind(statSync(resolved))) return null;
   try {
     // .native for the 8.3 reason in files/pathContainment.ts — one spelling of a Windows path.
     if (!isWithin(realpathSync.native(base), realpathSync.native(resolved))) return null;
