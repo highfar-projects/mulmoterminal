@@ -1901,10 +1901,10 @@
   dependencies:
     zod "^4.4.3"
 
-"@mulmocast/types@^2.13.0":
-  version "2.13.0"
-  resolved "https://registry.yarnpkg.com/@mulmocast/types/-/types-2.13.0.tgz#b572818eea76cf0e4baeb8a62cb58683d0840116"
-  integrity sha512-Km6NDskg+Rsbj8b7AHB6HTdLBW/uZ0e1S+WVtFM+D39fFsfE+fjaxs+8c32/UOz7qy4MI/pfFL20lYsUPwkHLw==
+"@mulmocast/types@^2.14.0":
+  version "2.14.0"
+  resolved "https://registry.yarnpkg.com/@mulmocast/types/-/types-2.14.0.tgz#580c79003031b9a6aff76522612b627baa52e959"
+  integrity sha512-050iyp71LCfTy04U2cGf+KH8SBSbfmH31r5Wjf8y5dVEmapyly+H5357wayoee7hSqF8HBpFcm1UgAj+1Zxasw==
   dependencies:
     "@mulmocast/deck" "^2.0.0"
     zod "^4.4.3"
@@ -6617,10 +6617,10 @@ mulmocast-vision@^1.0.12:
     puppeteer "^25.3.0"
     yauzl "^3.4.0"
 
-mulmocast@^2.13.0:
-  version "2.13.0"
-  resolved "https://registry.yarnpkg.com/mulmocast/-/mulmocast-2.13.0.tgz#2b3ff764393ecea56b68d594c93c0fba64dc2fb8"
-  integrity sha512-ZDTxO566g/UbiBV28xD4fDsV+75al48ioMmAvStFkE/OhGF06BEIp6FHT1UgZwtiOcmsCLl8NbGvJKWxLCRFuA==
+mulmocast@^2.14.0:
+  version "2.14.0"
+  resolved "https://registry.yarnpkg.com/mulmocast/-/mulmocast-2.14.0.tgz#c36243875649223540496b939f244c157d25fcbb"
+  integrity sha512-EKGafQbJ5JEVarlO6t/+p+myJBR/XZoWDWqTFm1HXX83qTa5kQ99aD7yuTSl2J2tWBrz9cMHWo9Ld3Kgdc9e6g==
   dependencies:
     "@google-cloud/text-to-speech" "^6.4.1"
     "@google/genai" "^2.17.1"
