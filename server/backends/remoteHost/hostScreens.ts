@@ -4,7 +4,9 @@
 import { buildScreenMeta, captureSessionScreen, SCREEN_HISTORY_ROWS, type SessionScreenMeta } from "./terminalScreen.js";
 import { dirIconSrc, readIconFile } from "./dirIcons.js";
 import { quickCommandsForAgent } from "./quickCommands.js";
-import { dirIconFor } from "../../config/dir-config.js";
+import { dirIconFor, loadDirConfig } from "../../config/dir-config.js";
+import { listProjectRoots } from "../../infra/project-root.js";
+import { mobileFilesProjectFor } from "./mobileFileProject.js";
 import { getQuickCommands } from "../../config/config-routes.js";
 import { currentBranch } from "../../git/git-status.js";
 import { resolveGithubUrl } from "../../git/gitRemote.js";
@@ -24,6 +26,15 @@ const iconOf = (cwd: string): string => {
 /** The same dir / branch / memo / summary / prompt the grid cell shows. A session that outlived a
  *  restart has no PtyEntry, so it has no cwd here and no branch to look up — those fields are
  *  simply absent, and the phone shows the screen alone. */
+// Never throws: a config that cannot be read costs this one link, not the screen's other fields.
+const mobileFilesProjectOf = (cwd: string): string => {
+  try {
+    return mobileFilesProjectFor(listProjectRoots(), cwd, (root) => loadDirConfig(root).mobileFiles !== null);
+  } catch {
+    return "";
+  }
+};
+
 export const sessionScreenMeta = (sessionId: string): Promise<SessionScreenMeta> =>
   buildScreenMeta(sessionId, {
     cwdOf: (id) => ptys.get(id)?.cwd ?? "",
@@ -39,6 +50,7 @@ export const sessionScreenMeta = (sessionId: string): Promise<SessionScreenMeta>
     memoOf: (id) => sessionMemos.get(id) ?? "", // beside the summary, never instead of it — see SessionScreenMeta (#1110)
     summaryOf: (id) => aiTitles.get(id) ?? "",
     promptOf: (id) => lastPrompts.get(id) ?? "",
+    mobileFilesProjectOf,
     memosHydrated: sessionMemosHydrated,
   });
 
