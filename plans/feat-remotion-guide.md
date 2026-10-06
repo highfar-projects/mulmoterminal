@@ -36,3 +36,14 @@ adds remotion's `node_modules` to webpack's `resolve.modules` (`remotionNodeModu
 
 - The agent-facing tool description (receptron/mulmoclaude#3379).
 - UI for progress / editing the `.tsx` / regenerating one scene.
+
+## Follow-up: `code` scenes and where Chrome lands (#2909)
+
+- mulmocast 2.14.0 renders a remotion beat from `code` (`kind: "path"`, relative to the script, or
+  `"text"`) without calling `claude -p`. Checked by rendering a `code` beat with a `claude` on PATH
+  that only records being called: it rendered, and nothing was recorded.
+- Remotion's `getDownloadsCacheDir` (`@remotion/renderer/dist/browser/get-download-destination.js`)
+  walks up from `process.cwd()` to the first `package.json` and uses its `node_modules/.remotion`
+  (falling back to `<cwd>/.remotion` when none is found). The server runs with `cwd: PKG_DIR`, so the
+  browser lands in MulmoTerminal's install folder, a new folder per version under npx. The guide said
+  "once"; it now says the first render after each update downloads it again.

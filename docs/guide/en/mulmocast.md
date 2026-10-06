@@ -4,7 +4,7 @@ nav_title: MulmoCast videos
 layout: default
 parent: English
 nav_order: 24
-description: Let Claude Code write each scene of a MulmoCast video as a Remotion component. Optional packages you install yourself, where to put them so an npx upgrade keeps them, and how to tell it works.
+description: Let Claude Code write each scene of a MulmoCast video as a Remotion component, or pass a component you wrote. Optional packages you install yourself, where to put them so an npx upgrade keeps them, and how to tell it works.
 ---
 
 # MulmoCast videos
@@ -21,6 +21,7 @@ writes for you. This page covers the parts that need something installed first.
 Since mulmocast 2.13.0 a beat can be a **`remotion` scene**: you describe in words what the scene
 shows, Claude Code writes it as a [Remotion](https://www.remotion.dev) component, and MulmoCast
 renders it into the beat's video — motion, SVG paths, 3D (three.js), noise and shader effects.
+Since 2.14.0 you can also hand it a finished component instead (see [step 5](#remotion-code)).
 
 ```json
 {
@@ -38,7 +39,8 @@ renders it into the beat's video — motion, SVG paths, 3D (three.js), noise and
 }
 ```
 
-- `image.prompt` (required) — what the scene shows.
+- `image.prompt` — what the scene shows. Give either this or `image.code`, not both.
+- `image.code` — a finished component instead of a prompt ([step 5](#remotion-code)).
 - `image.fps` (optional) — 1 to 60, 30 when left out.
 - `remotionParams.brief` (optional) — art direction shared by every scene, so they look like one
   video.
@@ -79,9 +81,9 @@ The tool list should include:
 `○ remotion — optional` means nothing was found; `installed only in part; missing: …` names the
 packages still to install.
 
-### 3. Claude Code must be logged in
+### 3. For a `prompt` scene, Claude Code must be logged in
 
-The scene is written by `claude -p`, started **by the MulmoTerminal server** — not by the cell you
+A scene with `code` skips this step entirely. A `prompt` scene is written by `claude -p`, started **by the MulmoTerminal server** — not by the cell you
 are talking to. So:
 
 - `claude` has to be installed and logged in on the machine the server runs on.
@@ -97,7 +99,10 @@ are installed. Ask by name — for example
 *"make the second beat a remotion scene: …"* — or write the beat into the script yourself, then
 render the video from the GUI panel as usual.
 
-The first render downloads a headless Chrome for Remotion (around 90 MB), once.
+The first render downloads a headless Chrome for Remotion (around 90 MB). Remotion keeps it in the
+`node_modules/.remotion` of the folder the server runs from, which is MulmoTerminal's own install
+folder, so **after each MulmoTerminal update the first render downloads it again** (with `npx`, every
+version is a new folder). Nothing needs doing; expect the wait once per update.
 
 The code Claude Code wrote is kept next to the beat's images, in `<beat>_remotion/<hash>.tsx`, and
 reused as long as nothing it was written from changes: the prompt, the narration's wording, the
@@ -105,10 +110,34 @@ brief, the scene's place in the video, and the canvas size and fps. Change any o
 adding a beat before it — and the scene is written again. Audio that only got longer or shorter
 (another voice, another speed) re-renders the same code without asking Claude Code.
 
+### 5. Pass a finished component instead (`code`) {#remotion-code}
+
+Since mulmocast 2.14.0 a `remotion` beat can carry the component itself. MulmoCast then renders it as
+is and **does not call `claude -p`** — no Claude Code login on the server, and nothing is spent on
+writing the scene. You (or the agent in your cell) write the `.tsx`; the script points at it:
+
+```json
+"image": { "type": "remotion", "code": { "kind": "path", "path": "scenes/intro.tsx" }, "fps": 30 }
+```
+
+- `kind: "path"` — a file, relative to the script's folder. `kind: "text"` — the code inline, in
+  `"text"`.
+- The component must default-export the scene and be **one self-contained file**: it is copied to a
+  work folder before rendering, so relative imports do not resolve.
+- Nothing writes, repairs or reviews it. If it fails to render, the render stops and names the file
+  (or the beat, for inline code) with the error — fix it and render again.
+- Length works as for a `prompt` scene: the narration, or a longer `duration`.
+
+The rules a component has to follow (allowed imports, building all motion from the current frame,
+sizes relative to the canvas) are the ones in
+[mulmocast's remotion.md](https://github.com/receptron/mulmocast-cli/blob/main/docs/remotion.md);
+point your agent at that page when you ask it to write a scene.
+
 ### Things to know
 
-- **The generated code runs on your machine**, in a headless browser that can reach the network —
-  the same trust as an `html_tailwind` beat's `script`. Do not render a script you do not trust.
+- **A scene's code runs on your machine** — written by Claude Code or passed as `code` — in a
+  headless browser that can reach the network, the same trust as an `html_tailwind` beat's
+  `script`. Do not render a script you do not trust.
 - The install leaves a `package.json` and `node_modules` in your home directory, and those packages
   are then found by **any** Node project under it that does not install its own copy.
 - A `remotion` beat cannot also have a `moviePrompt`.
