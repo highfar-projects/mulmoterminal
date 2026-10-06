@@ -20,6 +20,8 @@ describe("pluginDispatchError", () => {
     expect(String(out)).toContain("plugin/presentMulmoScript gave no answer within 60 minutes");
     expect(String(out)).toContain("may still be running on the server");
     expect(String(out)).not.toContain("aborted without reason");
+    // Shared by every plugin, and only some report a late result, so the message must not promise one.
+    expect(String(out)).not.toContain("appears");
     expect(out instanceof Error ? out.cause : undefined).toBe(abort);
   });
 

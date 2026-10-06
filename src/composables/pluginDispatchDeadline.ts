@@ -9,8 +9,5 @@ const isAbortError = (err: unknown): boolean => typeof err === "object" && err !
 export function pluginDispatchError(toolName: string, err: unknown, timeout_ms: number): unknown {
   if (!isAbortError(err)) return err;
   const minutes = Math.round(timeout_ms / MS_PER_MINUTE);
-  return new Error(
-    `plugin/${toolName} gave no answer within ${minutes} minutes. The work may still be running on the server; its result appears here once it finishes.`,
-    { cause: err },
-  );
+  return new Error(`plugin/${toolName} gave no answer within ${minutes} minutes. The work may still be running on the server.`, { cause: err });
 }
