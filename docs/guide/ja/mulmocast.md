@@ -42,7 +42,7 @@ Claude Code がそれを [Remotion](https://www.remotion.dev) のコンポーネ
 - `image.fps`（任意）— 1〜60。省略すると 30。
 - `remotionParams.brief`（任意）— すべての場面に共通する色・書体・雰囲気。場面どうしがひとつの動画としてそろいます。
 
-場面の長さはナレーションの長さで決まります。詳しくは
+場面の長さはナレーションの長さで決まります。ビートに `duration` を指定してそれより長くした場合は、そちらになります。詳しくは
 [mulmocast の remotion.md](https://github.com/receptron/mulmocast-cli/blob/main/docs/remotion.md) を見てください。
 
 ### 1. パッケージをホームに入れる

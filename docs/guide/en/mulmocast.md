@@ -43,7 +43,8 @@ renders it into the beat's video — motion, SVG paths, 3D (three.js), noise and
 - `remotionParams.brief` (optional) — art direction shared by every scene, so they look like one
   video.
 
-The scene lasts as long as its narration. The full reference is
+The scene lasts as long as its narration, or as the beat's `duration` when you set a longer one.
+The full reference is
 [mulmocast's remotion.md](https://github.com/receptron/mulmocast-cli/blob/main/docs/remotion.md).
 
 ### 1. Install the packages, in your home directory

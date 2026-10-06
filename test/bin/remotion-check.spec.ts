@@ -95,6 +95,14 @@ describe("resolverFromMulmocast", () => {
     expect(resolverFromMulmocast(pkgDir)?.("three")).toBe(true);
   });
 
+  it("does not count a package whose package.json is malformed", () => {
+    const home = makeRoot();
+    const pkgDir = npxLayout(home);
+    mkdirSync(join(home, "node_modules", "remotion"), { recursive: true });
+    writeFileSync(join(home, "node_modules", "remotion", "package.json"), "{ not json");
+    expect(resolverFromMulmocast(pkgDir)?.("remotion")).toBe(false);
+  });
+
   it("finds a package installed beside mulmocast", () => {
     const home = makeRoot();
     const pkgDir = npxLayout(home);

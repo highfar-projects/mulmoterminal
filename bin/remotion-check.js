@@ -34,13 +34,14 @@ export function resolverFromMulmocast(pkgDir) {
   try {
     const mulmocastEntry = createRequire(join(pkgDir, "package.json")).resolve("mulmocast");
     const fromMulmocast = createRequire(mulmocastEntry);
-    // A package that hides its package.json behind `exports` (three does) is still installed.
+    // A package that hides its package.json behind `exports` (three does) is installed; any other
+    // failure — a malformed package.json included — is reported, since this check is a diagnosis.
     return (name) => {
       try {
         fromMulmocast.resolve(`${name}/package.json`);
         return true;
       } catch (error) {
-        return !(error instanceof Error && "code" in error && error.code === "MODULE_NOT_FOUND");
+        return error instanceof Error && "code" in error && error.code === "ERR_PACKAGE_PATH_NOT_EXPORTED";
       }
     };
   } catch {
