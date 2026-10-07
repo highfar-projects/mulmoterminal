@@ -199,6 +199,23 @@ const SPAWN: Record<ConfettiStyle, (viewport: Viewport, random: Random) => Parti
 
 export const spawnConfetti = (style: ConfettiStyle, viewport: Viewport, random: Random): Particle[] => SPAWN[style](viewport, random);
 
+// One press is a show, not a puff: the same burst repeated in waves, each starting `gapSeconds`
+// after the last, sized so every style fills the screen for several seconds.
+const SHOW: Record<ConfettiStyle, { waves: number; gapSeconds: number }> = {
+  cracker: { waves: 5, gapSeconds: 1.1 },
+  fireworks: { waves: 3, gapSeconds: 2.2 },
+  sakura: { waves: 4, gapSeconds: 1.8 },
+  rain: { waves: 4, gapSeconds: 1.5 },
+  balloons: { waves: 3, gapSeconds: 2 },
+};
+
+export function spawnConfettiShow(style: ConfettiStyle, viewport: Viewport, random: Random): Particle[] {
+  const { waves, gapSeconds } = SHOW[style];
+  return Array.from({ length: waves }, (_, wave) =>
+    spawnConfetti(style, viewport, random).map((particle) => ({ ...particle, delay: particle.delay + wave * gapSeconds })),
+  ).flat();
+}
+
 function advance(particle: Particle, seconds: number): Particle {
   const keep = Math.pow(particle.drag, seconds);
   const vx = particle.vx * keep;

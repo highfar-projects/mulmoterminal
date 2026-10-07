@@ -1,6 +1,6 @@
 // What the `confetti` setting accepts, and that a style pick can reach every style.
 import { describe, expect, it } from "vitest";
-import { CONFETTI_DEFAULT, CONFETTI_EVENTS, CONFETTI_STYLES, pickConfettiStyle, sanitizeConfetti } from "../../common/confetti";
+import { CONFETTI_DEFAULT, CONFETTI_EVENTS, CONFETTI_STYLES, pickConfettiMix, pickConfettiStyle, sanitizeConfetti } from "../../common/confetti";
 
 describe("sanitizeConfetti", () => {
   it.each([undefined, null, "sakura", 3, [], true])("reads %j as unconfigured", (input) => {
@@ -41,5 +41,21 @@ describe("pickConfettiStyle", () => {
 
   it("uses every style when handed an empty list", () => {
     expect(CONFETTI_STYLES).toContain(pickConfettiStyle([], () => 0.5));
+  });
+});
+
+describe("pickConfettiMix", () => {
+  it.each([0, 0.3, 0.7, 0.9999999])("gives %d-seeded picks that are all different", (roll) => {
+    const mix = pickConfettiMix(CONFETTI_STYLES, 3, () => roll);
+    expect(mix).toHaveLength(3);
+    expect(new Set(mix).size).toBe(3);
+  });
+
+  it("returns what there is when the list is shorter than the count", () => {
+    expect(pickConfettiMix(["sakura", "rain"], 3, () => 0.5).sort()).toEqual(["rain", "sakura"]);
+  });
+
+  it("uses every style when handed an empty list", () => {
+    expect(pickConfettiMix([], 5, () => 0.2).sort()).toEqual([...CONFETTI_STYLES].sort());
   });
 });

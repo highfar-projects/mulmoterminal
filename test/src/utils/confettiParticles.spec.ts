@@ -1,7 +1,7 @@
 // The physics of a celebration: every style starts, moves, and ends.
 import { describe, expect, it } from "vitest";
 import { CONFETTI_STYLES } from "../../../common/confetti";
-import { alphaOf, spawnConfetti, stepParticles, type Particle } from "../../../src/utils/confettiParticles";
+import { alphaOf, spawnConfetti, spawnConfettiShow, stepParticles, type Particle } from "../../../src/utils/confettiParticles";
 
 const VIEWPORT = { width: 1200, height: 800 };
 const FRAME = 1 / 60;
@@ -42,6 +42,21 @@ describe("spawnConfetti", () => {
 
   it("is the same burst for the same random source", () => {
     expect(spawnConfetti("cracker", VIEWPORT, seeded(3))).toEqual(spawnConfetti("cracker", VIEWPORT, seeded(3)));
+  });
+});
+
+describe("spawnConfettiShow", () => {
+  it.each(CONFETTI_STYLES)("%s repeats its burst in waves that start later", (style) => {
+    const single = spawnConfetti(style, VIEWPORT, seeded(1));
+    const show = spawnConfettiShow(style, VIEWPORT, seeded(1));
+    expect(show.length).toBeGreaterThan(single.length);
+    expect(Math.max(...show.map((particle) => particle.delay))).toBeGreaterThan(Math.max(...single.map((particle) => particle.delay)));
+  });
+
+  it.each(CONFETTI_STYLES)("%s lasts several seconds and still runs out", (style) => {
+    const frames = framesUntilEmpty(spawnConfettiShow(style, VIEWPORT, seeded(4)), seeded(8));
+    expect(frames / 60).toBeGreaterThan(4);
+    expect(frames / 60).toBeLessThan(20);
   });
 });
 

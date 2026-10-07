@@ -52,7 +52,7 @@ export const shortcutActionsEn = {
   screenSkills: "Go to Skills",
   settingsOpen: "Open Settings",
   soundToggle: "Turn the notification sound on / off",
-  confetti: "Throw confetti (a random style from your list)",
+  confetti: "Throw confetti (a random mix from your list)",
   viewToggle: "Switch the enlarged view: roster / strip",
   orderAuto: "Order terminals automatically (attention first)",
   orderManual: "Order terminals by hand",

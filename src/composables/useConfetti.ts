@@ -1,8 +1,9 @@
 import { computed, ref } from "vue";
 import {
   CONFETTI_DEFAULT,
+  CONFETTI_MIX_COUNT,
   CONFETTI_STYLES,
-  pickConfettiStyle,
+  pickConfettiMix,
   sanitizeConfetti,
   type Confetti,
   type ConfettiEvent,
@@ -35,9 +36,9 @@ const lastRequest = ref<ConfettiRequest | null>(null);
 export const confettiRequest = computed(() => lastRequest.value);
 let nextId = 0;
 
-/** One celebration now, in a style picked from the configured list. */
+/** One celebration now: a mix of styles picked from the configured list. */
 export function fireConfetti(random: () => number = Math.random): void {
-  lastRequest.value = { id: ++nextId, styles: [pickConfettiStyle(setting.value.styles, random)] };
+  lastRequest.value = { id: ++nextId, styles: pickConfettiMix(setting.value.styles, CONFETTI_MIX_COUNT, random) };
 }
 
 /** Every style at once, for the one place that wants a show rather than a pick. */
