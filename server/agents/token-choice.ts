@@ -14,6 +14,8 @@ export interface TokenCandidate {
   limits: RateLimits | null;
   /** Until when a limit hit observed on a session holds it out, in Unix seconds. */
   spentUntil_sec?: number | null;
+  /** How many sessions are running on it right now (#2926). */
+  liveSessions?: number;
 }
 
 /** At or above this, a 5-hour window is too close to blocking a turn to start a session on it. */
@@ -69,8 +71,13 @@ const RANK_UNMEASURED = 1;
 /**
  * The candidate a new session should run on, or null when there are none.
  *
- * Eligible and measured first, by burn pace; then eligible but never measured (the next probe
- * measures it); and only when every one is held out, the one free soonest. Ties keep config order.
+ * Eligible and measured first, by burn pace shared among the sessions already running there; then
+ * eligible but never measured (the next probe measures it); and only when every one is held out, the
+ * one free soonest. Ties go to fewer running sessions, then config order.
+ *
+ * The sharing is what spreads parallel sessions (#2926): by pace alone every one of them landed on
+ * the same subscription until its 5-hour window filled, because the readings only move when a probe
+ * runs — while the count of sessions moves the moment one is assigned.
  */
 export function chooseToken(candidates: readonly TokenCandidate[], now_sec: number): string | null {
   if (candidates.length === 0) return null;
@@ -79,12 +86,11 @@ export function chooseToken(candidates: readonly TokenCandidate[], now_sec: numb
     const freeAt = (candidate: TokenCandidate): number => blockedUntil(candidate, now_sec) ?? now_sec;
     return candidates.reduce((best, candidate) => (freeAt(candidate) < freeAt(best) ? candidate : best)).id;
   }
-  const ranked = free.map((candidate, order) => ({
-    id: candidate.id,
-    order,
-    rank: candidate.limits ? RANK_MEASURED : RANK_UNMEASURED,
-    pace: candidate.limits ? burnPace(candidate.limits, now_sec) : 0,
-  }));
-  ranked.sort((a, b) => a.rank - b.rank || b.pace - a.pace || a.order - b.order);
+  const ranked = free.map((candidate, order) => {
+    const load = candidate.liveSessions ?? 0;
+    const pace = candidate.limits ? burnPace(candidate.limits, now_sec) : 0;
+    return { id: candidate.id, order, load, rank: candidate.limits ? RANK_MEASURED : RANK_UNMEASURED, share: pace / (1 + load) };
+  });
+  ranked.sort((a, b) => a.rank - b.rank || b.share - a.share || a.load - b.load || a.order - b.order);
   return ranked[0]?.id ?? null;
 }

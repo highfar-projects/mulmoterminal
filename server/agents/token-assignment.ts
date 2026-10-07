@@ -26,6 +26,8 @@ export interface TokenAssignmentDeps {
   tokenLimits: (token: RotationToken) => RateLimits | null;
   /** Spent marks from limit hits, by token id (DEFAULT_LOGIN_ID included). */
   spentUntil_sec?: (tokenId: string) => number | null;
+  /** Sessions running on each credential now, by token id (DEFAULT_LOGIN_ID included). */
+  liveSessions?: (tokenId: string) => number;
   readSecret: (token: RotationToken) => string | null;
   now_sec: number;
   /** Refuse a candidate that is held out, rather than falling back to the one free soonest — for
@@ -35,9 +37,18 @@ export interface TokenAssignmentDeps {
 
 const candidatesOf = (deps: TokenAssignmentDeps): TokenCandidate[] => {
   const spent = (id: string) => deps.spentUntil_sec?.(id) ?? null;
-  const tokens = deps.rotation.tokens.map((token) => ({ id: token.id, limits: deps.tokenLimits(token), spentUntil_sec: spent(token.id) }));
+  const live = (id: string) => deps.liveSessions?.(id) ?? 0;
+  const tokens = deps.rotation.tokens.map((token) => ({
+    id: token.id,
+    limits: deps.tokenLimits(token),
+    spentUntil_sec: spent(token.id),
+    liveSessions: live(token.id),
+  }));
   if (!deps.rotation.includeDefaultLogin) return tokens;
-  return [{ id: DEFAULT_LOGIN_ID, limits: deps.defaultLoginLimits(), spentUntil_sec: spent(DEFAULT_LOGIN_ID) }, ...tokens];
+  return [
+    { id: DEFAULT_LOGIN_ID, limits: deps.defaultLoginLimits(), spentUntil_sec: spent(DEFAULT_LOGIN_ID), liveSessions: live(DEFAULT_LOGIN_ID) },
+    ...tokens,
+  ];
 };
 
 const assignmentOf = (tokenId: string, secret: string | null): TokenAssignment | null => {
@@ -78,4 +89,10 @@ export function assignToken(deps: TokenAssignmentDeps): TokenAssignment | null {
     return assignment ?? pickFrom(candidates.filter((candidate) => candidate.id !== id));
   };
   return pickFrom(candidatesOf(deps));
+}
+
+/** How many of the running claude sessions are on `tokenId`, by each one's recorded token. A session
+ *  rotation did not start has no record and counts toward none. */
+export function countLiveSessions(liveSessionIds: Iterable<string>, tokenOf: (sessionId: string) => string | undefined, tokenId: string): number {
+  return [...liveSessionIds].filter((sessionId) => tokenOf(sessionId) === tokenId).length;
 }

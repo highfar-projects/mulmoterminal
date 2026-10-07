@@ -299,7 +299,8 @@ be resumed on any subscription — the same as switching with `/login`, done aut
   subscription is a token, advise `false`: the `/login` account is always one of them, so it would be
   counted twice, and which one it duplicates changes whenever the user runs `/login` again.
 - **How it chooses**: by the 7-day window's remaining percent per hour until it resets, highest first
-  — room that is about to reset is used before it is lost. A token whose 5-hour window is at 90% or
+  — room that is about to reset is used before it is lost — divided by one plus the sessions already
+  running on it, so cells opened together spread over several subscriptions. A token whose 5-hour window is at 90% or
   more, or whose 7-day window is at 98% or more, is skipped; so is one whose usage probe found it at
   its limit. Each token's usage is measured by a short probe
   under that token, and appears as its own gauge beside the header's usage gauge.

@@ -135,3 +135,39 @@ describe("the switch line (#2919)", () => {
     expect(nearLimit(null, NOW)).toBe(false);
   });
 });
+
+describe("spreading parallel sessions (#2926)", () => {
+  const busy = (id: string, readings: RateLimits | null, liveSessions: number): TokenCandidate => ({ id, limits: readings, liveSessions });
+
+  it("shares a subscription's pace among the sessions already on it", () => {
+    // a: 15% left over 2h = 7.5/h, with 5 running → 1.25. b: 99% left over 55h = 1.8/h, none running.
+    expect(chooseToken([busy("a", limits(85, 2 * HOUR), 5), busy("b", limits(1, 55 * HOUR), 0)], NOW)).toBe("b");
+  });
+
+  it("still gives the urgent window the first sessions", () => {
+    expect(chooseToken([busy("a", limits(85, 2 * HOUR), 0), busy("b", limits(1, 55 * HOUR), 0)], NOW)).toBe("a");
+  });
+
+  it("spreads a burst of sessions opened before any reading moves", () => {
+    const same = limits(50, 3 * DAY);
+    const live: Record<string, number> = { a: 0, b: 0, c: 0 };
+    const picks = Array.from({ length: 6 }, () => {
+      const id = chooseToken(
+        ["a", "b", "c"].map((key) => busy(key, same, live[key] ?? 0)),
+        NOW,
+      );
+      if (id !== null) live[id] = (live[id] ?? 0) + 1;
+      return id;
+    });
+    expect(live).toEqual({ a: 2, b: 2, c: 2 });
+    expect(picks.slice(0, 3)).toEqual(["a", "b", "c"]);
+  });
+
+  it("breaks a tie between unmeasured subscriptions toward the less busy", () => {
+    expect(chooseToken([busy("a", null, 2), busy("b", null, 0)], NOW)).toBe("b");
+  });
+
+  it("treats a missing count as nobody running", () => {
+    expect(chooseToken([candidate("a", limits(50, DAY)), busy("b", limits(50, DAY), 1)], NOW)).toBe("a");
+  });
+});

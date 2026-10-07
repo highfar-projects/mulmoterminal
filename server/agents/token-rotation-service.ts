@@ -40,6 +40,8 @@ export interface TokenRotationDeps {
   claudeAvailable: () => boolean;
   /** The `/login` credential's last windows, from the default gauge's store. */
   defaultLoginLimits: () => RateLimits | null;
+  /** Sessions running on a credential now, by token id — what spreads parallel sessions (#2926). */
+  liveSessions: (tokenId: string) => number;
 }
 
 export interface TokenRotationRuntime {
@@ -91,6 +93,7 @@ export function createTokenRotation(deps: TokenRotationDeps): TokenRotationRunti
       defaultLoginLimits: deps.defaultLoginLimits,
       tokenLimits: (token) => meters.lastClaudeLimits(meteredToken(token)),
       spentUntil_sec: heldUntil,
+      liveSessions: deps.liveSessions,
       readSecret: readRotationToken,
       now_sec: nowSec(),
       onlyFree,
