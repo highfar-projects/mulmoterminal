@@ -1603,7 +1603,7 @@ A celebration over the whole page. Two ways to start one, and the first needs no
 
 Restart the server after editing the file by hand, then reload the tab. If your OS asks for reduced motion, there is no confetti at all.
 
-There is one more way, and it is not in any menu: **up up down down left right left right b a**.
+There is one more way, and it is not in any menu: **up up down down left right left right b a**, pressed while no terminal or text field has the focus.
 
 ## Roster rows too long or too short (`cockpitLines`) {#cockpit-lines}
 
