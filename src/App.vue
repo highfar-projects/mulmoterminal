@@ -20,6 +20,7 @@ import SkillsOverlay from "./components/SkillsOverlay.vue";
 import ProcessesOverlay from "./components/processes/ProcessesOverlay.vue";
 import UsageOverlay from "./components/usage/UsageOverlay.vue";
 import FilesOverlay from "./components/FilesOverlay.vue";
+import ConfettiOverlay from "./components/ConfettiOverlay.vue";
 import HoverTip from "./components/HoverTip.vue";
 import ServerStoppedOverlay from "./components/ServerStoppedOverlay.vue";
 import WhatsNewDialog from "./components/WhatsNewDialog.vue";
@@ -122,4 +123,6 @@ const { whatsNew, dismiss: dismissWhatsNew } = useWhatsNew(useI18n().locale.valu
   <!-- Over everything, including the settings modal it was pressed in: once the server is gone
        nothing behind it works, and a live-looking pane underneath would say otherwise (#1820). -->
   <ServerStoppedOverlay />
+  <!-- A celebration over everything (the confetti shortcut, an opted-in event, the Konami code); takes no clicks. -->
+  <ConfettiOverlay />
 </template>

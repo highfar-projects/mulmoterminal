@@ -64,6 +64,7 @@ export const commandPaletteZhCN = {
     sort: "排列顺序: {name}",
   },
   descriptions: {
+    confetti: "在整个页面撒下彩纸，样式从设置的列表中随机选择。",
     filesInsertSelection: "把 Files 面板选中的行以 {'@'}文件#L10-20 的形式放到放大终端的输入处（不发送）。",
     focusMode: "让应用全屏，并在 Chromium 系浏览器中锁定标签页按键（Cmd/Ctrl+W、T、N），使其传到 MulmoTerminal。",
     zoomToggle: "放大光标所在的终端，或还原已放大的终端。",

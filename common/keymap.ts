@@ -64,6 +64,7 @@ export const KEYMAP_ACTIONS = [
   "screen-skills",
   "settings-open",
   "sound-toggle",
+  "confetti",
   "view-toggle",
   "order-auto",
   "order-manual",

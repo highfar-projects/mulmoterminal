@@ -8,6 +8,7 @@ import { createBeepQueue, shouldHoldBeep } from "./pendingBeep";
 import { missedMarkFor } from "./missedAttention";
 import { applyMissedMark } from "./useMissedAttention";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
+import { fireConfettiForEvent } from "./useConfetti";
 
 // What the player needs from the user's config: which moments beep, and what each plays.
 // `soundFile` is the all-kind fallback a `sounds` entry overrides.
@@ -318,6 +319,7 @@ export function useAttentionSound(enabled: Ref<boolean>, config: Ref<SoundConfig
     // exactly the attention state nothing announced (#1152).
     const firstSighting = !prev.has(d.id);
     const kind = notifyKindOf(prev, d);
+    if (kind === "finished") fireConfettiForEvent("turn-finished");
     const wanted = kind !== null && enabled.value && config.value.kinds.includes(kind) ? kind : null;
     const sounded = wanted !== null && playNotify(wanted, d.cwd ?? null, config.value);
     applyMissedMark(d.id, missedMarkFor({ closed: d.event === "closed", firstSighting, waiting: d.waiting ?? false, suppressed: wanted !== null && !sounded }));

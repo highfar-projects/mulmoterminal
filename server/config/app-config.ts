@@ -8,6 +8,7 @@ import { isRecord } from "../../common/isRecord.js";
 import { SHOW_LOAD_AVERAGE_DEFAULT, sanitizeShowLoadAverage } from "../../common/showLoadAverage.js";
 import { PALETTE_SEARCH_BOX_DEFAULT, sanitizePaletteSearchBox } from "../../common/paletteSearchBox.js";
 import { REMOTE_SERVER_DEFAULT, sanitizeRemoteServer } from "../../common/remoteServer.js";
+import { CONFETTI_DEFAULT, sanitizeConfetti, type Confetti } from "../../common/confetti.js";
 import { PLAYFUL_EFFECTS_DEFAULT, sanitizePlayfulEffects, type PlayfulEffects } from "../../common/playfulEffects.js";
 import { sanitizePresets } from "./cwd-presets.js";
 import { sanitizeButtons, sanitizeChips } from "./header-config.js";
@@ -166,6 +167,8 @@ export interface AppConfig {
   remoteServer: boolean;
   // A little theatre on the terminal now and then. "off" switches it off; a picture name fixes the picture.
   playfulEffects: PlayfulEffects;
+  // Which celebrations exist and which app events set one off; see common/confetti.ts.
+  confetti: Confetti;
   // Which pinned favourites the toolbar shows without opening Collections (#1984), as
   // `"<kind>:<slug>"` keys in the order they are drawn. Empty by default — the toolbar is
   // unchanged until the user promotes one. The pins themselves live in the workspace file
@@ -578,6 +581,7 @@ export const emptyConfig = (): AppConfig => ({
   paletteSearchBox: PALETTE_SEARCH_BOX_DEFAULT,
   remoteServer: REMOTE_SERVER_DEFAULT,
   playfulEffects: PLAYFUL_EFFECTS_DEFAULT,
+  confetti: CONFETTI_DEFAULT,
   toolbarPins: [],
   cockpitLines: { ...DEFAULT_COCKPIT_LINES },
   fontFamily: null,
@@ -680,6 +684,7 @@ function sanitizeAppConfig(raw: unknown): AppConfig {
     paletteSearchBox: sanitizePaletteSearchBox(o.paletteSearchBox),
     remoteServer: sanitizeRemoteServer(o.remoteServer),
     playfulEffects: sanitizePlayfulEffects(o.playfulEffects),
+    confetti: sanitizeConfetti(o.confetti),
     toolbarPins: sanitizeToolbarPins(o.toolbarPins),
     cockpitLines: sanitizeCockpitLines(o.cockpitLines),
     fontFamily: normalizeFontFamily(o.fontFamily),
@@ -812,6 +817,7 @@ export function mergeConfigUpdate(base: AppConfig, body: Record<string, unknown>
     paletteSearchBox: updated("paletteSearchBox", sanitizePaletteSearchBox, base.paletteSearchBox),
     remoteServer: updated("remoteServer", sanitizeRemoteServer, base.remoteServer),
     playfulEffects: updated("playfulEffects", sanitizePlayfulEffects, base.playfulEffects),
+    confetti: updated("confetti", sanitizeConfetti, base.confetti),
     toolbarPins: updated("toolbarPins", sanitizeToolbarPins, base.toolbarPins),
     cockpitLines: updated("cockpitLines", sanitizeCockpitLines, base.cockpitLines),
   };
@@ -865,6 +871,7 @@ export function toPublicAppConfig(config: AppConfig): AppConfig {
     paletteSearchBox: config.paletteSearchBox,
     remoteServer: config.remoteServer,
     playfulEffects: config.playfulEffects,
+    confetti: config.confetti,
     toolbarPins: config.toolbarPins,
     cockpitLines: config.cockpitLines,
     fontFamily: config.fontFamily,

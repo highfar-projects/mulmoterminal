@@ -4,7 +4,7 @@
 import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
 import WorkItemChip from "../../../src/components/WorkItemChip.vue";
-import { hasWorkToShow, parseWorkItem, workCommentToPost } from "../../../src/composables/useWorkItem";
+import { becameMergedPr, hasWorkToShow, parseWorkItem, workCommentToPost } from "../../../src/composables/useWorkItem";
 import { EMPTY_WORK_ITEM, type WorkItem } from "../../../common/prPhase";
 
 const item = (over: Partial<WorkItem> = {}): WorkItem => ({ ...EMPTY_WORK_ITEM, ...over });
@@ -218,5 +218,24 @@ describe("workCommentToPost", () => {
   it("announces the new issue when a cell moves to a different one", () => {
     const before = item({ phase: "ready", pr: 983, issue: 979 });
     expect(workCommentToPost(before, item({ phase: "none", issue: 966 }))).toBe("start");
+  });
+});
+
+describe("becameMergedPr", () => {
+  it("is true when the same PR was open on the last poll and is merged now", () => {
+    expect(becameMergedPr(item({ phase: "ready", pr: 5 }), item({ phase: "merged", pr: 5 }))).toBe(true);
+  });
+
+  it("is false for a PR first seen already merged (a reload, an old branch)", () => {
+    expect(becameMergedPr(item(), item({ phase: "merged", pr: 5 }))).toBe(false);
+  });
+
+  it("is false when the PR changed under the cell, or was merged before", () => {
+    expect(becameMergedPr(item({ phase: "ready", pr: 4 }), item({ phase: "merged", pr: 5 }))).toBe(false);
+    expect(becameMergedPr(item({ phase: "merged", pr: 5 }), item({ phase: "merged", pr: 5 }))).toBe(false);
+  });
+
+  it("is false while nothing is merged", () => {
+    expect(becameMergedPr(item({ phase: "ready", pr: 5 }), item({ phase: "ci-running", pr: 5 }))).toBe(false);
   });
 });

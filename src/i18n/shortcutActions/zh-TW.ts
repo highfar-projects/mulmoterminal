@@ -52,6 +52,7 @@ export const shortcutActionsZhTW = {
   screenSkills: "前往技能",
   settingsOpen: "開啟設定",
   soundToggle: "開啟 / 關閉通知音",
+  confetti: "灑彩紙（從設定的樣式中隨機選一種）",
   viewToggle: "切換放大檢視（清單 / 縮圖列）",
   orderAuto: "終端機依自動順序排列（關注優先）",
   orderManual: "終端機依手動順序排列",

@@ -13,6 +13,7 @@ import { isIssueWorkCommentsEnabled } from "./issueWorkComments";
 import type { WorkCommentKind } from "../../common/workComment";
 import { isWorkCommentFailure, type WorkCommentFailure } from "../../common/workCommentFailure";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
+import { fireConfettiForEvent } from "./useConfetti";
 
 const POLL_MS = 30_000;
 
@@ -70,6 +71,11 @@ export function hasWorkToShow(item: WorkItem): boolean {
 // "Arriving" includes the first poll after a reload, on purpose: this side cannot know what was
 // already said, only the issue can. The server is idempotent, so re-asking is the design, not a
 // leak — see server/git/work-comment.ts.
+/** This session watched the same pull request turn merged: it was here on the previous poll, not
+ *  yet merged. Arriving at a merged state (a reload, a cell left on an old branch) is not a merge. */
+export const becameMergedPr = (before: WorkItem, now: WorkItem): boolean =>
+  now.phase === "merged" && now.pr !== null && before.pr === now.pr && before.phase !== "merged";
+
 export function workCommentToPost(before: WorkItem, now: WorkItem): WorkCommentKind | null {
   if (now.issue === null) return null;
   // "Merged" is only reportable when this session WATCHED it happen: the same PR was here on the
@@ -141,6 +147,7 @@ export function useWorkItem(cwd: Ref<string | null>) {
       const data: unknown = await res.json();
       if (my !== req) return;
       const next = parseWorkItem(data);
+      if (becameMergedPr(item.value, next)) fireConfettiForEvent("pr-merged");
       const enabled = isIssueWorkCommentsEnabled();
       const kind = enabled ? workCommentToPost(item.value, next) : null;
       item.value = next;

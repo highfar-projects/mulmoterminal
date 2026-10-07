@@ -52,6 +52,7 @@ export const shortcutActionsJa = {
   screenSkills: "スキルへ",
   settingsOpen: "設定を開く",
   soundToggle: "通知音のオン / オフ",
+  confetti: "紙吹雪を散らす（設定したスタイルからランダム）",
   viewToggle: "拡大時の表示を切り替える（一覧 / サムネイル列）",
   orderAuto: "並び順を自動にする（注目度順）",
   orderManual: "並び順を手動にする",
