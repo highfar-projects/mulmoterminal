@@ -8,8 +8,8 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **9.3.0 is out.** Token rotation now spreads cells opened together across your subscriptions instead of piling
-> them onto one. [Setup guide](v9.3.0.html)
+> **9.4.0 is out.** Confetti has a box in Settings, and the guide explains how to throw it: a key, a merged PR, or the
+> Konami code. [Setup guide](v9.4.0.html)
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching

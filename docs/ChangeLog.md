@@ -8,6 +8,18 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@9.4.0 — 2026-10-08
+
+> **Setup guide:** [9.4.0 — Confetti, from a key, a merge or Settings](https://receptron.github.io/mulmoterminal/guide/en/v9.4.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v9.4.0.html))
+
+### Confetti gets a Settings box (#2932)
+
+- [#2933](https://github.com/receptron/mulmoterminal/pull/2933) — Settings → Theme has a Confetti box: a tick for each of the five styles (the last one stays ticked, since an empty list is read back as every style), a tick for each event that sets one off by itself (a watched PR merged, an agent turn finished, a Run command ended without an error), and a Try it button. Ticks save as they are clicked and go back when the server refuses. Labels in all five languages; the config skill and the English and Japanese config guide point at the box.
+
+### Docs
+
+- [#2931](https://github.com/receptron/mulmoterminal/pull/2931) — the feature list names the confetti action.
+
 ## mulmoterminal@9.3.0 — 2026-10-08
 
 > **Setup guide:** [9.3.0 — Cells opened together are spread across your subscriptions](https://receptron.github.io/mulmoterminal/guide/en/v9.3.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v9.3.0.html))
