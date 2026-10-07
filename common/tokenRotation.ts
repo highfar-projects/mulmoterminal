@@ -42,6 +42,18 @@ export const ROTATION_TOKEN_REF_MAX = 500;
 export const ROTATION_TOKENS_MAX = 8;
 export const ROTATION_TOKEN_EMAIL_MAX = 254;
 
+/** What a terminal line calls the `/login` credential. */
+export const DEFAULT_LOGIN_LABEL = "the /login account";
+
+/** What a terminal line calls a credential: its label and address, the `/login` one by name, and a
+ *  token gone from the config by its id. */
+export function rotationLoginLabel(rotation: TokenRotation, tokenId: string): string {
+  if (tokenId === DEFAULT_LOGIN_ID) return DEFAULT_LOGIN_LABEL;
+  const token = rotation.tokens.find((candidate) => candidate.id === tokenId);
+  if (!token) return tokenId;
+  return token.email ? `${token.label} (${token.email})` : token.label;
+}
+
 export const TOKEN_ROTATION_OFF: TokenRotation = { enabled: false, includeDefaultLogin: true, tokens: [] };
 
 export const isRotationTokenId = (value: unknown): value is string => typeof value === "string" && ROTATION_TOKEN_ID_RE.test(value);

@@ -93,3 +93,19 @@ describe("keptAssignment (#2919)", () => {
     expect(keptAssignment({ ...rotation, enabled: false }, "b", read)?.tokenId).toBe("b");
   });
 });
+
+describe("assignToken with onlyFree (#2919)", () => {
+  it("refuses to fall back to a held-out candidate", () => {
+    const allSpent = deps({}, { spentUntil_sec: () => NOW + DAY, onlyFree: true });
+    expect(assignToken(allSpent)).toBeNull();
+  });
+
+  it("still picks a free one", () => {
+    const oneFree = deps({}, { spentUntil_sec: (id) => (id === "b" ? NOW + DAY : null), onlyFree: true });
+    expect(assignToken(oneFree)?.tokenId).toBe("a");
+  });
+
+  it("without onlyFree, falls back to the one free soonest as before", () => {
+    expect(assignToken(deps({}, { spentUntil_sec: () => NOW + DAY }))).not.toBeNull();
+  });
+});

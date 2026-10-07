@@ -42,6 +42,11 @@ describe("activityHookEffects", () => {
     expect(activityHookEffects("Notification", false)).toEqual([{ kind: "waiting", value: true }]);
   });
 
+  it("StopFailure clears working and flags nothing, active or not (#2919)", () => {
+    expect(activityHookEffects("StopFailure", true)).toEqual([{ kind: "working", value: false }]);
+    expect(activityHookEffects("StopFailure", false)).toEqual([{ kind: "working", value: false }]);
+  });
+
   it("ignores events that are neither a turn boundary nor tool activity", () => {
     // SessionStart fires before any prompt — the session exists but isn't working yet.
     expect(activityHookEffects("SessionStart", true)).toEqual([]);

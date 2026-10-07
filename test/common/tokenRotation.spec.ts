@@ -1,5 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { rotationTokenFrom, sanitizeTokenRotation, ROTATION_TOKENS_MAX, ROTATION_TOKEN_LABEL_MAX, TOKEN_ROTATION_OFF } from "../../common/tokenRotation";
+import {
+  DEFAULT_LOGIN_ID,
+  DEFAULT_LOGIN_LABEL,
+  rotationLoginLabel,
+  rotationTokenFrom,
+  sanitizeTokenRotation,
+  ROTATION_TOKENS_MAX,
+  ROTATION_TOKEN_LABEL_MAX,
+  TOKEN_ROTATION_OFF,
+} from "../../common/tokenRotation";
 
 const keychainRow = { id: "a", label: "Personal", keychain: "mulmoterminal-token-a" };
 const fileRow = { id: "b", label: "Work", file: "~/.mulmoterminal/tokens/b" };
@@ -74,5 +83,19 @@ describe("sanitizeTokenRotation (#2919)", () => {
 
   it("reads a non-array tokens field as none", () => {
     expect(sanitizeTokenRotation({ enabled: true, tokens: keychainRow }).tokens).toEqual([]);
+  });
+});
+
+describe("rotationLoginLabel (#2919)", () => {
+  const rotation = { enabled: true, includeDefaultLogin: true, tokens: [{ ...keychainRow, email: "me@example.com" }, fileRow] };
+
+  it("names a token by label and address, or label alone", () => {
+    expect(rotationLoginLabel(rotation, "a")).toBe("Personal (me@example.com)");
+    expect(rotationLoginLabel(rotation, "b")).toBe("Work");
+  });
+
+  it("names the /login credential, and a token gone from the config by its id", () => {
+    expect(rotationLoginLabel(rotation, DEFAULT_LOGIN_ID)).toBe(DEFAULT_LOGIN_LABEL);
+    expect(rotationLoginLabel(rotation, "gone")).toBe("gone");
   });
 });

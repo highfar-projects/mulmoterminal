@@ -18,13 +18,15 @@ import { ptyExitLine } from "./pty-exit-log.js";
 import { startAgentPty, type StartedAgentPty } from "./agent-pty-start.js";
 import { spawnWithFullGuiClaim } from "./spawn-with-full-gui-claim.js";
 import { attachDraftInjection } from "./draft-injection.js";
-import { sendExitAndClose } from "./ws-frames.js";
+import { sendExitAndClose, sendFrame } from "./ws-frames.js";
 import { wireBufferedOutput } from "./output-relay.js";
 import { sessionExistsOnDisk } from "./session-reads.js";
 import { accountSpawnEnv } from "./session-home.js";
 import { boundAccount } from "./account-sessions.js";
 import { sessionCredential, type SessionCredential } from "./session-credential.js";
 import { rememberTokenSession, sessionToken } from "./token-sessions.js";
+import { movedNoticeLine, takeMovedFrom } from "./rotation-notice.js";
+import { rotationLoginLabel } from "../../common/tokenRotation.js";
 import type { PtyEntry } from "./types.js";
 import type { SpawnDeps } from "./spawn-deps.js";
 import { handlePtyExit } from "./pty-exit.js";
@@ -159,6 +161,13 @@ function sessionCredentialFor(
     return ptyWouldReattach(sessionId, true) ? (deps.keptAssignment?.(sessionToken(sessionId)) ?? null) : (deps.assignToken?.() ?? null);
   };
   return sessionCredential(resolved, { providerEnv: resolved.env, runsCustomAgent, onAccount }, assign);
+}
+
+/** The line a session moved off a spent credential prints as its new process starts (#2919). */
+function printMovedNotice(sessionId: string, ws: WebSocket | null, tokenId: string | null): void {
+  const fromLabel = takeMovedFrom(sessionId);
+  if (fromLabel === undefined || tokenId === null) return;
+  sendFrame(ws, { type: "output", data: movedNoticeLine(fromLabel, rotationLoginLabel(getTokenRotation(), tokenId)) });
 }
 
 function sessionAddDirs(sessionId: string, configured: string[] | null | undefined): string[] | null | undefined {
@@ -322,6 +331,7 @@ export function createClaudeSpawner(deps: SpawnDeps) {
       if (!reattaching) resetSessionToolGroups(sessionId);
       // Only a NEW process is on the chosen token; a reattached one keeps the token it started with.
       if (!reattaching) rememberTokenSession(sessionId, credential.tokenId);
+      if (!reattaching) printMovedNotice(sessionId, ws, credential.tokenId);
       return spawnWithFullGuiClaim({ sessionId, attachGuiMcp, cwd, wouldReattach: reattaching, agent: "claude" }, () => {
         const program = sessionProgram(deps.claudeBin, sessionId, customAgentId, canResume ? resume : null, credential.unset, deps.permissionMode);
         const spawnEnv = { ...program.spawnEnv, env: { ...program.spawnEnv.env, ...claudeRendererEnv(sessionId, cwd) } };
