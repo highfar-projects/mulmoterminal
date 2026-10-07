@@ -8,6 +8,18 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@9.3.0 — 2026-10-08
+
+> **Setup guide:** [9.3.0 — Cells opened together are spread across your subscriptions](https://receptron.github.io/mulmoterminal/guide/en/v9.3.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v9.3.0.html))
+
+### Token rotation spreads sessions instead of piling them up (#2926)
+
+- [#2927](https://github.com/receptron/mulmoterminal/pull/2927) — token rotation sent every new session to one subscription: the choice took the single highest burn pace, and since usage readings only move when a probe runs, every session opened in between made the same choice. The rank is now the burn pace divided by one plus the sessions running on that token now (ties go to the less busy, then config order), and the count changes the moment a session is assigned, so cells opened together spread; an urgent window still gets the first sessions. A session counts as running while this server holds its claude process.
+
+### Dependencies
+
+- [#2930](https://github.com/receptron/mulmoterminal/pull/2930) — `mulmocast` and `@mulmocast/types` 2.17, `@mulmoclaude/core` 5.11.1, `@mulmoclaude/markdown-plugin` 5.2, `vue-router` 5.4, `vite` 8.3.3 and `knip` 6.40.
+
 ## mulmoterminal@9.2.0 — 2026-10-07
 
 > **Setup guide:** [9.2.0 — Several Claude subscriptions, used evenly, picked for you](https://receptron.github.io/mulmoterminal/guide/en/v9.2.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v9.2.0.html))

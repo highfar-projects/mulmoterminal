@@ -8,8 +8,8 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **9.2.0 is out.** Register several Claude subscriptions once, and every new session starts on the one with the most
-> room — a session running low moves to another and carries on. [Setup guide](v9.2.0.html)
+> **9.3.0 is out.** Token rotation now spreads cells opened together across your subscriptions instead of piling
+> them onto one. [Setup guide](v9.3.0.html)
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching
