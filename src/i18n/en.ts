@@ -13,6 +13,7 @@
 // that table holds no words. A spec pins that every id there has a message here and in every other
 // locale.
 import { blueprintsEn } from "./blueprints/en";
+import { usageViewEn } from "./usageView/en";
 import { tipsEn } from "./tips/en";
 import { commandPaletteEn } from "./commandPalette/en";
 import { focusModeEn } from "./focusMode/en";
@@ -622,8 +623,10 @@ export const en = {
       skills: { label: "Skills", detail: "Every skill in ~/.claude/skills and in your folders, with search" },
       processes: { label: "Processes", detail: "What each session is running, and worktrees that can go" },
       worklog: { label: "Worklog", detail: "The dev work log in the wiki (#worklog)" },
+      usage: { label: "Token usage", detail: "What each rotation token has left of its 5h and weekly windows" },
     },
   },
+  usageView: usageViewEn,
   rowMenu: {
     trigger: "Actions for this terminal",
     title: "Actions",

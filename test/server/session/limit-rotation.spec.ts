@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, vi } from "vitest";
-import { rotateOnLimit, type LimitRotationDeps, type MovableSession } from "../../../server/session/limit-rotation";
+import { rotateNearLimit, rotateOnLimit, type LimitRotationDeps, type MovableSession, type MovedFrom } from "../../../server/session/limit-rotation";
 
 const ID = "44444444-5555-4666-8777-888888888888";
 
@@ -23,7 +23,8 @@ const harness = (over: Partial<LimitRotationDeps> = {}, entryOver: Partial<Movab
     entryOf: () => entry,
     reap: vi.fn(() => order.push(`reap:ws=${entry.ws === null ? "detached" : "attached"}`)),
     labelOf: (id) => `Token ${id.toUpperCase()}`,
-    noteMovedFrom: vi.fn((_id: string, label: string) => order.push(`note:${label}`)),
+    noteMovedFrom: vi.fn((_id: string, move: MovedFrom) => order.push(`note:${move.fromLabel}:${move.reason}`)),
+    isNearLimit: () => false,
     ...over,
   };
   return { deps, entry, order, closeSocket };
@@ -33,7 +34,7 @@ describe("rotateOnLimit (#2919)", () => {
   it("marks the token spent, detaches the socket before ending the process, then closes it bare", () => {
     const { deps, order } = harness();
     expect(rotateOnLimit(deps, ID)).toBe("moved");
-    expect(order).toEqual(["spent:a", "note:Token A", "reap:ws=detached", "close"]);
+    expect(order).toEqual(["spent:a", "note:Token A:limit-hit", "reap:ws=detached", "close"]);
   });
 
   it("leaves a session rotation did not start alone", () => {
@@ -72,5 +73,31 @@ describe("rotateOnLimit (#2919)", () => {
     entry.ws = null;
     expect(rotateOnLimit(deps, ID)).toBe("moved");
     expect(deps.reap).toHaveBeenCalledWith(ID);
+  });
+});
+
+describe("rotateNearLimit (#2919)", () => {
+  it("moves a session whose credential is at the switch line, without marking it spent", () => {
+    const { deps, order } = harness({ isNearLimit: () => true });
+    expect(rotateNearLimit(deps, ID)).toBe("moved");
+    expect(order).toEqual(["note:Token A:near-limit", "reap:ws=detached", "close"]);
+  });
+
+  it("leaves a session below the line alone", () => {
+    const { deps, order } = harness({ isNearLimit: () => false });
+    expect(rotateNearLimit(deps, ID)).toBe("below-limit");
+    expect(order).toEqual([]);
+  });
+
+  it("leaves a session rotation did not start alone, whatever its credential", () => {
+    const { deps, order } = harness({ sessionToken: () => undefined, isNearLimit: () => true });
+    expect(rotateNearLimit(deps, ID)).toBe("not-rotated");
+    expect(order).toEqual([]);
+  });
+
+  it("stays put when there is nowhere free to go", () => {
+    const { deps, order } = harness({ isNearLimit: () => true, hasFreeChoice: () => false });
+    expect(rotateNearLimit(deps, ID)).toBe("no-free-credential");
+    expect(order).toEqual([]);
   });
 });

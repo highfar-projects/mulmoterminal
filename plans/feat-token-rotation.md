@@ -72,7 +72,10 @@ keeps the token its process was started with; only a newly started process is as
    `--resume`s the conversation and the spawn chooses with the spent token held out. Agreed with
    the user: the prompt that hit the limit is not re-sent. A spent mark lasts until the next probe
    can measure the token; a session with nowhere better to go is left as it is.
-3. **UI + guide.** The token's label on a cell, and the setup guide in both languages.
+3. **UI + guide.** The token's label on a cell (a `credential` frame after the spawn), the address in the
+   gauge's hover, a "Token usage" screen in the feature menu (only while rotation is on), a usage-limit
+   probe verdict that holds a used-up token out, the 98% switch line (choice ceiling, and a move at the
+   end of a turn), and the setup guide in both languages.
 
 ## Choice rule (`server/agents/token-choice.ts`)
 

@@ -211,7 +211,7 @@ describe("the Files tab actions", () => {
 // #2441. Screens are rows too: they need no grid, so they are never disabled, and they lead the
 // list wherever the grid is not in front.
 describe("screen rows", () => {
-  const ALL_SET_UP = { prs: true, rooms: true, worklog: true };
+  const ALL_SET_UP = { prs: true, rooms: true, worklog: true, usage: false };
   const HIDDEN = { zoomed: false, available: false, manualOrder: true, filesOpen: false };
 
   it("lists every screen after the actions while the grid is in front", () => {
@@ -246,7 +246,9 @@ describe("screen rows", () => {
   });
 
   it("offers no screen for a feature that is not set up", () => {
-    const keys = paletteRows("", {}, UNZOOMED, TEXT, { ...NONE, screens: visibleScreens({ prs: false, rooms: false, worklog: false }) }).map(rowKey);
+    const keys = paletteRows("", {}, UNZOOMED, TEXT, { ...NONE, screens: visibleScreens({ prs: false, rooms: false, worklog: false, usage: false }) }).map(
+      rowKey,
+    );
     expect(keys).not.toContain("screen:prs");
     expect(keys).not.toContain("screen:rooms");
     expect(keys).not.toContain("screen:worklog");
@@ -274,7 +276,7 @@ describe("terminal rows", () => {
   it("lists them after the actions on the grid, and after the screens elsewhere", () => {
     const onGrid = paletteRows("", {}, UNZOOMED, TEXT, {
       ...NONE,
-      screens: visibleScreens({ prs: false, rooms: false, worklog: false }),
+      screens: visibleScreens({ prs: false, rooms: false, worklog: false, usage: false }),
       terminals: TERMINALS,
     }).map((row) => row.kind);
     expect(onGrid.indexOf("terminal")).toBe(PALETTE_ACTIONS.length);

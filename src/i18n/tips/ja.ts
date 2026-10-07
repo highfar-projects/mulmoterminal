@@ -331,6 +331,7 @@ export const tipsJa: Messages["tips"] = {
     noReport: "Claude の利用状況を表示できません — 前回の確認に応答がありませんでした。間隔を空けながら再試行します。",
     trustPrompt:
       "Claude の利用状況を表示できません — 利用状況の確認が Claude Code の信頼の確認で止まっています。そのフォルダで一度 `claude` を実行して承認してください。",
+    usageLimit: "Claude の使用量を表示できません — このサブスクリプションは上限に達していて、確認が答えを得られませんでした。",
     accountTrustPrompt:
       "Claude の利用状況を表示できません — 利用状況の確認が Claude Code の信頼の確認で止まっています。ワークスペースのフォルダでこのアカウントのセルを一度起動して承認してください。",
     accountNote: "{account}: {note}",

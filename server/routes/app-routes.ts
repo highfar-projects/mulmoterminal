@@ -117,6 +117,8 @@ export interface AppRouteDeps extends SessionActivityDeps {
   rateLimits: RateLimitRouteDeps;
   /** A rotated session's turn ended on a usage limit: move it to another credential (#2919). */
   onRateLimited?: (sessionId: string) => void;
+  /** A live session's turn ended: move it if its credential is at the switch line (#2919). */
+  onTurnEnded?: (sessionId: string) => void;
   isAllowedOrigin: (origin: string | undefined, remoteAddress: string | undefined) => boolean;
   publish: (channel: string, data: unknown) => void;
   sessionChannel: (id: string) => string;
@@ -391,6 +393,7 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
     // whose port the backend only knows when CLIENT_PORT is set in its environment.
     uiPort: String(process.env.CLIENT_PORT || PORT),
     ...(deps.onRateLimited ? { onRateLimited: deps.onRateLimited } : {}),
+    ...(deps.onTurnEnded ? { onTurnEnded: deps.onTurnEnded } : {}),
   });
 
   // The tools pane: the toolResult sink, its replay, the available-tool list and the

@@ -32,6 +32,7 @@ import { useGatedEntries } from "../composables/useGatedEntries";
 import { blueprintsViewOpen } from "../composables/useBlueprintsView";
 import { skillsViewOpen } from "../composables/useSkillsView";
 import { processesViewOpen } from "../composables/useProcessesView";
+import { usageViewOpen } from "../composables/useUsageView";
 import { useSoundEnabled } from "../composables/useSoundEnabled";
 import { audioBlocked } from "../composables/audioUnlockState";
 import { soundButtonState } from "./soundButtonState";
@@ -183,6 +184,7 @@ const FEATURE_ACTIONS: Record<FeatureMenuEntry, () => void> = {
   skills: skillsViewOpen,
   processes: processesViewOpen,
   worklog: showWorklog,
+  usage: usageViewOpen,
 };
 </script>
 

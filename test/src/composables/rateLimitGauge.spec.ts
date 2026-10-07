@@ -232,6 +232,18 @@ describe("rateLimitReadout with accounts", () => {
     expect(notesOf({ ...claudeOnly, accounts: [{ ...stuck, probe: "no-windows" }] })[0]?.note).toMatch(/API-key billing/);
   });
 
+  it("names a rotation token's address in its title, and keeps the short label (#2919)", () => {
+    const token = { ...work, id: "ss", label: "SS", email: "me@example.com" };
+    const gauge = gaugesOf({ ...claudeOnly, accounts: [token] }, NOW)[1];
+    expect(gauge?.label).toBe("SS");
+    expect(gauge?.title).toContain("SS · me@example.com (claude) rate limit");
+  });
+
+  it("says a subscription at its usage limit is that, not 'no answer' (#2919)", () => {
+    expect(notesOf({ ...claudeOnly, accounts: [{ ...stuck, probeStall: "usage-limit" }] })[0]?.note).toMatch(/^Work: .*usage limit/);
+    expect(noteOf({ claude: null, codex: null, claudeProbe: "no-report", claudeStall: "usage-limit" }, NOW)).toMatch(/usage limit/);
+  });
+
   it("says nothing for an account that is showing, not yet measured, or codex", () => {
     expect(notesOf({ ...claudeOnly, accounts: [{ ...stuck, limits: work.limits }] })).toEqual([]);
     expect(notesOf({ ...claudeOnly, accounts: [{ ...work, limits: null }] })).toEqual([]);

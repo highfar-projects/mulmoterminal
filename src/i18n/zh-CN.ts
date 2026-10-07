@@ -1,4 +1,5 @@
 import type { Messages } from "./messages";
+import { usageViewZhCN } from "./usageView/zh-CN";
 import { blueprintsZhCN } from "./blueprints/zh-CN";
 import { tipsZhCN } from "./tips/zh-CN";
 import { commandPaletteZhCN } from "./commandPalette/zh-CN";
@@ -585,8 +586,10 @@ export const zhCN: Messages = {
       skills: { label: "Skills", detail: "列出并搜索 ~/.claude/skills 和各文件夹中的技能" },
       processes: { label: "进程", detail: "各会话中运行的进程，以及可删除的 worktree" },
       worklog: { label: "Worklog", detail: "wiki 中的开发工作日志（#worklog）" },
+      usage: { label: "令牌用量", detail: "轮换中每个令牌剩余的 5 小时窗口和每周窗口" },
     },
   },
+  usageView: usageViewZhCN,
   rowMenu: {
     trigger: "此终端的操作",
     title: "操作",

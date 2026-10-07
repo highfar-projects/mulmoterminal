@@ -15,6 +15,7 @@ export const PALETTE_SCREENS = [
   "worklog",
   "skills",
   "processes",
+  "usage",
 ] as const;
 export type PaletteScreen = (typeof PALETTE_SCREENS)[number];
 
@@ -32,6 +33,7 @@ export const SCREEN_ICONS: Record<PaletteScreen, string> = {
   worklog: "history_edu",
   skills: "auto_stories",
   processes: "memory",
+  usage: "data_usage",
 };
 
 /** Each screen's name, from the key its own door already uses, so the two cannot drift apart. */
@@ -48,9 +50,10 @@ export const SCREEN_LABEL_KEYS: Record<PaletteScreen, string> = {
   worklog: "featureMenu.items.worklog.label",
   skills: "featureMenu.items.skills.label",
   processes: "featureMenu.items.processes.label",
+  usage: "featureMenu.items.usage.label",
 };
 
-const GATED_BY: Partial<Record<PaletteScreen, GatedEntry>> = { prs: "prs", rooms: "rooms", worklog: "worklog" };
+const GATED_BY: Partial<Record<PaletteScreen, GatedEntry>> = { prs: "prs", rooms: "rooms", worklog: "worklog", usage: "usage" };
 
 export function visibleScreens(gated: Record<GatedEntry, boolean>): PaletteScreen[] {
   return PALETTE_SCREENS.filter((screen) => {

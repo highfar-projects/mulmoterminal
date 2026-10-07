@@ -42,6 +42,8 @@ export const routes: RouteRecordRaw[] = [
   { path: "/skills", name: "skills", component: Stub },
   // What each session is running, and the worktrees that can go (#2219).
   { path: "/processes", name: "processes", component: Stub },
+  // What each rotation token has left of its 5h / 7d windows (#2919).
+  { path: "/usage", name: "usage", component: Stub },
   // Full-screen file explorer + editor, rooted at a project dir (?cwd=). Opened from a
   // terminal header's Files button.
   { path: "/files", name: "files", component: Stub },

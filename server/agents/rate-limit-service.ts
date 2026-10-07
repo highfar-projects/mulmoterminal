@@ -81,6 +81,7 @@ export type RateLimitService = RateLimitRouteDeps & {
   keptAssignment: (tokenId: string | undefined) => TokenAssignment | null;
   markSpent: (tokenId: string) => void;
   hasFreeChoice: () => boolean;
+  isNearLimit: (tokenId: string) => boolean;
 };
 
 /** The accounts' meters and the rotation tokens' meters, as the one list the routes read. A probe's

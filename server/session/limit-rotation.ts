@@ -24,25 +24,55 @@ export interface LimitRotationDeps {
   entryOf: (sessionId: string) => MovableSession | undefined;
   reap: (sessionId: string) => void;
   labelOf: (tokenId: string) => string;
-  noteMovedFrom: (sessionId: string, fromLabel: string) => void;
+  noteMovedFrom: (sessionId: string, move: MovedFrom) => void;
+  /** Whether the credential is at the switch line (token-choice.ts SWITCH_AT_PERCENT). */
+  isNearLimit: (tokenId: string) => boolean;
 }
 
-export type LimitRotationOutcome = "not-rotated" | "no-session" | "no-free-credential" | "moved";
+/** Why a session moved, for its notice line. */
+export type MoveReason = "limit-hit" | "near-limit";
 
-/** What to do about a session whose turn just failed on a usage limit. */
-export function rotateOnLimit(deps: LimitRotationDeps, sessionId: string): LimitRotationOutcome {
-  const tokenId = deps.rotationEnabled() ? deps.sessionToken(sessionId) : undefined;
-  if (tokenId === undefined) return "not-rotated";
-  deps.markSpent(tokenId);
+export interface MovedFrom {
+  fromLabel: string;
+  reason: MoveReason;
+}
+
+export type LimitRotationOutcome = "not-rotated" | "below-limit" | "no-session" | "no-free-credential" | "moved";
+
+/** End the session's process with its socket detached so no exit frame reaches the cell, then close
+ *  the socket bare: the cell's reconnect resumes the conversation on a fresh choice. */
+function moveSession(deps: LimitRotationDeps, sessionId: string, tokenId: string, reason: MoveReason): LimitRotationOutcome {
   const entry = deps.entryOf(sessionId);
   if (!entry || entry.agent !== "claude") return "no-session";
   // Every other credential is held out too: a restart would land on one that fails the same way.
-  // The session stays as it is, showing Claude Code's own limit message.
+  // The session stays as it is.
   if (!deps.hasFreeChoice()) return "no-free-credential";
   const socket = entry.ws;
   entry.ws = null;
-  deps.noteMovedFrom(sessionId, deps.labelOf(tokenId));
+  deps.noteMovedFrom(sessionId, { fromLabel: deps.labelOf(tokenId), reason });
   deps.reap(sessionId);
   socket?.close();
   return "moved";
+}
+
+const rotatedToken = (deps: LimitRotationDeps, sessionId: string): string | undefined => (deps.rotationEnabled() ? deps.sessionToken(sessionId) : undefined);
+
+/** What to do about a session whose turn just failed on a usage limit. */
+export function rotateOnLimit(deps: LimitRotationDeps, sessionId: string): LimitRotationOutcome {
+  const tokenId = rotatedToken(deps, sessionId);
+  if (tokenId === undefined) return "not-rotated";
+  deps.markSpent(tokenId);
+  return moveSession(deps, sessionId, tokenId, "limit-hit");
+}
+
+/**
+ * What to do about a session whose turn just ended normally: move it while it is between turns if its
+ * credential is at the switch line, before a turn has to fail on the limit (#2919). The readings are
+ * the probes', so the line can be crossed by a few percent before it is seen.
+ */
+export function rotateNearLimit(deps: LimitRotationDeps, sessionId: string): LimitRotationOutcome {
+  const tokenId = rotatedToken(deps, sessionId);
+  if (tokenId === undefined) return "not-rotated";
+  if (!deps.isNearLimit(tokenId)) return "below-limit";
+  return moveSession(deps, sessionId, tokenId, "near-limit");
 }

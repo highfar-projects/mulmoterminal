@@ -18,7 +18,10 @@ export interface TokenCandidate {
 
 /** At or above this, a 5-hour window is too close to blocking a turn to start a session on it. */
 export const FIVE_HOUR_CEILING_PERCENT = 90;
-export const SEVEN_DAY_CEILING_PERCENT = 100;
+/** The user's line (#2919): a week this full is treated as spent, both for choosing a new session's
+ *  credential and for moving a running one at the end of its turn. */
+export const SWITCH_AT_PERCENT = 98;
+export const SEVEN_DAY_CEILING_PERCENT = SWITCH_AT_PERCENT;
 /** A window resetting within this many hours is ranked as if it had this long left, so a reading
  *  a minute before its reset does not dwarf every other candidate. */
 export const MIN_HOURS_TO_RESET = 1;
@@ -41,6 +44,13 @@ export function blockedUntil(candidate: TokenCandidate, now_sec: number): number
   if (limits && usedNow(limits.sevenDay, now_sec) >= SEVEN_DAY_CEILING_PERCENT) blocks.push(reset(limits.sevenDay));
   if (limits && usedNow(limits.fiveHour, now_sec) >= FIVE_HOUR_CEILING_PERCENT) blocks.push(reset(limits.fiveHour));
   return blocks.length > 0 ? Math.max(...blocks) : null;
+}
+
+/** Whether a running session on these readings should move at the end of its turn: either window is
+ *  at the switch line. Null readings never move anything — there is nothing to say it is full. */
+export function nearLimit(limits: RateLimits | null, now_sec: number): boolean {
+  if (!limits) return false;
+  return usedNow(limits.fiveHour, now_sec) >= SWITCH_AT_PERCENT || usedNow(limits.sevenDay, now_sec) >= SWITCH_AT_PERCENT;
 }
 
 /** Remaining weekly percent per hour to its reset — higher is more urgent to use. A reading with no

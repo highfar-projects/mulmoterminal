@@ -163,11 +163,24 @@ function sessionCredentialFor(
   return sessionCredential(resolved, { providerEnv: resolved.env, runsCustomAgent, onAccount }, assign);
 }
 
+/** Which rotation credential this session's process runs on, for the cell's mark (#2919): the token
+ *  just chosen for a new process, or the one a reattached process was recorded on. Nothing is sent
+ *  while rotation is off, so a cell without it sees no new frame at all. */
+function announceCredential(sessionId: string, ws: WebSocket | null): void {
+  const rotation = getTokenRotation();
+  if (!rotation.enabled) return;
+  const tokenId = sessionToken(sessionId);
+  const token = rotation.tokens.find((candidate) => candidate.id === tokenId);
+  // `label` is what fits on the mark; `detail` names the address too, for its hover.
+  const label = tokenId === undefined ? null : (token?.label ?? rotationLoginLabel(rotation, tokenId));
+  sendFrame(ws, { type: "credential", label, detail: tokenId === undefined ? null : rotationLoginLabel(rotation, tokenId) });
+}
+
 /** The line a session moved off a spent credential prints as its new process starts (#2919). */
 function printMovedNotice(sessionId: string, ws: WebSocket | null, tokenId: string | null): void {
-  const fromLabel = takeMovedFrom(sessionId);
-  if (fromLabel === undefined || tokenId === null) return;
-  sendFrame(ws, { type: "output", data: movedNoticeLine(fromLabel, rotationLoginLabel(getTokenRotation(), tokenId)) });
+  const move = takeMovedFrom(sessionId);
+  if (move === undefined || tokenId === null) return;
+  sendFrame(ws, { type: "output", data: movedNoticeLine(move, rotationLoginLabel(getTokenRotation(), tokenId)) });
 }
 
 function sessionAddDirs(sessionId: string, configured: string[] | null | undefined): string[] | null | undefined {
@@ -304,6 +317,7 @@ export function createClaudeSpawner(deps: SpawnDeps) {
     // spawn has to take it with it — a session that never starts never reaches reap(),
     // where the cleanup normally happens (#579).
     const { entry, spawnedAtMs } = withSettingsCleanup(sessionId, spawnEntry);
+    announceCredential(sessionId, entry.ws);
 
     // A NEW claude process gets whatever the user's MCP config says NOW, so anything this id
     // learned under a previous one is stale — including a group the user has since removed.

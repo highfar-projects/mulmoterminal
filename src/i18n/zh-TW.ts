@@ -1,4 +1,5 @@
 import type { Messages } from "./messages";
+import { usageViewZhTW } from "./usageView/zh-TW";
 import { blueprintsZhTW } from "./blueprints/zh-TW";
 import { tipsZhTW } from "./tips/zh-TW";
 import { commandPaletteZhTW } from "./commandPalette/zh-TW";
@@ -590,8 +591,10 @@ export const zhTW: Messages = {
       skills: { label: "Skills", detail: "列出並搜尋 ~/.claude/skills 與各資料夾中的技能" },
       processes: { label: "處理程序", detail: "各工作階段中執行的處理程序，以及可刪除的 worktree" },
       worklog: { label: "Worklog", detail: "wiki 中的開發工作紀錄（#worklog）" },
+      usage: { label: "權杖用量", detail: "輪換中每個權杖剩餘的 5 小時視窗與每週視窗" },
     },
   },
+  usageView: usageViewZhTW,
   rowMenu: {
     trigger: "此終端機的操作",
     title: "操作",
