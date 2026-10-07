@@ -291,7 +291,8 @@ be resumed on any subscription — the same as switching with `/login`, done aut
 
 - `keychain` is read with `security find-generic-password -a <keychainAccount> -s <keychain> -w`;
   `keychainAccount` defaults to `mulmoterminal`. Off macOS, use `file` (a file holding only the
-  token, mode 600). Exactly one of the two per entry; an entry with both or neither is dropped.
+  token). It must be `chmod 600` and owned by the user: a file anyone else can read is refused,
+  with the reason in the server log. Exactly one of the two per entry; an entry with both or neither is dropped.
 - `email` is what the user signs in with — shown beside that token's usage so they can tell which
   subscription is which. MulmoTerminal cannot read it from the token.
 - `includeDefaultLogin` (default `true`): the `/login` credential is one more candidate.

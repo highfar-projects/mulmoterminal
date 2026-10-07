@@ -27,8 +27,34 @@ const keychainRead = (service: string, account: string): string =>
     stdio: ["ignore", "pipe", "ignore"],
   });
 
+/** What a token file's stat says, as the refusal rule reads it. */
+export interface TokenFileStat {
+  isFile: boolean;
+  size: number;
+  mode: number;
+  uid: number;
+}
+
+const GROUP_OR_OTHER_BITS = 0o077;
+
+/**
+ * Why a token file must not be read, or null when it may. Off Windows it has to be private the way
+ * ssh demands of a key — a regular file, owned by this user, with no group or other bits — because a
+ * token kept out of config, argv and env is still leaked by a file anyone on the machine can read.
+ * Windows has no such mode bits to check.
+ */
+export function tokenFileRefusal(stat: TokenFileStat, platform: NodeJS.Platform, uid: number | undefined): string | null {
+  if (!stat.isFile) return "not a regular file";
+  if (stat.size > TOKEN_FILE_MAX_BYTES) return `larger than ${TOKEN_FILE_MAX_BYTES} bytes`;
+  if (platform === "win32") return null;
+  if (uid !== undefined && stat.uid !== uid) return "not owned by this user";
+  return (stat.mode & GROUP_OR_OTHER_BITS) === 0 ? null : "readable by others: chmod 600 it";
+}
+
 const boundedRead = (file: string): string => {
-  if (statSync(file).size > TOKEN_FILE_MAX_BYTES) throw new Error(`larger than ${TOKEN_FILE_MAX_BYTES} bytes`);
+  const stat = statSync(file);
+  const refusal = tokenFileRefusal({ isFile: stat.isFile(), size: stat.size, mode: stat.mode, uid: stat.uid }, process.platform, process.getuid?.());
+  if (refusal) throw new Error(refusal);
   return readFileSync(file, "utf8");
 };
 

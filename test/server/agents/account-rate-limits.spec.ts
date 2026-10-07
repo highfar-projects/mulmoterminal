@@ -114,6 +114,21 @@ describe("createAccountRateLimits (#2215)", () => {
     m.refresh(start + 1_000);
     expect(probes).toHaveLength(1);
   });
+
+  it("backs off a probe that could not even start, instead of retrying it on every refresh (#2919)", () => {
+    let attempts = 0;
+    const m = meters([WORK], {
+      startClaudeProbe: () => {
+        attempts += 1;
+        throw new Error("token unreadable");
+      },
+    });
+    const start = Date.now();
+    m.refresh(start);
+    expect(m.readings(start)).toMatchObject([{ probing: false, probe: "no-report" }]);
+    m.refresh(start + 1_000);
+    expect(attempts).toBe(1);
+  });
 });
 
 describe("the route and an account's probe", () => {

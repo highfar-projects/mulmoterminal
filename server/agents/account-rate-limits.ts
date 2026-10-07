@@ -121,6 +121,9 @@ export function createAccountRateLimits<T extends MeteredLogin = AgentAccount>(d
       );
     } catch {
       probeLogins.delete(probeReportKey);
+      // A probe that could not even start (a rotation token that cannot be read) is a failed attempt,
+      // so it backs off like one instead of being retried on every refresh.
+      meter.store.noteProbeFailedIfNoReport(Date.now());
       meter.store.setProbeInFlight(false);
     }
   };
