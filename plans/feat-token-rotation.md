@@ -66,7 +66,12 @@ keeps the token its process was started with; only a newly started process is as
    the per-session record of which token a process runs on, and a usage probe per token whose
    readings appear beside the accounts' gauges. `mulmoterminal-model` skill documents the key.
 2. **Limit hit.** Register `StopFailure`; a `rate_limit` from a rotated session marks its token
-   spent and resumes the session on the next choice.
+   spent and resumes the session on the next choice. The move is the Restart button's path done
+   from the server (`server/session/limit-rotation.ts`): the cell's socket is detached before the
+   process is ended, so no exit frame reaches it, then closed bare; the cell's own reconnect
+   `--resume`s the conversation and the spawn chooses with the spent token held out. Agreed with
+   the user: the prompt that hit the limit is not re-sent. A spent mark lasts until the next probe
+   can measure the token; a session with nowhere better to go is left as it is.
 3. **UI + guide.** The token's label on a cell, and the setup guide in both languages.
 
 ## Choice rule (`server/agents/token-choice.ts`)

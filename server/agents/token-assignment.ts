@@ -4,7 +4,7 @@
 // Pure: the config, the readings, the secret reader and the clock are injected.
 import type { RateLimits } from "../../common/rateLimits.js";
 import { DEFAULT_LOGIN_ID, type RotationToken, type TokenRotation } from "../../common/tokenRotation.js";
-import { chooseToken, type TokenCandidate } from "./token-choice.js";
+import { blockedUntil, chooseToken, type TokenCandidate } from "./token-choice.js";
 
 /** Anything that would outrank the chosen credential (an API key, a provider's token) or stand in
  *  for it (an inherited token) is removed from the session's environment. */
@@ -28,6 +28,9 @@ export interface TokenAssignmentDeps {
   spentUntil_sec?: (tokenId: string) => number | null;
   readSecret: (token: RotationToken) => string | null;
   now_sec: number;
+  /** Refuse a candidate that is held out, rather than falling back to the one free soonest — for
+   *  deciding whether moving a session off a spent token would land anywhere better. */
+  onlyFree?: boolean;
 }
 
 const candidatesOf = (deps: TokenAssignmentDeps): TokenCandidate[] => {
@@ -68,6 +71,8 @@ export function assignToken(deps: TokenAssignmentDeps): TokenAssignment | null {
   const pickFrom = (candidates: TokenCandidate[]): TokenAssignment | null => {
     const id = chooseToken(candidates, deps.now_sec);
     if (id === null) return null;
+    const chosen = candidates.find((candidate) => candidate.id === id);
+    if (deps.onlyFree && chosen && blockedUntil(chosen, deps.now_sec) !== null) return null;
     const token = deps.rotation.tokens.find((candidate) => candidate.id === id);
     const assignment = assignmentOf(id, token ? deps.readSecret(token) : null);
     return assignment ?? pickFrom(candidates.filter((candidate) => candidate.id !== id));

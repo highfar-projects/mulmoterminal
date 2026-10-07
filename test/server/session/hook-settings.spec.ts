@@ -9,7 +9,7 @@ const SESSION = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
 const settings = (over: Partial<Parameters<typeof hookSettingsJson>[0]> = {}) =>
   JSON.parse(hookSettingsJson({ host: "localhost", port: 34567, sessionId: SESSION, ...over }));
 
-const HOOK_EVENTS = ["UserPromptSubmit", "Stop", "Notification", "SessionStart"] as const;
+const HOOK_EVENTS = ["UserPromptSubmit", "Stop", "Notification", "SessionStart", "StopFailure"] as const;
 const TOOL_EVENTS = ["PreToolUse", "PostToolUse", "PostToolUseFailure"] as const;
 
 const commandOf = (entry: { hooks: { command: string }[] }): string => entry.hooks[0].command;

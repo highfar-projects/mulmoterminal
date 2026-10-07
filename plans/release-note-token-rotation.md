@@ -23,7 +23,7 @@ MulmoTerminal は、そんなヘビーな Vibe coder のために、**新しい�
 - 5 時間枠が上限近いアカウント、週の枠を使い切ったアカウントは自動で外れます。
 - 会話はアカウントをまたいで続きます。`/login` で切り替えたときと同じで、会話の記録は一つの場所にあるので、
   どのアカウントでも再開できます。
-- 上限に当たったセッションは、別のアカウントで自動で再開します。（PR 2）
+- 使っている途中で上限に当たったセッションは、別のアカウントに自動で移って同じ会話を続けます。セルには「どのアカウントからどのアカウントへ移ったか」が 1 行出ます。上限で止まった質問は自動では送り直さないので、もう一度送ってください。
 - ヘッダーの使用量の表示に、アカウントごとの残りが並びます。どのメールアドレスのアカウントかも表示されます。（PR 3 で見た目を整える）
 - トークンそのものは画面にも設定ファイルにも出ません。設定に書くのは「どこにしまったか」（macOS のキーチェーンの項目名など）だけです。
 
@@ -65,7 +65,7 @@ session starts.**
 - An account near its 5-hour limit, or out of its weekly allowance, is skipped.
 - Conversations carry across accounts, just as with `/login`: everything stays in one place, so any
   session can be resumed on any account.
-- A session that hits its limit resumes on another account by itself. (PR 2)
+- A session that hits its limit mid-conversation moves to another account by itself and carries on, with one line in the cell saying which account it moved from and to. The message that hit the limit is not re-sent — send it again.
 - The header's usage gauge shows what is left on each account, with the sign-in address it belongs to. (polished in PR 3)
 - The token itself is never shown and never written to the config — an entry says only where it is kept.
 

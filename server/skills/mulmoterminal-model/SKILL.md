@@ -304,6 +304,11 @@ be resumed on any subscription — the same as switching with `/login`, done aut
   agent or an `accounts` login already says whose subscription it runs on and is never rotated.
 - A token is chosen when a session's process STARTS (new, or resumed after it exited). A running
   session keeps its token; reconnecting to it changes nothing.
+- **When a running session hits its limit**, it moves by itself: that subscription is held out, the
+  cell reconnects and resumes the same conversation on the next choice, and prints one line naming
+  both. The prompt that hit the limit is NOT re-sent — the user sends it again. If every other
+  subscription is held out too, the session stays where it is with Claude Code's own limit message.
+  Only sessions rotation started are moved; a provider's 429 never is.
 - A token that cannot be read is skipped for that spawn, with a warning in the server log naming the
   entry (never the value).
 

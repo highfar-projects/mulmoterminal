@@ -14,6 +14,9 @@ import type { ProbeStall } from "./probe-stall.js";
 import type { LoginRateLimits } from "./rate-limit-routes.js";
 
 const MS_PER_SEC = 1000;
+/** How long a limit hit holds a credential out. Only until a probe measures it: the probe's reading
+ *  (at its ceiling, with its reset time) then decides, so this need only outlast the next probe. */
+export const SPENT_HOLD_SEC = 60 * 60;
 
 /** A rotation token as a meter sees it: a claude login like an account's. */
 type MeteredToken = RotationToken & { agent: "claude" };
@@ -42,6 +45,10 @@ export interface TokenRotationRuntime {
   meters: LoginRateLimits;
   assignToken: () => TokenAssignment | null;
   keptAssignment: (tokenId: string | undefined) => TokenAssignment | null;
+  /** A session on this credential hit its limit (#2919). */
+  markSpent: (tokenId: string) => void;
+  /** Whether a new process would start on a credential that is not held out. */
+  hasFreeChoice: () => boolean;
 }
 
 export function createTokenRotation(deps: TokenRotationDeps): TokenRotationRuntime {
@@ -60,14 +67,26 @@ export function createTokenRotation(deps: TokenRotationDeps): TokenRotationRunti
     claudeAvailable: deps.claudeAvailable,
   });
 
-  const assign = (): TokenAssignment | null =>
+  // In memory: a restart forgets a mark, and the probe's reading takes over from there.
+  const spentUntil = new Map<string, number>();
+  const nowSec = () => Math.floor(Date.now() / MS_PER_SEC);
+
+  const assign = (onlyFree: boolean): TokenAssignment | null =>
     assignToken({
       rotation: getTokenRotation(),
       defaultLoginLimits: deps.defaultLoginLimits,
       tokenLimits: (token) => meters.lastClaudeLimits(meteredToken(token)),
+      spentUntil_sec: (id) => spentUntil.get(id) ?? null,
       readSecret: readRotationToken,
-      now_sec: Math.floor(Date.now() / MS_PER_SEC),
+      now_sec: nowSec(),
+      onlyFree,
     });
 
-  return { meters, assignToken: assign, keptAssignment: (tokenId) => keptAssignment(getTokenRotation(), tokenId, readRotationToken) };
+  return {
+    meters,
+    assignToken: () => assign(false),
+    keptAssignment: (tokenId) => keptAssignment(getTokenRotation(), tokenId, readRotationToken),
+    markSpent: (tokenId) => spentUntil.set(tokenId, nowSec() + SPENT_HOLD_SEC),
+    hasFreeChoice: () => assign(true) !== null,
+  };
 }

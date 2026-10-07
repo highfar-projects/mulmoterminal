@@ -79,6 +79,8 @@ export function startHomeProbe(
 export type RateLimitService = RateLimitRouteDeps & {
   assignToken: () => TokenAssignment | null;
   keptAssignment: (tokenId: string | undefined) => TokenAssignment | null;
+  markSpent: (tokenId: string) => void;
+  hasFreeChoice: () => boolean;
 };
 
 /** The accounts' meters and the rotation tokens' meters, as the one list the routes read. A probe's
@@ -173,14 +175,14 @@ export function createRateLimitService(): RateLimitService {
     defaultLoginLimits: () => store.snapshot().claude?.limits ?? null,
   });
 
+  const { meters: tokenMeters, ...rotationControls } = rotation;
   return {
     store,
     refreshCodex,
     startProbe,
     claudeAvailable: claudeIsRunnable,
     now_ms: () => Date.now(),
-    accounts: combinedMeters([accounts, rotation.meters]),
-    assignToken: rotation.assignToken,
-    keptAssignment: rotation.keptAssignment,
+    accounts: combinedMeters([accounts, tokenMeters]),
+    ...rotationControls,
   };
 }
