@@ -167,12 +167,15 @@ export function createFilePathLinkProvider(
         range: { start: { x: link.startX, y: bufferLineNumber }, end: { x: link.endX, y: bufferLineNumber } },
         decorations: { pointerCursor: true, underline: true },
         activate: () => {
-          if (openInPane(link.text, cwd)) return;
+          // A Windows path is linked as printed (`.claude\x\a.md`) but opened `/`-separated, the
+          // one shape the pane, the routes and the containment checks all compare in.
+          const token = link.text.replace(/\\/g, "/");
+          if (openInPane(token, cwd)) return;
           // A path outside the cell is served relative to its own directory: the routes contain
           // `path` within `cwd`, so handing them the cell's cwd refused it as an escape (#2260).
-          const rebased = rebaseOutsideCwd(link.text, cwd);
+          const rebased = rebaseOutsideCwd(token, cwd);
           const base = rebased?.base ?? cwd;
-          const filePath = rebased?.rel ?? link.text;
+          const filePath = rebased?.rel ?? token;
           const target = fileLinkTarget(filePath, base);
           if (target.kind === "files") openInFiles(filePath, base);
           else openUrl(target.url);

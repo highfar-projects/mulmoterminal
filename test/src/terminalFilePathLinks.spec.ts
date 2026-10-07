@@ -57,6 +57,24 @@ describe("findFilePathLinks", () => {
     expect(texts("a/b.7z")).toEqual(["a/b.7z"]);
   });
 
+  it("detects a backslash-separated (Windows) relative path", () => {
+    expect(texts("wrote .claude\\evidence\\test\\test.md")).toEqual([".claude\\evidence\\test\\test.md"]);
+    expect(texts("（src\\a.ts）")).toEqual(["src\\a.ts"]);
+  });
+
+  it("keeps the drive letter of a Windows absolute path", () => {
+    const line = "see C:\\Users\\me\\a.md and D:/work/b.ts";
+    const links = findFilePathLinks(line);
+    expect(links.map((l) => l.text)).toEqual(["C:\\Users\\me\\a.md", "D:/work/b.ts"]);
+    for (const link of links) expect(line.slice(link.start, link.end)).toBe(link.text);
+  });
+
+  it("does not take a non-drive prefix before a colon as a drive letter", () => {
+    expect(texts("abc:\\x\\a.md")).toEqual([]);
+    expect(texts("src/a.ts:12")).toEqual(["src/a.ts"]);
+    expect(texts("C://cdn.example.com/a.js")).toEqual([]);
+  });
+
   it("returns nothing for empty or path-free lines", () => {
     expect(texts("")).toEqual([]);
     expect(texts("no paths on this line at all")).toEqual([]);

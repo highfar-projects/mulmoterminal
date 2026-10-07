@@ -158,4 +158,21 @@ describe("createFilePathLinkProvider against real xterm", () => {
     expect(openInFiles).toHaveBeenCalledWith("notes.ts", "/Users/me/other");
     term.dispose();
   });
+
+  // A Windows path is linked as printed, backslashes and all, but every opener downstream
+  // compares `/`-separated paths — so the click hands them that shape.
+  it("opens a backslash-separated path with forward slashes", async () => {
+    const term = new Terminal({ cols: 120, rows: 10, allowProposedApi: true });
+    term.open(document.createElement("div"));
+    await writeLine(term, "wrote .claude\\evidence\\test\\test.md");
+    const open = vi.fn();
+    const openInPane = vi.fn(() => false);
+    const [link] = provideLinks(term, "C:\\work\\proj", open, vi.fn(), openInPane) ?? [];
+    if (!link) throw new Error("expected a link");
+    expect(link.text).toBe(".claude\\evidence\\test\\test.md");
+    link.activate(new MouseEvent("click"), link.text);
+    expect(openInPane).toHaveBeenCalledWith(".claude/evidence/test/test.md", "C:\\work\\proj");
+    expect(open).toHaveBeenCalledWith("/api/files/browse/md?cwd=C%3A%5Cwork%5Cproj&path=.claude%2Fevidence%2Ftest%2Ftest.md");
+    term.dispose();
+  });
 });

@@ -2,10 +2,9 @@
 // cwd at all. The Files pane is rooted at its cell's directory and cannot walk above it, so
 // this is what decides whether a click can go there or has to keep its old route.
 //
-// Browser-side, so no `node:path`. A token only becomes a link if it contains `/` and is not
-// preceded by `:` (see terminalFilePathLinks), which means a `C:\...` path never reaches here
-// — but the CWD still arrives with backslashes on Windows, so separators are normalized
-// before anything is compared.
+// Browser-side, so no `node:path`. A clicked token can be a Windows path (`C:\...`, `a\b.md`,
+// see terminalFilePathLinks) and the CWD arrives with backslashes on Windows, so separators
+// are normalized before anything is compared.
 
 const DRIVE_PREFIX = /^[A-Za-z]:/;
 
