@@ -27,7 +27,7 @@
 // terminals (which are NOT persisted — their process is unresumable, so their slot
 // is released on unmount like before).
 import { reactive, watch } from "vue";
-import { credentialOf, type CellCredential } from "./cellCredential";
+import { credentialOf, forgetCredential, type CellCredential } from "./cellCredential";
 import { Terminal, type ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
@@ -781,10 +781,6 @@ export function detach(key: string, el: HTMLElement | null) {
 // connectKey changed (session switch / relaunch in the same slot): point the slot
 // at the new target and reconnect. Closes the previous socket, so the previous
 // session falls back to the server's reap grace.
-function forgetCredential(c: Conn): void {
-  c.knownCredential = null;
-  c.handlers.onCredential?.(null);
-}
 
 export function retarget(key: string, target: ConnTarget) {
   const c = conns.get(key);
@@ -792,8 +788,6 @@ export function retarget(key: string, target: ConnTarget) {
   c.target = target;
   c.knownSessionId = target.sessionId;
   c.knownCwd = null;
-  // A credential belongs to the process it was announced for; the new target's arrives in its own
-  // frame, or never (rotation off, another agent), so the mark must not carry over meanwhile.
   forgetCredential(c);
   c.reconnectAttempts = 0;
   c.sawExit = false;
