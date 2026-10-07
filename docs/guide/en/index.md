@@ -8,8 +8,8 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **9.1.0 is out.** The agent in your cell writes MulmoCast's Remotion scenes itself and refines them with you, and a
-> terminal on the phone opens its project's files with one button. [Setup guide](v9.1.0.html)
+> **9.2.0 is out.** Register several Claude subscriptions once, and every new session starts on the one with the most
+> room — a session running low moves to another and carries on. [Setup guide](v9.2.0.html)
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching

@@ -4,7 +4,7 @@ nav_title: Feature list
 layout: default
 parent: English
 nav_order: 6.5
-as_of: 9.1.0
+as_of: 9.2.0
 description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 9.1.0)."
 ---
 
@@ -68,6 +68,9 @@ More: [Agents](agents.html)
 - A claude cell says when Claude Code is too old for auto permission mode, and how to update (v6.6.0)
 - A Codex cell reads Needs input while Codex waits for approval, with sound and push (v6.2.0)
 - Beta: accounts run cells on different Claude Code or Codex subscriptions, picked in the launch form (v5.8.0)
+- Beta: token rotation starts each new Claude session on whichever of several subscriptions has the most weekly room per hour until its reset, and conversations carry across them (v9.2.0)
+- A rotated session moves to another subscription at 98%, or when it hits its limit, and carries on with the same conversation (v9.2.0)
+- A cell's header names the subscription it runs on, and More features → Token usage lists each subscription's 5h / weekly room (v9.2.0)
 - Unavailable agents are dimmed in the Agent Picker, with the reason and an install guide link (v5.8.0)
 - Declare the default agent with --agent or defaultAgent, so the app starts without Claude Code installed (v4.25.0)
 - GitHub Copilot CLI runs in a cell, with an Agent Picker entry, GUI tools and working status (v4.22.0)

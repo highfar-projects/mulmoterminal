@@ -8,6 +8,20 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@9.2.0 — 2026-10-07
+
+> **Setup guide:** [9.2.0 — Several Claude subscriptions, used evenly, picked for you](https://receptron.github.io/mulmoterminal/guide/en/v9.2.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v9.2.0.html))
+
+### Token rotation (beta): several Claude subscriptions behind one home (#2919)
+
+- [#2920](https://github.com/receptron/mulmoterminal/pull/2920) — a `tokenRotation` config key lists several subscriptions' tokens by where each is kept (a macOS keychain item, or a `chmod 600` file — anything readable by others is refused), never the value. Each new plain Claude process on the default home starts on the subscription whose 7-day window has the most room per hour until its reset; the token travels as `CLAUDE_CODE_OAUTH_TOKEN` in the 0600 `--settings` file (never argv or the child's env, the usage probe included), with `ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN` unset. Conversations stay in one home, so any session resumes on any subscription. Each token gets its own usage probe and gauge; `token-sessions.jsonl` records which token each process runs on, and a reattach keeps the token its process started with. Provider, custom-agent and account cells are never rotated. Measured first on real subscriptions (Claude Code 2.1.284): the token outranks the `/login` credential, reports its own windows, and a conversation resumed on another token continues.
+- [#2921](https://github.com/receptron/mulmoterminal/pull/2921) — `StopFailure` is registered; a `rate_limit` from a rotated session holds its token out and, when another is free, ends the process with the cell's socket detached and closes it bare, so the cell reconnects on its own id and resumes the conversation on the next choice, printing one line naming both subscriptions. The prompt that hit the limit is not re-sent. `StopFailure` also clears the working dot, which no `Stop` does on a failed turn.
+- [#2922](https://github.com/receptron/mulmoterminal/pull/2922) — 98% is the switch line: a week at it is not chosen, and a session that ends a turn on a subscription at it moves then. A probe whose screen shows Claude Code's own limit message reads as `usage-limit` and holds that token out. A cell's header names its subscription (a `credential` frame after the spawn; the address in its hover), the gauge's hover names each token's address, and More features → Token usage lists each subscription's 5h / weekly room (only while rotation is on). Setup guide in English and Japanese.
+
+### Docs
+
+- [#2923](https://github.com/receptron/mulmoterminal/pull/2923) — the token rotation design note names the 98% switch line as the 7-day ceiling.
+
 ## mulmoterminal@9.1.0 — 2026-10-07
 
 > **Setup guide:** [9.1.0 — Your agent writes Remotion scenes itself, and a terminal's files are one tap away on the phone](https://receptron.github.io/mulmoterminal/guide/en/v9.1.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v9.1.0.html))
