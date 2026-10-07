@@ -27,8 +27,11 @@ export interface RateLimitRouteDeps {
   now_ms: () => number;
   /** Each account's meter (#2215). Absent in the specs that predate accounts; with no accounts
    *  configured it reports nothing, and the response is exactly what it always was. */
-  accounts?: AccountRateLimits;
+  accounts?: LoginRateLimits;
 }
+
+/** What the routes ask of a set of per-login meters — the accounts', and the rotation tokens' (#2919). */
+export type LoginRateLimits = Pick<AccountRateLimits, "refresh" | "reportClaudeStatus" | "readings">;
 
 export function mountRateLimitRoutes(app: Express, deps: RateLimitRouteDeps): void {
   // Written by the statusLine given to the probe, which pipes Claude Code's status payload here.

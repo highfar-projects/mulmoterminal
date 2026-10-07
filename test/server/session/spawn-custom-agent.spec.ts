@@ -73,6 +73,7 @@ vi.mock("../../../server/config/config-routes.js", () => ({
   getAppendSystemPrompt: () => false,
   getTerminalSubmit: () => "cr",
   getProviders: () => [],
+  getTokenRotation: () => ({ enabled: false, includeDefaultLogin: true, tokens: [] }),
 }));
 
 const { createClaudeSpawner } = await import("../../../server/session/spawn-claude.js");

@@ -31,6 +31,7 @@ import { DEFAULT_TERMINAL_SUBMIT_MODE, isTerminalSubmitMode, type TerminalSubmit
 import type { QuickCommand } from "../../common/quickCommands.js";
 import { CUSTOM_AGENT_COMMAND_MAX, CUSTOM_AGENT_LABEL_MAX, CUSTOM_AGENTS_MAX, isCustomAgentId, type CustomAgent } from "../../common/customAgents.js";
 import { sanitizePaletteAliases, sanitizePaletteFavorites, type PaletteAliases } from "../../common/paletteConfig.js";
+import { sanitizeTokenRotation, TOKEN_ROTATION_OFF, type TokenRotation } from "../../common/tokenRotation.js";
 import { ACCOUNT_HOME_MAX, ACCOUNT_LABEL_MAX, ACCOUNTS_MAX, isAccountHome, isAccountId, type AgentAccount } from "../../common/agentAccounts.js";
 import { DEFAULT_PUSH_KINDS, PUSH_KINDS, type PushKind } from "../../common/pushKinds.js";
 import { DEFAULT_SOUND_KINDS, NOTIFY_KINDS, type NotifyKind } from "../../common/notifyKinds.js";
@@ -93,6 +94,9 @@ export interface AppConfig {
   // Second logins for claude / codex, each in its own config home, offered when launching a cell
   // (#2215). Empty = one login per agent, exactly as before — see common/agentAccounts.ts.
   accounts: AgentAccount[];
+  // Several subscriptions behind the default home, one picked per new session (#2919). Off by
+  // default; the entries name where each token is kept, never the token — see common/tokenRotation.ts.
+  tokenRotation: TokenRotation;
   // Phrases the phone offers as chips on a session's terminal view (#830), optionally
   // scoped to session kinds. Empty by default — no chips until the user adds one.
   quickCommands: QuickCommand[];
@@ -543,6 +547,7 @@ export const emptyConfig = (): AppConfig => ({
   paletteAliases: {},
   paletteFavorites: [],
   accounts: [],
+  tokenRotation: TOKEN_ROTATION_OFF,
   quickCommands: [],
   userMcpServers: [],
   headerStatusColors: {},
@@ -644,6 +649,7 @@ function sanitizeAppConfig(raw: unknown): AppConfig {
     paletteAliases: sanitizePaletteAliases(o.paletteAliases),
     paletteFavorites: sanitizePaletteFavorites(o.paletteFavorites),
     accounts: sanitizeAccounts(o.accounts),
+    tokenRotation: sanitizeTokenRotation(o.tokenRotation),
     quickCommands: sanitizeQuickCommands(o.quickCommands),
     userMcpServers: sanitizeUserMcpServers(o.userMcpServers),
     headerStatusColors: sanitizeHeaderStatusColors(o.headerStatusColors),
@@ -773,6 +779,7 @@ export function mergeConfigUpdate(base: AppConfig, body: Record<string, unknown>
     paletteAliases: updated("paletteAliases", sanitizePaletteAliases, base.paletteAliases),
     paletteFavorites: updated("paletteFavorites", sanitizePaletteFavorites, base.paletteFavorites),
     accounts: updated("accounts", sanitizeAccounts, base.accounts),
+    tokenRotation: updated("tokenRotation", sanitizeTokenRotation, base.tokenRotation),
     quickCommands: updated("quickCommands", sanitizeQuickCommands, base.quickCommands),
     userMcpServers: updated("userMcpServers", sanitizeUserMcpServers, base.userMcpServers),
     headerStatusColors: updated("headerStatusColors", sanitizeHeaderStatusColors, base.headerStatusColors),
@@ -828,6 +835,7 @@ export function toPublicAppConfig(config: AppConfig): AppConfig {
     paletteAliases: config.paletteAliases,
     paletteFavorites: config.paletteFavorites,
     accounts: config.accounts,
+    tokenRotation: config.tokenRotation,
     quickCommands: config.quickCommands,
     userMcpServers: config.userMcpServers,
     headerStatusColors: config.headerStatusColors,

@@ -5,7 +5,8 @@ import type { WebSocket } from "ws";
 import { CLAUDE_CWD, PORT } from "../config/env.js";
 import { guiMcpEnv, carriesFullGuiMcp, directoryGroupsMcpConfigJson, fullGuiAllowedTools } from "./mcp-config.js";
 import type { ToolGroup } from "../../common/toolGroups.js";
-import { getUserMcpServers, getPrWorkdirFooter, getAppendSystemPrompt, getTerminalSubmit, getCustomAgents } from "../config/config-routes.js";
+import { getUserMcpServers, getPrWorkdirFooter, getAppendSystemPrompt, getTerminalSubmit, getCustomAgents, getTokenRotation } from "../config/config-routes.js";
+import type { TokenAssignment } from "../agents/token-assignment.js";
 import { submitSequenceForAgent } from "../../common/terminalSubmit.js";
 import { buildClaudeArgs } from "../agents/claude-args.js";
 import { refuseUnsupportedPermissionMode } from "../agents/claude-help-probe.js";
@@ -21,6 +22,9 @@ import { sendExitAndClose } from "./ws-frames.js";
 import { wireBufferedOutput } from "./output-relay.js";
 import { sessionExistsOnDisk } from "./session-reads.js";
 import { accountSpawnEnv } from "./session-home.js";
+import { boundAccount } from "./account-sessions.js";
+import { sessionCredential, type SessionCredential } from "./session-credential.js";
+import { rememberTokenSession, sessionToken } from "./token-sessions.js";
 import type { PtyEntry } from "./types.js";
 import type { SpawnDeps } from "./spawn-deps.js";
 import { handlePtyExit } from "./pty-exit.js";
@@ -131,6 +135,32 @@ function resolveSessionBackend(input: { cwd: string; sessionId: string; launch?:
  * Its own function for the same reason resolveSessionBackend is — the spawn body is at its line
  * budget, and this is a value derived from two sources rather than part of spawning.
  */
+/**
+ * The credential this session's process is started with: the provider's, or — for a plain claude
+ * cell on the default home, with rotation on — the token chosen for it (#2919). Its own function
+ * for the reason resolveSessionBackend is.
+ */
+function sessionCredentialFor(
+  deps: SpawnDeps,
+  sessionId: string,
+  resolved: ReturnType<typeof requireResolution>,
+  customAgentId: string | undefined,
+  resuming: boolean,
+): SessionCredential {
+  const agentId = resuming ? customAgentSessions.get(sessionId) : customAgentId;
+  const runsCustomAgent = agentId !== undefined && getCustomAgents().some((candidate) => candidate.id === agentId);
+  const onAccount = boundAccount("claude", sessionId) !== undefined;
+  // A reattach starts nothing, but its settings file is still rewritten: it has to name the token the
+  // running process was started with, never a fresh choice (spawnEntry records only a new process).
+  // Asked only with rotation on, so the spawn's own reattach probe (spawnEntry) stays the only one
+  // otherwise. A session ending between the two starts on its recorded token, which is still true.
+  const assign = (): TokenAssignment | null => {
+    if (!getTokenRotation().enabled) return null;
+    return ptyWouldReattach(sessionId, true) ? (deps.keptAssignment?.(sessionToken(sessionId)) ?? null) : (deps.assignToken?.() ?? null);
+  };
+  return sessionCredential(resolved, { providerEnv: resolved.env, runsCustomAgent, onAccount }, assign);
+}
+
 function sessionAddDirs(sessionId: string, configured: string[] | null | undefined): string[] | null | undefined {
   const dropsDirectory = ensureDropsDir(sessionId);
   return dropsDirectory ? [...(configured ?? []), dropsDirectory] : configured;
@@ -225,8 +255,9 @@ export function createClaudeSpawner(deps: SpawnDeps) {
 
     const { dir, resolved } = resolveSessionBackend({ cwd, sessionId, launch, canResume });
     const addDirs = sessionAddDirs(sessionId, dir.addDirs);
+    const credential = sessionCredentialFor(deps, sessionId, resolved, customAgentId, canResume);
 
-    const hookSettings = deps.hookSettingsJson("localhost", sessionId, resolved.env);
+    const hookSettings = deps.hookSettingsJson("localhost", sessionId, credential.env);
     const mcpJson = deps.mcpConfigJson(sessionId, "127.0.0.1");
     // File-ized only when it is actually passed (fullGuiMcp), so a cell that never carries
     // the GUI MCP leaves no file behind for reap to clean up.
@@ -239,9 +270,9 @@ export function createClaudeSpawner(deps: SpawnDeps) {
       sessionId,
       resume,
       canResume,
-      // A provider session's settings carry its token, so they go to a 0600 file instead of
-      // argv — see session-settings.ts.
-      settings: settingsArgument(sessionId, hookSettings, Object.keys(resolved.env).length > 0),
+      // A provider session's settings carry its token, as a rotated one's do, so they go to a 0600
+      // file instead of argv — see session-settings.ts.
+      settings: settingsArgument(sessionId, hookSettings, Object.keys(credential.env).length > 0),
       permissionMode: deps.permissionMode,
       attachGuiMcp: fullGuiMcp || directoryGroupsJson !== null,
       mcpConfig,
@@ -289,8 +320,10 @@ export function createClaudeSpawner(deps: SpawnDeps) {
     function spawnEntry(): StartedAgentPty {
       const reattaching = ptyWouldReattach(sessionId, true);
       if (!reattaching) resetSessionToolGroups(sessionId);
+      // Only a NEW process is on the chosen token; a reattached one keeps the token it started with.
+      if (!reattaching) rememberTokenSession(sessionId, credential.tokenId);
       return spawnWithFullGuiClaim({ sessionId, attachGuiMcp, cwd, wouldReattach: reattaching, agent: "claude" }, () => {
-        const program = sessionProgram(deps.claudeBin, sessionId, customAgentId, canResume ? resume : null, resolved.unset, deps.permissionMode);
+        const program = sessionProgram(deps.claudeBin, sessionId, customAgentId, canResume ? resume : null, credential.unset, deps.permissionMode);
         const spawnEnv = { ...program.spawnEnv, env: { ...program.spawnEnv.env, ...claudeRendererEnv(sessionId, cwd) } };
         // "claude" whatever wrapper started it — see sessionProgram.
         return startAgentPty({ sessionId, ws, cwd, agent: "claude", file: program.file, args: [...program.prefixArgs, ...args], spawnEnv, note: program.note });

@@ -43,6 +43,8 @@ const REACHABLE_BY: Record<string, Reachable> = {
   customAgents: { ui: true, skill: "mulmoterminal-model" },
   // Beside customAgents in the same skill: both change how a cell's CLI is started (#2215).
   accounts: { ui: true, skill: "mulmoterminal-model" },
+  // Config.json only for now; the skill is how it is set (#2919).
+  tokenRotation: { skill: "mulmoterminal-model" },
   // Half of it is a start-up decision (it gates whether the app runs without Claude Code at all), so
   // the control offers an agent this machine cannot start only disabled — saving one would stop the
   // next launch.

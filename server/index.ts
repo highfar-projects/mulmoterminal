@@ -254,6 +254,10 @@ const { forgetTitle, noteTitleTurn, maybeGenerateTitle, freshenRosterTitle } = c
   resolveTitle: (input) => resolveSessionTitle(input),
 });
 
+// The 5h / 7d rate-limit gauge (#387) — store, Codex reading and Claude probe (rate-limit-service.ts).
+// Before the spawners: a new claude session's rotation token is chosen from its readings (#2919).
+const rateLimits = createRateLimitService();
+
 // The PTY spawners (session/spawn-*.ts). They take what index.ts still owns — the session
 // lifecycle it drives, and this file's port and live user config bound into the two payload
 // builders (session/hook-settings.ts, session/mcp-config.ts) — as deps.
@@ -285,6 +289,8 @@ const spawnDeps: SpawnDeps = {
   publishSessionCreated: (sessionId) => pubsub?.publish(SESSIONS_CHANNEL, { id: sessionId, working: false, event: "created" }),
   publishActivity: (sessionId) => publishActivity(sessionId),
   publishPromptSubmitted: (sessionId) => pubsub?.publish(PROMPT_SUBMITTED_CHANNEL, { sessionId } satisfies PromptSubmittedEvent),
+  assignToken: () => rateLimits.assignToken(),
+  keptAssignment: (tokenId) => rateLimits.keptAssignment(tokenId),
 };
 const { spawnClaudePty } = createClaudeSpawner(spawnDeps);
 const { spawnCodexPty } = createCodexSpawner(spawnDeps);
@@ -353,9 +359,6 @@ enforceKeymap(APP_CONFIG_FILE, {
 // reports — a warning describing a different rule than the one enforced is worse than none.
 const browserHostnames = browserOriginHostnames(BIND_HOST, process.env.MULMOTERMINAL_ALLOWED_ORIGINS);
 const isAllowedOrigin = createIsAllowedOrigin(browserHostnames);
-
-// The 5h / 7d rate-limit gauge (#387) — store, Codex reading and Claude probe (rate-limit-service.ts).
-const rateLimits = createRateLimitService();
 
 // What a removed feature left on disk (infra/legacy-cleanup.ts). Fire-and-forget.
 runLegacyCleanupsOnce();

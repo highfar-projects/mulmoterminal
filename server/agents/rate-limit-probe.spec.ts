@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { readFileSync, statSync } from "node:fs";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { startRateLimitProbe, probeArgs, PROBE_PROMPT } from "./rate-limit-probe";
 import { createRateLimitStore } from "./rate-limit-store";
@@ -238,5 +239,40 @@ describe("ending the probe when its answer lands", () => {
     const { store, killed } = wire();
     store.reportCodex(windows, 1000);
     expect(killed).not.toHaveBeenCalled();
+  });
+});
+
+// A rotation token rides in the settings file, which is 0600 and removed on stop — never in the
+// child's environment, where same-user process inspection can read it (#2919).
+describe("startRateLimitProbe's settings env", () => {
+  interface SeenSettings {
+    json: Record<string, unknown>;
+    mode: number;
+  }
+  const settingsAtSpawn = (settingsEnv?: Record<string, string>): SeenSettings | undefined => {
+    const seen: SeenSettings[] = [];
+    const stop = startRateLimitProbe(
+      deps({
+        ...(settingsEnv ? { settingsEnv } : {}),
+        spawn: (args: string[]) => {
+          const file = args[args.indexOf("--settings") + 1] ?? "";
+          seen.push({ json: JSON.parse(readFileSync(file, "utf8")), mode: statSync(file).mode & 0o777 });
+          return pty();
+        },
+      }),
+    );
+    stop();
+    return seen[0];
+  };
+
+  it("writes the given variables into the settings file, mode 600", () => {
+    const seen = settingsAtSpawn({ CLAUDE_CODE_OAUTH_TOKEN: "t" });
+    expect(seen?.json.env).toEqual({ CLAUDE_CODE_OAUTH_TOKEN: "t" });
+    if (process.platform !== "win32") expect(seen?.mode).toBe(0o600);
+  });
+
+  it("writes no env block without any", () => {
+    expect(settingsAtSpawn()?.json).not.toHaveProperty("env");
+    expect(settingsAtSpawn({})?.json).not.toHaveProperty("env");
   });
 });
