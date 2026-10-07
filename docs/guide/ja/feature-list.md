@@ -4,14 +4,14 @@ nav_title: 全機能リスト
 layout: default
 parent: 日本語
 nav_order: 6.5
-as_of: 9.0.0
-description: MulmoTerminal のいまある機能を、入った版つきで領域ごとに一行ずつ並べた一覧（9.0.0 時点）。
+as_of: 9.1.0
+description: MulmoTerminal のいまある機能を、入った版つきで領域ごとに一行ずつ並べた一覧（9.1.0 時点）。
 ---
 
 # 全機能リスト
 {: .no_toc }
 
-9.0.0 時点で MulmoTerminal にある機能を、領域ごとに一行ずつ並べた一覧です。行末の `(vX.Y.Z)` はその機能が最初に入った版で、その後の大きな拡張は行の中に版番号で添えています。不具合の修正や内部の変更は載せていません。それらは [ChangeLog](https://github.com/receptron/mulmoterminal/blob/main/docs/ChangeLog.md) を、詳しい使い方は[機能リファレンス](features.html)と各節の「詳しく」から辿れるページを見てください。
+9.1.0 時点で MulmoTerminal にある機能を、領域ごとに一行ずつ並べた一覧です。行末の `(vX.Y.Z)` はその機能が最初に入った版で、その後の大きな拡張は行の中に版番号で添えています。不具合の修正や内部の変更は載せていません。それらは [ChangeLog](https://github.com/receptron/mulmoterminal/blob/main/docs/ChangeLog.md) を、詳しい使い方は[機能リファレンス](features.html)と各節の「詳しく」から辿れるページを見てください。
 
 - TOC
 {:toc}
@@ -103,6 +103,7 @@ description: MulmoTerminal のいまある機能を、入った版つきで領�
 
 詳しく: [スマホ](phone.html)
 
+- スマホのターミナルから、そのプロジェクトの共有ファイルをボタン一つで開き、元のターミナルに戻れる (v9.1.0)
 - プロジェクトが `.mulmoterminal.json` の `mobileFiles` で、スマホで一覧して開けるファイル（md・html・pdf・画像）を決める。スマホの画面は MulmoServer の更新で入る (v9.0.0)
 - スマホのターミナル一覧は、UUID ではなく会話の内容から名前を付ける (v5.7.0)
 - スマホで Claude の会話をさかのぼって読める（4.25 で codex、cursor、copilot も） (v4.10.0)
@@ -254,6 +255,7 @@ description: MulmoTerminal のいまある機能を、入った版つきで領�
 
 詳しく: [コレクションから作る](from-collection.html) · [MulmoCast の動画](mulmocast.html)
 
+- セルのエージェントが MulmoCast の Remotion の場面を自分で書き（`code`）、一緒に直せる (v9.1.0)
 - MulmoCast の `remotion` の場面: Claude Code がビートを Remotion のアニメーションとして書くか、自分で書いたものを渡す（`code`）。任意のパッケージは自分で入れ、`init` で確かめる (v9.0.0)
 - 共有アプリで、公開ページを見た人が空のコピーを自分の分として作れる（forkable）。質問箱・集計・survey-results のひな形は最初から有効 (v8.8.0)
 - 共有アプリのリンクを SNS に貼ると、アプリのカード、または公開した行ごとのカードが出る（shareCard） (v8.8.0)

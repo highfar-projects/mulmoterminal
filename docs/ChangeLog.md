@@ -8,9 +8,21 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@9.1.0 — 2026-10-07
+
+> **Setup guide:** [9.1.0 — Your agent writes Remotion scenes itself, and a terminal's files are one tap away on the phone](https://receptron.github.io/mulmoterminal/guide/en/v9.1.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v9.1.0.html))
+
+### MulmoCast: the agent can write a remotion scene's component itself (receptron/mulmoclaude#3396)
+
+- [#2918](https://github.com/receptron/mulmoterminal/pull/2918) — `@mulmoclaude/mulmoscript-plugin` 5.3.0: the tool description offers the remotion beat's `code` form next to `prompt` (the agent writes the finished component, mulmocast renders it as is) and carries mulmocast's `REMOTION_COMPONENT_GUIDE`. Checked by assembling the text this host hands the agent (`describeTool`): it holds the `code` form and the guide, with no unreplaced `{{promptFilesDir}}`; with no prompt-files binding here the full text is injected. `mulmocast` / `@mulmocast/types` 2.15.0 (the first with `mulmocast/remotion/guide`) and `@mulmoclaude/core` 5.11.0 move with it — core 5.11's prompt split does not change this host's own `manageCollection` text. The MulmoCast videos guide now says to just ask the agent to write a scene.
+
 ### Phone: open a terminal's shared files from the terminal (#2915)
 
 - [#2916](https://github.com/receptron/mulmoterminal/pull/2916) — `getTerminalScreen` gains `mobileFilesProject`, the opaque id of the project the session works in, so the phone's terminal page can link straight to that project's shared files. It is the deepest project (the workspace or a registered directory) containing the session's directory, and only when that project itself declares `mobileFiles`: a sub-project that shares nothing does not fall back to the enclosing workspace's files. Only the id travels, never a path, and the key is omitted when there is nothing to link. The phone side is receptron/mulmoserver#346 (the folder button on the terminal page, and the files icon moved beside Issues) and #348 (the way back to the terminal).
+
+### Docs
+
+- [#2917](https://github.com/receptron/mulmoterminal/pull/2917) — the ChangeLog entry for #2916, kept under Unreleased until this release.
 
 ## mulmoterminal@9.0.0 — 2026-10-07
 
