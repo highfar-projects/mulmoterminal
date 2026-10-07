@@ -15,6 +15,7 @@ const tokenSessions = new Map<string, string>();
 // hydration finishes must not be overwritten by the line it replaced.
 const assignedThisRun = new Set<string>();
 const TOKEN_SESSIONS_FILE = path.join(MULMOTERMINAL_HOME, "token-sessions.jsonl");
+let hydrationDone = false;
 
 export const tokenSessionsHydrated: Promise<void> = (async () => {
   try {
@@ -24,6 +25,8 @@ export const tokenSessionsHydrated: Promise<void> = (async () => {
     });
   } catch (err) {
     if (!hasErrnoCode(err) || err.code !== "ENOENT") console.error(`[token-sessions] could not read ${TOKEN_SESSIONS_FILE}: ${messageOf(err)}`);
+  } finally {
+    hydrationDone = true;
   }
 })();
 
@@ -35,8 +38,12 @@ trackPersistQueue(() => tokenPersist);
 
 /** Record the token a session's NEW process is starting on (null: not rotated), and persist it. */
 export function rememberTokenSession(sessionId: string, tokenId: string | null): void {
-  if (!isValidSessionId(sessionId) || (tokenSessions.get(sessionId) ?? null) === tokenId) return;
+  if (!isValidSessionId(sessionId)) return;
+  // Before the log is read, "unchanged" cannot be told from "not loaded yet": the write goes ahead,
+  // so a non-rotated restart is not undone by the older line hydration is about to apply.
+  const unchanged = (tokenSessions.get(sessionId) ?? null) === tokenId;
   assignedThisRun.add(sessionId);
+  if (unchanged && hydrationDone) return;
   applyTokenSession(tokenSessions, { sessionId, tokenId });
   tokenPersist = tokenPersist
     .then(() => fs.mkdir(MULMOTERMINAL_HOME, { recursive: true }))

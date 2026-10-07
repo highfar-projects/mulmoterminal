@@ -74,7 +74,10 @@ export function startHomeProbe(
 }
 
 /** What index.ts takes: the routes' deps, and the choice of credential for a new session (#2919). */
-export type RateLimitService = RateLimitRouteDeps & { assignToken: () => TokenAssignment | null };
+export type RateLimitService = RateLimitRouteDeps & {
+  assignToken: () => TokenAssignment | null;
+  keptAssignment: (tokenId: string | undefined) => TokenAssignment | null;
+};
 
 /** The accounts' meters and the rotation tokens' meters, as the one list the routes read. A probe's
  *  report key is minted by the meter that started it, so at most one of the two knows it. */
@@ -176,5 +179,6 @@ export function createRateLimitService(): RateLimitService {
     now_ms: () => Date.now(),
     accounts: combinedMeters([accounts, rotation.meters]),
     assignToken: rotation.assignToken,
+    keptAssignment: rotation.keptAssignment,
   };
 }

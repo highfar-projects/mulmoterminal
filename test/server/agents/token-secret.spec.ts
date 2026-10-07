@@ -1,4 +1,5 @@
 // @vitest-environment node
+import path from "node:path";
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { readRotationToken, tokenFromText, type TokenSecretDeps } from "../../../server/agents/token-secret";
 import { KEYCHAIN_ACCOUNT_DEFAULT } from "../../../common/tokenRotation";
@@ -47,7 +48,7 @@ describe("readRotationToken", () => {
   it("reads a ~/ file from the home directory", () => {
     const read: string[] = [];
     expect(readRotationToken({ id: "b", label: "B", file: "~/t/b" }, deps({ readFile: (file) => (read.push(file), SECRET) }))).toBe(SECRET);
-    expect(read).toEqual(["/Users/me/t/b"]);
+    expect(read).toEqual([path.join("/Users/me", "t/b")]);
   });
 
   it("is null, and says so without the value, when the read throws", () => {

@@ -37,6 +37,27 @@ const candidatesOf = (deps: TokenAssignmentDeps): TokenCandidate[] => {
   return [{ id: DEFAULT_LOGIN_ID, limits: deps.defaultLoginLimits(), spentUntil_sec: spent(DEFAULT_LOGIN_ID) }, ...tokens];
 };
 
+const assignmentOf = (tokenId: string, secret: string | null): TokenAssignment | null => {
+  if (tokenId === DEFAULT_LOGIN_ID) return { tokenId, env: {}, unset: ROTATION_UNSET_ENV };
+  return secret ? { tokenId, env: { [OAUTH_TOKEN_ENV]: secret }, unset: ROTATION_UNSET_ENV } : null;
+};
+
+/**
+ * The credential a process ALREADY runs on, for a reattach: its settings file is rewritten on every
+ * connection, and must keep saying what the running process was started with rather than whatever
+ * would be chosen now. Null when it was not started by rotation, or its token is gone or unreadable.
+ */
+export function keptAssignment(
+  rotation: TokenRotation,
+  tokenId: string | undefined,
+  readSecret: (token: RotationToken) => string | null,
+): TokenAssignment | null {
+  if (tokenId === undefined) return null;
+  if (tokenId === DEFAULT_LOGIN_ID) return assignmentOf(tokenId, null);
+  const token = rotation.tokens.find((candidate) => candidate.id === tokenId);
+  return token ? assignmentOf(tokenId, readSecret(token)) : null;
+}
+
 /**
  * The credential a new process should run on, or null when rotation has nothing to say — it is
  * off, or no candidate could be used. A token whose secret cannot be read is dropped and the
@@ -47,11 +68,9 @@ export function assignToken(deps: TokenAssignmentDeps): TokenAssignment | null {
   const pickFrom = (candidates: TokenCandidate[]): TokenAssignment | null => {
     const id = chooseToken(candidates, deps.now_sec);
     if (id === null) return null;
-    if (id === DEFAULT_LOGIN_ID) return { tokenId: id, env: {}, unset: ROTATION_UNSET_ENV };
     const token = deps.rotation.tokens.find((candidate) => candidate.id === id);
-    const secret = token ? deps.readSecret(token) : null;
-    if (secret) return { tokenId: id, env: { [OAUTH_TOKEN_ENV]: secret }, unset: ROTATION_UNSET_ENV };
-    return pickFrom(candidates.filter((candidate) => candidate.id !== id));
+    const assignment = assignmentOf(id, token ? deps.readSecret(token) : null);
+    return assignment ?? pickFrom(candidates.filter((candidate) => candidate.id !== id));
   };
   return pickFrom(candidatesOf(deps));
 }

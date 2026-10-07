@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { assignToken, OAUTH_TOKEN_ENV, ROTATION_UNSET_ENV, type TokenAssignmentDeps } from "../../../server/agents/token-assignment";
+import { assignToken, keptAssignment, OAUTH_TOKEN_ENV, ROTATION_UNSET_ENV, type TokenAssignmentDeps } from "../../../server/agents/token-assignment";
 import { DEFAULT_LOGIN_ID, type RotationToken, type TokenRotation } from "../../../common/tokenRotation";
 import type { RateLimits } from "../../../common/rateLimits";
 
@@ -65,5 +65,31 @@ describe("assignToken (#2919)", () => {
     const read: string[] = [];
     assignToken(deps({}, { readSecret: (token) => (read.push(token.id), `s-${token.id}`) }));
     expect(read).toEqual(["b"]);
+  });
+});
+
+describe("keptAssignment (#2919)", () => {
+  const rotation: TokenRotation = { enabled: true, includeDefaultLogin: true, tokens: [A, B] };
+  const read = (token: RotationToken) => `secret-${token.id}`;
+
+  it("hands back the recorded token, not a fresh choice", () => {
+    expect(keptAssignment(rotation, "a", read)).toEqual({ tokenId: "a", env: { [OAUTH_TOKEN_ENV]: "secret-a" }, unset: ROTATION_UNSET_ENV });
+  });
+
+  it("hands back the /login credential with no env", () => {
+    expect(keptAssignment(rotation, DEFAULT_LOGIN_ID, read)).toEqual({ tokenId: DEFAULT_LOGIN_ID, env: {}, unset: ROTATION_UNSET_ENV });
+  });
+
+  it("is null for a process rotation did not start", () => {
+    expect(keptAssignment(rotation, undefined, read)).toBeNull();
+  });
+
+  it("is null for a token that left the config or cannot be read", () => {
+    expect(keptAssignment(rotation, "gone", read)).toBeNull();
+    expect(keptAssignment(rotation, "a", () => null)).toBeNull();
+  });
+
+  it("keeps the running process's token even after rotation was switched off", () => {
+    expect(keptAssignment({ ...rotation, enabled: false }, "b", read)?.tokenId).toBe("b");
   });
 });

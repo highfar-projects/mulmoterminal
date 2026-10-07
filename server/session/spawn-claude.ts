@@ -5,7 +5,8 @@ import type { WebSocket } from "ws";
 import { CLAUDE_CWD, PORT } from "../config/env.js";
 import { guiMcpEnv, carriesFullGuiMcp, directoryGroupsMcpConfigJson, fullGuiAllowedTools } from "./mcp-config.js";
 import type { ToolGroup } from "../../common/toolGroups.js";
-import { getUserMcpServers, getPrWorkdirFooter, getAppendSystemPrompt, getTerminalSubmit, getCustomAgents } from "../config/config-routes.js";
+import { getUserMcpServers, getPrWorkdirFooter, getAppendSystemPrompt, getTerminalSubmit, getCustomAgents, getTokenRotation } from "../config/config-routes.js";
+import type { TokenAssignment } from "../agents/token-assignment.js";
 import { submitSequenceForAgent } from "../../common/terminalSubmit.js";
 import { buildClaudeArgs } from "../agents/claude-args.js";
 import { refuseUnsupportedPermissionMode } from "../agents/claude-help-probe.js";
@@ -23,7 +24,7 @@ import { sessionExistsOnDisk } from "./session-reads.js";
 import { accountSpawnEnv } from "./session-home.js";
 import { boundAccount } from "./account-sessions.js";
 import { sessionCredential, type SessionCredential } from "./session-credential.js";
-import { rememberTokenSession } from "./token-sessions.js";
+import { rememberTokenSession, sessionToken } from "./token-sessions.js";
 import type { PtyEntry } from "./types.js";
 import type { SpawnDeps } from "./spawn-deps.js";
 import { handlePtyExit } from "./pty-exit.js";
@@ -149,7 +150,15 @@ function sessionCredentialFor(
   const agentId = resuming ? customAgentSessions.get(sessionId) : customAgentId;
   const runsCustomAgent = agentId !== undefined && getCustomAgents().some((candidate) => candidate.id === agentId);
   const onAccount = boundAccount("claude", sessionId) !== undefined;
-  return sessionCredential(resolved, { providerEnv: resolved.env, runsCustomAgent, onAccount }, () => deps.assignToken?.() ?? null);
+  // A reattach starts nothing, but its settings file is still rewritten: it has to name the token the
+  // running process was started with, never a fresh choice (spawnEntry records only a new process).
+  // Asked only with rotation on, so the spawn's own reattach probe (spawnEntry) stays the only one
+  // otherwise. A session ending between the two starts on its recorded token, which is still true.
+  const assign = (): TokenAssignment | null => {
+    if (!getTokenRotation().enabled) return null;
+    return ptyWouldReattach(sessionId, true) ? (deps.keptAssignment?.(sessionToken(sessionId)) ?? null) : (deps.assignToken?.() ?? null);
+  };
+  return sessionCredential(resolved, { providerEnv: resolved.env, runsCustomAgent, onAccount }, assign);
 }
 
 function sessionAddDirs(sessionId: string, configured: string[] | null | undefined): string[] | null | undefined {

@@ -4,7 +4,7 @@
 // A token is measured in the DEFAULT home under its own credential — exactly how a cell on it runs —
 // by the same meter an account uses, keyed by the token rather than the home they all share.
 import { createAccountRateLimits } from "./account-rate-limits.js";
-import { assignToken, OAUTH_TOKEN_ENV, ROTATION_UNSET_ENV, type TokenAssignment } from "./token-assignment.js";
+import { assignToken, keptAssignment, OAUTH_TOKEN_ENV, ROTATION_UNSET_ENV, type TokenAssignment } from "./token-assignment.js";
 import { readRotationToken } from "./token-secret.js";
 import { agentHome } from "./agent-homes.js";
 import { getTokenRotation } from "../config/config-routes.js";
@@ -37,7 +37,13 @@ export interface TokenRotationDeps {
   defaultLoginLimits: () => RateLimits | null;
 }
 
-export function createTokenRotation(deps: TokenRotationDeps): { meters: LoginRateLimits; assignToken: () => TokenAssignment | null } {
+export interface TokenRotationRuntime {
+  meters: LoginRateLimits;
+  assignToken: () => TokenAssignment | null;
+  keptAssignment: (tokenId: string | undefined) => TokenAssignment | null;
+}
+
+export function createTokenRotation(deps: TokenRotationDeps): TokenRotationRuntime {
   // A secret that cannot be read throws, which the meter counts as a probe that never ran.
   const meters = createAccountRateLimits<MeteredToken>({
     accounts: rotationTokens,
@@ -61,5 +67,5 @@ export function createTokenRotation(deps: TokenRotationDeps): { meters: LoginRat
       now_sec: Math.floor(Date.now() / MS_PER_SEC),
     });
 
-  return { meters, assignToken: assign };
+  return { meters, assignToken: assign, keptAssignment: (tokenId) => keptAssignment(getTokenRotation(), tokenId, readRotationToken) };
 }

@@ -290,6 +290,7 @@ const spawnDeps: SpawnDeps = {
   publishActivity: (sessionId) => publishActivity(sessionId),
   publishPromptSubmitted: (sessionId) => pubsub?.publish(PROMPT_SUBMITTED_CHANNEL, { sessionId } satisfies PromptSubmittedEvent),
   assignToken: () => rateLimits.assignToken(),
+  keptAssignment: (tokenId) => rateLimits.keptAssignment(tokenId),
 };
 const { spawnClaudePty } = createClaudeSpawner(spawnDeps);
 const { spawnCodexPty } = createCodexSpawner(spawnDeps);

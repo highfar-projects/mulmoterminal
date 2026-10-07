@@ -46,4 +46,6 @@ export interface SpawnDeps {
   /** The credential a new claude process should run on when token rotation is on (#2919); absent
    *  or null means the session runs as it always did. */
   assignToken?: () => TokenAssignment | null;
+  /** The credential of the process a reattach will pick up, by the token it was recorded on. */
+  keptAssignment?: (tokenId: string | undefined) => TokenAssignment | null;
 }
