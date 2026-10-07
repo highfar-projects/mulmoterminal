@@ -12,6 +12,7 @@ import { rotateNearLimit, rotateOnLimit, type LimitRotationDeps, type LimitRotat
 import { noteMovedFrom } from "./session/rotation-notice.js";
 import { sessionToken } from "./session/token-sessions.js";
 import { rotationLoginLabel } from "../common/tokenRotation.js";
+import { countLiveSessions } from "./agents/token-assignment.js";
 import { enforceKeymap } from "./config/keymap-check.js";
 import { tmuxCancelCopyMode, tmuxPaneInMode, tmuxPanePidsBySessionAsync, tmuxRedrawClient, tmuxTerminalModes, tmuxWindowSize } from "./infra/tmux.js";
 import { browserOriginHostnames, createIsAllowedOrigin } from "./infra/allowed-origin.js";
@@ -260,7 +261,14 @@ const { forgetTitle, noteTitleTurn, maybeGenerateTitle, freshenRosterTitle } = c
 
 // The 5h / 7d rate-limit gauge (#387) — store, Codex reading and Claude probe (rate-limit-service.ts).
 // Before the spawners: a new claude session's rotation token is chosen from its readings (#2919).
-const rateLimits = createRateLimitService();
+// A new session's token is shared among the claude sessions already running on it (#2926).
+const rateLimits = createRateLimitService((tokenId) =>
+  countLiveSessions(
+    [...ptys].filter(([, entry]) => entry.agent === "claude").map(([sessionId]) => sessionId),
+    sessionToken,
+    tokenId,
+  ),
+);
 
 // The PTY spawners (session/spawn-*.ts). They take what index.ts still owns — the session
 // lifecycle it drives, and this file's port and live user config bound into the two payload

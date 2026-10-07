@@ -82,7 +82,9 @@ keeps the token its process was started with; only a newly started process is as
 Input: candidates in config order, each with its last reading (or none) and `now_sec`.
 - A window whose `resetsAt` has passed counts as unused.
 - Out of the running: 7-day used >= `SWITCH_AT_PERCENT`, 5-hour used >= `FIVE_HOUR_CEILING_PERCENT`, a spent mark from a limit hit, or a probe that found the token at its limit.
-- Eligible with a reading: highest `(100 - used7d) / max(hoursToReset, MIN_HOURS)`.
+- Eligible with a reading: highest `(100 - used7d) / max(hoursToReset, MIN_HOURS)`, divided by
+  `1 + sessions running on it now` (#2926) — by pace alone, every parallel session landed on the one
+  subscription until its 5-hour window filled, since readings move only when a probe runs.
 - No reading: after every eligible measured candidate (it is measured on the next probe).
 - None eligible: the one whose blocking window resets first.
 - Ties: config order.

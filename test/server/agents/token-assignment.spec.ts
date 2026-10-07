@@ -1,6 +1,13 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { assignToken, keptAssignment, OAUTH_TOKEN_ENV, ROTATION_UNSET_ENV, type TokenAssignmentDeps } from "../../../server/agents/token-assignment";
+import {
+  assignToken,
+  countLiveSessions,
+  keptAssignment,
+  OAUTH_TOKEN_ENV,
+  ROTATION_UNSET_ENV,
+  type TokenAssignmentDeps,
+} from "../../../server/agents/token-assignment";
 import { DEFAULT_LOGIN_ID, type RotationToken, type TokenRotation } from "../../../common/tokenRotation";
 import type { RateLimits } from "../../../common/rateLimits";
 
@@ -107,5 +114,25 @@ describe("assignToken with onlyFree (#2919)", () => {
 
   it("without onlyFree, falls back to the one free soonest as before", () => {
     expect(assignToken(deps({}, { spentUntil_sec: () => NOW + DAY }))).not.toBeNull();
+  });
+});
+
+describe("live sessions (#2926)", () => {
+  it("counts the running sessions recorded on a token", () => {
+    const tokenOf = (id: string) => ({ s1: "a", s2: "a", s3: "b" })[id];
+    expect(countLiveSessions(["s1", "s2", "s3", "s4"], tokenOf, "a")).toBe(2);
+    expect(countLiveSessions(["s1", "s2", "s3", "s4"], tokenOf, "b")).toBe(1);
+    expect(countLiveSessions([], tokenOf, "a")).toBe(0);
+  });
+
+  it("moves the next session off a busy token", () => {
+    // b would win on pace (used(10) beats used(50)), but has three sessions on it already.
+    const busy = assignToken(
+      deps(
+        {},
+        { defaultLoginLimits: () => used(100), tokenLimits: (token) => (token.id === "a" ? used(50) : used(10)), liveSessions: (id) => (id === "b" ? 3 : 0) },
+      ),
+    );
+    expect(busy?.tokenId).toBe("a");
   });
 });
