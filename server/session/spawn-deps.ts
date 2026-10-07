@@ -1,3 +1,4 @@
+import type { TokenAssignment } from "../agents/token-assignment.js";
 // What index.ts still owns after the PTY machinery moved out (#548 step 3c). The json
 // builders read config it holds; `reap` and `setWorking` drive a session lifecycle that
 // reaches well beyond spawning, so they arrive as deps rather than as imports.
@@ -42,4 +43,7 @@ export interface SpawnDeps {
    *  because that one is suppressed when the flag does not move, and the prompt that interrupts a
    *  running turn moves nothing (common/promptChannel.ts). */
   publishPromptSubmitted: (sessionId: string) => void;
+  /** The credential a new claude process should run on when token rotation is on (#2919); absent
+   *  or null means the session runs as it always did. */
+  assignToken?: () => TokenAssignment | null;
 }

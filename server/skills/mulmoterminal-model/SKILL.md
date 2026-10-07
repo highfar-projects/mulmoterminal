@@ -20,6 +20,9 @@ The keys, and the job each one does:
 - **`~/.mulmoterminal/config.json` → `accounts`** — a SECOND LOGIN for Claude Code or Codex (another
   subscription), kept in its own config directory and picked per cell in the launch form. Also added
   and removed in Settings → Models and backends.
+- **`~/.mulmoterminal/config.json` → `tokenRotation`** — several Claude subscriptions behind the ONE
+  default config directory, with MulmoTerminal choosing which one each new session runs on so the
+  weekly windows drain evenly. config.json only (beta).
 - **`~/.mulmoterminal/config.json` → `defaultAgent`** (or `--agent <id>` on the command line) —
   which of the seven agent CLIs a NEW cell starts as, and the only thing that relaxes the
   Claude-Code-required check at start-up (#2082). Also a select in Settings → Models and backends.
@@ -261,6 +264,47 @@ switches — handed to it at launch.
   not in `providers`' `env`. MulmoTerminal then reads the default directory while the session writes
   elsewhere, so the session list, resume, cost and history all come back empty.
 - A partial `POST /api/config` merge like the others: send `accounts` **complete**.
+
+## Several subscriptions, chosen per session — `tokenRotation` (beta)
+
+For a user with more than one Claude subscription who wants them used EVENLY without picking one
+per cell. Unlike `accounts`, every conversation stays in the default `~/.claude`, so any session can
+be resumed on any subscription — the same as switching with `/login`, done automatically.
+
+1. For each subscription, the user runs `claude setup-token` in their OWN terminal (it signs in
+   through the browser) and stores the printed token, e.g. in the macOS keychain:
+   `security add-generic-password -a mulmoterminal -s mulmoterminal-token-a -w` (with nothing after
+   `-w` it prompts, so the token never reaches the shell history). **Never ask the user to paste a
+   token into the chat, and never write one into config.json** — an entry names where it is kept.
+2. Add the key:
+
+```json
+"tokenRotation": {
+  "enabled": true,
+  "includeDefaultLogin": true,
+  "tokens": [
+    { "id": "a", "label": "Personal", "email": "me@example.com", "keychain": "mulmoterminal-token-a" },
+    { "id": "b", "label": "Work", "email": "me@work.example", "file": "~/.mulmoterminal/tokens/b" }
+  ]
+}
+```
+
+- `keychain` is read with `security find-generic-password -a <keychainAccount> -s <keychain> -w`;
+  `keychainAccount` defaults to `mulmoterminal`. Off macOS, use `file` (a file holding only the
+  token, mode 600). Exactly one of the two per entry; an entry with both or neither is dropped.
+- `email` is what the user signs in with — shown beside that token's usage so they can tell which
+  subscription is which. MulmoTerminal cannot read it from the token.
+- `includeDefaultLogin` (default `true`): the `/login` credential is one more candidate.
+- **How it chooses**: by the 7-day window's remaining percent per hour until it resets, highest first
+  — room that is about to reset is used before it is lost. A token whose 5-hour window is at 90% or
+  more, or whose 7-day window is used up, is skipped. Each token's usage is measured by a short probe
+  under that token, and appears as its own gauge beside the header's usage gauge.
+- **Which cells rotate**: a plain Claude cell on the default directory only. A provider, a custom
+  agent or an `accounts` login already says whose subscription it runs on and is never rotated.
+- A token is chosen when a session's process STARTS (new, or resumed after it exited). A running
+  session keeps its token; reconnecting to it changes nothing.
+- A token that cannot be read is skipped for that spawn, with a warning in the server log naming the
+  entry (never the value).
 
 ## Choosing a model — never invent an id
 

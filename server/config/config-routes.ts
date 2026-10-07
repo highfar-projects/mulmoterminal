@@ -31,6 +31,7 @@ import type { AgentAccount } from "../../common/agentAccounts.js";
 import type { PlayfulEffects } from "../../common/playfulEffects.js";
 import { systemTaskSettingsChanged } from "./system-task-settings.js";
 import { setAccountsProvider } from "../session/session-home.js";
+import type { TokenRotation } from "../../common/tokenRotation.js";
 import { installBundledSkills } from "../infra/install-bundled-skills.js";
 import type { SystemTaskSwitches } from "../backends/system-tasks.js";
 import type { PushKind } from "../../common/pushKinds.js";
@@ -114,6 +115,11 @@ export function getCustomAgents(): CustomAgent[] {
 // bound against the current list, so adding an account needs no restart.
 export function getAccounts(): AgentAccount[] {
   return config.accounts;
+}
+
+// Read live: each new session is assigned a token from the current list (#2919).
+export function getTokenRotation(): TokenRotation {
+  return config.tokenRotation;
 }
 
 export function getPlayfulEffects(): PlayfulEffects {
