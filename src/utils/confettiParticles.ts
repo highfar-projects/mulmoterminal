@@ -236,6 +236,18 @@ export function stepParticles(particles: readonly Particle[], seconds: number, r
   });
 }
 
+// A press during a show adds to it, so mashing the key keeps the screen full; this caps what the
+// canvas has to draw. A single mixed press and the all-style finale both fit under it.
+export const MAX_PARTICLES = 2500;
+
+/** `incoming` added after `existing`, trimmed from its latest waves so the total stays within
+ *  `MAX_PARTICLES`; `existing` is never cut, so a show already on screen is not clipped. */
+export function mergeShows(existing: readonly Particle[], incoming: readonly Particle[]): Particle[] {
+  const room = Math.max(0, MAX_PARTICLES - existing.length);
+  const kept = [...incoming].sort((a, b) => a.delay - b.delay).slice(0, room);
+  return [...existing, ...kept];
+}
+
 /** 1 while a particle is young, falling to 0 over the last part of its life. */
 export const alphaOf = (particle: Particle): number => Math.max(0, Math.min(1, (particle.life - particle.age) / (particle.life * FADE_SHARE)));
 

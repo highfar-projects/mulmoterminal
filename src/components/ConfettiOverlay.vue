@@ -5,7 +5,7 @@ import { onBeforeUnmount, ref, watch } from "vue";
 import { confettiRequest } from "../composables/useConfetti";
 import { useKonamiCode } from "../composables/useKonamiCode";
 import { drawParticles } from "../utils/confettiDraw";
-import { spawnConfettiShow, stepParticles, type Particle } from "../utils/confettiParticles";
+import { mergeShows, spawnConfettiShow, stepParticles, type Particle } from "../utils/confettiParticles";
 
 const canvas = ref<HTMLCanvasElement | null>(null);
 const MAX_FRAME_SECONDS = 0.05;
@@ -56,7 +56,10 @@ function start(): void {
 watch(confettiRequest, (request) => {
   if (request === null || prefersReducedMotion) return;
   const viewport = { width: window.innerWidth, height: window.innerHeight };
-  particles = [...particles, ...request.styles.flatMap((style) => spawnConfettiShow(style, viewport, Math.random))];
+  particles = mergeShows(
+    particles,
+    request.styles.flatMap((style) => spawnConfettiShow(style, viewport, Math.random)),
+  );
   start();
 });
 

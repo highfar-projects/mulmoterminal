@@ -52,7 +52,7 @@ export const shortcutActionsZhCN = {
   screenSkills: "前往技能",
   settingsOpen: "打开设置",
   soundToggle: "开启 / 关闭通知音",
-  confetti: "撒彩纸（从设置的样式中随机选一种）",
+  confetti: "撒彩纸（从设置的样式中随机混合）",
   viewToggle: "切换放大视图（列表 / 缩略图条）",
   orderAuto: "终端按自动顺序排列（关注优先）",
   orderManual: "终端按手动顺序排列",

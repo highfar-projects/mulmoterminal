@@ -52,7 +52,7 @@ export const shortcutActionsKo = {
   screenSkills: "스킬로",
   settingsOpen: "설정 열기",
   soundToggle: "알림음 켜기 / 끄기",
-  confetti: "색종이를 뿌리기 (설정한 스타일 중 무작위)",
+  confetti: "색종이를 뿌리기 (설정한 스타일을 무작위로 섞어서)",
   viewToggle: "확대 보기 전환(목록 / 썸네일 줄)",
   orderAuto: "터미널 순서를 자동으로(주목도 순)",
   orderManual: "터미널 순서를 수동으로",
