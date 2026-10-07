@@ -469,7 +469,7 @@ it. Settings → Theme has an on/off switch for it (no picture choice). Asked to
 ### `confetti` — a celebration over the whole page
 
 Off for every event until asked; the `confetti` keymap action (the keys skill binds it) and the
-command palette's "Throw confetti" row work with no setting at all. The key is an object:
+command palette's "Throw confetti" row work with no setting at all. **Settings → Theme → Confetti** has a tick for every style and every event and a "Try it" button — offer that first, and use the key when the user would rather be told it. The key is an object:
 
 ```json
 { "confetti": { "styles": ["sakura", "fireworks"], "events": ["pr-merged"] } }

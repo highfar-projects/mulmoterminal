@@ -90,4 +90,18 @@ export const settingsControlsEn = {
     hint: "Now and then, something on a terminal. Off keeps every terminal plain.",
     field: "Playful effects",
   },
+  confetti: {
+    title: "Confetti",
+    hint: "A show over the whole page. Bind a key to it under Keyboard shortcuts, or find it in the command palette.",
+    stylesTitle: "Which kinds may fall",
+    stylesHint: "Each press mixes three of the ticked kinds, picked at random. One always stays ticked.",
+    styles: { cracker: "Party poppers", fireworks: "Fireworks", sakura: "Cherry petals", rain: "Paper rain", balloons: "Balloons" },
+    eventsTitle: "Throw some by itself when",
+    events: {
+      "pr-merged": "a pull request you were watching is merged",
+      "turn-finished": "an agent finishes a turn",
+      "command-done": "a Run command ends without an error",
+    },
+    try: "Try it",
+  },
 };

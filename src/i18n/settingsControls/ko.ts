@@ -90,4 +90,14 @@ export const settingsControlsKo = {
     hint: "가끔 터미널에 무언가가 일어납니다. 끄면 모든 터미널이 조용한 채로 있습니다.",
     field: "소소한 연출",
   },
+  confetti: {
+    title: "색종이",
+    hint: "화면 가득 나오는 연출입니다. 키보드 단축키에서 키를 지정하거나 명령 팔레트에서 실행할 수 있습니다.",
+    stylesTitle: "뿌릴 종류",
+    stylesHint: "한 번에 체크한 종류 중 세 가지를 무작위로 섞습니다. 하나는 항상 체크된 채로 남습니다.",
+    styles: { cracker: "크래커", fireworks: "불꽃놀이", sakura: "벚꽃잎", rain: "색종이 비", balloons: "풍선" },
+    eventsTitle: "다음 경우에 자동으로 뿌리기",
+    events: { "pr-merged": "보고 있던 PR이 머지되었을 때", "turn-finished": "에이전트가 한 턴을 마쳤을 때", "command-done": "Run 명령이 오류 없이 끝났을 때" },
+    try: "시험해 보기",
+  },
 };

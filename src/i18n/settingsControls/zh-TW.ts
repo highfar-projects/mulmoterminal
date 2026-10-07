@@ -90,4 +90,14 @@ export const settingsControlsZhTW = {
     hint: "偶爾，終端機上會發生些什麼。關閉後所有終端機都保持安靜。",
     field: "小小的趣味效果",
   },
+  confetti: {
+    title: "彩紙",
+    hint: "鋪滿整個頁面的特效。可在「鍵盤快速鍵」中為它綁定按鍵，也可在命令面板中找到。",
+    stylesTitle: "可以灑哪些",
+    stylesHint: "每次從勾選的種類中隨機混合三種。始終至少保留一種。",
+    styles: { cracker: "禮炮", fireworks: "煙火", sakura: "櫻花瓣", rain: "彩紙雨", balloons: "氣球" },
+    eventsTitle: "在以下情況自動灑",
+    events: { "pr-merged": "正在關注的拉取請求被合併時", "turn-finished": "代理完成一輪時", "command-done": "執行命令無錯誤結束時" },
+    try: "試一下",
+  },
 };

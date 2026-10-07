@@ -1585,7 +1585,7 @@ a letter.
 A celebration over the whole page. Two ways to start one, and the first needs no setting:
 
 - **By hand** — bind the `confetti` action to a key (see [Keyboard shortcuts](#keymap)), or pick **Throw confetti** in the command palette.
-- **By itself** — name the events that should set one off in `confetti.events`. None do until you say so.
+- **By itself** — tick the events that should set one off in **Settings → Theme → Confetti**, or name them in `confetti.events`. None do until you say so. The same box has a tick for each style and a **Try it** button.
 
 ```json
 {
@@ -1601,7 +1601,7 @@ A celebration over the whole page. Two ways to start one, and the first needs no
 | `styles` | Which kinds may fall; each celebration mixes three picked at random from the list (all of them if it has three or fewer). `cracker` (party poppers from the bottom corners), `fireworks`, `sakura` (cherry petals), `rain` (paper confetti falling), `balloons`. Absent or empty means all five. |
 | `events` | `pr-merged` (a pull request this session watched turn merged), `turn-finished` (an agent finished a turn), `command-done` (a Run command exited 0). Absent or empty means none. The same event within a few seconds is one celebration. |
 
-Restart the server after editing the file by hand, then reload the tab. If your OS asks for reduced motion, there is no confetti at all.
+The ticks save as you click, with no restart. Restart the server after editing the file by hand, then reload the tab. If your OS asks for reduced motion, there is no confetti at all.
 
 There is one more way, and it is not in any menu: **up up down down left right left right b a**, pressed while no terminal or text field has the focus.
 
