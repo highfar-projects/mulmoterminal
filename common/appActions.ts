@@ -23,6 +23,7 @@ export const APP_ACTIONS = [
   ...SCREEN_ACTIONS,
   "settings-open",
   "sound-toggle",
+  "confetti",
   "view-toggle",
   ...ORDER_ACTIONS,
   "page-next",

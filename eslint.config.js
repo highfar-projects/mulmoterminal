@@ -434,6 +434,7 @@ export default [
     // the limit; the rule then holds it there.
     files: [
       "src/components/TerminalCell.vue", // 1078 — the launch form is out (#1122); the running cell's chrome (header chips, diff panel, close confirm, handoff menu) is what's left
+      "server/config/app-config.ts", //  the config key list: every key adds a line to each of its five places, and it reached the limit with #confetti
       "src/components/TerminalGrid.vue", //  815 — layout state machine + its documented <style> exception (#1125)
       // The specs that were already over the limit when it stopped being a warning. Splitting one
       // moves assertions away from each other, so these are carried as debt rather than cut up —

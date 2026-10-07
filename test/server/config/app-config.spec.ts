@@ -30,6 +30,7 @@ import { DEFAULT_SOUND_KINDS } from "../../../common/notifyKinds.js";
 import { DEFAULT_PUSH_KINDS } from "../../../common/pushKinds.js";
 import { DEFAULT_COCKPIT_LINES } from "../../../common/cockpitLines.js";
 import { DEFAULT_HEADER_STATUS_TINT } from "../../../common/headerStatusColors.js";
+import { CONFETTI_DEFAULT } from "../../../common/confetti.js";
 import { PLAYFUL_EFFECTS_DEFAULT } from "../../../common/playfulEffects.js";
 import { sanitizeWorklogIntervalHours } from "../../../common/worklogInterval.js";
 
@@ -429,6 +430,7 @@ describe("loadAppConfig / saveAppConfig", () => {
     paletteSearchBox: false,
     remoteServer: false,
     playfulEffects: PLAYFUL_EFFECTS_DEFAULT,
+    confetti: CONFETTI_DEFAULT,
     toolbarPins: [],
     cockpitLines: { ...DEFAULT_COCKPIT_LINES },
     headerStatusColors: {},
@@ -483,6 +485,7 @@ describe("loadAppConfig / saveAppConfig", () => {
       paletteSearchBox: true, // opt-in (#2569): only `true` proves it persisted
       remoteServer: true, // experimental opt-in (#2669): only `true` proves it persisted
       playfulEffects: "off" as const, // defaults on, so only the opt-out proves it persisted
+      confetti: { styles: ["sakura" as const], events: ["pr-merged" as const] }, // a narrowed list and an opted-in event
       toolbarPins: ["collection:works"], // opt-in (#1984): only a promoted pin proves it persisted
       cockpitLines: { summary: 6, prompt: 2, response: 3 }, // a raised clamp must survive it too
       headerStatusColors: { working: { background: "#6d28d9", text: null } }, // a per-status header colour must round-trip too
@@ -567,6 +570,7 @@ describe("loadAppConfig / saveAppConfig", () => {
       paletteSearchBox: false,
       remoteServer: false,
       playfulEffects: PLAYFUL_EFFECTS_DEFAULT, // same: absent means on
+      confetti: CONFETTI_DEFAULT, // absent: every style, no event
       toolbarPins: [], // opt-in the other way (#1984): a config that predates it promotes nothing
       fontFamily: null,
       defaultAgent: null,
@@ -694,6 +698,7 @@ describe("#741 corrupt config is not silently wiped by a partial update", () => 
     paletteSearchBox: false,
     remoteServer: false,
     playfulEffects: PLAYFUL_EFFECTS_DEFAULT,
+    confetti: CONFETTI_DEFAULT,
     toolbarPins: [],
     cockpitLines: { ...DEFAULT_COCKPIT_LINES },
     headerStatusColors: {},
@@ -788,6 +793,7 @@ describe("mergeConfigUpdate", () => {
     paletteSearchBox: false,
     remoteServer: false,
     playfulEffects: PLAYFUL_EFFECTS_DEFAULT,
+    confetti: CONFETTI_DEFAULT,
     toolbarPins: [],
     cockpitLines: { ...DEFAULT_COCKPIT_LINES },
     headerStatusColors: {},

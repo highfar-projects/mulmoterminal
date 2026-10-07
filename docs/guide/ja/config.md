@@ -1216,6 +1216,7 @@ Claude のセッションが何かを尋ねて止まったとき —— 普段�
 | `screen-terminals` / `screen-collections` / `screen-feeds` / `screen-accounting` / `screen-files` / `screen-wiki` / `screen-prs` / `screen-rooms` / `screen-blueprints` / `screen-worklog` / `screen-skills` | **その画面へ移動**する（ツールバーの入口と同じ）。PRs・Rooms・Worklog は、ツールバーに出ないのと同じく、設定するまで何もしません。グリッドだけでなく**どの画面でも**効きます（1 つのキーの場合。2 キーの連続はグリッドのみ） | 不要 |
 | `settings-open` | **設定**を開く | 不要 |
 | `sound-toggle` | **通知音**のオン / オフ（ツールバーのスピーカー） | 不要 |
+| `confetti` | **紙吹雪**を画面いっぱいに散らす。スタイルは設定した一覧からランダム（[下記](#confetti)） | 不要 |
 | `view-toggle` | **拡大時の表示**を一覧とサムネイル列で切り替える | 不要 |
 | `order-auto` / `order-manual` / `order-priority` | **並び順**を選ぶ（ツールバーの並び順メニュー） | 不要 |
 | `page-next` / `page-prev` | グリッドの**次 / 前のページ**を表示する（1ページ9個）。最後 / 最初のページでは何もしない。コマンドパレットにも出ます | 不要 |
@@ -1501,6 +1502,31 @@ Safari も Chrome もこう振る舞います。キーの文字列だけから M
 > **未知のアクション名は警告のみ**で、起動は続行します——新しいバージョン向けに書かれた設定はこう見えるので、
 > ダウングレードでアプリが使えなくなってはいけないためです。並べ替え・ページ切替・ナビゲーション等の追加
 > アクションは [issue #829](https://github.com/receptron/mulmoterminal/issues/829) で追跡しています。
+
+## 紙吹雪（`confetti`） {#confetti}
+
+画面いっぱいに紙吹雪を散らします。始め方は二つあり、一つ目は設定なしで使えます。
+
+- **手で** — `confetti` アクションをキーに割り当てる（[キーボードショートカット](#keymap)）か、コマンドパレットの **Throw confetti**（紙吹雪を散らす）を選びます。
+- **自動で** — `confetti.events` に、紙吹雪を出したい出来事を書きます。書かない間はどれも出ません。
+
+```json
+{
+  "confetti": {
+    "styles": ["sakura", "fireworks", "cracker"],
+    "events": ["pr-merged"]
+  }
+}
+```
+
+| キー | 値 |
+|---|---|
+| `styles` | 降らせる種類。毎回この一覧からランダムに一つ選びます。`cracker`（画面の下の両隅から飛ぶクラッカー）、`fireworks`（花火）、`sakura`（桜の花びら）、`rain`（降り注ぐ紙吹雪）、`balloons`（風船）。省略または空なら5種類すべて。 |
+| `events` | `pr-merged`（このセッションが見ている間にマージされた PR）、`turn-finished`（エージェントが1ターンを終えた）、`command-done`（実行コマンドが終了コード 0 で終わった）。省略または空なら何も出ません。同じ出来事は数秒のうちは1回として数えます。 |
+
+ファイルを手で直したときは、サーバーを再起動してからタブを読み込み直してください。OS で「視差効果を減らす」を選んでいる場合、紙吹雪は一切出ません。
+
+メニューのどこにも出ない出し方がもう一つあります。**上 上 下 下 左 右 左 右 b a** と押してみてください。
 
 ## ロスターの行が長すぎる / 短すぎる（`cockpitLines`） {#cockpit-lines}
 

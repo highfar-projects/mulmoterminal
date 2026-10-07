@@ -57,6 +57,7 @@ const LABEL_KEYS: Record<KeymapAction, string> = {
   "screen-skills": "settings.shortcuts.actions.screenSkills",
   "settings-open": "settings.shortcuts.actions.settingsOpen",
   "sound-toggle": "settings.shortcuts.actions.soundToggle",
+  confetti: "settings.shortcuts.actions.confetti",
   "view-toggle": "settings.shortcuts.actions.viewToggle",
   "order-auto": "settings.shortcuts.actions.orderAuto",
   "order-manual": "settings.shortcuts.actions.orderManual",

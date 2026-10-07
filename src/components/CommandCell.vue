@@ -8,6 +8,7 @@ import { isThumbnail, type GridCellEmits, type GridCellProps } from "./gridCell"
 import { browserLocale } from "../utils/browserLocale";
 import { isRecord } from "../../common/isRecord";
 import { commandExitKind, notifySound } from "../composables/notifySound";
+import { fireConfettiForEvent } from "../composables/useConfetti";
 import { CELL_BTN, CELL_BTN_BOX, CELL_BTN_INK, CELL_BTN_SIZE, CELL_TERM } from "./cellChromeClasses";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { useI18n } from "vue-i18n";
@@ -51,6 +52,7 @@ function onExit(exitCode: number | null) {
   // "closed" activity for it and useAttentionSound cannot see this. The cell is the only
   // place that knows the command ended, and with what status.
   notifySound(commandExitKind(exitCode), props.command.cwd);
+  if (exitCode === 0) fireConfettiForEvent("command-done");
 }
 
 function rerun() {

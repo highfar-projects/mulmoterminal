@@ -1272,6 +1272,7 @@ is refused there, and one the browser keeps for itself is saved with a warning. 
 | `screen-terminals` / `screen-collections` / `screen-feeds` / `screen-accounting` / `screen-files` / `screen-wiki` / `screen-prs` / `screen-rooms` / `screen-blueprints` / `screen-worklog` / `screen-skills` | **Go to that screen** — the toolbar's doors. PRs, Rooms and Worklog do nothing until they are set up, as the toolbar leaves them out. Works on **every screen**, not only the grid (a single key; two-key sequences only on the grid) | no |
 | `settings-open` | Open **Settings** | no |
 | `sound-toggle` | Turn the **notification sound** on / off (the toolbar's speaker) | no |
+| `confetti` | Throw **confetti** over the page — a style picked at random from your list ([below](#confetti)) | no |
 | `view-toggle` | Switch the **enlarged view** between the roster and the thumbnail strip | no |
 | `order-auto` / `order-manual` / `order-priority` | Set the **cell order** (the toolbar's order menu) | no |
 | `page-next` / `page-prev` | Show the **next / previous page** of the tiled grid (9 terminals a page). Does nothing past the last page or before the first; also in the command palette | no |
@@ -1578,6 +1579,31 @@ a letter.
 > An **unknown action name only warns** and the app still starts — that is what a config written for a newer
 > MulmoTerminal looks like, and downgrading must not brick it. Further actions (reordering, page switching,
 > navigation) are tracked in [issue #829](https://github.com/receptron/mulmoterminal/issues/829).
+
+## Confetti (`confetti`) {#confetti}
+
+A celebration over the whole page. Two ways to start one, and the first needs no setting:
+
+- **By hand** — bind the `confetti` action to a key (see [Keyboard shortcuts](#keymap)), or pick **Throw confetti** in the command palette.
+- **By itself** — name the events that should set one off in `confetti.events`. None do until you say so.
+
+```json
+{
+  "confetti": {
+    "styles": ["sakura", "fireworks", "cracker"],
+    "events": ["pr-merged"]
+  }
+}
+```
+
+| Key | Values |
+|---|---|
+| `styles` | Which kinds may fall; each celebration picks one at random from the list. `cracker` (party poppers from the bottom corners), `fireworks`, `sakura` (cherry petals), `rain` (paper confetti falling), `balloons`. Absent or empty means all five. |
+| `events` | `pr-merged` (a pull request this session watched turn merged), `turn-finished` (an agent finished a turn), `command-done` (a Run command exited 0). Absent or empty means none. The same event within a few seconds is one celebration. |
+
+Restart the server after editing the file by hand, then reload the tab. If your OS asks for reduced motion, there is no confetti at all.
+
+There is one more way, and it is not in any menu: **up up down down left right left right b a**.
 
 ## Roster rows too long or too short (`cockpitLines`) {#cockpit-lines}
 
