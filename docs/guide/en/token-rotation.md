@@ -68,6 +68,10 @@ By the 7-day window: **what is left, divided by the hours until it resets.** Roo
 is used first, because it is lost at the reset; a subscription with a full week ahead waits. Over a week
 that keeps every subscription's window draining as evenly as possible.
 
+Sessions already running on a subscription share it: its figure is divided by one plus the number of
+sessions running there, so several cells opened together spread over several subscriptions instead of
+all landing on the most urgent one.
+
 A subscription is skipped when its 5-hour window is at 90% or more, or its week is at 98% or more.
 
 ## When a subscription runs low

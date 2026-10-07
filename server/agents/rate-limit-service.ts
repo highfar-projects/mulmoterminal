@@ -100,7 +100,7 @@ const combinedMeters = (parts: readonly LoginRateLimits[]): LoginRateLimits => (
  *  reports, which is the same as having no data yet. Seeded from the last run so the header has
  *  numbers the moment the grid opens; probing at boot instead would spend a query on every restart
  *  — once per SAVE under `yarn dev`. */
-export function createRateLimitService(): RateLimitService {
+export function createRateLimitService(liveSessions: (tokenId: string) => number = () => 0): RateLimitService {
   // Stopping the probe the moment its answer lands. Without this the PTY was held for the full
   // PROBE_TIMEOUT_MS — the status line arrives in seconds, so most of that minute and a half was a
   // live `claude` process with nothing left to say, and `probing: true` kept every browser polling
@@ -170,13 +170,12 @@ export function createRateLimitService(): RateLimitService {
     claudeAvailable: claudeIsRunnable,
   });
 
-  const rotation = createTokenRotation({
+  const { meters: tokenMeters, ...rotationControls } = createTokenRotation({
     startHomeProbe,
     claudeAvailable: claudeIsRunnable,
     defaultLoginLimits: () => store.snapshot().claude?.limits ?? null,
+    liveSessions,
   });
-
-  const { meters: tokenMeters, ...rotationControls } = rotation;
   return {
     store,
     refreshCodex,
