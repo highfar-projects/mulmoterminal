@@ -1,7 +1,16 @@
 // The physics of a celebration: every style starts, moves, and ends.
 import { describe, expect, it } from "vitest";
 import { CONFETTI_STYLES, type ConfettiStyle } from "../../../common/confetti";
-import { alphaOf, MAX_PARTICLES, mergeShows, spawnConfetti, spawnConfettiShow, stepParticles, type Particle } from "../../../src/utils/confettiParticles";
+import {
+  alphaOf,
+  MAX_PARTICLES,
+  mergeShows,
+  weightOf,
+  spawnConfetti,
+  spawnConfettiShow,
+  stepParticles,
+  type Particle,
+} from "../../../src/utils/confettiParticles";
 
 const VIEWPORT = { width: 1200, height: 800 };
 const FRAME = 1 / 60;
@@ -72,6 +81,24 @@ describe("mergeShows", () => {
     const piled = [1, 2, 3, 4, 5, 6].reduce<Particle[]>((live, seed) => mergeShows(live, showOf(["cracker", "sakura", "rain"], seed)), []);
     expect(piled.length).toBeLessThanOrEqual(MAX_PARTICLES);
     expect(piled.length).toBeGreaterThan(MAX_PARTICLES - 400);
+  });
+
+  it("holds a pile of fireworks presses to the cap even after every rocket has burst", () => {
+    const piled = Array.from({ length: 40 }, (_, seed) => seed).reduce<Particle[]>((live, seed) => mergeShows(live, showOf(["fireworks"], seed)), []);
+    const peak = (particles: Particle[], frames: number, best: number): number => {
+      if (frames === 0 || particles.length === 0) return best;
+      const next = stepParticles(particles, FRAME, seeded(frames));
+      return peak(next, frames - 1, Math.max(best, next.length));
+    };
+    expect(peak(piled, 60 * 12, piled.length)).toBeLessThanOrEqual(MAX_PARTICLES);
+  });
+
+  it("counts a rocket as the sparks it becomes", () => {
+    const rocket = spawnConfettiShow("fireworks", VIEWPORT, seeded(1))[0];
+    const paper = spawnConfetti("rain", VIEWPORT, seeded(1))[0];
+    if (rocket === undefined || paper === undefined) throw new Error("no particle");
+    expect(weightOf(paper)).toBe(1);
+    expect(weightOf(rocket)).toBeGreaterThan(10);
   });
 
   it("does not cut what is already on screen, and trims the latest waves of the new show", () => {

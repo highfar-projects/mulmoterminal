@@ -104,8 +104,10 @@ function spawnFireworks({ width, height }: Viewport, random: Random): Particle[]
   });
 }
 
+const SPARKS_PER_BURST = 70;
+
 function spawnBurst(rocket: Particle, random: Random): Particle[] {
-  return Array.from({ length: 70 }, () => {
+  return Array.from({ length: SPARKS_PER_BURST }, () => {
     const direction = range(random, 0, TWO_PI);
     const speed = range(random, 80, 380);
     return base({
@@ -237,14 +239,23 @@ export function stepParticles(particles: readonly Particle[], seconds: number, r
 }
 
 // A press during a show adds to it, so mashing the key keeps the screen full; this caps what the
-// canvas has to draw. A single mixed press and the all-style finale both fit under it.
-export const MAX_PARTICLES = 2500;
+// canvas has to draw. It counts a rocket as the sparks it will become, since the burst is what is
+// drawn. A single mixed press and the all-style finale both fit under it.
+export const MAX_PARTICLES = 3500;
 
-/** `incoming` added after `existing`, trimmed from its latest waves so the total stays within
- *  `MAX_PARTICLES`; `existing` is never cut, so a show already on screen is not clipped. */
+export const weightOf = (particle: Particle): number => (particle.shape === "rocket" ? SPARKS_PER_BURST : 1);
+const totalWeight = (particles: readonly Particle[]): number => particles.reduce((sum, particle) => sum + weightOf(particle), 0);
+
+/** `incoming` added after `existing`, trimmed from its latest waves so the weighted total stays
+ *  within `MAX_PARTICLES`; `existing` is never cut, so a show already on screen is not clipped. */
 export function mergeShows(existing: readonly Particle[], incoming: readonly Particle[]): Particle[] {
-  const room = Math.max(0, MAX_PARTICLES - existing.length);
-  const kept = [...incoming].sort((a, b) => a.delay - b.delay).slice(0, room);
+  const room = Math.max(0, MAX_PARTICLES - totalWeight(existing));
+  const kept = [...incoming]
+    .sort((a, b) => a.delay - b.delay)
+    .reduce<{ taken: Particle[]; used: number }>(
+      (acc, particle) => (acc.used + weightOf(particle) <= room ? { taken: [...acc.taken, particle], used: acc.used + weightOf(particle) } : acc),
+      { taken: [], used: 0 },
+    ).taken;
   return [...existing, ...kept];
 }
 
