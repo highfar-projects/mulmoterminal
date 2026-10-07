@@ -1901,10 +1901,10 @@
   dependencies:
     zod "^4.4.3"
 
-"@mulmocast/types@^2.14.0":
-  version "2.14.0"
-  resolved "https://registry.yarnpkg.com/@mulmocast/types/-/types-2.14.0.tgz#580c79003031b9a6aff76522612b627baa52e959"
-  integrity sha512-050iyp71LCfTy04U2cGf+KH8SBSbfmH31r5Wjf8y5dVEmapyly+H5357wayoee7hSqF8HBpFcm1UgAj+1Zxasw==
+"@mulmocast/types@^2.15.0":
+  version "2.15.0"
+  resolved "https://registry.yarnpkg.com/@mulmocast/types/-/types-2.15.0.tgz#99ba6ed20fcb5efb573ed6e6844a2d2726da227f"
+  integrity sha512-HtdUG1m1w+rduN4pe4MOS0azB9Cfc76VnbfMPBfNvx1ugaKsJKqtHPDlVsCN89dXVu35CVlQAqTOevkZ9ZwBfQ==
   dependencies:
     "@mulmocast/deck" "^2.0.0"
     zod "^4.4.3"
@@ -1942,10 +1942,10 @@
   resolved "https://registry.yarnpkg.com/@mulmoclaude/common/-/common-1.4.0.tgz#068ef0d2ae75a487a601d4244d0c9536ee73397a"
   integrity sha512-1SYF7y5vRXPUDjdkczvlP6mOjwNwKvC46w9zT4Rqv/cWnG3G3Zo2nksAxnrL9ExL4zIZt6aCWeLg+0uCf2FicQ==
 
-"@mulmoclaude/core@^5.10.1":
-  version "5.10.1"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/core/-/core-5.10.1.tgz#92be98862b0cc5d9271c5d297e9c210ac4ae3139"
-  integrity sha512-ml9/dcsozmBGonlvK9s/gB6rhxAIHTMviKiF9v2iAsOPcUDn7Eq3L0M+qRBxv8mjV01KCxWuJ9zVXNj/j6oPqw==
+"@mulmoclaude/core@^5.11.0":
+  version "5.11.0"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/core/-/core-5.11.0.tgz#de61c933cab11e1bd0cb0e4b99c69c19c5f1de7e"
+  integrity sha512-PM8QibAWLGYld2tVtpdtylL4recwDfxLu1YxIzIA+5yOKyTV0T1hJOgJ0FMH4vudRLQxf4NB/UunOWuHJ+vZ+Q==
   dependencies:
     "@duckdb/node-api" "^1.5.6-r.1"
     "@gui-chat-plugin/common" "^0.1.0"
@@ -1995,10 +1995,10 @@
     js-yaml "^5.4.2"
     marked "^18.0.14"
 
-"@mulmoclaude/mulmoscript-plugin@^5.1.0":
-  version "5.1.0"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/mulmoscript-plugin/-/mulmoscript-plugin-5.1.0.tgz#63e11ffd35690b78429ea3f8bae62b3baaa8b29e"
-  integrity sha512-aHTFj9JGjJyY1QetHeMKA6a1RxcOEulQR463FT8+oA7i9RfsYXzWrJoRbVdtahVLr7KBV3pmMQF7fmo7c+DRlQ==
+"@mulmoclaude/mulmoscript-plugin@^5.3.0":
+  version "5.3.0"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/mulmoscript-plugin/-/mulmoscript-plugin-5.3.0.tgz#1ed8de067d6bab21d4987b57bb783c1dc20b504d"
+  integrity sha512-wsYnGbC/+V+/u94is9xmDTROV/WcCCnlsQEoVeGWcBLihT0TZ4ZIKPj2vAcxY6+Ircf6GNld8qDtAYsQff69/g==
 
 "@mulmoclaude/x-plugin@^1.0.4":
   version "1.0.4"
@@ -6617,10 +6617,10 @@ mulmocast-vision@^1.0.12:
     puppeteer "^25.3.0"
     yauzl "^3.4.0"
 
-mulmocast@^2.14.0:
-  version "2.14.0"
-  resolved "https://registry.yarnpkg.com/mulmocast/-/mulmocast-2.14.0.tgz#c36243875649223540496b939f244c157d25fcbb"
-  integrity sha512-EKGafQbJ5JEVarlO6t/+p+myJBR/XZoWDWqTFm1HXX83qTa5kQ99aD7yuTSl2J2tWBrz9cMHWo9Ld3Kgdc9e6g==
+mulmocast@^2.15.0:
+  version "2.15.0"
+  resolved "https://registry.yarnpkg.com/mulmocast/-/mulmocast-2.15.0.tgz#9b2cd763b015f005f4c90952143e25bd47827bd9"
+  integrity sha512-WoQO0wM313Z7uLrQgBgr5T39b7w+PkduZnbJ4KJQ53Kc32YSRNXd+2l59zKUhFW5ZZ7BOtfgu9xtEMZsOTVxJg==
   dependencies:
     "@google-cloud/text-to-speech" "^6.4.1"
     "@google/genai" "^2.17.1"

@@ -137,8 +137,11 @@ writing the scene. You (or the agent in your cell) write the `.tsx`; the script 
 
 The rules a component has to follow (allowed imports, building all motion from the current frame,
 sizes relative to the canvas) are the ones in
-[mulmocast's remotion.md](https://github.com/receptron/mulmocast-cli/blob/main/docs/remotion.md);
-point your agent at that page when you ask it to write a scene.
+[mulmocast's remotion.md](https://github.com/receptron/mulmocast-cli/blob/main/docs/remotion.md).
+The agent in your cell is given the same rules with the MulmoCast tool, so you can simply ask it —
+for example *"write the second beat yourself as a remotion component, and let's adjust it together"* —
+and it writes the `.tsx`. If the render stops with an error, show it the error and it fixes the
+component.
 
 ### Things to know
 
