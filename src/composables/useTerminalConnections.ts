@@ -730,6 +730,7 @@ export function attach(key: string, target: ConnTarget, handlers: ConnHandlers, 
   }
   c.released = false;
   c.handlers = handlers;
+  if (inherited) forgetCredential(c);
   c.attachedEl = el;
   // Replay server-learned session/cwd to the freshly-bound handlers. Without this,
   // a slot that learned its id/cwd WHILE DETACHED (handlers were cleared) would
@@ -780,12 +781,20 @@ export function detach(key: string, el: HTMLElement | null) {
 // connectKey changed (session switch / relaunch in the same slot): point the slot
 // at the new target and reconnect. Closes the previous socket, so the previous
 // session falls back to the server's reap grace.
+function forgetCredential(c: Conn): void {
+  c.knownCredential = null;
+  c.handlers.onCredential?.(null);
+}
+
 export function retarget(key: string, target: ConnTarget) {
   const c = conns.get(key);
   if (!c) return;
   c.target = target;
   c.knownSessionId = target.sessionId;
   c.knownCwd = null;
+  // A credential belongs to the process it was announced for; the new target's arrives in its own
+  // frame, or never (rotation off, another agent), so the mark must not carry over meanwhile.
+  forgetCredential(c);
   c.reconnectAttempts = 0;
   c.sawExit = false;
   c.released = false;
