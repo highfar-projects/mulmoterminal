@@ -4,6 +4,7 @@ import { useI18n } from "vue-i18n";
 import { useTheme } from "../../composables/useTheme";
 import SkillLaunchButton from "../SkillLaunchButton.vue";
 import ThemeColorEditor from "./ThemeColorEditor.vue";
+import ConfettiSettings from "./ConfettiSettings.vue";
 import type { BundledSkillName } from "../../../common/bundledSkills";
 import { playfulEffects, savePlayfulEffects } from "../../composables/playfulEffects";
 import { playfulAfterSwitch, playfulIsOn } from "./playfulSwitch";
@@ -108,6 +109,7 @@ async function onPlayfulToggle(e: Event) {
       <strong>{{ t("settingsControls.playful.title") }}</strong> (<code>playfulEffects</code>) — {{ t("settingsControls.playful.hint") }}
     </span>
   </label>
+  <ConfettiSettings />
   <div class="mt-3">
     <SkillLaunchButton skill="mulmoterminal-theme" icon="format_paint" :label="t('settings.theme.create')" @launch="emit('launch-skill', $event)" />
   </div>

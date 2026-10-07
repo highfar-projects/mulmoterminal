@@ -18,7 +18,7 @@ picks one at random from the user's list.
 - `src/composables/useConfetti.ts` — setting ref, `fireConfetti*`, event cooldown;
   `ConfettiOverlay.vue` — one fixed, click-through canvas at the app root, drawing only while alive.
 - Reduced motion: no confetti at all.
-- No Settings control yet; the config skill documents the key (a list-valued key has no widget).
+- Settings → Theme → Confetti: a tick per style (the last one is locked, since an empty list reads back as every style), a tick per event, and a Try it button; the config skill documents the key too.
 
 ## Not done
 - A Settings section with checkboxes for styles and events.

@@ -90,4 +90,14 @@ export const settingsControlsZhCN = {
     hint: "偶尔，终端上会发生点什么。关闭后所有终端都保持安静。",
     field: "小小的趣味效果",
   },
+  confetti: {
+    title: "彩纸",
+    hint: "铺满整个页面的特效。可在“键盘快捷键”中为它绑定按键，也可在命令面板中找到。",
+    stylesTitle: "可以撒哪些",
+    stylesHint: "每次从勾选的种类中随机混合三种。始终至少保留一种。",
+    styles: { cracker: "礼花", fireworks: "烟花", sakura: "樱花瓣", rain: "彩纸雨", balloons: "气球" },
+    eventsTitle: "在以下情况自动撒",
+    events: { "pr-merged": "正在关注的拉取请求被合并时", "turn-finished": "智能体完成一轮时", "command-done": "运行命令无错误结束时" },
+    try: "试一下",
+  },
 };

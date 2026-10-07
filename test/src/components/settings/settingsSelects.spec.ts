@@ -8,6 +8,7 @@ import { i18n } from "../../../../src/i18n";
 import { defaultAgentRef, setDefaultAgent } from "../../../../src/composables/defaultAgent";
 import { globalHeaderStatusTint, setHeaderStatusDefaults } from "../../../../src/composables/headerStatusColors";
 import { playfulEffects, setPlayfulEffects } from "../../../../src/composables/playfulEffects";
+import { confettiRequest, confettiSetting, setConfetti } from "../../../../src/composables/useConfetti";
 
 const server = vi.hoisted(() => ({ ok: true, echo: undefined as unknown, calls: [] as [string, unknown][], hold: null as Promise<void> | null }));
 vi.mock("../../../../src/composables/postConfigField", () => ({
@@ -35,6 +36,7 @@ afterEach(() => {
   setDefaultAgent(null);
   setHeaderStatusDefaults({}, "background");
   setPlayfulEffects("random");
+  setConfetti(undefined);
   server.ok = true;
   server.echo = undefined;
   server.calls.length = 0;
@@ -196,6 +198,57 @@ describe("ThemeSection — playful effects switch", () => {
     await flushPromises();
     expect(input.element.checked).toBe(true);
     expect(playfulEffects.value).toBe("random");
+    wrapper.unmount();
+  });
+});
+
+describe("ThemeSection — confetti", () => {
+  const box = (wrapper: ReturnType<typeof mountWith>, testid: string) => wrapper.find<HTMLInputElement>(`[data-testid="${testid}"]`);
+
+  it("shows every style ticked and no event, for a config that never mentioned confetti", () => {
+    const wrapper = mountWith(ThemeSection);
+    expect(box(wrapper, "settings-confetti-style-sakura").element.checked).toBe(true);
+    expect(box(wrapper, "settings-confetti-event-pr-merged").element.checked).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("ticking an event saves the whole setting through /api/config", async () => {
+    const wrapper = mountWith(ThemeSection);
+    await box(wrapper, "settings-confetti-event-pr-merged").setValue(true);
+    await flushPromises();
+    expect(server.calls).toEqual([["confetti", { styles: ["cracker", "fireworks", "sakura", "rain", "balloons"], events: ["pr-merged"] }]]);
+    expect(confettiSetting.value.events).toEqual(["pr-merged"]);
+    wrapper.unmount();
+  });
+
+  it("locks the last style so the list cannot go empty", async () => {
+    setConfetti({ styles: ["rain"], events: [] });
+    const wrapper = mountWith(ThemeSection);
+    expect(box(wrapper, "settings-confetti-style-rain").element.disabled).toBe(true);
+    expect(box(wrapper, "settings-confetti-style-sakura").element.disabled).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("is locked while a save is in flight, and puts the box back when the save is refused", async () => {
+    server.ok = false;
+    const release = holdSaves();
+    const wrapper = mountWith(ThemeSection);
+    const input = box(wrapper, "settings-confetti-event-command-done");
+    await input.setValue(true);
+    expect(input.element.disabled).toBe(true);
+    release();
+    await flushPromises();
+    expect(input.element.disabled).toBe(false);
+    expect(input.element.checked).toBe(false);
+    expect(confettiSetting.value.events).toEqual([]);
+    wrapper.unmount();
+  });
+
+  it("Try it throws a celebration", async () => {
+    const wrapper = mountWith(ThemeSection);
+    const before = confettiRequest.value?.id ?? 0;
+    await wrapper.find('[data-testid="settings-confetti-try"]').trigger("click");
+    expect(confettiRequest.value?.id).toBe(before + 1);
     wrapper.unmount();
   });
 });

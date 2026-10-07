@@ -90,4 +90,18 @@ export const settingsControlsJa = {
     hint: "ときどき、ターミナルに何かが起きます。オフにすると、どのターミナルも静かなままです。",
     field: "ちょっとした演出",
   },
+  confetti: {
+    title: "紙吹雪",
+    hint: "画面いっぱいに出る演出です。「キーボードショートカット」でキーを割り当てるか、コマンドパレットから出せます。",
+    stylesTitle: "降らせる種類",
+    stylesHint: "1回ごとに、チェックした種類から3つをランダムに混ぜます。1つは必ずチェックが残ります。",
+    styles: { cracker: "クラッカー", fireworks: "花火", sakura: "桜の花びら", rain: "紙吹雪の雨", balloons: "風船" },
+    eventsTitle: "次のときに自動で出す",
+    events: {
+      "pr-merged": "見ていた PR がマージされたとき",
+      "turn-finished": "エージェントが1ターンを終えたとき",
+      "command-done": "実行コマンドがエラーなく終わったとき",
+    },
+    try: "試しに出す",
+  },
 };
