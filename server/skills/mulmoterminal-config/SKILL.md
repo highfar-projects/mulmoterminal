@@ -475,7 +475,7 @@ command palette's "Throw confetti" row work with no setting at all. The key is a
 { "confetti": { "styles": ["sakura", "fireworks"], "events": ["pr-merged"] } }
 ```
 
-- `styles` — which kinds may fall; each celebration picks one at random from the list. Any of
+- `styles` — which kinds may fall; each celebration mixes three picked at random from the list (all of them when the list has three or fewer). Any of
   `cracker`, `fireworks`, `sakura`, `rain`, `balloons`. Absent, empty or all-unknown means all five.
 - `events` — what sets one off by itself: `pr-merged` (a pull request this session watched turn
   merged), `turn-finished` (an agent finished a turn) and `command-done` (a Run command exited 0).

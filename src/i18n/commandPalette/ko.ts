@@ -64,7 +64,7 @@ export const commandPaletteKo = {
     sort: "정렬 순서: {name}",
   },
   descriptions: {
-    confetti: "화면 가득 색종이를 뿌립니다. 스타일은 설정한 목록에서 무작위로 고릅니다.",
+    confetti: "화면 가득 색종이를 뿌립니다. 스타일은 설정한 목록에서 무작위로 여러 개를 섞습니다.",
     filesInsertSelection: "Files 패널에서 선택한 줄을 {'@'}파일#L10-20 형식으로 확대된 터미널 입력에 넣습니다(전송하지 않음).",
     focusMode: "앱을 전체 화면으로 만들고, Chromium 계열 브라우저에서는 탭 키(Cmd/Ctrl+W, T, N)를 잠가 MulmoTerminal에 전달되게 합니다.",
     zoomToggle: "커서가 있는 터미널을 확대하거나, 확대된 터미널을 되돌립니다.",

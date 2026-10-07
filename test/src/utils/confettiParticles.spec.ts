@@ -1,7 +1,16 @@
 // The physics of a celebration: every style starts, moves, and ends.
 import { describe, expect, it } from "vitest";
-import { CONFETTI_STYLES } from "../../../common/confetti";
-import { alphaOf, spawnConfetti, stepParticles, type Particle } from "../../../src/utils/confettiParticles";
+import { CONFETTI_STYLES, type ConfettiStyle } from "../../../common/confetti";
+import {
+  alphaOf,
+  MAX_PARTICLES,
+  mergeShows,
+  weightOf,
+  spawnConfetti,
+  spawnConfettiShow,
+  stepParticles,
+  type Particle,
+} from "../../../src/utils/confettiParticles";
 
 const VIEWPORT = { width: 1200, height: 800 };
 const FRAME = 1 / 60;
@@ -42,6 +51,65 @@ describe("spawnConfetti", () => {
 
   it("is the same burst for the same random source", () => {
     expect(spawnConfetti("cracker", VIEWPORT, seeded(3))).toEqual(spawnConfetti("cracker", VIEWPORT, seeded(3)));
+  });
+});
+
+describe("spawnConfettiShow", () => {
+  it.each(CONFETTI_STYLES)("%s repeats its burst in waves that start later", (style) => {
+    const single = spawnConfetti(style, VIEWPORT, seeded(1));
+    const show = spawnConfettiShow(style, VIEWPORT, seeded(1));
+    expect(show.length).toBeGreaterThan(single.length);
+    expect(Math.max(...show.map((particle) => particle.delay))).toBeGreaterThan(Math.max(...single.map((particle) => particle.delay)));
+  });
+
+  it.each(CONFETTI_STYLES)("%s lasts several seconds and still runs out", (style) => {
+    const frames = framesUntilEmpty(spawnConfettiShow(style, VIEWPORT, seeded(4)), seeded(8));
+    expect(frames / 60).toBeGreaterThan(4);
+    expect(frames / 60).toBeLessThan(20);
+  });
+});
+
+describe("mergeShows", () => {
+  const showOf = (styles: readonly ConfettiStyle[], seed: number) => styles.flatMap((style) => spawnConfettiShow(style, VIEWPORT, seeded(seed)));
+
+  it("keeps a single mixed press and the all-style finale whole", () => {
+    expect(mergeShows([], showOf(["cracker", "sakura", "rain"], 1))).toHaveLength(showOf(["cracker", "sakura", "rain"], 1).length);
+    expect(mergeShows([], showOf(CONFETTI_STYLES, 2))).toHaveLength(showOf(CONFETTI_STYLES, 2).length);
+  });
+
+  it("never exceeds the cap, however many presses pile up", () => {
+    const piled = [1, 2, 3, 4, 5, 6].reduce<Particle[]>((live, seed) => mergeShows(live, showOf(["cracker", "sakura", "rain"], seed)), []);
+    expect(piled.length).toBeLessThanOrEqual(MAX_PARTICLES);
+    expect(piled.length).toBeGreaterThan(MAX_PARTICLES - 400);
+  });
+
+  it("holds a pile of fireworks presses to the cap even after every rocket has burst", () => {
+    const piled = Array.from({ length: 40 }, (_, seed) => seed).reduce<Particle[]>((live, seed) => mergeShows(live, showOf(["fireworks"], seed)), []);
+    const peak = (particles: Particle[], frames: number, best: number): number => {
+      if (frames === 0 || particles.length === 0) return best;
+      const next = stepParticles(particles, FRAME, seeded(frames));
+      return peak(next, frames - 1, Math.max(best, next.length));
+    };
+    expect(peak(piled, 60 * 12, piled.length)).toBeLessThanOrEqual(MAX_PARTICLES);
+  });
+
+  it("counts a rocket as the sparks it becomes", () => {
+    const rocket = spawnConfettiShow("fireworks", VIEWPORT, seeded(1))[0];
+    const paper = spawnConfetti("rain", VIEWPORT, seeded(1))[0];
+    if (rocket === undefined || paper === undefined) throw new Error("no particle");
+    expect(weightOf(paper)).toBe(1);
+    expect(weightOf(rocket)).toBeGreaterThan(10);
+  });
+
+  it("does not cut what is already on screen, and trims the latest waves of the new show", () => {
+    const existing = showOf(["rain"], 3);
+    const incoming = showOf(CONFETTI_STYLES, 4);
+    const merged = mergeShows(existing, incoming);
+    expect(merged.slice(0, existing.length)).toEqual(existing);
+    const kept = merged.slice(existing.length);
+    const dropped = incoming.length - kept.length;
+    expect(dropped).toBeGreaterThan(0);
+    expect(Math.max(...kept.map((particle) => particle.delay))).toBeLessThanOrEqual(Math.max(...incoming.map((particle) => particle.delay)));
   });
 });
 

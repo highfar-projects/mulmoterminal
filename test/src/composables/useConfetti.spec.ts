@@ -1,15 +1,23 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { confettiRequest, fireConfetti, fireConfettiFinale, fireConfettiForEvent, setConfetti } from "../../../src/composables/useConfetti";
-import { CONFETTI_STYLES } from "../../../common/confetti";
+import { CONFETTI_MIX_COUNT, CONFETTI_STYLES } from "../../../common/confetti";
 
 const requestCount = () => confettiRequest.value?.id ?? 0;
 
 describe("useConfetti", () => {
   beforeEach(() => setConfetti({ styles: ["sakura"], events: ["pr-merged"] }));
 
-  it("picks from the configured styles", () => {
+  it("uses the configured styles when the list is short", () => {
     fireConfetti(() => 0.5);
     expect(confettiRequest.value?.styles).toEqual(["sakura"]);
+  });
+
+  it("mixes several different styles from a long list", () => {
+    setConfetti({ styles: CONFETTI_STYLES, events: [] });
+    fireConfetti(() => 0.4);
+    const styles = confettiRequest.value?.styles ?? [];
+    expect(styles).toHaveLength(CONFETTI_MIX_COUNT);
+    expect(new Set(styles).size).toBe(CONFETTI_MIX_COUNT);
   });
 
   it("throws every style for the finale", () => {
