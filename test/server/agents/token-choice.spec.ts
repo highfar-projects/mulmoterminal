@@ -1,6 +1,14 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { blockedUntil, burnPace, chooseToken, FIVE_HOUR_CEILING_PERCENT, type TokenCandidate } from "../../../server/agents/token-choice";
+import {
+  blockedUntil,
+  burnPace,
+  chooseToken,
+  FIVE_HOUR_CEILING_PERCENT,
+  nearLimit,
+  SWITCH_AT_PERCENT,
+  type TokenCandidate,
+} from "../../../server/agents/token-choice";
 import type { RateLimits } from "../../../common/rateLimits";
 
 const NOW = 1_800_000_000;
@@ -38,7 +46,7 @@ describe("chooseToken (#2919)", () => {
   });
 
   it("holds out a candidate whose 7-day window is used up", () => {
-    expect(chooseToken([candidate("a", limits(100, HOUR)), candidate("b", limits(99, 6 * DAY))], NOW)).toBe("b");
+    expect(chooseToken([candidate("a", limits(100, HOUR)), candidate("b", limits(SWITCH_AT_PERCENT - 1, 6 * DAY))], NOW)).toBe("b");
   });
 
   it("holds out a candidate whose 5-hour window is at the ceiling", () => {
@@ -108,5 +116,22 @@ describe("burnPace", () => {
 
   it("ranks a 7-day window with no reset time over a full week", () => {
     expect(burnPace(limits(30, null), NOW)).toBeCloseTo(70 / (7 * 24));
+  });
+});
+
+describe("the switch line (#2919)", () => {
+  it("holds out a week at the line for a new session", () => {
+    expect(chooseToken([candidate("a", limits(SWITCH_AT_PERCENT, 6 * DAY)), candidate("b", limits(SWITCH_AT_PERCENT - 1, 6 * DAY))], NOW)).toBe("b");
+  });
+
+  it("nearLimit is true at the line in either window, and false just below", () => {
+    expect(nearLimit(limits(SWITCH_AT_PERCENT, DAY), NOW)).toBe(true);
+    expect(nearLimit(limits(0, DAY, SWITCH_AT_PERCENT), NOW)).toBe(true);
+    expect(nearLimit(limits(SWITCH_AT_PERCENT - 1, DAY, SWITCH_AT_PERCENT - 1), NOW)).toBe(false);
+  });
+
+  it("nearLimit ignores a window whose reset has passed, and readings that are absent", () => {
+    expect(nearLimit(limits(100, -HOUR, 100, -HOUR), NOW)).toBe(false);
+    expect(nearLimit(null, NOW)).toBe(false);
   });
 });

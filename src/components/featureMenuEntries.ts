@@ -2,7 +2,7 @@
 // onto an empty screen, so it is left out. Blueprints, Skills and Processes need no setup, so the menu is never empty.
 import type { GatedEntry } from "./gatedToolbarEntries";
 
-export type FeatureMenuEntry = "rooms" | "blueprints" | "skills" | "processes" | "worklog";
+export type FeatureMenuEntry = "rooms" | "blueprints" | "skills" | "processes" | "worklog" | "usage";
 
 export const FEATURE_MENU_ICONS: Record<FeatureMenuEntry, string> = {
   rooms: "forum",
@@ -10,6 +10,7 @@ export const FEATURE_MENU_ICONS: Record<FeatureMenuEntry, string> = {
   skills: "auto_stories",
   processes: "memory",
   worklog: "history_edu",
+  usage: "data_usage",
 };
 
 export function featureMenuEntries(gated: Record<GatedEntry, boolean>): FeatureMenuEntry[] {
@@ -17,5 +18,6 @@ export function featureMenuEntries(gated: Record<GatedEntry, boolean>): FeatureM
   if (gated.rooms) entries.push("rooms");
   entries.push("blueprints", "skills", "processes");
   if (gated.worklog) entries.push("worklog");
+  if (gated.usage) entries.push("usage");
   return entries;
 }

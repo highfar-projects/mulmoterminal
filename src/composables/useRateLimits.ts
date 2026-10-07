@@ -31,7 +31,7 @@ let watchers = 0;
 const PROBE_STATES: readonly ClaudeProbeState[] = ["ok", "no-claude", "no-windows", "no-report"];
 const isProbeState = (v: unknown): v is ClaudeProbeState => typeof v === "string" && PROBE_STATES.some((state) => state === v);
 
-const PROBE_STALLS: readonly ClaudeProbeStall[] = ["trust-prompt", "unknown"];
+const PROBE_STALLS: readonly ClaudeProbeStall[] = ["trust-prompt", "usage-limit", "unknown"];
 const isProbeStall = (v: unknown): v is ClaudeProbeStall => typeof v === "string" && PROBE_STALLS.some((stall) => stall === v);
 
 // A failure leaves the last known windows in place. Blanking them would read as "0% used", which
@@ -80,6 +80,8 @@ const accountReadingsOf = (raw: unknown): (AccountReading & { probing: boolean }
                 probe: isProbeState(row.probe) ? row.probe : undefined,
                 probeStall: isProbeStall(row.probeStall) ? row.probeStall : undefined,
                 probing: row.probing === true,
+                ...(typeof row.email === "string" ? { email: row.email } : {}),
+                ...(row.rotation === true ? { rotation: true } : {}),
               },
             ]
           : [],

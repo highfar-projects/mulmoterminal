@@ -21,6 +21,7 @@ import { opensOnConfiguredDefault } from "./cellLaunchAgent";
 import { launchAgentPick } from "../composables/launchAgentPick";
 import { customAgentIdOf, customAgentPick, isCustomAgentId, type AgentPick, type CustomAgent } from "../../common/customAgents";
 import { accountLabel, type AgentAccount } from "../../common/agentAccounts";
+import type { CellCredential } from "../composables/cellCredential";
 import AccountMark from "./AccountMark.vue";
 import { unsavedWork } from "./unsavedWork";
 import { shouldPromptTidy } from "./mergedTidy";
@@ -554,7 +555,11 @@ const launchChoice = ref<LaunchChoice | null>(props.initialLaunchChoice ?? null)
 // cell like the model choice, so a relaunch in the same cell repeats it. The server binds a session
 // to its account when it first starts, so this only ever decides a NEW session.
 const accountId = ref<string | null>(props.initialAccount ?? null);
-const accountMarkLabel = computed(() => (accountId.value ? accountLabel(props.accounts ?? [], accountId.value) : null));
+// The rotation credential the server started this session's process on (#2919) — a different
+// subscription from the cell beside it, in the same home, so it wears the same mark an account does.
+const cellCredential = ref<CellCredential | null>(null);
+const accountMarkLabel = computed(() => (accountId.value ? accountLabel(props.accounts ?? [], accountId.value) : (cellCredential.value?.label ?? null)));
+const accountMarkDetail = computed(() => (accountId.value ? null : (cellCredential.value?.detail ?? null)));
 
 // Start what the Agent Picker picked, in `dir`. EVERY launch in the form goes through here: the
 // picker decides for the dir field, for a preset chip, and for a worktree alike, and a rule
@@ -1441,7 +1446,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                  on the filmstrip thumbnail too (the CockpitHeader above), unlike the info chips
                  below, because it is identity rather than status. -->
             <CollectionMark :collection="collection" />
-            <AccountMark v-if="launched" :label="accountMarkLabel" />
+            <AccountMark v-if="launched" :label="accountMarkLabel" :detail="accountMarkDetail" />
             <!-- The path is NOT here any more — it is the lead item on row 2 (see the
                `header-lead` template below). It had `min-w-[16ch]`, a floor of roughly a third of
                this track, and once it hit that floor the only thing left that could shrink was the
@@ -1704,6 +1709,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
           @session="onSession"
           @input="onTerminalInput"
           @cwd="onServerCwd"
+          @credential="(credential) => (cellCredential = credential)"
           @run="(cmd) => emit('runSpare', cmd)"
           @canvas="emit('canvas')"
         >

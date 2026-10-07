@@ -1,4 +1,5 @@
 import type { Messages } from "./messages";
+import { usageViewKo } from "./usageView/ko";
 import { blueprintsKo } from "./blueprints/ko";
 import { tipsKo } from "./tips/ko";
 import { commandPaletteKo } from "./commandPalette/ko";
@@ -599,8 +600,10 @@ export const ko: Messages = {
       skills: { label: "Skills", detail: "~/.claude/skills 와 각 폴더의 스킬을 목록·검색" },
       processes: { label: "프로세스", detail: "각 세션에서 실행 중인 프로세스와 지울 수 있는 worktree" },
       worklog: { label: "Worklog", detail: "wiki에 있는 개발 작업 로그 (#worklog)" },
+      usage: { label: "토큰 사용량", detail: "로테이션의 각 토큰에 남은 5시간 창과 주간 창" },
     },
   },
+  usageView: usageViewKo,
   rowMenu: {
     trigger: "이 터미널 작업",
     title: "작업",

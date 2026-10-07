@@ -295,20 +295,27 @@ be resumed on any subscription — the same as switching with `/login`, done aut
   with the reason in the server log. Exactly one of the two per entry; an entry with both or neither is dropped.
 - `email` is what the user signs in with — shown beside that token's usage so they can tell which
   subscription is which. MulmoTerminal cannot read it from the token.
-- `includeDefaultLogin` (default `true`): the `/login` credential is one more candidate.
+- `includeDefaultLogin` (default `true`): the `/login` credential is one more candidate. Once EVERY
+  subscription is a token, advise `false`: the `/login` account is always one of them, so it would be
+  counted twice, and which one it duplicates changes whenever the user runs `/login` again.
 - **How it chooses**: by the 7-day window's remaining percent per hour until it resets, highest first
   — room that is about to reset is used before it is lost. A token whose 5-hour window is at 90% or
-  more, or whose 7-day window is used up, is skipped. Each token's usage is measured by a short probe
+  more, or whose 7-day window is at 98% or more, is skipped; so is one whose usage probe found it at
+  its limit. Each token's usage is measured by a short probe
   under that token, and appears as its own gauge beside the header's usage gauge.
 - **Which cells rotate**: a plain Claude cell on the default directory only. A provider, a custom
   agent or an `accounts` login already says whose subscription it runs on and is never rotated.
 - A token is chosen when a session's process STARTS (new, or resumed after it exited). A running
   session keeps its token; reconnecting to it changes nothing.
+- **At 98%**: a session that ends a turn on a subscription at 98% (either window) moves to another one
+  then, between turns.
 - **When a running session hits its limit**, it moves by itself: that subscription is held out, the
   cell reconnects and resumes the same conversation on the next choice, and prints one line naming
   both. The prompt that hit the limit is NOT re-sent — the user sends it again. If every other
   subscription is held out too, the session stays where it is with Claude Code's own limit message.
   Only sessions rotation started are moved; a provider's 429 never is.
+- The cell's header names the subscription it runs on. Claude Code's own `/status` may still name the
+  `/login` account — only a display; usage is counted against the header's subscription.
 - A token that cannot be read is skipped for that spawn, with a warning in the server log naming the
   entry (never the value).
 

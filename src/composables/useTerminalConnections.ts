@@ -27,6 +27,7 @@
 // terminals (which are NOT persisted — their process is unresumable, so their slot
 // is released on unmount like before).
 import { reactive, watch } from "vue";
+import { credentialOf, forgetCredential, type CellCredential } from "./cellCredential";
 import { Terminal, type ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
@@ -103,6 +104,8 @@ const submittableFor = (c: Conn, text: string): string => (isClaudeTarget(c.targ
 export interface ConnHandlers {
   onSession?: (id: string) => void;
   onCwd?: (cwd: string) => void;
+  /** Which rotation credential the session's process runs on (#2919), or null for none. */
+  onCredential?: (credential: CellCredential | null) => void;
   // `exitCode` is the command's status when the server reported one, else null (a start
   // failure, or an agent session that ended without one). A Run cell reads it to tell a
   // clean finish from a broken build.
@@ -145,6 +148,7 @@ interface Conn {
   ws: WebSocket | null;
   knownSessionId: string | null;
   knownCwd: string | null; // server-resolved cwd, replayed on (re)attach
+  knownCredential: CellCredential | null; // the rotation credential, replayed on (re)attach
   target: ConnTarget;
   handlers: ConnHandlers;
   sawExit: boolean; // an intentional end (exit/superseded/error) — suppress reconnect
@@ -516,6 +520,7 @@ function ensure(key: string, target: ConnTarget, font: TerminalFont): Conn {
     ws: null,
     knownSessionId: target.sessionId,
     knownCwd: null,
+    knownCredential: null,
     target,
     handlers: {},
     sawExit: false,
@@ -689,6 +694,9 @@ function handleMessage(c: Conn, event: MessageEvent) {
     if (typeof msg.data === "string") c.term.write(msg.data);
   } else if (msg.type === "session") {
     applySessionFrame(c, msg);
+  } else if (msg.type === "credential") {
+    c.knownCredential = credentialOf(msg);
+    c.handlers.onCredential?.(c.knownCredential);
   } else if (msg.type === "paneMode" || msg.type === "heat") {
     applyViewFrame(connView.get(c.key), msg);
   } else {
@@ -718,10 +726,11 @@ export function attach(key: string, target: ConnTarget, handlers: ConnHandlers, 
   if (inherited) {
     const held = c.knownSessionId ?? "a fresh session still starting";
     console.warn(`[terminal] slot ${key} holds ${held} but the view asked for ${target.sessionId} — reconnecting instead of reusing`);
-    Object.assign(c, { knownSessionId: target.sessionId, knownCwd: null, reconnectAttempts: 0, sawExit: false });
+    Object.assign(c, { knownSessionId: target.sessionId, knownCwd: null, knownCredential: null, reconnectAttempts: 0, sawExit: false });
   }
   c.released = false;
   c.handlers = handlers;
+  if (inherited) forgetCredential(c);
   c.attachedEl = el;
   // Replay server-learned session/cwd to the freshly-bound handlers. Without this,
   // a slot that learned its id/cwd WHILE DETACHED (handlers were cleared) would
@@ -730,6 +739,7 @@ export function attach(key: string, target: ConnTarget, handlers: ConnHandlers, 
   // useful update; the parent's setters are idempotent for already-known values.
   if (c.knownSessionId) handlers.onSession?.(c.knownSessionId);
   if (c.knownCwd) handlers.onCwd?.(c.knownCwd);
+  if (c.knownCredential) handlers.onCredential?.(c.knownCredential);
   el.appendChild(c.host);
   if (theme) {
     c.theme = theme;
@@ -771,12 +781,14 @@ export function detach(key: string, el: HTMLElement | null) {
 // connectKey changed (session switch / relaunch in the same slot): point the slot
 // at the new target and reconnect. Closes the previous socket, so the previous
 // session falls back to the server's reap grace.
+
 export function retarget(key: string, target: ConnTarget) {
   const c = conns.get(key);
   if (!c) return;
   c.target = target;
   c.knownSessionId = target.sessionId;
   c.knownCwd = null;
+  forgetCredential(c);
   c.reconnectAttempts = 0;
   c.sawExit = false;
   c.released = false;

@@ -18,6 +18,33 @@ const TRUST_SCREEN =
 // One ordinary boot, answered. Nothing here may be read as a dialog.
 const RUNNING_SCREEN = `${ESC}[2J${ESC}[HClaude Code v2.1.220\n${ESC}[2m❯ reply with the single character: .${ESC}[0m\n⏺ .\n`;
 
+// Recorded from a real `claude` (2.1.284) on a subscription that was out of its week (#2919), escapes
+// included — trimmed to the reply and the line after it.
+const USAGE_LIMIT_SCREEN =
+  `${ESC}[H\r${ESC}[7B${ESC}[38;5;246m  ⎿  ${ESC}[38;5;211mYou've hit your weekly limit · resets Oct 9 at 7am (Asia/Tokyo)\r` +
+  `${ESC}[2B${ESC}[38;5;246m✻${ESC}[3GBaked for 4s · done 5:56 PM\r${ESC}[2B${ESC}[48;5;237m❯ ${ESC}[38;5;231m/rate-limit-options${ESC}[39m`;
+
+describe("classifyProbeStall on a usage limit (#2919)", () => {
+  it("names the limit when Claude Code says the subscription is out of a window", () => {
+    expect(classifyProbeStall(USAGE_LIMIT_SCREEN)).toBe("usage-limit");
+  });
+
+  it.each([["You've hit your session limit · resets 11:20am"], ["You've hit your limit · resets 11:20am"], ["You’ve hit your weekly limit"]])(
+    "reads %j as a limit too",
+    (line) => {
+      expect(classifyProbeStall(`${ESC}[2J${line}`)).toBe("usage-limit");
+    },
+  );
+
+  it("does not read the words 'rate limit' anywhere else as one", () => {
+    expect(classifyProbeStall(`${ESC}[2J❯ /rate-limit-options\nexplain the rate limit gauge`)).toBe("unknown");
+  });
+
+  it("still names the trust dialog first", () => {
+    expect(classifyProbeStall(`${USAGE_LIMIT_SCREEN}${TRUST_SCREEN}`)).toBe("trust-prompt");
+  });
+});
+
 describe("classifyProbeStall", () => {
   it("names the trust dialog when it is what the terminal is showing", () => {
     expect(classifyProbeStall(TRUST_SCREEN)).toBe("trust-prompt");

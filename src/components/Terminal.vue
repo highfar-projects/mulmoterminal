@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { CellCredential } from "../composables/cellCredential";
 import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch, nextTick } from "vue";
 import { type ITheme } from "@xterm/xterm";
 import { FLIP_MS, shouldRefocusOnZoomChange } from "./cellFlip";
@@ -109,6 +110,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
   (e: "session" | "cwd", value: string): void;
+  (e: "credential", credential: CellCredential | null): void;
   (e: "exit", exitCode: number | null): void;
   (e: "run", command: RunCommand): void;
   // `input`: the user typed (or pasted) into this terminal. Output the server writes back never
@@ -335,6 +337,7 @@ onMounted(() => {
     {
       onSession: (id) => emit("session", id),
       onCwd: (c) => emit("cwd", c),
+      onCredential: (credential) => emit("credential", credential),
       onExit: (exitCode) => emit("exit", exitCode),
       onInput: () => emit("input"),
       onInputDropped: (willReconnect) => void showHint(willReconnect ? INPUT_DROPPED_EN : INPUT_DROPPED_ENDED_EN, "cloud_off"),

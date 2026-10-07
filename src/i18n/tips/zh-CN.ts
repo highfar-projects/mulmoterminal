@@ -328,6 +328,7 @@ export const tipsZhCN: Messages["tips"] = {
     noWindows: "无法显示 Claude 用量 — 此账号不报告 5h / 7d 窗口（API 密钥计费）。",
     noReport: "无法显示 Claude 用量 — 上次检查没有得到回应。将以逐渐拉长的间隔重试。",
     trustPrompt: "无法显示 Claude 用量 — 用量检查正在等待 Claude Code 的信任确认。请在该文件夹中运行一次 `claude` 并接受。",
+    usageLimit: "无法显示 Claude 用量 — 该订阅已达到用量上限，检查未能得到回应。",
     accountTrustPrompt: "无法显示 Claude 用量 — 用量检查正在等待 Claude Code 的信任确认。请在工作区文件夹中用此账号启动一次单元格并接受。",
     accountNote: "{account}：{note}",
     resetsInHours: "{hours}小时{minutes}分钟后重置",

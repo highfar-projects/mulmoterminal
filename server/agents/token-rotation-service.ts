@@ -6,9 +6,10 @@
 import { createAccountRateLimits } from "./account-rate-limits.js";
 import { assignToken, keptAssignment, OAUTH_TOKEN_ENV, ROTATION_UNSET_ENV, type TokenAssignment } from "./token-assignment.js";
 import { readRotationToken } from "./token-secret.js";
+import { nearLimit } from "./token-choice.js";
 import { agentHome } from "./agent-homes.js";
 import { getTokenRotation } from "../config/config-routes.js";
-import type { RotationToken } from "../../common/tokenRotation.js";
+import { DEFAULT_LOGIN_ID, type RotationToken } from "../../common/tokenRotation.js";
 import type { RateLimits } from "../../common/rateLimits.js";
 import type { ProbeStall } from "./probe-stall.js";
 import type { LoginRateLimits } from "./rate-limit-routes.js";
@@ -49,6 +50,8 @@ export interface TokenRotationRuntime {
   markSpent: (tokenId: string) => void;
   /** Whether a new process would start on a credential that is not held out. */
   hasFreeChoice: () => boolean;
+  /** Whether a running session on this credential should move at the end of its turn. */
+  isNearLimit: (tokenId: string) => boolean;
 }
 
 export function createTokenRotation(deps: TokenRotationDeps): TokenRotationRuntime {
@@ -71,22 +74,34 @@ export function createTokenRotation(deps: TokenRotationDeps): TokenRotationRunti
   const spentUntil = new Map<string, number>();
   const nowSec = () => Math.floor(Date.now() / MS_PER_SEC);
 
+  // A token whose last probe found it at its usage limit reports no windows at all (the block comes
+  // before any response), so the probe's verdict is what holds it out until a later probe answers.
+  const atLimitByProbe = (id: string): boolean =>
+    meters.readings(Date.now()).some((reading) => reading.id === id && reading.probe === "no-report" && reading.probeStall === "usage-limit");
+  const heldUntil = (id: string): number | null => spentUntil.get(id) ?? (atLimitByProbe(id) ? nowSec() + SPENT_HOLD_SEC : null);
+  const limitsOf = (tokenId: string): RateLimits | null => {
+    if (tokenId === DEFAULT_LOGIN_ID) return deps.defaultLoginLimits();
+    const token = getTokenRotation().tokens.find((candidate) => candidate.id === tokenId);
+    return token ? meters.lastClaudeLimits(meteredToken(token)) : null;
+  };
+
   const assign = (onlyFree: boolean): TokenAssignment | null =>
     assignToken({
       rotation: getTokenRotation(),
       defaultLoginLimits: deps.defaultLoginLimits,
       tokenLimits: (token) => meters.lastClaudeLimits(meteredToken(token)),
-      spentUntil_sec: (id) => spentUntil.get(id) ?? null,
+      spentUntil_sec: heldUntil,
       readSecret: readRotationToken,
       now_sec: nowSec(),
       onlyFree,
     });
 
   return {
-    meters,
+    meters: { ...meters, readings: (now_ms) => meters.readings(now_ms).map((reading) => ({ ...reading, rotation: true })) },
     assignToken: () => assign(false),
     keptAssignment: (tokenId) => keptAssignment(getTokenRotation(), tokenId, readRotationToken),
     markSpent: (tokenId) => spentUntil.set(tokenId, nowSec() + SPENT_HOLD_SEC),
     hasFreeChoice: () => assign(true) !== null,
+    isNearLimit: (tokenId) => nearLimit(limitsOf(tokenId), nowSec()),
   };
 }

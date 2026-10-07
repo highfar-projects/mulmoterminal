@@ -43,6 +43,8 @@ export interface HookDeps extends SessionActivityDeps {
   uiPort: string;
   /** A turn ended on a usage limit (#2919). Absent: nothing reacts to one. */
   onRateLimited?: (sessionId: string) => void;
+  /** A live session's turn ended normally — the moment it can move without interrupting work. */
+  onTurnEnded?: (sessionId: string) => void;
 }
 
 // Activity hooks update a session's working / needs-attention flags. `active` (this
@@ -263,6 +265,7 @@ const TRANSLATE_HOOK = new Map<string, (hookName: string | undefined, payload: u
 // failed on a usage limit may move a rotated session to another credential (#2919).
 function handleTurnEnd(deps: HookDeps, sessionId: string, live: boolean, fields: HookFields): void {
   if (fields.event === "Stop") failPendingTranslation(sessionId, "[translation] worker ended its turn without calling submitTranslation");
+  if (live && fields.event === "Stop") deps.onTurnEnded?.(sessionId);
   if (live && fields.event === "StopFailure" && fields.errorType === "rate_limit") deps.onRateLimited?.(sessionId);
 }
 

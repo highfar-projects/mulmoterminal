@@ -1,3 +1,4 @@
+import { sanitizeTokenRotation, TOKEN_ROTATION_OFF, type TokenRotation } from "../../common/tokenRotation";
 import { getCurrentScope, onScopeDispose, ref, type Ref } from "vue";
 import { presetLabel, type CwdPreset } from "../components/presets";
 import { isManagedWorktreePath, worktreeLabel } from "../../common/worktreePath";
@@ -163,6 +164,9 @@ const paletteFavorites = ref<string[]>([]);
 // Second logins for claude / codex (#2215), offered when launching a cell. Read-only here, like the
 // custom agents: config.json and the mulmoterminal-model skill are where they are added.
 const accounts = ref<AgentAccount[]>([]);
+
+// Several subscriptions behind one home (#2919). Read-only here: it gates the token usage screen.
+const tokenRotation = ref<TokenRotation>(TOKEN_ROTATION_OFF);
 
 // User-added HTTP MCP servers merged into the single-view session's --mcp-config —
 // SINGLETON like the others.
@@ -535,6 +539,7 @@ function adoptListConfig(c: Record<string, unknown>): void {
   paletteAliases.value = sanitizePaletteAliases(c.paletteAliases);
   paletteFavorites.value = sanitizePaletteFavorites(c.paletteFavorites);
   accounts.value = listOf(c.accounts, isAgentAccount);
+  tokenRotation.value = sanitizeTokenRotation(c.tokenRotation);
   quickCommands.value = listOf(c.quickCommands, isQuickCommand);
   userMcpServers.value = listOf(c.userMcpServers, isUserMcpServer);
 }
@@ -836,6 +841,7 @@ export function useAppConfig() {
     paletteAliases,
     paletteFavorites,
     accounts,
+    tokenRotation,
     quickCommands,
     userMcpServers,
     ...soundSettings,

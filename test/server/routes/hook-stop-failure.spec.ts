@@ -11,6 +11,7 @@ import { fakePtyEntry } from "../../helpers/fakePtyEntry";
 
 const ID = "33333333-4444-4555-8666-777777777777";
 const onRateLimited = vi.fn();
+const onTurnEnded = vi.fn();
 const deps = {
   setWorking: vi.fn(),
   setWaiting: vi.fn(),
@@ -27,6 +28,7 @@ const deps = {
   publishQuestion: vi.fn(),
   uiPort: "34567",
   onRateLimited,
+  onTurnEnded,
 };
 
 const app = express();
@@ -43,6 +45,7 @@ const postHook = async (body: Record<string, unknown>) => {
 
 beforeEach(() => {
   onRateLimited.mockClear();
+  onTurnEnded.mockClear();
   deps.setWorking.mockClear();
 });
 afterEach(() => ptys.delete(ID));
@@ -75,5 +78,19 @@ describe("StopFailure (#2919)", () => {
     ptys.set(ID, live());
     await postHook({ hook_event_name: "StopFailure", error_type: "overloaded" });
     expect(deps.setWorking).toHaveBeenCalledWith(ID, false, "StopFailure");
+  });
+
+  it("hands a live session's ordinary Stop to the turn-end check, and a failure to it never (#2919)", async () => {
+    ptys.set(ID, live());
+    await postHook({ hook_event_name: "Stop" });
+    expect(onTurnEnded).toHaveBeenCalledWith(ID);
+    onTurnEnded.mockClear();
+    await postHook({ hook_event_name: "StopFailure", error_type: "rate_limit" });
+    expect(onTurnEnded).not.toHaveBeenCalled();
+  });
+
+  it("does not run the turn-end check for a session with no pty here", async () => {
+    await postHook({ hook_event_name: "Stop" });
+    expect(onTurnEnded).not.toHaveBeenCalled();
   });
 });

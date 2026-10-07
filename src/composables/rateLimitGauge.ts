@@ -30,13 +30,17 @@ export interface AccountReading {
   /** Why a claude account's figures are missing, as for the default login. */
   probe?: ClaudeProbeState | undefined;
   probeStall?: ClaudeProbeStall | undefined;
+  /** Whose subscription a rotation token is (#2919), shown beside its label where there is room. */
+  email?: string | undefined;
+  /** A rotation token rather than an account (#2919). */
+  rotation?: boolean | undefined;
 }
 
 export type ClaudeProbeState = "ok" | "no-claude" | "no-windows" | "no-report";
 
 /** The one silence the probe's screen can name. Everything else is `unknown`, which reads as the
  *  general no-report line — a wrong reason costs more than a vague one. */
-export type ClaudeProbeStall = "trust-prompt" | "unknown";
+export type ClaudeProbeStall = "trust-prompt" | "usage-limit" | "unknown";
 
 // What to put where the Claude figures would be. Silence is right for "we simply have not
 // measured yet", and wrong for the two states that will not resolve on their own: #1011 was a
@@ -52,6 +56,7 @@ const PROBE_NOTES: Record<ClaudeProbeState, string | null> = {
 // ever know to: the hidden session waits on a dialog they cannot see. It says "the folder" rather
 // than naming one because the path is the server's (CLAUDE_CWD) and does not cross to the browser.
 const TRUST_PROMPT_NOTE = "tips.rateLimit.trustPrompt";
+const USAGE_LIMIT_NOTE = "tips.rateLimit.usageLimit";
 
 /** A short line explaining an absent Claude gauge, or null when there is nothing worth saying —
  *  either it is showing, or it has simply not been measured yet.
@@ -80,6 +85,7 @@ function probeNoteKey(
 ): string | null {
   if (gaugeWindows(limits, now_ms).length > 0) return null;
   if (probe === "no-report" && stall === "trust-prompt") return trustNote;
+  if (probe === "no-report" && stall === "usage-limit") return USAGE_LIMIT_NOTE;
   return PROBE_NOTES[probe ?? "ok"];
 }
 
@@ -207,7 +213,8 @@ function accountGauges(readings: readonly AccountReading[], now_ms: number, tran
   return readings.flatMap((reading) => {
     const windows = gaugeWindows(reading.limits, now_ms);
     if (!windows.length) return [];
-    const agentName = translate("tips.rateLimit.accountAgent", { account: reading.label, agent: reading.agent });
+    const account = reading.email ? `${reading.label} · ${reading.email}` : reading.label;
+    const agentName = translate("tips.rateLimit.accountAgent", { account, agent: reading.agent });
     const title = gaugeTitle(agentName, reading.limits, now_ms, translate);
     return [{ key: `account:${reading.id}`, agent: reading.agent, label: reading.label, marked: true, title, windows }];
   });

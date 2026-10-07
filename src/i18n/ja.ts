@@ -1,4 +1,5 @@
 import type { Messages } from "./messages";
+import { usageViewJa } from "./usageView/ja";
 import { blueprintsJa } from "./blueprints/ja";
 import { tipsJa } from "./tips/ja";
 import { commandPaletteJa } from "./commandPalette/ja";
@@ -602,8 +603,10 @@ export const ja: Messages = {
       skills: { label: "Skills", detail: "~/.claude/skills と各フォルダのスキルを一覧・検索" },
       processes: { label: "プロセス", detail: "各セッションで動いているプロセスと、消せる worktree" },
       worklog: { label: "Worklog", detail: "wiki にある開発作業ログ（#worklog）" },
+      usage: { label: "トークンの使用量", detail: "ローテーションの各トークンに残っている 5 時間枠と週の枠" },
     },
   },
+  usageView: usageViewJa,
   rowMenu: {
     trigger: "このセルの操作",
     title: "操作",

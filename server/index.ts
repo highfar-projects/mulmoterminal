@@ -8,7 +8,7 @@ import { createPubSub } from "./infra/pubsub.js";
 import { hideErrorStacks } from "./infra/hide-error-stacks.js";
 import { allowedToolNames, autoAllowedToolNames, toolSummaries } from "./infra/plugins-registry.js";
 import { getPlayfulEffects, getUserMcpServers, getTokenRotation, APP_CONFIG_FILE } from "./config/config-routes.js";
-import { rotateOnLimit } from "./session/limit-rotation.js";
+import { rotateNearLimit, rotateOnLimit, type LimitRotationDeps, type LimitRotationOutcome } from "./session/limit-rotation.js";
 import { noteMovedFrom } from "./session/rotation-notice.js";
 import { sessionToken } from "./session/token-sessions.js";
 import { rotationLoginLabel } from "../common/tokenRotation.js";
@@ -375,28 +375,28 @@ hideErrorStacks(app);
 // Generous body limit: PostToolUse hook payloads carry the tool's full output
 // (a big Read/Bash result can blow past Express's 100kb default, which would 413
 // the hook and leave its tool-call entry stuck on "running").
-// A rotated session that hit its usage limit moves to another credential (session/limit-rotation.ts).
-const moveOffSpentCredential = (sessionId: string): void => {
-  const outcome = rotateOnLimit(
-    {
-      rotationEnabled: () => getTokenRotation().enabled,
-      sessionToken,
-      markSpent: rateLimits.markSpent,
-      hasFreeChoice: rateLimits.hasFreeChoice,
-      entryOf: (id) => ptys.get(id),
-      reap: (id) => reap(id),
-      labelOf: (tokenId) => rotationLoginLabel(getTokenRotation(), tokenId),
-      noteMovedFrom,
-    },
-    sessionId,
-  );
-  if (outcome !== "not-rotated") console.log(`[token-rotation] ${sessionId} hit its usage limit: ${outcome}`);
+// A rotated session moves to another credential when it hits its usage limit, or ends a turn at the
+// switch line (session/limit-rotation.ts).
+const limitRotationDeps: LimitRotationDeps = {
+  rotationEnabled: () => getTokenRotation().enabled,
+  sessionToken,
+  markSpent: rateLimits.markSpent,
+  hasFreeChoice: rateLimits.hasFreeChoice,
+  isNearLimit: rateLimits.isNearLimit,
+  entryOf: (id) => ptys.get(id),
+  reap: (id) => reap(id),
+  labelOf: (tokenId) => rotationLoginLabel(getTokenRotation(), tokenId),
+  noteMovedFrom,
+};
+const logMove = (sessionId: string, why: string, outcome: LimitRotationOutcome): void => {
+  if (outcome !== "not-rotated" && outcome !== "below-limit") console.log(`[token-rotation] ${sessionId} ${why}: ${outcome}`);
 };
 
 mountAppRoutes(app, {
   clientDir: __dirname,
   rateLimits,
-  onRateLimited: (sessionId) => moveOffSpentCredential(sessionId),
+  onRateLimited: (sessionId) => logMove(sessionId, "hit its usage limit", rotateOnLimit(limitRotationDeps, sessionId)),
+  onTurnEnded: (sessionId) => logMove(sessionId, "ended a turn at the switch line", rotateNearLimit(limitRotationDeps, sessionId)),
   isAllowedOrigin,
   publish: (channel, data) => pubsub?.publish(channel, data),
   sessionChannel,

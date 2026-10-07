@@ -26,10 +26,14 @@ export interface AccountRateLimitReading {
   probing: boolean;
   probe: ProbeState["kind"];
   probeStall: ProbeStall | undefined;
+  /** The sign-in address a rotation token's entry names (#2919); absent for an account. */
+  email?: string;
+  /** A rotation token rather than an account (#2919) — what the token usage screen lists. */
+  rotation?: true;
 }
 
 /** What a meter needs to know about the thing it measures: an account, or a rotation token (#2919). */
-export type MeteredLogin = Pick<AgentAccount, "id" | "label" | "agent">;
+export type MeteredLogin = Pick<AgentAccount, "id" | "label" | "agent"> & { email?: string };
 
 export interface AccountRateLimitDeps<T extends MeteredLogin = AgentAccount> {
   /** The configured accounts, read live so an added one is measured without a restart. */
@@ -62,6 +66,7 @@ function readingOf(account: MeteredLogin, store: RateLimitStore, now_ms: number)
     probing: store.isProbing(),
     probe: state.kind,
     probeStall: state.kind === "no-report" ? state.stall : undefined,
+    ...(account.email ? { email: account.email } : {}),
   };
 }
 

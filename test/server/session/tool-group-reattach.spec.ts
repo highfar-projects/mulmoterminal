@@ -53,6 +53,12 @@ vi.mock("../../../server/session/registry.js", () => ({
 
 // The transcript check decides --resume; irrelevant here and it would touch the real disk.
 vi.mock("../../../server/session/session-reads.js", () => ({ sessionExistsOnDisk: () => false }));
+// Rotation asks the reattach question once more of its own (#2919). Held off here so this spec counts
+// only the spawn's own probe, whatever the developer running it has in their config.json.
+vi.mock("../../../server/config/config-routes.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../server/config/config-routes")>()),
+  getTokenRotation: () => ({ enabled: false, includeDefaultLogin: true, tokens: [] }),
+}));
 
 const fakeTerm = () => ({ pid: 1, onData: vi.fn(), onExit: vi.fn(), write: vi.fn(), kill: vi.fn(), resize: vi.fn() });
 

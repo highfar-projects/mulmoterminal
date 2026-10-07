@@ -115,6 +115,21 @@ describe("createAccountRateLimits (#2215)", () => {
     expect(probes).toHaveLength(1);
   });
 
+  it("carries a rotation token's address on its reading, and none for an account (#2919)", () => {
+    const token = { id: "ss", label: "SS", agent: "claude" as const, email: "me@example.com" };
+    const m = createAccountRateLimits({
+      accounts: () => [token],
+      homeOf: () => "/h/claude",
+      loginOf: (t) => `claude-token:${t.id}`,
+      readCodex: () => null,
+      startClaudeProbe: () => () => {},
+      claudeAvailable: () => true,
+      cacheFile: (login) => path.join(dir, `${encodeURIComponent(login)}.json`),
+    });
+    expect(m.readings(NOW)[0]?.email).toBe("me@example.com");
+    expect(meters([WORK]).readings(NOW)[0]).not.toHaveProperty("email");
+  });
+
   it("backs off a probe that could not even start, instead of retrying it on every refresh (#2919)", () => {
     let attempts = 0;
     const m = meters([WORK], {
