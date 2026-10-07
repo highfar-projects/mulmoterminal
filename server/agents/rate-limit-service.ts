@@ -57,6 +57,7 @@ export function startHomeProbe(
   onSettled: (stall: ProbeStall) => void,
   unset: readonly string[],
   env: Record<string, string>,
+  settingsEnv: Record<string, string> = {},
 ) {
   const sessionId = newProbeSessionId();
   return startRateLimitProbe({
@@ -66,6 +67,7 @@ export function startHomeProbe(
     cwd: CLAUDE_CWD,
     sessionId,
     probeReportKey,
+    settingsEnv,
     onSettled: ({ stall }) => {
       onSettled(stall);
       setTimeout(() => void removeProbeTranscript(CLAUDE_CWD, sessionId, home).catch(() => {}), TRANSCRIPT_FLUSH_MS).unref();

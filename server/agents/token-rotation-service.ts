@@ -31,6 +31,7 @@ export interface TokenRotationDeps {
     onSettled: (stall: ProbeStall) => void,
     unset: readonly string[],
     env: Record<string, string>,
+    settingsEnv: Record<string, string>,
   ) => () => void;
   claudeAvailable: () => boolean;
   /** The `/login` credential's last windows, from the default gauge's store. */
@@ -53,7 +54,8 @@ export function createTokenRotation(deps: TokenRotationDeps): TokenRotationRunti
     startClaudeProbe: (home, probeReportKey, onSettled, token) => {
       const secret = readRotationToken(token);
       if (!secret) throw new Error(`rotation token "${token.id}" could not be read`);
-      return deps.startHomeProbe(home, probeReportKey, onSettled, ROTATION_UNSET_ENV, { [OAUTH_TOKEN_ENV]: secret });
+      // In the probe's 0600 settings file, as a cell's token is, never in the child's environment.
+      return deps.startHomeProbe(home, probeReportKey, onSettled, ROTATION_UNSET_ENV, {}, { [OAUTH_TOKEN_ENV]: secret });
     },
     claudeAvailable: deps.claudeAvailable,
   });
