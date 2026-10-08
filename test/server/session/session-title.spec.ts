@@ -15,7 +15,7 @@ import {
   titleTurnCounts,
 } from "../../../server/session/registry.js";
 import { clearedTranscripts } from "../../../server/session/cleared-transcripts.js";
-import { VIEW_TITLE_REGEN_TURNS } from "../../../server/config/header-title.js";
+import { VIEW_TITLE_REGEN_TURNS } from "../../../server/config/header/header-title.js";
 
 const SESSION = "11111111-2222-3333-4444-555555555555";
 

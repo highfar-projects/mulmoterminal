@@ -5,7 +5,7 @@
 import os from "node:os";
 import type { Express } from "express";
 import { repoRoot, defaultBaseBranch, listWorktrees, createWorktree, removeWorktree, isDirty } from "./worktrees.js";
-import { releaseWorktreeEnv } from "../config/worktree-env.js";
+import { releaseWorktreeEnv } from "../config/worktree/worktree-env.js";
 import { worktreeDiff } from "./worktree-diff.js";
 import { pushWorktree, createOrOpenPR } from "./worktree-pr.js";
 import { requestOriginAllowed } from "../routes/same-origin-guard.js";

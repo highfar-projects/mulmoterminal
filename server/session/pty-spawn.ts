@@ -13,7 +13,7 @@ import { cwdProblemMessage, diagnoseSpawnCwd, type CwdDiagnosis } from "../infra
 import { withoutUnset } from "./provider-env.js";
 import { trackPtyExit } from "./pty-kill.js";
 import { PORT, SESSION_ID_RE } from "../config/env.js";
-import { reservedWorktreeEnv } from "../config/worktree-env.js";
+import { reservedWorktreeEnv } from "../config/worktree/worktree-env.js";
 import { ownBindPort, tmuxAvailable, tmuxClientUnsetNames, tmuxHasSession, tmuxNewSessionArgs, tmuxScrubEnvNames } from "../infra/tmux.js";
 
 const PTY_COLS = 120;
@@ -48,7 +48,7 @@ export function ptyEnv(unset: readonly string[] = [], extra: Readonly<Record<str
  *  what its dev server needs, and cannot be allowed to redirect our bridge.
  *
  *  Reserved, never allocated — allocation is async and happens before the spawn (see
- *  config/worktree-env.ts for why a probe at this moment would move a running server's port). */
+ *  config/worktree/worktree-env.ts for why a probe at this moment would move a running server's port). */
 //  MULMOTERMINAL_PORT is first because it is the weakest: it is a fact about this server that
 //  EVERY terminal needs, agent or not. `mulmoterminal room` is a plain CLI a user runs in a shell
 //  cell and it has to reach THIS server rather than whatever holds 34567 — it used to find the

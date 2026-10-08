@@ -90,7 +90,7 @@ vi.mock("../../../server/session/account-sessions.js", () => ({
 const registeredGuiMcpGroups = vi.fn(() => Promise.resolve(["render"]));
 vi.mock("../../../server/infra/gui-mcp-registration.js", () => ({ registeredGuiMcpGroups }));
 
-vi.mock("../../../server/config/worktree-env.js", () => ({
+vi.mock("../../../server/config/worktree/worktree-env.js", () => ({
   ensureWorktreeEnv: vi.fn(() => {
     mocks.onEnsureWorktreeEnv();
     return Promise.resolve({});

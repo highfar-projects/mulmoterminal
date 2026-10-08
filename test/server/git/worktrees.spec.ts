@@ -4,7 +4,7 @@ import { makeTempDir } from "../../support/tempDir.js";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { writeFileSync, readFileSync, existsSync, symlinkSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { reservedWorktreeEnv } from "../../../server/config/worktree-env.js";
+import { reservedWorktreeEnv } from "../../../server/config/worktree/worktree-env.js";
 import path from "node:path";
 import { rmDirRetrying, GIT_TEST_TIMEOUT_MS } from "./wtTestUtil.js";
 import {

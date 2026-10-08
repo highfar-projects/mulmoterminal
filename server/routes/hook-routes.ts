@@ -11,7 +11,7 @@ import { codexHookBody } from "../agents/codex/codex-hook.js";
 import { recordCursorStop } from "../agents/cursor/cursor-usage.js";
 import { ASK_QUESTION_TOOL, parseAskQuestions, type AskQuestionDone, type AskQuestionEvent } from "../../common/askQuestion.js";
 import { watchOtherWrites } from "../session/write-to-session.js";
-import { dirConfigWriteTarget } from "../config/dir-config.js";
+import { dirConfigWriteTarget } from "../config/dir/dir-config.js";
 import { writtenFilePath } from "../files/tool-writes.js";
 import { activityHookEffects, claudeOwnSessionId, pushKindFor, resolveHookCwd, resolveHookSessionId } from "../session/activity-hook.js";
 import { runCompletionHook } from "../session/completion-hooks.js";

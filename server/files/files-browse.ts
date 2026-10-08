@@ -33,7 +33,7 @@ import { requestBody } from "../routes/requestBody.js";
 import { mountFilesTreeRoutes } from "./files-tree-routes.js";
 import { splitFrontmatter } from "@mulmoclaude/markdown-utils/markdown/frontmatter";
 import { mountFilesGitStatusRoute } from "./files-git-status.js";
-import { dirConfigDetail, dirConfigDirOf } from "../config/dir-config.js";
+import { dirConfigDetail, dirConfigDirOf } from "../config/dir/dir-config.js";
 import { dirConfigSaveReport, type DirConfigSaveReport } from "../../common/dirConfigSaveReport.js";
 
 // Cap on the bytes served to the editor / accepted on write — a text editor, not a

@@ -7,7 +7,7 @@ import { statSync, readdirSync, openSync, readSync, closeSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { loadAppConfigResult, emptyConfig, mergeConfigUpdate, saveAppConfig, unknownKeysOf } from "./config/app-config.js";
-import { deriveCwdPresets, extractCwdFromTranscript, type CwdRecord } from "./config/cwd-presets.js";
+import { deriveCwdPresets, extractCwdFromTranscript, type CwdRecord } from "./config/dir/cwd-presets.js";
 import { claudeProjectsRoot } from "./session/project-dir.js";
 
 const CONFIG_FILE = path.join(os.homedir(), ".mulmoterminal", "config.json");

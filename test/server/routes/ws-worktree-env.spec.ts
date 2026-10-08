@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { PtyEntry } from "../../../server/session/types.js";
 
 const ensureWorktreeEnv = vi.fn(() => Promise.resolve({ PORT: "3010" }));
-vi.mock("../../../server/config/worktree-env.js", () => ({ ensureWorktreeEnv }));
+vi.mock("../../../server/config/worktree/worktree-env.js", () => ({ ensureWorktreeEnv }));
 
 // tmux is what tells a SURVIVED session apart from a fresh one, and it is a real process on the
 // host — stubbed so this asks the question rather than the machine.
