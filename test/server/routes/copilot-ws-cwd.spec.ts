@@ -41,7 +41,7 @@ vi.mock("../../../server/infra/tmux.js", async (importOriginal) => ({
 
 // The session exists wherever it is asked about, so the probe's answer cannot be what makes this
 // pass or fail — only the DIRECTORY handed on does.
-vi.mock("../../../server/agents/copilot-sessions.js", () => ({
+vi.mock("../../../server/agents/copilot/copilot-sessions.js", () => ({
   copilotSessionExistsForCwd: async () => true,
   copilotSessionExists: () => true,
   listCopilotSessionsForCwd: async () => [],

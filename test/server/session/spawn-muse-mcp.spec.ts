@@ -37,8 +37,8 @@ vi.mock("../../../server/session/pty-spawn.js", () => ({
   ptyWouldReattach: () => reattaching,
 }));
 
-vi.mock("../../../server/agents/muse-mcp.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../../server/agents/muse-mcp.js")>()),
+vi.mock("../../../server/agents/muse/muse-mcp.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../server/agents/muse/muse-mcp.js")>()),
   syncMuseMcpPlugin: () => syncMuseMcpPlugin(),
 }));
 
@@ -56,7 +56,7 @@ vi.mock("../../../server/session/bridge-session.js", () => ({
   rememberEntitledToolGroups: (id: string, groups: readonly string[]) => rememberEntitledToolGroups(id, groups),
   entitledToolGroups: () => recorded,
 }));
-vi.mock("../../../server/agents/muse-session.js", () => ({
+vi.mock("../../../server/agents/muse/muse-session.js", () => ({
   snapshotMuseSessions: () => Promise.resolve(new Set<string>()),
   watchForMuseSession: () => Promise.resolve(null),
 }));

@@ -14,8 +14,8 @@
 //
 // Kept together so a third agent with the same shape is added in one place, and so index.ts carries
 // the call rather than the argument.
-import { removeCopilotHooksFile, repairStaleCopilotHooksFile } from "./copilot-hooks-file.js";
-import { removeCursorHooksFile, repairStaleCursorHooksFile } from "./cursor-hooks-file.js";
+import { removeCopilotHooksFile, repairStaleCopilotHooksFile } from "./copilot/copilot-hooks-file.js";
+import { removeCursorHooksFile, repairStaleCursorHooksFile } from "./cursor/cursor-hooks-file.js";
 
 const LOCALHOST = "127.0.0.1";
 

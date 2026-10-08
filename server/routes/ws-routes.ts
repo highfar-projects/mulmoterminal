@@ -21,12 +21,12 @@ import { shellQuoteFor } from "../infra/shell-quote.js";
 import { tmuxHasSession } from "../infra/tmux.js";
 import { defaultShellTarget, type LaunchTarget } from "../session/shell-command.js";
 import { launchChoiceFromParams } from "../session/launch-choice.js";
-import { antigravityBrainRoot, antigravityConversationExists } from "../agents/antigravity-session.js";
-import { grokConversationExists, grokSessionsRoot } from "../agents/grok-session.js";
-import { museSessionExistsForCwd } from "../agents/muse-session.js";
-import { copilotSessionExistsForCwd } from "../agents/copilot-sessions.js";
-import { cursorSessionExistsForCwd } from "../agents/cursor-sessions.js";
-import { codexRolloutExists } from "../agents/codex-sessions.js";
+import { antigravityBrainRoot, antigravityConversationExists } from "../agents/antigravity/antigravity-session.js";
+import { grokConversationExists, grokSessionsRoot } from "../agents/grok/grok-session.js";
+import { museSessionExistsForCwd } from "../agents/muse/muse-session.js";
+import { copilotSessionExistsForCwd } from "../agents/copilot/copilot-sessions.js";
+import { cursorSessionExistsForCwd } from "../agents/cursor/cursor-sessions.js";
+import { codexRolloutExists } from "../agents/codex/codex-sessions.js";
 import {
   antigravityConversations,
   antigravityConversationsHydrated,
@@ -70,7 +70,7 @@ import type {
   ResolveLauncher,
 } from "../session/spawners.js";
 import { syncDirectoryMcpForSpawnAsync, type SpawnDirectoryMcpPty } from "../session/spawn-directory-mcp.js";
-import { syncCursorDirectoryMcp } from "../agents/cursor-mcp.js";
+import { syncCursorDirectoryMcp } from "../agents/cursor/cursor-mcp.js";
 import { terminalWsKind, type TerminalWsKind } from "./terminal-ws-path.js";
 import { normalizeAgent, parseIndexParam } from "./routeParams.js";
 import { agentResumeId } from "../agents/agent-resume.js";
@@ -767,7 +767,7 @@ export async function handleCodexConnection(deps: WsRouteDeps, ws: WebSocket, re
 }
 
 // Which copilot session a connection resumes. The shortest of these, because `--session-id` both
-// mints and resumes (server/agents/copilot-args.ts): the requested key IS copilot's own id, so
+// mints and resumes (server/agents/copilot/copilot-args.ts): the requested key IS copilot's own id, so
 // there is no second id to look up and no map to hydrate first. The existence probe is what stops a
 // stale key from being handed to a fresh spawn under an old session's name — the same guard grok's
 // resolver states at length, for the same reason.
@@ -846,7 +846,7 @@ export async function handleCopilotConnection(deps: WsRouteDeps, ws: WebSocket, 
 }
 
 // Cursor is copilot's twin on identity — `--resume <uuid>` mints and resumes under an id of ours
-// (server/agents/cursor-args.ts) — so the resolver above applies verbatim, remembered cwd and all.
+// (server/agents/cursor/cursor-args.ts) — so the resolver above applies verbatim, remembered cwd and all.
 // It differs only in having no GUI MCP to attach: cursor reads MCP from a file and this build
 // writes none (spawn-cursor.ts), so there are no groups to resolve and no `?gui=` to honour.
 export async function resolveCursorSession(requested: string | null, cwd: string): Promise<ResumableSession> {
@@ -982,7 +982,7 @@ export interface DirectoryMcpWsAgent {
    *  MCP at all, and the lookup reads Claude Code's config files on every spawn — a cost nothing
    *  could act on. What muse does with the answer is still different from the other two (it travels
    *  on the session's ENVIRONMENT rather than into a file in the directory, because its plugin
-   *  registration is per machine — server/agents/muse-mcp.ts), and that difference lives in its
+   *  registration is per machine — server/agents/muse/muse-mcp.ts), and that difference lives in its
    *  spawner rather than here. */
   readsDirectoryMcpConfig: boolean;
   resolveSession: (requested: string | null, cwd: string) => ResumableSession | Promise<ResumableSession>;

@@ -16,7 +16,7 @@ const MAX_PORT = 65535;
  *  and only one of them used to be checked: `--port` came through here while `PORT` was taken from
  *  the environment as-is. That mattered beyond tidiness — the port is INTERPOLATED into shell
  *  commands this server writes for an agent to run later (server/session/hook-settings.ts and
- *  server/agents/copilot-hooks-file.ts), so an unusable value was not merely a bad bind, it was
+ *  server/agents/copilot/copilot-hooks-file.ts), so an unusable value was not merely a bad bind, it was
  *  whatever the string said. One rule, both channels (Codex review on #2063). */
 export const parsePort = (raw: string | undefined): number | null => {
   const parsed = Number.parseInt(raw ?? "", 10);

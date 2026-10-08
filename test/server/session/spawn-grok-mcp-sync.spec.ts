@@ -32,7 +32,7 @@ vi.mock("../../../server/session/pty-spawn.js", () => ({
   ptyWouldReattach: () => reattaching,
 }));
 
-vi.mock("../../../server/agents/grok-mcp.js", () => ({
+vi.mock("../../../server/agents/grok/grok-mcp.js", () => ({
   syncGrokMcpConfig: (cwd: string, groups: readonly string[]) => syncGrokMcpConfig(cwd, groups),
 }));
 

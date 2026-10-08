@@ -1587,7 +1587,7 @@ has been prompted once — a few seconds, not the rest of the session.
 Antigravity's numbers are the one case read from a store with **no published format**: agy keeps
 its per-generation accounting as protobuf in `~/.gemini/antigravity-cli/conversations/<id>.db`,
 with no schema on disk, so the fields are identified by measurement (see
-`server/agents/antigravity-usage.ts`). Every layer of that reader is built to answer *nothing*
+`server/agents/antigravity/antigravity-usage.ts`). Every layer of that reader is built to answer *nothing*
 rather than a number it is unsure of, so if a future agy release moves those fields, an
 Antigravity cell falls back to showing its model alone — it will not show a wrong percentage.
 
@@ -1633,7 +1633,7 @@ Copilot** can. **Antigravity, Grok and Cursor** cannot — they read a file in t
 **Muse** reads neither, which is the third route below.
 
 **Cursor is half of each**, and the half nobody would guess is the second: it reads a file in the
-directory as agy does (`.cursor/mcp.json`, written by `server/agents/cursor-mcp.ts`), but it starts
+directory as agy does (`.cursor/mcp.json`, written by `server/agents/cursor/cursor-mcp.ts`), but it starts
 that MCP server on a CURATED ENVIRONMENT rather than its own — so the group and the port travel as
 ARGV, as muse's do, and the SESSION is resolved through `/api/mcp-resolve`. An agy-shaped entry (group
 in `env`, port inherited) was tried first and reached the bridge with no port at all. Cursor also refuses to

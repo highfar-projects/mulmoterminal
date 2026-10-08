@@ -6,14 +6,14 @@
 //   session is watched until that id appears, which is what lets a later cold reconnect resume it.
 //
 //   its OWN shape on the MCP axis — muse reaches the GUI tools through a PLUGIN, and a plugin is
-//   installed per MACHINE rather than per directory (server/agents/muse-mcp.ts). So the
+//   installed per MACHINE rather than per directory (server/agents/muse/muse-mcp.ts). So the
 //   registration is made once and the DIRECTORY's groups travel on the session's environment
 //   instead, where the bridge reads them. `mcpGroups` is therefore used here, not written to a file.
-import { museAdapter } from "../agents/muse.js";
-import { buildMuseArgs } from "../agents/muse-args.js";
-import { snapshotMuseSessions, watchForMuseSession } from "../agents/muse-session.js";
-import { syncMuseMcpPlugin } from "../agents/muse-mcp.js";
-import { musePluginEnv } from "../agents/muse-mcp.js";
+import { museAdapter } from "../agents/muse/muse.js";
+import { buildMuseArgs } from "../agents/muse/muse-args.js";
+import { snapshotMuseSessions, watchForMuseSession } from "../agents/muse/muse-session.js";
+import { syncMuseMcpPlugin } from "../agents/muse/muse-mcp.js";
+import { musePluginEnv } from "../agents/muse/muse-mcp.js";
 import { entitledToolGroups, rememberEntitledToolGroups } from "./bridge-session.js";
 import { ptyWouldReattach } from "./pty-spawn.js";
 import { startAgentPty } from "./agent-pty-start.js";

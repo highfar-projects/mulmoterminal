@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { rotationApplies, sessionCredential } from "../../../server/session/session-credential";
-import { ROTATION_UNSET_ENV } from "../../../server/agents/token-assignment";
+import { ROTATION_UNSET_ENV } from "../../../server/agents/token/token-assignment";
 
 const PLAIN = { providerEnv: {}, runsCustomAgent: false, onAccount: false };
 const assignment = { tokenId: "a", env: { CLAUDE_CODE_OAUTH_TOKEN: "s" }, unset: ROTATION_UNSET_ENV };

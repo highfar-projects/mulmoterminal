@@ -117,9 +117,9 @@ and end. Only two mechanisms have worked here:
   source because it also reports *blocked on input* (`Notification`) — the "waiting" half.
 - **An append-only log with turn records.** Codex's rollout is tailed on a 1s poll and
   `turn started` / `turn completed` are translated into the *same* effect table the hooks feed
-  (`server/agents/codex-activity.ts` → `server/session/activity-hook.ts`). The rollout records
+  (`server/agents/codex/codex-activity.ts` → `server/session/activity-hook.ts`). The rollout records
   nothing while an approval dialog is up, so "waiting" comes from a **hook** instead:
-  `PermissionRequest`, passed with `-c` (`server/agents/codex-hook.ts`). Codex asks the user to trust
+  `PermissionRequest`, passed with `-c` (`server/agents/codex/codex-hook.ts`). Codex asks the user to trust
   a hook once, and again whenever its handler's hash changes, which is why the command is a constant
   that reads the port and session from the environment. The rollout stays the source for turn
   boundaries because it needs no trust — declining the dialog costs only the waiting half.
@@ -131,7 +131,7 @@ warning, and a cell that runs perfectly while reporting nothing.**
 - **One bad entry voids the WHOLE file.** A probe arming sixteen event names fired nothing at all,
   on a turn that edited a file and completed; one of the sixteen (`notification`) is not a real
   event. Remove it and the other fifteen fire. This is why `CURSOR_HOOK_EVENTS` is derived from the
-  translation map rather than written out (`server/agents/cursor-hook.ts`), with a spec pinning
+  translation map rather than written out (`server/agents/cursor/cursor-hook.ts`), with a spec pinning
   every registered name against the CLI-supported list.
 - **A command containing a URL is refused, and takes the file with it.** `curl … http://…` never
   ran; neither did `env curl …`, nor `node poster.js <event> http://…`. The same poster with the URL
@@ -163,7 +163,7 @@ strings.
 **`—` in rows 9-10 means unwired, and for two of the three it is only that.** Grok appends one
 `turn_completed` record per turn to `updates.jsonl`, and muse appends a `model_completed` per model
 call — and this repo **already parses both**, incrementally, for the token badges in row 15
-(`server/agents/grok-usage.ts`, `muse-usage.ts`).
+(`server/agents/grok/grok-usage.ts`, `muse-usage.ts`).
 
 But be precise about how close that is, because it is easy to overstate: those folds run **when a
 badge request asks for them** (`GET /api/session/:id` → `server/session/agent-badges.ts`), which is
@@ -184,13 +184,13 @@ have no token badge to keep current at all) poll on a minute
 timer to keep a badge current.
 
 Agy is the genuinely hard one of the three: its accounting is per-generation protobuf rows inside a
-SQLite database (`server/agents/antigravity-proto.ts`), not an append-only log with a turn boundary
+SQLite database (`server/agents/antigravity/antigravity-proto.ts`), not an append-only log with a turn boundary
 in it.
 
 **Copilot was the second agent on the hook route, and what it cost is worth knowing before a fourth
 one is wired that way.** Its events map onto claude's almost exactly (`userPromptSubmitted` → 
 `UserPromptSubmit`, `agentStop` → `Stop`, `pre`/`postToolUse` → the same), so the translation is a
-rename in one pure file (`server/agents/copilot-hook.ts`) and the entire fan-out downstream is
+rename in one pure file (`server/agents/copilot/copilot-hook.ts`) and the entire fan-out downstream is
 reached unchanged. Three things about it are NOT like claude, each measured against copilot 1.0.83
 rather than read:
 
@@ -239,11 +239,11 @@ agent keeps them**, since the badge sums them: claude and codex per turn, grok p
 than the largest, because a high-water mark never comes down after a compaction (`muse-usage.ts`
 has the numbers). All five clear this, by four different routes — claude's transcript `message.usage`,
 codex's rollout, grok's `signals.json` + `updates.jsonl`, muse's `model_completed` events, agy's
-protobuf blobs in SQLite (`server/agents/antigravity-proto.ts`, a format with no published schema —
+protobuf blobs in SQLite (`server/agents/antigravity/antigravity-proto.ts`, a format with no published schema —
 read the file's warning before copying that approach). `$` cost additionally needs a public price
 table keyed by model id, which is why it is claude-only. The rate-limit gauge needs the *provider*
 to publish a window; claude's arrives only through an interactive session's `statusLine`, which is
-why there is a hidden probe session at all (`server/agents/rate-limit-probe.ts`).
+why there is a hidden probe session at all (`server/agents/rate-limit/rate-limit-probe.ts`).
 
 **18 · GUI MCP.** The broker is agent-agnostic — the session id lives in the URL and results are
 published on a per-session channel — so this is **config injection, not new server code**. What
@@ -339,7 +339,7 @@ before anyone teaches it anything. Draft injection needs a status-line marker sa
 box is ready, **captured from a real session rather than guessed** — a guessed one types into
 nothing, which is why codex, agy, grok and muse all omit `draftReadyMarker` rather than carry a
 hopeful regex. Do not expect one string to hold, either: claude's has already drifted once, so
-`server/agents/claude.ts` matches two spellings and still falls back to a quiet timer for a version
+`server/agents/claude/claude.ts` matches two spellings and still falls back to a quiet timer for a version
 that prints neither.
 
 **24 · Custom-agent wrapper.** `CUSTOM_AGENT_KINDS` is claude-only on purpose: an entry declares
@@ -431,7 +431,7 @@ will not.
 **The agent's own files** — `server/agents/<agent>.ts` (the adapter), `<agent>-args.ts`, and
 whichever of `<agent>-session.ts` / `-sessions.ts` / `-usage.ts` / `-mcp.ts` / `-skills.ts` the
 answers above call for; `server/session/spawn-<agent>.ts`. An agent that reads MCP from a file in
-the directory also pulls in the shared helpers for that — `server/agents/gui-mcp-bridge.ts` and
+the directory also pulls in the shared helpers for that — `server/agents/mcp/gui-mcp-bridge.ts` and
 `git-exclude.ts`, both of which the grok commit created — **and may refactor an existing agent's
 copy while doing it** (that commit removed 41 lines from `antigravity-mcp.ts` and added 9, pulling
 the shared parts out into those two files). Budget for touching a sibling agent, not just for

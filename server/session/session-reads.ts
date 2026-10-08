@@ -57,9 +57,9 @@ import { currentTurnReplyFromClaudeParsed, lastTurnFromClaudeParsed, lastTurnFro
 import { forEachJsonlRecord, forEachJsonlRecordIn, readTailRecords } from "../infra/jsonl-file.js";
 import { copySummaryState, emptySummaryState, foldSummary, summaryPartsOf, type SummaryState } from "./summary-scan.js";
 import { partitionPending } from "./partitionPending.js";
-import { codexRolloutPath } from "../agents/codex-sessions.js";
-import { cursorTranscriptPath } from "../agents/cursor-sessions.js";
-import { cursorLastTurnFromRecords } from "../agents/cursor-last-turn.js";
+import { codexRolloutPath } from "../agents/codex/codex-sessions.js";
+import { cursorTranscriptPath } from "../agents/cursor/cursor-sessions.js";
+import { cursorLastTurnFromRecords } from "../agents/cursor/cursor-last-turn.js";
 import type { DiskStat, PendingSession, SessionMeta } from "./types.js";
 import { readString } from "../../common/readString.js";
 import type { TerminalAgent } from "../../common/sessionAgent.js";

@@ -13,10 +13,10 @@
 //   measurements behind that, and for why `COPILOT_HOME` must not be used to scope it.
 import type { WebSocket } from "ws";
 import { PORT } from "../config/env.js";
-import { buildCopilotArgs } from "../agents/copilot-args.js";
-import { copilotAdapter } from "../agents/copilot.js";
-import { copilotMcpConfigJson } from "../agents/copilot-mcp.js";
-import { copilotHome, syncCopilotHooksFile } from "../agents/copilot-hooks-file.js";
+import { buildCopilotArgs } from "../agents/copilot/copilot-args.js";
+import { copilotAdapter } from "../agents/copilot/copilot.js";
+import { copilotMcpConfigJson } from "../agents/copilot/copilot-mcp.js";
+import { copilotHome, syncCopilotHooksFile } from "../agents/copilot/copilot-hooks-file.js";
 import type { ToolGroup } from "../../common/toolGroups.js";
 import { codexGuiMcpServers } from "./mcp-config.js";
 import { spawnWithFullGuiClaim, type FullGuiClaimRequest } from "./spawn-with-full-gui-claim.js";

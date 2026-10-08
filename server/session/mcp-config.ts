@@ -11,7 +11,7 @@ import { toolGroupServerId, GUI_SERVER_ID, type ToolGroup } from "../../common/t
 import { isWorkspaceCwd } from "../config/env.js";
 import { agentCarriesFullGuiMcp } from "../../common/guiMcpAgents.js";
 import type { SessionAgent } from "../../common/sessionAgent.js";
-import type { GuiMcpServer } from "../agents/codex-args.js";
+import type { GuiMcpServer } from "../agents/codex/codex-args.js";
 
 export interface McpConfigInput {
   sessionId: string;

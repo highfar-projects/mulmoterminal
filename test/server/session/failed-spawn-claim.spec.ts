@@ -29,9 +29,9 @@ vi.mock("../../../server/session/pty-spawn.js", () => ({
   ptyWouldReattach: () => pty.reattaching,
 }));
 // `claude --help` and the copilot hooks file would otherwise reach a real binary and a real home.
-vi.mock("../../../server/agents/claude-help-probe.js", () => ({ refuseUnsupportedPermissionMode: vi.fn() }));
-vi.mock("../../../server/agents/copilot-hooks-file.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../../server/agents/copilot-hooks-file.js")>()),
+vi.mock("../../../server/agents/claude/claude-help-probe.js", () => ({ refuseUnsupportedPermissionMode: vi.fn() }));
+vi.mock("../../../server/agents/copilot/copilot-hooks-file.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../server/agents/copilot/copilot-hooks-file.js")>()),
   syncCopilotHooksFile: vi.fn(),
 }));
 vi.mock("../../../server/session/session-reads.js", () => ({ sessionExistsOnDisk: () => false }));

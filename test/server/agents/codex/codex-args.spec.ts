@@ -1,0 +1,87 @@
+// @vitest-environment node
+import { describe, it, expect } from "vitest";
+import { buildCodexArgs } from "../../../../server/agents/codex/codex-args.js";
+import { codexPermissionHookOverride } from "../../../../server/agents/codex/codex-hook.js";
+
+const base = { resume: null, model: null, guiMcpServers: [], permissionHook: false };
+
+describe("buildCodexArgs", () => {
+  it("passes no id for a fresh session (codex mints its own)", () => {
+    expect(buildCodexArgs({ ...base })).toEqual([]);
+  });
+
+  it("adds the model override before the subcommand", () => {
+    expect(buildCodexArgs({ ...base, model: "gpt-5.4" })).toEqual(["--model", "gpt-5.4"]);
+  });
+
+  it("resumes a known rollout id via the resume subcommand", () => {
+    expect(buildCodexArgs({ ...base, resume: "019f251d-001c-7542-b13e-9a627effce52" })).toEqual(["resume", "019f251d-001c-7542-b13e-9a627effce52"]);
+  });
+
+  it("keeps global flags ahead of the resume subcommand", () => {
+    expect(buildCodexArgs({ ...base, resume: "abc", model: "gpt-5.4" })).toEqual(["--model", "gpt-5.4", "resume", "abc"]);
+  });
+
+  it("injects the GUI MCP server + auto-approval via -c when a url is given", () => {
+    // Opaque endpoint token — buildCodexArgs embeds it verbatim (the real value is an
+    // interpolated loopback URL; a static http literal here trips no-clear-text-protocols).
+    const url = "gui-mcp-endpoint";
+    expect(buildCodexArgs({ ...base, guiMcpServers: [{ id: "mulmoterminal-gui", url, autoApprove: true }] })).toEqual([
+      "-c",
+      `mcp_servers.mulmoterminal-gui.url="${url}"`,
+      "-c",
+      `mcp_servers.mulmoterminal-gui.default_tools_approval_mode="approve"`,
+    ]);
+  });
+
+  // A GRID cell gets one server per tool group its directory registered, not the all-tools URL.
+  // Auto-approval is per server id, so every group needs its own line — a group the user enabled
+  // and codex then asks permission for on every call is the friction this flag exists to remove.
+  it("injects one server per group, each auto-approved", () => {
+    const args = buildCodexArgs({
+      ...base,
+      guiMcpServers: [
+        { id: "mulmoterminal-render", url: "render-endpoint", autoApprove: true },
+        { id: "mulmoterminal-media", url: "media-endpoint", autoApprove: true },
+      ],
+    });
+    expect(args).toEqual([
+      "-c",
+      `mcp_servers.mulmoterminal-render.url="render-endpoint"`,
+      "-c",
+      `mcp_servers.mulmoterminal-render.default_tools_approval_mode="approve"`,
+      "-c",
+      `mcp_servers.mulmoterminal-media.url="media-endpoint"`,
+      "-c",
+      `mcp_servers.mulmoterminal-media.default_tools_approval_mode="approve"`,
+    ]);
+  });
+
+  it("orders model, GUI MCP, then the resume subcommand (no positional prompt)", () => {
+    const args = buildCodexArgs({
+      resume: "id1",
+      model: "gpt-5.4",
+      permissionHook: false,
+      guiMcpServers: [{ id: "mulmoterminal-gui", url: "gui-mcp-endpoint", autoApprove: true }],
+    });
+    expect(args.slice(0, 2)).toEqual(["--model", "gpt-5.4"]);
+    expect(args).toContain("-c");
+    expect(args.slice(-2)).toEqual(["resume", "id1"]);
+  });
+
+  // codex approves per server, so a group holding a tool that is not auto-allowed gets the url
+  // and nothing else — the prompt is the point. See codexGuiMcpServers.
+  it("omits the approval line for a server that is not auto-approved", () => {
+    const args = buildCodexArgs({ ...base, guiMcpServers: [{ id: "mulmoterminal-media", url: "media-endpoint", autoApprove: false }] });
+    expect(args).toEqual(["-c", `mcp_servers.mulmoterminal-media.url="media-endpoint"`]);
+    expect(args.join(" ")).not.toContain("approval_mode");
+  });
+
+  // The hook override is the same string for every session (see codex-hook.ts), and like every
+  // other global flag it has to precede the resume subcommand.
+  it("registers the permission hook ahead of the resume subcommand when asked", () => {
+    const args = buildCodexArgs({ ...base, resume: "id1", permissionHook: true });
+    expect(args).toEqual(["-c", codexPermissionHookOverride(), "resume", "id1"]);
+    expect(buildCodexArgs({ ...base, resume: "id1" })).toEqual(["resume", "id1"]);
+  });
+});

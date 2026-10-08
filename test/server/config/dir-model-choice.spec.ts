@@ -16,7 +16,7 @@ import path from "node:path";
 import { loadDirConfig } from "../../../server/config/dir-config.js";
 import { effectiveChoice } from "../../../server/session/launch-choice.js";
 import { resolveProvider, type ProviderConfig, type ProviderResult } from "../../../server/session/provider-env.js";
-import { buildClaudeArgs } from "../../../server/agents/claude-args.js";
+import { buildClaudeArgs } from "../../../server/agents/claude/claude-args.js";
 import { MODEL_ID_ALLOWED } from "../../../common/modelIds.js";
 import { makeTempDir } from "../../support/tempDir";
 

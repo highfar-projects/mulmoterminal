@@ -9,7 +9,7 @@
 // Every dependency is injected so the loop can be driven with fakes: the real one reads
 // the filesystem and mutates session flags, neither of which a test should need.
 
-import { nextReadRange, takeCompleteLines, turnBoundaries, type CodexTurnBoundary } from "../agents/codex-activity.js";
+import { nextReadRange, takeCompleteLines, turnBoundaries, type CodexTurnBoundary } from "../agents/codex/codex-activity.js";
 
 export const CODEX_ACTIVITY_POLL_MS = 1000;
 

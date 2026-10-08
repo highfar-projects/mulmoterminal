@@ -3,14 +3,14 @@
 // a later cold reconnect resume it. Split from index.ts (#548 step 3c).
 import type { WebSocket } from "ws";
 import { PORT } from "../config/env.js";
-import { buildCodexArgs } from "../agents/codex-args.js";
-import { codexAdapter } from "../agents/codex.js";
+import { buildCodexArgs } from "../agents/codex/codex-args.js";
+import { codexAdapter } from "../agents/codex/codex.js";
 import type { ToolGroup } from "../../common/toolGroups.js";
 import { codexGuiMcpServers, guiMcpEnv } from "./mcp-config.js";
-import { wantsCodexPermissionHook } from "../agents/codex-hook.js";
-import { snapshotSessions, watchForCodexSession } from "../agents/codex-session.js";
+import { wantsCodexPermissionHook } from "../agents/codex/codex-hook.js";
+import { snapshotSessions, watchForCodexSession } from "../agents/codex/codex-session.js";
 import { accountSpawnEnv, codexSessionRoot, codexSessionSkillsDir } from "./session-home.js";
-import { codexRolloutPath } from "../agents/codex-sessions.js";
+import { codexRolloutPath } from "../agents/codex/codex-sessions.js";
 import { trackCodexActivity } from "./codex-activity-track.js";
 import { claimedCodexRollouts, codexRollouts, ptys, rememberCodexRollout } from "./registry.js";
 import { ptyWouldReattach } from "./pty-spawn.js";

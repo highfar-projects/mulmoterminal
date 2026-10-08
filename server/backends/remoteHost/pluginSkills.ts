@@ -9,7 +9,7 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
 import { isRecord } from "../../../common/isRecord.js";
-import { SLUG_RE } from "../../agents/codex-skills.js";
+import { SLUG_RE } from "../../agents/codex/codex-skills.js";
 import { settingsLayers, type HiddenSkillsOptions } from "./skillOverrides.js";
 
 const SKILL_FILE = "SKILL.md";

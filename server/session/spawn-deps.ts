@@ -1,4 +1,4 @@
-import type { TokenAssignment } from "../agents/token-assignment.js";
+import type { TokenAssignment } from "../agents/token/token-assignment.js";
 // What index.ts still owns after the PTY machinery moved out (#548 step 3c). The json
 // builders read config it holds; `reap` and `setWorking` drive a session lifecycle that
 // reaches well beyond spawning, so they arrive as deps rather than as imports.

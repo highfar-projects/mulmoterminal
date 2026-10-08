@@ -5,7 +5,7 @@
 // user's own command line, and an account session runs on its own home's login — each of those
 // says whose subscription it is, and rotating it would silently overrule that.
 import type { ProviderResolution } from "./provider-env.js";
-import type { TokenAssignment } from "../agents/token-assignment.js";
+import type { TokenAssignment } from "../agents/token/token-assignment.js";
 
 export interface RotationEligibility {
   /** The provider resolution's env: non-empty for a provider session. */

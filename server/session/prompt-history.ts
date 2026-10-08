@@ -13,7 +13,7 @@
 import { isRecord } from "../../common/isRecord.js";
 import { readString } from "../../common/readString.js";
 import type { PromptEntry, PromptWindow } from "../../common/promptHistory.js";
-import { codexUserTurn, isDoubleWrite, type CodexUserTurn } from "../agents/codex-user-turn.js";
+import { codexUserTurn, isDoubleWrite, type CodexUserTurn } from "../agents/codex/codex-user-turn.js";
 import { userPromptText } from "./transcript.js";
 
 /** Enough to recognise a prompt again, which is what this is for. Deliberately far above

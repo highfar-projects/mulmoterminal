@@ -4,7 +4,7 @@
 // a PTY.
 
 import { promises as fs } from "node:fs";
-import { HOOK_EVENT_FOR, boundaryOutcome, type CodexTurnBoundary } from "../agents/codex-activity.js";
+import { HOOK_EVENT_FOR, boundaryOutcome, type CodexTurnBoundary } from "../agents/codex/codex-activity.js";
 import { notifyTaskFinished } from "./task-push.js";
 import { watchCodexActivity } from "./codex-activity-watch.js";
 

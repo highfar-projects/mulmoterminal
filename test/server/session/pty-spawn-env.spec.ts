@@ -363,7 +363,7 @@ describe("ptySpawn — the session-id guard", () => {
   // The one non-random id shape in the codebase — it must keep passing, or every rate-limit
   // probe dies at launch.
   it("accepts a probe id, which is UUID-shaped by construction", async () => {
-    const { newProbeSessionId } = await import("../../../server/agents/probe-session.js");
+    const { newProbeSessionId } = await import("../../../server/agents/probe/probe-session.js");
     ptySpawn(newProbeSessionId(), "claude", [], EXISTING_CWD, false);
     expect(spawn).toHaveBeenCalled();
   });

@@ -21,9 +21,9 @@
 import type { WebSocket } from "ws";
 import { PORT } from "../config/env.js";
 import { guiMcpEnv } from "./mcp-config.js";
-import { buildCursorArgs } from "../agents/cursor-args.js";
-import { cursorAdapter } from "../agents/cursor.js";
-import { syncCursorHooksFile } from "../agents/cursor-hooks-file.js";
+import { buildCursorArgs } from "../agents/cursor/cursor-args.js";
+import { cursorAdapter } from "../agents/cursor/cursor.js";
+import { syncCursorHooksFile } from "../agents/cursor/cursor-hooks-file.js";
 import { entitledToolGroups, rememberEntitledToolGroups } from "./bridge-session.js";
 import type { ToolGroup } from "../../common/toolGroups.js";
 import { ptyWouldReattach } from "./pty-spawn.js";

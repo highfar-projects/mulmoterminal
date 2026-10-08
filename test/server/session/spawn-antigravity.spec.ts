@@ -30,8 +30,8 @@ const mocks = vi.hoisted(() => ({ remembered: [] as { sessionId: string; convers
 // The argv each spawn really handed the pty — the only place the seed wiring can be seen end to end.
 const spawnMocks = vi.hoisted(() => ({ argv: [] as string[][] }));
 
-vi.mock("../../../server/agents/antigravity-session.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../../server/agents/antigravity-session.js")>()),
+vi.mock("../../../server/agents/antigravity/antigravity-session.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../server/agents/antigravity/antigravity-session.js")>()),
   watchForAntigravitySession: vi.fn(() => Promise.resolve(CAPTURED_ID)),
 }));
 

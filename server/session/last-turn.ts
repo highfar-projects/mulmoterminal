@@ -5,8 +5,8 @@
 // simply isn't on disk (#254).
 
 import { conversationTurnsFromParsed, parseJsonl } from "./transcript.js";
-import { codexEventPayload as eventPayload } from "../agents/codex-events.js";
-import { codexUserPrompt } from "../agents/codex-user-turn.js";
+import { codexEventPayload as eventPayload } from "../agents/codex/codex-events.js";
+import { codexUserPrompt } from "../agents/codex/codex-user-turn.js";
 
 export interface LastTurn {
   prompt: string | null;

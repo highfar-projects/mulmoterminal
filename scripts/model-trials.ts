@@ -20,7 +20,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { median } from "../common/median.js";
-import { claudeAdapter } from "../server/agents/claude.js";
+import { claudeAdapter } from "../server/agents/claude/claude.js";
 import { loadAppConfig } from "../server/config/app-config.js";
 import { cleanupSessionSettings, settingsArgument } from "../server/session/session-settings.js";
 import { requireResolution, resolveProvider, withoutUnset } from "../server/session/provider-env.js";

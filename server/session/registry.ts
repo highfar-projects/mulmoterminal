@@ -128,7 +128,7 @@ export const claimedCodexRollouts = new Set<string>();
 // Sessions spawned with our `--settings` hooks. Only spawn-claude registers them, and the reason is
 // narrower than "only claude has hooks" — copilot and cursor have them too, but theirs live in ONE
 // MACHINE-GLOBAL file rather than a file written per spawn, so there is nothing per-session to
-// record here (server/agents/{copilot,cursor}-hooks-file.ts).
+// record here (server/agents/{copilot/copilot,cursor/cursor}-hooks-file.ts).
 //
 // It exists so the MCP broker can tell whether a session's tool calls are ALREADY being recorded,
 // without asking what agent it is: a codex launcher chip runs codex through the login shell, so

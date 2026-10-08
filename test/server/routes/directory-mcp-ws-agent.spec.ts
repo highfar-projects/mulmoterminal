@@ -47,7 +47,7 @@ vi.mock("../../../server/infra/tmux.js", async (importOriginal) => ({
 
 // muse's index is a sqlite database on the real disk; this spec is about the handler's shape.
 const museSessionExistsForCwd = vi.fn(() => Promise.resolve(false));
-vi.mock("../../../server/agents/muse-session.js", () => ({ museSessionExistsForCwd }));
+vi.mock("../../../server/agents/muse/muse-session.js", () => ({ museSessionExistsForCwd }));
 
 // The directory's registered tool groups, read off Claude Code's config files on the real path.
 const registeredGuiMcpGroups = vi.fn(() => Promise.resolve(["render"]));
