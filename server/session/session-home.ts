@@ -13,7 +13,7 @@ import { isAccountId, type AccountAgent, type AgentAccount } from "../../common/
 import { agentHome, agentHomeEnvVar, agentHomeSpelling } from "../agents/agent-homes.js";
 import { accountSessionsHydrated, boundAccount, rememberAccountSession } from "./account-sessions.js";
 import { projectSessionsDir } from "./project-dir.js";
-import { codexRolloutExists } from "../agents/codex-sessions.js";
+import { codexRolloutExists } from "../agents/codex/codex-sessions.js";
 
 let accountsProvider: () => readonly AgentAccount[] = () => [];
 

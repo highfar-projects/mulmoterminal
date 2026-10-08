@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { watchCodexActivity, type CodexActivityDeps } from "../../../server/session/codex-activity-watch.js";
-import type { CodexTurnBoundary } from "../../../server/agents/codex-activity.js";
+import type { CodexTurnBoundary } from "../../../server/agents/codex/codex-activity.js";
 
 const line = (o: unknown) => JSON.stringify(o);
 const started = (turnId = "t1") => line({ type: "event_msg", payload: { type: "task_started", turn_id: turnId } }) + "\n";

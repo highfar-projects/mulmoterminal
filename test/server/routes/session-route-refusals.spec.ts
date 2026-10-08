@@ -45,11 +45,11 @@ const listSessions = async () => {
   if (listing.fails) throw new Error("index unreadable");
   return listing.rows;
 };
-vi.mock("../../../server/agents/copilot-sessions.js", async (importOriginal) => ({
+vi.mock("../../../server/agents/copilot/copilot-sessions.js", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   listCopilotSessionsForCwd: listSessions,
 }));
-vi.mock("../../../server/agents/cursor-sessions.js", async (importOriginal) => ({
+vi.mock("../../../server/agents/cursor/cursor-sessions.js", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   listCursorSessionsForCwd: listSessions,
 }));

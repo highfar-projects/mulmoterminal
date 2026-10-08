@@ -29,7 +29,7 @@ import { isRecord } from "./isRecord.js";
 // appended, so it must say.
 //
 // Claude Code is the only one today. Codex and Antigravity take a different argument set
-// (server/agents/codex-args.ts), so adding one here means teaching the spawn to build ITS argv —
+// (server/agents/codex/codex-args.ts), so adding one here means teaching the spawn to build ITS argv —
 // which is why this is a list rather than a boolean.
 export const CUSTOM_AGENT_KINDS = ["claude"] as const;
 

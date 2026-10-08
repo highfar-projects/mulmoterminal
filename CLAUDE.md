@@ -203,7 +203,7 @@ that hole is known and accepted (a `codex` chip can occupy a worktree twice). A 
 tools asks for them in the flags the user writes. Agent behaviour belongs to the Agent Picker.
 
 **Muse is the third shape and the one that breaks the pattern.** It reads neither a flag nor a file
-in the directory: MCP servers are declared by an installed PLUGIN (`server/agents/muse-mcp.ts`), and
+in the directory: MCP servers are declared by an installed PLUGIN (`server/agents/muse/muse-mcp.ts`), and
 `muse plugins install` records one PER MACHINE — `--scope project` writes nothing into the project.
 So the registration cannot express "this directory gets render", and two things follow that nothing
 else here does:
@@ -221,7 +221,7 @@ both were tried, and both fail silently by serving zero tools.
 
 **Cursor is the fourth shape, and it is half of two others — which is the part to remember.** It
 reads `.cursor/mcp.json` in the working directory, as agy does, so the writer
-(`server/agents/cursor-mcp.ts`) looks like agy's. But cursor starts that MCP server on a **curated
+(`server/agents/cursor/cursor-mcp.ts`) looks like agy's. But cursor starts that MCP server on a **curated
 environment**, exactly as muse's plugin host does, so the mechanism agy's entry leans on — the bridge
 inheriting the agent's `guiMcpEnv` — does not happen: the group and the port go in the entry's
 **argv**, and the SESSION is resolved through `/api/mcp-resolve` by walking the process tree
@@ -267,7 +267,7 @@ muse drive neither — and for grok and muse that is a missing WIRE, not a missi
 record, since this repo already parses their own per-turn logs for the token badges (on a badge poll,
 though, not on a live tail: the tail is part of what a status wire would still have to add). Cursor
 inverts that pair: its status is wired and its counts come from the same hook, because it writes them
-to NO file — so its badge is folded in memory (`server/agents/cursor-usage.ts`) and a restart starts
+to NO file — so its badge is folded in memory (`server/agents/cursor/cursor-usage.ts`) and a restart starts
 the count again. Launching a CLI in a PTY is the cheap
 part; the notification, the resume, the GUI panel and the token badge are separate capabilities,
 each with its own precondition on what that CLI exposes.

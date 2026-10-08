@@ -27,11 +27,11 @@ import {
   museConversations,
   museConversationsHydrated,
 } from "./registry.js";
-import { grokConversationExists, grokSessionsRoot } from "../agents/grok-session.js";
+import { grokConversationExists, grokSessionsRoot } from "../agents/grok/grok-session.js";
 import { claudeTranscriptFile, codexSessionRoot } from "./session-home.js";
-import { codexRolloutPath } from "../agents/codex-sessions.js";
-import { cursorTranscriptPath } from "../agents/cursor-sessions.js";
-import { listCopilotTurns } from "../agents/copilot-sessions.js";
+import { codexRolloutPath } from "../agents/codex/codex-sessions.js";
+import { cursorTranscriptPath } from "../agents/cursor/cursor-sessions.js";
+import { listCopilotTurns } from "../agents/copilot/copilot-sessions.js";
 import { foldCopilotRow } from "./transcript-view-copilot.js";
 import type { SqliteRow } from "../agents/sqlite-read.js";
 import type { SessionAgent } from "../../common/sessionAgent.js";

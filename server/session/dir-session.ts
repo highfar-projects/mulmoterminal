@@ -10,9 +10,9 @@ import { canonicalPath } from "../infra/canonical-path.js";
 import { isSessionAttached, type SessionOccupancy } from "../../common/sessionOccupancy.js";
 import { tmuxListSessionIds } from "../infra/tmux.js";
 import { isTerminalAgent, type TerminalAgent } from "../../common/sessionAgent.js";
-import { isProbeSessionId } from "../agents/probe-session.js";
+import { isProbeSessionId } from "../agents/probe/probe-session.js";
 import type { AgentConversation } from "./agent-conversations.js";
-import { grokConversationExists, grokSessionsRoot } from "../agents/grok-session.js";
+import { grokConversationExists, grokSessionsRoot } from "../agents/grok/grok-session.js";
 import {
   antigravityConversations,
   codexRollouts,

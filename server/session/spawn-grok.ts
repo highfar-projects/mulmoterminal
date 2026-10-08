@@ -4,13 +4,13 @@
 // new conversation, so the id is the one THIS server minted. There is nothing to watch for, nothing
 // to claim, and no session->conversation map to keep — the whole apparatus codex and antigravity
 // need (a watcher, a `claimed…` set, `remember…`) exists only because those two mint their own ids
-// and tell nobody. grok is claude-shaped on this axis; see server/agents/grok-args.ts.
+// and tell nobody. grok is claude-shaped on this axis; see server/agents/grok/grok-args.ts.
 //
 // It is antigravity-shaped on the OTHER axis: grok reads its MCP servers from a file in the
 // directory rather than from a flag, so that file is brought in line on the way past.
-import { grokAdapter } from "../agents/grok.js";
-import { buildGrokArgs } from "../agents/grok-args.js";
-import { syncGrokMcpConfig } from "../agents/grok-mcp.js";
+import { grokAdapter } from "../agents/grok/grok.js";
+import { buildGrokArgs } from "../agents/grok/grok-args.js";
+import { syncGrokMcpConfig } from "../agents/grok/grok-mcp.js";
 import { startDirectoryMcpPty, syncDirectoryMcpForSpawn, type SpawnDirectoryMcpPty } from "./spawn-directory-mcp.js";
 import { wireAgentPtyRelay } from "./pty-relay.js";
 import { seedPromptArgument, withSettingsCleanup } from "./session-settings.js";

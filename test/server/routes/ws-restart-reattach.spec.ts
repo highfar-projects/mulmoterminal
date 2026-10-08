@@ -50,12 +50,12 @@ vi.mock("../../../server/session/session-reads.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../server/session/session-reads.js")>()),
   claudeOnDiskSessionIds: () => new Set(mocks.claudeOnDisk),
 }));
-vi.mock("../../../server/agents/antigravity-session.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../../server/agents/antigravity-session.js")>()),
+vi.mock("../../../server/agents/antigravity/antigravity-session.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../server/agents/antigravity/antigravity-session.js")>()),
   antigravityConversationExists: () => false,
 }));
-vi.mock("../../../server/agents/grok-session.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../../server/agents/grok-session.js")>()),
+vi.mock("../../../server/agents/grok/grok-session.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../server/agents/grok/grok-session.js")>()),
   grokConversationExistsInAnyCwd: () => mocks.grokHas,
 }));
 
@@ -72,8 +72,8 @@ vi.mock("../../../server/infra/tmux.js", async (importOriginal) => ({
 }));
 
 // The rollout probe walks codex's real sessions root on disk; the resolver must not.
-vi.mock("../../../server/agents/codex-sessions.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../../server/agents/codex-sessions.js")>()),
+vi.mock("../../../server/agents/codex/codex-sessions.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../server/agents/codex/codex-sessions.js")>()),
   codexRolloutExists: () => false,
 }));
 

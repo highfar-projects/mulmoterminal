@@ -7,7 +7,7 @@ import { join, resolve } from "node:path";
 import { collectSkills } from "./remoteHost/skills.js";
 import { userPluginInstalls, type PluginInstall } from "./remoteHost/pluginSkills.js";
 import { projectSkillsDir, userSkillsDir } from "./collections.js";
-import { SLUG_RE } from "../agents/codex-skills.js";
+import { SLUG_RE } from "../agents/codex/codex-skills.js";
 import { assembleSkillCatalog, recentDistinctDirs, type FoundPlugin, type FoundSource, type SkillCatalog } from "../../common/skillCatalog.js";
 
 /** A SKILL.md is a page of instructions; anything past this is not one, and is not read whole. */

@@ -27,12 +27,12 @@ vi.mock("../../../server/session/pty-spawn.js", () => ({
   ptyWouldReattach: () => reattaching,
 }));
 
-vi.mock("../../../server/agents/antigravity-mcp.js", () => ({
+vi.mock("../../../server/agents/antigravity/antigravity-mcp.js", () => ({
   syncAntigravityMcpConfig: (cwd: string, groups: readonly string[]) => syncAntigravityMcpConfig(cwd, groups),
 }));
 
 // The conversation-id watcher reads the real brain directory and would outlive the test.
-vi.mock("../../../server/agents/antigravity-session.js", () => ({
+vi.mock("../../../server/agents/antigravity/antigravity-session.js", () => ({
   antigravityBrainRoot: () => `${CWD}/.antigravity/brain`,
   snapshotAntigravitySessions: () => new Set<string>(),
   watchForAntigravitySession: () => Promise.resolve(null),

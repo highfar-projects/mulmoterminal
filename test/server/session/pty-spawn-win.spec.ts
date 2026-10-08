@@ -11,7 +11,7 @@ import pty from "node-pty";
 import { spawnPty } from "../../../server/session/pty-spawn";
 import { resolvePtyLaunchForEnv } from "../../../server/infra/resolve-bin";
 import { hookSettingsJson } from "../../../server/session/hook-settings";
-import { buildCodexArgs } from "../../../server/agents/codex-args";
+import { buildCodexArgs } from "../../../server/agents/codex/codex-args";
 
 const isWindows = process.platform === "win32";
 

@@ -3,8 +3,8 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TERMINAL_AGENTS, type TerminalAgent } from "../../../common/sessionAgent.js";
 import { agentDefaultHome, agentHome } from "../../../server/agents/agent-homes.js";
-import { codexSessionsRoot } from "../../../server/agents/codex-session.js";
-import { codexSkillsRoot } from "../../../server/agents/codex-skills.js";
+import { codexSessionsRoot } from "../../../server/agents/codex/codex-session.js";
+import { codexSkillsRoot } from "../../../server/agents/codex/codex-skills.js";
 import { bundledSkillsRoots } from "../../../server/infra/install-bundled-skills.js";
 import { setAccountsProvider } from "../../../server/session/session-home.js";
 import {

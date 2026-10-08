@@ -127,7 +127,7 @@ function readRemoteServer() {
 //
 // The override is the point rather than a detail: the gate used to look for the literal word
 // `claude` on PATH while the server ran `process.env.CLAUDE_BIN || "claude"`
-// (server/agents/claude.ts). A user who set CLAUDE_BIN to a real install was refused start-up by a
+// (server/agents/claude/claude.ts). A user who set CLAUDE_BIN to a real install was refused start-up by a
 // check asking a different question than the thing it was gating (#2082).
 function agentInstalled(agent) {
   const bin = agentBin(agent);

@@ -42,7 +42,7 @@ vi.mock("../../../server/infra/tmux.js", async (importOriginal) => ({
 
 // The session exists wherever it is asked about, so the probe's answer cannot be what makes this
 // pass or fail — only the DIRECTORY handed on does.
-vi.mock("../../../server/agents/cursor-sessions.js", () => ({
+vi.mock("../../../server/agents/cursor/cursor-sessions.js", () => ({
   cursorSessionExistsForCwd: () => true,
   cursorSessionExists: () => true,
   listCursorSessionsForCwd: () => [],

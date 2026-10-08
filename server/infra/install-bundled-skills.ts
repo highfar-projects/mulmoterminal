@@ -6,7 +6,7 @@
 import { existsSync, mkdirSync, cpSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { codexSkillsRoot } from "../agents/codex-skills.js";
+import { codexSkillsRoot } from "../agents/codex/codex-skills.js";
 import { claudeUserSkillsDir } from "../session/project-dir.js";
 import { agentDefaultHome } from "../agents/agent-homes.js";
 import { accountHome, accountsFor } from "../session/session-home.js";

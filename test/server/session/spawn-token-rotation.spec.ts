@@ -4,7 +4,7 @@
 // token-choice.spec.ts and the eligibility rule session-credential.spec.ts; this pins the spawn
 // path that connects them — including that a reattach never re-chooses.
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { TokenAssignment } from "../../../server/agents/token-assignment.js";
+import type { TokenAssignment } from "../../../server/agents/token/token-assignment.js";
 
 let reattach = false;
 let probes = 0;
@@ -19,7 +19,7 @@ vi.mock("../../../server/session/pty-spawn.js", () => ({
     return reattach;
   },
 }));
-vi.mock("../../../server/agents/claude-help-probe.js", () => ({ refuseUnsupportedPermissionMode: vi.fn() }));
+vi.mock("../../../server/agents/claude/claude-help-probe.js", () => ({ refuseUnsupportedPermissionMode: vi.fn() }));
 vi.mock("../../../server/session/claude-fullscreen-env.js", () => ({ claudeRendererEnv: () => ({}) }));
 vi.mock("../../../server/session/registry.js", () => ({
   knownSessions: new Map(),

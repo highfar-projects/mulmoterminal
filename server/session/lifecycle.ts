@@ -34,7 +34,7 @@ import {
 } from "./registry.js";
 import { clearedTranscripts, forgetClearedTranscript } from "./cleared-transcripts.js";
 import { forgetEntitledToolGroups } from "./bridge-session.js";
-import { forgetCursorBadges } from "../agents/cursor-usage.js";
+import { forgetCursorBadges } from "../agents/cursor/cursor-usage.js";
 import { parseWaitGraceMs, reapDecisionFor, reapTimerDelay, shouldForgetActivity } from "./reap-policy.js";
 import { sessionRow, shouldRefreshReply } from "./activity-transition.js";
 import { flagEffect, type ActivityFlag } from "./activity-flag.js";

@@ -3,7 +3,7 @@
 // the session. Split from index.ts (#548): the two agents differ only in how they decide
 // the input box is ready, and neither decision needs any of index.ts's session state.
 import type { IPty } from "node-pty";
-import { claudeAdapter } from "../agents/claude.js";
+import { claudeAdapter } from "../agents/claude/claude.js";
 import type { PtyEntry } from "./types.js";
 import { sanitizeDraftText } from "./pty-text.js";
 import { squashForMarker, trustDialogIsUp } from "./pty-scan.js";

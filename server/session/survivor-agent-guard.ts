@@ -22,10 +22,10 @@ import { TERMINAL_AGENTS, type TerminalAgent } from "../../common/sessionAgent.j
 import type { TerminalWsKind } from "../routes/terminal-ws-path.js";
 import { claudeOnDiskSessionIds } from "./session-reads.js";
 import { codexRolloutExistsAnywhere } from "./session-home.js";
-import { antigravityBrainRoot, antigravityConversationExists } from "../agents/antigravity-session.js";
-import { grokConversationExistsInAnyCwd, grokSessionsRoot } from "../agents/grok-session.js";
-import { copilotSessionExists } from "../agents/copilot-sessions.js";
-import { cursorSessionExists } from "../agents/cursor-sessions.js";
+import { antigravityBrainRoot, antigravityConversationExists } from "../agents/antigravity/antigravity-session.js";
+import { grokConversationExistsInAnyCwd, grokSessionsRoot } from "../agents/grok/grok-session.js";
+import { copilotSessionExists } from "../agents/copilot/copilot-sessions.js";
+import { cursorSessionExists } from "../agents/cursor/cursor-sessions.js";
 import { ptyWouldReattach } from "./pty-spawn.js";
 import {
   antigravityConversations,

@@ -38,7 +38,7 @@
 // rather than ceremonial: it is what makes a shape this store never showed us VISIBLE instead of
 // silently thinning the view.
 import { isRecord } from "../../common/isRecord.js";
-import { contentOf, cursorUserText } from "../agents/cursor-last-turn.js";
+import { contentOf, cursorUserText } from "../agents/cursor/cursor-last-turn.js";
 import { type TranscriptScan, foldTurnRecord, unknownRow } from "./transcript-view.js";
 import type { TranscriptRow } from "../../common/transcriptView.js";
 

@@ -7,13 +7,13 @@
 // The model line is per agent and always the same shape — `<AGENT>_MODEL`, or null to leave the
 // CLI on whatever it is configured to use. Claude has none here because its model is chosen per
 // session by the launch form rather than by the environment.
-import { claudeAdapter } from "../agents/claude.js";
-import { codexAdapter } from "../agents/codex.js";
-import { antigravityAdapter } from "../agents/antigravity.js";
-import { grokAdapter } from "../agents/grok.js";
-import { museAdapter } from "../agents/muse.js";
-import { copilotAdapter } from "../agents/copilot.js";
-import { cursorAdapter } from "../agents/cursor.js";
+import { claudeAdapter } from "../agents/claude/claude.js";
+import { codexAdapter } from "../agents/codex/codex.js";
+import { antigravityAdapter } from "../agents/antigravity/antigravity.js";
+import { grokAdapter } from "../agents/grok/grok.js";
+import { museAdapter } from "../agents/muse/muse.js";
+import { copilotAdapter } from "../agents/copilot/copilot.js";
+import { cursorAdapter } from "../agents/cursor/cursor.js";
 
 export const AGENT_BINS = {
   claude: claudeAdapter.bin(),
@@ -33,6 +33,6 @@ export const AGENT_MODELS = {
   copilot: process.env.COPILOT_MODEL || null,
   // Cursor's model names are account-specific and a wrong one is FATAL — the CLI exits printing the
   // whole list rather than falling back — so an operator setting this checks `cursor-agent
-  // --list-models` first (server/agents/cursor-args.ts).
+  // --list-models` first (server/agents/cursor/cursor-args.ts).
   cursor: process.env.CURSOR_MODEL || null,
 } as const;

@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import path from "node:path";
 import { resolveAddDirs, MAX_ADD_DIRS } from "../../../server/config/config-schema";
-import { buildClaudeArgs } from "../../../server/agents/claude-args";
+import { buildClaudeArgs } from "../../../server/agents/claude/claude-args";
 
 // Built through `path.resolve`, never written as "/repo": the rule resolves with the platform's
 // own path module, so on Windows a literal POSIX string never matches what it produces

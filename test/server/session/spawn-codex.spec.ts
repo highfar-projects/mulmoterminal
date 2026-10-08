@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createCodexSpawner } from "../../../server/session/spawn-codex.js";
 import { ptys } from "../../../server/session/registry.js";
 import type { SpawnDeps } from "../../../server/session/spawn-deps.js";
-import { codexPermissionHookOverride } from "../../../server/agents/codex-hook.js";
+import { codexPermissionHookOverride } from "../../../server/agents/codex/codex-hook.js";
 
 const SID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeee01";
 const ROLLOUT_ID = "11111111-2222-4333-8444-555555555555";
@@ -38,8 +38,8 @@ vi.mock("../../../server/session/pty-spawn.js", () => ({
 // appends to the real ~/.mulmoterminal log. Both are stubbed: this file is about which branch
 // the spawner takes, and a unit test must not write a session that never existed into the
 // developer's own state.
-vi.mock("../../../server/agents/codex-session.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../../server/agents/codex-session.js")>()),
+vi.mock("../../../server/agents/codex/codex-session.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../server/agents/codex/codex-session.js")>()),
   codexSessionsRoot: () => "/codex-root",
   snapshotSessions: () => new Set<string>(),
   watchForCodexSession: vi.fn(() => {
@@ -48,8 +48,8 @@ vi.mock("../../../server/agents/codex-session.js", async (importOriginal) => ({
   }),
 }));
 
-vi.mock("../../../server/agents/codex-sessions.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../../server/agents/codex-sessions.js")>()),
+vi.mock("../../../server/agents/codex/codex-sessions.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../server/agents/codex/codex-sessions.js")>()),
   codexRolloutPath: (_root: string, id: string) => `/codex-root/rollout-${id}.jsonl`,
 }));
 

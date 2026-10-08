@@ -3,7 +3,7 @@
 //
 // The history has one writer everywhere else: `/api/hook`, driven by the PreToolUse /
 // PostToolUse settings claude carries (session/hook-settings.ts). codex has no hook mechanism
-// and neither does agy — see the note at the top of agents/codex-activity.ts, and
+// and neither does agy — see the note at the top of agents/codex/codex-activity.ts, and
 // docs/codex-vs-claude.md — so for those two the pane sat empty however much they did.
 //
 // The broker is the one place their work is visible to us: every GUI tool they call arrives at

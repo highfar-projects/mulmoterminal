@@ -46,7 +46,7 @@
 // row per unknown type would fill the view with names of things that are not conversation. Nothing
 // in the store hits the fallback today — it is a tripwire, not a source of rows.
 import { isRecord } from "../../common/isRecord.js";
-import { codexUserTurn, isDoubleWrite, type CodexUserTurn } from "../agents/codex-user-turn.js";
+import { codexUserTurn, isDoubleWrite, type CodexUserTurn } from "../agents/codex/codex-user-turn.js";
 import { type TranscriptScan, foldTurnRecord, toolResultRow } from "./transcript-view.js";
 import type { TranscriptRow } from "../../common/transcriptView.js";
 

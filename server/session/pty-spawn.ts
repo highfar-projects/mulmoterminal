@@ -210,7 +210,7 @@ export function ptySpawn(
   // machine (#1533), and every spawn with the same defect would have attached that same pane, each
   // cell showing whichever conversation got there first. Refused here, at the one choke point every
   // spawner passes, so the defect is a failed launch with a message instead of a silently shared
-  // terminal. Probe ids pass: they are UUID-shaped by construction (agents/probe-session.ts).
+  // terminal. Probe ids pass: they are UUID-shaped by construction (agents/probe/probe-session.ts).
   if (!SESSION_ID_RE.test(sessionId)) throw new Error(`refusing to spawn a pty for an invalid session id: ${JSON.stringify(sessionId)}`);
   const { unset = [], binEnvVar } = options;
   // Merged HERE and not only in spawnPty, because the tmux branch below does not hand `env` to

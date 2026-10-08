@@ -2,7 +2,7 @@
 //
 // Both sweeps are about a feature that is GONE, so neither belongs in the boot sequence's prose:
 // what a reader of index.ts needs is that they happen before anything listens, not why.
-import { sweepLegacyProbeTranscriptsOnce } from "../agents/probe-transcript.js";
+import { sweepLegacyProbeTranscriptsOnce } from "../agents/probe/probe-transcript.js";
 import { removeLegacySandboxCredentials, removeLegacySandboxContainers } from "./fs-cleanup.js";
 import { CLAUDE_CWD, MULMOTERMINAL_HOME } from "../config/env.js";
 

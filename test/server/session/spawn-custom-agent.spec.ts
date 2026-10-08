@@ -29,7 +29,7 @@ vi.mock("../../../server/session/pty-spawn.js", () => ({
 
 // Stands in for `claude --help`, so asking the spawn's preflight runs no real binary.
 const refuseUnsupportedPermissionMode = vi.fn();
-vi.mock("../../../server/agents/claude-help-probe.js", () => ({ refuseUnsupportedPermissionMode }));
+vi.mock("../../../server/agents/claude/claude-help-probe.js", () => ({ refuseUnsupportedPermissionMode }));
 
 // The real map + writer, minus the disk: what a session was started on is persisted (it must
 // outlive the pty, since the transcript does), and these tests are about the resolution, not the

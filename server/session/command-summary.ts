@@ -6,7 +6,7 @@
 import type { Express, Request } from "express";
 import { spawn } from "node:child_process";
 import os from "node:os";
-import { claudeAdapter } from "../agents/claude.js";
+import { claudeAdapter } from "../agents/claude/claude.js";
 import { requestOriginAllowed } from "../routes/same-origin-guard.js";
 import { isRecord } from "../../common/isRecord.js";
 

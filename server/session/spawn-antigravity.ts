@@ -1,11 +1,11 @@
 // Starting an Antigravity (`agy`) session in a PTY. Like codex, agy mints its conversation id
 // itself, so a fresh session is watched until that id appears — that is what lets a later cold
 // reconnect resume it.
-import { antigravityAdapter } from "../agents/antigravity.js";
-import { buildAntigravityArgs } from "../agents/antigravity-args.js";
-import { syncAntigravityMcpConfig } from "../agents/antigravity-mcp.js";
-import { syncAntigravitySkillsConfig } from "../agents/antigravity-skills.js";
-import { antigravityBrainRoot, snapshotAntigravitySessions, watchForAntigravitySession } from "../agents/antigravity-session.js";
+import { antigravityAdapter } from "../agents/antigravity/antigravity.js";
+import { buildAntigravityArgs } from "../agents/antigravity/antigravity-args.js";
+import { syncAntigravityMcpConfig } from "../agents/antigravity/antigravity-mcp.js";
+import { syncAntigravitySkillsConfig } from "../agents/antigravity/antigravity-skills.js";
+import { antigravityBrainRoot, snapshotAntigravitySessions, watchForAntigravitySession } from "../agents/antigravity/antigravity-session.js";
 import { startDirectoryMcpPty, syncDirectoryMcpForSpawn, type SpawnDirectoryMcpPty } from "./spawn-directory-mcp.js";
 import { wireAgentPtyRelay } from "./pty-relay.js";
 import { seedPromptArgument, withSettingsCleanup } from "./session-settings.js";

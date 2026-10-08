@@ -106,7 +106,7 @@ import { mountProcessRoutes } from "./process-routes.js";
 import { listProcessDetails } from "../infra/process-list.js";
 import type { SessionActivityDeps } from "../session/session-activity-deps.js";
 import { mountSpaFallback } from "../infra/spa-fallback.js";
-import { mountRateLimitRoutes, type RateLimitRouteDeps } from "../agents/rate-limit-routes.js";
+import { mountRateLimitRoutes, type RateLimitRouteDeps } from "../agents/rate-limit/rate-limit-routes.js";
 import { mountLoadRoute } from "./load-routes.js";
 import { workspaceForRoute } from "./routeParams.js";
 
