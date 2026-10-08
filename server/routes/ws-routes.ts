@@ -52,6 +52,7 @@ import { TOOL_GROUPS, type ToolGroup } from "../../common/toolGroups.js";
 import { parseTerminalSize, type TerminalSize } from "../../common/terminalSize.js";
 import { handleCommandFrame } from "../session/pty-connection.js";
 import { closeWithError } from "../session/ws-frames.js";
+import { announceCredential } from "../session/credential-announce.js";
 import { ProviderRefusedError } from "../session/provider-env.js";
 import { sessionExistsOnDisk } from "../session/session-reads.js";
 import { clearedTranscripts } from "../session/cleared-transcripts.js";
@@ -577,6 +578,8 @@ export async function handleClaudeConnection(deps: WsRouteDeps, ws: WebSocket, r
     const settled = settledEntry(ws, "claude", sessionId, !!live, early);
     if (!settled) return;
     startAndWire(deps, ws, { id: sessionId, tag: "claude", early, startFailureMessage, size }, () => {
+      // spawnClaudePty announces for a process it starts; a same-process reattach starts nothing.
+      if (settled.entry) announceCredential(sessionId, ws);
       const entry = settled.entry
         ? deps.reattachPty(settled.entry, ws, sessionId)
         : deps.spawnClaudePty(sessionId, resume, ws, { cwd, attachGuiMcp, launch, customAgentId, directoryMcpGroups });

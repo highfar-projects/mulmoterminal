@@ -104,6 +104,9 @@ vi.mock("../../../server/session/worktree-session-limit.js", () => ({
   worktreeOccupancy: () => Promise.resolve({ isWorktree: false, session: null }),
 }));
 
+const announceCredential = vi.fn();
+vi.mock("../../../server/session/credential-announce.js", () => ({ announceCredential }));
+
 const { handleClaudeConnection, handleCodexConnection } = await import("../../../server/routes/ws-routes.js");
 
 const SID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeee02";
@@ -190,6 +193,25 @@ describe("/ws (claude) admission", () => {
   it("spawns for a client that stayed", async () => {
     await handleClaudeConnection(makeDeps(), fakeWs() as unknown as WebSocket, request());
     expect(spawnClaudePty).toHaveBeenCalledTimes(1);
+  });
+});
+
+// spawnClaudePty announces the rotation token for a process it starts. A same-process reattach
+// (a reloaded page, a remounted cell) starts nothing, so the handler has to announce it itself or
+// the cell's account mark stays blank until the next spawn (#2919).
+describe("/ws (claude) rotation credential on a same-process reattach", () => {
+  it("announces the credential to the reattaching socket and does not spawn", async () => {
+    ptys.set(SID, { term: fakeTerm(), agent: "claude", active: false });
+    const ws = fakeWs();
+    await handleClaudeConnection(makeDeps(), ws as unknown as WebSocket, request(`&session=${SID}`));
+    expect(spawnClaudePty).not.toHaveBeenCalled();
+    expect(announceCredential).toHaveBeenCalledWith(SID, ws);
+  });
+
+  it("leaves the announcing to the spawn for a process it starts", async () => {
+    await handleClaudeConnection(makeDeps(), fakeWs() as unknown as WebSocket, request());
+    expect(spawnClaudePty).toHaveBeenCalledTimes(1);
+    expect(announceCredential).not.toHaveBeenCalled();
   });
 });
 
