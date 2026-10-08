@@ -1,5 +1,5 @@
 // "Would this collection survive a clone?" — the wire shape, shared because BOTH sides decide
-// from it: the server produces the report (server/backends/collectionSelfContainment.ts) and the
+// from it: the server produces the report (server/backends/collections/collectionSelfContainment.ts) and the
 // Collections pane renders it, colouring by severity and blocking on `portable`.
 //
 // In `common/` rather than mirrored, for the reason the layout rule gives: a second copy of a

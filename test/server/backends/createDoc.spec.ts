@@ -7,8 +7,8 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { createDoc, initMarkdownBackend } from "../../../server/backends/markdown.js";
-import { DOCS_DIR } from "../../../server/backends/docPath.js";
+import { createDoc, initMarkdownBackend } from "../../../server/backends/plugins/markdown.js";
+import { DOCS_DIR } from "../../../server/backends/files/docPath.js";
 
 let ws: string;
 const tempDirs: string[] = [];

@@ -90,7 +90,7 @@ export function resolveContained(base: string, rel: string, homeDir: string, pla
  *  not live-refresh, which is what it did before any of this existed.
  *
  *  That is narrower than `presentDocument`, which opens any `.md` on disk with no containment
- *  root at all (backends/openPath.ts), and the difference is deliberate: a channel name is a
+ *  root at all (backends/files/openPath.ts), and the difference is deliberate: a channel name is a
  *  string a BROWSER chose, while a tool-call path came from an agent the user launched. Closing
  *  the gap means registering the paths those tool calls actually opened and allowing only those
  *  — a trusted-path list, not a wider gate. Until that exists the README says what this covers
@@ -116,7 +116,7 @@ export function containForWatching(roots: Iterable<string>, candidatePath: strin
  *  The announcement goes through `publishFileChange`, so the channel and the payload stay the
  *  ones every View already subscribes to. For a document named by ABSOLUTE path that publish
  *  logs one `[file-change] stat failed` line per change — the shared publisher joins its
- *  argument onto the workspace, as it already does for an absolute save (backends/markdown.ts).
+ *  argument onto the workspace, as it already does for an absolute save (backends/plugins/markdown.ts).
  *  Cosmetic: the channel is still right, and `mtimeMs` only cache-busts. */
 
 // The DOS device names. Windows resolves them in EVERY directory — `C:\anything\NUL` is the

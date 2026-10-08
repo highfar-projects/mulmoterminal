@@ -535,7 +535,7 @@ worktree は `.git` を共有するので軽いが、**作業ツリーだけが�
 | `server/git/prPhase.ts` | ブランチの PR フェーズと CI 状態 | Review / MergeQueue |
 | `server/git/work-comment.ts`（#979 / #1369） | issue に1つのコメントを置き、マイルストーンを編集で追記。二重投稿しない | 外形的な進捗ログ |
 | `server/session/activity-*.ts` / `completion-hooks.ts` | working / waiting の検出、hidden ワーカーの完了フック | 進行エンジン（stall 検出） |
-| `server/backends/scheduler.ts` / `scheduled-run.ts` | cron でチャットを spawn | 定期巡回（CI 待ち、bot 取り込み） |
+| `server/backends/scheduler/scheduler.ts` / `scheduled-run.ts` | cron でチャットを spawn | 定期巡回（CI 待ち、bot 取り込み） |
 | `server/session/draft-injection.ts` / `issue-spawn-options.ts`（#1253） | 種プロンプトを draft で置く / 自動実行する の使い分け | Gate（自動進行と人間確認の切替） |
 | `server/agents/rate-limit-*.ts` | エージェントのレート制限の観測と永続化 | 並列度の制御 |
 | `server/session/decisions.ts` / `decision-digest.ts` | セッション中の決定の抽出とダイジェスト | Learn |

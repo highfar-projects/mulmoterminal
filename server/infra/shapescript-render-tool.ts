@@ -22,8 +22,8 @@ import {
 } from "@gui-chat-plugin/shapescript/render";
 import { isShapeArtifactPath, isPresentableShapePath, toArtifactsRelative } from "@gui-chat-plugin/shapescript";
 import type { ToolDefinition } from "gui-chat-protocol";
-import { artifactsFileOps, artifactsRoot } from "../backends/artifacts.js";
-import { shapeScriptByPath } from "../backends/openPath.js";
+import { artifactsFileOps, artifactsRoot } from "../backends/plugins/artifacts.js";
+import { shapeScriptByPath } from "../backends/files/openPath.js";
 
 /** Where a render lands, under the workspace artifacts root. Its own directory
  *  rather than beside the models: a `.shape` is a source the user edits, a PNG

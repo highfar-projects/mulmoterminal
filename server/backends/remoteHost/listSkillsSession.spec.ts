@@ -6,7 +6,7 @@ import path from "node:path";
 
 import { createListSkills, sessionSkillRoot, type SkillSessionLookup } from "./handlers/listSkills.js";
 import type { JsonObject } from "@mulmoclaude/core/remote-host";
-import { initCollectionsBackend } from "../collections.js";
+import { initCollectionsBackend } from "../collections/collections.js";
 
 // #2358. A sessionId asks for the skills THAT session can run: its own directory's, plus its
 // enabled plugins'. Absent, the list is the workspace's as before.

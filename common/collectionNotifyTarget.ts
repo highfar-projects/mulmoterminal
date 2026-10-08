@@ -1,6 +1,6 @@
 // The navigate target a collection-completion bell carries, and the one narrowing
 // that reads it back. Shared because BOTH sides decide from it: the server writes
-// the target when it publishes a bell (server/backends/collectionNotifierAdapter.ts)
+// the target when it publishes a bell (server/backends/collections/collectionNotifierAdapter.ts)
 // and the UI reads it to accent the record's card (src/utils/collectionNotified.ts).
 // A second copy of the literal in the reader is exactly how a writer/reader pair
 // drifts silently — the bell keeps arriving, only the accent stops appearing.

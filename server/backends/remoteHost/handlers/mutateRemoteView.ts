@@ -6,9 +6,9 @@
 import { loadCollection } from "@mulmoclaude/core/collection/server";
 import { normalizeMutate } from "@mulmoclaude/core/remote-view";
 import { toJsonObject, type CommandHandlers, type JsonObject } from "@mulmoclaude/core/remote-host";
-import { mutateRemoteViewFor, mutateRemoteViewFailureMessage } from "../../remoteView.js";
+import { mutateRemoteViewFor, mutateRemoteViewFailureMessage } from "../../collections/remoteView.js";
 import { scopeFromCommand } from "../commandScope.js";
-import { mutateWriteApplied } from "../../mutateStatus.js";
+import { mutateWriteApplied } from "../../collections/mutateStatus.js";
 import { jsonPayload } from "../jsonPayload.js";
 import { readString } from "../../../../common/readString.js";
 

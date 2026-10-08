@@ -38,7 +38,7 @@ function apiCall<T = unknown>(path: string, opts: { method: "GET" | "POST" | "PU
 configureAccountingHost({
   apiCall,
   // Raw `accounting:<bookId>` / `accounting:books` channels: the engine publishes
-  // book changes (server/backends/accounting.ts) and the View live-refreshes.
+  // book changes (server/backends/plugins/accounting.ts) and the View live-refreshes.
   subscribe,
   localeTag: () => browserLocale(),
 });

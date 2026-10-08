@@ -7,7 +7,7 @@ import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 import { chmodSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { setFirestoreAccessor, setSharedCollectionsSupport, type FirestoreDocs, type FirestoreDoc } from "@mulmoclaude/core/collection/server";
-import { initCollectionsBackend } from "../../../server/backends/collections.js";
+import { initCollectionsBackend } from "../../../server/backends/collections/collections.js";
 import { forkSharedApp, initSharedApp } from "../../../server/backends/sharedApp/declare.js";
 import { makeTempDir } from "../../support/tempDir";
 import { fakeServerTimestamp } from "../../support/serverTimestamp.js";

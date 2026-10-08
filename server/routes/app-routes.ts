@@ -46,25 +46,25 @@ import { mountPickFileRoute } from "../files/pick-file.js";
 import { mountCommandSummaryRoute } from "../session/command-summary.js";
 import { mountCostRoute } from "../session/cost.js";
 import { mountShutdownRoute } from "./shutdown-routes.js";
-import { mountCollectionRoutes } from "../backends/collections.js";
-import { mountCollectionActionIndex } from "../backends/collectionActionIndexRoute.js";
+import { mountCollectionRoutes } from "../backends/collections/collections.js";
+import { mountCollectionActionIndex } from "../backends/collections/collectionActionIndexRoute.js";
 // "Would this collection survive a clone?" — mounts itself beside the collection routes.
-import { mountSelfContainmentRoutes } from "../backends/collectionSelfContainment.js";
+import { mountSelfContainmentRoutes } from "../backends/collections/collectionSelfContainment.js";
 // "What would publishing this app put on screen?" — computed, never written.
-import { mountSharedAppPreviewRoutes } from "../backends/sharedAppPreviewRoutes.js";
-import { syncCollectionWatcherRoots } from "../backends/collectionWatchers.js";
-import { mountGoogleRoutes } from "../backends/google.js";
-import { mountWikiRoutes } from "../backends/wiki.js";
-import { mountAccountingRoutes } from "../backends/accounting.js";
-import { mountFeedsRoutes } from "../backends/feeds.js";
-import { mountCalendarPushRoutes } from "../backends/calendarPush.js";
+import { mountSharedAppPreviewRoutes } from "../backends/sharedApp/sharedAppPreviewRoutes.js";
+import { syncCollectionWatcherRoots } from "../backends/collections/collectionWatchers.js";
+import { mountGoogleRoutes } from "../backends/calendar/google.js";
+import { mountWikiRoutes } from "../backends/plugins/wiki.js";
+import { mountAccountingRoutes } from "../backends/plugins/accounting.js";
+import { mountFeedsRoutes } from "../backends/feeds/feeds.js";
+import { mountCalendarPushRoutes } from "../backends/calendar/calendarPush.js";
 import { listProjectRoots } from "../infra/project-root.js";
 import { mountRemoteHostRoutes } from "../backends/remoteHost/index.js";
 import { mountNotificationRoutes } from "../backends/notifier.js";
-import { mountWhisperRoutes } from "../backends/whisper.js";
-import { mountSchedulerRoutes } from "../backends/scheduler.js";
-import { mountFilesRoutes } from "../backends/files.js";
-import { mountFilesPageRoute } from "../backends/filesPage.js";
+import { mountWhisperRoutes } from "../backends/media/whisper.js";
+import { mountSchedulerRoutes } from "../backends/scheduler/scheduler.js";
+import { mountFilesRoutes } from "../backends/files/files.js";
+import { mountFilesPageRoute } from "../backends/files/filesPage.js";
 import {
   hookedSessions,
   ptys,
@@ -81,12 +81,12 @@ import { mountDecisionRoutes } from "./decision-routes.js";
 import { mountWhatsNewRoutes } from "../whatsNew/routes.js";
 import { mountRoomRoutes } from "./room-routes.js";
 import { mountSkillCatalogRoutes } from "./skill-catalog-routes.js";
-import { mountTranslationRoutes } from "../backends/translation.js";
-import { mountHtmlDispatchRoute, mountHtmlFileRoute, mountHtmlPreviewRoute } from "../backends/html.js";
-import { mountShapeScriptDispatchRoute } from "../backends/shapescript.js";
-import { mountPresentPathRoot } from "../backends/presentPathRoot.js";
+import { mountTranslationRoutes } from "../backends/media/translation.js";
+import { mountHtmlDispatchRoute, mountHtmlFileRoute, mountHtmlPreviewRoute } from "../backends/plugins/html.js";
+import { mountShapeScriptDispatchRoute } from "../backends/plugins/shapescript.js";
+import { mountPresentPathRoot } from "../backends/files/presentPathRoot.js";
 import { cwdForSession } from "../session/session-cwd.js";
-import { mountMulmoScriptDispatchRoute, mountMulmoScriptMediaRoute } from "../backends/mulmoscript.js";
+import { mountMulmoScriptDispatchRoute, mountMulmoScriptMediaRoute } from "../backends/plugins/mulmoscript.js";
 import { CLAUDE_CWD, MULMOTERMINAL_HOME, PORT, SESSION_ID_RE } from "../config/env.js";
 import { FILE_WRITE_CHANNEL, type FileWriteEvent } from "../../common/fileWriteChannel.js";
 import { PROMPT_SUBMITTED_CHANNEL, type PromptSubmittedEvent } from "../../common/promptChannel.js";
@@ -179,7 +179,7 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
 
   // Straight after the body parser and BEFORE every /api/plugin handler: rewrite
   // presentDocument / presentHtml's relative `path` to an absolute one under the calling
-  // session's own directory (backends/presentPathRoot.ts). Registered here rather than
+  // session's own directory (backends/files/presentPathRoot.ts). Registered here rather than
   // next to one of the dispatch routes because more than one of them can take that path,
   // and all of them must see the same, already-absolute value.
   mountPresentPathRoot(app, { cwdForSession, workspace: CLAUDE_CWD });

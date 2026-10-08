@@ -16,7 +16,7 @@ import path from "node:path";
 import { listFeeds } from "@mulmoclaude/core/feeds/server";
 import { createRemoteHostHandlers } from "./handlers/index.js";
 import { createGetFeed, type GetFeedDeps } from "./handlers/getFeed.js";
-import { initCollectionsBackend } from "../collections.js";
+import { initCollectionsBackend } from "../collections/collections.js";
 import type { AnswerResult } from "../../../common/askQuestion.js";
 
 // Only listFeeds is stubbed; storeFor/toDetail/deriveItems/pageResult stay real.

@@ -8,13 +8,13 @@
 // a `schema.json` is a collection, served by `listCollections`, so it must not
 // double-list).
 //
-// The roots come from backends/collections.ts (`userSkillsDir` / `projectSkillsDir`),
+// The roots come from backends/collections/collections.ts (`userSkillsDir` / `projectSkillsDir`),
 // the SAME directories the collection engine discovers — so the skill/collection
 // split is derived from one source of truth, not two.
 import { readdir, readFile, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
-import { userSkillsDir, projectSkillsDir } from "../collections.js";
+import { userSkillsDir, projectSkillsDir } from "../collections/collections.js";
 import { SLUG_RE } from "../../agents/codex/codex-skills.js";
 import { hiddenSkills } from "./skillOverrides.js";
 

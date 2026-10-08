@@ -15,7 +15,7 @@ import { loadDirConfig } from "../../../server/config/dir/dir-config";
 import { loadPresets } from "../../../server/config/dir/cwd-presets";
 import { loadScripts } from "../../../server/files/scripts";
 import { loadAppConfigResult } from "../../../server/config/app-config";
-import { loadUserTasks } from "../../../server/backends/scheduler";
+import { loadUserTasks } from "../../../server/backends/scheduler/scheduler";
 
 const BOM = "﻿";
 const dirs: string[] = [];

@@ -15,7 +15,7 @@ import { readSoundPreset } from "../config/sound-presets.js";
 import { isNotifyKind } from "../../common/notifyKinds.js";
 import { buildHeaderContext, loadHeaderConfig } from "../config/header/header-context.js";
 import { headerHasPrButton, resolveHeader } from "../config/header/header-resolve.js";
-import { listDecks } from "../backends/deckList.js";
+import { listDecks } from "../backends/plugins/deckList.js";
 import { loadScripts } from "../files/scripts.js";
 import { gitStatus } from "../git/git-status.js";
 import { missingRepoReason, repoForDir } from "../git/forge-support.js";
