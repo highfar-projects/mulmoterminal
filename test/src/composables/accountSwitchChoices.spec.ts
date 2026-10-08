@@ -42,7 +42,7 @@ describe("accountSwitchChoices (#2950)", () => {
   describe("weekly room (#2954)", () => {
     it("carries what is left of the weekly window", () => {
       const [a] = accountSwitchChoices(rotation(), "b", snap([reading("a", { limits: weekly(37.4) })]), NOW_MS);
-      expect(a).toMatchObject({ weekLeftPercent: 62, usage: "ok" });
+      expect(a).toMatchObject({ weekLeftPercent: 62, weekResetsAt_sec: NOW_SEC + 3600, usage: "ok" });
     });
 
     it("says not measured, rather than zero, for a subscription with no reading", () => {
@@ -56,7 +56,7 @@ describe("accountSwitchChoices (#2950)", () => {
 
     it("counts a window whose reset has passed as full", () => {
       const [a] = accountSwitchChoices(rotation(), "b", snap([reading("a", { limits: weekly(90, NOW_SEC - 1) })]), NOW_MS);
-      expect(a?.weekLeftPercent).toBe(100);
+      expect(a).toMatchObject({ weekLeftPercent: 100, weekResetsAt_sec: null });
     });
 
     it("ignores readings that are accounts, not rotation tokens", () => {

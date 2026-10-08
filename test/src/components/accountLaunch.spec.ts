@@ -133,8 +133,16 @@ describe("AccountMark", () => {
   // The mark is the way to move a rotated session to another subscription (#2950).
   describe("with subscriptions to move to", () => {
     const choices: AccountSwitchChoice[] = [
-      { id: "a", label: "A", detail: null, current: true, weekLeftPercent: 40, usage: "ok" },
-      { id: "b", label: "B", detail: "b@example.com", current: false, weekLeftPercent: null, usage: "measuring" },
+      {
+        id: "a",
+        label: "A",
+        detail: null,
+        current: true,
+        weekLeftPercent: 40,
+        weekResetsAt_sec: Math.floor(Date.now() / 1000) + 2 * 3600 + 30 * 60,
+        usage: "ok",
+      },
+      { id: "b", label: "B", detail: "b@example.com", current: false, weekLeftPercent: null, weekResetsAt_sec: null, usage: "measuring" },
     ];
     const open = async () => {
       const w = mount(AccountMark, { props: { label: "A", choices }, attachTo: document.body });
@@ -158,6 +166,9 @@ describe("AccountMark", () => {
       const weeks = [...document.body.querySelectorAll('[data-testid="cell-account-week"]')].map((node) => node.textContent);
       expect(weeks).toHaveLength(1);
       expect(weeks[0]).toContain("40%");
+      const resets = [...document.body.querySelectorAll('[data-testid="cell-account-reset"]')].map((node) => node.textContent);
+      expect(resets).toHaveLength(1);
+      expect(resets[0]).toMatch(/2h/);
       w.unmount();
     });
 
