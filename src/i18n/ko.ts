@@ -491,6 +491,12 @@ export const ko: Messages = {
   // 핵심으로, `AttentionStatus` / `WorkPhase` / `PrPhase`에 값을 추가했을 때 여기에 이름을 적기
   // 전까지 컴파일이 통과하지 않도록 하기 위해서다(#1894).
   // A cell header's two view menus: what happened in the session, and the tools around it.
+  // The account mark on a rotated cell opens this menu (#2950).
+  accountSwitch: {
+    title: "이 세션을 다른 구독으로 옮기기",
+    hint: "클릭하여 이 세션을 다른 구독으로 옮깁니다",
+    explain: "선택한 구독으로 세션을 다시 시작하고 같은 대화를 이어갑니다. 진행 중인 턴은 중단됩니다.",
+  },
   cellMenu: {
     history: "기록",
     tools: "도구",

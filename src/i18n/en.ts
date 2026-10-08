@@ -504,6 +504,12 @@ export const en = {
   // `WorkPhase` or `PrPhase` stays a COMPILE ERROR until somebody names it here, where a derived
   // `status.pr.${phase}.label` would have shipped the key path to the screen instead (#1894).
   // A cell header's two view menus: what happened in the session, and the tools around it.
+  // The account mark on a rotated cell opens this menu (#2950).
+  accountSwitch: {
+    title: "Move this session to another subscription",
+    hint: "Click to move this session to another subscription",
+    explain: "The session restarts on the one you pick and continues the same conversation. A turn in progress is stopped.",
+  },
   cellMenu: {
     history: "History",
     tools: "Tools",

@@ -128,4 +128,33 @@ describe("AccountMark", () => {
         .exists(),
     ).toBe(false);
   });
+
+  // The mark is the way to move a rotated session to another subscription (#2950).
+  describe("with subscriptions to move to", () => {
+    const choices = [
+      { id: "a", label: "A", detail: null, current: true },
+      { id: "b", label: "B", detail: "b@example.com", current: false },
+    ];
+    const open = async () => {
+      const w = mount(AccountMark, { props: { label: "A", choices }, attachTo: document.body });
+      await w.get('[data-testid="cell-account-mark"]').trigger("click");
+      return w;
+    };
+
+    it("emits the pick, and nothing for the subscription it is already on", async () => {
+      const w = await open();
+      await document.body.querySelector<HTMLElement>('[data-testid="cell-account-choice-b"]')?.click();
+      expect(w.emitted("switch")).toEqual([["b"]]);
+      w.unmount();
+      const again = await open();
+      await document.body.querySelector<HTMLElement>('[data-testid="cell-account-choice-a"]')?.click();
+      expect(again.emitted("switch")).toBeUndefined();
+      again.unmount();
+    });
+
+    it("stays a plain mark when there is nothing else to pick", () => {
+      const w = mount(AccountMark, { props: { label: "A", choices: choices.slice(0, 1) } });
+      expect(w.find("button").exists()).toBe(false);
+    });
+  });
 });

@@ -28,6 +28,7 @@ import { rememberTokenSession, sessionToken } from "./token-sessions.js";
 import { movedNoticeLine, takeMovedFrom } from "./rotation-notice.js";
 import { rotationLoginLabel } from "../../common/tokenRotation.js";
 import { announceCredential } from "./credential-announce.js";
+import { takeSwitchedToken } from "./token-switch-pins.js";
 import type { PtyEntry } from "./types.js";
 import type { SpawnDeps } from "./spawn-deps.js";
 import { handlePtyExit } from "./pty-exit.js";
@@ -159,7 +160,11 @@ function sessionCredentialFor(
   // otherwise. A session ending between the two starts on its recorded token, which is still true.
   const assign = (): TokenAssignment | null => {
     if (!getTokenRotation().enabled) return null;
-    return ptyWouldReattach(sessionId, true) ? (deps.keptAssignment?.(sessionToken(sessionId)) ?? null) : (deps.assignToken?.() ?? null);
+    if (ptyWouldReattach(sessionId, true)) return deps.keptAssignment?.(sessionToken(sessionId)) ?? null;
+    // A subscription the user picked from the cell's mark (#2950) wins; one that cannot be read falls back to the usual choice.
+    const picked = takeSwitchedToken(sessionId);
+    const pickedAssignment = picked === undefined ? null : (deps.keptAssignment?.(picked) ?? null);
+    return pickedAssignment ?? deps.assignToken?.() ?? null;
   };
   return sessionCredential(resolved, { providerEnv: resolved.env, runsCustomAgent, onAccount }, assign);
 }

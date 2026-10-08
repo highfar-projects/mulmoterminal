@@ -104,8 +104,8 @@ vi.mock("../../../server/session/worktree-session-limit.js", () => ({
   worktreeOccupancy: () => Promise.resolve({ isWorktree: false, session: null }),
 }));
 
-const announceCredential = vi.fn();
-vi.mock("../../../server/session/credential-announce.js", () => ({ announceCredential }));
+const settleCredential = vi.fn();
+vi.mock("../../../server/session/credential-announce.js", () => ({ settleCredential }));
 
 const { handleClaudeConnection, handleCodexConnection } = await import("../../../server/routes/ws-routes.js");
 
@@ -205,13 +205,13 @@ describe("/ws (claude) rotation credential on a same-process reattach", () => {
     const ws = fakeWs();
     await handleClaudeConnection(makeDeps(), ws as unknown as WebSocket, request(`&session=${SID}`));
     expect(spawnClaudePty).not.toHaveBeenCalled();
-    expect(announceCredential).toHaveBeenCalledWith(SID, ws);
+    expect(settleCredential).toHaveBeenCalledWith(SID, SID, true, ws);
   });
 
-  it("leaves the announcing to the spawn for a process it starts", async () => {
-    await handleClaudeConnection(makeDeps(), fakeWs() as unknown as WebSocket, request());
+  it("tells a spawn apart from a reattach, and hands it the id the connection asked for", async () => {
+    await handleClaudeConnection(makeDeps(), fakeWs() as unknown as WebSocket, request(`&session=${SID}`));
     expect(spawnClaudePty).toHaveBeenCalledTimes(1);
-    expect(announceCredential).not.toHaveBeenCalled();
+    expect(settleCredential).toHaveBeenCalledWith(SID, expect.any(String), false, expect.anything());
   });
 });
 

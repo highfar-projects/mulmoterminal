@@ -1,6 +1,8 @@
 // The rotation credential a cell's process runs on (#2919), as its `credential` frame says it.
 
 export interface CellCredential {
+  /** The token it names (#2950), or null for a frame that names none. */
+  id: string | null;
   /** What fits on the cell's mark. */
   label: string;
   /** The longer name its hover gives — the label with the subscription's address. */
@@ -10,7 +12,7 @@ export interface CellCredential {
 /** A `credential` frame read back, or null when it names none. */
 export function credentialOf(msg: Record<string, unknown>): CellCredential | null {
   if (typeof msg.label !== "string") return null;
-  return { label: msg.label, detail: typeof msg.detail === "string" ? msg.detail : msg.label };
+  return { id: typeof msg.id === "string" ? msg.id : null, label: msg.label, detail: typeof msg.detail === "string" ? msg.detail : msg.label };
 }
 
 /** What holds a cell's credential: the last one announced, and the view to tell. */

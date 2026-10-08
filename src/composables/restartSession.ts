@@ -61,3 +61,25 @@ export async function reapSessionOnServer(sessionId: string): Promise<boolean> {
     return false;
   }
 }
+
+/** Move a rotated session to the subscription the user picked (#2950): the server pins the pick for the
+ *  next spawn and ends the session exactly as the close button does. Resolves to the same answer
+ *  `reapSessionOnServer` gives — whether nothing of the session is running any more — so it drops into
+ *  `restartSession` as the reap step, and an unconfirmed switch reconnects nothing. */
+export async function switchTokenOnServer(sessionId: string, tokenId: string): Promise<boolean> {
+  try {
+    const res = await fetchWithTimeout(`/api/session/${encodeURIComponent(sessionId)}/switch-token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tokenId }),
+    });
+    if (!res.ok) {
+      console.warn(`[restart] switch-token ${sessionId} answered HTTP ${res.status}`);
+      return false;
+    }
+    return (await jsonBody(res)).ended === true;
+  } catch (e) {
+    console.warn(`[restart] switch-token ${sessionId} failed: ${e instanceof Error ? e.message : String(e)}`);
+    return false;
+  }
+}
