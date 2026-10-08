@@ -9,6 +9,7 @@ import type { PtyEntry } from "../session/types.js";
 import type { TerminalWsKind } from "./terminal-ws-path.js";
 import { SpawnRefusedError } from "../session/pty-spawn.js";
 import { closeWithError } from "../session/ws-frames.js";
+import { ProviderRefusedError } from "../session/provider-env.js";
 import { messageOf } from "../errors.js";
 
 // A refused spawn already carries its own diagnosis — the missing CLI with the PATH that was
@@ -76,3 +77,9 @@ export const startFailureMessageFor =
   (what: string) =>
   (err: unknown): string =>
     err instanceof SpawnRefusedError ? err.message : `Failed to start ${what}: ${messageOf(err)}`;
+
+/** A provider refusal already says exactly what is wrong with the directory's config (#579), and a
+ *  refused spawn already names the binary and the PATH it searched, or the directory that is gone
+ *  (#1063, #1078); a generic hint would bury either. */
+export const claudeStartFailureMessage = (err: unknown): string =>
+  err instanceof ProviderRefusedError || err instanceof SpawnRefusedError ? err.message : `Failed to start Claude: ${messageOf(err)}`;
