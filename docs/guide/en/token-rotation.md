@@ -124,13 +124,13 @@ too, the session stays where it is, with Claude Code's own limit message.
 
 ## Token usage
 
-**More features → Token usage** shows every subscription at once: what is left of its 5-hour and weekly
+**More features → Token usage** shows every subscription you registered under `tokenRotation` at once (the `/login` account is not listed): what is left of its 5-hour and weekly
 windows, and when each resets. Open it when you want to know *why* a session landed where it did, or
 which subscription comes back first after a limit.
 
 ![More features menu with Token usage at the bottom](../images/token-rotation-more-features.png)
 
-![The Token usage screen: each subscription with what is left of its 5-hour and weekly windows (names replaced)](../images/token-rotation-usage.png)
+![The Token usage screen: each rotation token with what is left of its 5-hour and weekly windows (names replaced)](../images/token-rotation-usage.png)
 
 - A bar is what is **left**, not what is spent. A short bar is a subscription running dry.
 - The reset time is what the picker weighs: room about to reset is used first.
