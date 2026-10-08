@@ -45,7 +45,7 @@ import { fetchWithTimeout } from "./utils/fetchWithTimeout";
 // Movie/PDF bytes for the mulmoscript View's download / clip-play UI. A plain
 // <video src> can't ride the dispatch envelope, so the package asks the host for
 // bytes via this adapter capability; the server route realpath-contains the wire
-// path (see server/backends/mulmoscript.ts).
+// path (see server/backends/plugins/mulmoscript.ts).
 // The download counterpart of dropUpload's own limit, and generous for the same reason: the
 // deadline covers the whole TRANSFER — `res.blob()` reads a whole movie, and the helper keeps its
 // signal armed past the headers precisely so that read is bounded too. Generous rather than tight
@@ -153,7 +153,7 @@ const PACKAGES: Record<string, Registration> = {
     // The presentHtml View uses useRuntime() (dispatch for loadHtml/saveHtml, pubsub
     // for live-refresh). scope "html" matches the server's file-change channel
     // (plugin:html:file:<path>); dispatch targets /api/plugin/presentHtml, where the
-    // server intercepts loadHtml/saveHtml (see server/backends/html.ts).
+    // server intercepts loadHtml/saveHtml (see server/backends/plugins/html.ts).
     viewComponent: wrapWithPluginRuntime("html", htmlPlugin.toolDefinition.name, viewOf("@mulmoclaude/html-plugin", htmlPlugin.viewComponent)),
     css: htmlCss,
     // The View renders an h-full iframe; give it a definite frame height (like the
@@ -184,9 +184,9 @@ const PACKAGES: Record<string, Registration> = {
     // would not merely lose the save — it would fail the view on mount.
     //
     // scope "shapescript" matches the server's file-change channel
-    // (plugin:shapescript:file:<path>, see backends/fileChange.ts); dispatch
+    // (plugin:shapescript:file:<path>, see backends/files/fileChange.ts); dispatch
     // targets /api/plugin/presentShapeScript, where the server intercepts
-    // loadShape/saveShape (see server/backends/shapescript.ts).
+    // loadShape/saveShape (see server/backends/plugins/shapescript.ts).
     viewComponent: wrapWithPluginRuntime(
       "shapescript",
       shapeScriptPlugin.toolDefinition.name,
@@ -210,7 +210,7 @@ const PACKAGES: Record<string, Registration> = {
     // The storyboard View uses useRuntime() (dispatch kind router + generation
     // pubsub). scope "mulmoScript" matches the server's generation channel
     // (plugin:mulmoScript:generation); dispatch targets /api/plugin/
-    // presentMulmoScript, where server/backends/mulmoscript.ts routes by kind.
+    // presentMulmoScript, where server/backends/plugins/mulmoscript.ts routes by kind.
     // The host adapter supplies authenticated-media fetch (movie/PDF bytes).
     viewComponent: wrapWithPluginRuntime(
       "mulmoScript",

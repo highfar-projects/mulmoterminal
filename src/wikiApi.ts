@@ -1,4 +1,4 @@
-// Typed client for the read-only wiki REST surface (server/backends/wiki.ts). Thin
+// Typed client for the read-only wiki REST surface (server/backends/plugins/wiki.ts). Thin
 // fetch wrappers — the heavy lifting (slug resolution, graph, lint) all lives in the
 // shared @mulmoclaude/core engine the server calls; the browser only renders the
 // shapes it returns. Types mirror @mulmoclaude/core/wiki(/server) so the views stay

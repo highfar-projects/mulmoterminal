@@ -22,7 +22,7 @@ Campaign Mode は新しい画面ではない。**grid に供給されるセッ�
 | 次の1ステップを打ち込む | round table の submit と draft injection | `useRoundTable.ts` / `server/session/draft-injection.ts` |
 | PR の状態 | フェーズ + CI 状態をセルごとに表示済み | `server/git/prPhase.ts` / `src/components/rosterPhase.ts` |
 | エージェントが今何をしているか | planning / implementing の分類 | `server/session/workPhase.ts` |
-| 定期的に何かを起こす仕掛け | scheduler の tick | `server/backends/scheduler.ts` |
+| 定期的に何かを起こす仕掛け | scheduler の tick | `server/backends/scheduler/scheduler.ts` |
 | 会話をタブより長生きさせる | rooms（ディスク上の会話ログ） | `server/rooms/rooms.ts` |
 | 進捗の外形的な記録 | issue に1つのコメントを編集し続ける | `server/git/work-comment.ts` |
 

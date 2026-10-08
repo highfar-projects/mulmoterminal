@@ -6,7 +6,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const check = vi.fn();
-vi.mock("../../../server/backends/collectionSelfContainment.js", () => ({
+vi.mock("../../../server/backends/collections/collectionSelfContainment.js", () => ({
   checkCollectionSelfContainment: (slug: string, scope: { workspaceRoot: string }) => check(slug, scope),
 }));
 

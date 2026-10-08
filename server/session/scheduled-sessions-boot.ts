@@ -10,7 +10,7 @@ import { ptys } from "./registry.js";
 import type { SpawnClaudePty } from "./spawn-claude.js";
 import { tmuxAttachedClientCount, tmuxHasSession, tmuxKillSession } from "../infra/tmux.js";
 import { CLAUDE_CWD, MULMOTERMINAL_HOME, SESSION_ID_RE } from "../config/env.js";
-import type { ScheduledChatSpawn } from "../backends/scheduled-run.js";
+import type { ScheduledChatSpawn } from "../backends/scheduler/scheduled-run.js";
 
 // Sweep at startup (catching sessions that outlived a restart — tmux survives one by design) and
 // hourly, so the age cap holds even after the schedule is turned off.

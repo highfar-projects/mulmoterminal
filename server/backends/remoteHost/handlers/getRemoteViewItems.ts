@@ -7,7 +7,7 @@ import { loadCollection } from "@mulmoclaude/core/collection/server";
 import { normalizeFields } from "@mulmoclaude/core/remote-view";
 import type { CommandHandlers, JsonObject } from "@mulmoclaude/core/remote-host";
 import { clampLimit, clampOffset } from "../collectionPage.js";
-import { remoteViewItemsFor, remoteViewItemsFailureMessage } from "../../remoteView.js";
+import { remoteViewItemsFor, remoteViewItemsFailureMessage } from "../../collections/remoteView.js";
 import { scopeFromCommand } from "../commandScope.js";
 import { jsonPayload } from "../jsonPayload.js";
 import { readString } from "../../../../common/readString.js";

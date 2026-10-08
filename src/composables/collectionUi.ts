@@ -7,10 +7,10 @@
 // Wired: data fetch (detail/list), record CRUD, custom views (read-only desktop +
 // read/write mobile phone-frame preview via fetchRemoteView/mutateRemoteView), actions
 // (seed prompt → startChat → a visible chat), favorites (useShortcuts), feed/agent
-// refresh + feed listing (via @mulmoclaude/core/feeds — see server/backends/feeds.ts),
-// Google-calendar push (via @mulmoclaude/core/google — see server/backends/calendarPush.ts),
+// refresh + feed listing (via @mulmoclaude/core/feeds — see server/backends/feeds/feeds.ts),
+// Google-calendar push (via @mulmoclaude/core/google — see server/backends/calendar/calendarPush.ts),
 // collection/feed/view deletion and the Discover registry tab (listRegistry/importRegistry
-// via @mulmoclaude/core/collection — see server/backends/collections.ts), and state-based
+// via @mulmoclaude/core/collection — see server/backends/collections/collections.ts), and state-based
 // navigation (useCollectionBrowse — the toolbar + browse overlay), and the live bell's
 // per-record severities (useNotifications → the Kanban accent).
 import { configureCollectionUi } from "@mulmoclaude/collection-plugin/vue";
@@ -176,7 +176,7 @@ export function makeCollectionUi(projectIdOf: () => string | null): HostBinding 
 
   // Runtime UI-string translation transport for the collection plugin (e.g. the
   // new-collection starter modal's card titles/descriptions/prompts). POSTs to
-  // MulmoTerminal's OWN /api/translation (server/backends/translation.ts → hidden-chat
+  // MulmoTerminal's OWN /api/translation (server/backends/media/translation.ts → hidden-chat
   // LLM); the request/response contract is the host-agnostic
   // @mulmoclaude/core/translation/client. Resolves null on any failure so the plugin
   // falls back to the English source. English is short-circuited server-side.
@@ -209,7 +209,7 @@ export function makeCollectionUi(projectIdOf: () => string | null): HostBinding 
     return scopedUrl(`/api/files/raw?path=${encodeURIComponent(String(value))}`);
   }
 
-  // The preview route (server/backends/html.ts → mountHtmlPreviewRoute) serves
+  // The preview route (server/backends/plugins/html.ts → mountHtmlPreviewRoute) serves
   // artifacts/html/*.html with the sandboxed preview CSP so it renders in a new tab;
   // everything else falls back to the raw-file route. See htmlPreviewUrl.
   return {
@@ -226,7 +226,7 @@ export function makeCollectionUi(projectIdOf: () => string | null): HostBinding 
     // it would just hide the tab).
     fetchOntology: () => apiGet<CollectionOntologyResponse>("/api/collections/ontology"),
 
-    // ── asset URLs → the raw workspace-file route (server/backends/files.ts).
+    // ── asset URLs → the raw workspace-file route (server/backends/files/files.ts).
     //    Mirrors MulmoClaude's resolveImageSrc: data: URIs pass through, everything
     //    else resolves to /api/files/raw?path=<workspace-relative>. fileRoutePath
     //    (in-app File Explorer nav) stays null — MulmoTerminal has no file explorer. ──
@@ -258,7 +258,7 @@ export function makeCollectionUi(projectIdOf: () => string | null): HostBinding 
     buildViewSrcdoc: (html, boot) => buildCustomViewSrcdoc(html, boot),
 
     // ── mobile custom views (phone-frame preview): a `target: "mobile"` view is
-    //    built HOST-side into its sandboxed srcdoc (server/backends/remoteView.ts,
+    //    built HOST-side into its sandboxed srcdoc (server/backends/collections/remoteView.ts,
     //    shared with the remote-host channel), so the desktop preview renders the
     //    exact artifact the phone gets. Optional + paired: providing both makes the
     //    view selector surface mobile views. Image thumbnails aren't inlined (no
@@ -314,12 +314,12 @@ export function makeCollectionUi(projectIdOf: () => string | null): HostBinding 
     refreshCollection: (slug) => apiPost<CollectionRefreshResult>(`/api/collections/${encodeURIComponent(slug)}/refresh`, {}),
     // The write direction. Path matches MulmoClaude's `API_ROUTES.collections.calendarPush`.
     // A push that could not run still answers 200 with the reason in `errors`, which is what
-    // the view shows beside the button (server/backends/calendarPush.ts).
+    // the view shows beside the button (server/backends/calendar/calendarPush.ts).
     pushCalendarCollection: (slug) => apiPost<CollectionPushResult>(`/api/collections/${encodeURIComponent(slug)}/calendar-push`, {}),
     deleteView: (slug, viewId) => apiDelete(`/api/collections/${encodeURIComponent(slug)}/views/${encodeURIComponent(viewId)}`),
     listFeeds: () => apiGet<FeedsListResponse>("/api/feeds"),
     // ── Discover/registry tab: the shared @mulmoclaude/core registry engine, wired
-    //    over /api/collections/registry/* (server/backends/collections.ts) — MulmoClaude
+    //    over /api/collections/registry/* (server/backends/collections/collections.ts) — MulmoClaude
     //    serves the same engine at /api/collections-registry/*, one of the three known
     //    path divergences (docs/mulmoclaude-parity.md). ──
     listRegistry: () => apiGet<RegistryListResponse>("/api/collections/registry/list"),

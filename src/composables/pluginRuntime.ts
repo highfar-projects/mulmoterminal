@@ -8,7 +8,7 @@
 //                 LLM tool-call share one endpoint).
 //   - pubsub    → the existing socket.io usePubSub, on `plugin:<scope>:<event>`
 //                 channels (the server forwards file changes to
-//                 plugin:markdown:file:<path> — see server/backends/markdown.js).
+//                 plugin:markdown:file:<path> — see server/backends/plugins/markdown.js).
 //   - locale    → a fixed "en" ref (MulmoTerminal has no locale picker; the
 //                 package's bundled i18n falls back to English).
 //   - openUrl   → scheme-allowlisted window.open.

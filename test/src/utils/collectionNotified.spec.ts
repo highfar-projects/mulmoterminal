@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { collectionNotifiedSeverities, type NotifiedEntryLike } from "../../../src/utils/collectionNotified";
-import { buildPluginData } from "../../../server/backends/collectionNotifierAdapter.js";
+import { buildPluginData } from "../../../server/backends/collections/collectionNotifierAdapter.js";
 
 // A bell as the UI sees it: `pluginData` is whatever the publishing app wrote (it
 // reaches the browser as `unknown`), `severity` is the notifier's own.

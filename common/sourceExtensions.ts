@@ -4,7 +4,7 @@
 // Both sides of the file-path link decide something from this set, and the two decisions
 // are different, so this is the shared CORE rather than either side's whole answer:
 //   - the server serves these as text/plain so they VIEW instead of downloading
-//     (backends/rawServingPlan.ts, which also covers docs, markup and dotfiles), and
+//     (backends/files/rawServingPlan.ts, which also covers docs, markup and dotfiles), and
 //   - the client opens these in the app's own Files view instead of a new tab
 //     (composables/terminalFilePathLinkProvider.ts, which also covers .txt).
 // Each side adds its own extras next to its import; anything that belongs to only one of

@@ -81,7 +81,7 @@ share a containment rule, and the difference is not about what each renders. **H
 may reach is set by WHO chose the path**: a directory the user zoomed into is a narrower claim
 than a path a browser put in a query string, which is narrower than a path an agent the user
 launched asked for by name. `presentDocument` has no containment root at all, on purpose, and
-says so in its own header; `backends/fileOps.ts` exists to do the opposite.
+says so in its own header; `backends/files/fileOps.ts` exists to do the opposite.
 
 This is why the same `.md` renders differently in the right pane and at `/files`: only the right
 pane can open it on the canvas, where the markdown plugin's view runs. The full-screen view falls
@@ -138,7 +138,7 @@ the specs, CI and the review bots all pass. Only a human comparing the two repos
 In #907 the push route shipped as `/calendar/push` against MulmoClaude's `/calendar-push`,
 green the whole way, and was caught only because someone pointed at `../mulmoclaude`.
 
-`server/backends/collections.ts` already requires this of the **on-disk** layout (so both
+`server/backends/collections/collections.ts` already requires this of the **on-disk** layout (so both
 apps discover the same collection skills). The API surface needs it for the same reason and
 had no rule until now.
 

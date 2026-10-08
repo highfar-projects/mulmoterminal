@@ -68,8 +68,8 @@ import { initWorkspaceSetup } from "./backends/workspaceSetup.js";
 import { installBundledSkills } from "./infra/install-bundled-skills.js";
 import { initBackends } from "./backends/boot-backends.js";
 import { installShutdownHandlers } from "./infra/shutdown.js";
-import { startCollectionCompletionWatchers } from "./backends/collectionWatchers.js";
-import { initScheduling } from "./backends/scheduler-boot.js";
+import { startCollectionCompletionWatchers } from "./backends/collections/collectionWatchers.js";
+import { initScheduling } from "./backends/scheduler/scheduler-boot.js";
 // The projects a request may name — and, at boot, the roots whose feeds refresh on schedule.
 import { listProjectRoots } from "./infra/project-root.js";
 import { createSessionLifecycle, SESSIONS_CHANNEL } from "./session/lifecycle.js";

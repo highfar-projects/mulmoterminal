@@ -1,7 +1,7 @@
 // What a browser is handed for a file, decided from its name alone.
 //
 // BOTH sides read this. The server sets it as the raw route's `Content-Type`
-// (server/backends/rawServingPlan.ts); the terminal's file links ask the same question to decide
+// (server/backends/files/rawServingPlan.ts); the terminal's file links ask the same question to decide
 // where a click goes, because a type the browser cannot display is a type that turns a new tab
 // into a silent download (#2038). Two copies of this table would send a click to a tab the server
 // then made a download — which is the bug, arrived at from the other side.

@@ -16,15 +16,15 @@ Each of these runs the same engine as MulmoClaude, with host specifics injected:
 
 | Subsystem | Core entry | MulmoTerminal wiring |
 | --- | --- | --- |
-| Collection engine (discovery, CRUD, actions, views, registry) | `@mulmoclaude/core/collection(/server)` | `server/backends/collections.ts` |
+| Collection engine (discovery, CRUD, actions, views, registry) | `@mulmoclaude/core/collection(/server)` | `server/backends/collections/collections.ts` |
 | `manageCollection` MCP tool (agent data plane: getItems with computed fields, validated putItems, getOntology, schemaDocs, getSchema/putSchema) | `@mulmoclaude/core/collection/server` | `server/infra/collection-tool.ts` + host-tool dispatch in `server/index.ts` (#384) |
 | Workspace setup (help docs + preset-skill seeding) | `@mulmoclaude/core/workspace-setup` | `server/backends/workspaceSetup.ts` (#122) |
-| File-change publisher | `@mulmoclaude/core/file-change` | `server/backends/fileChange.ts` (#123) |
+| File-change publisher | `@mulmoclaude/core/file-change` | `server/backends/files/fileChange.ts` (#123) |
 | Notifier + collection completion watchers (bell UI) | `@mulmoclaude/core/notifier`, `/collection-watchers` | `server/backends/notifier.ts`, `collectionWatchers.ts` (#124) |
-| Scheduler engine + user cron tasks (`config/scheduler/tasks.json` → spawn a visible chat) | `@mulmoclaude/core/scheduler` | `server/backends/scheduler.ts` (#125) |
-| RSS/JSON feed refresh (system task) | `@mulmoclaude/core/feeds(/server)` | `server/backends/feeds.ts` + `feedRefreshTaskDef` registration in `server/index.ts` |
-| Google account (loopback OAuth) + Calendar (events, non-primary calendars, colours) incl. the settings-UI link routes | `@mulmoclaude/core/google` | `server/backends/google.ts` (shim + `/api/google/*`), `remoteHost/googleCalendar.ts` (`createEvent`/`listEvents` w/ `calendarId`+`colorId`, `listCalendars`, `colors`), `server/cli-google.ts` (#386, #425) |
-| Collection ↔ Google Calendar: hourly pull, manual sync (the header button's calendar arm), push | `@mulmoclaude/core/google` | `server/backends/system-tasks.ts` (`googleCalendarSyncTaskDef`), `calendarRefresh.ts` + `calendarRefreshResult.ts`, `calendarPush.ts` + `calendarPushResult.ts` |
+| Scheduler engine + user cron tasks (`config/scheduler/tasks.json` → spawn a visible chat) | `@mulmoclaude/core/scheduler` | `server/backends/scheduler/scheduler.ts` (#125) |
+| RSS/JSON feed refresh (system task) | `@mulmoclaude/core/feeds(/server)` | `server/backends/feeds/feeds.ts` + `feedRefreshTaskDef` registration in `server/index.ts` |
+| Google account (loopback OAuth) + Calendar (events, non-primary calendars, colours) incl. the settings-UI link routes | `@mulmoclaude/core/google` | `server/backends/calendar/google.ts` (shim + `/api/google/*`), `remoteHost/googleCalendar.ts` (`createEvent`/`listEvents` w/ `calendarId`+`colorId`, `listCalendars`, `colors`), `server/cli-google.ts` (#386, #425) |
+| Collection ↔ Google Calendar: hourly pull, manual sync (the header button's calendar arm), push | `@mulmoclaude/core/google` | `server/backends/scheduler/system-tasks.ts` (`googleCalendarSyncTaskDef`), `calendarRefresh.ts` + `calendarRefreshResult.ts`, `calendarPush.ts` + `calendarPushResult.ts` |
 
 The two workspaces are interchangeable: both apps read and write the same
 on-disk layout (`data/`, `.claude/skills/`, `config/`), and cross-app invariants
@@ -63,17 +63,17 @@ the registry sits outside the namespace entirely under its own top-level
 `collections-registry` prefix. MulmoTerminal instead put every literal *inside*
 `/api/collections`, which forces the suffixes: `/api/collections/registry/list`
 only stays unambiguous because it is mounted **before** the `:slug` routes
-(`server/backends/collections.ts` says so at the mount site), and `list` /
+(`server/backends/collections/collections.ts` says so at the mount site), and `list` /
 `detail` sidestep the shape question rather than relying on it. The response
 *shapes* are MulmoClaude's; only the URLs differ.
 
 **Consumer of record: `src/composables/collectionUi.ts`.** The plugin's UI
 binding is what actually calls these, and it is self-consistent with the server —
-`test/server/backends/collections.spec.ts` pins MulmoTerminal's own spelling
+`test/server/backends/collections/collections.spec.ts` pins MulmoTerminal's own spelling
 (`GET /api/collections/list`, `/:slug/detail`), as it should. So no test here can
 catch the divergence; only a comparison against MulmoClaude shows it, which is
 what this table is for. Treat that binding plus the mount block in
-`server/backends/collections.ts` as the pair that has to agree.
+`server/backends/collections/collections.ts` as the pair that has to agree.
 
 **Not fixed here, on purpose.** Renaming the runtime paths, or adding aliases at
 MulmoClaude's spellings, are both live options and both out of scope for the
@@ -99,7 +99,7 @@ backfill* that indexes past sessions for search.
 model (SDK transcripts, its session store, its message shapes). MulmoTerminal
 sessions are PTYs running the real Claude CLI — the equivalent source material
 is terminal scrollback plus Claude Code's own transcript files, which is a
-different data model, not just a different path. `server/backends/scheduler.ts`
+different data model, not just a different path. `server/backends/scheduler/scheduler.ts`
 documents the decision: journal / chat-index stay MulmoClaude-only.
 
 **Picking it up means:** first a design decision — what does a journal or a
@@ -160,17 +160,17 @@ through `manageCollection`'s `schemaDocs` — tell collection authors these exis
 
 | Endpoint | Where |
 | --- | --- |
-| `GET …/view-i18n` (parent-side; feeds `__MC_VIEW.dict` / `t()`) | `server/backends/customViewRoutes.ts` |
+| `GET …/view-i18n` (parent-side; feeds `__MC_VIEW.dict` / `t()`) | `server/backends/collections/customViewRoutes.ts` |
 | `GET …/view-data/image` | same file (+ `isAuthorizedImagePath`) |
 | `POST …/view-data/actions/:actionId` | same file — mutate kind only |
-| `POST …/view-data/query`, `GET`/`PUT …/view-data` | `server/backends/collections.ts` (#167) |
+| `POST …/view-data/query`, `GET`/`PUT …/view-data` | `server/backends/collections/collections.ts` (#167) |
 
 Rules worth keeping when touching these: the image route's authorization *is*
 the record scan (only a **current** value of an `image` field resolves, never an
 arbitrary workspace path), and the action route is **mutate-only** — a view
 token must never be able to start LLM work, so `chat` / `agent` actions stay on
 the parent-side route. Both sit behind per-minute budgets
-(`server/backends/viewRateLimit.ts`), images in a roomier bucket than actions
+(`server/backends/collections/viewRateLimit.ts`), images in a roomier bucket than actions
 because a gallery's first paint is legitimately dozens of fetches.
 
 `GET …/view-data` reads through `manageCollection`'s `getItems` on both hosts, so
@@ -198,7 +198,7 @@ acknowledgement.
 
 **Picking it up means:** dispatching via the existing hidden-session machinery
 (`spawnBackgroundChat` internals) from the item/collection action routes in
-`server/backends/collections.ts`, answering `{dispatched: true}`, and adding
+`server/backends/collections/collections.ts`, answering `{dispatched: true}`, and adding
 the run-key bookkeeping the plugin reads from the detail response.
 
 ### 6. First sync of a freshly declared `googleCalendar` collection

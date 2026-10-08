@@ -21,7 +21,7 @@ import { syncCursorDirectoryMcp } from "../agents/cursor/cursor-mcp.js";
 import { resolveSpawnCollection } from "../session/spawn-collection.js";
 import { TOOL_GROUPS, type ToolGroup } from "../../common/toolGroups.js";
 import { codexifySkillSeed } from "../agents/codex/codex-skills.js";
-import { SESSION_HEADER, sessionIdFromHeader } from "../backends/presentPathRoot.js";
+import { SESSION_HEADER, sessionIdFromHeader } from "../backends/files/presentPathRoot.js";
 import { cwdForSession } from "../session/session-cwd.js";
 import { projectScopeForCwd, rootForProjectId } from "../infra/project-root.js";
 import { manageCollectionHandlerFor } from "../infra/collection-tool.js";

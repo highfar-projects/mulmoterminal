@@ -4,7 +4,7 @@ import { describe, it, expect, vi } from "vitest";
 import express from "express";
 import { routeCall } from "../../helpers/routeCall";
 import { mountSkillCatalogRoutes } from "../../../server/routes/skill-catalog-routes";
-import type { FetchText } from "../../../server/backends/skillsSh";
+import type { FetchText } from "../../../server/backends/skills/skillsSh";
 
 function setup(fetchSkillsSh: FetchText) {
   const app = express();

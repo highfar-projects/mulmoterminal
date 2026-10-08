@@ -21,8 +21,8 @@ import {
   toArtifactsRelative,
 } from "@gui-chat-plugin/shapescript";
 import type { ToolDefinition } from "gui-chat-protocol";
-import { artifactsFileOps, artifactsRoot } from "../backends/artifacts.js";
-import { shapeScriptByPath } from "../backends/openPath.js";
+import { artifactsFileOps, artifactsRoot } from "../backends/plugins/artifacts.js";
+import { shapeScriptByPath } from "../backends/files/openPath.js";
 
 export const EXPORT_SHAPE_SCRIPT_STL: ToolDefinition = {
   type: "function",

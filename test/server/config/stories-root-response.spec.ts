@@ -3,9 +3,9 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, mkdirSync, symlinkSync, rmSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { initMulmoScriptBackend, registeredStoriesRoots } from "../../../server/backends/mulmoscript";
-import { initArtifactsBackend } from "../../../server/backends/artifacts";
-import { storiesRootId } from "../../../server/backends/storiesRoot";
+import { initMulmoScriptBackend, registeredStoriesRoots } from "../../../server/backends/plugins/mulmoscript";
+import { initArtifactsBackend } from "../../../server/backends/plugins/artifacts";
+import { storiesRootId } from "../../../server/backends/files/storiesRoot";
 
 // What `/api/config` hands the browser about the named stories root. It must be the value the
 // plugin was REGISTERED with: a card carries the id, and an id nothing registered is a

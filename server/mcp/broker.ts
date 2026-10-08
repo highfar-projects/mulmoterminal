@@ -31,7 +31,7 @@ import { offeredTools, routeToolCall, SUBMIT_TRANSLATION_TOOL_NAME } from "./too
 import { toolGroupServerId, GUI_SERVER_ID, type ToolGroup } from "../../common/toolGroups.js";
 import { interpretToolEnvelope } from "./tool-envelope.js";
 import { isRecord } from "../../common/isRecord.js";
-import { SESSION_HEADER } from "../backends/presentPathRoot.js";
+import { SESSION_HEADER } from "../backends/files/presentPathRoot.js";
 import type { GuiCallRecorder } from "./gui-call-history.js";
 import { messageOf } from "../errors.js";
 
@@ -139,7 +139,7 @@ export function buildGuiMcpServer(
       // Dispatch to the plugin's server-side handler, then interpret its envelope (tool-envelope.ts).
       // The session id travels as a header, not in the body: the args are the tool's own
       // schema and every plugin sees them. It is what lets a relative `path` be read as
-      // "relative to the directory THIS cell runs in" (backends/presentPathRoot.ts);
+      // "relative to the directory THIS cell runs in" (backends/files/presentPathRoot.ts);
       // plugins that don't care never look at it.
       const parsed = await (await postJson(`${baseUrl}/api/plugin/${name}`, args ?? {}, { [SESSION_HEADER]: sessionId })).json();
       const { publish, narration } = interpretToolEnvelope(isRecord(parsed) ? parsed : {});

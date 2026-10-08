@@ -3,8 +3,8 @@
 // directory could not be read.
 import type { Express } from "express";
 import { rememberedSessionCwds } from "../session/registry.js";
-import { readSkillCatalog, readSkillDoc, type SkillDocSource } from "../backends/skillCatalog.js";
-import { MAX_QUERY_CHARS, readSkillsShSkill, searchSkillsSh, type FetchText } from "../backends/skillsSh.js";
+import { readSkillCatalog, readSkillDoc, type SkillDocSource } from "../backends/skills/skillCatalog.js";
+import { MAX_QUERY_CHARS, readSkillsShSkill, searchSkillsSh, type FetchText } from "../backends/skills/skillsSh.js";
 import { isRemoteSkillId, isRemoteSource } from "../../common/skillsSh.js";
 
 const nonEmpty = (value: unknown): string | null => (typeof value === "string" && value !== "" ? value : null);

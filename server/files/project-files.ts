@@ -3,7 +3,7 @@
 //
 // `.gitignore` is honoured by ASKING GIT, never by parsing it here. The rule is not one file:
 // a nested `.gitignore`, `.git/info/exclude`, the user's global excludes and negation patterns
-// all decide it, and `server/backends/collectionSelfContainment.ts` already made this same call
+// all decide it, and `server/backends/collections/collectionSelfContainment.ts` already made this same call
 // for the same reason. A directory that is not a repository has no such authority to ask, so it
 // is walked instead — and the caller is TOLD which of the two answered, because "node_modules is
 // absent" means something different in each.
