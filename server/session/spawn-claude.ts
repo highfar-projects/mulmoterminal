@@ -27,6 +27,7 @@ import { sessionCredential, type SessionCredential } from "./session-credential.
 import { rememberTokenSession, sessionToken } from "./token-sessions.js";
 import { movedNoticeLine, takeMovedFrom } from "./rotation-notice.js";
 import { rotationLoginLabel } from "../../common/tokenRotation.js";
+import { announceCredential } from "./credential-announce.js";
 import type { PtyEntry } from "./types.js";
 import type { SpawnDeps } from "./spawn-deps.js";
 import { handlePtyExit } from "./pty-exit.js";
@@ -161,19 +162,6 @@ function sessionCredentialFor(
     return ptyWouldReattach(sessionId, true) ? (deps.keptAssignment?.(sessionToken(sessionId)) ?? null) : (deps.assignToken?.() ?? null);
   };
   return sessionCredential(resolved, { providerEnv: resolved.env, runsCustomAgent, onAccount }, assign);
-}
-
-/** Which rotation credential this session's process runs on, for the cell's mark (#2919): the token
- *  just chosen for a new process, or the one a reattached process was recorded on. Nothing is sent
- *  while rotation is off, so a cell without it sees no new frame at all. */
-function announceCredential(sessionId: string, ws: WebSocket | null): void {
-  const rotation = getTokenRotation();
-  if (!rotation.enabled) return;
-  const tokenId = sessionToken(sessionId);
-  const token = rotation.tokens.find((candidate) => candidate.id === tokenId);
-  // `label` is what fits on the mark; `detail` names the address too, for its hover.
-  const label = tokenId === undefined ? null : (token?.label ?? rotationLoginLabel(rotation, tokenId));
-  sendFrame(ws, { type: "credential", label, detail: tokenId === undefined ? null : rotationLoginLabel(rotation, tokenId) });
 }
 
 /** The line a session moved off a spent credential prints as its new process starts (#2919). */

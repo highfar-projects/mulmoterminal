@@ -41,18 +41,18 @@ import {
   sessionCwd,
   ptys,
 } from "../session/registry.js";
-import { SpawnRefusedError, ptyWouldReattach } from "../session/pty-spawn.js";
+import { ptyWouldReattach } from "../session/pty-spawn.js";
 import { bufferEarlyFrames, type EarlyFrames } from "../session/early-frames.js";
 // Re-exported so the endpoint guard keeps its long-standing import path (its spec, and any reader
 // looking for it where it has always been).
 export { settledEntry, startFailureMessageFor, wrongEndpointReason } from "./ws-endpoint-guard.js";
-import { settledEntry, startFailureMessageFor } from "./ws-endpoint-guard.js";
+import { claudeStartFailureMessage, settledEntry, startFailureMessageFor } from "./ws-endpoint-guard.js";
 import { registeredGuiMcpGroups } from "../infra/gui-mcp-registration.js";
 import { TOOL_GROUPS, type ToolGroup } from "../../common/toolGroups.js";
 import { parseTerminalSize, type TerminalSize } from "../../common/terminalSize.js";
 import { handleCommandFrame } from "../session/pty-connection.js";
 import { closeWithError } from "../session/ws-frames.js";
-import { ProviderRefusedError } from "../session/provider-env.js";
+import { announceCredential } from "../session/credential-announce.js";
 import { sessionExistsOnDisk } from "../session/session-reads.js";
 import { clearedTranscripts } from "../session/cleared-transcripts.js";
 import { canStartLauncher, isContinuingSession, resolveReattachableId, resolveSession, type SessionResolution } from "../session/session-resolve.js";
@@ -568,15 +568,11 @@ export async function handleClaudeConnection(deps: WsRouteDeps, ws: WebSocket, r
     // socket's close event, so the close handler startAndWire installs never fires for it.
     if (!clientStillConnected(ws, "claude", sessionId, early)) return;
 
-    // A provider refusal already says exactly what is wrong with the directory's config (#579), and a
-    // refused spawn already names the binary and the PATH it searched, or the directory that is gone
-    // (#1063, #1078); a generic hint would bury either.
-    const startFailureMessage = (err: unknown): string =>
-      err instanceof ProviderRefusedError || err instanceof SpawnRefusedError ? err.message : `Failed to start Claude: ${messageOf(err)}`;
-
     const settled = settledEntry(ws, "claude", sessionId, !!live, early);
     if (!settled) return;
-    startAndWire(deps, ws, { id: sessionId, tag: "claude", early, startFailureMessage, size }, () => {
+    startAndWire(deps, ws, { id: sessionId, tag: "claude", early, startFailureMessage: claudeStartFailureMessage, size }, () => {
+      // spawnClaudePty announces for a process it starts; a same-process reattach starts nothing.
+      if (settled.entry) announceCredential(sessionId, ws);
       const entry = settled.entry
         ? deps.reattachPty(settled.entry, ws, sessionId)
         : deps.spawnClaudePty(sessionId, resume, ws, { cwd, attachGuiMcp, launch, customAgentId, directoryMcpGroups });
