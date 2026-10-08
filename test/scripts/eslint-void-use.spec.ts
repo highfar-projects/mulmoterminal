@@ -16,7 +16,7 @@ const ERROR = 2;
 
 // One file per config block that could turn it off again: the type-aware block covers server, src
 // and common .ts; `.vue` and everything else take it from sonarjs's recommended set.
-const FILES = ["server/session/tmux-size-sync.ts", "src/composables/useDynamicFavicon.ts", "common/toolGroups.ts", "src/components/SettingsField.vue"];
+const FILES = ["server/session/pty/tmux-size-sync.ts", "src/composables/useDynamicFavicon.ts", "common/toolGroups.ts", "src/components/SettingsField.vue"];
 
 const eslint = new ESLint();
 

@@ -55,7 +55,7 @@ GitHub's own Octicons through `GithubIcon.vue` (path data in `githubIcons.ts`), 
   The `emoji` field still exists for end-user configs and wins over `icon` when both are set —
   don't use it in anything this repo ships.
 - Three deliberate exceptions, all functional. Don't "fix" them:
-  - `server/session/screen-rows.ts` — `/^\s*[❯›]\s/u` parses Claude Code's real terminal output.
+  - `server/session/pty/screen-rows.ts` — `/^\s*[❯›]\s/u` parses Claude Code's real terminal output.
   - `src/composables/useDynamicFavicon.ts` — the `❯` chevron drawn on canvas as the favicon mark.
   - `bin/mulmoterminal.js` — the CLI doctor's `✓ / ✗ / ○` (a terminal can't render an icon font).
 - Compact status **notation** stays text, not icons: `⎇ main ●3 ↑2`, `●` unsaved dots, `−12` diff
@@ -163,13 +163,13 @@ decisions behind them are D1–D10 in `plans/feat-shareable-collections.md`; wha
 The same tool is called `mcp__mt__presentChart` in a workspace cell,
 `mcp__mulmoterminal-render__presentChart` in a project cell, and
 `mcp__plugin_mulmoterminal_render__presentChart` in a muse cell. All three are current. The branch is
-`carriesFullGuiMcp()` in `server/session/mcp-config.ts`: the workspace / single view / cell-less chat
+`carriesFullGuiMcp()` in `server/session/spawn/setup/mcp-config.ts`: the workspace / single view / cell-less chat
 gets a **generated** `--mcp-config` carrying every tool under `GUI_SERVER_ID`; a project cell is
 handed **no `--mcp-config` at all** and reaches the tools through the user's own `.mcp.json` under the
 per-group ids from `toolGroupServerId()`. Both constants live in `common/toolGroups.ts`. The one
 exception is a project cell on a second login (`accounts`): its own `.claude.json` has none of the
 launcher's switches, so it is handed the directory's groups as a generated `--mcp-config` under the
-SAME per-group ids (`server/session/account-mcp.ts`) — the tool names do not change.
+SAME per-group ids (`server/session/accounts/account-mcp.ts`) — the tool names do not change.
 
 **Ask that predicate from every new spawn path that starts an AGENT.** It is deliberately
 agent-agnostic: claude cells and codex cells both consult it, so two terminals in the workspace reach

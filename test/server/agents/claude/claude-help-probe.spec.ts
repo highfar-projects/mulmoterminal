@@ -9,7 +9,7 @@ import {
   refuseUnsupportedPermissionMode,
   type RunHelp,
 } from "../../../../server/agents/claude/claude-help-probe.js";
-import { SpawnPermissionModeError, SpawnRefusedError } from "../../../../server/session/pty-spawn.js";
+import { SpawnPermissionModeError, SpawnRefusedError } from "../../../../server/session/pty/pty-spawn.js";
 
 const SHORT_TIMEOUT_MS = 300;
 // Well under the stubborn script's 5s sleep, well over the timeout.

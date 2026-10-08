@@ -62,5 +62,5 @@ export const accountsForAgent = (accounts: readonly AgentAccount[], agent: unkno
   isAccountAgent(agent) ? accounts.filter((account) => account.agent === agent) : [];
 
 /** What a cell or a list row calls an account: its label, or the bare id once the entry has left the
- *  config (the session still runs on it — see server/session/account-log.ts). */
+ *  config (the session still runs on it — see server/session/accounts/account-log.ts). */
 export const accountLabel = (accounts: readonly AgentAccount[], id: string): string => accounts.find((account) => account.id === id)?.label ?? id;

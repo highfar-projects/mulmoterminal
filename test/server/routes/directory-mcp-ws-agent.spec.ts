@@ -59,7 +59,7 @@ vi.mock("../../../server/config/worktree/worktree-env.js", () => ({
 }));
 
 // A real occupancy read runs git against the cwd; this spec is about the handler's shape.
-vi.mock("../../../server/session/worktree-session-limit.js", () => ({
+vi.mock("../../../server/session/credentials/worktree-session-limit.js", () => ({
   claimLaunch: () => ({ release: vi.fn(), contended: false }),
   worktreeOccupancy: () => Promise.resolve({ isWorktree: false, session: null }),
 }));

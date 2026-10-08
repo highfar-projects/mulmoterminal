@@ -17,7 +17,7 @@
 // drains nothing. That is why the signal path is the one that matters: it is the path Ctrl+C and
 // the browser's stop button both take.
 import { stopWhisperSidecar } from "../backends/media/whisper.js";
-import { drainPersistQueues } from "../session/persist-drain.js";
+import { drainPersistQueues } from "../session/reaping/persist-drain.js";
 
 const SIGNALS = ["SIGINT", "SIGTERM"] as const;
 

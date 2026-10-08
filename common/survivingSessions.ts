@@ -6,7 +6,7 @@
 // visible nowhere. This is the row that makes them visible, and endable.
 //
 // In `common/` because both sides decide from it: the server fills it from tmux plus its own
-// registry (session/surviving-sessions.ts), and the section renders and acts on it
+// registry (session/reaping/surviving-sessions.ts), and the section renders and acts on it
 // (components/settings/SurvivingSessionsSection.vue).
 import type { TerminalAgent } from "./sessionAgent.js";
 

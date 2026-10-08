@@ -2,7 +2,7 @@
 // everything downstream of /api/hook — the working/waiting dots, the attention sound, Web Push, the
 // tool-call history, the work phase, the header prompt — is reached without a second copy of any of
 // it. The same arrangement copilot has, and for the same reason: the effect tables downstream key
-// on CLAUDE's event names (server/session/activity-hook.ts, tool-hook.ts), so a third vocabulary
+// on CLAUDE's event names (server/session/activity/activity-hook.ts, tool-hook.ts), so a third vocabulary
 // would mean a third copy of the rules for what a turn boundary does.
 //
 // Everything here is pure. The route's own fan-out does the work; this only renames.

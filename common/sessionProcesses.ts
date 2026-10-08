@@ -1,7 +1,7 @@
 // What the Processes page shows: each tmux session and the process tree under its panes (#2219).
 //
 // In `common/` because both sides decide from it: the server builds it from `ps` and tmux
-// (server/session/session-processes.ts), and the page reads it back and highlights from it.
+// (server/session/list/session-processes.ts), and the page reads it back and highlights from it.
 import { isRecord } from "./isRecord.js";
 import { isUnknownArray } from "./isUnknownArray.js";
 

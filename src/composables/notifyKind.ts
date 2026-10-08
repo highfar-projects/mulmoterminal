@@ -12,7 +12,7 @@ export interface ActivityMsg {
   waiting?: boolean;
   // The hook that caused this push ("Stop", "Notification", "closed", a tool event…). Which
   // one it was is NOT recoverable from the flags: a background Stop raises the very same
-  // `waiting` flag a permission prompt does (see server/session/activity-hook.ts), so
+  // `waiting` flag a permission prompt does (see server/session/activity/activity-hook.ts), so
   // without this a finished turn and a blocked one are indistinguishable here.
   event?: string | null;
   // The session's working dir, so a beep can use that directory's own sound.

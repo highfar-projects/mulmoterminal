@@ -13,7 +13,7 @@ import {
   type ScreenMetaSources,
   type SessionListInput,
 } from "../../../../server/backends/remoteHost/terminalScreen.js";
-import type { ScreenRow } from "../../../../server/session/screen-rows.js";
+import type { ScreenRow } from "../../../../server/session/pty/screen-rows.js";
 import { undefinedPaths } from "@mulmoclaude/core/remote-host/server";
 
 const ESC = String.fromCharCode(0x1b);

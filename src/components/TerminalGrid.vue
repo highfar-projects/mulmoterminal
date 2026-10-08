@@ -1775,7 +1775,7 @@ function onRosterDragLeave(event: DragEvent) {
              Follows the enlarged cell's session like they do, and needs no AGENT: the reader asks
              each agent's log whether it HAS a file for this session rather than being told which to
              open, because a restarted claude cell reports its agent as `shell`
-             (server/session/transcript-view-read.ts). -->
+             (server/session/transcript/transcript-view-read.ts). -->
         <TranscriptPane
           v-else-if="rightPane === 'transcript'"
           :session-id="expandedSessionId"

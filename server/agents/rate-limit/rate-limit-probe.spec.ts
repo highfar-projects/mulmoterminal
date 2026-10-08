@@ -3,12 +3,12 @@ import { readFileSync, statSync } from "node:fs";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { startRateLimitProbe, probeArgs, probeSpawnEnv, PROBE_ENV, PROBE_PROMPT } from "./rate-limit-probe";
 import { createRateLimitStore } from "./rate-limit-store";
-import { killPty } from "../../session/pty-kill";
+import { killPty } from "../../session/pty/pty-kill";
 
 // Passed through to the real kill, so the specs below still see their pty's kill() called; mocked
 // only so the wiring itself can be asserted.
-vi.mock("../../session/pty-kill", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../session/pty-kill")>();
+vi.mock("../../session/pty/pty-kill", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../session/pty/pty-kill")>();
   return { ...actual, killPty: vi.fn(actual.killPty) };
 });
 

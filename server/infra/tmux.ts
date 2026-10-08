@@ -136,7 +136,7 @@ export function planMsOverride(showStdout: string): MsOverridePlan {
 function applyLiveTmuxOptions(): void {
   tmux(["set", "-g", "mouse", "on"]);
   tmux(["set", "-g", "set-clipboard", "on"]);
-  // The status bar is off in CONF_FILE for looks, but the size check (session/tmux-size-sync.ts)
+  // The status bar is off in CONF_FILE for looks, but the size check (session/pty/tmux-size-sync.ts)
   // now DEPENDS on it: a status line reserves a row, so `window_height` would sit one below the
   // client's forever and every resize would read as a disagreement. A tmux server that predates
   // the conf keeps its status bar across every node restart, so it has to be set live too.
@@ -349,7 +349,7 @@ export function tmuxKillSession(id: string): boolean {
 // restart (tmux outlives the node process). Null when tmux has no such session, which is
 // also how a tmux-less host reports "ask someone else".
 //
-// `-e` keeps the escape sequences, which the caller strips back out (session/screen-rows).
+// `-e` keeps the escape sequences, which the caller strips back out (session/pty/screen-rows).
 // Only one attribute is actually wanted — dim, the thing that marks an agent's ghost
 // suggestion apart from text the user typed — but tmux has no way to emit that alone.
 //
@@ -383,7 +383,7 @@ export function tmuxPaneCommand(id: string): string | null {
 // Needed because the reattach replay is a bounded tail: `CSI ? 1049 h` is written at pty offset 0
 // (when our tmux client attaches) and never again, so past ~1 MiB it is gone from the replay and
 // the browser restores into the normal buffer — which silently disables the wheel and click
-// synthesis, both gated on the alternate buffer (see session/terminal-replay.ts).
+// synthesis, both gated on the alternate buffer (see session/pty/terminal-replay.ts).
 //
 // Asking tmux instead of tracking the byte stream is what keeps this small: tmux is the emulator
 // that owns the state, so there is no DECRST bookkeeping and no CSI split across pty chunks.
@@ -466,7 +466,7 @@ export function parseTmuxWindowSize(stdout: string): { cols: number; rows: numbe
 // How big tmux believes the window is. While things are in step this equals the attached
 // client's size — our conf turns the status line off, so no row is reserved — and a difference
 // means the client's SIGWINCH never landed. Nothing repaints its way out of that (see
-// session/tmux-size-sync.ts).
+// session/pty/tmux-size-sync.ts).
 //
 // Async, unlike its neighbours: a browser window resize settles every open grid cell at once, and
 // ten synchronous tmux spawns in a row would block the event loop for all of them.

@@ -13,8 +13,8 @@ import { mountHookRoute } from "../../../server/routes/hook-routes";
 import { claudeSessionIds } from "../../../server/session/registry";
 
 vi.mock("../../../server/session/session-reads.js", () => ({ latestUserPrompt: vi.fn(async () => null) }));
-vi.mock("../../../server/session/cleared-transcripts", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../../server/session/cleared-transcripts")>();
+vi.mock("../../../server/session/transcript/cleared-transcripts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../server/session/transcript/cleared-transcripts")>();
   return { ...actual, markTranscriptCleared: async () => {} };
 });
 

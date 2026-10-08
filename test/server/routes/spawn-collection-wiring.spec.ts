@@ -37,7 +37,7 @@ vi.mock("node:fs", () => {
 // with the slug the body carried and the directory the session runs in.
 const asked: Array<{ slug: string | null; cwd: string }> = [];
 let answer: { slug: string; icon: string; title: string } | null = null;
-vi.mock("../../../server/session/spawn-collection.js", () => ({
+vi.mock("../../../server/session/spawn/spawn-collection.js", () => ({
   resolveSpawnCollection: async (slug: string | null, cwd: string) => {
     asked.push({ slug, cwd });
     return answer;

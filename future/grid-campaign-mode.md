@@ -17,11 +17,11 @@ Campaign Mode は新しい画面ではない。**grid に供給されるセッ�
 |---|---|---|
 | N セッションを1画面で監督する | **cockpit roster**（全ページの全セルを一覧、status + PR フェーズ + prompt/reply 行） | `docs/grid-view-modes.md`、`CockpitHeader.vue` |
 | サーバが起こしたセッションを勝手にセルにする | **unplaced sweep**。サーバが「誰のブラウザも頼んでいない」印を付け、grid が拾って adopt する | `GridView.vue:572-609`、`/api/sessions/unplaced` |
-| 作業場所の排他 | **1作業ツリー = 1セッション**の claim（#1207 / #1208） | `server/session/worktree-session-limit.ts` |
+| 作業場所の排他 | **1作業ツリー = 1セッション**の claim（#1207 / #1208） | `server/session/credentials/worktree-session-limit.ts` |
 | ターン完了の判定 | **因果相関**（送った文字列が相手の次の prompt に現れたターンだけを答えとする）。実機で枯れている | `src/composables/exchangeRules.ts` / `useCrossTalk.ts` |
-| 次の1ステップを打ち込む | round table の submit と draft injection | `useRoundTable.ts` / `server/session/draft-injection.ts` |
+| 次の1ステップを打ち込む | round table の submit と draft injection | `useRoundTable.ts` / `server/session/spawn/draft-injection.ts` |
 | PR の状態 | フェーズ + CI 状態をセルごとに表示済み | `server/git/prPhase.ts` / `src/components/rosterPhase.ts` |
-| エージェントが今何をしているか | planning / implementing の分類 | `server/session/workPhase.ts` |
+| エージェントが今何をしているか | planning / implementing の分類 | `server/session/activity/workPhase.ts` |
 | 定期的に何かを起こす仕掛け | scheduler の tick | `server/backends/scheduler/scheduler.ts` |
 | 会話をタブより長生きさせる | rooms（ディスク上の会話ログ） | `server/rooms/rooms.ts` |
 | 進捗の外形的な記録 | issue に1つのコメントを編集し続ける | `server/git/work-comment.ts` |

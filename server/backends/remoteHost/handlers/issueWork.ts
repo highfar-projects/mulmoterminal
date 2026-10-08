@@ -13,7 +13,7 @@ import { toJsonObject, type CommandHandlers, type JsonObject } from "@mulmoclaud
 import { getCwdPresets, getGitlabHosts, getPrRepos, getRepoDirs } from "../../../config/config-routes.js";
 import { listIssuesAcrossRepos } from "../../../git/issues.js";
 import { startIssueWork } from "../../../git/issue-work.js";
-import { requestedIssueAgent } from "../../../session/issue-session-spawn.js";
+import { requestedIssueAgent } from "../../../session/spawn/issue-session-spawn.js";
 import { repoDirsFromPresets } from "../../../git/repo-dirs.js";
 import { issueStartPlan, startableHosts, type BlockedIssueStartPlan } from "../../../../common/issueStartPlan.js";
 import { isRepoEntry, repoIdentity } from "../../../../common/repoEntry.js";

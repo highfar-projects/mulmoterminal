@@ -32,7 +32,7 @@ vi.mock("node:fs", () => {
 });
 
 const { mountPluginRoutes } = await import("../../../server/routes/plugin-routes.js");
-const { runCompletionHook } = await import("../../../server/session/completion-hooks.js");
+const { runCompletionHook } = await import("../../../server/session/activity/completion-hooks.js");
 const { isFailedWorker, unplacedSessionRows } = await import("../../../server/session/registry.js");
 
 const app = express();

@@ -2,13 +2,13 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { accountSessionKey, type AccountSession } from "../../../server/session/account-log";
+import { accountSessionKey, type AccountSession } from "../../../server/session/accounts/account-log";
 
 // The record is kept in memory here: the real module appends to ~/.mulmoterminal, which a spec must
 // not touch. Its fold rule (first binding wins) is the one account-log.spec pins.
 const store = vi.hoisted(() => ({ sessions: new Map<string, AccountSession>(), remembered: [] as AccountSession[] }));
-vi.mock("../../../server/session/account-sessions.js", async () => {
-  const { accountSessionKey: key } = await import("../../../server/session/account-log");
+vi.mock("../../../server/session/accounts/account-sessions.js", async () => {
+  const { accountSessionKey: key } = await import("../../../server/session/accounts/account-log");
   return {
     accountSessions: store.sessions,
     accountSessionsHydrated: Promise.resolve(),

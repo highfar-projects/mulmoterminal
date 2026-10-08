@@ -10,7 +10,7 @@
 // Deliberately fire-and-forget: the caller sits on the synchronous hook path that
 // serves Claude Code's own requests, and a Firestore hiccup must never disturb it.
 import { deleteDoc, doc, serverTimestamp, setDoc, type DocumentReference, type Firestore } from "firebase/firestore";
-import type { WorkPhase } from "../../session/workPhase.js";
+import type { WorkPhase } from "../../session/activity/workPhase.js";
 
 export interface SessionActivity {
   working: boolean;

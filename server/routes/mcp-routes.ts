@@ -2,7 +2,7 @@
 // of it.
 //
 // /api/mcp/:sessionId is the in-process GUI MCP server over Streamable HTTP; claude (wired up
-// by session/mcp-config.ts) POSTs JSON-RPC there. /api/translation/submit is where the hidden
+// by session/spawn/setup/mcp-config.ts) POSTs JSON-RPC there. /api/translation/submit is where the hidden
 // translation worker reports its answer, through the broker's worker-only submitTranslation
 // tool — it is a landing point for that tool and nothing else, which is why it sits with the
 // MCP surface rather than with the translation routes (#548).
@@ -19,8 +19,8 @@ import { isRecord } from "../../common/isRecord.js";
 import { entitledToolGroups, bridgeResolvableSessions, resolveBridgeSession } from "../session/bridge-session.js";
 import { ancestorPids } from "../infra/process-tree.js";
 import { tmuxPanePids } from "../infra/tmux.js";
-import { submitTranslation } from "../session/translation-worker.js";
-import { translationSubmitOutcome } from "../session/translation-submit.js";
+import { submitTranslation } from "../session/scheduled/translation-worker.js";
+import { translationSubmitOutcome } from "../session/scheduled/translation-submit.js";
 
 // No SSE stream and no session teardown in stateless mode, so everything but POST is refused.
 const rejectNonPost = (_req: Request, res: Response) => res.status(405).set("Allow", "POST").json({ error: "method not allowed" });

@@ -11,7 +11,7 @@
 //
 // The url is a TEMPLATE, not a resolved address. Claude Code expands `${VAR}` in an MCP url at
 // connect time, and the two moving parts (our port, the session id) are only known per spawn —
-// they are set on each session's environment (see session/mcp-config.ts guiMcpEnv).
+// they are set on each session's environment (see session/spawn/setup/mcp-config.ts guiMcpEnv).
 import { readFile } from "node:fs/promises";
 import { realpathSync } from "node:fs";
 import path from "node:path";

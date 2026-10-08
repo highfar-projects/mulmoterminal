@@ -8,7 +8,7 @@ import {
   codexPermissionHookOverride,
   wantsCodexPermissionHook,
 } from "../../../../server/agents/codex/codex-hook.js";
-import { activityHookEffects, pushKindFor } from "../../../../server/session/activity-hook.js";
+import { activityHookEffects, pushKindFor } from "../../../../server/session/activity/activity-hook.js";
 
 // Captured from codex 0.156.1 on macOS while its approval dialog was on screen.
 const PERMISSION_REQUEST = {

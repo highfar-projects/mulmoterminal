@@ -15,7 +15,7 @@ import path from "node:path";
 import { readString } from "../../../common/readString.js";
 import { copilotHome } from "./copilot-hooks-file.js";
 import { queryReadOnlySqlite, type SqliteRow as Row } from "../sqlite-read.js";
-import { TRANSCRIPT_MAX_BYTES } from "../../session/transcript-view.js";
+import { TRANSCRIPT_MAX_BYTES } from "../../session/transcript/transcript-view.js";
 
 export const copilotSessionStatePath = (home: string = copilotHome()): string => path.join(home, "session-state");
 const sessionStorePath = (home: string = copilotHome()): string => path.join(home, "session-store.db");

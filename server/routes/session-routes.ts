@@ -45,7 +45,7 @@ import {
   sessionPrompts,
   sessionTimeline,
 } from "../session/session-reads.js";
-import { formatHandoff, type HandoffShape } from "../session/handoff-text.js";
+import { formatHandoff, type HandoffShape } from "../session/transcript/handoff-text.js";
 import { agentHomeChoices, codexSessionsUnder } from "../session/session-home.js";
 import { runningKeyOf, runningSessionKeys, sessionAttached, survivorSnapshot } from "../session/dir-session.js";
 import type { SessionOccupancy } from "../../common/sessionOccupancy.js";
@@ -60,18 +60,18 @@ import { grokSessionsRoot } from "../agents/grok/grok-session.js";
 import { listGrokSessions } from "../agents/grok/grok-sessions.js";
 import { listMuseSessionsForCwd, museSessionLogPath } from "../agents/muse/muse-session.js";
 import { museConversations, museConversationsHydrated } from "../session/registry.js";
-import { conversationSessionKeys, type AgentConversation } from "../session/agent-conversations.js";
+import { conversationSessionKeys, type AgentConversation } from "../session/list/agent-conversations.js";
 import { AGENT_SESSION_LIST_PATHS } from "../../common/agentSessionList.js";
 import { TERMINAL_AGENTS, type TerminalAgent } from "../../common/sessionAgent.js";
 import type { SessionMeta } from "../session/types.js";
-import { liveSessionAnswer } from "../session/live-sessions.js";
-import { parseActivityIds, selectSessionRows } from "../session/session-list.js";
-import { agentBadges } from "../session/agent-badges.js";
+import { liveSessionAnswer } from "../session/list/live-sessions.js";
+import { parseActivityIds, selectSessionRows } from "../session/list/session-list.js";
+import { agentBadges } from "../session/activity/agent-badges.js";
 import { agentSessionTitle } from "../agents/agent-session-title.js";
 import { agentTitleKind, type AgentTitleKind } from "../../common/agentTitle.js";
-import { sessionDetailView } from "../session/session-detail-view.js";
-import { clearedTranscripts } from "../session/cleared-transcripts.js";
-import { parseTranscriptCursor, sessionTranscriptPage } from "../session/transcript-view-read.js";
+import { sessionDetailView } from "../session/list/session-detail-view.js";
+import { clearedTranscripts } from "../session/transcript/cleared-transcripts.js";
+import { parseTranscriptCursor, sessionTranscriptPage } from "../session/transcript/transcript-view-read.js";
 import type { SessionAgent } from "../../common/sessionAgent.js";
 import { requestBody } from "./requestBody.js";
 

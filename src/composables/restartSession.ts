@@ -5,7 +5,7 @@
 //
 // The order is the whole rule, and it is why this is a function rather than two lines at the call
 // site. A session runs inside tmux, and reconnecting to a tmux session that is still alive
-// ATTACHES it — see ptyWouldReattach in server/session/pty-spawn.ts: "on the attach path nothing
+// ATTACHES it — see ptyWouldReattach in server/session/pty/pty-spawn.ts: "on the attach path nothing
 // is re-read, because nothing is re-started". So a reconnect that overtakes the reap gets the OLD
 // process back, with the old config, and looks exactly like a restart that worked.
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";

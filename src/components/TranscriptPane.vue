@@ -3,7 +3,7 @@
 //
 // A claude cell runs on the alternate screen, so the terminal holds no scrollback worth scrolling:
 // what is above the fold is gone. This reads the agent's transcript instead — the same fold the
-// phone gets (`server/session/transcript-view.ts`) — and pages BACKWARDS through it, so scrolling up
+// phone gets (`server/session/transcript/transcript-view.ts`) — and pages BACKWARDS through it, so scrolling up
 // walks the whole session to its first turn.
 //
 // A SNAPSHOT, deliberately: it does not follow a running turn. The terminal beside it is already the
@@ -27,7 +27,7 @@ const props = defineProps<{
   cwd: string | null;
   /** The cell's agent, for the LABEL on its frames and nothing else. Never used to choose a reader:
    *  the host asks each agent's log whether it holds this session, because a claude cell that
-   *  outlived a restart reports itself as `shell` (server/session/transcript-view-read.ts). So a
+   *  outlived a restart reports itself as `shell` (server/session/transcript/transcript-view-read.ts). So a
    *  wrong answer here mislabels a frame; it cannot show the wrong conversation. */
   agent?: string | null;
   // Whether this pane currently covers the terminal area. Owned by the grid, shown here because the

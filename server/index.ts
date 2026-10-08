@@ -8,9 +8,9 @@ import { createPubSub } from "./infra/pubsub.js";
 import { hideErrorStacks } from "./infra/hide-error-stacks.js";
 import { allowedToolNames, autoAllowedToolNames, toolSummaries } from "./infra/plugins-registry.js";
 import { getPlayfulEffects, getUserMcpServers, getTokenRotation, APP_CONFIG_FILE } from "./config/config-routes.js";
-import { rotateNearLimit, rotateOnLimit, type LimitRotationDeps, type LimitRotationOutcome } from "./session/limit-rotation.js";
-import { noteMovedFrom } from "./session/rotation-notice.js";
-import { sessionToken } from "./session/token-sessions.js";
+import { rotateNearLimit, rotateOnLimit, type LimitRotationDeps, type LimitRotationOutcome } from "./session/credentials/limit-rotation.js";
+import { noteMovedFrom } from "./session/credentials/rotation-notice.js";
+import { sessionToken } from "./session/credentials/token-sessions.js";
 import { rotationLoginLabel } from "../common/tokenRotation.js";
 import { countLiveSessions } from "./agents/token/token-assignment.js";
 import { enforceKeymap } from "./config/keymap/keymap-check.js";
@@ -19,50 +19,50 @@ import { browserOriginHostnames, createIsAllowedOrigin } from "./infra/allowed-o
 import { serverErrorExit } from "./infra/server-exit.js";
 import { PORT, BIND_HOST, CLAUDE_CWD } from "./config/env.js";
 import { messageOf } from "./errors.js";
-import { hookSettingsJson } from "./session/hook-settings.js";
-import { mcpConfigJson } from "./session/mcp-config.js";
-import { createClaudeSpawner } from "./session/spawn-claude.js";
+import { hookSettingsJson } from "./session/spawn/setup/hook-settings.js";
+import { mcpConfigJson } from "./session/spawn/setup/mcp-config.js";
+import { createClaudeSpawner } from "./session/spawn/agents/spawn-claude.js";
 import { createRateLimitService } from "./agents/rate-limit/rate-limit-service.js";
 import { runLegacyCleanupsOnce } from "./infra/legacy-cleanup.js";
-import { createCodexSpawner } from "./session/spawn-codex.js";
-import { createShellSpawners } from "./session/spawn-shell.js";
-import { createTranslationWorker } from "./session/translation-worker.js";
-import { createTitleManager } from "./session/session-title.js";
+import { createCodexSpawner } from "./session/spawn/agents/spawn-codex.js";
+import { createShellSpawners } from "./session/spawn/spawn-shell.js";
+import { createTranslationWorker } from "./session/scheduled/translation-worker.js";
+import { createTitleManager } from "./session/list/session-title.js";
 import { resolveSessionTitle } from "./config/header/header-title.js";
 import { mountTerminalWebSockets } from "./routes/ws-routes.js";
-import { createConnectionHandlers } from "./session/pty-connection.js";
-import { createTmuxSizeSync } from "./session/tmux-size-sync.js";
-import { createIssueSessionSpawner } from "./session/issue-session-spawn.js";
+import { createConnectionHandlers } from "./session/pty/pty-connection.js";
+import { createTmuxSizeSync } from "./session/pty/tmux-size-sync.js";
+import { createIssueSessionSpawner } from "./session/spawn/issue-session-spawn.js";
 import { bindSessionAccount } from "./session/session-home.js";
 import { registeredGuiMcpGroups } from "./infra/gui-mcp-registration.js";
 import { syncCursorDirectoryMcp } from "./agents/cursor/cursor-mcp.js";
 import { ensureWorktreeEnv } from "./config/worktree/worktree-env.js";
 import { TOOL_GROUPS } from "../common/toolGroups.js";
-import { createPaneModeWatch } from "./session/pane-mode-watch.js";
-import { createHeatWatch } from "./session/heat-watch.js";
+import { createPaneModeWatch } from "./session/pty/pane-mode-watch.js";
+import { createHeatWatch } from "./session/activity/heat-watch.js";
 import type { HeatFrame } from "../common/playfulEffects.js";
 import { listProcessRows } from "./infra/process-list.js";
 import { sendFrame } from "./session/ws-frames.js";
-import type { SpawnDeps } from "./session/spawn-deps.js";
+import type { SpawnDeps } from "./session/spawn/spawn-deps.js";
 import { ptys } from "./session/registry.js";
-import { agentOfSession } from "./session/session-lookup.js";
+import { agentOfSession } from "./session/list/session-lookup.js";
 import { createToolStores } from "./session/tool-store.js";
-import { startScheduledSessions } from "./session/scheduled-sessions-boot.js";
-import { startDecisionDigestSchedule } from "./session/decision-digest-schedule.js";
+import { startScheduledSessions } from "./session/scheduled/scheduled-sessions-boot.js";
+import { startDecisionDigestSchedule } from "./session/decisions/decision-digest-schedule.js";
 import { AGENT_BINS, AGENT_MODELS } from "./config/agent/agent-bins.js";
 import { agentAvailability } from "./agents/agent-availability.js";
 import { agentInstallGuide } from "../bin/agent-install-guides.js";
 import { diagnoseBinary } from "./infra/has-binary.js";
-import { ptyEnv } from "./session/pty-spawn.js";
-import { createAntigravitySpawner } from "./session/spawn-antigravity.js";
-import { createGrokSpawner } from "./session/spawn-grok.js";
-import { createMuseSpawner } from "./session/spawn-muse.js";
-import { createCopilotSpawner } from "./session/spawn-copilot.js";
-import { createCursorSpawner } from "./session/spawn-cursor.js";
+import { ptyEnv } from "./session/pty/pty-spawn.js";
+import { createAntigravitySpawner } from "./session/spawn/agents/spawn-antigravity.js";
+import { createGrokSpawner } from "./session/spawn/agents/spawn-grok.js";
+import { createMuseSpawner } from "./session/spawn/agents/spawn-muse.js";
+import { createCopilotSpawner } from "./session/spawn/agents/spawn-copilot.js";
+import { createCursorSpawner } from "./session/spawn/agents/spawn-cursor.js";
 import { HOST_ID as REMOTE_HOST_ID } from "./backends/remoteHost/index.js";
 import { initRemoteHost } from "./backends/remoteHost/hostBindings.js";
 import { createSessionActivityPublisher, firestoreSessionActivityStore } from "./backends/remoteHost/sessionActivity.js";
-import { createWorkPhaseTracker } from "./session/work-phase-tracker.js";
+import { createWorkPhaseTracker } from "./session/activity/work-phase-tracker.js";
 import { currentFirestore, currentUid } from "./backends/remoteHost/session.js";
 import { initWorkspaceSetup } from "./backends/workspaceSetup.js";
 import { installBundledSkills } from "./infra/install-bundled-skills.js";
@@ -163,7 +163,7 @@ const OUTPUT_BUFFER_LIMIT = 1024 * 1024;
 let pubsub: ReturnType<typeof createPubSub> | null = null;
 
 // Keeps tmux's window in step with the browser's terminal, which SIGWINCH alone does not
-// guarantee (session/tmux-size-sync.ts, #957).
+// guarantee (session/pty/tmux-size-sync.ts, #957).
 const tmuxSizeSync = createTmuxSizeSync({
   windowSizeOf: (id) => tmuxWindowSize(id),
   resizePty: (id, { cols, rows }) => {
@@ -203,7 +203,7 @@ const heatWatch = createHeatWatch({
 });
 heatWatch.start();
 
-// Per-connection plumbing (session/pty-connection.ts). The reap decisions stay here —
+// Per-connection plumbing (session/pty/pty-connection.ts). The reap decisions stay here —
 // they read activity state and schedule timers that outlive any one connection.
 const { reattachPty, handleClientFrame, handleClientClose } = createConnectionHandlers({
   outputBufferLimit: OUTPUT_BUFFER_LIMIT,
@@ -251,7 +251,7 @@ const lifecycle = createSessionLifecycle({
 });
 const { cancelReap, reap, armReapForDetached, publishActivity, setWorking, setWaiting } = lifecycle;
 
-// AI-title bookkeeping (session/session-title.ts). publishActivity stays here — it
+// AI-title bookkeeping (session/list/session-title.ts). publishActivity stays here — it
 // publishes the whole session row, of which the title is one field.
 const { forgetTitle, noteTitleTurn, maybeGenerateTitle, freshenRosterTitle } = createTitleManager({
   publishActivity: (id) => publishActivity(id),
@@ -272,7 +272,7 @@ const rateLimits = createRateLimitService((tokenId) =>
 
 // The PTY spawners (session/spawn-*.ts). They take what index.ts still owns — the session
 // lifecycle it drives, and this file's port and live user config bound into the two payload
-// builders (session/hook-settings.ts, session/mcp-config.ts) — as deps.
+// builders (session/spawn/setup/hook-settings.ts, session/spawn/setup/mcp-config.ts) — as deps.
 const spawnDeps: SpawnDeps = {
   claudeBin: CLAUDE_BIN,
   codexBin: CODEX_BIN,
@@ -338,7 +338,7 @@ const spawnIssueSession = createIssueSessionSpawner({
   },
 });
 
-// The hidden translation worker (session/translation-worker.ts). It drives a headless
+// The hidden translation worker (session/scheduled/translation-worker.ts). It drives a headless
 // claude session, so it needs the spawner above and the reap this file owns.
 const { translateViaHiddenChat } = createTranslationWorker({
   reap: (id) => reap(id),
@@ -384,7 +384,7 @@ hideErrorStacks(app);
 // (a big Read/Bash result can blow past Express's 100kb default, which would 413
 // the hook and leave its tool-call entry stuck on "running").
 // A rotated session moves to another credential when it hits its usage limit, or ends a turn at the
-// switch line (session/limit-rotation.ts).
+// switch line (session/credentials/limit-rotation.ts).
 const limitRotationDeps: LimitRotationDeps = {
   rotationEnabled: () => getTokenRotation().enabled,
   sessionToken,
@@ -477,10 +477,10 @@ startCollectionCompletionWatchers().catch((err) => {
 });
 
 // The background sessions nobody waits for, and the sweep that bounds them
-// (session/scheduled-sessions-boot.ts).
+// (session/scheduled/scheduled-sessions-boot.ts).
 const scheduledSessions = startScheduledSessions({ reap, spawnClaudePty });
 
-// The decision digest, at startup and on its timer (session/decision-digest-schedule.ts).
+// The decision digest, at startup and on its timer (session/decisions/decision-digest-schedule.ts).
 startDecisionDigestSchedule();
 
 // User-task scheduler: cron tasks from config/scheduler/tasks.json fire on schedule

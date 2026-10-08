@@ -18,7 +18,7 @@ import { discoverCollections } from "@mulmoclaude/core/collection/server";
 import { toJsonObject, type CommandHandlers, type JsonObject } from "@mulmoclaude/core/remote-host";
 import type { SessionAgent } from "../../../../common/sessionAgent.js";
 import { SESSION_ID_RE } from "../../../config/env.js";
-import { agentOfSession, cwdOfSession } from "../../../session/session-lookup.js";
+import { agentOfSession, cwdOfSession } from "../../../session/list/session-lookup.js";
 import { userSkillsDir } from "../../collections/collections.js";
 import { discoverPluginSkillIds } from "../pluginSkills.js";
 import { discoverSkillNames } from "../skills.js";

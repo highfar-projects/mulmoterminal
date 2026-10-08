@@ -9,7 +9,7 @@
 // a path-level watch does not survive — it goes on watching the inode that was replaced, so
 // the feature works until the first real edit. And on Windows a watch opened on an 8.3 short
 // path makes libuv abort() the whole process, uncatchable (docs/windows-gotchas.md);
-// server/session/codex-activity-watch.ts chose polling for that same reason.
+// server/session/activity/codex-activity-watch.ts chose polling for that same reason.
 //
 // Every dependency is injected, so the loop runs against fakes without a filesystem or a clock.
 import { parsePluginFileChannel } from "../../common/fileChannel.js";

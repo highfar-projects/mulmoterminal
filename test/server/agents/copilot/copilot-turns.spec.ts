@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { COPILOT_TURNS_READ_LIMIT, listCopilotTurns } from "../../../../server/agents/copilot/copilot-sessions.js";
-import { TRANSCRIPT_MAX_BYTES } from "../../../../server/session/transcript-view.js";
+import { TRANSCRIPT_MAX_BYTES } from "../../../../server/session/transcript/transcript-view.js";
 
 const HERE = "/work/project";
 const ELSEWHERE = "/work/other";

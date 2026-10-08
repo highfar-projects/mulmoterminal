@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { Terminal } from "@xterm/headless";
-import { terminalModePrefix } from "../../../server/session/terminal-replay";
+import { terminalModePrefix } from "../../../server/session/pty/terminal-replay";
 import { parseTmuxTerminalModes } from "../../../server/infra/tmux";
 import { swallowsMouseTracking } from "../../../src/composables/mouseTrackingModes";
 import { recordSwallowedModes, wantsMouseReports } from "../../../src/composables/mouseReports";

@@ -11,7 +11,7 @@
 // server/session/bridge-session.ts).
 import { describe, it, expect } from "vitest";
 import { agentCarriesFullGuiMcp, FULL_GUI_MCP_AGENTS } from "../../../common/guiMcpAgents.js";
-import { carriesFullGuiMcp } from "../../../server/session/mcp-config.js";
+import { carriesFullGuiMcp } from "../../../server/session/spawn/setup/mcp-config.js";
 import { entitledToolGroups, rememberEntitledToolGroups, forgetEntitledToolGroups } from "../../../server/session/bridge-session.js";
 
 describe("muse and the GUI MCP", () => {

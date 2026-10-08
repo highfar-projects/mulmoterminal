@@ -262,7 +262,7 @@ export function getSessionIdleReapDays(): number {
 
 // How often the sweep runs again while we are up (#2165). Read at the start that arms the timer, and
 // passed on when a save moves it (#2626), which re-arms counted from the last sweep. What this process
-// actually armed is reported by session/reap-schedule.ts rather than inferred from this number.
+// actually armed is reported by session/reaping/reap-schedule.ts rather than inferred from this number.
 export function getSessionReapIntervalHours(): number {
   return config.sessionReapIntervalHours;
 }

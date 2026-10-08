@@ -23,7 +23,7 @@
 import path from "node:path";
 import { protoVarintsAt } from "./antigravity-proto.js";
 import type { SessionContextInfo } from "../../../common/sessionContext.js";
-import type { SessionUsage } from "../../session/transcript.js";
+import type { SessionUsage } from "../../session/transcript/transcript.js";
 
 export interface AntigravityBadges {
   usage: SessionUsage;

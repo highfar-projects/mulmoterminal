@@ -10,7 +10,7 @@
 // wiring the browser to a dead pty while the next connect spawned a fresh one under the same id.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { WebSocket } from "ws";
-import type { EarlyFrames } from "../../../server/session/early-frames.js";
+import type { EarlyFrames } from "../../../server/session/pty/early-frames.js";
 import type { PtyEntry } from "../../../server/session/types.js";
 
 const { wrongEndpointReason, settledEntry } = await import("../../../server/routes/ws-routes.js");

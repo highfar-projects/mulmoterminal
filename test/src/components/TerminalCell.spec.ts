@@ -2890,7 +2890,7 @@ describe("TerminalCell", () => {
 
   // The switch writes Claude Code's per-folder MCP config, but it is no longer only claude's:
   // a codex grid cell is handed the SAME groups as resolved `-c mcp_servers.*` urls at spawn
-  // (server/session/spawn-codex.ts). Hiding the rows on codex left that path with no way to be
+  // (server/session/spawn/agents/spawn-codex.ts). Hiding the rows on codex left that path with no way to be
   // turned on from the cell that uses it.
   it("offers the tool-group switches for codex as well as claude", async () => {
     globalThis.fetch = vi.fn(async (url: string) => {

@@ -4,10 +4,10 @@ import type { WebSocket } from "ws";
 import type { IPty } from "node-pty";
 
 import { beginRunTerminal, type WsRouteDeps } from "../../../server/routes/ws-routes.js";
-import { killPty } from "../../../server/session/pty-kill.js";
+import { killPty } from "../../../server/session/pty/pty-kill.js";
 
-vi.mock("../../../server/session/pty-kill.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../../server/session/pty-kill.js")>()),
+vi.mock("../../../server/session/pty/pty-kill.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../server/session/pty/pty-kill.js")>()),
   killPty: vi.fn(),
 }));
 

@@ -2,7 +2,7 @@
 // After a spawn throws: is this session's all-tools claim released? (#2848) The decision, every
 // input; then the helper that every claiming spawner goes through, with the registry stubbed.
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { FullGuiClaimRequest } from "../../../server/session/spawn-with-full-gui-claim.js";
+import type { FullGuiClaimRequest } from "../../../server/session/spawn/spawn-with-full-gui-claim.js";
 
 const registry = vi.hoisted(() => {
   const calls: string[] = [];
@@ -17,8 +17,8 @@ vi.mock("../../../server/session/registry.js", () => ({
   releaseAllToolsSession: (id: string) => registry.calls.push(`release ${id}`),
 }));
 
-const { releasesClaimAfterFailedSpawn } = await import("../../../server/session/failed-spawn-claim.js");
-const { spawnWithFullGuiClaim } = await import("../../../server/session/spawn-with-full-gui-claim.js");
+const { releasesClaimAfterFailedSpawn } = await import("../../../server/session/spawn/failed-spawn-claim.js");
+const { spawnWithFullGuiClaim } = await import("../../../server/session/spawn/spawn-with-full-gui-claim.js");
 
 const BOOLEANS: readonly boolean[] = [true, false];
 const ID = "11111111-2222-4333-8444-555555555555";

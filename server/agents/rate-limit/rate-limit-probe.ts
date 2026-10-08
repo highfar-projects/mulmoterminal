@@ -12,7 +12,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { killPty } from "../../session/pty-kill.js";
+import { killPty } from "../../session/pty/pty-kill.js";
 import { statusLineCommand } from "../statusline.js";
 import { appendProbeScreen, classifyProbeStall, type ProbeStall } from "../probe/probe-stall.js";
 

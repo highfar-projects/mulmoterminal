@@ -32,23 +32,23 @@ import {
   titleInFlight,
   isFailedWorker,
 } from "./registry.js";
-import { clearedTranscripts, forgetClearedTranscript } from "./cleared-transcripts.js";
+import { clearedTranscripts, forgetClearedTranscript } from "./transcript/cleared-transcripts.js";
 import { forgetEntitledToolGroups } from "./bridge-session.js";
 import { forgetCursorBadges } from "../agents/cursor/cursor-usage.js";
-import { parseWaitGraceMs, reapDecisionFor, reapTimerDelay, shouldForgetActivity } from "./reap-policy.js";
-import { sessionRow, shouldRefreshReply } from "./activity-transition.js";
-import { flagEffect, type ActivityFlag } from "./activity-flag.js";
-import type { WorkPhase } from "./workPhase.js";
+import { parseWaitGraceMs, reapDecisionFor, reapTimerDelay, shouldForgetActivity } from "./reaping/reap-policy.js";
+import { sessionRow, shouldRefreshReply } from "./activity/activity-transition.js";
+import { flagEffect, type ActivityFlag } from "./activity/activity-flag.js";
+import type { WorkPhase } from "./activity/workPhase.js";
 import { forgetHistoryMemo, readLatestResponse } from "./session-reads.js";
 import { cleanupSessionSettings } from "./session-settings.js";
 import { cleanupSessionDrops } from "./session-drops.js";
-import { runCompletionHook } from "./completion-hooks.js";
+import { runCompletionHook } from "./activity/completion-hooks.js";
 import { messageOf } from "../errors.js";
 import { tmuxKillSession } from "../infra/tmux.js";
 import { forgetAnsweredQuestion } from "./answerQuestion.js";
 import { forgetUserInputClock, stopWatchingOtherWrites } from "./write-to-session.js";
 import { stopWatchesFor } from "./shared-app-watches.js";
-import { killPty } from "./pty-kill.js";
+import { killPty } from "./pty/pty-kill.js";
 
 // The channel every session row is published on.
 export const SESSIONS_CHANNEL = "sessions";

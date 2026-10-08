@@ -5,10 +5,10 @@
 import { randomUUID } from "node:crypto";
 import type { AgentWorkerRunner } from "@mulmoclaude/core/feeds/server";
 import { feedWorkerSpawnOptions } from "./feed-worker-options.js";
-import { runWithHiddenMarker } from "../../session/hiddenMarker.js";
-import { registerCompletionHook } from "../../session/completion-hooks.js";
+import { runWithHiddenMarker } from "../../session/transcript/hiddenMarker.js";
+import { registerCompletionHook } from "../../session/activity/completion-hooks.js";
 import { backgroundMarkers } from "../../session/registry.js";
-import type { SpawnClaudePty } from "../../session/spawn-claude.js";
+import type { SpawnClaudePty } from "../../session/spawn/agents/spawn-claude.js";
 import { messageOf } from "../../errors.js";
 
 export interface FeedsWorkerDeps {

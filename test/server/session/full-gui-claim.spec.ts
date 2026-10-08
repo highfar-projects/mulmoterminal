@@ -20,7 +20,7 @@ const REAL_HOME = process.env.HOME;
 process.env.HOME = HOME;
 const { mountMcpRoutes } = await import("../../../server/routes/mcp-routes.js");
 const { claimFullGuiMcp, hasAllGuiTools, releaseAllToolsSession, whenToolGroupsPersisted } = await import("../../../server/session/registry.js");
-const { carriesFullGuiMcp } = await import("../../../server/session/mcp-config.js");
+const { carriesFullGuiMcp } = await import("../../../server/session/spawn/setup/mcp-config.js");
 const { CLAUDE_CWD } = await import("../../../server/config/env.js");
 
 afterAll(async () => {

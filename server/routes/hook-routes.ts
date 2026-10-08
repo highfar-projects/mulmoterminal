@@ -13,18 +13,18 @@ import { ASK_QUESTION_TOOL, parseAskQuestions, type AskQuestionDone, type AskQue
 import { watchOtherWrites } from "../session/write-to-session.js";
 import { dirConfigWriteTarget } from "../config/dir/dir-config.js";
 import { writtenFilePath } from "../files/tool-writes.js";
-import { activityHookEffects, claudeOwnSessionId, pushKindFor, resolveHookCwd, resolveHookSessionId } from "../session/activity-hook.js";
-import { runCompletionHook } from "../session/completion-hooks.js";
+import { activityHookEffects, claudeOwnSessionId, pushKindFor, resolveHookCwd, resolveHookSessionId } from "../session/activity/activity-hook.js";
+import { runCompletionHook } from "../session/activity/completion-hooks.js";
 import { messageOf } from "../errors.js";
-import { headerHookEffect } from "../session/header-hook.js";
+import { headerHookEffect } from "../session/activity/header-hook.js";
 import { claudeSessionIds, lastPrompts, lastResponses, ptys } from "../session/registry.js";
-import { clearedTranscripts, markTranscriptCleared } from "../session/cleared-transcripts.js";
+import { clearedTranscripts, markTranscriptCleared } from "../session/transcript/cleared-transcripts.js";
 import { latestUserPrompt } from "../session/session-reads.js";
-import { notifyTaskFinished } from "../session/task-push.js";
-import { preferredHeaderPrompt } from "../session/transcript.js";
-import { failPendingTranslation } from "../session/translation-worker.js";
-import type { SessionActivityDeps } from "../session/session-activity-deps.js";
-import { publishesDirConfig, toolHookRecord, type ToolCallEnd, type ToolCallStart, type ToolHookPayload } from "../session/tool-hook.js";
+import { notifyTaskFinished } from "../session/activity/task-push.js";
+import { preferredHeaderPrompt } from "../session/transcript/transcript.js";
+import { failPendingTranslation } from "../session/scheduled/translation-worker.js";
+import type { SessionActivityDeps } from "../session/activity/session-activity-deps.js";
+import { publishesDirConfig, toolHookRecord, type ToolCallEnd, type ToolCallStart, type ToolHookPayload } from "../session/activity/tool-hook.js";
 
 // The header shows one line, so a longer prompt is stored truncated rather than in full.
 

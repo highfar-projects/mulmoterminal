@@ -10,7 +10,7 @@ import {
   antigravityTranscriptPath,
   listAntigravitySessions,
 } from "../../../../server/agents/antigravity/antigravity-sessions.js";
-import type { AgentConversation } from "../../../../server/session/agent-conversations.js";
+import type { AgentConversation } from "../../../../server/session/list/agent-conversations.js";
 
 // Captured verbatim from agy 1.1.9 (`agy -p`), so a format change breaks this rather than
 // quietly renaming every row. The point of the fixture is the wrapping: the prompt is inside

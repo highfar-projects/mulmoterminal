@@ -8,7 +8,7 @@ import type { Express } from "express";
 import { getAccounts, getCwdPresets, getRepoDirs } from "../config/config-routes.js";
 import { repoDirsFromPresets } from "../git/repo-dirs.js";
 import { startIssueWork } from "../git/issue-work.js";
-import { requestedIssueAccount, requestedIssueAgent, type SpawnIssueSession } from "../session/issue-session-spawn.js";
+import { requestedIssueAccount, requestedIssueAgent, type SpawnIssueSession } from "../session/spawn/issue-session-spawn.js";
 import { isIssueNumber } from "../../common/prPhase.js";
 import { isRepoEntry, repoIdentity } from "../../common/repoEntry.js";
 import { requestOriginAllowed } from "./same-origin-guard.js";

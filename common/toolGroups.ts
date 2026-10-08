@@ -166,7 +166,7 @@ export const toolGroupServerId = (group: ToolGroup): string => `mulmoterminal-${
 // `--mcp-config` (claude) or `-c mcp_servers.<id>.url=` (codex), so it is ours to name.
 //
 // Which of the two ids a session gets is decided by `carriesFullGuiMcp` in
-// server/session/spawn-claude.ts: the single view, a cell-less chat, and a cell whose cwd IS the
+// server/session/spawn/agents/spawn-claude.ts: the single view, a cell-less chat, and a cell whose cwd IS the
 // workspace carry this one; a cell in a project directory is handed no --mcp-config at all and
 // reaches the group ids through the user's own per-folder config. Both are live, on purpose.
 //
@@ -260,7 +260,7 @@ export const AUTO_ALLOWED_TOOLS: readonly string[] = [
  *  then deploy" arriving in that text is a tool call rather than a question.
  *
  *  IT SAYS CLAUDE, AND THAT IS THE WHOLE OF ITS REACH. codex approves per SERVER — `guiMcpServers`
- *  in `server/session/mcp-config.ts` marks every attached group `autoApprove: true`, by the owner's
+ *  in `server/session/spawn/setup/mcp-config.ts` marks every attached group `autoApprove: true`, by the owner's
  *  decision of 2026-07-28 — so a codex cell holding a group waves through every tool in it, this
  *  list included. That is already true of `manageSharedApp` in `data` and is now equally true of
  *  `useSharedApp` in `external`; adding the tool did not create it. It cannot be narrowed per tool

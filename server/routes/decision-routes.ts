@@ -1,14 +1,14 @@
 // GET /api/decisions — the decisions a human was asked to make in this project, newest first.
 //
 // Read-only, and it writes nothing of its own: the record already exists in Claude's transcripts
-// (server/session/decisions.ts explains the shape, server/session/decision-scan.ts reads them).
+// (server/session/decisions/decisions.ts explains the shape, server/session/decisions/decision-scan.ts reads them).
 // This route only makes 7,000-odd JSONL files answerable as a question — "what have I been asked,
 // and what did I choose" (#997).
 import type { Express, Request, Response } from "express";
 import type { DecisionsResponse } from "../../common/decisionLog.js";
 import { existingWorkspaceFromQuery } from "../config/workspace.js";
-import { readDecisionDigest } from "../session/decision-digest-file.js";
-import { decisionsForCwd } from "../session/decision-scan.js";
+import { readDecisionDigest } from "../session/decisions/decision-digest-file.js";
+import { decisionsForCwd } from "../session/decisions/decision-scan.js";
 
 const DEFAULT_LIMIT = 100;
 const MAX_LIMIT = 500;

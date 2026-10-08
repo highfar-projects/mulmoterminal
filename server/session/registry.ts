@@ -10,13 +10,13 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { MULMOTERMINAL_HOME, SESSION_ID_RE } from "../config/env.js";
-import { trackPersistQueue } from "./persist-drain.js";
-import type { DirModelChoice } from "./provider-env.js";
+import { trackPersistQueue } from "./reaping/persist-drain.js";
+import type { DirModelChoice } from "./spawn/setup/provider-env.js";
 import { asTerminalAgent, type SessionAgent, type TerminalAgent } from "../../common/sessionAgent.js";
 import { messageOf } from "../errors.js";
-import { buildActivitySnapshot, mergeOwnedActivity, parseActivityState, type PersistedActivity } from "./activity-state.js";
+import { buildActivitySnapshot, mergeOwnedActivity, parseActivityState, type PersistedActivity } from "./activity/activity-state.js";
 import { parseSessionIdLog, sessionIdLogLine } from "./session-id-log.js";
-import { applyCustomAgentSession, customAgentSessionLine, customAgentSessionRecord } from "./custom-agent-log.js";
+import { applyCustomAgentSession, customAgentSessionLine, customAgentSessionRecord } from "./spawn/agents/custom-agent-log.js";
 import { isCustomAgentId } from "../../common/customAgents.js";
 import {
   agentConversationLine,
@@ -24,8 +24,8 @@ import {
   applyAgentConversation,
   hydrateAgentConversationInto,
   type AgentConversation,
-} from "./agent-conversations.js";
-import { applySessionMemo, createMemoWriteGuard, sessionMemoLine, sessionMemoRecord } from "./session-memos.js";
+} from "./list/agent-conversations.js";
+import { applySessionMemo, createMemoWriteGuard, sessionMemoLine, sessionMemoRecord } from "./list/session-memos.js";
 import { normalizeMemo } from "../../common/sessionMemo.js";
 import { applySessionCollection, sessionCollectionLine, sessionCollectionRecord } from "./session-collections.js";
 import type { SessionCollection } from "../../common/sessionCollection.js";
@@ -35,7 +35,7 @@ import { devTerminalCwdLine, hydrateCwdsInto } from "./dev-terminal-cwds.js";
 import { parseSessionToolGroups, sessionToolGroupLine, TOOL_GROUP_RESET, type SessionToolGroup } from "./session-tool-groups.js";
 import { allToolsLogLine, parseAllToolsLog } from "./all-tools-log.js";
 import type { ToolGroup } from "../../common/toolGroups.js";
-import { carriesFullGuiMcp } from "./mcp-config.js";
+import { carriesFullGuiMcp } from "./spawn/setup/mcp-config.js";
 import type { Activity, KnownSession, PtyEntry } from "./types.js";
 
 // Per-session "working" state, driven by agent hooks (see /api/hook):

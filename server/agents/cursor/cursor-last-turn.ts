@@ -24,7 +24,7 @@
 // answering `null` for a turn that ended without prose; the cost of the loose one is quoting a
 // preamble as the conclusion, which is the error that cannot be seen at the other end.
 import { isRecord } from "../../../common/isRecord.js";
-import { EMPTY_TURN, type LastTurn } from "../../session/last-turn.js";
+import { EMPTY_TURN, type LastTurn } from "../../session/transcript/last-turn.js";
 
 const readString = (value: unknown): string => (typeof value === "string" ? value : "");
 

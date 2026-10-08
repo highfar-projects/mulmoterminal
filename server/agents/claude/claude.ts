@@ -7,7 +7,7 @@ import type { AgentAdapter } from "../types.js";
 // version that prints neither still lands on draft-injection's quiet fallback.
 //
 // NO SPACES, and lowercase: this is matched against `squashForMarker`'s output (see
-// server/session/pty-scan.ts), because the raw pty stream carries cursor-positioning
+// server/session/pty/pty-scan.ts), because the raw pty stream carries cursor-positioning
 // escapes BETWEEN the words — "?ESC[24GforESC[28Gshortcuts" — so a spaced regex matches
 // nothing that a terminal actually sends.
 //
