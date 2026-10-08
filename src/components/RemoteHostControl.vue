@@ -32,6 +32,9 @@ import { isRecord } from "../../common/isRecord";
 import { MULMOSERVER_ORIGIN } from "../../common/firebaseConfig";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 // Mobile companion PWA — shown in the dropdown as help text (not fetched here). The origin is
 // shared with the server, which prints it into a shared app's addresses (see common/).
@@ -197,10 +200,10 @@ onUnmounted(() => stopSelfHeal?.());
   <ToolbarPopover
     ref="popover"
     icon="phonelink"
-    :title="view.online ? 'Remote host connected' : view.reconnecting ? 'Remote host reconnecting' : 'Remote host'"
-    trigger-label="Remote host"
+    :title="view.online ? t('tips.toolbar.remoteConnected') : view.reconnecting ? t('tips.toolbar.remoteReconnecting') : t('tips.toolbar.remoteHost')"
+    :trigger-label="t('tips.toolbar.remoteHost')"
     pane-class="w-[300px] gap-2 p-2.5 font-sans"
-    pane-label="Remote host"
+    :pane-label="t('tips.toolbar.remoteHost')"
     :trigger-class="{ connected: view.online, disconnected: alarm }"
     @open="onPopoverOpen"
   >

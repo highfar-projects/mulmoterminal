@@ -1,0 +1,11 @@
+export type Drift = { kind: "current" } | { kind: "unknown" } | { kind: "behind"; latest: string; sameMajor?: boolean };
+export declare const CURRENT: Drift;
+export declare const UNKNOWN: Drift;
+export declare const CLAUDE_UPDATE_NATIVE: string;
+export declare const CLAUDE_UPDATE_NPM: string;
+export declare function nodeDrift(localVersion: string, releases: unknown): Drift;
+export declare function claudeDrift(localVersion: string | null, stableVersion: string | null): Drift;
+export declare function parseClaudeVersion(stdout: string | null | undefined): string | null;
+export declare function claudeUpdateCommands(realPath: string | null): string[];
+export declare function nodeDriftLines(drift: Drift, upgrade: import("./node-install.js").NodeUpgradeGuide): string[];
+export declare function claudeDriftLines(drift: Drift, localVersion: string | null, updateCommands: string[]): string[];

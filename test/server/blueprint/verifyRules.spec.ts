@@ -8,6 +8,7 @@ import {
   minutesOf,
   problemsIn,
   weekdayIndex,
+  weekdayLike,
   weekdayOfDate,
   type Amount,
   type Event,
@@ -90,6 +91,11 @@ describe("problemsIn: finds", () => {
     expect(found).toMatchObject({ id: "weekday-mismatch-d1", rule: "weekday-mismatch", detail: { written: "金", actual: "木" } });
   });
 
+  it("the actual weekday written the way the document wrote its own", () => {
+    const [english] = problemsIn({ events: [event("d1", "2026-10-09", { weekday: "Saturday" })] });
+    expect(english?.detail).toMatchObject({ written: "Saturday", actual: "Friday" });
+  });
+
   it("one wrong weekday once, however many events carry it, and another date separately", () => {
     const facts = {
       events: [event("a", "2026-10-01", { weekday: "金" }), event("b", "2026-10-01", { weekday: "(金)" }), event("c", "2026-10-02", { weekday: "土" })],
@@ -149,9 +155,18 @@ describe("problemsIn: finds", () => {
 
   it("a total that is not the sum of its parts, with decimals compared in cents", () => {
     const facts = { amounts: [amount("x", 12000), amount("y", 24000)], totals: [total("t", 35000, ["x", "y"])] };
-    expect(problemsIn(facts)).toEqual([{ id: "total-mismatch-t", rule: "total-mismatch", entries: ["t"], detail: { written: 35000, sum: 36000, unit: "円" } }]);
+    expect(problemsIn(facts)).toEqual([
+      { id: "total-mismatch-t", rule: "total-mismatch", entries: ["t"], detail: { written: 35000, sum: 36000, unit: "円", writtenIs: "less", by: 1000 } },
+    ]);
     const cents = { amounts: [amount("x", 1.1, "USD"), amount("y", 2.2, "USD")], totals: [total("t", 3.3, ["x", "y"], "USD")] };
     expect(rulesOf(cents)).toEqual([]);
+  });
+
+  it("says which way a total is off, and by how much, in cents", () => {
+    const over = { amounts: [amount("x", 28000), amount("y", 24000), amount("z", 3500)], totals: [total("t", 56000, ["x", "y", "z"])] };
+    expect(problemsIn(over)[0]?.detail).toEqual({ written: 56000, sum: 55500, unit: "円", writtenIs: "more", by: 500 });
+    const cents = { amounts: [amount("x", 1.1, "USD"), amount("y", 2.2, "USD")], totals: [total("t", 3.25, ["x", "y"], "USD")] };
+    expect(problemsIn(cents)[0]?.detail).toMatchObject({ writtenIs: "less", by: 0.05 });
   });
 
   it("parts in another unit than the total, instead of a sum across units", () => {
@@ -190,6 +205,37 @@ describe("what a quotation writes", () => {
     expect(monthDaysIn("on 1 day").size).toBe(0);
     expect([...monthDaysIn("2026-10-01")]).toEqual(["10-1"]);
     expect([...monthDaysIn("2026年 10 月 1 日")]).toEqual(["10-1"]);
+  });
+
+  it("a range that writes AM/PM once, for both of its times", () => {
+    const sorted = (quote: string) => [...timesIn(quote)].sort((a, b) => a - b);
+    // English writes it after the end, so the start gains the afternoon reading beside its plain one.
+    expect(sorted("1:00–5:00 PM The Met")).toEqual([60, 780, 1020]);
+    // A bare number is not a time on its own, so it takes no share: it may as well be a day.
+    expect(sorted("3–6 pm museum")).toEqual([1080]);
+    expect(sorted("1:00 to 5:30 p.m.")).toContain(780);
+    // Japanese writes it before the start, so the end gains it.
+    expect(sorted("午後1時〜5時")).toEqual([300, 780, 1020]);
+    expect(sorted("午後1:00〜5:30 見学")).toContain(1050);
+    expect(sorted("午後1時〜5時半")).toContain(1050);
+    // A time with its own marker, and a range with none, are read as before.
+    expect(sorted("9:00 AM–1:00 PM")).toEqual([540, 780]);
+    expect(sorted("1:00–5:00")).toEqual([60, 300]);
+    expect(sorted("午前9時〜午後1時")).toEqual([540, 780]);
+    // A Japanese start that closes with 分, and a marker written without a space or a word break after it.
+    expect(sorted("午後1時30分〜5時")).toContain(1020);
+    expect(sorted("1:00PMPM")).toEqual([780]);
+    // Only a range shares, and only with an end that writes no marker of its own.
+    expect(sorted("1:00 発 5:00 PM 着")).toEqual([60, 1020]);
+    expect(sorted("午前11:00–1:00 PM")).toEqual([660, 780]);
+    expect(sorted("午後11時〜1:00 AM")).toEqual([60, 1380]);
+    expect(sorted("October 1 to 5:30 pm")).toEqual([1050]);
+    expect(sorted("October 1 to 5 pm")).toEqual([1020]);
+    expect(sorted("Oct. 1–5 pm")).toEqual([1020]);
+    expect(sorted("10/1-5 pm")).toEqual([1020]);
+    expect(sorted("1 to 5:30 pm")).toEqual([1050]);
+    expect(sorted("10月 1-5 pm")).toEqual([1020]);
+    expect(sorted("2026年 10 月 1 to 5 pm")).toEqual([1020]);
   });
 
   it("times with a colon or in Japanese", () => {
@@ -312,4 +358,20 @@ describe("shapeProblems", () => {
     ["a total with no parts", { totals: [total("t", 1, [])] }, '"parts" must list the ids of amounts'],
   ];
   it.each(cases)("rejects %s", (_name, facts, message) => expect(shapeProblems(facts).join("\n")).toContain(message));
+});
+
+describe("weekdayLike", () => {
+  it.each([
+    ["木", 5, "金"],
+    ["（木）", 5, "金"],
+    ["木曜日", 5, "金"],
+    ["Thursday", 5, "Friday"],
+    ["thursday", 5, "Friday"],
+    ["Thu", 5, "Fri"],
+    ["Thu.", 5, "Fri."],
+    ["(Thu)", 5, "Fri"],
+    ["", 0, "日"],
+  ])("%s, weekday %i → %s", (written, index, expected) => {
+    expect(weekdayLike(written, index)).toBe(expected);
+  });
 });

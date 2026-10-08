@@ -4,7 +4,7 @@
 // terminal falls back to the global theme/sound. Field validation lives in the zod
 // schemas of config-schema.ts; the path-confinement check for `sound` (the security
 // surface) stays here because it touches the filesystem.
-import { existsSync, statSync } from "node:fs";
+import { existsSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { sanitizeButtons, sanitizeChips } from "./header-config.js";
 import { EMPTY_DIR_CHROME, type DirChrome } from "../../common/dirChrome.js";
@@ -16,7 +16,8 @@ import {
   type DirConfigSource,
   type DirConfigExtras,
 } from "../../common/dirConfigSource.js";
-import { resolveFileWithinDir } from "./dir-file.js";
+import { resolveDirWithinDir, resolveFileWithinDir } from "./dir-file.js";
+import { isExcludedSegment, type MobileFileExtension } from "../../common/mobileFiles.js";
 import { resolveDirIcon, dirIconImage, dirIconNamed, dirIconRef, type DirIcon, type DirIconSetting } from "./dir-icon.js";
 import { resolveDirBackground, type DirBackground } from "./dir-background.js";
 import { DIR_BACKGROUND_ROUTE, type PublicDirBackground } from "../../common/dirBackground.js";
@@ -26,6 +27,7 @@ import { DIR_ICON_ROUTE } from "../../common/dirIcon.js";
 import { readJsonFile } from "../infra/read-text-file.js";
 import { repoJsonConfig, repoJsonPath } from "./repo-json.js";
 import { isRecord } from "../../common/isRecord.js";
+import { DIR_FORM_KEYS } from "../../common/dirConfigForm.js";
 import type { WorktreeEnvSpec } from "../../common/worktreeEnv.js";
 import { isBuiltinThemeId } from "../../common/themeVars.js";
 import { getCustomThemeIds } from "./config-routes.js";
@@ -52,9 +54,9 @@ import {
   dirOrderPriorityField,
   dirSkillsField,
   dirDecksField,
+  dirMobileFilesField,
   dirProviderField,
   dirModelField,
-  dirAccountField,
   dirAppendSystemPromptField,
   dirDevcontainerField,
   dirDevcontainerWorkspaceFolderField,
@@ -76,10 +78,10 @@ export interface DirConfig extends DirChrome {
   theme: ThemeId | null;
   // Per-key xterm palette overrides (on top of `theme`), or null when none are valid.
   colors: Record<string, string> | null;
-  // Absolute path to the attention sound, resolved within cwd; null when unset or the
-  // configured path is absolute / escapes the directory / doesn't exist. The fallback for
-  // EVERY notification kind; `sounds` overrides it per kind.
-  sound: string | null;
+  // The attention sound for EVERY notification kind — a preset, or a file resolved within cwd —
+  // or null when unset or the configured path is absolute / escapes the directory / doesn't
+  // exist. `sounds` overrides it per kind, and takes the same two forms.
+  sound: DirSound | null;
   // Per-kind overrides of `sound` (#873), each either a preset or a file inside cwd.
   sounds: Partial<Record<NotifyKind, DirSound>>;
   // What the FILE said about this directory's image (#1421): an icon, `"off"` for an explicit
@@ -94,16 +96,18 @@ export interface DirConfig extends DirChrome {
   buttons: HeaderEntry[] | null;
   // Per-project header display chips, or null when this dir doesn't configure them.
   chips: HeaderChip[] | null;
+  // Per-project command-palette entries, shaped like buttons (#2465); [] when none.
+  commands: HeaderEntry[];
   // Header Skill-menu allowlist: show only these skill slugs, in this order. null =
   // this dir doesn't filter, so the menu shows every discovered skill.
   skills: string[] | null;
   decks: string[] | null;
+  // What the phone may see (#2911): each declared directory already resolved to an absolute path
+  // and contained in this one. null when nothing survived, so the project stays invisible.
+  mobileFiles: MobileFilesConfig | null;
   // Which backend/model this directory's sessions run on (#579). Never a secret.
   provider: string | null;
   model: string | null;
-  // Fork-only: the `accounts[]` id a NEW session here starts on when the launch form picked none
-  // (session-home.ts resolveWithAccount). An id for another agent's account is ignored there.
-  account: string | null;
   // Extra directories this dir's sessions may touch (#908) — already resolved to absolute
   // paths against the config's own directory, and already checked to exist.
   addDirs: string[] | null;
@@ -149,9 +153,13 @@ export interface PublicDirConfig extends DirChrome {
  *  rules, so the config's live reload and the editor's change feed can't drift apart. */
 export function dirConfigWriteTarget(toolName: unknown, toolInput: unknown, sessionCwd: string | null = null): string | null {
   const file = writtenFilePath(toolName, toolInput, sessionCwd);
-  if (!file) return null;
-  // Either file — a clone's local override is the one a user edits most, and reloading only on the
-  // shared file would leave the very setting they just changed not applying (#1430).
+  return file ? dirConfigDirOf(file) : null;
+}
+
+/** The directory whose config `file` is, when it is one of the two config files; else null.
+ *  Either file — a clone's local override is the one a user edits most, and reloading only on the
+ *  shared file would leave the very setting they just changed not applying (#1430). */
+export function dirConfigDirOf(file: string): string | null {
   const name = path.basename(file);
   return name === DIR_CONFIG_FILE || name === DIR_LOCAL_CONFIG_FILE ? path.dirname(file) : null;
 }
@@ -199,11 +207,12 @@ const EMPTY: DirConfig = {
   backgroundImage: null,
   buttons: null,
   chips: null,
+  commands: [],
   skills: null,
   decks: null,
+  mobileFiles: null,
   provider: null,
   model: null,
-  account: null,
   addDirs: null,
   appendSystemPrompt: null,
   worktreeEnv: null,
@@ -244,6 +253,31 @@ function readConfigObject(file: string): Record<string, unknown> {
   }
 }
 
+export interface MobileFilesConfig {
+  dirs: string[];
+  extensions: MobileFileExtension[];
+}
+
+// Whether a contained directory sits, as written or once its links are followed, under a hidden or
+// vendored segment — declaring `.git` must not open what the walk would never list.
+function isExcludedRoot(base: string, dir: string): boolean {
+  try {
+    const segments = [path.relative(base, dir), path.relative(realpathSync.native(base), realpathSync.native(dir))].flatMap((rel) => rel.split(path.sep));
+    return segments.some((segment) => segment !== "" && isExcludedSegment(segment));
+  } catch {
+    return true;
+  }
+}
+
+// A declared directory that escapes the project, does not exist, is a file, or is hidden is dropped
+// here, so the key lands in Settings' "ignored" list rather than widening what the phone can reach.
+export function resolveMobileFiles(base: string, input: unknown): MobileFilesConfig | null {
+  const declared = dirMobileFilesField.parse(input);
+  if (!declared) return null;
+  const dirs = declared.dirs.flatMap((ref) => resolveDirWithinDir(base, ref) ?? []).filter((dir) => !isExcludedRoot(base, dir));
+  return dirs.length ? { dirs: [...new Set(dirs)], extensions: declared.extensions } : null;
+}
+
 export function loadDirConfig(cwd: string): DirConfig {
   try {
     const base = path.resolve(cwd);
@@ -265,17 +299,18 @@ export function loadDirConfig(cwd: string): DirConfig {
       orderPriority: dirOrderPriorityField.parse(raw.orderPriority),
       theme: resolvableTheme(dirThemeField.parse(raw.theme)),
       colors: dirColorsField.parse(raw.colors),
-      sound: resolveDirSound(base, raw.sound),
+      sound: resolveDirSoundValue(base, raw.sound),
       sounds: resolveDirSounds(base, raw.sounds),
       icon: resolveDirIcon(base, raw.icon),
       backgroundImage: resolveDirBackground(base, raw.backgroundImage),
       buttons: sanitizeButtons(raw.buttons),
       chips: sanitizeChips(raw.chips),
+      commands: sanitizeButtons(raw.commands) ?? [],
       skills: dirSkillsField.parse(raw.skills),
       decks: dirDecksField.parse(raw.decks),
+      mobileFiles: resolveMobileFiles(base, raw.mobileFiles),
       provider: dirProviderField.parse(raw.provider),
       model: dirModelField.parse(raw.model),
-      account: dirAccountField.parse(raw.account),
       addDirs: resolveAddDirs(raw.addDirs, base, (p) => statSync(p).isDirectory()),
       appendSystemPrompt: dirAppendSystemPromptField.parse(raw.appendSystemPrompt),
       worktreeEnv: dirWorktreeEnvField.parse(raw.worktreeEnv),
@@ -381,6 +416,10 @@ export interface DirConfigDetail {
   // cell fetches on mount, and none of this is of any use to a running terminal.
   extras: DirConfigExtras;
   source: DirConfigSource;
+  // What this directory's own two files say for each key the Settings form edits (#2722), before
+  // validation and without `repo.json`: the form shows and changes what is written HERE, which the
+  // resolved `config` cannot tell apart from a value the repository offered underneath.
+  formValues: Record<string, unknown>;
 }
 
 // A chip is either a builtin's id or a custom { label, text } — either way its label is the
@@ -388,20 +427,36 @@ export interface DirConfigDetail {
 const chipLabel = (chip: HeaderChip): string => (typeof chip === "string" ? chip : chip.label);
 
 function dirConfigExtras(cwd: string): DirConfigExtras {
-  const { provider, model, account, skills, decks, addDirs, appendSystemPrompt, buttons, chips, icon, worktreeEnv, devcontainer, devcontainerWorkspaceFolder } =
-    loadDirConfig(cwd);
+  const {
+    provider,
+    model,
+    skills,
+    decks,
+    mobileFiles,
+    addDirs,
+    appendSystemPrompt,
+    buttons,
+    chips,
+    commands,
+    icon,
+    worktreeEnv,
+    devcontainer,
+    devcontainerWorkspaceFolder,
+  } = loadDirConfig(cwd);
   return {
     provider,
     model,
-    account,
     skills,
     decks,
+    mobileFileDirs: (mobileFiles?.dirs ?? []).map((dir) => path.relative(cwd, dir) || "."),
+    mobileFileExtensions: mobileFiles?.extensions ?? [],
     addDirs,
     appendSystemPrompt,
     devcontainer,
     devcontainerWorkspaceFolder,
     buttonLabels: (buttons ?? []).map((button) => button.label),
     chipLabels: (chips ?? []).map(chipLabel),
+    commandLabels: commands.map((command) => command.label),
     autoIcon: autoIconRef(cwd, icon),
     worktreeEnvNames: Object.keys(worktreeEnv ?? {}),
   };
@@ -438,6 +493,7 @@ export const MISSING_DIR_CONFIG_DETAIL: DirConfigDetail = {
   config: { ...EMPTY_DIR_CHROME, theme: null, colors: null, hasSound: false, iconUrl: null, devcontainer: null, backgroundImage: null },
   extras: EMPTY_DIR_CONFIG_EXTRAS,
   source: EMPTY_DIR_CONFIG_SOURCE,
+  formValues: {},
 };
 
 export function dirConfigDetail(cwd: string): DirConfigDetail {
@@ -446,7 +502,16 @@ export function dirConfigDetail(cwd: string): DirConfigDetail {
   const localFile = dirConfigFile(cwd, DIR_LOCAL_CONFIG_FILE);
   const repoFile = repoJsonPath(cwd);
   if (!file && !localFile && !repoFile) {
-    return { exists: true, file: null, localFile: null, repoFile: null, config, extras: EMPTY_DIR_CONFIG_EXTRAS, source: EMPTY_DIR_CONFIG_SOURCE };
+    return {
+      exists: true,
+      file: null,
+      localFile: null,
+      repoFile: null,
+      config,
+      extras: EMPTY_DIR_CONFIG_EXTRAS,
+      source: EMPTY_DIR_CONFIG_SOURCE,
+      formValues: {},
+    };
   }
   const extras = dirConfigExtras(cwd);
   // Both files, as the loader sees them. Malformed or non-object JSON keeps the FILE in the
@@ -454,13 +519,25 @@ export function dirConfigDetail(cwd: string): DirConfigDetail {
   // preview can say, and reporting no file at all would send the reader looking for one that is
   // right there — which is now two places to look rather than one.
   const { raw, repoKeys, localKeys } = mergedDirConfigRaw(path.resolve(cwd));
-  if (Object.keys(raw).length === 0) return { exists: true, file, localFile, repoFile, config, extras, source: EMPTY_DIR_CONFIG_SOURCE };
+  const formValues = dirFormValues(path.resolve(cwd));
+  if (Object.keys(raw).length === 0) return { exists: true, file, localFile, repoFile, config, extras, source: EMPTY_DIR_CONFIG_SOURCE, formValues };
   // `icon: "invalid"` is a VALUE to keysWithValue, which would report the key as applied — the one
   // thing it must not say about a setting that did not take effect. Flattened to null here so the
   // key lands in "ignored", where a mistyped path belongs.
   const resolved = loadDirConfig(cwd);
   const kept = keysWithValue({ ...resolved, icon: dirIconRef(resolved.icon) });
-  return { exists: true, file, localFile, repoFile, config, extras, source: { ...describeDirConfig(raw, kept), local: localKeys, repo: repoKeys } };
+  return { exists: true, file, localFile, repoFile, config, extras, source: { ...describeDirConfig(raw, kept), local: localKeys, repo: repoKeys }, formValues };
+}
+
+/** What this directory's own two files say, local over shared — no `repo.json` under them. */
+export function dirOwnConfigRaw(cwd: string): Record<string, unknown> {
+  const base = path.resolve(cwd);
+  return { ...readConfigObject(path.join(base, DIR_CONFIG_FILE)), ...readConfigObject(path.join(base, DIR_LOCAL_CONFIG_FILE)) };
+}
+
+function dirFormValues(base: string): Record<string, unknown> {
+  const written = dirOwnConfigRaw(base);
+  return Object.fromEntries(DIR_FORM_KEYS.filter((key) => key in written).map((key) => [key, written[key]]));
 }
 
 // The sound this directory wants for one kind: its per-kind entry, else its all-kind
@@ -470,5 +547,5 @@ export function dirSoundFor(cwd: string, kind: NotifyKind | null): DirSound | nu
   const config = loadDirConfig(cwd);
   const perKind = kind ? config.sounds[kind] : undefined;
   if (perKind) return perKind;
-  return config.sound ? { source: "file", path: config.sound } : null;
+  return config.sound;
 }

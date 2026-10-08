@@ -1,0 +1,37 @@
+{
+  "manifest": {
+    "title": "Align terms (a glossary, given to chaff)",
+    "description": "Collects from your documents the terms they define, terms defined twice, and words written in more than one way, into a glossary. Every definition and spelling comes with a quote from the original, and a machine checks that no term the documents define was left out. If you want, the spellings to use and your company's own words go into the folder's chaff.yaml, and from then on chaff points out the variations. The originals are not changed."
+  },
+  "hearing": {
+    "documents": {
+      "label": "The documents to collect terms from (one file per line, inside this folder)",
+      "why": "Defined terms and spellings are collected from these documents and backed by quotes from the original",
+      "placeholder": "e.g.\ndocs/spec.md\ndocs/terms.md"
+    },
+    "write": {
+      "label": "Put how to align the spellings it found into chaff.yaml?",
+      "why": "If you do, every time chaff checks the documents in this folder, the spellings not to use are pointed out",
+      "options": {
+        "このフォルダの chaff.yaml に入れる": "Put them in this folder's chaff.yaml",
+        "入れない（.blueprint の中だけ）": "Don't (keep them inside .blueprint only)"
+      }
+    }
+  },
+  "steps": {
+    "collect": {
+      "title": "Collect the terms",
+      "description": "Makes a glossary, with quotes from the original, of the terms the documents define, the different ways one word is written, and words only understood inside the company. A machine checks that no term the documents define was left out."
+    },
+    "apply": {
+      "title": "Put them in chaff.yaml and report",
+      "description": "After checking the glossary, puts the spellings to use and the company's own words into chaff.yaml, only if you asked for it, and checks that chaff points out the variations still left. The glossary and the terms defined twice go into the report."
+    }
+  },
+  "presets": {
+    "shanai-yogo": {
+      "title": "Align the terms in a remote-work regulation and its guide",
+      "description": "Makes a glossary from the sample remote-work regulation (kitei.txt) and guide (tebiki.md). It finds that \"社員\" (employee) is defined with different meanings in the two documents, and the variations \"サーバー／サーバ\" and \"ユーザー／ユーザ\" (server, user). The spellings to use go into the folder's chaff.yaml, so from then on chaff points out the variations. The originals are not changed."
+    }
+  }
+}

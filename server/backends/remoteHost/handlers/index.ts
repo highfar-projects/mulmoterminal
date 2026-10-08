@@ -24,6 +24,7 @@ import { listCollections } from "./listCollections.js";
 import { createListFeeds } from "./listFeeds.js";
 import { createListShortcuts } from "./listShortcuts.js";
 import { createListSkills } from "./listSkills.js";
+import { createMobileFileHandlers } from "./mobileFiles.js";
 import { mutateRemoteViewItem } from "./mutateRemoteView.js";
 import { createStartChat } from "./startChat.js";
 import { createTerminalSessionHandlers } from "./terminalSession.js";
@@ -67,5 +68,8 @@ export function createRemoteHostHandlers(deps: RemoteHostHandlerDeps): CommandHa
     ...createIssueWorkHandlers(deps),
 
     ...createTerminalSessionHandlers(deps),
+
+    // Files a project declares under `mobileFiles` in its .mulmoterminal.json (#2911).
+    ...createMobileFileHandlers({ workspace, stager: deps.mobileFileStager }),
   };
 }

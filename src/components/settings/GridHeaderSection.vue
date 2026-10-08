@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n";
 import { showLoadAverage, saveShowLoadAverage } from "../../composables/showLoadAverage";
+import { paletteSearchBox, savePaletteSearchBox } from "../../composables/paletteSearchBox";
 
 // The read-outs along the top of the grid, as opposed to the ones on a cell's own header
 // (headerChrome) or in the roster beside an enlarged one (waitingRows).
@@ -13,6 +14,12 @@ async function onLoadAverageToggle(e: Event) {
   if (!(e.target instanceof HTMLInputElement)) return;
   const input = e.target;
   if (!(await saveShowLoadAverage(input.checked))) input.checked = showLoadAverage.value;
+}
+
+async function onSearchBoxToggle(e: Event) {
+  if (!(e.target instanceof HTMLInputElement)) return;
+  const input = e.target;
+  if (!(await savePaletteSearchBox(input.checked))) input.checked = paletteSearchBox.value;
 }
 </script>
 
@@ -28,6 +35,18 @@ async function onLoadAverageToggle(e: Event) {
     />
     <span class="text-[12px]">
       <strong>{{ t("settings.gridHeader.loadAverageTitle") }}</strong> — {{ t("settings.gridHeader.loadAverageHint") }}
+    </span>
+  </label>
+  <label class="mt-1.5 flex cursor-pointer items-start gap-2">
+    <input
+      type="checkbox"
+      class="mt-1 cursor-pointer"
+      :checked="paletteSearchBox"
+      :aria-label="t('settings.gridHeader.searchBox')"
+      @change="(e) => void onSearchBoxToggle(e)"
+    />
+    <span class="text-[12px]">
+      <strong>{{ t("settings.gridHeader.searchBoxTitle") }}</strong> — {{ t("settings.gridHeader.searchBoxHint") }}
     </span>
   </label>
 </template>

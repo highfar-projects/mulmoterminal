@@ -46,7 +46,12 @@ const item = (id: string) => document.body.querySelector<HTMLElement>(`[data-tes
 // Each item leads with a Material Symbols ligature, which renders as its own text node — the
 // same strip TerminalCell.spec.ts does for the path menu.
 const itemLabel = (text: string) => text.replace(/^\S+\s+/, "");
-const labels = () => [...document.body.querySelectorAll('[data-testid="files-row-menu"] [role="menuitem"]')].map((b) => itemLabel(b.textContent?.trim() ?? ""));
+const allLabels = () =>
+  [...document.body.querySelectorAll('[data-testid="files-row-menu"] [role="menuitem"]')].map((b) => itemLabel(b.textContent?.trim() ?? ""));
+// The tree's file operations (#2578) close every menu; the cases below are about what comes before
+// them, and the last case pins that they are there.
+const FILE_OP_LABELS = ["New file…", "New folder…", "Rename…", "Move to Trash"];
+const labels = () => allLabels().filter((label) => !FILE_OP_LABELS.includes(label));
 
 /** A real event, so `defaultPrevented` means what it means in a browser. */
 const rightClick = (el: Element, clientX = 40, clientY = 60) => {
@@ -66,7 +71,7 @@ describe("the files tree's row menu", () => {
     rightClick(w.findAll('[data-testid="files-row"]')[0].element);
     await flushPromises();
 
-    expect(labels()).toEqual(["Show in folder", "Insert relative path", "Insert absolute path"]);
+    expect(labels()).toEqual(["Open in a new tab", "Show in folder", "Insert relative path", "Insert absolute path"]);
     item("insert-relative")?.click();
     await flushPromises();
     expect(w.emitted("insert-text")).toEqual([["README.md "]]);
@@ -90,7 +95,7 @@ describe("the files tree's row menu", () => {
     rightClick(w.findAll('[data-testid="files-row"]')[0].element); // README.md
     await flushPromises();
 
-    expect(labels()).toEqual(["Open in the Canvas", "Show in folder", "Insert relative path", "Insert absolute path"]);
+    expect(labels()).toEqual(["Open in a new tab", "Open in the Canvas", "Show in folder", "Insert relative path", "Insert absolute path"]);
     item("open-canvas")?.click();
     await flushPromises();
     expect(w.emitted("open-in-canvas")).toEqual([["README.md"]]);
@@ -116,7 +121,7 @@ describe("the files tree's row menu", () => {
     const event = rightClick(w.findAll('[data-testid="files-row"]')[0].element);
     await flushPromises();
 
-    expect(labels()).toEqual(["Show in folder"]);
+    expect(labels()).toEqual(["Open in a new tab", "Show in folder"]);
     expect(event.defaultPrevented).toBe(true);
   });
 
@@ -125,7 +130,7 @@ describe("the files tree's row menu", () => {
     rightClick(w.findAll('[data-testid="files-row"]')[0].element);
     await flushPromises();
 
-    expect(labels()).toEqual(["Show in folder", "Insert absolute path"]);
+    expect(labels()).toEqual(["Open in a new tab", "Show in folder", "Insert absolute path"]);
   });
 
   it("opens from the keyboard, on both spellings of the menu key", async () => {
@@ -150,17 +155,25 @@ describe("the files tree's row menu", () => {
     const row = w.findAll('[data-testid="files-row"]')[0];
     await row.trigger("keydown", { key: "F10", shiftKey: true });
     await flushPromises();
-    // The first item, which since #2039 is the file-manager entry rather than an insert.
+    // The first item, which on a file row is opening it in a new tab (#2267).
+    expect(document.activeElement).toBe(item("open-tab"));
+
+    const down = (): void => void menu()?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    down();
     expect(document.activeElement).toBe(item("reveal"));
-
-    menu()?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    down();
     expect(document.activeElement).toBe(item("insert-relative"));
-    menu()?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    down();
     expect(document.activeElement).toBe(item("insert-absolute"));
-    menu()?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
-    expect(document.activeElement).toBe(item("reveal")); // wraps
+    down();
+    expect(document.activeElement).toBe(item("new-file")); // the tree's own operations follow (#2578)
+    menu()?.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true }));
+    expect(allLabels().at(-1)).toBe(document.activeElement?.textContent?.trim().replace(/^\S+\s/, ""));
+    down();
+    expect(document.activeElement).toBe(item("open-tab")); // wraps
 
-    menu()?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    down();
+    down();
     expect(document.activeElement).toBe(item("insert-relative"));
 
     (document.activeElement as HTMLElement).click(); // what Enter does on a button
@@ -216,5 +229,58 @@ describe("the files tree's row menu", () => {
     await w.findAll('[data-testid="files-row"]')[0].trigger("click");
     await flushPromises();
     expect(fakeEditor.setDoc).toHaveBeenCalledWith("# hello", "README.md");
+  });
+
+  // #2694. The tree's empty space is the root: its menu offers a new file or folder there, and only that.
+  it("opens a root menu on the tree's empty space", async () => {
+    const w = await mountPane();
+    const event = rightClick(w.get("nav").element);
+    await flushPromises();
+    expect(event.defaultPrevented).toBe(true);
+    expect(allLabels()).toEqual(["New file…", "New folder…"]);
+  });
+
+  // The keyboard reaches it too, and gets the empty space back when the menu is dismissed.
+  it("opens the root menu from the keyboard, and gives the keyboard back", async () => {
+    const w = await mountPane();
+    const nav = w.get("nav").element;
+    if (!(nav instanceof HTMLElement)) throw new Error("no tree");
+    nav.focus();
+    nav.dispatchEvent(new KeyboardEvent("keydown", { key: "F10", shiftKey: true, bubbles: true }));
+    await flushPromises();
+    expect(allLabels()).toEqual(["New file…", "New folder…"]);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await flushPromises();
+    expect(document.activeElement).toBe(nav);
+  });
+
+  // Nothing new goes on a root that could not be listed.
+  it("offers no root menu while the tree could not be read", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ error: "unreadable" }), { status: 500 })),
+    );
+    const w = await mountPane();
+    rightClick(w.get("nav").element);
+    await flushPromises();
+    expect(menu()).toBeNull();
+    vi.unstubAllGlobals();
+  });
+
+  // An empty folder has no row to right-click, so what the menu would offer is right there.
+  it("offers a new file or folder in an empty folder, from the keyboard too", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => new Response(JSON.stringify(String(input).includes("/list") ? { entries: [] } : { ok: true }))),
+    );
+    const prompt = vi.spyOn(window, "prompt").mockReturnValue(null);
+    const w = await mountPane();
+    const button = w.get('[data-testid="files-empty-new-file"]');
+    expect(button.text()).toBe("New file…");
+    await button.trigger("click");
+    await flushPromises();
+    expect(prompt).toHaveBeenCalledWith("Name of the new file", "");
+    prompt.mockRestore();
+    vi.unstubAllGlobals();
   });
 });

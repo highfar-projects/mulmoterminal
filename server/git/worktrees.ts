@@ -122,9 +122,12 @@ export async function git(
    *  browser hung up on — where the timeout alone would leave the process running for its full
    *  duration. Settles as `ok: false, code: null`, the answer that already means "no result came back". */
   signal?: AbortSignal,
-): Promise<{ ok: boolean; stdout: string; code: number | null }> {
-  const res = await runTool("git", cwd ? ["-C", cwd, ...args] : args, { timeoutMs, signal });
-  return { ok: res.ok, stdout: res.stdout, code: res.code };
+  /** Stops the child once its output passes this many bytes, for a caller that will not use an
+   *  answer that large anyway; the result is then `ok: false` with `overflow: true`. Unset reads all. */
+  maxStdoutBytes?: number,
+): Promise<{ ok: boolean; stdout: string; code: number | null; overflow?: boolean }> {
+  const res = await runTool("git", cwd ? ["-C", cwd, ...args] : args, { timeoutMs, signal, maxStdoutBytes });
+  return res.overflow ? { ok: false, stdout: "", code: res.code, overflow: true } : { ok: res.ok, stdout: res.stdout, code: res.code };
 }
 
 // The current working tree's root, or null if `dir` isn't inside a git work tree.

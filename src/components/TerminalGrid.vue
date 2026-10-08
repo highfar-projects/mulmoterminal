@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { takeFilesPanelSeed } from "../composables/filesPanelSeed";
 import { ref, computed, onMounted, onBeforeUnmount, onActivated, watch, nextTick, useTemplateRef } from "vue";
 import TerminalCell from "./TerminalCell.vue";
 import CommandCell from "./CommandCell.vue";
@@ -22,6 +23,9 @@ import type { CwdPreset } from "./presets";
 import type { Launcher, LaunchPick } from "./launchers";
 import type { CustomAgent } from "../../common/customAgents";
 import type { AgentAccount } from "../../common/agentAccounts";
+import { isCellSelfAction, isPaneAction, paneOfAction, type CellAction } from "../../common/headerActions";
+import { registerGridCellRunner } from "../composables/useGridCellAction";
+import { requestCellAction } from "../composables/useCellAction";
 import { shouldFlipZoom } from "./cellChromeRules";
 import { rosterAlertClass } from "./rosterAlertClasses";
 import { attentionAction, type MenuPoint } from "./rowMenu";
@@ -35,6 +39,7 @@ import CollectionsPane from "./CollectionsPane.vue";
 import ToolsPane from "./ToolsPane.vue";
 import PromptsPane from "./PromptsPane.vue";
 import TranscriptPane from "./TranscriptPane.vue";
+import { rightPaneStyle } from "./rightPaneStyle";
 import {
   clampPaneWidth,
   clampSecondary,
@@ -48,6 +53,7 @@ import {
   TERMINAL_STRIP,
 } from "./splitterWidth";
 import { setFilesPaneOpener } from "../composables/filesPaneOpener";
+import type { FileLocation } from "../composables/filePathLocation";
 import { paneCanShowClick } from "./paneClickTarget";
 import { onToolGroupsAnnounced } from "../composables/useToolGroupsAnnounce";
 import { usePubSub } from "../composables/usePubSub";
@@ -68,6 +74,7 @@ import { jsonBody } from "../jsonBody";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { useI18n } from "vue-i18n";
+import type { FilesPaneAction, FilesTabAction } from "./filesPaneActions";
 
 const { t } = useI18n();
 
@@ -137,10 +144,12 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
   (e: "session" | "cwd", uid: number, value: string): void;
-  (e: "close" | "toggle-expand" | "focus-cell", uid: number): void;
+  (e: "close" | "toggle-expand" | "focus-cell" | "new-here", uid: number): void;
   (e: "run" | "runSpare", uid: number, command: RunCommand): void;
   (e: "launch", uid: number, pick: LaunchPick): void;
   (e: "move", uid: number, dir: -1 | 1): void;
+  // A cell action only the whole grid can carry out (the launch panel, a new cell, closing, unread).
+  (e: "cell-shortcut", uid: number, action: CellAction): void;
   // Manual reorder to an arbitrary slot (a roster row dragged by its header): put `uid` in front of
   // `beforeUid`, or at the end of the list when that is null.
   (e: "move-before", uid: number, beforeUid: number | null): void;
@@ -521,15 +530,47 @@ async function adoptStoredCard(): Promise<void> {
 // Not a toggle. "Browse files" is "show me", the way `openCanvasFor` is; the pane's own close
 // button is what puts it away.
 //
-// The flush condition is narrower than openCanvasFor's, because less is unmounted: the Canvas
-// always replaces a files pane, while this one moves it only when it is on ANOTHER cell. And
-// `filesOpen` already means "the pane on screen is files" — it reads `paneUid` — so
-// `paneUid !== uid` is exactly "a files pane that is about to be re-rooted".
-async function openFilesFor(uid: number): Promise<void> {
-  if (filesOpen.value && paneUid.value !== uid && (await filesPane.value?.flush()) === false) return;
+// The flush condition is narrower than openCanvasFor's only for `files`, which re-roots a files pane
+// on ANOTHER cell and leaves one on this cell alone. Any other pane replaces it outright — on this
+// cell too, since a collapsed zoom leaves the files pane mounted, hidden, on the cell it was on.
+async function openPaneFor(uid: number, pane: RightPane): Promise<void> {
+  const filesUnmounts = filesOpen.value && (paneUid.value !== uid || pane !== "files");
+  if (filesUnmounts && (await filesPane.value?.flush()) === false) return;
   if (props.expandedUid !== uid) emit("toggle-expand", uid);
-  setRightPane("files", uid);
+  setRightPane(pane, uid);
 }
+
+// A pane asked for by name — a header button, a shortcut, the palette. On the enlarged cell it is
+// the History / Tools menu's toggle; on a tile it is the gesture above, because a toggle there only
+// records what the cell should show once enlarged, and an action that visibly does nothing reads as
+// broken.
+function pressPane(uid: number, pane: RightPane): void {
+  if (uid === props.expandedUid) void toggleRightPane(pane, uid);
+  else if (pane === "canvas") void openCanvasFor(uid);
+  else void openPaneFor(uid, pane);
+}
+
+// Where every cell action is decided for a NAMED cell: a header button reaches it through
+// useGridCellAction, a shortcut or palette pick through GridView. Panes are this component's, what
+// the cell does by itself is the cell's, and what needs the whole grid (the launch panel, a new
+// cell, closing, unread) goes to GridView's `runCellShortcut`, the path the keyboard already takes.
+// False when the cell cannot do it now, so a button can say so.
+function runCellAction(action: CellAction, uid: number): boolean {
+  if (isPaneAction(action)) pressPane(uid, paneOfAction(action));
+  else if (isCellSelfAction(action)) return requestCellAction(`cell-${uid}`, action);
+  else if (action === "zoom-toggle") emit("toggle-expand", uid);
+  else if (action === "terminal-move-prev" || action === "terminal-move-next") return moveCell(uid, action === "terminal-move-prev" ? -1 : 1);
+  else emit("cell-shortcut", uid, action);
+  return true;
+}
+
+function moveCell(uid: number, dir: -1 | 1): boolean {
+  if (!props.reorderable) return false; // only manual order moves a cell; any other would re-sort it
+  emit("move", uid, dir);
+  return true;
+}
+
+onBeforeUnmount(registerGridCellRunner((uid, action) => runCellAction(action, uid)));
 
 /** What a refusal has to come back to for it to be worth showing. */
 type PaneIdentity = { uid: number | null; cwd: string | null; pane: FilesPaneInstance | null };
@@ -599,18 +640,38 @@ async function openFileInCanvas(path: string): Promise<void> {
  *  opens this pane — and for its reason: `setFilesOpen` answers for the pane that is ON SCREEN,
  *  which is not always the enlarged cell. The pane can TRAIL another cell after a re-root it could
  *  not save out of, and moving it from here would take that unsaved buffer with it. */
-async function openFilesFinder(): Promise<void> {
+async function openFilesFinder(query = ""): Promise<void> {
   if (!filesOpen.value) setFilesOpen(true);
   await nextTick(); // the pane may have just mounted; `filesPane` is only a ref afterwards
-  filesPane.value?.openFinder();
+  filesPane.value?.openFinder(query);
 }
 
 /** The `files-search` shortcut's entrance (#2140), the same shape as the finder's above and for
  *  every one of its reasons — the pane may not be up, and it may be rooted on another cell. */
-async function openFilesSearch(): Promise<void> {
+async function openFilesSearch(query = ""): Promise<void> {
   if (!filesOpen.value) setFilesOpen(true);
   await nextTick();
-  filesPane.value?.openSearch();
+  filesPane.value?.openSearch(query);
+}
+
+/** The Files pane's tab keys (#2267). Unlike the two above they do NOT open the pane: closing or
+ *  switching a tab in a pane that was not up has nothing to act on. `filesPane` is only a ref while
+ *  the pane is mounted, so a closed pane answers them with nothing. */
+async function filesTab(action: FilesTabAction): Promise<void> {
+  if (action === "files-tab-close") await filesPane.value?.closeFrontTab();
+  else await filesPane.value?.stepTab(action === "files-tab-next" ? 1 : -1);
+}
+
+/** Every Files-pane action the grid's keys and the palette reach, through one entrance. */
+async function runFilesAction(action: FilesPaneAction): Promise<void> {
+  // The palette's text is taken HERE, before the first await, so the palette can drop what this
+  // did not take the moment its call returns: a refused action must not leave text for later.
+  if (action === "files-find") return openFilesFinder(takeFilesPanelSeed(action));
+  if (action === "files-search") return openFilesSearch(takeFilesPanelSeed(action));
+  // Like the tab keys, it needs the pane up and does not open it: there is no selection in a pane
+  // that was not there.
+  if (action === "files-insert-selection") return void filesPane.value?.insertSelection();
+  return filesTab(action);
 }
 
 // A session cell closes through its own close(), which asks keep/remove for a worktree. The roster's
@@ -632,7 +693,7 @@ function closeRow(uid: number): void {
   if (!requestClose(uid)) emit("close", uid);
 }
 
-defineExpose({ openCanvasFor, openFilesFinder, openFilesSearch, requestClose });
+defineExpose({ openCanvasFor, openFilesFinder, runFilesAction, runCellAction, filesOpen: () => filesOpen.value, requestClose });
 
 // A pane button: opens its pane on that cell, or closes it when it is already the one that cell
 // has. `uid` is the cell whose button was pressed.
@@ -996,7 +1057,8 @@ const gridCellEvents = (cell: Cell) => ({
   // enlarged, and after #1378 two cells can want different panes.
   "toggle-canvas": () => toggleRightPane("canvas", cell.uid),
   "open-canvas": () => openCanvasFor(cell.uid),
-  "open-files": () => openFilesFor(cell.uid),
+  "open-files": () => openPaneFor(cell.uid, "files"),
+  "new-here": () => emit("new-here", cell.uid),
   "toggle-tools": () => toggleRightPane("tools", cell.uid),
   "toggle-prompts": () => toggleRightPane("prompts", cell.uid),
   "toggle-transcript": () => toggleRightPane("transcript", cell.uid),
@@ -1106,19 +1168,19 @@ watch(
 // The pane's SECOND entrance (#910): a file path clicked in terminal output, offered here
 // before it falls back to a new tab or the full-screen view. Whether this grid can show it is
 // `paneCanShowClick`; all that is left here is doing it.
-function openClickedPath(cwd: string, pathRel: string): boolean {
+function openClickedPath(cwd: string, pathRel: string, location?: FileLocation): boolean {
   const state = { zoomed: zoomed.value, expandedCwd: expandedCwd.value, paneCwd: paneCwd.value };
   if (!paneCanShowClick(state, cwd)) return false;
-  void showClickedPath(pathRel);
+  void showClickedPath(pathRel, location);
   return true;
 }
 
-async function showClickedPath(pathRel: string): Promise<void> {
+async function showClickedPath(pathRel: string, location?: FileLocation): Promise<void> {
   if (!filesOpen.value) setFilesOpen(true);
   // Let the pane mount and the re-root watcher put paneCwd under it — the pane resolves the
   // path against that prop, so opening any earlier would read it from the wrong directory.
   await nextTick();
-  await filesPane.value?.openFile(pathRel);
+  await filesPane.value?.openFile(pathRel, location);
 }
 
 onMounted(() => setFilesPaneOpener(openClickedPath));
@@ -1763,13 +1825,11 @@ function onRosterDragLeave(event: DragEvent) {
           @toggle-expand="togglePaneExpanded"
           @close="setRightPane(null, paneUid)"
         />
-        <!-- `width: auto` only while full: the pane sets its own w-[340px], and a fixed width
-             beside `flex: 1` is the one combination where the class outlives the layout. -->
         <ToolsPane
           v-else-if="rightPane === 'tools'"
           :session-id="expandedSessionId"
           :expanded="paneFull"
-          :style="paneFull ? { flex: '1 1 0%', width: 'auto' } : { flex: `0 0 ${paneWidth}px` }"
+          :style="rightPaneStyle(paneFull, paneWidth)"
           class="border-l border-border"
           @toggle-expand="togglePaneExpanded"
           @close="setRightPane(null, paneUid)"
@@ -1784,7 +1844,7 @@ function onRosterDragLeave(event: DragEvent) {
           :cwd="expandedCwd"
           :agent="expandedAgent"
           :expanded="paneFull"
-          :style="paneFull ? { flex: '1 1 0%', width: 'auto' } : { flex: `0 0 ${paneWidth}px` }"
+          :style="rightPaneStyle(paneFull, paneWidth)"
           class="border-l border-border"
           @toggle-expand="togglePaneExpanded"
           @close="setRightPane(null, paneUid)"
@@ -1800,7 +1860,7 @@ function onRosterDragLeave(event: DragEvent) {
           :cwd="expandedCwd"
           :agent="expandedAgent"
           :expanded="paneFull"
-          :style="paneFull ? { flex: '1 1 0%', width: 'auto' } : { flex: `0 0 ${paneWidth}px` }"
+          :style="rightPaneStyle(paneFull, paneWidth)"
           class="border-l border-border"
           @toggle-expand="togglePaneExpanded"
           @close="setRightPane(null, paneUid)"
@@ -1811,7 +1871,7 @@ function onRosterDragLeave(event: DragEvent) {
           v-else-if="rightPane === 'collections'"
           :cwd="expandedCwd"
           :expanded="paneFull"
-          :style="paneFull ? { flex: '1 1 0%', width: 'auto' } : { flex: `0 0 ${paneWidth}px` }"
+          :style="rightPaneStyle(paneFull, paneWidth)"
           class="border-l border-border"
           @toggle-expand="togglePaneExpanded"
           @close="setRightPane(null, paneUid)"
@@ -1823,7 +1883,7 @@ function onRosterDragLeave(event: DragEvent) {
           :event="expandedQuestion"
           :failure="answerFailure"
           :expanded="paneFull"
-          :style="paneFull ? { flex: '1 1 0%', width: 'auto' } : { flex: `0 0 ${paneWidth}px` }"
+          :style="rightPaneStyle(paneFull, paneWidth)"
           @answer="answerQuestion"
           @say="sayInsteadOfChoosing"
           @toggle-expand="togglePaneExpanded"

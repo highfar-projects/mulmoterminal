@@ -2,9 +2,9 @@
 // One picture at one heat level, in a 200x200 box. The shake and the fade-in are shared; what
 // burns, and how it ends, is each picture's own.
 import type { Component } from "vue";
-import type { HeatPalette } from "./heatPalette";
 import type { HeatPattern } from "../../../common/playfulEffects";
 import type { StageLevel } from "./stageLevel";
+import type { HeatFigureProps } from "./heatFigure";
 import HeatBomb from "./HeatBomb.vue";
 import HeatVolcano from "./HeatVolcano.vue";
 import HeatKettle from "./HeatKettle.vue";
@@ -12,8 +12,9 @@ import HeatRocket from "./HeatRocket.vue";
 import HeatDynamite from "./HeatDynamite.vue";
 import HeatBalloon from "./HeatBalloon.vue";
 import HeatSkull from "./HeatSkull.vue";
+import HeatSumo from "./HeatSumo.vue";
 
-defineProps<{ pattern: HeatPattern; level: StageLevel; palette: HeatPalette; animate: boolean }>();
+defineProps<{ pattern: HeatPattern } & HeatFigureProps>();
 
 const PICTURE: Record<HeatPattern, Component> = {
   bomb: HeatBomb,
@@ -23,6 +24,7 @@ const PICTURE: Record<HeatPattern, Component> = {
   dynamite: HeatDynamite,
   balloon: HeatBalloon,
   skull: HeatSkull,
+  sumo: HeatSumo,
 };
 const OPACITY: Record<StageLevel, number> = { 0: 0, 1: 0.35, 2: 0.5, 3: 0.6, 4: 0.7, 5: 1 };
 </script>

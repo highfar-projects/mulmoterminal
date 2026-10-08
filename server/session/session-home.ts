@@ -58,25 +58,6 @@ export function accountSpawnEnv(agent: AccountAgent, sessionId: string): Record<
   return bound ? homeEnv(agent, bound.home) : {};
 }
 
-/**
- * Fork-only: CLAUDE_CODE_OAUTH_TOKEN for a claude session bound to an account that names an
- * `oauthTokenEnvVar`, read from the server's own environment — {} otherwise.
- *
- * Returned for the SETTINGS FILE's env block (spawn-claude.ts merges it into the provider's), never
- * the pty env: a tmux spawn passes pty env as `-e KEY=VALUE` on argv, where every user on the host
- * can read it through `ps`, while the settings file is 0600 (session-settings.ts). An account whose
- * variable is unset still starts — on whatever login its home already holds — with a warning.
- */
-export function accountTokenEnv(sessionId: string, env: NodeJS.ProcessEnv = process.env): Record<string, string> {
-  const bound = boundAccount("claude", sessionId);
-  const name = bound ? accountsFor("claude").find((account) => account.id === bound.accountId)?.oauthTokenEnvVar : undefined;
-  if (!name) return {};
-  const token = env[name];
-  if (token) return { CLAUDE_CODE_OAUTH_TOKEN: token };
-  console.warn(`[accounts] account '${bound?.accountId}' names ${name} for its token, but it is not set in the server's environment — starting without one`);
-  return {};
-}
-
 /** The variable that points `agent` at `home` — for a spawn that is not a session, like an account's
  *  usage probe. */
 export function homeEnv(agent: AccountAgent, home: string): Record<string, string> {
@@ -222,15 +203,13 @@ const accountIdParam = (params: URLSearchParams): string | undefined => {
   return isAccountId(value) ? value : undefined;
 };
 
-/** resolveWithAccount for a claude connection. `dirAccount` (fork-only) is the directory's own
- *  default (`.mulmoterminal.json` → `account`), used when the launch form picked none. */
+/** resolveWithAccount for a claude connection. */
 export const resolveClaudeWithAccount = <T extends { sessionId: string }>(
   requested: string | null,
   params: URLSearchParams,
   cwd: string,
   resolve: () => T,
-  dirAccount: string | null = null,
-): Promise<T> => resolveWithAccount("claude", requested, accountIdParam(params) ?? dirAccount ?? undefined, (id) => claudeTranscriptExistsIn(cwd, id), resolve);
+): Promise<T> => resolveWithAccount("claude", requested, accountIdParam(params), (id) => claudeTranscriptExistsIn(cwd, id), resolve);
 
 /** resolveWithAccount for a codex connection. `rolloutOf` maps a session key to the rollout it
  *  runs (the key itself when it came from a list), which is what exists on disk. */
@@ -239,6 +218,4 @@ export const resolveCodexWithAccount = <T extends { sessionId: string }>(
   params: URLSearchParams,
   rolloutOf: (sessionKey: string) => string,
   resolve: () => T,
-  dirAccount: string | null = null,
-): Promise<T> =>
-  resolveWithAccount("codex", requested, accountIdParam(params) ?? dirAccount ?? undefined, (id) => codexRolloutExistsIn(rolloutOf(id)), resolve);
+): Promise<T> => resolveWithAccount("codex", requested, accountIdParam(params), (id) => codexRolloutExistsIn(rolloutOf(id)), resolve);

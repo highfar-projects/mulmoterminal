@@ -64,26 +64,25 @@ describe("rawServingPlan — the sandbox boundary", () => {
 });
 
 describe("rawServingPlan — the size cap", () => {
-  // Audio/video get 500 MiB (Range-streamed); everything else 25 MiB.
-  it("lets a 400 MiB video through but 413s a 30 MiB image", () => {
-    expect(rawServingPlan("/w/x.mp4", 400 * MB).tooLarge).toBe(false);
-    expect(rawServingPlan("/w/x.png", 30 * MB).tooLarge).toBe(true);
-  });
+  const GB = 1024 * MB;
 
   it("holds an image right at the 25 MiB cap", () => {
     expect(rawServingPlan("/w/x.png", 25 * MB).tooLarge).toBe(false);
     expect(rawServingPlan("/w/x.png", 25 * MB + 1).tooLarge).toBe(true);
   });
 
-  it("413s a video only past 500 MiB", () => {
-    expect(rawServingPlan("/w/x.webm", 500 * MB).tooLarge).toBe(false);
-    expect(rawServingPlan("/w/x.webm", 500 * MB + 1).tooLarge).toBe(true);
+  it("caps a text file and an unknown type the same way", () => {
+    for (const p of ["/w/x.log", "/w/x.xyz", "/w/noext"]) expect(rawServingPlan(p, 25 * MB + 1).tooLarge).toBe(true);
   });
 
-  // An audio file is media too, not a generic file on the small cap.
-  it("gives audio the media cap", () => {
-    expect(rawServingPlan("/w/x.mp3", 100 * MB).tooLarge).toBe(false);
-  });
+  // Streamed, so size is not a memory question — and a screen recording passes any fixed cap.
+  it.each(["/w/x.mp4", "/w/x.webm", "/w/x.mov", "/w/x.mp3", "/w/x.m4a", "/w/x.wav", "/w/x.ogg", "/w/x.pdf", "/w/X.PDF"])(
+    "never 413s %s, however large",
+    (p) => {
+      expect(rawServingPlan(p, 25 * MB + 1).tooLarge).toBe(false);
+      expect(rawServingPlan(p, 8 * GB).tooLarge).toBe(false);
+    },
+  );
 });
 
 // The shared source list is only HALF of what this module serves as text (#826). Pinning

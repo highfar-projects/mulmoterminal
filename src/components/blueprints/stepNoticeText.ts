@@ -42,3 +42,21 @@ export function stopReasonText(t: Translate, stepState: StepState | undefined): 
   if (reason === null) return null;
   return stepState?.reasonNotice ? noticeText(t, stepState.reasonNotice) : reason;
 }
+
+/** The folder to open Claude Code in, to answer its trust prompt, when that is why the step stopped; null otherwise. */
+export function untrustedFolder(stepState: StepState | undefined): string | null {
+  const notices = [stepState?.reasonNotice, stepState?.lastCheck?.notice];
+  return notices.flatMap((notice) => (notice?.code === "untrusted" ? [notice.dir] : []))[0] ?? null;
+}
+
+/**
+ * How many times the build tried to fix the step by itself before stopping, when that is why it stopped: a failed
+ * check (a pack's, or a lost session) after every automatic attempt was used. Null for a stop only a person can
+ * clear (an untrusted folder, another build at work, a rejection), and while attempts are left.
+ */
+export function gaveUpAfter(stepState: StepState | undefined, failedChecks: number, maxAttempts: number): number | null {
+  const check = stepState?.lastCheck;
+  if (stepState?.status !== "failed" || !check || check.ok || failedChecks < maxAttempts) return null;
+  const personOnly = check.notice?.code === "untrusted" || check.notice?.code === "folder-busy";
+  return personOnly ? null : failedChecks;
+}

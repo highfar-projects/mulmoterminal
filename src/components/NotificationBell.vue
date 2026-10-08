@@ -4,6 +4,9 @@ import ToolbarPopover from "./ToolbarPopover.vue";
 import { useNotifications, type NotifierEntry, type NotifierSeverity } from "../composables/useNotifications";
 import { compactRelativeTimeFromIso } from "./cellDisplay";
 import { shortPkg } from "./shortPkg";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 // Toolbar bell: a severity-coloured unread badge + a dropdown listing the active
 // notifications. Mirrors MulmoClaude's bell structure (severity-coloured bell icon
@@ -16,9 +19,8 @@ const { count, topSeverity, sorted, dismiss, activate } = useNotifications();
 const popoverRef = useTemplateRef<InstanceType<typeof ToolbarPopover>>("popover");
 
 const triggerTitle = computed(() => {
-  if (!count.value) return "Notifications";
-  const suffix = count.value === 1 ? "" : "s";
-  return `${count.value} notification${suffix}`;
+  if (!count.value) return t("tips.toolbar.notifications");
+  return count.value === 1 ? t("tips.toolbar.notificationsOne") : t("tips.toolbar.notificationsMany", { count: count.value });
 });
 
 function onRowClick(entry: NotifierEntry) {
@@ -46,9 +48,9 @@ function bellColorClass(severity: NotifierSeverity): string {
     ref="popover"
     icon="notifications"
     :title="triggerTitle"
-    trigger-label="Notifications"
+    :trigger-label="t('tips.toolbar.notifications')"
     pane-class="w-[340px] max-h-[460px] overflow-y-auto p-1"
-    pane-label="Notifications"
+    :pane-label="t('tips.toolbar.notifications')"
   >
     <template #trigger-extra>
       <span
@@ -90,8 +92,8 @@ function bellColorClass(severity: NotifierSeverity): string {
         <button
           type="button"
           class="inline-flex h-[22px] w-[22px] flex-none cursor-pointer items-center justify-center rounded-[4px] border-0 bg-transparent p-0 text-muted hover:bg-hover hover:text-fg"
-          data-tip="Dismiss"
-          aria-label="Dismiss notification"
+          :data-tip="t('tips.toolbar.dismiss')"
+          :aria-label="t('tips.toolbar.dismissNotification')"
           @click.stop="dismiss(entry.id)"
         >
           <span class="material-symbols-outlined text-[16px] leading-none" aria-hidden="true">close</span>

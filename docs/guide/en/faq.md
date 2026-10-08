@@ -131,7 +131,7 @@ No install step.
 
 The server listens on **loopback only** — so a malicious site you happen to open cannot drive your local Claude PTY.
 
-To reach it from elsewhere, **SSH port forwarding** is the recommended route. If you only want your phone, there is a separate path for that (→ [Using it from your phone](phone.html)).
+To reach it from elsewhere, **SSH port forwarding** is the recommended route — the steps, logging the agents in on the server, and Docker are in [Run the server on another machine](remote.html). If you only want your phone, there is a separate path for that (→ [Using it from your phone](phone.html)).
 
 ---
 
@@ -213,6 +213,47 @@ cells that get colour, a chime and a phone push, because they're the ones that s
 **An agent session launched in the workspace has every GUI tool** — drawing into the Canvas, working with collections, all of it available with nothing to register.
 Claude, Codex or Copilot, it is the same, and the **WORKSPACE** chip at the head of the WORKING DIRECTORY row is the quick way to get there (Antigravity, Grok, Muse and Cursor are the exceptions: wherever one of them runs, it gets what its directory registered → [Antigravity, Grok, Muse and Cursor register everywhere](basics.html#antigravity-gui-tools)). A **launch command** is not this — it runs your command line verbatim and carries no GUI tools, `claude` included.
 A cell in a project directory has only the tool groups registered for that directory, so register one with the launcher's MCP toggles when you want GUI tools there (→ [which directory to launch in](basics.html#launch-dir)).
+
+### A cell I reopened came back without my latest conversation. Is it gone?
+
+**No — it is still on disk, under another session id.** When you move a conversation to the
+background in Claude Code (the **←** key, "Your conversation moved to the background"), Claude Code
+carries on under a **new** session id. Everything after that is written to the new one, while the
+cell still knows the old one.
+
+While the terminal keeps running nothing looks wrong: a page reload or a server restart only
+reattaches to it. But once the terminal itself has ended — the machine restarted, or the cell was
+closed — reopening the cell resumes the id it knows, and the conversation comes back as it was when
+you pressed **←**, with no warning.
+
+To get the rest back, open the launch form in that directory and pick the conversation that holds your later work under
+**OR RESUME HERE** (or run `claude --resume <new id>`). The two share a start time; the old one
+stopped a few seconds after the split, so the new one is the much larger of the two. Do not go by
+the last-updated time: the old one can be written again when Claude Code exits and look newer.
+
+This is Claude Code's behaviour, and it happens in any terminal: it is reported upstream as
+[anthropics/claude-code#87984](https://github.com/anthropics/claude-code/issues/87984). Linking the
+two transcripts is requested in
+[anthropics/claude-code#85004](https://github.com/anthropics/claude-code/issues/85004).
+
+
+### The scrollbar is gone, and I cannot select more than one screen in a Claude cell. Why? {#claude-fullscreen}
+
+**Claude Code is running in its fullscreen renderer.** It draws on the alternate screen, which has
+no scrollback: the wheel scrolls Claude's own view, while the terminal underneath does not move, so
+there is no scrollbar and a selection stays on the visible screen.
+
+Claude Code can turn this renderer on by itself when your settings do not name one. So
+**MulmoTerminal starts Claude cells with it off unless you chose it**: when no Claude settings file
+(`~/.claude/settings.json`, or the project's `.claude/settings.json` / `.claude/settings.local.json`)
+has a `tui` key, and neither `CLAUDE_CODE_NO_FLICKER` nor `CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN` is
+set, the cell gets `CLAUDE_CODE_NO_FLICKER=0`.
+
+- To keep the classic renderer explicitly, add `"tui": "default"` to `~/.claude/settings.json`.
+- To use the fullscreen renderer, add `"tui": "fullscreen"` (or run `/tui fullscreen` in Claude Code).
+  MulmoTerminal then leaves it alone — and the scrollbar and long selections go with it.
+
+Either change applies to a cell started after it; restart a running one with **Restart the agent**.
 
 ---
 

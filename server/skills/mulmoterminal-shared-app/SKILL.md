@@ -26,7 +26,7 @@ the user turns this down.
 
 ## Start from a template when one fits
 
-Nine shapes are written out in full — declaration, schemas, and the reasoning behind each key:
+These shapes are written out in full — declaration, schemas, and the reasoning behind each key:
 
 - **[templates/salon.md](./templates/salon.md)** — a request that a NAMED PERSON approves, and only
   their own (a salon's bookings, interviews, repairs, review assignments). This is what `assignee`
@@ -36,21 +36,49 @@ Nine shapes are written out in full — declaration, schemas, and the reasoning 
   `window.fromField` are for, and it explains why the capacity lives in the VIEW and not in the
   rules.
 - **[templates/survey.md](./templates/survey.md)** — **collecting answers**, with nothing to run out
-  of (a survey, a quiz, an application form, a sign-up with no cap). The shortest declaration of the
-  nine, and the shape most often written with a public page and nothing else — so this one is built
+  of (a survey, a quiz, an application form, a sign-up with no cap). The shortest declaration of
+  them all, and the shape most often written with a public page and nothing else — so this one is built
   around its `member` page, which is where the answers are read. It also spells out the three-way
   trade above, and what a tally may and may not claim about values a respondent typed.
 - **[templates/meeting-room.md](./templates/meeting-room.md)** — a bookable unit you can LIST IN
   ADVANCE, taken on the spot with no approval (a meeting room, a desk, equipment on loan, a parking
   space). This is what `idFrom: "field"` and `mirror` are for, and it is the one that spells out who
   refills the slots, and what a cancellation does NOT do.
+- **[templates/class-seats.md](./templates/class-seats.md)** — a class with a CAPACITY whose
+  visitors see "N left" and never who booked (a dance class, a workshop, a trial lesson). The
+  meeting-room shape once per PLACE: a class of 20 is 20 seat records, each taken like a slot, and
+  the page counts the open ones — the rules cannot count, so the capacity is the number of seats.
+  Read it for why the booking window points at the SEAT and not at the class.
+- **[templates/schedule-poll.md](./templates/schedule-poll.md)** — a SCHEDULING POLL (調整さん /
+  Doodle): candidate dates, ○△× per date, everyone sees the table, a participant corrects their own
+  answer with `view.correct`, and the organiser closes it by moving `closesAt`. Names are meant to be
+  seen here, which is the opposite of class-seats.
+- **[templates/question-box.md](./templates/question-box.md)** — a QUESTION BOX: anyone sends a
+  question with no sign-in, the owner answers on `/m/`, and only the rows the owner chose to publish
+  reach the public page (a talk's Q&A, a shop's FAQ, an anonymous question box). This is what
+  `public.readPublished` + `publishField` are for: the rules, not the page, keep the rest away, and
+  publishing is the owner's switch on `/m/{slug}/records/{cid}` — never a page's write, because
+  `view.correct` sends strings and the flag is a boolean.
+- **[templates/tally.md](./templates/tally.md)** — ONLY THE TOTALS: visitors see how many chose each
+  answer and nothing else (a "which do you like?" result, a quiz's spread, an event's preference
+  poll). Not a key but a split: the counted field lives in `votes` (`public.read`, nothing else in
+  it), names and comments in `notes` (nobody's to read but the owner's), joined by the same per-app pseudonym, and
+  the page counts. It is also the template that sends TWO records as two presses — one write per
+  press, or the second loses the gesture mark and the preview drops it.
+- **[templates/survey-results.md](./templates/survey-results.md)** — a SURVEY WHOSE CHOICE TOTALS
+  ARE PUBLIC: the survey.md form, plus per-question counts and shares shown to a respondent after
+  they answer, while the address, name and free text stay with the owner. The tally split again:
+  the chosen answers in `tallies` (`public.read`, `answers` + `status` only, no `emailField`), the
+  rest in `responses` (private), joined by pseudonym. Read it for why the public page counts only
+  declared questions and choices and never draws a string it read from a tally — `answers` is free
+  text anyone can write. Showing results is the author's choice; survey.md stays the default.
 - **[templates/live-poll.md](./templates/live-poll.md)** — a page that MOVES while people are looking
   at it (a live stream, a lecture, a stand-up quiz). This is what `views[].live` is for, and the only
   one whose declaration is decided by FAN-OUT: the audience may watch the questions, only the desk may
   watch the votes, and the shape that would let both is refused by publish. **In English**, because
   the strings in its pages are what a stranger reads.
 - **[templates/project-board.md](./templates/project-board.md)** — the same work-claiming board with
-  a ROSTER and an owner's desk: people register a name once (`names`, `idFrom: "auth.uid"`), then
+  a ROSTER and an owner's desk: people register a name once (`names`, `idFrom: "pseudonym"`), then
   take work; the owner adds and removes tasks and frees an abandoned one from `/m/`. This is what
   `writerDelete` is for, and the one that spells out `view.mine()`'s three states — "you have not
   registered" and "nobody looked" are different answers, and treating them alike shows the
@@ -78,14 +106,14 @@ Nine shapes are written out in full — declaration, schemas, and the reasoning 
   back issues, a research log, release notes, a review column). This is what **`views[].article`**
   is for — the platform draws the article page, so the app declares which fields are the title, the
   body and the byline, and `idFrom: "slug"` makes the writer's chosen name the document id and
-  freezes it. It is the only sample that states a `protocol` of its own, the only one whose `limit`
+  freezes it. It is the article-view sample, so its `protocol` floor is at least `2.0.0` (its pseudonym byline makes it `3.0.0`); the only one whose `limit`
   is a COST — publish works it out in bytes and refuses the declaration when it is too large — and
   the one that explains why the owner has to hold
   `participant` on their own collection — `audience` forces `submitOnly`, `submitOnly` closes the
   writer branch, and an owner who skips it cannot publish at all. Read it before any app where a
   record is something a stranger is meant to sit and read.
 
-Read the matching one before writing `app.json` by hand. All nine are checked against the real
+Read the matching one before writing `app.json` by hand. All of them are checked against the real
 publish gate by this repository's tests, so what they show is what publishes — and they spend most
 of their length on the traps, which is the part you cannot recover by guessing.
 
@@ -302,7 +330,8 @@ reached for only when a custom public page is also required:
 - A **generated** public form (an app declaring no `public` view) already shows a visitor their own
   answer back, roster or not. **Writing a custom public page removes that** — the custom page
   replaces the generated form, and the data a public page may be handed is limited to
-  `public.read`, which the submitted records can never be in.
+  `public.read` (every row, to everybody) and the rows the owner published from
+  `public.readPublished` — neither hands a sender back their own answer alone.
 - So "anyone may answer" + "a public page I wrote myself" + "answerers can see their answer" is
   three things, and **only two of them are available at once**. Drop the middle one and the
   generated form serves everybody; drop the first and `/p/{slug}` serves a roster. Say so while the
@@ -352,8 +381,8 @@ Four more things this shape settles:
   of the records, so the two are not the same line.
 - **`byline` is a string somebody typed**, not an identity the rules hold. Never put an address in
   it — the field is drawn to the whole world.
-- **`theme.hue` colours the article page and nothing else.** Your own pages carry their own CSS, and
-  publish refuses `theme` on an app that declares no `article` block.
+- **`theme.hue` colours the article page.** Your own pages carry their own CSS. The rest of `theme`
+  dresses the page around every app — see 2e.
 
 `type: "article"` is REFUSED. It used to mean "the platform draws this page", and it took the index
 with it — an app that published articles had no public face of its own. If you meet one in an
@@ -401,6 +430,36 @@ Run `check` after writing one. Then run `describe` **as the audience that will s
 know that the author's own `describe` is usually the owner's, so it shows the member briefs and not
 what a public visitor would see. That is the identity limit of one signed-in account per machine,
 not a fault in the app.
+
+### 2e. Dress the public page — as loud as the user likes
+
+The platform draws a bar above the app's own page (name, share, account, menu). `theme` dresses it and
+the page around the app, in the spirit of an old mobile site:
+
+```json
+{
+  "theme": {
+    "bar": ["#ff3399", "#ffcc00"],
+    "barText": "#ffffff",
+    "background": ["#fff0f8", "#e0f7ff"],
+    "icon": "🌸",
+    "ticker": "★☆ 本日オープン！ ☆★",
+    "banner": "views/banner.svg"
+  }
+}
+```
+
+- `bar` / `background`: one colour, or a gradient of two or three. **Colours are `#rgb` / `#rrggbb`
+  only** — publish refuses anything else (names, `rgb()`, CSS). Without `barText` the bar's text is
+  chosen dark or light from the bar's brightness.
+- `icon`: one character beside the app's name, and on the share card. `ticker`: a marquee under the
+  bar (at most 120 characters; it stops on a tap and for reduced motion).
+- `banner`: one PNG / JPEG / WebP / **SVG** directly in `views/`, at most 300 kB. Publish checks the
+  bytes really are that picture and writes them for the page, which shows it through `<img>` (an
+  SVG's script never runs there). Write the SVG yourself for a crisp, small banner.
+- The share card takes the bar's colours and the icon too.
+- Inside your own page, draw anything — inline `<svg>` and `data:` images work; the page cannot load
+  outside URLs.
 
 ### 3. RUN THE PAGE. Not reading it — running it.
 
@@ -642,17 +701,25 @@ An address the roster already has keeps the spelling it has there, and that entr
 place — `invite` never migrates a key or writes a second one beside it. If a hand edit has left two
 entries for one person differing only in case, `invite` refuses and names them: merge them by hand.
 
+Publish REPLACES the live roster with app.json's. So an address the live roster has and app.json
+does not loses access at the next publish — whether it was removed with `invite` on purpose, or
+another owner invited that person after this copy of app.json was written. The two look the same on
+disk, so publish names each of them and stops. `confirmRemovals: true` goes past that and nothing
+else; `confirm` does not. Read the names to the user before sending it: if they did not mean to
+remove them, `invite` them back instead of confirming.
+
 ### 4b. Check, whenever you have edited `app.json`
 
 `manageSharedApp` with `action: "check"` runs the gate publish runs — the declaration, the
 collections it names, the pages, and the size of the public form — and writes nothing. That much
 needs no connection.
 
-With a session open it also asks publish's two questions about what is ALREADY in the app: whether
+With a session open it also asks publish's questions about what is ALREADY in the app: whether
 the live records still fit these schemas, and whether an identity key moved under them
 (`idFrom`, `idField`, `idIn`, `mirror`, `mirrorOf`). Both refuse a publish, and **`confirm` gets
 past neither of the second kind** — so meeting them here, rather than at publish, is the difference
-between an edit and a collection that has to be emptied. Signed out, `check` says which of those it
+between an edit and a collection that has to be emptied. It also names anyone the live roster has
+and app.json no longer lists — the people publish would stop for and ask `confirmRemovals` about. Signed out, `check` says which of those it
 could not run rather than staying silent about them.
 
 Use it after any hand edit, and before telling the user something is ready. The alternative is
@@ -709,6 +776,15 @@ Every line of that is load-bearing, and publish refuses the declaration without 
     their phone, and again in an incognito window, and no address is recorded anywhere.
   - **`none`** is refused: with no session there is no uid, so `idFrom` can only be `auto` and the
     same person can submit as often as they can press the button.
+- **If the rows are public, use `idFrom: "pseudonym"` / `"pseudonym+field"` instead of the `auth.uid`
+  pair.** Same one-row-per-uid guarantee, but the id is sha256(uid + ":" + aid): the anonymous uid is
+  the same in every app of this project, so a public row named by it can be joined to the same
+  person's named rows elsewhere. Declare `protocol: "3.0.0"` (readers older than that refuse the app),
+  and no plain `uidField` beside it — publish refuses the pair, since the field would write the uid
+  back. Where the id is spent on something else (a claimed task: `idFrom: "field"`) and identity has
+  to live in `uidField`, add `uidForm: "pseudonym"` so the field holds the pseudonym instead.
+  `templates/schedule-poll.md`, `templates/tally.md`, `templates/survey-results.md`, `templates/project-board.md` and
+  `templates/magazine.md` use them.
 - **`emailField` names the field their address lands in**, and it must be in `createFields`.
 - **`uidField` is the same binding without an address** — the field the rules compare with the
   submitter's own uid. Reach for it when the DOCUMENT ID is already spent on exclusivity (a claim
@@ -795,6 +871,12 @@ an update, which the public submission path never allows. Firestore decides that
   (the queue rule reads the document after the write, and there is none). An app that wants the
   record kept names no status and sends its people to the desk. Say which one the user is
   choosing — it is not a detail they discover later.
+  **And the button belongs on the PUBLIC page.** `/p/` opens only for addresses in `members`, and a
+  visitor who booked from the public page is not one. The public page receives their own rows in
+  `viewer.mine` (matched by `emailField` or `uidField`) — but only the fields they sent and the id,
+  never the status. That is enough where a booking has one status (`meeting-room.md`,
+  `class-seats.md`); where it has several, the page cannot tell which rows may be withdrawn, and the
+  desk cancels instead (`salon.md`).
   **Do not give a participant both.** `selfTransitions` to `cancelled` alongside
   `selfDelete: ["booked"]` reads as two ways to cancel and is a one-way trap: the transition
   lands the row in a status `selfDelete` no longer names, so the person has, with a documented
@@ -857,7 +939,7 @@ entry per page, each naming **who it is for**:
   blank with nothing to say why.
 - **`collections` is declared, not inferred.** A view fed the wrong data renders perfectly and
   draws an empty page, which is the one failure nothing reports. Publish refuses a `public` page
-  fed a collection outside `public.read`, and a `participant` page fed one a participant cannot
+  fed a collection in neither `public.read` nor `public.readPublished`, and a `participant` page fed one a participant cannot
   reach at all (neither in `participantRead` nor their own row through `public.submit`).
 - **A collection that grows forever needs `limit`, or every reader pays for its whole history.**
   A view is handed its datasets WHOLE, so a chat room's page fetches every message ever posted to
@@ -1273,7 +1355,7 @@ Then `manageSharedApp` with `action: "publish"`.
 
 ## Before you ask the user a question
 
-Three things are worth asking and the rest are not:
+Six things are worth asking and the rest are not:
 
 - **their email address**, if you do not have it — nothing works without it in `members`;
 - **whether people outside the roster should be able to answer** — it decides `public.enabled`,
@@ -1291,6 +1373,57 @@ Three things are worth asking and the rest are not:
   roster. Invite-only is what the `/p/{slug}` route costs, and that route is the option to reach
   for when a custom public page is also required. The AUTHOR'S own page is not on this list: an app
   that collects records gets one, and asking makes it sound optional.
+- **whether visitors to the public page should see what was sent** — decide it before writing
+  that page, because the answer is a declaration the page is built on, not a page to rewrite later.
+  Offer three, in the author's words:
+  - **nobody sees it** (only the author reads what arrives): the collection is in neither
+    `public.read` nor `public.readPublished`;
+  - **only the ones I choose** (a question box that shows the questions it answered):
+    `collections[cid].publishField: "<a boolean field>"` and `public.readPublished: [cid]`. The owner
+    flips a row public or private with the per-row switch in the list at `/m/{slug}`; the sender
+    cannot set that field, and the rules refuse it if they try;
+  - **everyone sees everything** (a scheduling grid, where seeing every answer is the point):
+    `public.read: [cid]`. Every row reaches every visitor whole, so declare no `emailField` there
+    (the note in `templates/schedule-poll.md` says the same).
+
+  A fourth, **only the totals** (visitors see how many chose each answer, never who or what they
+  wrote), is not a declaration but a DATA SHAPE: keep the counted field in a world-readable
+  collection of its own and everything else in a private one, and let the public page count —
+  [templates/tally.md](./templates/tally.md). It holds up to roughly ten thousand votes, because the
+  page reads them all; say so if the author expects more. A multi-question survey whose totals are
+  public is the same split: [templates/survey-results.md](./templates/survey-results.md).
+
+  Publish refuses: a `readPublished` collection with no `publishField`; a collection in both
+  `public.read` and `readPublished`; a `publishField` listed in `createFields` or `selfUpdate`; and a
+  `publishField` named like the status, assignee, stamp, id, uid or email field. A public page
+  (`audience: "public"`) may list a `readPublished` collection in its `collections`, but a public
+  agent (`agents[]`) can only watch one in `public.read` — it reads without a filter, and the rules
+  refuse an unfiltered read. In production the public page receives only the rows whose field is
+  `true`, enforced by the Firestore rules; the preview shows the same rows as production.
+
+- **whether a visitor may make their own copy** (`"forkable": true`). The public page then offers
+  "make your own": a Google sign-in and a name, and the visitor gets the same app with themselves as
+  owner and no records. Say the cost in the author's words before turning it on: **every page of the
+  app, the staff pages included, becomes readable by anyone**, because the copy is made of them. Off
+  unless asked; a question box, a tally or a public-results survey is where it fits — their templates
+  ship with it on — and a booking or a roster-only app is not. Publish refuses it beside `agents[]` (a copy would run somebody's agent),
+  and refuses while a roster address or the owner's uid is written anywhere in the declaration, a
+  schema or a page — take it out of the text rather than turning `forkable` off.
+
+- **whether people should see it widely on social networks** (`"shareCard": { "collection": cid,
+  "textField": field }`). Ask it in these words, never "spread it on SNS" — nothing is ever posted:
+  > **SNS で多くの人に見てもらう** — オンにすると、X や LINE などにこのページのリンクを貼ったとき、
+  > 内容の一部（お題や質問など）が画像入りのカードとして表示されます。こちらから SNS に投稿することは
+  > ありません。カードになるのは、あなたが公開した項目だけです。一度 SNS に表示されたカードは、
+  > あとから公開をやめても SNS 側に残ることがあります。
+
+  If the request already says it should spread, turn it on without asking. Every card-carrying app gets
+  a card for itself (its `title`, or its name). Name a row field only when one row's text is what a
+  stranger should read (a question box): YOU choose it, the collection must be one visitors read
+  (`public.read` or `public.readPublished`) and the field text — publish refuses anything else. An app
+  that shows totals (tally, public-results survey) declares `"shareCard": {}` or `{ "title": "..." }`.
+  The app then lives at `/s/{slug}`. A booking or a roster has no use for it; the question box, tally and
+  survey-results templates ship with it on.
 
 Do not ask which storage to use, whether to make it "an app", or what to call the collection.
 

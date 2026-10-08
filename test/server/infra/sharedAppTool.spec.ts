@@ -9,6 +9,7 @@ import {
   MANAGE_SHARED_APP,
   SHARED_APP_ACTIONS,
   checkKeyNote,
+  checkRemovalNote,
   checkRecordNote,
   manageSharedApp,
   openNote,
@@ -179,6 +180,16 @@ describe("manageSharedApp, the tool", () => {
     expect(checkKeyNote({ compared: false, why: "no-app" })).toEqual([]);
   });
 
+  // A publish from an app.json older than the live roster takes these people off it. `check` names
+  // them and says what publish will ask for, and which consent — not `confirm` (#1964).
+  it("names the people publish would remove, and the consent it will ask for", () => {
+    expect(checkRemovalNote([])).toEqual([]);
+    const note = checkRemovalNote([{ email: "late@example.com", roles: { "*": "editor" } }]).join("\n");
+    expect(note).toContain("late@example.com (editor)");
+    expect(note).toContain("`confirmRemovals: true`");
+    expect(note).toContain("`invite` them back");
+  });
+
   it("reports the rows it DID find beside the collection it could not read", () => {
     // `scanRecords` skips an unreadable collection and carries on, so the two outcomes coexist —
     // and answering only "could not be read" would hide rows the next publish is about to name.
@@ -256,6 +267,26 @@ describe("manageSharedApp, the tool", () => {
     // Removed ENTIRELY rather than left as an empty object: the rules require the roster and its
     // email list to agree, and a half-removed entry is a permission somebody still holds.
     expect(JSON.parse(readFileSync(path.join(root, "app.json"), "utf-8")).members).toEqual({ "o@e.com": { "*": "owner" } });
+  });
+
+  // #1963: the roster holds plain addresses and app.json is committed, so an address the file did
+  // not have before enters the repository's history. Said only when a NEW string is written.
+  it("says a new address will enter the committed file, and only when it is new", async () => {
+    const root = makeTempDir("mt-shared-tool-");
+    writeFileSync(path.join(root, "app.json"), JSON.stringify({ aid: "a1", members: { "o@e.com": { "*": "owner" }, "Kept@E.com": { "*": "viewer" } } }));
+    const invite = (email: string, role?: string, cid?: string) =>
+      manageSharedApp(root, { action: "invite", email, ...(role ? { role } : {}), ...(cid ? { cid } : {}) });
+    const HISTORY = "enter the repository's history";
+
+    expect(await invite("t@e.com", "viewer")).toContain(HISTORY);
+    // Already on the roster: a role change, another collection, or the same address in other case.
+    expect(await invite("t@e.com", "editor")).not.toContain(HISTORY);
+    expect(await invite("t@e.com", "participant", "survey")).not.toContain(HISTORY);
+    expect(await invite("kept@e.com", "editor")).not.toContain(HISTORY);
+    // A removal writes nothing new; once the address is gone entirely, adding it back does.
+    expect(await invite("t@e.com")).not.toContain(HISTORY);
+    expect(await invite("t@e.com", undefined, "survey")).not.toContain(HISTORY);
+    expect(await invite("t@e.com", "viewer")).toContain(HISTORY);
   });
 
   it("writes the SIGNED-IN address as owner, and generates the aid", async () => {

@@ -17,7 +17,6 @@ import { getHeaderConfig } from "../config/config-routes.js";
 import { buildHeaderContext, loadHeaderConfig } from "../config/header-context.js";
 import { resolveButtonCommand } from "../config/header-resolve.js";
 import { resolveScript } from "../files/scripts.js";
-import { loadDirConfig } from "../config/dir-config.js";
 import { resolveLaunchConfig } from "../files/launchConfigs.js";
 import { shellQuoteFor } from "../infra/shell-quote.js";
 import { tmuxHasSession } from "../infra/tmux.js";
@@ -536,13 +535,7 @@ export async function handleClaudeConnection(deps: WsRouteDeps, ws: WebSocket, r
   // The account, before resolving too: resolving asks whether the transcript exists, and a session
   // started on a second login has it in THAT home. A requested session runs wherever its transcript
   // already is; only a newly minted one takes the picked account.
-  const { resume, sessionId } = await resolveClaudeWithAccount(
-    requested,
-    url.searchParams,
-    cwd,
-    () => resolveClaudeSession(requested, cwd),
-    loadDirConfig(cwd).account,
-  );
+  const { resume, sessionId } = await resolveClaudeWithAccount(requested, url.searchParams, cwd, () => resolveClaudeSession(requested, cwd));
   // Everything from the `live` read to the wiring runs in this id's own turn (#1533): the awaits
   // below are the window in which a competing connect used to double-spawn, and the reap timer
   // used to kill the entry this handler was still holding.
@@ -728,7 +721,7 @@ export async function handleCodexConnection(deps: WsRouteDeps, ws: WebSocket, re
   // Same order and rule as the claude handler: bind where an existing rollout is, and give only a
   // newly minted key the picked account.
   const rolloutOf = (key: string) => codexRollouts.get(key)?.conversationId ?? key;
-  const resolved = await resolveCodexWithAccount(requested, url.searchParams, rolloutOf, () => resolveCodexSession(requested), loadDirConfig(cwd).account);
+  const resolved = await resolveCodexWithAccount(requested, url.searchParams, rolloutOf, () => resolveCodexSession(requested));
   const { sessionId, live: resolvedLive, resumeRolloutId } = resolved;
   await sessionConnects(sessionId, async () => {
     // Same re-read as the launch handler above, for the same review finding.
@@ -785,6 +778,30 @@ export async function resolveCopilotSession(requested: string | null, cwd: strin
   return resolveResumableSession(requested, ({ hasLivePty }) => (!hasLivePty && isResumableHere ? requested : null));
 }
 
+type SessionDirAdmission = { requested: string | null; sessionId: string; resolvedLive: PtyEntry | undefined; cwd: string; devTerminal: boolean };
+type SessionDirAdmitted = { live: PtyEntry | undefined; sessionDir: string; early: EarlyFrames };
+
+/**
+ * `admitAgentSession` run in the SESSION's directory rather than the request's. A reconnect often
+ * carries no `?cwd=`, which `wsConnectionContext` resolves to the DEFAULT workspace — so the
+ * request's value is the wrong answer for a session that lives elsewhere, and it was the wrong
+ * answer in FOUR places rather than one: the worktree reservation, the admission (which records the
+ * cell's directory), the tool groups, and the spawn itself. Fixing only the resume probe meant a
+ * cold reconnect resumed the right conversation and then ran it in the workspace (Codex round 6 of
+ * #2063, P1). So the caller uses the returned `sessionDir` for everything after this.
+ *
+ * Call it inside `sessionConnects`: the live entry is read here, after the per-session lock.
+ * Returns null when the socket was refused and closed.
+ */
+async function admitInSessionDir(ws: WebSocket, kind: TerminalWsKind, session: SessionDirAdmission): Promise<SessionDirAdmitted | null> {
+  const { requested, sessionId, resolvedLive, cwd, devTerminal } = session;
+  const live = ptys.get(sessionId) ?? resolvedLive;
+  const sessionDir = live?.cwd ?? sessionCwd(sessionId) ?? cwd;
+  await reserveWorktreeEnvForSpawn(sessionDir, { id: sessionId, live });
+  const early = await admitAgentSession(ws, kind, { requested, sessionId, live, cwd: sessionDir, devTerminal });
+  return early ? { live, sessionDir, early } : null;
+}
+
 // copilot connects like CODEX, not like agy/grok/muse: it takes its GUI tools from a per-spawn flag
 // (`--additional-mcp-config`), so there is no file in the directory to keep in step — see
 // DirectoryMcpWsAgent for the line between the two groups. What it does NOT share with codex is the
@@ -799,17 +816,9 @@ export async function handleCopilotConnection(deps: WsRouteDeps, ws: WebSocket, 
   await devTerminalCwdsHydrated;
   const { sessionId, live: resolvedLive } = await resolveCopilotSession(requested, cwd);
   await sessionConnects(sessionId, async () => {
-    const live = ptys.get(sessionId) ?? resolvedLive;
-    // ONE directory, used by everything below. A reconnect often carries no `?cwd=`, which
-    // `wsConnectionContext` resolves to the DEFAULT workspace — so the request's value is the wrong
-    // answer for a session that lives elsewhere, and it was the wrong answer in FOUR places rather
-    // than one: the worktree reservation, the admission (which records the cell's directory), the
-    // tool groups, and the spawn itself. Fixing only the resume probe meant a cold reconnect
-    // resumed the right conversation and then ran it in the workspace (Codex round 6 of #2063, P1).
-    const sessionDir = live?.cwd ?? sessionCwd(sessionId) ?? cwd;
-    await reserveWorktreeEnvForSpawn(sessionDir, { id: sessionId, live });
-    const early = await admitAgentSession(ws, "copilot", { requested, sessionId, live, cwd: sessionDir, devTerminal: !attachGuiMcp });
-    if (!early) return;
+    const admitted = await admitInSessionDir(ws, "copilot", { requested, sessionId, resolvedLive, cwd, devTerminal: !attachGuiMcp });
+    if (!admitted) return;
+    const { live, sessionDir, early } = admitted;
     // A project cell's GUI tools are whatever its DIRECTORY registered, read here for the reason
     // codex's handler states: the spawner is sync and this reads Claude Code's config files.
     const mcpGroups = !attachGuiMcp && !live ? await registeredGuiMcpGroups(sessionDir, TOOL_GROUPS).catch(() => []) : [];
@@ -852,11 +861,9 @@ export async function handleCursorConnection(deps: WsRouteDeps, ws: WebSocket, r
   await devTerminalCwdsHydrated;
   const { sessionId, live: resolvedLive } = await resolveCursorSession(requested, cwd);
   await sessionConnects(sessionId, async () => {
-    const live = ptys.get(sessionId) ?? resolvedLive;
-    const sessionDir = live?.cwd ?? sessionCwd(sessionId) ?? cwd;
-    await reserveWorktreeEnvForSpawn(sessionDir, { id: sessionId, live });
-    const early = await admitAgentSession(ws, "cursor", { requested, sessionId, live, cwd: sessionDir, devTerminal: !singleView });
-    if (!early) return;
+    const admitted = await admitInSessionDir(ws, "cursor", { requested, sessionId, resolvedLive, cwd, devTerminal: !singleView });
+    if (!admitted) return;
+    const { live, sessionDir, early } = admitted;
     // The directory's registered groups, written into `.cursor/mcp.json` and approved before the
     // agent reads either. Not for a live REATTACH, and not merely because it would be wasted: the
     // file is shared by every cursor session in the directory, so rewriting it speaks for terminals

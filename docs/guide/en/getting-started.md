@@ -254,7 +254,8 @@ npx mulmoterminal@latest
 - **Stop it with Ctrl + C** — closing the browser tab does not stop the server
 - **Lost that terminal?** Either stop it from the browser — **Settings → Quit MulmoTerminal** —
   or run `npx mulmoterminal@latest stop` in any other terminal. Both stop every running server,
-  which is also what you want before starting a newer version
+  which is also what you want before starting a newer version. To stop just one of several, add
+  its port: `npx mulmoterminal@latest stop --port 34568`
 
 Options worth knowing:
 
@@ -300,6 +301,9 @@ npx mulmoterminal@latest init
 - Reports your Node version and `claude` / `git` / `gh` / `glab` / `tmux` / `codex` /
   `ffmpeg` / `ollama` as **`✓` (found), `✗` (required, missing), `○` (optional)** — plus, on
   Linux, whatever this host opens a file dialog with
+- Compares Node with the latest LTS of the same major, and Claude Code with its `stable` release
+  on npm; when either is behind, prints the command that updates it. Offline, it says it could not
+  check and carries on
 - Seeds the launcher's **directory presets** from your Claude Code history
 - Writes `~/.mulmoterminal/config.json`, keeping your other settings
 - With `claude` installed, offers to hand off to the `/mulmoterminal-config` skill
@@ -344,6 +348,26 @@ mulmoterminal
 It **does not auto-update** — you get a notice at startup when a new version ships, and
 `npm install -g mulmoterminal@latest` applies it. `npx mulmoterminal@latest` always fetches
 the newest instead. Set `MULMOTERMINAL_NO_UPDATE_CHECK=1` to silence the notice.
+
+### After upgrading — "What's new" {#whats-new}
+
+The first time you open the app in a browser after starting a newer version, a **What's new**
+window appears. It lists what changed between the version you used last and the one you are on
+now, newest first. It is the same text as each release's setup guide, sorted into three parts:
+
+- **New features** — what you can do now, and how to try it
+- **What looks different** — buttons or views that moved or changed how they look
+- **Under the hood** — changes you cannot see but may notice, such as speed or a fixed bug
+
+Pictures load from the published guide site, so without a network connection only the pictures
+are missing. Close it with **Got it** or the × in the corner. A version is shown once: with several
+tabs or browsers opening at the same time, only the first one to open gets it. If you skipped several versions, all of them are shown; when there are too
+many, the newest are shown and the rest are a link to the
+[changelog](https://github.com/receptron/mulmoterminal/blob/main/docs/ChangeLog.md). It is in Japanese when the
+app's language is Japanese, and in English otherwise. To read it again after closing it, open
+**Settings → Release notes**: pick any version up to the one you are on and its page is shown there,
+without changing which versions the window has already shown. The same pages are in the
+[release guides](index.html).
 
 ### Where settings live
 

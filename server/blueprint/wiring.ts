@@ -16,6 +16,12 @@ import { mkdir, rm } from "node:fs/promises";
 import { createRunStore } from "./runStore.js";
 import { runCheck } from "./checkRunner.js";
 import { mountBlueprintRoutes } from "./routes.js";
+import { collectionSource } from "./collectionSnapshot.js";
+import { sharedAppsFromFolders } from "./sharedAppsProvider.js";
+import { listProjectRoots } from "../infra/project-root.js";
+import { sharedCollections } from "../backends/sharedApp/context.js";
+import { currentEmail } from "../backends/remoteHost/session.js";
+import { discoverCollections, storeFor } from "@mulmoclaude/core/collection/server";
 import { listProjectFiles, readProjectFile } from "./projectFiles.js";
 import { writeAnswers } from "./answersFile.js";
 import type { PackRoot } from "./packs.js";
@@ -27,6 +33,7 @@ import { registerCompletionHook } from "../session/completion-hooks.js";
 import { markSessionPlaced } from "../session/registry.js";
 import { tmuxHasSession, tmuxKillSession } from "../infra/tmux.js";
 import { CLAUDE_CWD, MULMOTERMINAL_HOME, PORT } from "../config/env.js";
+import { getCwdPresets } from "../config/config-routes.js";
 
 type SpawnClaude = (sessionId: string, ws: null, resumeId: null, options: { initialPrompt: string; cwd: string }) => void;
 
@@ -43,7 +50,7 @@ const PACK_ROOTS: readonly PackRoot[] = [
   { dir: INSTALLED_PACKS_DIR, source: "installed" },
 ];
 
-// The question travels in $QUESTION and is JSON-encoded by node, so no quoting in it can break
+// The question travels in $QUESTION (its choices in $CHOICES and $RECOMMEND) and is JSON-encoded by node, so no quoting in it can break
 // the request — the agent writes prose, not JSON. node comes FIRST in a pipe: the prompt tells the
 // agent to write `QUESTION='…' <this>`, and such a prefix reaches only the first command. Inside a
 // `$(…)` it would reach nothing, which is how a real run posted empty questions.
@@ -53,7 +60,7 @@ export function askCommand(port: number | string, runId: string, stepId: string,
   // Interpolated into a shell line, so each is held to a shape that needs no quoting.
   if (!/^\d{1,5}$/.test(String(port)) || ![runId, stepId, sessionId].every((arg) => SAFE_ARG_RE.test(arg)))
     throw new Error(`unsafe ask command arguments: ${port} ${runId} ${stepId} ${sessionId}`);
-  const body = `node -e 'console.log(JSON.stringify({stepId:process.argv[1],sessionId:process.argv[2],question:process.env.QUESTION}))' ${stepId} ${sessionId}`;
+  const body = `node -e 'console.log(JSON.stringify({stepId:process.argv[1],sessionId:process.argv[2],question:process.env.QUESTION,choices:process.env.CHOICES,recommend:process.env.RECOMMEND}))' ${stepId} ${sessionId}`;
   // --fail-with-body: a refused question must fail the command AND say why, or the agent carries on
   // believing it asked.
   return `${body} | curl -sS --fail-with-body -X POST -H 'content-type: application/json' --data-binary @- http://127.0.0.1:${port}/api/blueprints/runs/${runId}/ask`;
@@ -113,13 +120,20 @@ export function mountBlueprints(app: Express, spawnClaudePty: SpawnClaude, reap:
     isTrusted: (dir) => claudeTrusts(dir),
     workspace: CLAUDE_CWD,
     home: os.homedir(),
+    savedFolders: () => getCwdPresets().map((preset) => preset.path),
+    collections: collectionSource({
+      discover: () => discoverCollections({ workspaceRoot: CLAUDE_CWD }),
+      workspaceRoot: CLAUDE_CWD,
+      reader: { records: (collection, root) => storeFor(collection, { workspaceRoot: root }).list() },
+      apps: sharedAppsFromFolders({ roots: listProjectRoots, collectionsOf: sharedCollections, signedInEmail: currentEmail }),
+    }),
   });
 }
 
 // Taking the lock recovers the runs, so a server that takes over from a dead holder first settles the
 // sessions that holder left behind. Every change re-reads the lock: one lost to another server is
 // noticed, and refused, rather than acted on. Reads work either way.
-function lockedExecutor(executor: BlueprintExecutor): { executor: BlueprintExecutor; ensureOwner: () => Promise<void> } {
+export function lockedExecutor(executor: BlueprintExecutor): { executor: BlueprintExecutor; ensureOwner: () => Promise<void> } {
   const self = { pid: process.pid, port: String(PORT), token: randomUUID() };
   let owning: Promise<void> | null = null;
   const refuseFor = (holder: { port: string }): BlueprintRefusal => new BlueprintRefusal({ code: "held-elsewhere", port: holder.port });
@@ -155,16 +169,19 @@ function lockedExecutor(executor: BlueprintExecutor): { executor: BlueprintExecu
   return {
     ensureOwner,
     executor: {
-      view: (runId) => executor.view(runId),
-      list: () => executor.list(),
-      specView: (runId) => executor.specView(runId),
-      reportView: (runId) => executor.reportView(runId),
-      workingIn: (folder) => executor.workingIn(folder),
+      // Every argument forwarded as given: a wrapper that names fewer parameters still type-checks and drops the rest.
+      view: (...args: Parameters<BlueprintExecutor["view"]>) => executor.view(...args),
+      list: (...args: Parameters<BlueprintExecutor["list"]>) => executor.list(...args),
+      specView: (...args: Parameters<BlueprintExecutor["specView"]>) => executor.specView(...args),
+      reportView: (...args: Parameters<BlueprintExecutor["reportView"]>) => executor.reportView(...args),
+      targetsView: (...args: Parameters<BlueprintExecutor["targetsView"]>) => executor.targetsView(...args),
+      workingIn: (...args: Parameters<BlueprintExecutor["workingIn"]>) => executor.workingIn(...args),
       recover: owned((endSession: Parameters<BlueprintExecutor["recover"]>[0]) => executor.recover(endSession)),
       create: owned((request: Parameters<BlueprintExecutor["create"]>[0]) => executor.create(request)),
       humanEvent: owned((...args: Parameters<BlueprintExecutor["humanEvent"]>) => executor.humanEvent(...args)),
       ask: owned((...args: Parameters<BlueprintExecutor["ask"]>) => executor.ask(...args)),
       say: owned((...args: Parameters<BlueprintExecutor["say"]>) => executor.say(...args)),
+      archive: owned((...args: Parameters<BlueprintExecutor["archive"]>) => executor.archive(...args)),
     },
   };
 }

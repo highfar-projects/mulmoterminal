@@ -97,8 +97,9 @@ describeSh("style: sources.mjs", () => {
     ]);
   });
 
-  it("passes with two listed Markdown sources and enough text", () => {
+  it("passes with two listed Markdown sources and enough text, and writes them as a person reads them", () => {
     expect(node("sources.mjs").code).toBe(0);
+    expect(readFileSync(join(dir, ".blueprint/sources.txt"), "utf8")).toMatch(/^- \S+ ← /u);
   });
 
   it.each([
@@ -285,6 +286,20 @@ describeSh("style: counter.mjs", () => {
       ],
     });
     expect(node("counter.mjs")).toMatchObject({ code: 1, stderr: expect.stringContaining("only 1 rule") });
+  });
+
+  it("wants every rule chaff.yaml turns on to be seen firing, a note enough, and never one turned off", () => {
+    rulesJson([rule("sentence-length", "relaxed"), rule("contraction-consistency", "normal"), rule("ai-tell", "off")]);
+    expect(node("counter.mjs")).toMatchObject({ code: 1, stderr: expect.stringContaining("turns on contraction-consistency, but no counter text trips it") });
+    writeFake("findings.json", {
+      ".blueprint/counter": [
+        { rule: "sentence-length", level: "warning", file: ".blueprint/counter/a.md" },
+        { rule: "sentence-ending", level: "warning", file: ".blueprint/counter/a.md" },
+        { rule: "heading-echo", level: "error", file: ".blueprint/counter/b.md" },
+        { rule: "contraction-consistency", level: "info", file: ".blueprint/counter/b.md" },
+      ],
+    });
+    expect(node("counter.mjs").code).toBe(0);
   });
 
   it("wants to know what each text breaks", () => {

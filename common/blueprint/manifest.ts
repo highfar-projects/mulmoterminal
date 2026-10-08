@@ -19,8 +19,13 @@ const manifestCommon = {
   slug,
   title: z.string().min(1),
   version: z.string().min(1),
+  /** Where the pack stands in the lists (lower first; the first base is what the new-build form opens on). Unset packs follow, by slug. */
+  order: z.number().int().optional(),
   description: z.string().default(""),
 };
+
+/** Where a report is written: a Markdown file directly under the build's own `.blueprint/` folder. */
+export const REPORT_PATH_RE = /^\.blueprint\/[A-Za-z0-9][A-Za-z0-9._-]*\.md$/;
 
 export const baseManifestSchema = z.object({
   ...manifestCommon,
@@ -28,13 +33,21 @@ export const baseManifestSchema = z.object({
   platform: z.string().min(1),
   requires: z.array(requiredCliSchema).default([]),
   credentials: z.array(z.string().min(1)).default([]),
+  /** The report every build on this base ends with, shown when its usecase names none of its own. */
+  report: z.string().regex(REPORT_PATH_RE).optional(),
 });
 
-/** Where a usecase's report is written: a Markdown file directly under the build's own `.blueprint/` folder. */
-export const REPORT_PATH_RE = /^\.blueprint\/[A-Za-z0-9][A-Za-z0-9._-]*\.md$/;
-
-/** A usecase a person may go on to in the same folder once this one finishes, with the answers it fills in. */
-export const nextStepSchema = z.object({ usecase: slug, answers: hearingAnswersSchema.default({}) });
+/**
+ * A usecase a person may go on to in the same folder once this one finishes, with the answers it fills in: fixed ones,
+ * and `carry`, the finished build's own answers copied over (the next question's id to the finished question's id).
+ */
+export const nextStepSchema = z.object({
+  usecase: slug,
+  answers: hearingAnswersSchema.default({}),
+  carry: z.record(z.string().min(1), z.string().min(1)).default({}),
+  /** The next question that takes the files the finished build changed, one per line (a document just written, to polish). */
+  changedFilesTo: z.string().min(1).optional(),
+});
 export type NextStep = z.infer<typeof nextStepSchema>;
 
 export const usecaseManifestSchema = z.object({
@@ -56,4 +69,25 @@ export type BlueprintManifest = z.infer<typeof blueprintManifestSchema>;
 export function incompatibility(base: BaseManifest, usecase: UsecaseManifest): string | null {
   if (usecase.bases.includes(base.slug)) return null;
   return `usecase "${usecase.slug}" supports ${usecase.bases.join(", ")}, not "${base.slug}"`;
+}
+
+/** The report a finished build shows: its usecase's own, else its base's; null when neither can be read to name one. */
+export function reportOf(usecase: BlueprintManifest | null, base: BlueprintManifest | null): string | null {
+  if (usecase?.kind !== "usecase") return null;
+  return usecase.report ?? (base?.kind === "base" ? base.report : undefined) ?? null;
+}
+
+// Not localeCompare: the order must not depend on the machine's locale.
+const bySlug = (a: string, b: string): number => Number(a > b) - Number(a < b);
+
+/**
+ * Packs in the order people see them: by `order` (lower first), then those without one, each group by slug.
+ * `orderOf` says which packs' `order` counts — by default every pack's.
+ */
+export function inPackOrder<P extends { slug: string; manifest: { order?: number | undefined } }>(
+  packs: readonly P[],
+  orderOf: (pack: P) => number | undefined = (pack) => pack.manifest.order,
+): P[] {
+  const rank = (pack: P): number => orderOf(pack) ?? Number.POSITIVE_INFINITY;
+  return [...packs].sort((a, b) => rank(a) - rank(b) || bySlug(a.slug, b.slug));
 }

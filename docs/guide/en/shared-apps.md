@@ -44,7 +44,7 @@ early warning, not the thing holding the line.
 
 ## What you can build
 
-Seven shapes are written out in full as templates. Ask for the thing you want in your own words —
+These shapes are written out in full as templates. Ask for the thing you want in your own words —
 the agent picks the shape — but knowing they exist tells you what is cheap to ask for.
 
 | The thing you want | The shape | What is special about it |
@@ -53,6 +53,11 @@ the agent picks the shape — but knowing they exist tells you what is cheap to 
 | A booking a named person approves, and only their own — a salon, an interview, a repair | **salon** | One booking per slot, decided by the platform rather than by counting. This is what an `assignee` role is for |
 | First come, first served with a waiting list — a gym class, a workshop | **gym** | A server-stamped arrival time, a per-class opening time, and a queue that promotes itself |
 | A bookable unit you can list in advance — a meeting room, a desk, equipment on loan | **meeting-room** | The slots exist as records; taking one is claiming its id |
+| A class with a capacity, where people see how many seats are left but not who booked | **class-seats** | A class of N is N seat records; cancelling is done at the front desk |
+| A scheduling poll — which candidate dates work for everyone | **schedule-poll** | One answer per person, correctable until the deadline; moving the deadline closes it |
+| A question box — anyone asks without signing in, and only the ones the owner picks are shown | **question-box** | Questions are seen by the owner only; the owner decides one by one which reach the public page |
+| Only the totals — visitors see how many chose each answer, while names and comments stay with the owner | **tally** | Votes and names/comments live in separate collections; good up to roughly ten thousand votes |
+| A survey whose results respondents see — per-question counts and shares after answering, while addresses, names and comments stay with the owner | **survey-results** | The chosen answers and everything else live in separate collections; the public page counts only the declared choices |
 | A page that moves while people are watching — a live poll, a lecture, a stand-up quiz | **live-poll** | The audience's page redraws as votes land, with no reload |
 | A work board with a roster — people register once, then claim tasks; the owner adds and frees work | **project-board** | A desk for the owner, and the one that shows how "have I already registered?" is answered properly |
 | A log only added to, never rewritten — a shift handover, an incident timeline, a class question board, a chat room | **append-feed** | Rows are only ever appended, and only their author may remove one |
@@ -347,6 +352,79 @@ terms rather than expecting it as the end of building.
   and the URL name's resolution — and deliberately leaves `/m/` and `/p/` standing for the roster,
   so staff and participants carry on where they were. Everything is kept, so re-opening it later is
   one step; if you meant to shut everyone out, that is a different job.
+
+---
+
+## Spread it, and dress it up
+
+An app with a public page (`/a/<slug>`) can change how it spreads and how it looks **by adding to
+its declaration**. Ask the agent; it writes `app.json`, and the change takes effect **at the next
+publish**.
+
+### Let a visitor make their own — `forkable`
+
+With `"forkable": true` the public page says "**You can make this app your own**" and offers a
+"**Make your own**" button. The visitor signs in with Google, picks a name, and gets **the same app
+with themselves as owner**. No records come with it. The copy appears under their **My apps**,
+where "Publish" and "Unpublish" open and close it.
+
+**What it costs: every page of the app becomes readable by anyone**, the staff pages included,
+because the copy is made from them. It fits a question box, a tally or a public-results survey —
+their templates ship with it on — and not a booking or a roster-only app.
+
+Publish refuses it beside `agents[]` (a copy would run somebody's agent), and while a roster
+address or the owner's uid is written anywhere in the declaration, a schema or a page. Take that
+text out rather than turning `forkable` off.
+
+### Let social networks show it — `shareCard`
+
+Declare `shareCard` and a link pasted into X or LINE unfurls into **a card with a picture**.
+**Nothing is ever posted for you**, and only what you published can appear on a card.
+
+- The app's address becomes `/s/<slug>` (opening `/a/<slug>` moves there).
+- `{}` gives a card with the app's name; `{ "title": "..." }` one with that headline. Right for a
+  tally or a survey that shows its totals.
+- `{ "collection": "...", "textField": "..." }` gives **a card per row** (`/s/<slug>/<id>`), for when
+  one row's text is what a stranger should read — a question in a question box. Only a text field of
+  a collection visitors can read (`public.read` or `public.readPublished`) qualifies, and a row that
+  is not public gets no card.
+- **A card a social network has already shown may stay there after you unpublish.**
+
+An app with cards gets a **Share** button in the bar at the top of its page: "Post on X", "Send on
+LINE", "Copy the link" and "Share with another app". The address it sends is the `/s/` one.
+
+### Dress the page — `theme`
+
+As loud as you like, in the spirit of an old mobile site.
+
+```json
+{
+  "theme": {
+    "bar": ["#ff3399", "#ffcc00"],
+    "barText": "#ffffff",
+    "background": ["#fff0f8", "#e0f7ff"],
+    "icon": "🌸",
+    "ticker": "★☆ Now open! ☆★",
+    "banner": "views/banner.svg"
+  }
+}
+```
+
+| key | what it changes |
+|---|---|
+| `bar` | the bar at the top: one colour, or a gradient of two or three |
+| `barText` | the bar's text colour; left out, dark or white is chosen from the bar's brightness |
+| `background` | the ground behind the page: one colour, or a gradient |
+| `icon` | one character (an emoji is fine) beside the app's name, and on the share card |
+| `ticker` | a line scrolling under the bar (at most 120 characters); a tap stops it, and it stays still for reduced motion |
+| `banner` | a picture under the bar: a PNG / JPEG / WebP / SVG directly in `views/`, at most 300 kB |
+
+- **Colours are `#rgb` or `#rrggbb` only.** Names, `rgb()` and CSS are refused at publish.
+- Publish checks the banner's bytes really are that kind of picture, and the page shows it through
+  `<img>`, so an SVG's script never runs. Ask the agent to draw an SVG for a small, crisp banner.
+- The share card takes the bar's colours, the ground and the icon too.
+- Inside the app's own page you can draw anything — inline `<svg>` and `data:` images work; the page
+  cannot load outside URLs.
 
 ---
 

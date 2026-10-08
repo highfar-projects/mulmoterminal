@@ -13,6 +13,8 @@ const { loadRun, loadReport, listPacks, filesGotoFile, filesGotoIndex, blueprint
 }));
 vi.mock("../../../../src/composables/useBlueprintsView", () => ({ blueprintsViewFollowUp }));
 vi.mock("../../../../src/composables/useFilesView", () => ({ filesGotoFile, filesGotoIndex }));
+const { openTerminalAt } = vi.hoisted(() => ({ openTerminalAt: vi.fn() }));
+vi.mock("../../../../src/composables/useNewTerminal", () => ({ openTerminalAt }));
 vi.mock("../../../../src/composables/blueprintsApi", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../../../src/composables/blueprintsApi")>();
   return { ...actual, loadRun, loadReport, listPacks };
@@ -21,7 +23,7 @@ vi.mock("../../../../src/composables/blueprintsApi", async (importOriginal) => {
 import BlueprintRunView from "../../../../src/components/blueprints/BlueprintRunView.vue";
 import { en } from "../../../../src/i18n/en";
 
-const step = { id: "report", title: "報告", description: "", skill: "skills/report", check: "true", gates: [], origin: "usecase" as const };
+const step = { id: "report", title: "報告", description: "", skill: "skills/report", check: "true", gates: [], reads: [], origin: "usecase" as const };
 const runView = (status: "passed" | "running" | "failed", extra: Record<string, unknown> = {}) => ({
   ok: true,
   value: {
@@ -169,20 +171,24 @@ describe("what a finished build may go on to", () => {
             version: "1",
             description: "",
             bases: ["docs"],
-            next: [{ usecase: "write", answers: { style: "folder" } }],
+            next: [{ usecase: "write", answers: { style: "folder" }, carry: { audience: "audience" }, changedFilesTo: "sources" }],
           },
         },
         { slug: "write", manifest: { kind: "usecase", slug: "write", title: "文書を書く", version: "1", description: "", bases: ["docs"], next: [] } },
       ],
     },
   };
-  const finishedWith = (pair: { base: string; usecase: string } | null) => {
+  const finishedWith = (pair: { base: string; usecase: string } | null, language: string | null = null) => {
     listPacks.mockResolvedValue(packs);
-    loadRun.mockResolvedValue(runView("passed"));
-    loadReport.mockResolvedValue({ ok: true, value: { path: null, markdown: null, changed: { files: [], more: false }, pair } });
+    const finished = runView("passed");
+    loadRun.mockResolvedValue({
+      ...finished,
+      value: { ...finished.value, run: { ...finished.value.run, answers: { audience: "新しく入った人", kind: "記事" }, language } },
+    });
+    loadReport.mockResolvedValue({ ok: true, value: { path: null, markdown: null, changed: { files: ["STYLE.md", "chaff.yaml"], more: false }, pair } });
   };
 
-  it("offers the next step, and opens it with the same base and folder, its answers, and what it continues", async () => {
+  it("offers the next step, and opens it with the same base and folder, its answers, the ones it carries and the files the build changed, and what it continues", async () => {
     finishedWith({ base: "docs", usecase: "style" });
     const wrapper = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
     await flushPromises();
@@ -192,10 +198,18 @@ describe("what a finished build may go on to", () => {
     expect(blueprintsViewFollowUp).toHaveBeenCalledWith({
       base: "docs",
       usecase: "write",
-      answers: { style: "folder" },
+      answers: { audience: "新しく入った人", sources: "STYLE.md\nchaff.yaml", style: "folder" },
       projectDir: "/work/docs",
       after: "規約をつくる",
     });
+  });
+
+  it("keeps the finished build's report language for the next one", async () => {
+    finishedWith({ base: "docs", usecase: "style" }, "ja");
+    const wrapper = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
+    await flushPromises();
+    await wrapper.get('[data-testid="blueprint-next-step"]').trigger("click");
+    expect(blueprintsViewFollowUp).toHaveBeenCalledWith(expect.objectContaining({ usecase: "write", language: "ja" }));
   });
 
   it("offers nothing when the report does not say which packs ran", async () => {
@@ -203,5 +217,84 @@ describe("what a finished build may go on to", () => {
     const wrapper = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
     await flushPromises();
     expect(wrapper.find('[data-testid="blueprint-next-steps"]').exists()).toBe(false);
+  });
+});
+
+describe("a review gate", () => {
+  const gated = (reads: string[]) => {
+    const reviewStep = { ...step, id: "propose", gates: ["review"], reads };
+    const view = runView("passed");
+    return {
+      ...view,
+      value: {
+        ...view.value,
+        run: { ...view.value.run, steps: [reviewStep] },
+        state: { steps: { propose: { status: "awaiting-approval", approved: false, answers: [] } } },
+      },
+    };
+  };
+
+  // The gate stands before the step it names: without the name, the step's own title above read as work already done.
+  it("says which step the approval lets start", async () => {
+    loadRun.mockResolvedValue(gated([".blueprint/brief.md"]));
+    const wrapper = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
+    await flushPromises();
+    const gate = wrapper.get('[data-testid="blueprint-current"] li').text();
+    expect(gate).toContain("報告");
+    expect(gate).not.toMatch(/[{}]/);
+  });
+
+  it("lists what to read before approving, each opening in the Files view", async () => {
+    loadRun.mockResolvedValue(gated([".blueprint/findings.json", "STYLE.md"]));
+    const wrapper = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
+    await flushPromises();
+    const files = wrapper.findAll('[data-testid="blueprint-read-file"]');
+    expect(files.map((file) => file.text())).toEqual(["description.blueprint/findings.json", "descriptionSTYLE.md"]);
+    await files[1]?.trigger("click");
+    expect(filesGotoFile).toHaveBeenLastCalledWith("/work/docs", "STYLE.md");
+    // The icon is decoration: a screen reader should hear the file name, not "description".
+    expect(files.every((file) => file.get(".material-symbols-outlined").attributes("aria-hidden") === "true")).toBe(true);
+  });
+
+  it("lists nothing when the step names nothing to read, and asks the spec panel to stay: that is an app build's gate", async () => {
+    loadRun.mockResolvedValue(gated([]));
+    const wrapper = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="blueprint-reads"]').exists()).toBe(false);
+    expect(wrapper.findComponent({ name: "BlueprintSpecReview" }).props("expectsSpec")).toBe(true);
+  });
+
+  it("does not ask the spec panel to stay at a gate that names what to read", async () => {
+    loadRun.mockResolvedValue(gated(["STYLE.md"]));
+    const wrapper = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
+    await flushPromises();
+    expect(wrapper.findComponent({ name: "BlueprintSpecReview" }).props("expectsSpec")).toBe(false);
+  });
+});
+
+describe("a step stopped because Claude Code does not trust the folder", () => {
+  const lastCheck = (notice: Record<string, unknown>) => ({ ok: false, output: "English", atMs: 1, notice });
+
+  beforeEach(() => {
+    loadRun.mockReset();
+    loadReport.mockReset();
+    openTerminalAt.mockReset();
+  });
+
+  it("opens Claude Code in that folder for the person to answer, and still offers Try again", async () => {
+    loadRun.mockResolvedValue(runView("failed", { lastCheck: lastCheck({ code: "untrusted", dir: "/work/docs" }) }));
+    const wrapper = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
+    await flushPromises();
+    expect(wrapper.get('[data-testid="blueprint-run-trust"]').text()).toContain("/work/docs");
+    await wrapper.get('[data-testid="blueprint-run-open-trust"]').trigger("click");
+    expect(openTerminalAt).toHaveBeenCalledWith("/work/docs", null, "claude");
+    expect(wrapper.find('[data-testid="blueprint-retry"]').exists()).toBe(true);
+  });
+
+  it("offers nothing to open when the step stopped for another reason", async () => {
+    loadRun.mockResolvedValue(runView("failed", { lastCheck: lastCheck({ code: "session-lost" }) }));
+    const wrapper = mount(BlueprintRunView, { props: { runId: "run-00000001" } });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="blueprint-run-open-trust"]').exists()).toBe(false);
   });
 });

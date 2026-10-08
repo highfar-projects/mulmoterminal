@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import type { CellCredential } from "../composables/cellCredential";
 import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch, nextTick } from "vue";
 import { type ITheme } from "@xterm/xterm";
 import { FLIP_MS, shouldRefocusOnZoomChange } from "./cellFlip";
+import { isRemoteServer } from "../composables/remoteServer";
 import { terminalManagesAttention, terminalViewActive } from "./terminalViewActive";
-import { dragCarriesFiles, dropTextFromUriList, toInsertText } from "./dropPaths";
+import { dragCarriesFiles, dropPlan, dropTextFromUriList, toInsertText } from "./dropPaths";
 import { dropUploadErrorMessage, uploadDropBatch } from "./dropUpload";
 import { createImagePasteHandler } from "../composables/usePasteImage";
 import { translateUiSentence } from "../utils/translateUi";
@@ -30,6 +32,7 @@ import { skillSeed } from "./skillSeed";
 import GitBranchChip from "./GitBranchChip.vue";
 import WorktreeEnvChip from "./WorktreeEnvChip.vue";
 import { useHeaderButtons, hasPickFileButton, isHeaderFolder, type HeaderButton } from "../composables/useHeaderButtons";
+import { usePaletteHeaderEntries } from "../composables/paletteHeaderEntries";
 import { dropHintEnglish } from "./dropHint";
 import HeaderButtonFolder from "./HeaderButtonFolder.vue";
 import HeaderButtonGlyph from "./HeaderButtonGlyph.vue";
@@ -108,6 +111,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
   (e: "session" | "cwd", value: string): void;
+  (e: "credential", credential: CellCredential | null): void;
   (e: "exit", exitCode: number | null): void;
   (e: "run", command: RunCommand): void;
   // `input`: the user typed (or pasted) into this terminal. Output the server writes back never
@@ -195,7 +199,11 @@ const { context: sessionContext } = useSessionContext(
 // agent session, which those cells do not have. The env values describe the DIRECTORY, and a
 // launcher cell is where `yarn dev` actually runs — so it is the one cell that most needs to say
 // which port it got. The buttons stay suppressed below rather than by withholding the request.
-const { buttons: resolvedButtons, env: worktreeEnv } = useHeaderButtons({
+const {
+  buttons: resolvedButtons,
+  commands: resolvedCommands,
+  env: worktreeEnv,
+} = useHeaderButtons({
   cwd: serverCwd,
   session: computed(() => props.sessionId),
   agent: computed(() => props.agent ?? "claude"),
@@ -223,6 +231,14 @@ function onHeaderButton(button: HeaderButton): void {
   };
   emit("run", command);
 }
+// The command palette lists these and runs a pick through onHeaderButton, as the header does (#2465).
+usePaletteHeaderEntries(slotKey, {
+  buttons: () => headerButtons.value,
+  commands: () => (props.command || props.launcher ? [] : resolvedCommands.value),
+  run: onHeaderButton,
+  // And the Run and Skill menus' entries, only where this terminal shows those menus (#2697).
+  menus: () => (props.runMenu ? { cwd: serverCwd.value, runScript: (command) => emit("run", command), runSkill: onSkill } : null),
+});
 // A skill picked from the header Skill menu runs IN this session (not a spare cell
 // like a script): type its invocation and submit, exactly like a `run:"input"` button.
 function onSkill(slug: string): void {
@@ -322,6 +338,7 @@ onMounted(() => {
     {
       onSession: (id) => emit("session", id),
       onCwd: (c) => emit("cwd", c),
+      onCredential: (credential) => emit("credential", credential),
       onExit: (exitCode) => emit("exit", exitCode),
       onInput: () => emit("input"),
       onInputDropped: (willReconnect) => void showHint(willReconnect ? INPUT_DROPPED_EN : INPUT_DROPPED_ENDED_EN, "cloud_off"),
@@ -475,7 +492,14 @@ function terminate() {
 function readOutput(): string {
   return conn.readBuffer(slotKey);
 }
-defineExpose({ submitText, terminate, readOutput, showHint });
+// The mic, asked for by name (a key, the palette, a header button): false where it cannot listen.
+function toggleVoice(): boolean {
+  if (!voice.capable.value) return false;
+  void voice.toggle();
+  return true;
+}
+
+defineExpose({ submitText, terminate, readOutput, showHint, toggleVoice });
 
 // Insert text (a path, or space-joined paths) at the terminal cursor via the
 // normal input channel — no trailing CR, so the user reviews and submits.
@@ -498,9 +522,13 @@ function onDrop(e: DragEvent) {
   if (!dt || !dragCarriesFiles(dt.types)) return; // not a file drop — leave text drags alone
   e.preventDefault();
   const text = dropTextFromUriList(dt.getData("text/uri-list") || dt.getData("text/plain"));
-  if (text) return insertText(text);
-  const files = Array.from(dt.files);
-  if (files.length) enqueueDrop(files);
+  // The files are only read when the plan can use them: a path the browser gave settles a local drop,
+  // as it always did (#2669).
+  const remote = isRemoteServer();
+  const files = text && !remote ? [] : Array.from(dt.files);
+  const plan = dropPlan({ pathText: text, fileCount: files.length, remoteServer: remote });
+  if (plan === "insert-path") insertText(text);
+  else if (plan === "upload") enqueueDrop(files);
   else showDropHint();
 }
 

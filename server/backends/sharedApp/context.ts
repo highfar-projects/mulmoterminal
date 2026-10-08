@@ -17,6 +17,7 @@ import type { CollectionSchema } from "@mulmoclaude/core/collection";
 import { isRecord } from "../../../common/isRecord.js";
 import { publicInputProblems } from "./publicForm.js";
 import { scopedFieldProblems } from "./scopedFields.js";
+import { SIGN_IN_STEP } from "./signInStep.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -37,6 +38,9 @@ export interface SharedAppOptions {
    *  everybody the app is for have this anyway", which is a sentence the user has to have said
    *  (design D10). */
   confirm?: boolean | undefined;
+  /** Proceed although the publish takes people off the live roster. Its own consent, not `confirm`:
+   *  agreeing to records that do not fit must not be spent on somebody losing access (#1964). */
+  confirmRemovals?: boolean | undefined;
   /** Wall clock, injectable so a test can assert an exact document. */
   now?: (() => number) | undefined;
   /** Resolve the commit being written from. Injectable for the same reason, and because a
@@ -180,7 +184,7 @@ export async function sharedAppContext(root: string): Promise<SharedAppContext |
       ok: false,
       partial: false,
       problems: [
-        "this needs a signed-in Firestore session: connect remote-host first. Shared-app writes go out as the app's owner, which is an authenticated write, " +
+        `this needs a signed-in Firestore session: ${SIGN_IN_STEP} Shared-app writes go out as the app's owner, which is an authenticated write, ` +
           "and the roster is keyed by your VERIFIED address — an unverified one is not a weaker identity to the rules, it is no identity at all.",
       ],
     };

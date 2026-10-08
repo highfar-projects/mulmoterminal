@@ -6,6 +6,7 @@ import {
   type HeaderStatusColors,
   type HeaderStatusTint,
 } from "../../common/headerStatusColors";
+import { postConfigField } from "./postConfigField";
 
 // The DEFAULT header status colours for every directory, hydrated from /api/config (#1617).
 //
@@ -23,3 +24,15 @@ export const setHeaderStatusDefaults = (rawColors: unknown, rawTint: unknown): v
   colors.value = sanitizeHeaderStatusColors(rawColors);
   tint.value = sanitizeHeaderStatusTint(rawTint) ?? DEFAULT_HEADER_STATUS_TINT;
 };
+
+export async function saveHeaderStatusTint(value: HeaderStatusTint): Promise<boolean> {
+  const saved = await postConfigField("headerStatusTint", value);
+  if (saved.ok) tint.value = sanitizeHeaderStatusTint(saved.value) ?? DEFAULT_HEADER_STATUS_TINT;
+  return saved.ok;
+}
+
+export async function saveHeaderStatusColors(value: HeaderStatusColors): Promise<boolean> {
+  const saved = await postConfigField("headerStatusColors", value);
+  if (saved.ok) colors.value = sanitizeHeaderStatusColors(saved.value);
+  return saved.ok;
+}

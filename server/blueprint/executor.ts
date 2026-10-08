@@ -9,17 +9,32 @@ import path from "node:path";
 import { realpath } from "node:fs/promises";
 import { applyEvent, currentStep, initialState, type BlueprintState, type StepEvent } from "../../common/blueprint/state.js";
 import { OPEN_QUESTIONS_FILE, SPEC_FILE, replyFile, specRevisionPrompt } from "../../common/blueprint/specRevisionPrompt.js";
+import { lastRevisionCheckFailed } from "../../common/blueprint/revisionCheck.js";
 import type { Refusal } from "../../common/blueprint/refusal.js";
+import type { AskChoice } from "../../common/blueprint/askChoices.js";
+import { TARGETS_FILE, targetsViewOf, type TargetsView } from "../../common/blueprint/targets.js";
 import { Refused } from "./refused.js";
 import { englishStepNotice, type StepNotice } from "../../common/blueprint/stepNotice.js";
 import { changedFiles, type FolderListing, type ChangedFiles } from "../../common/blueprint/changedFiles.js";
-import { atRoundLimit, MAX_FAILED_CHECKS, MAX_ROUNDS, nextAction, shouldRepeat, type ExecutorAction } from "../../common/blueprint/executorPolicy.js";
-import { stepPrompt } from "../../common/blueprint/stepPrompt.js";
+import {
+  atRoundLimit,
+  MAX_FAILED_CHECKS,
+  MAX_ROUNDS,
+  nextAction,
+  shouldRepeat,
+  waitsOnBusyFolder,
+  type ExecutorAction,
+} from "../../common/blueprint/executorPolicy.js";
+import { earlierAnswers, stepPrompt } from "../../common/blueprint/stepPrompt.js";
+import { localizedManifest } from "../../common/blueprint/packLocale.js";
+import { localizedRunSteps, overlayReader } from "./packLocales.js";
 import { summarizeRun, type BlueprintRun, type BlueprintRunSummary } from "../../common/blueprint/run.js";
 import type { ComposedStep } from "../../common/blueprint/plan.js";
 import type { HearingAnswers } from "../../common/blueprint/hearing.js";
+import type { PersonLanguage } from "../../common/blueprint/personLanguage.js";
 import type { RunStore } from "./runStore.js";
-import { readManifest } from "./packs.js";
+import { declaredRevises, readManifest } from "./packs.js";
+import { reportOf } from "../../common/blueprint/manifest.js";
 import type { CheckRequest, CheckResult } from "./checkRunner.js";
 
 export interface ExecutorDeps {
@@ -107,12 +122,20 @@ const isWorking = ({ run, state }: Loaded): boolean => run.revisionSessionId !==
 // session: whatever it left behind was not claimed as done.
 export const LOST_SESSION_OUTPUT = englishStepNotice({ code: "session-lost" });
 
+// A step starts counting its failures afresh: a person retried it, a round passed, or its check passed.
+const withFailuresCleared = (run: BlueprintRun, stepId: string): BlueprintRun => ({
+  ...run,
+  failedChecks: { ...run.failedChecks, [stepId]: 0 },
+  failureOutputs: { ...run.failureOutputs, [stepId]: [] },
+});
+
 export interface CreateRunRequest {
   projectDir: string;
   basePackDir: string;
   usecasePackDir: string;
   steps: ComposedStep[];
   answers?: HearingAnswers;
+  language?: PersonLanguage;
 }
 
 const stepOf = (run: BlueprintRun, stepId: string): ComposedStep | undefined => run.steps.find((step) => step.id === stepId);
@@ -143,11 +166,14 @@ class Executor {
       ...request,
       answers: request.answers ?? {},
       failedChecks: {},
+      failureOutputs: {},
       activeSessionId: null,
       sessions: [],
       createdAtMs: this.deps.now(),
       specChat: [],
       revisionSessionId: null,
+      archivedAtMs: null,
+      language: request.language ?? null,
     };
     const state = initialState(request.steps);
     await this.deps.store.save(run, state);
@@ -159,11 +185,11 @@ class Executor {
     return this.mustLoad(runId);
   }
 
-  /** The report the usecase names in its manifest, as the project holds it now; nulls when there is none. */
+  /** The report the usecase (or, failing that, the base) names in its manifest, as the project holds it now; nulls when there is none. */
   async reportView(runId: string): Promise<ReportView> {
     const { run } = await this.mustLoad(runId);
     const [manifest, baseManifest] = await Promise.all([run.usecasePackDir, run.basePackDir].map((dir) => readManifest(dir).catch(() => null)));
-    const report = manifest?.kind === "usecase" ? (manifest.report ?? null) : null;
+    const report = reportOf(manifest ?? null, baseManifest ?? null);
     const changed = changedFiles(await this.deps.projectFiles.list(run.projectDir), run.createdAtMs);
     // Which packs this build ran, by slug, so the view can offer the usecase's next steps; null when either is unreadable.
     const pair = manifest?.kind === "usecase" && baseManifest?.kind === "base" ? { base: baseManifest.slug, usecase: manifest.slug } : null;
@@ -171,10 +197,31 @@ class Executor {
     return { path: path.join(run.projectDir, report), markdown: await this.deps.projectFiles.read(run.projectDir, report), changed, pair };
   }
 
-  /** Every build, newest first. One that cannot be read is left out rather than failing the list. */
-  async list(): Promise<BlueprintRunSummary[]> {
-    const loaded = await Promise.all((await this.deps.store.list()).map((runId) => this.deps.store.load(runId).catch(() => null)));
-    return loaded.flatMap((entry) => (entry ? [summarizeRun(entry.run, entry.state)] : [])).sort((a, b) => b.createdAtMs - a.createdAtMs);
+  /**
+   * Every build, newest first, its words in the screen's language (`localizedRunSteps`). One that cannot be read is left
+   * out rather than failing the list.
+   */
+  async list(screenLanguage?: string): Promise<BlueprintRunSummary[]> {
+    const loaded = (await Promise.all((await this.deps.store.list()).map((runId) => this.deps.store.load(runId).catch(() => null)))).filter(
+      (entry): entry is Loaded => entry !== null,
+    );
+    // Each usecase pack read once per listing, however many builds share it.
+    const dirs = [...new Set(loaded.map((entry) => entry.run.usecasePackDir))];
+    const read = overlayReader(screenLanguage);
+    const titleOf = async (dir: string): Promise<[string, string | null]> => [
+      dir,
+      await readManifest(dir).then(
+        async (manifest) => (manifest.kind === "usecase" ? localizedManifest(manifest, await read(dir)).title : null),
+        () => null,
+      ),
+    ];
+    const titles = new Map(await Promise.all(dirs.map(titleOf)));
+    const summaries = await Promise.all(
+      loaded.map(async (entry) =>
+        summarizeRun({ ...entry.run, steps: await localizedRunSteps(entry.run, read) }, entry.state, titles.get(entry.run.usecasePackDir) ?? null),
+      ),
+    );
+    return summaries.sort((a, b) => b.createdAtMs - a.createdAtMs);
   }
 
   /** A person approved, rejected, answered or asked to retry. */
@@ -182,22 +229,38 @@ class Executor {
     return this.serially(runId, async () => {
       const before = await this.mustLoad(runId);
       if (before.run.revisionSessionId !== null) throw new BlueprintRefusal({ code: "revision-pending" });
+      if (event.type === "approve" && lastRevisionCheckFailed(before.run.specChat)) throw new BlueprintRefusal({ code: "revision-check-failed" });
       const loaded = applied(before, stepId, event);
       if (event.type === "retry") this.closeSessionsOf(before.run, stepId);
       // A person's retry is a fresh start for the automatic retries, too.
-      const run = event.type === "retry" ? { ...loaded.run, failedChecks: { ...loaded.run.failedChecks, [stepId]: 0 } } : loaded.run;
+      const run = event.type === "retry" ? withFailuresCleared(loaded.run, stepId) : loaded.run;
       await this.deps.store.save(run, loaded.state);
       return this.advance({ run, state: loaded.state });
     });
   }
 
+  /**
+   * Puts the build away from the list, or brings it back. Nothing is deleted, and a build put away while it waits for
+   * a person waits on. Refused while an agent works on it — a step's session or a spec revision — so a running build
+   * cannot drop out of sight.
+   */
+  archive(runId: string, archived: boolean): Promise<Loaded> {
+    return this.serially(runId, async () => {
+      const loaded = await this.mustLoad(runId);
+      if (archived && (loaded.run.activeSessionId !== null || loaded.run.revisionSessionId !== null)) throw new BlueprintRefusal({ code: "agent-working" });
+      const run = { ...loaded.run, archivedAtMs: archived ? this.deps.now() : null };
+      await this.deps.store.save(run, loaded.state);
+      return { run, state: loaded.state };
+    });
+  }
+
   /** The agent working on `stepId` needs a decision. Only that session may ask. */
-  ask(runId: string, stepId: string, question: string, sessionId: string): Promise<Loaded> {
+  ask(runId: string, stepId: string, question: string, sessionId: string, choices: AskChoice[] = []): Promise<Loaded> {
     return this.serially(runId, async () => {
       const loaded = await this.mustLoad(runId);
       if (loaded.run.activeSessionId === null) throw new BlueprintRefusal("no agent is working on this build");
       if (loaded.run.activeSessionId !== sessionId) throw new BlueprintRefusal("this session is not the one working on the step");
-      const asked = applied(loaded, stepId, { type: "ask", question });
+      const asked = applied(loaded, stepId, { type: "ask", question, choices });
       await this.deps.store.save(asked.run, asked.state);
       return asked;
     });
@@ -227,6 +290,15 @@ class Executor {
     // A run the server stopped mid-advance (a step started, no session yet) is picked up again.
     const idle = loadedRuns.flatMap((loaded) => (loaded && !loaded.run.activeSessionId ? [loaded.run.id] : []));
     await Promise.all(idle.map((runId) => this.serially(runId, async () => this.advance(await this.mustLoad(runId)))));
+    // A build left waiting on a busy folder across the restart: that folder may be free now.
+    const folders = [...new Set(loadedRuns.flatMap((loaded) => (loaded && waitsOnBusyFolder(loaded.run.steps, loaded.state) ? [loaded.run.projectDir] : [])))];
+    await folders.reduce((done, folder) => done.then(() => this.wakeBuildsWaitingOn(folder, null)), Promise.resolve());
+  }
+
+  /** The work list the build keeps in its folder, as it stands now. */
+  async targetsView(runId: string): Promise<TargetsView> {
+    const { run } = await this.mustLoad(runId);
+    return targetsViewOf(await this.deps.projectFiles.read(run.projectDir, TARGETS_FILE));
   }
 
   /** The spec as it stands, its open questions, and the conversation about it. */
@@ -246,13 +318,17 @@ class Executor {
       const refusal = specChatRefusal(loaded);
       if (refusal) throw new BlueprintRefusal(refusal);
       const { run } = loaded;
-      if (!(await this.trusted(run))) throw new BlueprintRefusal({ code: "untrusted", dir: run.projectDir });
+      if (!(await this.trusted(run))) throw new BlueprintRefusal({ code: "untrusted", dir: run.projectDir, trustIn: run.projectDir });
       const sessionId = this.deps.newSessionId();
+      const gate = currentStep(run.steps, loaded.state);
       const prompt = specRevisionPrompt({
         chat: run.specChat,
         message,
         packDirs: { base: run.basePackDir, usecase: run.usecasePackDir },
         replyPath: replyFile(sessionId),
+        language: run.language,
+        reads: gate?.reads ?? [],
+        revises: await this.revisesOf(run, gate),
       });
       const specChat = [...run.specChat, { role: "person" as const, text: message, atMs: this.deps.now() }];
       const next: Loaded = { run: { ...run, revisionSessionId: sessionId, specChat }, state: loaded.state };
@@ -281,12 +357,36 @@ class Executor {
         const reply = didError ? null : ((await this.deps.projectFiles.read(run.projectDir, replyFile(sessionId))) ?? "").trim();
         await this.deps.projectFiles.remove(run.projectDir, replyFile(sessionId));
         const outcome = replyOutcome(didError, reply);
-        const specChat = [...run.specChat, { role: "agent" as const, text: reply ?? "", atMs: this.deps.now(), outcome }];
-        await this.deps.store.save({ ...run, revisionSessionId: null, specChat }, state);
+        const answered = [...run.specChat, { role: "agent" as const, text: reply ?? "", atMs: this.deps.now(), outcome }];
+        // Even after a lost session: it may have changed the files before it ended.
+        const recheck = await this.recheckAfterRevision(run, state);
+        const failed =
+          recheck && !recheck.ok ? [{ role: "agent" as const, text: recheck.output.trim(), atMs: this.deps.now(), outcome: "check-failed" as const }] : [];
+        await this.deps.store.save({ ...run, revisionSessionId: null, specChat: [...answered, ...failed] }, state);
       } finally {
         this.deps.closeSession(sessionId);
       }
     });
+  }
+
+  // What the conversation at `gate` may change: as the build stored it, or — for a build started before its pack
+  // declared any — as the pack declares it now, so it is never left to change the views it reads.
+  private async revisesOf(run: BlueprintRun, gate: { id: string } | null): Promise<string[]> {
+    const stored = gate ? stepOf(run, gate.id) : undefined;
+    if (!stored || stored.reads.length === 0) return [];
+    if (stored.revises.length > 0) return stored.revises;
+    return declaredRevises(stored.origin === "base" ? run.basePackDir : run.usecasePackDir, stored.id);
+  }
+
+  // A document gate's conversation changed the files the step before it wrote: that step's check runs again, which
+  // redraws the views the person reads and says whether the files still fit. An app gate (it names nothing to read) has
+  // only the spec, which no check holds.
+  private async recheckAfterRevision(run: BlueprintRun, state: BlueprintState): Promise<CheckResult | null> {
+    const gate = currentStep(run.steps, state);
+    if (!gate || gate.reads.length === 0) return null;
+    const before = run.steps[run.steps.findIndex((step) => step.id === gate.id) - 1];
+    if (!before) return null;
+    return this.deps.runCheck({ command: before.check, cwd: run.projectDir, basePackDir: run.basePackDir, usecasePackDir: run.usecasePackDir });
   }
 
   // The sessions a step used; a failed step's last one was kept open for the person to look into.
@@ -298,10 +398,10 @@ class Executor {
 
   // The agent's session stopped. If it stopped to ask, the state already says so and there is
   // nothing to check; otherwise the check — not the agent — decides whether the step is done.
-  private turnEnded(runId: string, sessionId: string, didError: boolean): Promise<void> {
-    return this.serially(runId, async () => {
+  private async turnEnded(runId: string, sessionId: string, didError: boolean): Promise<void> {
+    const after = await this.serially(runId, async (): Promise<Loaded | null> => {
       const loaded = await this.mustLoad(runId);
-      if (loaded.run.activeSessionId !== sessionId) return;
+      if (loaded.run.activeSessionId !== sessionId) return null;
       const released: Loaded = { run: { ...loaded.run, activeSessionId: null }, state: loaded.state };
       const session = loaded.run.sessions.findLast((entry) => entry.sessionId === sessionId);
       // Closed BEFORE advancing: a session whose turn ended can still have background work running,
@@ -312,8 +412,10 @@ class Executor {
         throw err;
       });
       if (!session || !waitsOnFailure(settled, session.stepId)) this.deps.closeSession(sessionId);
-      await this.advance(settled);
+      return this.advance(settled);
     });
+    // After this build's queue: waking another build takes that build's own queue, and must not wait on this one.
+    if (after && !isWorking(after)) await this.wakeBuildsWaitingOn(after.run.projectDir, after.run.id).catch(() => undefined);
   }
 
   private async settleAndSave(released: Loaded, session: BlueprintRun["sessions"][number] | undefined, didError: boolean): Promise<Loaded> {
@@ -357,13 +459,39 @@ class Executor {
 
   /** Another build whose agent or check is working in `folder` now, or null. A build waiting for a person is not. */
   async workingIn(folder: string, exceptRunId: string | null = null): Promise<string | null> {
+    const working = (await this.buildsIn(folder, exceptRunId)).find(isWorking);
+    return working ? working.run.id : null;
+  }
+
+  /** Every other build in `folder`, however its path is spelled. */
+  private async buildsIn(folder: string, exceptRunId: string | null): Promise<Loaded[]> {
     const canonical = await this.folderOf(folder);
     const loaded = await Promise.all((await this.deps.store.list()).map((runId) => this.deps.store.load(runId).catch(() => null)));
     const siblings = await Promise.all(
       loaded.map(async (entry) => (entry && entry.run.id !== exceptRunId && (await this.folderOf(entry.run.projectDir)) === canonical ? entry : null)),
     );
-    const working = siblings.find((entry) => entry !== null && isWorking(entry));
-    return working ? working.run.id : null;
+    return siblings.filter((entry): entry is Loaded => entry !== null);
+  }
+
+  // A build that stopped because another was working in its folder resumes by itself once that one stops working —
+  // the person was only ever asked to wait and press retry, which the executor can do. Each is retried in turn: the
+  // first takes the folder, and the rest — or all of them, when another build still works there — find it busy again
+  // and wait in the same way.
+  private async wakeBuildsWaitingOn(folder: string, exceptRunId: string | null): Promise<void> {
+    const waiting = (await this.buildsIn(folder, exceptRunId)).flatMap((entry) => {
+      const stepId = waitsOnBusyFolder(entry.run.steps, entry.state);
+      return stepId === null ? [] : [{ runId: entry.run.id, stepId }];
+    });
+    await waiting.reduce(
+      (done, { runId, stepId }) =>
+        done.then(() =>
+          this.humanEvent(runId, stepId, { type: "retry" }).then(
+            () => undefined,
+            () => undefined,
+          ),
+        ),
+      Promise.resolve(),
+    );
   }
 
   // Two builds' agents in one folder would write each other's .blueprint/ records, and every session a build
@@ -380,7 +508,8 @@ class Executor {
         () => null,
         (err: unknown): StepNotice => ({ code: "answers-unwritten", detail: err instanceof Error ? err.message : String(err) }),
       );
-      if (unwritten !== null) return this.waitsForPerson(loaded, stepId, unwritten);
+      // Most likely passing (a disk briefly full or locked): retried like a failed check, with no session to close.
+      if (unwritten !== null) return this.recordNotice(loaded, stepId, unwritten);
       const next = this.spawnFor(loaded, stepId);
       // Saved inside the lock: the next build to ask must already see this one working.
       await this.deps.store.save(next.run, next.state);
@@ -431,6 +560,11 @@ class Executor {
       packDirs: { base: run.basePackDir, usecase: run.usecasePackDir },
       stepState: state.steps[stepId],
       askCommand: this.deps.askCommand(run.id, stepId, sessionId),
+      earlierAnswers: earlierAnswers(run.steps, state.steps, stepId),
+      language: run.language,
+      // The last failure is the step's lastCheck, already in the prompt; these are the ones before it.
+      earlierFailures: (run.failureOutputs[stepId] ?? []).slice(0, -1),
+      failedAttempts: run.failedChecks[stepId] ?? 0,
     });
     this.deps.spawnStepSession(run.projectDir, prompt, sessionId);
     this.deps.onTurnEnded(sessionId, ({ didError }) => this.turnEnded(run.id, sessionId, didError));
@@ -463,7 +597,8 @@ class Executor {
     }
     if (!shouldRepeat(step, round, more.ok)) return loaded;
     const repeated = applied(loaded, step.id, { type: "repeat" });
-    return { run: { ...repeated.run, failedChecks: { ...repeated.run.failedChecks, [step.id]: 0 } }, state: repeated.state };
+    // The round that just passed already cleared its failures.
+    return repeated;
   }
 
   private recordNotice(loaded: Loaded, stepId: string, notice: StepNotice): Loaded {
@@ -472,13 +607,20 @@ class Executor {
 
   private recordCheck(loaded: Loaded, stepId: string, result: CheckResult, notice?: StepNotice): Loaded {
     const checked = applied(loaded, stepId, { type: "check", ok: result.ok, output: result.output, atMs: this.deps.now(), ...(notice ? { notice } : {}) });
-    if (result.ok) return checked;
+    if (result.ok) return { run: withFailuresCleared(checked.run, stepId), state: checked.state };
     const failedChecks = { ...checked.run.failedChecks, [stepId]: (checked.run.failedChecks[stepId] ?? 0) + 1 };
-    return { run: { ...checked.run, failedChecks }, state: checked.state };
+    const failureOutputs = {
+      ...checked.run.failureOutputs,
+      [stepId]: [...(checked.run.failureOutputs[stepId] ?? []), result.output].slice(-MAX_FAILED_CHECKS),
+    };
+    return { run: { ...checked.run, failedChecks, failureOutputs }, state: checked.state };
   }
 }
 
-export type BlueprintExecutor = Pick<Executor, "create" | "view" | "list" | "humanEvent" | "ask" | "recover" | "specView" | "say" | "reportView" | "workingIn">;
+export type BlueprintExecutor = Pick<
+  Executor,
+  "create" | "view" | "list" | "humanEvent" | "ask" | "recover" | "specView" | "say" | "reportView" | "targetsView" | "workingIn" | "archive"
+>;
 
 /** A finished build's report: where it is, and its text (null when the usecase names none or it was not written); and the files the build wrote. */
 export type ReportView = {

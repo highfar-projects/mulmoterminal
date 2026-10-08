@@ -92,6 +92,29 @@ describe("blueprint executor", () => {
     expect(spawned[1].prompt).toContain("A: Tokyo");
   });
 
+  it("saves the choices offered with a question, and the picked label is the answer the next session reads", async () => {
+    await create();
+    const choices = [{ label: "Fix" }, { label: "Leave", description: "free", recommended: true as const }];
+    await executor.ask("run-00000001", "a", "Fix the type?", "s1", choices);
+    await endTurn("s1");
+    expect((await executor.view("run-00000001")).state.steps.a.choices).toEqual(choices);
+    await executor.humanEvent("run-00000001", "a", { type: "answer", answer: "Leave", atMs: 0 });
+    expect((await executor.view("run-00000001")).state.steps.a.choices).toBeUndefined();
+    expect(spawned[1].prompt).toContain("A: Leave");
+  });
+
+  it("tells a later step what the person decided in an earlier one", async () => {
+    await create();
+    await executor.ask("run-00000001", "a", "Which region?", "s1");
+    await endTurn("s1");
+    await executor.humanEvent("run-00000001", "a", { type: "answer", answer: "Tokyo", atMs: 0 });
+    await endTurn("s2");
+    await executor.humanEvent("run-00000001", "b", { type: "approve" });
+    const later = spawned.at(-1)?.prompt ?? "";
+    expect(later).toContain('In "a": Q: Which region?');
+    expect(later).toContain("A: Tokyo");
+  });
+
   it("does not count a session that stopped to ask as a failed attempt", async () => {
     checkResults["check-a"] = Array.from({ length: MAX_FAILED_CHECKS - 1 }, () => false);
     await create();
@@ -268,6 +291,13 @@ describe("blueprint executor", () => {
       files.set(".blueprint/spec.md", "# おうち図書館");
       expect(await executor.specView("run-00000001")).toEqual({ spec: "# おうち図書館", openQuestions: null, chat: [], revising: false });
     });
+
+    it("reads the work list from the project, and says when there is none yet", async () => {
+      await atReview();
+      expect(await executor.targetsView("run-00000001")).toEqual({ targets: null, problem: null });
+      files.set(".blueprint/targets.json", JSON.stringify({ targets: [{ id: "a", title: "A", status: "todo" }] }));
+      expect(await executor.targetsView("run-00000001")).toEqual({ targets: [{ id: "a", title: "A", files: [], status: "todo" }], problem: null });
+    });
   });
 
   describe("closing terminals the build no longer needs", () => {
@@ -288,10 +318,11 @@ describe("blueprint executor", () => {
       checkResults["check-a"] = Array.from({ length: MAX_FAILED_CHECKS }, () => false);
       await create();
       for (let attempt = 1; attempt <= MAX_FAILED_CHECKS; attempt++) await endTurn(`s${attempt}`);
-      expect(closed).toEqual(["s1", "s2"]);
+      const sessions = Array.from({ length: MAX_FAILED_CHECKS }, (_, index) => `s${index + 1}`);
+      expect(closed).toEqual(sessions.slice(0, -1));
       await executor.humanEvent("run-00000001", "a", { type: "retry" });
-      expect(closed).toEqual(expect.arrayContaining(["s1", "s2", "s3"]));
-      expect(closed).not.toContain("s4");
+      expect(closed).toEqual(expect.arrayContaining(sessions));
+      expect(closed).not.toContain(`s${MAX_FAILED_CHECKS + 1}`);
     });
 
     it("closes a session before starting the retry that replaces it", async () => {
@@ -419,6 +450,19 @@ describe("a repeating step", () => {
     expect(spawned[1].prompt).toContain("round 2");
   });
 
+  it("tells the next round, and the step after, what the person answered in an earlier round", async () => {
+    checkResults["more-w"] = [true, false];
+    await createRepeating();
+    await executor.ask("run-00000001", "w", "Which contact?", "s1");
+    await endTurn("s1");
+    await executor.humanEvent("run-00000001", "w", { type: "answer", answer: "総務部", atMs: 0 });
+    await endTurn("s2");
+    expect(spawned[2]?.prompt).toContain('In "w, round 1": Q: Which contact?');
+    await endTurn("s3");
+    expect(spawned[3]?.prompt).toContain('"z"');
+    expect(spawned[3]?.prompt).toContain("A: 総務部");
+  });
+
   it("passes and moves on once repeatWhile says there is no more", async () => {
     checkResults["more-w"] = [true, false];
     await createRepeating();
@@ -482,6 +526,99 @@ describe("a repeating step", () => {
     await createRepeating();
     await endTurn("s1");
     expect(order).toEqual(["spawn s1", "close s1", "spawn s2"]);
+  });
+});
+
+describe("the build list", () => {
+  const PACKS = path.join(import.meta.dirname, "..", "..", "..", "blueprints");
+
+  it("names what each build makes, from its usecase pack, and nothing when the pack cannot be read or is not a usecase", async () => {
+    const ids = ["run-00000003", "run-00000002", "run-00000001"];
+    executor = createExecutor({ ...deps, newRunId: () => ids.pop() ?? "run-00000009" });
+    await executor.create({ projectDir: "/work/docs", basePackDir: path.join(PACKS, "docs"), usecasePackDir: path.join(PACKS, "review"), steps: STEPS });
+    await executor.create({ projectDir: "/work/app", basePackDir: "/packs/gone", usecasePackDir: "/packs/gone-usecase", steps: STEPS });
+    await executor.create({ projectDir: "/work/base", basePackDir: path.join(PACKS, "docs"), usecasePackDir: path.join(PACKS, "docs"), steps: STEPS });
+    const listed = await executor.list();
+    const titleIn = (dir: string) => listed.find((summary) => summary.projectDir === dir)?.usecaseTitle;
+    expect(titleIn("/work/docs")).toContain("文書を読み解く");
+    expect(titleIn("/work/app")).toBeNull();
+    expect(titleIn("/work/base")).toBeNull();
+    const workspace = {
+      id: "workspace",
+      title: "フォルダと chaff を確かめる",
+      description: "",
+      skill: "s",
+      check: "true",
+      gates: [],
+      reads: [],
+      revises: [],
+      origin: "base" as const,
+    };
+    await executor.create({ projectDir: "/work/real", basePackDir: path.join(PACKS, "docs"), usecasePackDir: path.join(PACKS, "review"), steps: [workspace] });
+    const english = await executor.list("en");
+    expect(english.find((summary) => summary.projectDir === "/work/docs")?.usecaseTitle).toBe(
+      "Read documents closely (find contradictions and gaps, propose fixes)",
+    );
+    expect(english.find((summary) => summary.projectDir === "/work/real")?.current?.title).toBe("Check the folder and chaff");
+  });
+});
+
+describe("the language the person reads", () => {
+  it("is recorded when the build starts, and every step's agent is told it", async () => {
+    await executor.create({ projectDir: "/work/app", basePackDir: "/packs/firebase", usecasePackDir: "/packs/internal", steps: STEPS, language: "en" });
+    expect((await executor.view("run-00000001")).run.language).toBe("en");
+    expect(spawned[0]?.prompt).toContain("The user reads English.");
+    await endTurn("s1");
+    await executor.humanEvent("run-00000001", "b", { type: "approve" });
+    expect(spawned[1]?.prompt).toContain("The user reads English.");
+  });
+
+  it("is none for a build started without one, and no agent is told a language", async () => {
+    await create();
+    expect((await executor.view("run-00000001")).run.language).toBeNull();
+    expect(spawned[0]?.prompt).not.toContain("The user reads");
+  });
+});
+
+describe("putting a build away", () => {
+  it("marks it put away at the server's clock and lists it so, then brings it back", async () => {
+    const runId = await create();
+    await endTurn("s1");
+    const archived = await executor.archive(runId, true);
+    expect(archived.run.archivedAtMs).toBe(fakes.clockNow());
+    expect((await executor.list())[0]?.archived).toBe(true);
+    await executor.archive(runId, false);
+    expect((await executor.view(runId)).run.archivedAtMs).toBeNull();
+    expect((await executor.list())[0]?.archived).toBe(false);
+  });
+
+  it("refuses while an agent works on the build, and keeps it listed", async () => {
+    const runId = await create();
+    await expect(executor.archive(runId, true)).rejects.toMatchObject({ refusal: { code: "agent-working" } });
+    expect((await executor.list())[0]?.archived).toBe(false);
+  });
+
+  it("refuses while the spec is being rewritten, though no step session is open", async () => {
+    const runId = await create();
+    await endTurn("s1");
+    const saved = store.saved.get(runId);
+    if (!saved) throw new Error("no saved run");
+    store.saved.set(runId, { ...saved, run: { ...saved.run, activeSessionId: null, revisionSessionId: "r1" } });
+    await expect(executor.archive(runId, true)).rejects.toMatchObject({ refusal: { code: "agent-working" } });
+  });
+
+  it("brings a build back even while an agent works on it", async () => {
+    const runId = await create();
+    await expect(executor.archive(runId, false)).resolves.toBeDefined();
+  });
+
+  it("leaves the steps and the answers as they were", async () => {
+    const runId = await create();
+    await endTurn("s1");
+    const before = await executor.view(runId);
+    const after = await executor.archive(runId, true);
+    expect(after.state).toEqual(before.state);
+    expect({ ...after.run, archivedAtMs: null }).toEqual(before.run);
   });
 });
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { MD_PREVIEW_FROM_FRAME, MD_PREVIEW_FROM_HOST, mdPreviewFrameMessage } from "../../common/mdPreviewMessage";
+import { isPreviewToken, MD_PREVIEW_FROM_FRAME, MD_PREVIEW_FROM_HOST, mdPreviewFrameMessage } from "../../common/mdPreviewMessage";
 
 // #2157. What the preview document posts arrives on the same `message` listener as everything
 // else the app hears, from a document whose origin is the string "null" and identifies nobody.
@@ -9,15 +9,15 @@ const frame = (over: Record<string, unknown>) => ({ source: MD_PREVIEW_FROM_FRAM
 
 describe("mdPreviewFrameMessage", () => {
   it("reads a document announcing that it can be scrolled", () => {
-    expect(mdPreviewFrameMessage(frame({ kind: "ready" }))).toEqual({ kind: "ready" });
+    expect(mdPreviewFrameMessage(frame({ kind: "ready" }))).toEqual({ token: null, kind: "ready" });
   });
 
   it("reads a reported position", () => {
-    expect(mdPreviewFrameMessage(frame({ kind: "scroll", scrollY: 420 }))).toEqual({ kind: "scroll", scrollY: 420 });
+    expect(mdPreviewFrameMessage(frame({ kind: "scroll", scrollY: 420 }))).toEqual({ token: null, kind: "scroll", scrollY: 420 });
   });
 
   it("keeps the top of a document as a position like any other", () => {
-    expect(mdPreviewFrameMessage(frame({ kind: "scroll", scrollY: 0 }))).toEqual({ kind: "scroll", scrollY: 0 });
+    expect(mdPreviewFrameMessage(frame({ kind: "scroll", scrollY: 0 }))).toEqual({ token: null, kind: "scroll", scrollY: 0 });
   });
 
   // The window carries other traffic — Vite's HMR, plugin frames, anything an extension posts.
@@ -52,7 +52,7 @@ describe("mdPreviewFrameMessage", () => {
   // #2259. The host opens what this lets through with `window.open`, and the document is a file
   // nobody sanitised — so only an absolute http(s) URL is a link to follow.
   it.each([["https://www.youtube.com/watch?v=x"], ["http://example.com/a b"]])("accepts %s to open", (href) => {
-    expect(mdPreviewFrameMessage(frame({ kind: "navigate", href }))).toEqual({ kind: "navigate", href: new URL(href).href });
+    expect(mdPreviewFrameMessage(frame({ kind: "navigate", href }))).toEqual({ token: null, kind: "navigate", href: new URL(href).href });
   });
 
   it.each([["javascript:alert(1)"], ["file:///etc/passwd"], ["data:text/html,x"], ["docs/a.md"], ["#top"], [""], [7], [undefined]])(
@@ -61,4 +61,41 @@ describe("mdPreviewFrameMessage", () => {
       expect(mdPreviewFrameMessage(frame({ kind: "navigate", href }))).toBeNull();
     },
   );
+
+  // #2268. A link to another file is passed on as written; what it names is decided by the pane,
+  // which knows the document (previewLinkTarget), and nothing here reaches `window.open`.
+  it.each([["./b.md"], ["../README.md"], ["my%20file.md#top"]])("passes %s on as a file to open", (href) => {
+    expect(mdPreviewFrameMessage(frame({ kind: "open", href }))).toEqual({ token: null, kind: "open", href });
+  });
+
+  it.each([[""], [7], [undefined], [null]])("refuses %j as a file to open", (href) => {
+    expect(mdPreviewFrameMessage(frame({ kind: "open", href }))).toBeNull();
+  });
+
+  // #2615. A code block's number: all the document can say, and the pane reads the block from the file.
+  it.each([[0], [3], [2 ** 31]])("passes code block %j on", (index) => {
+    expect(mdPreviewFrameMessage(frame({ kind: "code-block", index }))).toEqual({ token: null, kind: "code-block", index });
+  });
+
+  it.each([[-1], [1.5], ["2"], [Number.NaN], [Infinity], [2 ** 53], [null], [undefined]])("refuses %j as a code block", (index) => {
+    expect(mdPreviewFrameMessage(frame({ kind: "code-block", index }))).toBeNull();
+  });
+});
+
+// #2515. Every message carries the token its document was served with; the host compares it.
+describe("the preview token", () => {
+  const TOKEN = "0123456789abcdef-token_x";
+
+  it("is read from a message that carries a well-formed one", () => {
+    expect(mdPreviewFrameMessage({ source: MD_PREVIEW_FROM_FRAME, kind: "ready", token: TOKEN })).toEqual({ kind: "ready", token: TOKEN });
+  });
+
+  it.each([[undefined], [null], [""], ["short"], ["has space inside x"], ["<script>alert(1)</script>xx"], [42]])("reads %j as no token", (token) => {
+    expect(mdPreviewFrameMessage({ source: MD_PREVIEW_FROM_FRAME, kind: "ready", token })?.token).toBeNull();
+  });
+
+  it("accepts only what a host could mint", () => {
+    expect([crypto.randomUUID(), "a".repeat(16), "A-z_0".repeat(12).slice(0, 64)].every(isPreviewToken)).toBe(true);
+    expect(["a".repeat(15), "a".repeat(65), 'a"b'.repeat(8), "</script>".repeat(3)].some(isPreviewToken)).toBe(false);
+  });
 });

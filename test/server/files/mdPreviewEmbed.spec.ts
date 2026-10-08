@@ -1,8 +1,9 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import ts from "typescript";
-import { mdPreviewEmbedCsp, mdPreviewReporterTag, newPreviewNonce, wantsMdPreviewEmbed } from "../../../server/files/mdPreviewEmbed";
-import { MD_PREVIEW_FROM_FRAME, MD_PREVIEW_FROM_HOST } from "../../../common/mdPreviewMessage";
+import { mdPreviewEmbedCsp, newPreviewNonce, wantsMdPreviewEmbed } from "../../../server/files/mdPreviewEmbed";
+import { mdPreviewReporterTag } from "../../../server/files/mdPreviewReporter";
+import { EXTERNAL_HREF, MD_PREVIEW_FROM_FRAME, MD_PREVIEW_FROM_HOST, OTHER_SCHEME_HREF } from "../../../common/mdPreviewMessage";
 
 // #2157. The preview document has to run ONE script — ours — while a `.md` this server never
 // sanitised sits in the same document and must go on running none. These are the pieces that
@@ -97,7 +98,10 @@ describe("mdPreviewReporterTag", () => {
   // And stops re-applying once the reader has taken over, or every scroll of theirs would be
   // undone by the next image that loads.
   it("stops re-applying once the reader has scrolled", () => {
-    expect(reporterSourceOf("n1")).toContain("if (!readerMoved) applyPlace()");
+    const source = reporterSourceOf("n1");
+    const watch = source.slice(source.indexOf("new ResizeObserver("));
+    expect(watch.indexOf("if (readerMoved) return;")).toBeGreaterThan(-1);
+    expect(watch.indexOf("if (readerMoved) return;")).toBeLessThan(watch.indexOf("applyPlace();"));
   });
 
   // It measures a document rendered from the file; it must never be built out of one. Nothing
@@ -113,17 +117,39 @@ describe("mdPreviewReporterTag", () => {
     expect(source).toContain("addEventListener('click'");
     expect(source).toContain("closest('a[href]')");
     expect(source).toContain("event.preventDefault()");
-    expect(source).toContain('post({ kind: "navigate", href })');
   });
 
-  // Decided on the attribute AS WRITTEN: a relative link resolves to this server's own URL, and
-  // must keep its default until #2268 gives it somewhere to go.
+  // #2268. A link to another file is handed over too, as written — the frame's own URL is this
+  // server's route, so following it there is a 404. The patterns are the ones common/ exports,
+  // built into the script, so these two lines and the specs on the patterns read the same rule.
+  it("hands a link to another file to the host, leaving anchors and other schemes alone", () => {
+    const source = reporterSourceOf("n1");
+    expect(source).toContain("if (!href || href.startsWith('#')) return;");
+    expect(source).toContain(`const external = ${EXTERNAL_HREF}.test(href);`);
+    expect(source).toContain(`if (!external && ${OTHER_SCHEME_HREF}.test(href)) return;`);
+    expect(source).toContain('post(external ? { kind: "navigate", href } : { kind: "open", href });');
+  });
+
+  // Decided on the attribute AS WRITTEN.
   it("recognises only an absolute http(s) href as external", () => {
-    const pattern = /if \(!href \|\| !(\/.+\/i)\.test\(href\)\) return;/.exec(reporterSourceOf("n1"))?.[1] ?? "";
-    const external = new RegExp(pattern.slice(1, -2), "i");
-    expect(["https://a.example/", "HTTP://a.example"].map((href) => external.test(href))).toEqual([true, true]);
-    expect(["docs/a.md", "/abs", "#top", "mailto:a@b", "javascript:void(0)", "//cdn.example/x"].map((href) => external.test(href))).toEqual([
+    expect(["https://a.example/", "HTTP://a.example"].map((href) => EXTERNAL_HREF.test(href))).toEqual([true, true]);
+    expect(["docs/a.md", "/abs", "#top", "mailto:a@b", "javascript:void(0)", "//cdn.example/x"].map((href) => EXTERNAL_HREF.test(href))).toEqual([
       false,
+      false,
+      false,
+      false,
+      false,
+      false,
+    ]);
+  });
+
+  // What is left to the browser: every href naming a scheme or a host. A path, relative or from
+  // the root, is not one — that is what the host opens as a file.
+  it("leaves another scheme or another host to the browser, and nothing that is a path", () => {
+    expect(
+      ["mailto:a@b", "javascript:void(0)", "//cdn.example/x", "file:///etc/hosts", "https://a.example/"].map((href) => OTHER_SCHEME_HREF.test(href)),
+    ).toEqual([true, true, true, true, true]);
+    expect(["docs/a.md", "./b.md", "../c.md", "/abs.md", "my file.md"].map((href) => OTHER_SCHEME_HREF.test(href))).toEqual([
       false,
       false,
       false,
@@ -154,5 +180,60 @@ describe("mdPreviewReporterTag", () => {
     const source = reporterSourceOf("n1");
     expect(source.startsWith("(() => {")).toBe(true);
     expect(source.trimEnd().endsWith("})();")).toBe(true);
+  });
+});
+
+// #2576. The outline's pick in the Preview: by position, checked against the text, from the parent
+// only, and reported back as the new place. Driven in a real browser in the PR's verification.
+describe("the reporter's heading jump", () => {
+  const tag = mdPreviewReporterTag("n1");
+
+  it("answers a heading request from its parent with a scroll to that heading", () => {
+    expect(tag).toContain("typeof data.heading === 'number' && typeof data.headingText === 'string'");
+    expect(tag).toContain("document.querySelectorAll('h1, h2, h3, h4, h5, h6')");
+    expect(tag).toContain('post({ kind: "scroll", scrollY: place });');
+  });
+
+  // The pick's heading is followed while images load above it, until the reader scrolls themselves.
+  it("keeps the picked heading as the place until the reader scrolls", () => {
+    expect(tag).toContain("anchor = target;");
+    expect(tag).toContain("if (anchor) place = Math.max(0, Math.round(anchor.getBoundingClientRect().top + scrollY));");
+    expect(tag).toContain("readerMoved = true;\n  anchor = null;");
+    // Not while the frame is hidden: a heading with no box measures 0.
+    expect(tag).toContain("if (anchor && anchor.getClientRects().length === 0) return;");
+  });
+
+  it("checks the heading at that position against the text before trusting it", () => {
+    expect(tag).toContain("if (at && norm(at.textContent) === norm(text)) return at;");
+    expect(tag).toContain("return same[occurrence] || same.find((h) => all.indexOf(h) >= index) || same[0] || at;");
+  });
+
+  it("still parses as a program with the heading branch in it", () => {
+    const body = tag.replace(/^<script[^>]*>/, "").replace(/<\/script>$/, "");
+    const diagnostics = ts.transpileModule(body, { reportDiagnostics: true, compilerOptions: { allowJs: true } }).diagnostics ?? [];
+    expect(diagnostics).toEqual([]);
+  });
+});
+
+// #2515. Every message carries the token the host gave this document; a page the frame is navigated
+// to has none. The token reaches a script, so only a well-formed one is written into it, quoted.
+describe("the reporter's token", () => {
+  const TOKEN = "0123456789abcdef-wire";
+
+  it("stamps every message it posts with the token it was given", () => {
+    const source = mdPreviewReporterTag("n1", TOKEN);
+    expect(source).toContain(`token: ${JSON.stringify(TOKEN)}`);
+    expect(source.match(/parent\.postMessage\(/g)).toHaveLength(1); // the one `post`, which every message goes through
+  });
+
+  it.each([
+    ["none", undefined],
+    ["an empty one", ""],
+    ["one too short", "short"],
+    ["one that would close the script", '"});</script><script>alert(1)//xxxx'],
+  ])("stamps null for %s", (_label, token) => {
+    const tag = mdPreviewReporterTag("n1", token);
+    expect(tag).toContain("token: null");
+    expect(tag.match(/<\/script>/g)).toHaveLength(1);
   });
 });

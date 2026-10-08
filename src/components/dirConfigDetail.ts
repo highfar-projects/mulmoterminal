@@ -30,6 +30,8 @@ export interface DirConfigDetailView {
   repoFile: string | null;
   rows: DirConfigRow[];
   source: DirConfigSource;
+  // The directory's own values for the keys the Settings form edits (#2722), as written.
+  formValues: Record<string, unknown>;
 }
 
 // The preview lists directories BY NAME, not in the recent-first order the launch chips use.
@@ -129,13 +131,10 @@ function describeBackground(background: PublicDirBackground): string {
 
 const stringList = (value: unknown): string[] => (Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : []);
 
-// What the sessions here run on: plain string fields, each its own row when set. A table rather
-// than near-identical `if`s, so the fork's `account` costs a row here instead of another branch
-// in extraRows below.
+// What the sessions here run on: plain string fields, each its own row when set.
 const STRING_FIELD_ROWS: [key: string, label: string][] = [
   ["provider", "Provider"],
   ["model", "Model"],
-  ["account", "Account"],
 ];
 
 function stringFieldRows(extras: Record<string, unknown>): DirConfigRow[] {
@@ -154,6 +153,11 @@ function extraRows(extras: Record<string, unknown>): DirConfigRow[] {
   if (skills.length) rows.push({ key: "skills", label: "Skill menu", value: skills.join(", "), color: null });
   const decks = stringList(extras.decks);
   if (decks.length) rows.push({ key: "decks", label: "Mulmo menu", value: decks.join(", "), color: null });
+  const mobileFileDirs = stringList(extras.mobileFileDirs);
+  if (mobileFileDirs.length) {
+    const extensions = stringList(extras.mobileFileExtensions).join(", ");
+    rows.push({ key: "mobileFiles", label: "Phone files", value: `${mobileFileDirs.join(", ")} (${extensions})`, color: null });
+  }
   const addDirs = stringList(extras.addDirs);
   if (addDirs.length) rows.push({ key: "addDirs", label: "Extra directories", value: addDirs.join(", "), color: null });
   // Both booleans are a setting, so the test is the TYPE, not truthiness — `false` is the whole
@@ -165,6 +169,8 @@ function extraRows(extras: Record<string, unknown>): DirConfigRow[] {
   if (buttons.length) rows.push({ key: "buttons", label: "Header buttons", value: buttons.join(", "), color: null });
   const chips = stringList(extras.chipLabels);
   if (chips.length) rows.push({ key: "chips", label: "Header chips", value: chips.join(", "), color: null });
+  const commands = stringList(extras.commandLabels);
+  if (commands.length) rows.push({ key: "commands", label: "Palette commands", value: commands.join(", "), color: null });
   const worktreeEnv = stringList(extras.worktreeEnvNames);
   if (worktreeEnv.length) rows.push({ key: "worktreeEnv", label: "Per-worktree env", value: worktreeEnv.join(", "), color: null });
   // Same reasoning as appendSystemPrompt above: only ever written `true` (see
@@ -198,7 +204,7 @@ export function dirConfigRows(config: unknown, extras: unknown = {}): DirConfigR
 }
 
 export function parseDirConfigDetail(data: unknown): DirConfigDetailView {
-  if (!isRecord(data)) return { exists: false, file: null, localFile: null, repoFile: null, rows: [], source: EMPTY_DIR_CONFIG_SOURCE };
+  if (!isRecord(data)) return { exists: false, file: null, localFile: null, repoFile: null, rows: [], source: EMPTY_DIR_CONFIG_SOURCE, formValues: {} };
   const source = isRecord(data.source) ? data.source : {};
   return {
     // Absent on the wire is read as "gone" rather than "fine": the only responses without it
@@ -215,5 +221,6 @@ export function parseDirConfigDetail(data: unknown): DirConfigDetailView {
       local: stringList(source.local),
       repo: stringList(source.repo),
     },
+    formValues: isRecord(data.formValues) ? data.formValues : {},
   };
 }

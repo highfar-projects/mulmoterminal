@@ -13,7 +13,7 @@ import { plugin as collectionPlugin } from "@mulmoclaude/collection-plugin/vue";
 import { plugin as htmlPlugin } from "@mulmoclaude/html-plugin/vue";
 import GenerateImagePlugin from "@mulmochat-plugin/generate-image/vue";
 import { plugin as mulmoScriptPlugin, MULMOSCRIPT_HOST_ADAPTER_KEY, type MulmoScriptHostAdapter } from "@mulmoclaude/mulmoscript-plugin/vue";
-import { plugin as shapeScriptPlugin } from "@mulmoclaude/shapescript-plugin/vue";
+import { plugin as shapeScriptPlugin } from "@gui-chat-plugin/shapescript/vue";
 import { AccountingView } from "@mulmoclaude/accounting-plugin/vue";
 import { wrapWithPluginRuntime } from "./composables/pluginRuntime";
 import CollectionCardView from "./components/CollectionCardView.vue";
@@ -29,7 +29,7 @@ import formCss from "@mulmoclaude/form-plugin/style.css?inline";
 import chartCss from "@mulmoclaude/chart-plugin/style.css?inline";
 import htmlCss from "@mulmoclaude/html-plugin/style.css?inline";
 import mulmoScriptCss from "@mulmoclaude/mulmoscript-plugin/style.css?inline";
-import shapeScriptCss from "@mulmoclaude/shapescript-plugin/style.css?inline";
+import shapeScriptCss from "@gui-chat-plugin/shapescript/style.css?inline";
 import { collectionShadowCss } from "./collectionShadowCss";
 // The accounting package ships its own self-contained Tailwind in style.css (its
 // content scan can't reach node_modules), imported as a STRING for shadow-DOM
@@ -175,7 +175,7 @@ const PACKAGES: Record<string, Registration> = {
     viewComponent: viewOf("@mulmoclaude/chart-plugin", chartPlugin.viewComponent),
     css: chartCss,
   },
-  "@mulmoclaude/shapescript-plugin": {
+  "@gui-chat-plugin/shapescript": {
     toolName: shapeScriptPlugin.toolDefinition.name,
     // The View needs the runtime as of shapescript-plugin 1.1.0: a model is now a
     // FILE, and the source editor reads and writes it with
@@ -190,7 +190,7 @@ const PACKAGES: Record<string, Registration> = {
     viewComponent: wrapWithPluginRuntime(
       "shapescript",
       shapeScriptPlugin.toolDefinition.name,
-      viewOf("@mulmoclaude/shapescript-plugin", shapeScriptPlugin.viewComponent),
+      viewOf("@gui-chat-plugin/shapescript", shapeScriptPlugin.viewComponent),
     ),
     css: shapeScriptCss,
     // The WebGL viewport lays out with an internal h-full chain rather than

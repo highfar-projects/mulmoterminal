@@ -1,0 +1,48 @@
+{
+  "manifest": {
+    "title": "Local (Express + SQLite + Vue)",
+    "description": "Runs on this computer only: an Express API, a SQLite file for data (Node's built-in node:sqlite), and a Vue screen. No cloud account, no billing."
+  },
+  "steps": {
+    "spec": {
+      "title": "Write the spec",
+      "description": "Fills in the spec templates for the base and the use case from the answers to the questions. Anything not yet decided goes on a list."
+    },
+    "prerequisites": {
+      "title": "Check the tools",
+      "description": "Checks Node (a version that has node:sqlite) and yarn."
+    },
+    "scaffold": {
+      "title": "App skeleton",
+      "description": "Creates the Express API, SQLite, the Vue screens and the starting point for tests, all in one folder."
+    },
+    "data": {
+      "title": "Data shape",
+      "description": "Turns the \"things it handles\" in the spec into SQLite tables, and writes migrations that can rebuild them, plus tests."
+    },
+    "api": {
+      "title": "API",
+      "description": "Turns the operations in the spec into an API, checks what comes in, and writes tests."
+    },
+    "ui": {
+      "title": "Screens",
+      "description": "Builds the screens in the spec with Vue and connects them to the API."
+    },
+    "auth": {
+      "title": "Sign-in",
+      "description": "Adds the sign-in method in the spec (if none is needed, makes the app open only from this computer)."
+    },
+    "run-check": {
+      "title": "Start it and check",
+      "description": "Builds it for production, starts it, and checks that the screens and the API respond."
+    },
+    "security": {
+      "title": "Security check",
+      "description": "Reads what was built the way an attacker would, following OWASP Top 10:2025, fixes the holes that can be exploited, confirms the fixes with tests, and writes a report. The result is checked by sending the running server requests shaped like real attacks (a different Host name, changes from another site, broken JSON)."
+    },
+    "handover": {
+      "title": "How to use it, and backups",
+      "description": "Writes in the README how to start it, where the data file is, and how to back it up."
+    }
+  }
+}

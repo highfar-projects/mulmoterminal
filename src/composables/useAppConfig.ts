@@ -1,8 +1,10 @@
+import { sanitizeTokenRotation, TOKEN_ROTATION_OFF, type TokenRotation } from "../../common/tokenRotation";
 import { getCurrentScope, onScopeDispose, ref, type Ref } from "vue";
 import { presetLabel, type CwdPreset } from "../components/presets";
 import { isManagedWorktreePath, worktreeLabel } from "../../common/worktreePath";
 import type { Launcher } from "../components/launchers";
 import { isCustomAgent, type CustomAgent } from "../../common/customAgents";
+import { sanitizePaletteAliases, sanitizePaletteFavorites, type PaletteAliases } from "../../common/paletteConfig";
 import { isAgentAccount, type AgentAccount } from "../../common/agentAccounts";
 import type { UserMcpServer } from "../components/userMcp";
 import type { QuickCommand } from "../../common/quickCommands";
@@ -24,7 +26,10 @@ import { setCopyOnSelect } from "./copyOnSelect";
 import { setQuestionPaneEnabled } from "./questionPane";
 import { setIssueWorkComments } from "./issueWorkComments";
 import { setShowLoadAverage } from "./showLoadAverage";
+import { setPaletteSearchBox } from "./paletteSearchBox";
+import { setRemoteServer } from "./remoteServer";
 import { setPlayfulEffects } from "./playfulEffects";
+import { setConfetti } from "./useConfetti";
 import { setDefaultAgent } from "./defaultAgent";
 import { seedLaunchAgentFromConfig } from "./useChatLauncher";
 import { setToolbarPins, toolbarPinsMark } from "./toolbarPins";
@@ -35,7 +40,11 @@ import { setWorklogEnabled, setWorklogIntervalHours } from "./worklog";
 import { setFeedRefreshEnabled, setCalendarSyncEnabled } from "./systemTasks";
 import { setSessionIdleReapDays, setSessionReapIntervalHours } from "./sessionReap";
 import { setHeaderConfigSummary } from "./headerConfigSummary";
+import { setGlobalHeaderChips } from "./headerChipsConfig";
+import { setGlobalHeaderButtons } from "./headerButtonsConfig";
 import { postConfigField } from "./postConfigField";
+import { postEntryChange, type EntryChange } from "./configEntryChange";
+import { isEntryProblem } from "../../common/agentEntries";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { configRetryDelayMs } from "./configRetryPolicy";
 
@@ -148,10 +157,17 @@ const launchers = ref<Launcher[]>([]);
 // The user's own ways of starting Claude Code, offered in the Agent Picker (#1414) — a SINGLETON
 // like the launchers above, and read-only here: config.json is the only place they can be set.
 const customAgents = ref<CustomAgent[]>([]);
+// The command palette's aliases and favorites (#2540): SINGLETONS for the same reason, and read-only
+// here — config.json is where they are written.
+const paletteAliases = ref<PaletteAliases>({});
+const paletteFavorites = ref<string[]>([]);
 
 // Second logins for claude / codex (#2215), offered when launching a cell. Read-only here, like the
 // custom agents: config.json and the mulmoterminal-model skill are where they are added.
 const accounts = ref<AgentAccount[]>([]);
+
+// Several subscriptions behind one home (#2919). Read-only here: it gates the token usage screen.
+const tokenRotation = ref<TokenRotation>(TOKEN_ROTATION_OFF);
 
 // User-added HTTP MCP servers merged into the single-view session's --mcp-config —
 // SINGLETON like the others.
@@ -468,7 +484,10 @@ function applyGlobalSettings(c: Record<string, unknown>, pinsMark: number): void
   setIssueWorkComments(c.issueWorkComments);
   // Whether the grid header carries this machine's load average (#1786). On unless opted out.
   setShowLoadAverage(c.showLoadAverage);
+  setPaletteSearchBox(c.paletteSearchBox);
+  setRemoteServer(c.remoteServer);
   setPlayfulEffects(c.playfulEffects);
+  setConfetti(c.confetti);
   // Which pinned favourites the toolbar carries (#1984). Absent, it carries none. The mark is what
   // stops a read that started before a save from putting the old list back — see toolbarPins.ts.
   setToolbarPins(c.toolbarPins, pinsMark);
@@ -499,6 +518,8 @@ function applyGlobalSettings(c: Record<string, unknown>, pinsMark: number): void
 // on this side had a reason to know their values.
 function adoptServerSideSettings(c: Record<string, unknown>): void {
   setHeaderConfigSummary(c);
+  setGlobalHeaderChips(c.chips);
+  setGlobalHeaderButtons(c.buttons);
   setPrWorkdirFooter(c.prWorkdirFooter);
   setAppendSystemPrompt(c.appendSystemPrompt);
   setDecisionDigest(c.decisionDigest);
@@ -517,7 +538,10 @@ function adoptServerSideSettings(c: Record<string, unknown>): void {
 function adoptListConfig(c: Record<string, unknown>): void {
   launchers.value = listOf(c.launchers, isLauncher);
   customAgents.value = listOf(c.customAgents, isCustomAgent);
+  paletteAliases.value = sanitizePaletteAliases(c.paletteAliases);
+  paletteFavorites.value = sanitizePaletteFavorites(c.paletteFavorites);
   accounts.value = listOf(c.accounts, isAgentAccount);
+  tokenRotation.value = sanitizeTokenRotation(c.tokenRotation);
   quickCommands.value = listOf(c.quickCommands, isQuickCommand);
   userMcpServers.value = listOf(c.userMcpServers, isUserMcpServer);
 }
@@ -553,11 +577,34 @@ async function saveLaunchers(next: Launcher[]): Promise<boolean> {
   if (r.ok) launchers.value = Array.isArray(r.value) ? r.value.filter(isLauncher) : [];
   return r.ok;
 }
-// Persist the second-subscription accounts (partial update).
-async function saveAccounts(next: AgentAccount[]): Promise<boolean> {
-  const r = await postConfigField("accounts", next);
-  if (r.ok) accounts.value = Array.isArray(r.value) ? r.value.filter(isAgentAccount) : [];
-  return r.ok;
+// Add or remove ONE custom agent or account (#2620), against the list on disk — a tab sending its
+// whole list would drop an entry added elsewhere since it loaded, as the palette favorites below say.
+async function changeCustomAgents(action: "add" | "remove", payload: Record<string, unknown>): Promise<EntryChange> {
+  const change = await postEntryChange(`/api/config/custom-agents/${action}`, payload, isEntryProblem);
+  if (change.ok) customAgents.value = listOf(change.body.customAgents, isCustomAgent);
+  return change;
+}
+async function changeAccounts(action: "add" | "remove", payload: Record<string, unknown>): Promise<EntryChange> {
+  const change = await postEntryChange(`/api/config/accounts/${action}`, payload, isEntryProblem);
+  if (change.ok) accounts.value = listOf(change.body.accounts, isAgentAccount);
+  return change;
+}
+// Add or remove ONE palette favorite (#2546). Against the list on disk, not by sending this tab's
+// copy: another tab or a hand edit may have changed it since, and a whole list would erase that.
+async function setPaletteFavorite(key: string, favorite: boolean): Promise<boolean> {
+  try {
+    const res = await fetchWithTimeout("/api/config/palette-favorites", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ key, favorite }),
+    });
+    if (!res.ok) return false;
+    const saved: unknown = await res.json();
+    paletteFavorites.value = sanitizePaletteFavorites(isRecord(saved) ? saved.paletteFavorites : undefined);
+    return true;
+  } catch {
+    return false;
+  }
 }
 // Persist which kinds of push to send (partial update).
 async function savePushKinds(next: PushKind[]): Promise<boolean> {
@@ -793,7 +840,10 @@ export function useAppConfig() {
     saveRepoDir,
     launchers,
     customAgents,
+    paletteAliases,
+    paletteFavorites,
     accounts,
+    tokenRotation,
     quickCommands,
     userMcpServers,
     ...soundSettings,
@@ -809,7 +859,9 @@ export function useAppConfig() {
     savePushKinds,
     savePrRepos,
     saveLaunchers,
-    saveAccounts,
+    changeCustomAgents,
+    changeAccounts,
+    setPaletteFavorite,
     saveQuickCommands,
     saveUserMcpServers,
   };

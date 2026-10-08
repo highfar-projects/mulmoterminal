@@ -8,10 +8,27 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { blueprintManifestSchema, incompatibility, type BaseManifest, type UsecaseManifest } from "../../../common/blueprint/manifest.js";
 import { basePlanSchema, composePlan, usecaseStepsSchema, BLUEPRINT_GATES, type ComposedStep } from "../../../common/blueprint/plan.js";
-import { answerProblems, hearingSchema, unansweredQuestions } from "../../../common/blueprint/hearing.js";
+import {
+  acceptedAnswers,
+  answerProblems,
+  hearingSchema,
+  unansweredQuestions,
+  type HearingAnswer,
+  type HearingQuestion,
+} from "../../../common/blueprint/hearing.js";
 import { presetsFileSchema } from "../../../common/blueprint/presets.js";
 
 const PACKS_DIR = join(import.meta.dirname, "..", "..", "..", "blueprints");
+
+// The bases that build a web app: they end with a security review and a page on how to start using it.
+const WEB_BASES = ["local", "firebase", "cloudflare", "supabase"];
+// What may follow the security review on each web base: the publish that ships what was reviewed, and the hand-over.
+const AFTER_SECURITY: Record<string, string[]> = {
+  local: ["handover"],
+  firebase: ["deploy-production"],
+  cloudflare: ["deploy", "handover"],
+  supabase: ["deploy", "handover"],
+};
 
 const readJson = (pack: string, file: string): unknown => JSON.parse(readFileSync(join(PACKS_DIR, pack, file), "utf8"));
 
@@ -87,8 +104,41 @@ describe("blueprint packs", () => {
     },
   );
 
+  // A base's report is the fallback every build on it ends with; one its checks never look at is a page nobody writes.
+  it.each(bases.flatMap(({ dir, manifest }) => (manifest.kind === "base" && manifest.report ? [[dir, manifest.report] as const] : [])))(
+    "%s: the base's report is one its checks require",
+    (dir, report) => {
+      const checks = readdirSync(join(PACKS_DIR, dir, "checks")).map((file) => readFileSync(join(PACKS_DIR, dir, "checks", file), "utf8"));
+      expect(checks.some((source) => source.includes(report))).toBe(true);
+    },
+  );
+
+  // Every app built on a web base finishes with a first page saying how to start it and what to try.
+  it.each(WEB_BASES)("%s ends every build with a page on how to start using the app", (dir) => {
+    const manifest = bases.find((entry) => entry.dir === dir)?.manifest;
+    expect(manifest?.kind === "base" ? manifest.report : undefined).toBe(".blueprint/start-here.md");
+  });
+
   it.each(usecases.map(({ dir }) => dir))("%s: the hearing parses", (dir) => {
     expect(hearingSchema.safeParse(readJson(dir, "hearing.json")).error?.issues ?? []).toEqual([]);
+  });
+});
+
+describe("security review", () => {
+  // Each pack carries its own copy, since packs are installed apart; the report's format is one contract.
+  it("judges the report the same way on every web base", () => {
+    const copies = WEB_BASES.map((dir) => readFileSync(join(PACKS_DIR, dir, "checks", "security-report.sh"), "utf8"));
+    expect(new Set(copies).size).toBe(1);
+  });
+
+  // The publish checks share one render check; a fix to one copy that misses another is how they drifted before.
+  it("renders a published page the same way in every pack that ships the render check", () => {
+    const copies = packDirs
+      .map((dir) => join(PACKS_DIR, dir, "checks", "page-renders.sh"))
+      .filter((file) => existsSync(file))
+      .map((file) => readFileSync(file, "utf8"));
+    expect(copies.length).toBeGreaterThan(1);
+    expect(new Set(copies).size).toBe(1);
   });
 });
 
@@ -134,6 +184,27 @@ describe.each(pairs.map(({ base, usecase }) => [`${base.dir} x ${usecase.dir}`, 
     expect(ids.indexOf("deploy-dev")).toBeGreaterThan(ids.indexOf("scaffold"));
   });
 
+  // A web app is attacked through what it serves; the review has to see the finished code, so nothing that
+  // changes the app may come after it — only the hand-over, or the publish that ships what was reviewed.
+  it.runIf(WEB_BASES.includes(base.dir))("reviews security last, right before the app is handed over or published", () => {
+    const ids = steps.map((step) => step.id);
+    expect(ids.indexOf("security")).toBeGreaterThan(0);
+    // Moving copied records into production changes no code, so it may follow the publish it waits for.
+    const after = ids.slice(ids.indexOf("security") + 1).filter((id) => id !== "import-production");
+    expect(after).toEqual(AFTER_SECURITY[base.dir]);
+  });
+
+  // A copied source's actions are built after its must-haves are proven and before the review that closes the build;
+  // the records reach production right after the publish they wait for — last of all on Firebase, before the hand-over
+  // that describes them on Cloudflare.
+  it.runIf(usecase.dir === "from-collection")("builds the source's actions after the must-haves, and moves production records last", () => {
+    const ids = steps.map((step) => step.id);
+    expect(ids.indexOf("actions")).toBe(ids.indexOf("acceptance") + 1);
+    expect(ids.indexOf("actions")).toBeLessThan(ids.indexOf("security"));
+    if (base.dir === "firebase") expect(ids.at(-1)).toBe("import-production");
+    if (base.dir === "cloudflare" || base.dir === "supabase") expect(ids.indexOf("import-production")).toBe(ids.indexOf("deploy") + 1);
+  });
+
   it("uses only known gates", () => {
     expect(steps.flatMap((step) => step.gates).filter((gate) => !BLUEPRINT_GATES.includes(gate))).toEqual([]);
   });
@@ -158,6 +229,7 @@ describe.each(presetCases)("preset %s", (_label, dir, manifest, preset) => {
   it("answers every question the form would require, with answers it would accept", () => {
     expect(unansweredQuestions(hearing, preset.answers).map((question) => question.id)).toEqual([]);
     expect(answerProblems(hearing, preset.answers)).toEqual([]);
+    expect(acceptedAnswers(hearing, preset.answers)).toEqual(preset.answers);
   });
 
   // An example of a document blueprint is started in an empty folder: every file its answers name must arrive
@@ -165,7 +237,9 @@ describe.each(presetCases)("preset %s", (_label, dir, manifest, preset) => {
   it("brings every file its answers name, and no file they do not", () => {
     const samplesDir = join(PACKS_DIR, dir, "presets", preset.id);
     const samples = existsSync(samplesDir) ? readdirSync(samplesDir).sort() : [];
-    const named = ["documents", "targets", "sources"].flatMap((id) => {
+    // The answers that name files are the questions the form lets a person pick files for.
+    const fileQuestions = hearing.questions.filter((question) => question.pick === "files").map((question) => question.id);
+    const named = fileQuestions.flatMap((id) => {
       const answer = preset.answers[id];
       return typeof answer === "string"
         ? answer
@@ -212,7 +286,36 @@ describe.each(nextCases)("next step %s", (_label, from, step) => {
   });
 
   it("fills in only answers its interview would accept", () => {
-    expect(answerProblems(hearingSchema.parse(readJson(step.usecase, "hearing.json")), step.answers)).toEqual([]);
+    // Every answer is checked, a question behind a condition as well: the form fills them all in.
+    expect(acceptedAnswers(hearingSchema.parse(readJson(step.usecase, "hearing.json")), step.answers)).toEqual(step.answers);
+  });
+
+  // The changed files arrive one per line, so they go to a question that takes lines.
+  it.runIf(step.changedFilesTo !== undefined)("sends the files the build changed only to a question that takes one per line", () => {
+    const target = hearingSchema.parse(readJson(step.usecase, "hearing.json")).questions.find((question) => question.id === step.changedFilesTo);
+    expect(target?.kind).toBe("text");
+    expect(target?.lines).toBe(true);
+  });
+
+  // Every answer a choice question can be given: one option for a select; for a multiselect, each alone and all at once.
+  const choicesOf = (question: HearingQuestion): HearingAnswer[] => {
+    const options = question.options ?? [];
+    return question.kind === "multiselect" ? [options, ...options.map((option) => [option])] : options;
+  };
+
+  // A carried answer is whatever the finished build was given, so every choice it could have been must be one the
+  // next interview accepts; a free-text answer can only go to a free-text question.
+  it("carries only from questions the finished build asks, to questions the next one asks, any answer the first could have", () => {
+    const finished = hearingSchema.parse(readJson(from.slug, "hearing.json")).questions;
+    const next = hearingSchema.parse(readJson(step.usecase, "hearing.json"));
+    Object.entries(step.carry).forEach(([to, fromId]) => {
+      const source = finished.find((question) => question.id === fromId);
+      const target = next.questions.find((question) => question.id === to);
+      expect(source, `${from.slug} asks ${fromId}`).toBeDefined();
+      expect(target, `${step.usecase} asks ${to}`).toBeDefined();
+      if (source?.options) choicesOf(source).forEach((choice) => expect(acceptedAnswers(next, { [to]: choice })).toEqual({ [to]: choice }));
+      else expect(target?.kind).toBe(source?.kind);
+    });
   });
 });
 
@@ -237,6 +340,60 @@ const fileListQuestions = listQuestions.filter(([, question]) => /このフォ�
 describe.each(fileListQuestions)("%s asks for files in the folder", (_label, question) => {
   it("offers them to pick from", () => {
     expect(question.pick).toBe("files");
+  });
+});
+
+// A document build has no specification, so its review gate is only useful if it says what to read instead.
+const documentReviewSteps = usecases.flatMap(({ dir, manifest }) =>
+  manifest.kind === "usecase" && manifest.bases.includes("docs")
+    ? usecaseStepsSchema
+        .parse(readJson(dir, "steps.json"))
+        .steps.filter((entry) => entry.gates.includes("review"))
+        .map((entry) => [`${dir}/${entry.id}`, entry] as const)
+    : [],
+);
+
+// The other side of that: a gate naming reads is taken to be about those files, not the spec, and loses the spec panel.
+// So an app pack's review gate, which reviews the spec, must name none.
+const appReviewSteps = [
+  ...bases.flatMap(({ dir }) =>
+    basePlanSchema
+      .parse(readJson(dir, "plan.json"))
+      .steps.filter((entry) => entry.gates.includes("review"))
+      .map((entry) => [`${dir}/${entry.id}`, entry] as const),
+  ),
+  ...usecases.flatMap(({ dir, manifest }) =>
+    manifest.kind === "usecase" && !manifest.bases.includes("docs")
+      ? usecaseStepsSchema
+          .parse(readJson(dir, "steps.json"))
+          .steps.filter((entry) => entry.gates.includes("review"))
+          .map((entry) => [`${dir}/${entry.id}`, entry] as const)
+      : [],
+  ),
+].filter(([label]) => !label.startsWith("docs/"));
+
+describe.each(appReviewSteps)("app step %s, reviewed before it runs", (_label, reviewed) => {
+  it("names no reads, so its gate keeps the spec panel", () => {
+    expect(reviewed.reads).toEqual([]);
+  });
+});
+
+describe.each(documentReviewSteps)("document step %s, reviewed before it runs", (label, reviewed) => {
+  it("names what the person reads before approving it", () => {
+    expect(reviewed.reads.length).toBeGreaterThan(0);
+  });
+
+  // Where a check writes a readable view of a JSON record, the gate points at the view, not the record.
+  it("reads the readable view of a record where the pack writes one", () => {
+    const [dir] = label.split("/");
+    const checks = readdirSync(join(PACKS_DIR, dir ?? "", "checks"))
+      .filter((file) => file.endsWith(".mjs"))
+      .map((file) => readFileSync(join(PACKS_DIR, dir ?? "", "checks", file), "utf8"))
+      .join("\n");
+    const shadowed = reviewed.reads.filter(
+      (file) => file.endsWith(".json") && [".md", ".txt"].some((view) => checks.includes(`"${file.replace(/\.json$/u, view)}"`)),
+    );
+    expect(shadowed).toEqual([]);
   });
 });
 

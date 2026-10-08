@@ -1,6 +1,6 @@
 ---
 name: mulmoterminal-keys
-description: Bind keyboard shortcuts and fix keyboard/clipboard behaviour in MulmoTerminal. **Writes `keymap`**, which Settings cannot set at all — its Keyboard shortcuts section is read-only, listing every action bound or not plus a `send` row. **Explains `copyOnSelect`, `questionPaneEnabled` and `terminalSubmit`**, which have their own Settings controls (two checkboxes and a picker) — point the user at those, and write the key yourself only when they have no browser to hand. Covers zooming a cell, jumping to whichever agent is waiting for you, opening and closing terminals, copy/paste, sending raw bytes to the terminal so a key the shell understands can be reached from a key your keyboard has (Cmd+Right for end-of-line), copying by selecting with no key pressed, and the Enter-vs-newline binding. Use when the user wants a shortcut or hotkey, wants to switch cells or reach a waiting agent without the mouse, wants selecting text to copy it, or reports that Shift+Enter submits their prompt instead of adding a line, that Enter drops to a new line instead of sending, that Ctrl+C stopped interrupting, that a shortcut does nothing, or that on a Mac Cmd+Left / Cmd+Right / Cmd+Delete behave as though the Cmd were ignored — moving or deleting one character, the same as the unmodified key.
+description: Bind keyboard shortcuts and fix keyboard/clipboard behaviour in MulmoTerminal. **Writes `keymap`** — Settings → Keyboard shortcuts also sets or clears ONE action's key by pressing it (single keystrokes; a two-key sequence and the `send` list are still written here), and its Recommended keys block adds this platform's starter set. **Explains `copyOnSelect`, `questionPaneEnabled` and `terminalSubmit`**, which have their own Settings controls (two checkboxes and a picker) — point the user at those, and write the key yourself only when they have no browser to hand. Covers zooming a cell, jumping to whichever agent is waiting for you, opening and closing terminals, copy/paste, sending raw bytes to the terminal so a key the shell understands can be reached from a key your keyboard has (Cmd+Right for end-of-line), copying by selecting with no key pressed, and the Enter-vs-newline binding. Use when the user wants a shortcut or hotkey, wants to switch cells or reach a waiting agent without the mouse, wants selecting text to copy it, or reports that Shift+Enter submits their prompt instead of adding a line, that Enter drops to a new line instead of sending, that Ctrl+C stopped interrupting, that a shortcut does nothing, or that on a Mac Cmd+Left / Cmd+Right / Cmd+Delete behave as though the Cmd were ignored — moving or deleting one character, the same as the unmodified key.
 ---
 
 # Keyboard, shortcuts and clipboard
@@ -21,12 +21,21 @@ does not add a `send` to the keymap — it **makes that the entire keymap**, del
 binding the user had. Nothing warns, and the reply is a success.
 
 So a keymap write always sends the **complete** keymap: what step 1 read, plus the change. Read it,
-merge in memory, post the whole thing. Every `keymap` example below shows one setting on its own for
+merge in memory, post the whole thing. An entry naming an action this version does not know (a typo like
+`zoom-toogle`, or a newer release's action) is kept in the file whatever you post, including when you leave
+it out (`GET /api/config` does not return it) — to remove one, edit `config.json` directly. Every `keymap` example below shows one setting on its own for
 readability — none of them is a body to post as-is unless the user genuinely has nothing else bound.
 
-Settings has a **Keyboard shortcuts** section, but it is **read-only** — it lists every action and
-its current binding, plus a `send` row: one per configured entry, or a single "Not set" placeholder
-when there are none. Point the user at it after writing, as the check.
+Settings has a **Keyboard shortcuts** section: every action and its current binding, plus a `send` row
+(one per configured entry, or a single "Not set" placeholder). Each action row has **Change**, which
+records the next keystroke pressed and saves it at once (a single keystroke — a two-key sequence and
+the `send` list are still written here), and **Clear**. A binding that would stop the server from
+starting is refused there, and one the browser keeps is saved with a warning. Point the user at it
+after writing, as the check — or at Change, when all they want is one single-key shortcut. Below the list, **Recommended keys**
+adds this browser's platform's starter set (Mac: the Up/Down pair of Arrows plus the macOS
+line-editing `send` set; Windows/Linux: all four Arrows) in one click — only to actions that are
+unbound and keys nothing starts with, so it never replaces a binding. Anything beyond that set, or a
+different key, is still this skill's job.
 
 ## Open with a proposal, not a question — **on the keymap path only**
 
@@ -148,9 +157,23 @@ binding you add is a key the program inside the terminal (Claude Code, `vim`, `l
 | `terminal-close` | Close the current terminal | **yes** |
 | `terminal-restart` | Restart the agent in the current terminal — same cell, same directory, same conversation | **yes** |
 | `terminal-move-prev` / `terminal-move-next` | Move the current terminal one place earlier / later (left / right in the grid and strip, up / down in the roster). Manual order only; in auto / priority order it does nothing | no — un-zoomed it moves the cursor's cell |
-| `files-find` | Open a file BY NAME in the Files pane beside the current terminal: a fuzzy search over every file in that project, opening what is picked with the tree expanded to it. Opens the pane first if it is closed | **yes** |
-| `files-search` | Search the CONTENTS of the files in that project — the companion to `files-find`. Results are grouped by file with the matching lines under them; picking one opens the file and puts the editor on that line. Literal by default with regex and match-case toggles, and smart case otherwise (a lower-case query matches either case). In a git repository `.gitignore` applies and files the agent just created are searched too; elsewhere no ignore file is read. Opens the pane first if it is closed | **yes** |
-| `command-palette` | Open the command palette: every grid action by name, with its current binding, disabled with a reason when the view cannot run it. The toolbar's Commands button opens it too, so it is safe to leave unbound; if they want VS Code's key, write it `"Cmd+Shift+p"` (lowercase, see below) | no |
+| `terminal-timeline` / `terminal-talk` / `terminal-park` | Activity timeline (Claude only) / talk to another terminal / set aside-wake, for the current terminal | no — un-zoomed, the cursor's cell |
+| `terminal-copy-code` / `terminal-insert-path` / `terminal-reveal` / `terminal-voice` / `terminal-diff` / `terminal-note` | The row-2 copy button, the path menu's insert-path and reveal, the mic, the changes panel (worktree with changes) and the note, for the current terminal | no — un-zoomed, the cursor's cell |
+| `pane-files` / `pane-prompts` / `pane-transcript` / `pane-tools` / `pane-canvas` / `pane-collections` | Open or close that pane beside the current terminal (enlarging a tiled one first) | no — un-zoomed, the cursor's cell |
+| `files-find` | Open a file BY NAME in the Files pane beside the current terminal: a fuzzy search over every file in that project, opening what is picked with the tree expanded to it. Opens the pane first if it is closed | **yes** — or the full-screen Files view is open |
+| `files-search` | Search the CONTENTS of the files in that project — the companion to `files-find`. Results are grouped by file with the matching lines under them; picking one opens the file and puts the editor on that line. Literal by default with regex and match-case toggles, and smart case otherwise (a lower-case query matches either case). In a git repository `.gitignore` applies and files the agent just created are searched too; elsewhere no ignore file is read. Opens the pane first if it is closed | **yes** — or the full-screen Files view is open |
+| `files-tab-close` | Close the Files pane's front tab, saving it first; the neighbouring tab comes forward, and the last one leaves the pane empty. Does nothing while the pane is closed (it does not open it) | **yes** — or the full-screen Files view is open |
+| `files-tab-next` | Bring the Files pane's next tab forward, going round at the end; the file left is saved. Does nothing while the pane is closed | **yes** — or the full-screen Files view is open |
+| `files-tab-prev` | The mirror of `files-tab-next` | **yes** — or the full-screen Files view is open |
+| `files-insert-selection` | Puts `@file#L10-20` for the Files pane's selected lines at the enlarged terminal's prompt (not sent), saving unsaved edits first; nothing while the pane is closed | **yes** |
+| `command-palette` | Open the command palette: every grid action by name, with its current binding, disabled with a reason when the view cannot run it, plus the app's screens to go to, the grid's terminals by path (part of the path, the memo or the summary finds one), each Settings section, and it switches the theme, the app's language, the sound, the enlarged view and the cell order in place. It also lists the acting terminal's header buttons and `commands` (the mulmoterminal-header skill), every collection's collection-level actions, and "New terminal: <dir>" for the workspace and each recent directory, which opens the default agent there (Claude when the default is a custom agent), plus "Start <agent> here" for every Agent Picker option (custom agents included) and "Launch: <label>" for every `launchers` entry, started in the acting terminal's directory (the workspace when there is none), next to it, and "Resume: <title>" for that directory's past conversations in the default agent's history (Claude's for a custom default or Shell), leaving out any already open or held elsewhere, and each Wiki page ("Wiki: <title>", found by title, slug, description or tags), which opens that page, and the open PRs and Issues of the repos set for the GitHub view ("PR #12: <title>", found by title, repo or number typed bare or as `app#12`), which open in a new tab on their forge (GitHub or GitLab); that list is reused for a few minutes; and the recent prompts sent in the acting terminal (the Prompts pane's window; "Prompt: <first line>", newest first, found by any of their text), which go back to its input unsent; and the acting terminal's Run-menu scripts ("Run: <name>", found by name or command) and Skill-menu skills ("Skill: /<name>"), which do what the menu does — a script runs in a new command cell, a skill is sent into that terminal's session (a command or launcher cell has neither menu, so lists neither). Rows picked often and recently rank first among equal matches (and with nothing typed), remembered per browser once the pick ran (terminals, launchers, a terminal's commands, collection actions, Wiki pages, the sound switch, past prompts, scripts, skills and the `/` / `#` rows are not, since what they point to can change). A leading `>` narrows it to what runs (actions, those commands, collection actions, the new-terminal, start, launch and resume rows, and the scripts and skills), `@` to terminals, `/` opens the Files pane's find-by-name and `#` its search-in-files with the rest of the text already typed in (both need an enlarged terminal, like those actions, or the full-screen Files view open; a leading `/` always means file names, so a terminal outside home is found by its absolute path after `@`), and `?` lists the symbols. The key opens it on every screen (a single key; a two-key sequence only on the grid). The toolbar's Commands button opens it too, so it is safe to leave unbound; if they want VS Code's key, write it `"Cmd+Shift+p"` (lowercase, see below) | no |
+| `focus-mode` | Full screen, plus (Chrome / Edge / Arc, on https or localhost) Keyboard Lock on the tab keys only — Cmd/Ctrl+W, T, N, Shift+T — so bindings on them fire (spelled as the browser reports them: `"Cmd+w"`, `"Cmd+Shift+t"` on a Mac; `"Ctrl+w"`, `"Ctrl+Shift+T"` elsewhere — the startup warning names a misspelling); Esc still leaves full screen. Safari / Firefox / plain http from another machine get full screen only and a notice. Terminals screen only (key or palette) | no |
+| `screen-terminals` … `screen-skills` (terminals, collections, feeds, accounting, files, wiki, prs, rooms, blueprints, worklog, skills) | Go to that screen, like the toolbar's doors; prs / rooms / worklog do nothing until set up. Works on every screen (single keys; sequences only on the grid) | no |
+| `settings-open` / `sound-toggle` / `view-toggle` | Open Settings / sound on-off / enlarged view roster-strip | no |
+| `confetti` | Throw **confetti** over the page, as a mix of three styles picked at random from the `confetti.styles` list (all five by default; the config skill documents it, and what else sets it off) | no |
+| `order-auto` / `order-manual` / `order-priority` | Set the cell order | no |
+| `page-next` / `page-prev` | Next / previous page of the tiled grid; no wrap. Also a palette row | no |
+| `terminal-reopen` | Reopen the most recently closed terminal beside the current one (agent cells resume their conversation, a shell comes back fresh); every closed one is also listed in the palette as "Reopen: …" | no |
 | `copy` | Copy the terminal's selection. Acts **only** when something is selected, so `Ctrl+C` stays usable as interrupt — with no selection the key reaches the program untouched | no |
 | `paste` | Paste into the terminal | no |
 
@@ -161,8 +184,8 @@ falls back to the workspace rather than doing nothing. `terminal-new-adjacent` i
 it starts a shell immediately and shows no form at all, which is why it still needs a current cell.
 
 `terminal-new` does not have to be bound to be reachable: the toolbar's `＋` does the same thing.
-`terminal-new-here` has no button any more — without it, open the panel from the toolbar and pick
-the directory there.
+`terminal-new-here` has one too: the `+` on a terminal's second header row, beside the code-block
+copy button.
 
 **Always bind `zoom-toggle` or `next-attention`.** Everything marked "yes" needs something already
 enlarged, so a keymap without one of those two can't be used without a mouse click first. Offer
@@ -212,11 +235,14 @@ Each is checked against the traps below. The guide documents them at
   uppercase letter.) The deviation is macOS's, so a browser following the spec reports `"P"` — which
   makes a `Cmd+Shift`+letter binding right for one platform or the other, not both. Offer a
   non-printing key (`Cmd+Shift+ArrowUp`) to anyone who browses from both.
-- **Never `Cmd`/`Ctrl` + `W` / `T` / `N`** — the browser reserves them; the binding silently does
-  nothing.
+- **Never the platform's tab key + `W` / `T` / `N`** — `Cmd` on macOS, `Ctrl` on Windows and Linux.
+  The browser reserves them; the binding silently does nothing. (A Mac's `"Ctrl+t"` works — written
+  lowercase, like every letter without Shift.) The one exception is `focus-mode` in Chrome / Edge /
+  Arc, which hands these keys to the page while it is on — so a binding on one works only there.
 - Two actions on one keystroke only fires the first. The startup check warns; don't write one.
 - **`terminal-close` ends the session with no confirmation.** Only bind it if asked, and suggest a
-  combination they won't hit by accident.
+  combination they won't hit by accident. `terminal-reopen` is the way back: it resumes the
+  conversation of the last closed agent cell, so offer the pair together.
 - **`terminal-restart` also acts with no confirmation, and costs a resume.** It kills the agent
   mid-turn if it is working, and the conversation is then read back from its transcript — real
   tokens, not a free reload. Offer it only to someone who says they change MCP servers, config or
@@ -231,6 +257,12 @@ Each is checked against the traps below. The guide documents them at
   remembering that `Alt` is `Option` on a Mac; a user who already bound `Cmd+Shift+p` to
   `files-find` (#2125) can keep it — only suggest moving it if they ask for the palette. For `files-search`, VS Code's is `Cmd+Shift+F` / `Ctrl+Shift+F`, and both are free here —
   write the Mac one `"Cmd+Shift+f"`, lowercase, for the same reason.
+- **The Files tab keys cannot take VS Code's.** `Cmd+W` / `Ctrl+W` close the browser tab and
+  `Ctrl+Tab` switches browser tabs, so the page never receives them. (A binding on the platform's tab
+  key — `Cmd` on macOS, `Ctrl` elsewhere — plus `W`, `T`, `N` or `Shift`+`T` gets a startup warning
+  and a *never fires* mark in Settings; a Mac's `"Ctrl+t"`, lowercase, is fine.) Offer a sequence after the
+  prefix the user already has — `"Cmd+k w"`, `"Cmd+k ]"`, `"Cmd+k ["` — and say the tabs' own ×
+  and ←/→ work unbound, so these are for someone who wants them from the terminal.
 
 ### Two-key sequences — `"Cmd+k p"`
 
@@ -337,6 +369,46 @@ For anything else, build the entry from the `bytes` table below rather than from
 
 The browser reads it **on page load — reload the tab.** A hand-edit made while the server is running
 also needs a server restart before it reaches the page. Then check Settings → Keyboard shortcuts.
+
+## `paletteAliases` / `paletteFavorites` — the command palette's own shortcuts
+
+Global config only (`~/.mulmoterminal/config.json`); Settings has no control for them. Both name a
+palette row by its **row key** — the name the palette gives each row:
+
+| row | key |
+|---|---|
+| a grid action | its action id, e.g. `zoom-toggle`, `files-find` |
+| a screen | `screen:<id>`, e.g. `screen:wiki`, `screen:collections` |
+| a Settings section | `settings:<tab>`, e.g. `settings:theme` |
+| a switch | `choice:<id>`, e.g. `choice:theme:dark`, `choice:language:ja` |
+| a new terminal in a directory | `launch:<absolute path>` |
+| an agent here | `start:agent:<pick>`, e.g. `start:agent:codex`, `start:agent:custom:<id>` |
+| a header command of the acting terminal | `command:<id>` — only rows the acting terminal has |
+| a collection action | `collection:<slug>:<action id>` — in the collections of the open project |
+| a past conversation | `resume:<account>:<id>` (`resume::<id>` for the default login) |
+| a Wiki page | `wiki:<slug>` |
+| a PR / Issue | `github:pr:<owner/repo>#<n>`, `github:issue:<owner/repo>#<n>` |
+
+Do not write any other key. A terminal (`terminal:<uid>`), a launcher (`start:launcher:<n>`) and a
+past prompt (`prompt:<n>`) are numbered by position and change between openings; the `?`, `/` and
+`#` rows never reach an alias or a favorite.
+
+- **`paletteAliases`** — `{ "<alias>": "<row key>" }`. Typing the alias exactly (case and the spaces
+  around it do not count) puts that row first; the alias is also searched as part of the row. Only
+  within the scope typed: `@ wk` does not reach a screen.
+- **`paletteFavorites`** — `["<row key>", …]`. With nothing typed, these come first, in this order,
+  above what the palette's own use ordering puts first.
+
+```json
+{
+  "paletteAliases": { "wk": "screen:wiki", "z": "zoom-toggle" },
+  "paletteFavorites": ["screen:wiki", "settings:theme"]
+}
+```
+
+Favorites can also be added and removed from the palette itself: **Tab** on a row, then "Add to favorites" (it writes `paletteFavorites`); "Copy its key" there gives the key to write in `paletteAliases`. A key that names no row is ignored, not an error. Aliases are capped at 200 and favorites at 50.
+Merge into the existing file (read it first); after editing by hand, restart the server and reload
+the tab.
 
 ## `copyOnSelect` — copy just by selecting
 

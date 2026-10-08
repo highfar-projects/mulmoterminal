@@ -21,11 +21,15 @@ let ownerRefusal: string | Refusal | null = null;
 let busyRun: string | null = null;
 const askedFolders: string[] = [];
 const createdAnswers: unknown[] = [];
+const createdLanguages: unknown[] = [];
+const snapshotAsks: { slug: string; records: boolean }[] = [];
+const PEOPLE_EMAIL = { collection: "people", field: "email", label: "Email" };
 
 const executor: BlueprintExecutor = {
   create: async (request) => {
     calls.push(["create", request.projectDir, request.steps.length]);
     createdAnswers.push(request.answers ?? {});
+    createdLanguages.push(request.language);
     return "run-00000001";
   },
   view: async (runId) => {
@@ -36,8 +40,8 @@ const executor: BlueprintExecutor = {
     if (stepId === "refused") throw new BlueprintRefusal("cannot approve a step that is pending");
     throw new Error("unexpected");
   },
-  ask: async (runId, stepId, question, sessionId) => {
-    calls.push(["ask", runId, stepId, question, sessionId]);
+  ask: async (runId, stepId, question, sessionId, choices) => {
+    calls.push(["ask", runId, stepId, question, sessionId, choices]);
     throw new BlueprintRefusal("no agent is working on this build");
   },
   list: async () => [],
@@ -46,6 +50,10 @@ const executor: BlueprintExecutor = {
     return busyRun;
   },
   specView: async () => ({ spec: "# spec", openQuestions: null, chat: [], revising: false }),
+  targetsView: async (runId) => {
+    if (runId !== "run-1") throw new BlueprintRefusal(`no blueprint run ${runId}`);
+    return { targets: [{ id: "a", title: "A", files: [], status: "todo" }], problem: null };
+  },
   reportView: async (runId) => {
     if (runId !== "run-1") throw new BlueprintRefusal(`no blueprint run ${runId}`);
     return {
@@ -58,6 +66,10 @@ const executor: BlueprintExecutor = {
   say: async (runId, message) => {
     calls.push(["say", runId, message]);
     throw new BlueprintRefusal("the spec can be discussed only while it waits for review");
+  },
+  archive: async (runId, archived) => {
+    calls.push(["archive", runId, archived]);
+    throw new BlueprintRefusal({ code: "agent-working" });
   },
   recover: async () => undefined,
 };
@@ -92,6 +104,19 @@ beforeAll(async () => {
     isTrusted: async (dir) => trusted.has(dir),
     workspace: WORKSPACE,
     home: WORKSPACE,
+    savedFolders: () => [],
+    collections: {
+      list: async () => [{ slug: "books", title: "Books", kind: "collection" }],
+      snapshot: async (slug, nowMs, records) => {
+        snapshotAsks.push({ slug, records });
+        if (slug === "huge" || slug === "app:huge") return { kind: "too-large", bytes: 300 * 1024 * 1024 };
+        if (slug === "app:signed-out") return { kind: "signed-out" };
+        if (slug === "app:partial") return { kind: "not-a-reader", collections: ["ballots", "topics"] };
+        const files = [{ path: ".blueprint/source/source.json", content: `{"takenAtMs":${nowMs}}` }];
+        if (slug === "people") return { kind: "ok", files, personal: { fields: [PEOPLE_EMAIL], members: 2 }, fingerprint: "sha256:people" };
+        return slug === "books" ? { kind: "ok", files, personal: { fields: [], members: 0 }, fingerprint: "sha256:books" } : { kind: "unknown" };
+      },
+    },
     ensureOwner: async () => {
       if (ownerRefusal) throw new BlueprintRefusal(ownerRefusal);
     },
@@ -206,6 +231,16 @@ describe("GET /api/blueprints/runs/:id/report", () => {
   });
 });
 
+describe("GET /api/blueprints/runs/:id/targets", () => {
+  it("returns the build's work list, and refuses an unknown run", async () => {
+    expect(await (await fetch(`${base}/api/blueprints/runs/run-1/targets`)).json()).toEqual({
+      targets: [{ id: "a", title: "A", files: [], status: "todo" }],
+      problem: null,
+    });
+    expect((await fetch(`${base}/api/blueprints/runs/run-9/targets`)).status).not.toBe(200);
+  });
+});
+
 describe("the spec conversation routes", () => {
   it("reads the spec", async () => {
     const res = await fetch(`${base}/api/blueprints/runs/run-00000001/spec`);
@@ -221,6 +256,19 @@ describe("the spec conversation routes", () => {
 
   it("refuses an empty message", async () => {
     expect((await post("/api/blueprints/runs/run-00000001/spec/messages", { message: "   " })).status).toBe(400);
+  });
+
+  it("passes the archive flag on, and answers a refusal with 409", async () => {
+    calls.length = 0;
+    const res = await post("/api/blueprints/runs/run-00000001/archive", { archived: true });
+    expect(res.status).toBe(409);
+    expect(calls).toEqual([["archive", "run-00000001", true]]);
+  });
+
+  it("refuses an archive request without a boolean, before reaching the build", async () => {
+    calls.length = 0;
+    expect((await post("/api/blueprints/runs/run-00000001/archive", { archived: "yes" })).status).toBe(400);
+    expect(calls).toEqual([]);
   });
 });
 
@@ -252,9 +300,52 @@ describe("POST /api/blueprints/runs in a folder another build uses", () => {
     try {
       expect((await post("/api/blueprints/runs", { projectDir: project, base: "docs", usecase: "review", answers: REVIEW_ANSWERS })).status).toBe(200);
       expect(createdAnswers.at(-1)).toEqual(REVIEW_ANSWERS);
+      expect(createdLanguages.at(-1)).toBeUndefined();
     } finally {
       await rm(project, { recursive: true, force: true });
     }
+  });
+
+  it("hands the screen's language to the build, and refuses one it does not know before creating anything", async () => {
+    const project = await mkdtemp(path.join(tmpdir(), "blueprint-language-"));
+    trusted.add(project);
+    try {
+      const body = { projectDir: project, base: "docs", usecase: "review", answers: REVIEW_ANSWERS };
+      expect((await post("/api/blueprints/runs", { ...body, language: "en" })).status).toBe(200);
+      expect(createdLanguages.at(-1)).toBe("en");
+      const before = createdLanguages.length;
+      expect((await post("/api/blueprints/runs", { ...body, language: "fr" })).status).toBe(400);
+      expect(createdLanguages).toHaveLength(before);
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("POST /api/blueprints/runs that leaves out a question with a default", () => {
+  const POLISH = { targets: "a.md", style: "chaff の既定のまま" };
+  // The kind is asked with chaff's own style, and a start that leaves it out takes its default.
+  const LEFT_TO_CHAFF = "指定しない（chaff に任せる）";
+
+  const createdWith = async (answers: Record<string, unknown>) => {
+    const project = await mkdtemp(path.join(tmpdir(), "blueprint-defaults-"));
+    trusted.add(project);
+    try {
+      const res = await post("/api/blueprints/runs", { projectDir: project, base: "docs", usecase: "polish", answers });
+      return { status: res.status, answers: createdAnswers.at(-1) };
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  };
+
+  it("starts with a required question's default, and with the answer given when there is one", async () => {
+    expect(await createdWith(POLISH)).toEqual({ status: 200, answers: { ...POLISH, kind: LEFT_TO_CHAFF, maxFiles: 5 } });
+    expect(await createdWith({ ...POLISH, maxFiles: 2 })).toEqual({ status: 200, answers: { ...POLISH, kind: LEFT_TO_CHAFF, maxFiles: 2 } });
+    expect(await createdWith({ ...POLISH, kind: "報告書" })).toEqual({ status: 200, answers: { ...POLISH, kind: "報告書", maxFiles: 5 } });
+  });
+
+  it("leaves a blank optional question blank", async () => {
+    expect((await createdWith({ ...POLISH, avoid: "" })).answers).toEqual({ ...POLISH, kind: LEFT_TO_CHAFF, maxFiles: 5, avoid: "" });
   });
 });
 
@@ -340,39 +431,165 @@ describe("POST /api/blueprints/runs from an example that brings sample documents
   });
 });
 
-describe("GET /api/blueprints/presets", () => {
-  it("names the sample documents an example brings", async () => {
-    const listing = z
-      .object({ presets: z.array(z.object({ id: z.string(), usecase: z.string(), samples: z.array(z.string()) })) })
-      .parse(await (await fetch(`${base}/api/blueprints/presets`)).json());
-    expect(listing.presets).toContainEqual(expect.objectContaining({ id: "itaku-keiyaku", usecase: "review", samples: ["contract.txt"] }));
-    expect(listing.presets).toContainEqual(expect.objectContaining({ id: "home-library", samples: [] }));
+describe("POST /api/blueprints/runs from a collection", () => {
+  const FROM_ANSWERS = {
+    source: "books",
+    copyRecords: false,
+    whyApp: "to own it as code",
+    audience: "自分だけ",
+    signIn: "なし（このパソコンからだけ使う）",
+    dataSensitivity: "身内だけの情報",
+    uiLanguage: "日本語",
+  };
+  const startFrom = (project: string, source: string) =>
+    post("/api/blueprints/runs", { projectDir: project, base: "local", usecase: "from-collection", answers: { ...FROM_ANSWERS, source } });
+  const emptyTrusted = async () => {
+    const project = await mkdtemp(path.join(tmpdir(), "blueprint-source-"));
+    trusted.add(project);
+    return project;
+  };
+
+  it("lists the collections a build may start from", async () => {
+    const res = await fetch(`${base}/api/blueprints/collections`);
+    expect(await res.json()).toEqual({ collections: [{ slug: "books", title: "Books", kind: "collection" }] });
   });
 
-  it("lists the shipped presets with the usecase each belongs to", async () => {
-    const listing = z
-      .object({ presets: z.array(z.object({ id: z.string(), usecase: z.string(), base: z.string() })) })
-      .parse(await (await fetch(`${base}/api/blueprints/presets`)).json());
-    expect(listing.presets).toContainEqual(expect.objectContaining({ id: "home-library", usecase: "product", base: "local" }));
-  });
-});
-
-describe("GET /api/blueprints/pairs/:base/:usecase", () => {
-  it("shows the interview and the composed steps of a real pair", async () => {
-    const preview = z
-      .object({
-        hearing: z.object({ questions: z.array(z.object({ id: z.string() })) }),
-        steps: z.array(z.object({ id: z.string(), gates: z.array(z.string()) })),
-      })
-      .parse(await (await fetch(`${base}/api/blueprints/pairs/firebase/internal`)).json());
-    expect(preview.hearing.questions[0].id).toBe("appName");
-    // The spec is written first, and read by a person before anything is created in their cloud.
-    expect(preview.steps[0].id).toBe("spec");
-    expect(preview.steps[1].gates).toContain("review");
+  it("places the copy of the chosen collection, taken at the server's clock, then starts", async () => {
+    const project = await emptyTrusted();
+    try {
+      expect((await startFrom(project, "books")).status).toBe(200);
+      expect(await readFile(path.join(project, ".blueprint/source/source.json"), "utf8")).toBe('{"takenAtMs":42}');
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
   });
 
-  it("refuses a pair that does not compose", async () => {
-    expect((await fetch(`${base}/api/blueprints/pairs/internal/firebase`)).status).toBe(400);
+  it("records the slug it copied, without the spaces around the answer", async () => {
+    const project = await emptyTrusted();
+    try {
+      expect((await startFrom(project, "  books ")).status).toBe(200);
+      expect(createdAnswers.at(-1)).toMatchObject({ source: "books" });
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it("asks for the records only when the answer says to copy them", async () => {
+    const project = await emptyTrusted();
+    try {
+      await post("/api/blueprints/runs", { projectDir: project, base: "local", usecase: "from-collection", answers: { ...FROM_ANSWERS, copyRecords: true } });
+      expect(snapshotAsks.at(-1)).toEqual({ slug: "books", records: true });
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+    const other = await emptyTrusted();
+    try {
+      await startFrom(other, "books");
+      expect(snapshotAsks.at(-1)).toEqual({ slug: "books", records: false });
+    } finally {
+      await rm(other, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses a copy too large to take, saying how large and what to do instead", async () => {
+    const project = await emptyTrusted();
+    try {
+      expect(await startFrom(project, "huge")).toEqual({
+        status: 400,
+        body: { error: expect.stringMatching(/"huge" with its records would be 300 MB, more than the 200 MB.*without the records/) },
+      });
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it("asks once before copying personal data, placing nothing, and starts once it is confirmed", async () => {
+    const project = await emptyTrusted();
+    const before = calls.length;
+    try {
+      const asked = await startFrom(project, "people");
+      expect(asked).toEqual({
+        status: 409,
+        body: {
+          error: expect.stringContaining("people.email (Email), the email addresses of the app's 2 members"),
+          refusal: { code: "personal-data", fields: [PEOPLE_EMAIL], members: 2 },
+        },
+      });
+      expect(calls).toHaveLength(before);
+      await expect(readFile(path.join(project, ".blueprint/source/source.json"), "utf8")).rejects.toThrow();
+      const answers = { ...FROM_ANSWERS, source: "people" };
+      const confirmed = await post("/api/blueprints/runs", {
+        projectDir: project,
+        base: "local",
+        usecase: "from-collection",
+        answers,
+        personalDataConfirmed: true,
+      });
+      expect(confirmed.status).toBe(200);
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses an app that is no longer offered without showing its id", async () => {
+    const project = await emptyTrusted();
+    try {
+      expect(await startFrom(project, "app:gone0123")).toEqual({
+        status: 400,
+        body: { error: "that shared app is no longer offered; choose another source from the list" },
+      });
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it("names a shared app too large to copy without its id", async () => {
+    const project = await emptyTrusted();
+    try {
+      const res = await startFrom(project, "app:huge");
+      expect(res).toEqual({ status: 400, body: { error: expect.stringContaining("the copy of the shared app with its records would be 300 MB") } });
+      expect(res.body).toEqual({ error: expect.not.stringContaining("app:huge") });
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    ["app:signed-out", "press Connect to sign in with Google"],
+    ["app:partial", "does not read every record of ballots, topics"],
+  ])("refuses to copy %s's records, and says what to do", async (source, message) => {
+    const project = await emptyTrusted();
+    try {
+      expect(await startFrom(project, source)).toEqual({ status: 409, body: { error: expect.stringContaining(message) } });
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses a collection it does not know, before creating anything", async () => {
+    const project = await emptyTrusted();
+    const before = calls.length;
+    try {
+      expect(await startFrom(project, "nope")).toEqual({ status: 400, body: { error: expect.stringContaining('no collection "nope"') } });
+      expect(calls).toHaveLength(before);
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses over an earlier copy, and leaves it as it was", async () => {
+    const project = await emptyTrusted();
+    try {
+      expect((await startFrom(project, "books")).status).toBe(200);
+      await writeFile(path.join(project, ".blueprint/source/source.json"), "earlier");
+      expect(await startFrom(project, "books")).toEqual({
+        status: 409,
+        body: { error: expect.any(String), refusal: { code: "samples-clash", files: [".blueprint/source/source.json"] } },
+      });
+      expect(await readFile(path.join(project, ".blueprint/source/source.json"), "utf8")).toBe("earlier");
+    } finally {
+      await rm(project, { recursive: true, force: true });
+    }
   });
 });
 
@@ -402,6 +619,39 @@ describe("POST /api/blueprints/runs/:id/events and /ask", () => {
 
   it("answers 409 to a question nobody is working on", async () => {
     expect((await post("/api/blueprints/runs/run-00000001/ask", { stepId: "x", sessionId: "s1", question: "q" })).status).toBe(409);
+  });
+
+  it("hands the executor the parsed choices, the recommended one marked", async () => {
+    calls.length = 0;
+    await post("/api/blueprints/runs/run-00000001/ask", {
+      stepId: "x",
+      sessionId: "s1",
+      question: "q",
+      choices: "Fix: cheap\nLeave: free",
+      recommend: "Leave",
+    });
+    expect(calls).toEqual([
+      [
+        "ask",
+        "run-00000001",
+        "x",
+        "q",
+        "s1",
+        [
+          { label: "Fix", description: "cheap" },
+          { label: "Leave", description: "free", recommended: true },
+        ],
+      ],
+    ]);
+  });
+
+  it("refuses choices it cannot read with 400 and the reason, before asking anyone", async () => {
+    calls.length = 0;
+    expect(await post("/api/blueprints/runs/run-00000001/ask", { stepId: "x", sessionId: "s1", question: "q", choices: "A\nB", recommend: "C" })).toEqual({
+      status: 400,
+      body: { error: 'not asked: RECOMMEND "C" is not one of the choices\' labels' },
+    });
+    expect(calls).toEqual([]);
   });
 
   it("answers 409 for a run that does not exist", async () => {

@@ -2,7 +2,7 @@ import { ref, computed } from "vue";
 import type { ITheme } from "@xterm/xterm";
 import { THEME_IDS, type ThemeId } from "../../common/themeIds";
 import { applyCustomTheme, clearCustomTheme, customTermTheme, customThemeList, findCustomTheme, readBuiltinVars } from "./customThemes";
-import { isLightTheme, isThemeIdLike, resolveThemeVars, type ThemeVars } from "../../common/themeVars";
+import { isLightTheme, isThemeIdLike, resolveThemeVars, type CustomThemeInput, type ThemeVars } from "../../common/themeVars";
 
 export type { ThemeId };
 
@@ -98,7 +98,7 @@ export const THEMES: (Theme & { id: ThemeId })[] = [
 ];
 
 const STORAGE_KEY = "theme";
-const DEFAULT_THEME: ThemeId = "midnight";
+export const DEFAULT_THEME: ThemeId = "midnight";
 
 // Validate against THEMES, not the id list: an id is only usable if it has a
 // theme object here. A THEME_IDS entry with no matching THEMES entry would
@@ -211,6 +211,18 @@ export function initTheme() {
  *  when the config lands. */
 export function refreshTheme() {
   applyTheme(themeId.value);
+}
+
+/** Paint a theme that is not saved yet — Settings' colour editor trying a change before it is kept.
+ *  `refreshTheme` puts the saved selection back. */
+export function previewCustomTheme(theme: CustomThemeInput): boolean {
+  return applyCustomTheme(theme, builtins());
+}
+
+/** Every variable of a theme, its base filled in: what the colour editor shows for a key the theme
+ *  does not set itself. Null when it cannot be completed. */
+export function resolvedThemeVars(theme: CustomThemeInput): ThemeVars | null {
+  return resolveThemeVars(theme, builtins());
 }
 
 // The three dots the picker shows for a custom theme, from its own resolved colours.

@@ -49,6 +49,36 @@ describeSh("review: findings.mjs read", () => {
     expect(readFileSync(join(harness.fake(), "cite.log"), "utf8")).toContain("第12条に定める業務");
   });
 
+  it("writes the findings as a person reads them before approving the proposals", () => {
+    record([finding()], []);
+    expect(node("findings.mjs", ["read"]).code).toBe(0);
+    const readable = readFileSync(join(harness.dir(), ".blueprint/findings.txt"), "utf8");
+    expect(readable).toContain(finding().summary);
+    expect(readable).toContain("> — contract.txt");
+  });
+
+  it("names where each quotation was read the way the contract numbers it, from chaff's tree", () => {
+    writeFake("tree.json", {
+      "contract.txt": {
+        kind: "doc",
+        address: "",
+        children: [
+          {
+            kind: "article",
+            address: "1",
+            attrs: { label: "第1条", heading: "目的" },
+            children: [{ kind: "item", address: "1.2", attrs: { label: "２" }, children: [] }],
+          },
+        ],
+      },
+    });
+    record([finding({ citations: [{ source: "contract.txt", address: "1.2", quote: "第12条に定める業務" }] })], []);
+    expect(node("findings.mjs", ["read"]).code).toBe(0);
+    const readable = readFileSync(join(harness.dir(), ".blueprint/findings.txt"), "utf8");
+    expect(readable).toContain("> — contract.txt 第1条第2項");
+    expect(readable).not.toContain("contract.txt 1.2");
+  });
+
   it("passes when a structure result is dismissed with a reason instead", () => {
     record([], [{ rule: "dangling-reference", file: "contract.txt", line: 2, why: "別の契約の条を指している" }]);
     expect(node("findings.mjs", ["read"]).code).toBe(0);

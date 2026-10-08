@@ -52,6 +52,25 @@ describeSh("verify: extract.mjs", () => {
     expect(cited).toContain("合計 35,000円");
   });
 
+  it("writes the facts as a person reads them, once they check out, and not when they do not", () => {
+    expect(node("extract.mjs").code).toBe(0);
+    expect(readFileSync(join(harness.dir(), ".blueprint/facts.txt"), "utf8")).toContain("- 2026-10-01（金） 09:00–11:30 東京駅から新大阪駅 · trip.md h1");
+    facts({ events: [{ ...depart, start: "08:00" }] });
+    write(".blueprint/facts.txt", "left from before");
+    expect(node("extract.mjs").code).toBe(1);
+    expect(readFileSync(join(harness.dir(), ".blueprint/facts.txt"), "utf8")).toBe("left from before");
+  });
+
+  it("names where each fact was read by the document's own heading, when chaff's tree has one", () => {
+    writeFake("tree.json", {
+      "trip.md": { kind: "doc", address: "", children: [{ kind: "section", address: "h1", attrs: { heading: "旅程" }, children: [] }] },
+    });
+    expect(node("extract.mjs").code).toBe(0);
+    const readable = readFileSync(join(harness.dir(), ".blueprint/facts.txt"), "utf8");
+    expect(readable).toContain("東京駅から新大阪駅 · trip.md 「旅程」");
+    expect(readable).not.toContain("trip.md h1");
+  });
+
   it("fails on a value the AI did not read from the quoted text", () => {
     facts({ events: [{ ...depart, start: "08:00" }] });
     const result = node("extract.mjs");
@@ -79,7 +98,7 @@ describeSh("verify: extract.mjs", () => {
 
   it("fails when nothing was extracted", () => {
     write(".blueprint/facts.json", {});
-    expect(node("extract.mjs").stderr).toContain("holds no events, amounts or totals");
+    expect(node("extract.mjs").stderr).toContain("holds no events, amounts, totals or products");
   });
 
   it("refuses a quotation from a file that is not one of the documents", () => {

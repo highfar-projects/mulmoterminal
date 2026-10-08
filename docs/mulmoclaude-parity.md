@@ -173,12 +173,12 @@ the parent-side route. Both sit behind per-minute budgets
 (`server/backends/viewRateLimit.ts`), images in a roomier bucket than actions
 because a gallery's first paint is legitimately dozens of fetches.
 
-Two differences remain, both benign but real:
+`GET …/view-data` reads through `manageCollection`'s `getItems` on both hosts, so
+`?ids=` / `?fields=`, the `{ collection, count, items }` shape and the refusal of
+an unprojected read past `MAX_UNSELECTIVE_ITEMS` are the same (#2901).
 
-- **`GET …/view-data` ignores `ids` / `fields`.** MulmoClaude routes that read
-  through `manageCollection`'s `getItems`; MulmoTerminal returns every enriched
-  record. A view that passes `?fields=…` (as the core doc's examples do) gets a
-  superset, so it renders correctly — it just transfers more than it asked for.
+One difference remains, benign but real:
+
 - **The registry is list + import only** — no preview or export route.
 
 ### 5. `kind: "agent"` collection actions run visible, not hidden

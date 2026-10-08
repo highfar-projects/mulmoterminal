@@ -38,11 +38,12 @@ const EMPTY = {
   backgroundImage: null,
   buttons: null,
   chips: null,
+  commands: [],
   skills: null,
   decks: null,
+  mobileFiles: null,
   provider: null,
   model: null,
-  account: null,
   addDirs: null,
   appendSystemPrompt: null,
   worktreeEnv: null,
@@ -171,17 +172,18 @@ describe("loadDirConfig", () => {
       orderPriority: 5,
       theme: "nord",
       colors: null,
-      sound: path.join(dir, "a.mp3"),
+      sound: { source: "file", path: path.join(dir, "a.mp3") },
       sounds: {},
       icon: null,
       backgroundImage: null,
       buttons: null,
       chips: null,
+      commands: [],
       skills: ["review", "commit"], // trimmed, deduped, empties dropped
       decks: ["decks/talk.json"], // the same treatment
+      mobileFiles: null,
       provider: null,
       model: null,
-      account: null,
       addDirs: null,
       appendSystemPrompt: false,
       worktreeEnv: { PORT: { kind: "port", base: 3000 } },
@@ -292,6 +294,48 @@ describe("loadDirConfig", () => {
   });
 });
 
+describe("mobileFiles", () => {
+  it("resolves declared directories inside the project and narrows the extensions", () => {
+    const { dir, cleanup } = withConfig({ mobileFiles: { dirs: ["output", " output ", "docs/out"], extensions: [".MD", "pdf", "env"] } });
+    mkdirSync(path.join(dir, "output"));
+    mkdirSync(path.join(dir, "docs", "out"), { recursive: true });
+    expect(loadDirConfig(dir).mobileFiles).toEqual({ dirs: [path.join(dir, "output"), path.join(dir, "docs", "out")], extensions: ["md", "pdf"] });
+    cleanup();
+  });
+
+  it.each([
+    ["a climb out", { dirs: ["../"], extensions: ["md"] }],
+    ["an absolute path", { dirs: ["/tmp"], extensions: ["md"] }],
+    ["a missing directory", { dirs: ["nope"], extensions: ["md"] }],
+    ["a file, not a directory", { dirs: ["file.md"], extensions: ["md"] }],
+    ["no allowed extension", { dirs: ["output"], extensions: ["env", "sh"] }],
+    ["an empty list", { dirs: [], extensions: ["md"] }],
+    ["a malformed value", "output"],
+  ])("drops the whole key for %s", (_label, value) => {
+    const { dir, cleanup } = withConfig({ mobileFiles: value });
+    mkdirSync(path.join(dir, "output"));
+    writeFileSync(path.join(dir, "file.md"), "x");
+    expect(loadDirConfig(dir).mobileFiles).toBeNull();
+    cleanup();
+  });
+
+  it.each([[".git"], ["node_modules/pkg"], ["out/.cache"], ["link-to-hidden"]])("drops a hidden or vendored root (%s)", (ref) => {
+    const { dir, cleanup } = withConfig({ mobileFiles: { dirs: [ref], extensions: ["md"] } });
+    [".git", "node_modules/pkg", "out/.cache", ".hidden"].forEach((sub) => mkdirSync(path.join(dir, sub), { recursive: true }));
+    symlinkSync(path.join(dir, ".hidden"), path.join(dir, "link-to-hidden"));
+    expect(loadDirConfig(dir).mobileFiles).toBeNull();
+    cleanup();
+  });
+
+  it("refuses a directory that is a symlink out of the project", () => {
+    const outside = tmp();
+    const { dir, cleanup } = withConfig({ mobileFiles: { dirs: ["link"], extensions: ["md"] } });
+    symlinkSync(outside, path.join(dir, "link"));
+    expect(loadDirConfig(dir).mobileFiles).toBeNull();
+    cleanup();
+  });
+});
+
 describe("dirConfigWriteTarget", () => {
   // Built through `path` so inputs and expectations carry the running platform's drive
   // and separators — the function returns path.resolve()'d dirs, which on Windows are
@@ -396,6 +440,15 @@ describe("publicDirConfig / dirSoundFor", () => {
 });
 
 describe("per-kind directory sounds", () => {
+  // The all-kind `sound` takes a preset as `sounds` does (#2726): the Settings form offers the same
+  // choice for both, and a preset there used to be read as a path and silently dropped.
+  it("takes a preset as the all-kind sound too", () => {
+    const { dir, cleanup } = withConfig({ sound: "preset:coin" });
+    expect(dirSoundFor(dir, "waiting")).toEqual({ source: "preset", id: "coin" });
+    expect(dirSoundFor(dir, null)).toEqual({ source: "preset", id: "coin" });
+    cleanup();
+  });
+
   it("overrides the all-kind sound for the kind it names", () => {
     const { dir, cleanup } = withConfig({ sound: "./all.mp3", sounds: { waiting: "./ask.mp3" } });
     writeFileSync(path.join(dir, "all.mp3"), "x");
@@ -467,6 +520,7 @@ describe("dirConfigDetail", () => {
       skills: ["deploy"],
       buttons: [{ id: "b1", label: "Deploy", run: "shell", cmd: "make deploy" }],
       chips: ["git", { label: "Build", text: "yarn build" }],
+      commands: [],
       appendSystemPrompt: false,
     });
     const { extras } = dirConfigDetail(dir);
@@ -499,13 +553,15 @@ describe("dirConfigDetail", () => {
     expect(extras).toEqual({
       provider: null,
       model: null,
-      account: null,
       skills: null,
       decks: null,
+      mobileFileDirs: [],
+      mobileFileExtensions: [],
       addDirs: null,
       appendSystemPrompt: null,
       buttonLabels: [],
       chipLabels: [],
+      commandLabels: [],
       autoIcon: null,
       worktreeEnvNames: [],
       devcontainer: null,

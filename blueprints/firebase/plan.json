@@ -60,11 +60,18 @@
       "gates": ["billing"]
     },
     {
+      "id": "security",
+      "title": "セキュリティ診断",
+      "description": "本番に公開する前に、OWASP Top 10:2025 に沿って作ったものを攻撃する側の目で読み、突ける穴を直してエミュレータの試験で確かめ、報告を書く。直したものは開発用に公開し直して、画面が壊れていないことまで確かめる。",
+      "skill": "skills/security",
+      "check": "sh \"$BLUEPRINT_BASE/checks/security.sh\""
+    },
+    {
       "id": "deploy-production",
       "title": "本番に公開",
       "description": "開発用で確かめたものと同じビルドを本番に公開する。",
       "skill": "skills/deploy-production",
-      "check": "sh \"$BLUEPRINT_BASE/checks/deploy-check.sh\" prod",
+      "check": "sh \"$BLUEPRINT_BASE/checks/deploy-check.sh\" prod && sh \"$BLUEPRINT_BASE/checks/start-here.sh\"",
       "gates": ["deploy-production"]
     }
   ]

@@ -12,6 +12,8 @@ export interface SortModeButton {
 /** Every mode, in the order the menu lists them. */
 export const SORT_MODES: readonly SortMode[] = ["auto", "manual", "priority"];
 
+export const isSortMode = (value: string): value is SortMode => SORT_MODES.some((mode) => mode === value);
+
 const ICON: Record<SortMode, string> = {
   auto: "sort",
   manual: "reorder",

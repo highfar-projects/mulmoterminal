@@ -22,6 +22,7 @@ import {
   planMsOverride,
   MS_OVERRIDE_ENTRY,
   parseTmuxPanePids,
+  parseTmuxPaneCwds,
   isScrubbedGlobalEnvEntry,
   tmuxClientUnsetNames,
   isPsmuxVersion,
@@ -559,6 +560,19 @@ describe("parseTmuxPanePids", () => {
 
   it("ignores a row it cannot read rather than inventing a pid", () => {
     expect(parseTmuxPanePids(["", "not-a-pid mt-aaaa", "0 mt-bbbb", "-3 mt-cccc", "2220"].join("\n"))).toEqual(new Map());
+  });
+});
+
+// A pane standing in a worktree is what keeps it off the removal list, so a path that is dropped
+// or cut short here offers a worktree somebody's shell is in.
+describe("parseTmuxPaneCwds", () => {
+  it("keeps our panes' directories whole, spaces included", () => {
+    const stdout = ["mt-aaaa\t/repo/wt one", "other\t/elsewhere", "mt-bbbb\t/repo/wt-two"].join("\n");
+    expect(parseTmuxPaneCwds(stdout)).toEqual(["/repo/wt one", "/repo/wt-two"]);
+  });
+
+  it("ignores a row without a tab or without a path", () => {
+    expect(parseTmuxPaneCwds(["", "mt-aaaa /no/tab", "mt-bbbb\t", "mt-cccc\t  "].join("\n"))).toEqual([]);
   });
 });
 

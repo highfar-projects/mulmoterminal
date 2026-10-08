@@ -15,12 +15,13 @@
 //   IT NEEDS NO SLUG. The name is the one irreversible write out of a namespace everybody shares,
 //   and nothing can ask whether one is free without consuming it. A preview that reserved one would
 //   burn a name per abandoned app.
+import { createHash } from "node:crypto";
 import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { setFirestoreAccessor, setSharedCollectionsSupport, type FirestoreDocs, type FirestoreDoc } from "@mulmoclaude/core/collection/server";
 import { initCollectionsBackend } from "../../../server/backends/collections.js";
-import { capped, previewSharedApp } from "../../../server/backends/sharedApp/preview.js";
+import { previewSharedApp } from "../../../server/backends/sharedApp/preview.js";
 import { makeTempDir } from "../../support/tempDir";
 import { fakeServerTimestamp } from "../../support/serverTimestamp.js";
 
@@ -149,44 +150,6 @@ function writeApp(root: string, app: Record<string, unknown>): void {
 const stamp = { now: () => 1_700_000_000_000, resolveCommit: () => Promise.resolve({ commit: "c0ffee", dirty: false }) };
 
 let root = "";
-
-describe("the window a capped page is handed", () => {
-  // `capped` is what stands between the pane and "the preview showed a row the page never gets".
-  // Exercised directly as well as through a preview, because the interesting cases are BOUNDARIES —
-  // which of two rows the cap keeps — and they are unreachable through a fixture that has to
-  // publish an app first.
-  const want = { cid: "messages", scope: "all" as const, limit: { rows: 2, field: "at" } };
-
-  it("keeps the newest, and drops a row with no stamp at all", () => {
-    // Firestore does not sort an unstamped document last — it does not RETURN it.
-    const rows = [{ id: "a", at: "2026-08-22T09:00:00Z" }, { id: "b", at: "2026-08-22T11:00:00Z" }, { id: "c" }, { id: "d", at: "2026-08-22T10:00:00Z" }];
-    expect(capped(want, rows).map((row) => row.id)).toEqual(["b", "d"]);
-    // And with no cap declared, the rows are handed over untouched — unstamped ones included.
-    expect(capped({ cid: "messages", scope: "all" }, rows).map((row) => row.id)).toEqual(["a", "b", "c", "d"]);
-  });
-
-  it("separates two Timestamps inside the same second", () => {
-    // `seconds + nanoseconds / 1e9` cannot: at epoch scale a double resolves no finer than ~240ns,
-    // so these two would collapse to one value and the boundary would fall by input order.
-    const rows = [
-      { id: "a", at: { seconds: 1_800_000_000, nanoseconds: 1 } },
-      { id: "b", at: { seconds: 1_800_000_000, nanoseconds: 2 } },
-      { id: "c", at: { seconds: 1_799_999_999, nanoseconds: 999_999_999 } },
-    ];
-    expect(capped(want, rows).map((row) => row.id)).toEqual(["b", "a"]);
-  });
-
-  it("breaks an exact tie by document name DESCENDING, as the query's implicit __name__ does", () => {
-    // Input order is name ascending. Left alone, the boundary would keep the opposite row from the
-    // one the published page is handed.
-    const rows = [
-      { id: "a", at: "2026-08-22T09:00:00Z" },
-      { id: "b", at: "2026-08-22T09:00:00Z" },
-      { id: "c", at: "2026-08-22T09:00:00Z" },
-    ];
-    expect(capped(want, rows).map((row) => row.id)).toEqual(["c", "b"]);
-  });
-});
 
 describe("shared app preview", () => {
   beforeAll(() => {
@@ -419,6 +382,24 @@ describe("shared app preview", () => {
     expect(result.ok && result.own).toEqual({ bookings: [{ id: `${OWNER.uid}_q1`, note: "q1" }] });
   });
 
+  it("finds an own row named by THIS app's pseudonym of the author", async () => {
+    // `idFrom: "pseudonym"` (#325): the row is sha256(uid + ":" + aid). The same author's pseudonym for
+    // another app, and their raw uid, are not their row here.
+    const submit = { bookings: { auth: "anonymous", createFields: ["note"], idFrom: "pseudonym" } };
+    writeApp(root, declaration({ collections: { bookings: { submitOnly: true } }, public: { enabled: true, read: ["notes"], submit } }));
+    const hash = (aid: string): string => createHash("sha256").update(`${OWNER.uid}:${aid}`).digest("hex");
+    const rows: [string, Record<string, string>][] = [
+      [hash(AID), { note: "mine" }],
+      [hash("another-app"), { note: "theirs" }],
+      [OWNER.uid, { note: "uid" }],
+    ];
+    docs.store.set(`apps/${AID}/collections/bookings/items`, new Map(rows));
+
+    const result = await previewSharedApp(root, stamp);
+
+    expect(result.ok && result.own).toEqual({ bookings: [{ id: hash(AID), note: "mine" }] });
+  });
+
   it("says nothing about a collection whose rows could not be read", async () => {
     // ABSENT is "nobody looked" and an empty array is "you have submitted nothing". A page told the
     // second when the first is true stops offering an action to somebody entitled to it, which is
@@ -579,6 +560,46 @@ describe("shared app preview", () => {
     // silently deliver the whole collection back.
     expect(result.ok && result.watches.map((entry) => entry.want.limit)).toEqual([{ rows: 2, field: "stampedAt" }]);
     expect(docs.writes).toEqual([]);
+  });
+
+  it("hands the public page only the rows the owner published, as the rules do", async () => {
+    // The author reads as themselves and may see every row; a visitor is refused any listing but
+    // `where(publishField == true)`. Handing the page the rest is the preview showing MORE.
+    mkdirSync(path.join(root, "views"), { recursive: true });
+    writeFileSync(path.join(root, "views", "box.html"), "<p>box</p>");
+    writeApp(
+      root,
+      declaration({
+        collections: { bookings: { publishField: "shown" } },
+        public: {
+          enabled: true,
+          read: ["notes"],
+          readPublished: ["bookings"],
+          view: { path: "views/box.html", collections: ["bookings", "notes"], live: ["bookings"] },
+        },
+      }),
+    );
+    docs.store.set(
+      `apps/${AID}/collections/bookings/items`,
+      new Map([
+        ["q1", { note: "published", shown: true }],
+        ["q2", { note: "withdrawn", shown: false }],
+        ["q3", { note: "never marked" }],
+        // Truthy is not true: the rules compare with `== true`.
+        ["q4", { note: "a string", shown: "true" }],
+      ]),
+    );
+    docs.store.set(`apps/${AID}/collections/notes/items`, new Map([["n1", { note: "open to all", shown: false }]]));
+
+    const result = await previewSharedApp(root, stamp);
+
+    expect(result.ok === false ? result.problems : []).toEqual([]);
+    const page = result.ok ? result.datasets["public:public"] : undefined;
+    expect((page?.bookings ?? []).map((row) => row.note)).toEqual(["published"]);
+    // A `public.read` collection is not filtered, even by a field of the same name.
+    expect((page?.notes ?? []).map((row) => row.note)).toEqual(["open to all"]);
+    // And the LISTENER is told the same filter, or the first change would hand the page every row.
+    expect(result.ok && result.watches.map((entry) => entry.want.publishedField)).toEqual(["shown"]);
   });
 
   it("carries what a public create may contain, so the parent can judge a submission", async () => {

@@ -1,0 +1,30 @@
+{
+  "questions": [
+    {
+      "id": "old",
+      "label": "旧版の文書（このフォルダの中のファイル 1 つ）",
+      "why": "比べる元。条ごとに新版と対応づける",
+      "placeholder": "例: contracts/業務委託契約_2025.md",
+      "kind": "text",
+      "pick": "files",
+      "lines": true
+    },
+    {
+      "id": "new",
+      "label": "新版の文書（このフォルダの中のファイル 1 つ）",
+      "why": "比べる先",
+      "placeholder": "例: contracts/業務委託契約_2026.md",
+      "kind": "text",
+      "pick": "files",
+      "lines": true
+    },
+    {
+      "id": "focus",
+      "label": "特に見てほしいこと（任意）",
+      "why": "その点に関わる変更を先に、詳しく書く",
+      "placeholder": "例: 支払い条件と解約の条件が変わっていないか",
+      "kind": "text",
+      "required": false
+    }
+  ]
+}

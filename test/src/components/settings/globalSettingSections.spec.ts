@@ -14,6 +14,7 @@ import { setAppendSystemPrompt } from "../../../../src/composables/appendSystemP
 import { setDecisionDigest } from "../../../../src/composables/decisionDigest";
 import { setWorklogEnabled, setWorklogIntervalHours } from "../../../../src/composables/worklog";
 import { setFeedRefreshEnabled, setCalendarSyncEnabled } from "../../../../src/composables/systemTasks";
+import { setRemoteServer } from "../../../../src/composables/remoteServer";
 import { setGlobalFontFamily } from "../../../../src/composables/terminalFontFamily";
 import { useAppConfig } from "../../../../src/composables/useAppConfig";
 import { reloadLaunchOptions } from "../../../../src/composables/useLaunchOptions";
@@ -159,6 +160,16 @@ describe("SessionSection", () => {
     const wrapper = mount(SessionSection);
     await toggleAt(wrapper, 4, false);
     expect(posts).toEqual([{ calendarSyncEnabled: false }]);
+  });
+
+  // #2669 (experimental): off unless the config says true, and the box writes exactly that key.
+  it("shows the experimental remoteServer box unticked by default, and posts remoteServer when ticked", async () => {
+    setRemoteServer(undefined);
+    const wrapper = mount(SessionSection);
+    expect((wrapper.find('[data-testid="settings-remote-server"]').element as HTMLInputElement).checked).toBe(false);
+    await toggleAt(wrapper, 5, true);
+    expect(posts).toEqual([{ remoteServer: true }]);
+    setRemoteServer(false);
   });
 
   // These two are the only default-ON boxes in this section. The risk is `createGlobalFlag`'s
@@ -335,44 +346,6 @@ describe("ModelsSection", () => {
     expect(row).toContain("0 models");
     expect(row).toContain("not in the picker");
     expect(row).not.toContain("ready");
-  });
-
-  // Unlike providers/customAgents above, an account is not resolved and not run as written, so it
-  // gets a real add form (#2215's read-only list restored to an editable one for this fork).
-  it("adds an account and posts the whole accounts list", async () => {
-    const wrapper = mount(ModelsSection);
-    await wrapper.find('input[placeholder="id (e.g. work)"]').setValue("work");
-    await wrapper.find('input[placeholder="label (e.g. Work)"]').setValue("Work");
-    await wrapper.find("select").setValue("claude");
-    await wrapper.find('input[placeholder="~/.claude-work"]').setValue("~/.claude-work");
-    await wrapper
-      .findAll("button")
-      .find((b) => b.text() === "Add")
-      ?.trigger("click");
-    expect(posts).toEqual([{ accounts: [{ id: "work", label: "Work", agent: "claude", home: "~/.claude-work" }] }]);
-    useAppConfig().accounts.value = [];
-  });
-
-  it("refuses an account with no home directory chosen", async () => {
-    const wrapper = mount(ModelsSection);
-    await wrapper.find('input[placeholder="id (e.g. work)"]').setValue("work");
-    await wrapper.find('input[placeholder="label (e.g. Work)"]').setValue("Work");
-    await wrapper.find("select").setValue("claude");
-    expect(
-      wrapper
-        .findAll("button")
-        .find((b) => b.text() === "Add")
-        ?.attributes("disabled"),
-    ).toBeDefined();
-  });
-
-  it("removes an account", async () => {
-    useAppConfig().accounts.value = [{ id: "work", label: "Work", agent: "claude", home: "~/.claude-work" }];
-    const wrapper = mount(ModelsSection);
-    await wrapper.vm.$nextTick();
-    await wrapper.get('[data-testid="settings-accounts"] button').trigger("click");
-    expect(posts).toEqual([{ accounts: [] }]);
-    useAppConfig().accounts.value = [];
   });
 });
 

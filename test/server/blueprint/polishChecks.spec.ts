@@ -2,7 +2,7 @@
 // The polish pack's checks decide when a document was polished without changing what it says. They run here
 // for real against a stand-in chaff (see docsPackHarness): the originals are kept, and the check compares
 // headings, code blocks, link targets and chaff's tree addresses, and asks chaff for findings.
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { docsPackHarness } from "./docsPackHarness";
@@ -44,6 +44,8 @@ describeSh("polish: targets.mjs survey", () => {
     writeFake("findings.json", { "docs/setup.md": [{ rule: "sentence-length", level: "warning", file: "docs/setup.md" }] });
     list([target("docs/setup.md", "todo", 1)]);
     expect(node("targets.mjs", ["survey"]).code).toBe(0);
+    // The list as a person reads it at the gate before anything is changed.
+    expect(readFileSync(join(harness.dir(), ".blueprint/polish.txt"), "utf8")).toBe("- docs/setup.md\n");
   });
 
   it("accepts names that only look like the parent or .blueprint", () => {
@@ -227,5 +229,218 @@ describeSh("polish: findings set aside, and the drafts for chaff", () => {
       targets: [{ ...target("docs/setup.md", "skipped", 2), note: "対象外", dismissed: [aside("sentence-length", 3, "meaning")] }],
     });
     expect(node("targets.mjs", ["verify"]).stderr).toContain("only a file marked done can set findings aside");
+  });
+});
+
+describeSh("polish: the kind of document decides chaff's genre", () => {
+  const lintLog = () => readFileSync(join(harness.fake(), "lint.log"), "utf8").trim().split("\n");
+  const answers = (extra: Record<string, unknown>) => write(".blueprint/answers.json", { maxFiles: 3, ...extra });
+
+  it("measures a report as a report, in the survey and in every later check", () => {
+    answers({ style: "chaff の既定のまま", kind: "報告書" });
+    list([target("docs/setup.md", "todo", 0)]);
+    expect(node("targets.mjs", ["survey"]).code).toBe(0);
+    mkdirSync(join(harness.dir(), ".blueprint", "originals", "docs"), { recursive: true });
+    write(".blueprint/originals/docs/setup.md", ORIGINAL);
+    write("docs/setup.md", REWORDED);
+    list([target("docs/setup.md", "done", 0)]);
+    // A report is also read for its viewpoints; recorded here so the run gets as far as chaff.
+    const read = ["conclusion-first", "actionable-ask", "unsourced-number", "stacked-hedging", "agentless-passive"];
+    write(".blueprint/viewpoints.json", { "docs/setup.md": read.map((id) => ({ id, verdict: "ok" })) });
+    expect(node("targets.mjs", ["verify"]).code).toBe(0);
+    expect(lintLog()).toHaveLength(2);
+    lintLog().forEach((line) => expect(line).toContain("--genre business/report"));
+  });
+
+  it.each<[string, Record<string, unknown>]>([
+    ["the folder's own style, whose chaff.yaml names the genre", { style: "このフォルダの規約（STYLE.md と chaff.yaml）", kind: "報告書" }],
+    ["a kind left to chaff", { style: "chaff の既定のまま", kind: "指定しない（chaff に任せる）" }],
+    ["no kind at all (an interview from before it was asked)", { style: "chaff の既定のまま" }],
+    ["a kind the pack does not know", { style: "chaff の既定のまま", kind: "短歌" }],
+  ])("passes no genre for %s", (_label, extra) => {
+    answers(extra);
+    list([target("docs/setup.md", "todo", 0)]);
+    expect(node("targets.mjs", ["survey"]).code).toBe(0);
+    expect(lintLog().some((line) => line.includes("--genre"))).toBe(false);
+  });
+
+  it("measures the shelved findings too when the person asked for them, and only then", () => {
+    answers({ style: "このフォルダの規約（STYLE.md と chaff.yaml）", shelved: "棚上げした指摘も直す" });
+    list([target("docs/setup.md", "todo", 0)]);
+    expect(node("targets.mjs", ["survey"]).code).toBe(0);
+    expect(lintLog().length).toBeGreaterThan(0);
+    lintLog().forEach((line) => expect(line).toContain("--show-baseline"));
+    rmSync(join(harness.fake(), "lint.log"));
+    answers({ style: "このフォルダの規約（STYLE.md と chaff.yaml）", shelved: "新しい指摘だけ" });
+    expect(node("targets.mjs", ["survey"]).code).toBe(0);
+    expect(lintLog().some((line) => line.includes("--show-baseline"))).toBe(false);
+  });
+
+  it("drafts a report to chaff under the same genre", () => {
+    answers({ style: "chaff の既定のまま", kind: "ブログ（技術記事）" });
+    writeFake("help.txt", "chaff <file|dir|glob>...\n  chaff feedback <file> --rule <rule-id> [--line N]\n");
+    write(".blueprint/polish.json", {
+      targets: [{ ...target("docs/setup.md", "done", 1), dismissed: [{ rule: "internal-jargon", line: 9, because: "wrong", why: "製品名" }] }],
+    });
+    expect(node("feedback.mjs").code).toBe(0);
+    expect(readFileSync(join(harness.fake(), "feedback.log"), "utf8").trim()).toBe(
+      "docs/setup.md --rule internal-jargon --line 9 --experimental --genre blog/tech",
+    );
+  });
+});
+
+describeSh("polish: nothing to polish", () => {
+  const polishTxt = () => readFileSync(join(harness.dir(), ".blueprint/polish.txt"), "utf8");
+  const nothing = (avoided?: string[]) => write(".blueprint/polish.json", { targets: [], ...(avoided ? { avoided } : {}) });
+
+  beforeEach(() => {
+    write(".blueprint/answers.json", { maxFiles: 3, targets: "docs" });
+    write("docs/other.md", "# 別の文書\n\n本文。\n");
+  });
+
+  it("is an answer when every named document is clean, and the rounds after it pass with nothing to do", () => {
+    nothing();
+    expect(node("targets.mjs", ["survey"]).code).toBe(0);
+    expect(polishTxt()).toContain("整える文書はありません");
+    expect(node("targets.mjs", ["progress"])).toEqual({ code: 0, stderr: "" });
+    expect(node("targets.mjs", ["verify"]).code).toBe(0);
+    expect(node("targets.mjs", ["more"]).code).toBe(1);
+  });
+
+  it("is refused while a named document has a finding, naming it", () => {
+    writeFake("findings.json", { "docs/other.md": [{ rule: "sentence-length", level: "warning", file: "docs/other.md" }] });
+    nothing();
+    expect(node("targets.mjs", ["survey"])).toMatchObject({ code: 1, stderr: expect.stringContaining("these have chaff findings: docs/other.md") });
+  });
+
+  it("does not count a finding that is only a note", () => {
+    writeFake("findings.json", { "docs/other.md": [{ rule: "sentence-length", level: "note", file: "docs/other.md" }] });
+    nothing();
+    expect(node("targets.mjs", ["survey"]).code).toBe(0);
+  });
+
+  it("leaves out a document the person asked to leave alone, and only one they named", () => {
+    writeFake("findings.json", { "docs/other.md": [{ rule: "sentence-length", level: "warning", file: "docs/other.md" }] });
+    nothing(["docs/other.md"]);
+    expect(node("targets.mjs", ["survey"])).toMatchObject({ code: 1, stderr: expect.stringContaining("the answer avoid does not: docs/other.md") });
+    write(".blueprint/answers.json", { maxFiles: 3, targets: "docs", avoid: "docs/other.md" });
+    expect(node("targets.mjs", ["survey"]).code).toBe(0);
+    nothing(["docs/other.md", "elsewhere.md"]);
+    expect(node("targets.mjs", ["survey"])).toMatchObject({ code: 1, stderr: expect.stringContaining("not among the named documents: elsewhere.md") });
+  });
+
+  it("is refused when the answer names no document here", () => {
+    write(".blueprint/answers.json", { maxFiles: 3, targets: "missing" });
+    nothing();
+    expect(node("targets.mjs", ["survey"])).toMatchObject({ code: 1, stderr: expect.stringContaining("names no Markdown or text file") });
+  });
+
+  it("refuses an empty list when a named place is a symbolic link, rather than following it", () => {
+    symlinkSync(join(harness.dir(), "docs", "other.md"), join(harness.dir(), "docs", "linked.md"));
+    nothing();
+    expect(node("targets.mjs", ["survey"])).toMatchObject({
+      code: 1,
+      stderr: expect.stringContaining("could not be read as this folder's own documents: docs/linked.md"),
+    });
+  });
+
+  it("refuses an empty list when the answer names a place outside this folder", () => {
+    write(".blueprint/answers.json", { maxFiles: 3, targets: "docs\n../elsewhere" });
+    nothing();
+    expect(node("targets.mjs", ["survey"])).toMatchObject({
+      code: 1,
+      stderr: expect.stringContaining("could not be read as this folder's own documents: ../elsewhere"),
+    });
+  });
+
+  it('checks "avoided" on a list with files in it too: named, asked for, and not also chosen', () => {
+    write(".blueprint/answers.json", { maxFiles: 3, targets: "docs", avoid: "docs/" });
+    write(".blueprint/polish.json", { targets: [target("docs/setup.md")], avoided: ["elsewhere.md"] });
+    expect(node("targets.mjs", ["survey"])).toMatchObject({ code: 1, stderr: expect.stringContaining("not among the named documents: elsewhere.md") });
+    write(".blueprint/polish.json", { targets: [target("docs/setup.md")], avoided: ["docs/setup.md"] });
+    expect(node("targets.mjs", ["survey"])).toMatchObject({ code: 1, stderr: expect.stringContaining("both chosen and left alone: docs/setup.md") });
+    write(".blueprint/polish.json", { targets: [target("docs/setup.md")], avoided: ["docs/other.md"] });
+    expect(node("targets.mjs", ["survey"]).code).toBe(0);
+    write(".blueprint/answers.json", { maxFiles: 3, targets: "docs", avoid: "docs/setup.md\n下書きは触らないで" });
+    expect(node("targets.mjs", ["survey"])).toMatchObject({ code: 1, stderr: expect.stringContaining("the answer avoid does not: docs/other.md") });
+  });
+
+  it('refuses an "avoided" that is not a list of files', () => {
+    write(".blueprint/polish.json", { targets: [], avoided: "docs/other.md" });
+    expect(node("targets.mjs", ["survey"])).toMatchObject({ code: 1, stderr: expect.stringContaining('"avoided" must be a list') });
+  });
+});
+
+describeSh("polish: a report is read for what a report needs", () => {
+  const REPORT_KIND = { maxFiles: 3, style: "chaff の既定のまま", kind: "報告書", targets: "docs" };
+  const viewpoints = (entries: unknown[]) => write(".blueprint/viewpoints.json", { "docs/setup.md": entries });
+  const everyOk = ["conclusion-first", "actionable-ask", "unsourced-number", "stacked-hedging", "agentless-passive"].map((id) => ({ id, verdict: "ok" }));
+  const polishedReport = () => {
+    mkdirSync(join(harness.dir(), ".blueprint", "originals", "docs"), { recursive: true });
+    write(".blueprint/originals/docs/setup.md", ORIGINAL);
+    write("docs/setup.md", REWORDED);
+    list([target("docs/setup.md", "done", 0)]);
+  };
+  const SECTIONS = ["整えたもの", "確かめたこと", "直さずに残したもの"];
+  const report = (extra: string) => write(".blueprint/polish-report.md", SECTIONS.map((section) => `## ${section}\ndocs/setup.md\n`).join("\n") + extra);
+
+  beforeEach(() => {
+    write(".blueprint/answers.json", REPORT_KIND);
+    polishedReport();
+  });
+
+  it("is not done until every viewpoint of the kind is recorded", () => {
+    expect(node("targets.mjs", ["verify"])).toMatchObject({ code: 1, stderr: expect.stringContaining("docs/setup.md: no viewpoints recorded") });
+    viewpoints(everyOk);
+    expect(node("targets.mjs", ["verify"])).toEqual({ code: 0, stderr: "" });
+  });
+
+  it("chooses every report, up to the agreed number, even when chaff finds nothing, since each is read for its viewpoints", () => {
+    write("docs/second.md", "# 二つめ\n\n本文。\n");
+    write(".blueprint/polish.json", { targets: [] });
+    expect(node("targets.mjs", ["survey"])).toMatchObject({
+      code: 1,
+      stderr: expect.stringContaining(
+        "a business/report is read for its viewpoints: choose 2 of the named documents; not chosen: docs/second.md, docs/setup.md",
+      ),
+    });
+    write(".blueprint/polish.json", { targets: [target("docs/setup.md")] });
+    expect(node("targets.mjs", ["survey"])).toMatchObject({ code: 1, stderr: expect.stringContaining("not chosen: docs/second.md") });
+    write(".blueprint/answers.json", { ...REPORT_KIND, maxFiles: 1 });
+    expect(node("targets.mjs", ["survey"]).code).toBe(0);
+    write(".blueprint/answers.json", { ...REPORT_KIND, avoid: "docs/second.md\ndocs/setup.md" });
+    write(".blueprint/polish.json", { targets: [], avoided: ["docs/second.md", "docs/setup.md"] });
+    expect(node("targets.mjs", ["survey"]).code).toBe(0);
+  });
+
+  it("asks nothing more of a kind that has no viewpoints, or of the folder's own style", () => {
+    write(".blueprint/answers.json", { ...REPORT_KIND, kind: "指定しない（chaff に任せる）" });
+    expect(node("targets.mjs", ["verify"]).code).toBe(0);
+    write(".blueprint/answers.json", { ...REPORT_KIND, style: "このフォルダの規約（STYLE.md と chaff.yaml）" });
+    expect(node("targets.mjs", ["verify"]).code).toBe(0);
+  });
+
+  it("puts every question for the writer in the report, quoted", () => {
+    const question = { id: "actionable-ask", verdict: "writer", quote: "項目を選べます", note: "誰がいつまでに選びますか" };
+    viewpoints([...everyOk.filter((entry) => entry.id !== "actionable-ask"), question]);
+    expect(node("targets.mjs", ["verify"]).code).toBe(0);
+    report("");
+    expect(node("report.mjs").stderr).toContain("lacks the section 書いた人に確かめてほしいこと / For the writer");
+    report("\n## 書いた人に確かめてほしいこと\n- docs/setup.md: 頼みごと\n");
+    expect(node("report.mjs").stderr).toContain(
+      "its part for the writer does not name the file and quote, word for word, the place of: docs/setup.md actionable-ask",
+    );
+    // The quotation elsewhere in the report does not count: the question belongs in the writer's part.
+    report("\n項目を選べます\n\n## 書いた人に確かめてほしいこと\n- docs/setup.md 頼みごと\n");
+    expect(node("report.mjs").stderr).toContain("the place of: docs/setup.md actionable-ask");
+    report("\n## 書いた人に確かめてほしいこと\n- docs/setup.md 「項目を選べます」 誰がいつまでに選びますか\n");
+    expect(node("report.mjs")).toEqual({ code: 0, stderr: "" });
+  });
+
+  it("asks nothing of a file that was skipped, even with a record left from an earlier try", () => {
+    write(".blueprint/polish.json", { targets: [{ ...target("docs/setup.md", "skipped", 0), note: "原文の引用だけの文書" }] });
+    write(".blueprint/viewpoints.json", { "docs/setup.md": [{ id: "actionable-ask", verdict: "writer", quote: "項目を選べます", note: "誰が？" }] });
+    report("");
+    expect(node("report.mjs")).toEqual({ code: 0, stderr: "" });
   });
 });

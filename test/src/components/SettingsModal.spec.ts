@@ -10,6 +10,14 @@ import { i18n } from "../../../src/i18n";
 import { en } from "../../../src/i18n/en";
 import { launchAgent } from "../../../src/composables/useChatLauncher";
 import { UI_LOCALES } from "../../../src/composables/uiLanguage";
+import { closeSettings, openSettingsAt, requestedSettingsTab, settingsOpen } from "../../../src/composables/settingsOpener";
+
+const filesOpened = vi.hoisted(() => [] as [string | null, string][]);
+vi.mock("../../../src/composables/useFilesView", () => ({
+  filesGotoFile: (cwd: string | null, path: string) => {
+    filesOpened.push([cwd, path]);
+  },
+}));
 
 // The sidebar's words come from the message tree now, keyed by the table's ids.
 const tabLabel = (tab: SettingsTabId): string => i18n.global.t(`settings.tabs.${tab}`);
@@ -469,6 +477,16 @@ describe("SettingsModal per-kind sounds (#873)", () => {
     await flushPromises();
     expect(w.findAll('[data-testid="dir-preview-row"]')).toHaveLength(2);
   });
+
+  // #2624: the Files view sits under this modal, so opening a config there closes Settings first.
+  it("closes Settings and opens the file a directory row asks for", async () => {
+    filesOpened.length = 0;
+    const w = await mountTab("dirSettings", { dirPaths: ["/proj/a"] });
+    await flushPromises();
+    w.findComponent({ name: "DirConfigPreview" }).vm.$emit("open-file", "/proj/a", ".mulmoterminal.json");
+    expect(w.emitted("close")).toHaveLength(1);
+    expect(filesOpened).toEqual([["/proj/a", ".mulmoterminal.json"]]);
+  });
 });
 
 // Each Settings section that a skill can write hands off to that skill (#1111). The list is
@@ -654,5 +672,60 @@ describe("SettingsModal skill launch confirmation", () => {
         await w.get('[data-testid="skill-launch-cancel"]').trigger("click");
       }
     }
+  });
+});
+
+// #2450. The command palette asks for a section by name: the modal opens on it, forgets the request,
+// and a second request while open moves to that section.
+describe("a section asked for by name", () => {
+  const selected = (w: Wrapper) => w.find('[aria-selected="true"]').attributes("data-testid");
+
+  it("opens on the requested section and clears the request", async () => {
+    requestedSettingsTab.value = "shortcuts";
+    const w = mountModal();
+    await flushPromises();
+    expect(selected(w)).toBe("settings-tab-shortcuts");
+    expect(requestedSettingsTab.value).toBeNull();
+    w.unmount();
+  });
+
+  it("moves to a section asked for while it is open, and opens on the default without a request", async () => {
+    const w = mountModal();
+    await flushPromises();
+    expect(selected(w)).toBe(`settings-tab-${DEFAULT_SETTINGS_TAB}`);
+    requestedSettingsTab.value = "sounds";
+    await flushPromises();
+    expect(selected(w)).toBe("settings-tab-sounds");
+    w.unmount();
+  });
+
+  // Voice is in the sidebar only once this modal's probe says the machine can transcribe.
+  it("shows Voice when asked only once the probe says it can, and stays put when it cannot", async () => {
+    stubServer(true);
+    requestedSettingsTab.value = "voice";
+    const capable = mountModal();
+    expect(selected(capable)).toBe(`settings-tab-${DEFAULT_SETTINGS_TAB}`);
+    await flushPromises();
+    expect(selected(capable)).toBe("settings-tab-voice");
+    capable.unmount();
+
+    stubServer(false);
+    requestedSettingsTab.value = "voice";
+    const incapable = mountModal();
+    await flushPromises();
+    expect(selected(incapable)).toBe(`settings-tab-${DEFAULT_SETTINGS_TAB}`);
+    expect(requestedSettingsTab.value).toBeNull();
+    incapable.unmount();
+  });
+
+  // Closing before the probe answers must not leave the request for the next plain open.
+  it("forgets a Voice request still waiting when Settings closes", async () => {
+    stubServer(true);
+    openSettingsAt("voice");
+    const w = mountModal();
+    closeSettings();
+    w.unmount();
+    expect(requestedSettingsTab.value).toBeNull();
+    expect(settingsOpen.value).toBe(false);
   });
 });

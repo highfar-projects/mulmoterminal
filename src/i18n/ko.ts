@@ -1,9 +1,25 @@
 import type { Messages } from "./messages";
+import { usageViewKo } from "./usageView/ko";
 import { blueprintsKo } from "./blueprints/ko";
 import { tipsKo } from "./tips/ko";
 import { forkTipsKo } from "./forkTips/ko";
-import { accountFormKo } from "./accountForm/ko";
 import { LAUNCH_COMMAND } from "../../common/launchCommand";
+import { commandPaletteKo } from "./commandPalette/ko";
+import { focusModeKo } from "./focusMode/ko";
+import { fileHistoryKo } from "./fileHistory/ko";
+import { dirConfigSaveKo } from "./dirConfigSave/ko";
+import { releaseNotesKo } from "./releaseNotes/ko";
+import { dirConfigOpenKo } from "./dirConfigOpen/ko";
+import { dirSettingsFormKo } from "./dirSettingsForm/ko";
+import { themeEditorKo } from "./themeEditor/ko";
+import { headerChipsKo } from "./headerChips/ko";
+import { headerButtonsKo } from "./headerButtons/ko";
+import { settingsControlsKo } from "./settingsControls/ko";
+import { shortcutsKo } from "./shortcuts/ko";
+import { filesTreeKo } from "./filesTree/ko";
+import { previewCodeCopyKo } from "./previewCodeCopy/ko";
+import { skillsViewKo } from "./skillsView/ko";
+import { processesViewKo } from "./processesView/ko";
 
 // 한국어. `Messages`는 en.ts의 모양 그대로라서 키를 하나라도 빠뜨리면 컴파일이 실패한다 ——
 // 실행 중에 조용히 영어로 되돌아가 아무도 눈치채지 못하는 상태는 생기지 않는다.
@@ -59,6 +75,7 @@ export const ko: Messages = {
       cost: "비용(추정)",
       quit: "MulmoTerminal 종료",
       help: "도움말과 사용자 가이드",
+      releaseNotes: "릴리스 노트",
     },
 
     terminalKeys: {
@@ -79,37 +96,7 @@ export const ko: Messages = {
       },
     },
 
-    shortcuts: {
-      intro:
-        "읽기 전용이며, 할당 여부와 상관없이 전부 {keymapKey} 아래에 나열됩니다. 할당할 수 있는 것은 두 가지 —— MulmoTerminal의 동작(확대, 기다리는 에이전트로 이동, 복사 / 붙여넣기), 그리고 터미널로 보내는 키 시퀀스(Mac에서 Cmd+←로 줄 맨 앞으로). 할당한 키는 터미널 안의 프로그램에 더 이상 닿지 않으므로, 아래 버튼으로 설정하세요 —— 에이전트가 기존 할당과 브라우저·Mac이 각자 만들어 내는 함정을 먼저 대조한 뒤에 씁니다. 레퍼런스는 {guide}에 있습니다.",
-      guide: "가이드",
-      actions: {
-        zoomToggle: "터미널 확대 / 되돌리기",
-        zoomNext: "다음 터미널 확대",
-        zoomPrev: "이전 터미널 확대",
-        focusNext: "다음 터미널로 커서 옮기기(그리드 보기에서만)",
-        focusPrev: "이전 터미널로 커서 옮기기(그리드 보기에서만)",
-        nextAttention: "나를 기다리는 터미널로 이동",
-        markUnread: "이 터미널을 읽지 않음 / 읽음으로 표시",
-        terminalNew: "실행 패널 열기",
-        terminalNewHere: "이 터미널의 디렉터리에서 실행 패널 열기",
-        terminalNewAdjacent: "이 터미널의 디렉터리에서 곧바로 shell 열기",
-        terminalClose: "이 터미널 닫기",
-        terminalRestart: "이 터미널의 에이전트 다시 시작",
-        terminalMovePrev: "이 터미널을 앞으로 이동",
-        terminalMoveNext: "이 터미널을 뒤로 이동",
-        filesFind: "이 터미널 옆에서 파일 이름으로 찾아 열기",
-        filesSearch: "이 터미널 옆에서 파일 내용 검색",
-        commandPalette: "명령 팔레트 열기",
-        copy: "터미널에서 선택한 내용 복사",
-        paste: "터미널에 붙여넣기",
-      },
-      list: "키보드 단축키",
-      notSet: "설정 안 됨",
-      sendRow: "{key}를 터미널로 보내기",
-      sendNone: "터미널로 키 보내기",
-      setUp: "단축키 설정하기…",
-    },
+    shortcuts: shortcutsKo,
 
     surviving: {
       intro:
@@ -142,8 +129,8 @@ export const ko: Messages = {
       sweepDisabledHint: "위에서 스윕 자체가 꺼져 있으므로 반복할 것이 없습니다.",
       sweepRunning: "이 서버는 {hours}시간마다 스윕을 반복하고 있습니다.",
       sweepRunningOff: "이 서버는 시작할 때 한 번만 스윕하며 반복하지 않습니다.",
-      sweepPending: "위에서 저장한 주기는 다음 시작부터 적용됩니다.",
-      sweepNote: "이 간격은 서버가 시작할 때 읽으므로, 여기서 바꾼 값은 다음 시작부터 적용됩니다.",
+      sweepPending: "위에서 저장한 주기가 아직 이 서버에 닿지 않았습니다. 설정 파일을 다시 읽거나 서버를 다시 시작하세요.",
+      sweepNote: "여기서 바꾸면 바로 적용되고, 마지막 정리부터 셉니다.",
       neverTitle: "자동으로 종료하지 않습니다.",
       neverHint: "여기서 멈추거나, 붙잡고 있는 터미널에서 끝낼 때까지 남아 있습니다.",
       reapHint: "아무것도 쓰고 있지 않고 —— 붙은 사람도 없고 이만큼 출력도 없는 —— 세션은 {ended}. 대화는 남습니다. 0으로 두면 자동으로 종료하지 않습니다.",
@@ -217,7 +204,7 @@ export const ko: Messages = {
       prFooterHint: "본문 맨 아래에 {line} 한 줄을 붙입니다. 나란히 둔 여러 클론 중 어느 것에서 나왔는지 PR이 말해 줍니다.",
       gitlabTitle: "자체 호스팅 GitLab",
       gitlabHint:
-        "URL만 봐서는 그 호스트가 어떤 forge인지 알 수 없으므로 여기서 선언하면 {glab}으로 저장소를 읽습니다. {authCommand}가 필요합니다. 다음 서버 시작부터 적용됩니다.",
+        "URL만 봐서는 그 호스트가 어떤 forge인지 알 수 없으므로 여기서 선언하면 {glab}으로 저장소를 읽습니다. {authCommand}가 필요합니다. 바로 적용됩니다.",
       gitlabField: "자체 호스팅 GitLab 호스트 추가",
     },
 
@@ -233,12 +220,15 @@ export const ko: Messages = {
       worklogInterval: "실행 주기:",
       worklogStepper: "개발 작업 로그 주기",
       systemTasks: "내장 예약 작업",
-      systemTasksHint: "둘 다 한 시간마다 돌고, 끄지 않는 한 켜져 있습니다. 하나를 끄면 서버가 다음에 시작할 때 반영됩니다.",
+      systemTasksHint: "둘 다 한 시간마다 돌고, 끄지 않는 한 켜져 있습니다. 켜고 끄면 바로 반영됩니다.",
       feedRefresh: "컬렉션과 피드 새로고침",
       feedRefreshHint:
         "RSS/JSON 피드를 받아오고 skill 기반 컬렉션 업데이트를 내보냅니다. 워크스페이스와 저장해 둔 모든 프로젝트 디렉터리가 대상입니다. 피드를 하나도 등록하지 않았다면 아무것도 하지 않습니다.",
       calendarSync: "Google 캘린더 동기화",
       calendarSyncHint: "Google 캘린더를 선언한 컬렉션에 변경된 일정을 가져옵니다. 계정을 연결하기 전에는 아무것도 하지 않습니다.",
+      remoteServer: "실험 기능: 서버가 다른 머신에서 동작함",
+      remoteServerHint:
+        "SSH 터널로 연결한 서버용. 서버 화면에서 동작해 버리는 조작(파일 선택 대화상자, 파일 관리자, 앱, Google 로그인)을 숨기거나 이유를 표시하고, 드롭한 파일은 항상 업로드합니다. 바로 적용되며, 실행 스크립트는 다음 시작부터 읽습니다.",
     },
 
     launchers: {
@@ -302,7 +292,6 @@ export const ko: Messages = {
       accountsIntro:
         "— Claude Code 또는 Codex의 다른 로그인을 각자의 설정 디렉터리로 사용합니다. 새 셀은 실행 화면에서 계정을 골라 시작할 수 있고, 그 셀의 헤더에 계정 이름이 표시됩니다. 세션은 시작한 계정에서 계속 실행됩니다.",
       noAccounts: "설정되지 않음 — 모든 셀이 기본 로그인으로 실행됩니다.",
-      ...accountFormKo,
       addBackend: "백엔드 추가하기…",
     },
 
@@ -429,6 +418,10 @@ export const ko: Messages = {
       loadAverageTitle: "Load average",
       loadAverageHint:
         "세션을 돌리는 기기의 부하를 코어 수 대비 퍼센트로 보여 줍니다 —— 100%는 모든 코어에 대기 중인 일이 있다는 뜻이고, 여기서 에이전트를 더 띄우면 이미 돌던 것들이 느려집니다. 100%에서 호박색, 200%에서 빨강. load average를 두지 않는 호스트(Windows)에서는 어느 쪽이든 아무것도 나오지 않습니다.",
+      searchBox: "상단 가운데에 검색창 표시",
+      searchBoxTitle: "검색창",
+      searchBoxHint:
+        "모든 화면에서 상단 막대 가운데에 명령 팔레트를 여는 검색창을 표시합니다. 명령 버튼이나 키로 여는 것과 같은 팔레트입니다. 기본값은 꺼짐입니다.",
     },
 
     waitingRows: {
@@ -489,7 +482,8 @@ export const ko: Messages = {
       picker: "이 앱의 언어",
       auto: "브라우저의 언어에 맞추기",
       autoResolved: "브라우저가 {locale}을(를) 요청하므로 {label}(으)로 표시됩니다.",
-      partial: "지금까지 번역된 것은 설정 화면과 그리드에 표시되는 상태 단어입니다. 앱의 나머지는 아직 영어입니다.",
+      partial:
+        "지금까지 번역된 것은 설정 화면, 그리드에 표시되는 상태 단어, 그리고 모든 버튼의 툴팁과 화면 낭독용 문구입니다. 앱의 나머지 문구는 아직 영어입니다.",
     },
   },
 
@@ -560,6 +554,7 @@ export const ko: Messages = {
   },
 
   launch: {
+    mcpGroupsNextStart: "이 폴더에서 다음에 시작하는 터미널부터 적용됩니다. 이미 열려 있는 셀은 시작할 때의 도구를 그대로 쓰므로 다시 시작하세요.",
     agentUnavailable: {
       missing: "이 컴퓨터에 {agent}이(가) 설치되어 있지 않아 여기서 시작할 수 없습니다.",
       noSuchPath: "{agent}의 명령 재정의가 가리키는 파일이 없어 시작할 수 없습니다.",
@@ -570,41 +565,13 @@ export const ko: Messages = {
   },
 
   // 2타 단축키가 두 번째 키를 기다리는 동안 보이는 안내 (#2265).
-  commandPalette: {
-    open: "명령",
-    placeholder: "이름으로 동작 실행",
-    close: "명령 팔레트 닫기",
-    empty: "일치하는 동작이 없습니다.",
-    needsEnlarged: "터미널을 확대했을 때만",
-    needsNothingEnlarged: "확대하지 않았을 때만",
-    needsManualOrder: "수동 정렬일 때만",
-    gridHidden: "터미널 그리드가 앞에 있을 때만",
-    hint: "Enter 실행 · Esc 닫기",
-    notSet: "키 없음",
-    descriptions: {
-      zoomToggle: "커서가 있는 터미널을 확대하거나, 확대된 터미널을 되돌립니다.",
-      zoomNext: "확대를 화면 순서상 다음 터미널로 옮깁니다.",
-      zoomPrev: "확대를 이전 터미널로 옮깁니다.",
-      focusNext: "타일 그리드에서 커서를 다음 터미널로 옮깁니다.",
-      focusPrev: "타일 그리드에서 커서를 이전 터미널로 옮깁니다.",
-      nextAttention: "입력을 기다리는 터미널, 그다음 끝난 것, 그다음 유휴 상태인 것으로 이동합니다.",
-      markUnread: "유휴 터미널은 읽지 않음으로, 기다리는 터미널은 읽음으로 표시합니다. 확대한 터미널, 없으면 커서가 있는 터미널이 대상입니다.",
-      terminalNew: "기본 워크스페이스에서 실행 패널을 엽니다.",
-      terminalNewHere: "현재 터미널의 디렉터리에서 실행 패널을 엽니다.",
-      terminalNewAdjacent: "현재 터미널의 디렉터리에서 입력 없이 바로 셸을 시작합니다.",
-      terminalClose: "현재 터미널을 확인 없이 바로 닫습니다.",
-      terminalRestart: "현재 터미널의 에이전트를 같은 대화로 다시 시작합니다.",
-      terminalMovePrev: "수동 정렬에서 현재 터미널을 한 칸 앞으로 옮깁니다(그리드와 썸네일 줄에서는 왼쪽, 목록에서는 위).",
-      terminalMoveNext: "수동 정렬에서 현재 터미널을 한 칸 뒤로 옮깁니다(그리드와 썸네일 줄에서는 오른쪽, 목록에서는 아래).",
-      filesFind: "확대된 터미널 옆 Files 패널에서 이름으로 파일을 찾습니다.",
-      filesSearch: "확대된 터미널의 프로젝트에서 파일 내용을 검색합니다.",
-    },
-  },
+  commandPalette: commandPaletteKo,
   // The path menu's file items. Its repository section stays in the forge's own words.
   pathMenu: {
     insertFilePath: "파일 경로 삽입",
     reveal: "파일 관리자에서 열기",
     browseFiles: "앱에서 파일 보기",
+    dirSettings: "이 디렉터리의 설정",
     newTerminal: "여기서 새 터미널",
   },
   prefixKeys: {
@@ -632,9 +599,13 @@ export const ko: Messages = {
     items: {
       rooms: { label: "Rooms", detail: "터미널끼리 나눈 원탁 대화" },
       blueprints: { label: "설계도", detail: "템플릿으로 앱이나 문서를 단계별로 만들기" },
+      skills: { label: "Skills", detail: "~/.claude/skills 와 각 폴더의 스킬을 목록·검색" },
+      processes: { label: "프로세스", detail: "각 세션에서 실행 중인 프로세스와 지울 수 있는 worktree" },
       worklog: { label: "Worklog", detail: "wiki에 있는 개발 작업 로그 (#worklog)" },
+      usage: { label: "토큰 사용량", detail: "로테이션의 각 토큰에 남은 5시간 창과 주간 창" },
     },
   },
+  usageView: usageViewKo,
   rowMenu: {
     trigger: "이 터미널 작업",
     title: "작업",
@@ -649,6 +620,33 @@ export const ko: Messages = {
     wake: "깨우기",
     close: "닫기",
   },
+  fileOutline: {
+    button: "개요",
+    tip: "이 파일의 제목(선택하면 그곳으로 이동)",
+    empty: "이 파일에는 제목이 없습니다.",
+  },
+  whatsNew: {
+    title: "새로운 기능",
+    intro: "MulmoTerminal이 {version}(으)로 업데이트되었습니다. 마지막으로 사용한 이후 달라진 점입니다.",
+    englishOnly: "릴리스 설명은 영어로 작성되어 있습니다.",
+    openOnWeb: "이 페이지를 웹에서 열기",
+    older: "이전 버전은 변경 기록에 있습니다.",
+    close: "확인",
+  },
+  fileHistory: fileHistoryKo,
+  dirConfigSave: dirConfigSaveKo,
+  releaseNotes: releaseNotesKo,
+  dirConfigOpen: dirConfigOpenKo,
+  dirSettingsForm: dirSettingsFormKo,
+  themeEditor: themeEditorKo,
+  headerChips: headerChipsKo,
+  headerButtons: headerButtonsKo,
+  focusMode: focusModeKo,
+  settingsControls: settingsControlsKo,
+  ...filesTreeKo,
+  ...previewCodeCopyKo,
+  ...skillsViewKo,
+  ...processesViewKo,
   tips: tipsKo,
   forkTips: forkTipsKo,
   blueprints: blueprintsKo,

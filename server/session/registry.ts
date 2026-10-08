@@ -532,6 +532,12 @@ export function sessionCwd(id: string): string | null {
   return sessionCwds.get(id) ?? null;
 }
 
+/** Every remembered session directory, one per session, oldest session first. */
+export async function rememberedSessionCwds(): Promise<string[]> {
+  await devTerminalCwdsHydrated;
+  return [...sessionCwds.values()];
+}
+
 let devTerminalCwdPersist: Promise<void> = Promise.resolve();
 trackPersistQueue(() => devTerminalCwdPersist);
 function rememberSessionCwd(id: string, cwd: string): void {

@@ -4,7 +4,7 @@
 
 > **これはフォークです。** [highfar-projects/mulmoterminal](https://github.com/highfar-projects/mulmoterminal)
 > は [receptron/mulmoterminal](https://github.com/receptron/mulmoterminal) のリリースを毎回取り込みつつ、
-> Windows ネイティブでのセッション永続化（psmux）、devcontainer セッション、複数アカウントを加えたものです。
+> Windows ネイティブでのセッション永続化（psmux）と devcontainer セッションを加えたものです。
 > 起動は **`npx github:highfar-projects/mulmoterminal`** です。`npx mulmoterminal@latest` では
 > フォークではなく本家が起動します。Windows と WSL2 については[このフォークについて](#このフォークについて)を参照してください。
 
@@ -163,7 +163,7 @@ npx github:highfar-projects/mulmoterminal#main     # 同じく、main の最新�
   （Windows ではフルパスで書きます）。
 - サブコマンドも同じ形で使えます: `npx github:highfar-projects/mulmoterminal init`、`… stop`。
 - **自分用の設定は `~/.mulmoterminal/.env` に書いてください**（`CLAUDE_PERMISSION_MODE`、
-  `WAIT_REAP_GRACE_MS`、アカウントのトークンなど）。本家は `npx` を実行した場所の `.env` しか
+  `WAIT_REAP_GRACE_MS` など）。本家は `npx` を実行した場所の `.env` しか
   読まないので、別の場所から起動するとこれらが黙って効かなくなっていました。このフォークは
   `~/.mulmoterminal/.env` を先に、起動した場所の `.env` を後に読みます。起動した場所の `.env` の
   ほうが優先され、シェルで設定した環境変数はどちらよりも優先されます。`yarn dev` も、リポジトリの

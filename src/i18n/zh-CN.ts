@@ -1,9 +1,25 @@
 import type { Messages } from "./messages";
+import { usageViewZhCN } from "./usageView/zh-CN";
 import { blueprintsZhCN } from "./blueprints/zh-CN";
 import { tipsZhCN } from "./tips/zh-CN";
 import { forkTipsZhCN } from "./forkTips/zh-CN";
-import { accountFormZhCN } from "./accountForm/zh-CN";
 import { LAUNCH_COMMAND } from "../../common/launchCommand";
+import { commandPaletteZhCN } from "./commandPalette/zh-CN";
+import { focusModeZhCN } from "./focusMode/zh-CN";
+import { fileHistoryZhCN } from "./fileHistory/zh-CN";
+import { dirConfigSaveZhCN } from "./dirConfigSave/zh-CN";
+import { releaseNotesZhCN } from "./releaseNotes/zh-CN";
+import { dirConfigOpenZhCN } from "./dirConfigOpen/zh-CN";
+import { dirSettingsFormZhCN } from "./dirSettingsForm/zh-CN";
+import { themeEditorZhCN } from "./themeEditor/zh-CN";
+import { headerChipsZhCN } from "./headerChips/zh-CN";
+import { headerButtonsZhCN } from "./headerButtons/zh-CN";
+import { settingsControlsZhCN } from "./settingsControls/zh-CN";
+import { shortcutsZhCN } from "./shortcuts/zh-CN";
+import { filesTreeZhCN } from "./filesTree/zh-CN";
+import { previewCodeCopyZhCN } from "./previewCodeCopy/zh-CN";
+import { skillsViewZhCN } from "./skillsView/zh-CN";
+import { processesViewZhCN } from "./processesView/zh-CN";
 
 // 简体中文。`Messages` 就是 en.ts 的形状，少一个键就会编译失败 —— 不会出现运行时悄悄回退到
 // 英文、而谁都没发现的状态。
@@ -60,6 +76,7 @@ export const zhCN: Messages = {
       cost: "费用（估算）",
       quit: "退出 MulmoTerminal",
       help: "帮助与用户指南",
+      releaseNotes: "发行说明",
     },
 
     terminalKeys: {
@@ -78,37 +95,7 @@ export const zhCN: Messages = {
       },
     },
 
-    shortcuts: {
-      intro:
-        "只读；不管有没有绑定，全都列在 {keymapKey} 下面。可以绑定两类：MulmoTerminal 的操作（放大、跳到在等你的智能体、复制 / 粘贴），以及发送给终端的按键序列（在 Mac 上用 Cmd+← 跳到行首）。你绑定的每个键都不再传给终端里的程序，所以请用下面的按钮来设置 —— 智能体会先对照你已有的绑定，以及浏览器和 Mac 各自带来的陷阱，然后才写入。参考资料见{guide}。",
-      guide: "指南",
-      actions: {
-        zoomToggle: "放大 / 收起一个终端",
-        zoomNext: "放大下一个终端",
-        zoomPrev: "放大上一个终端",
-        focusNext: "把光标移到下一个终端（仅网格视图）",
-        focusPrev: "把光标移到上一个终端（仅网格视图）",
-        nextAttention: "跳到在等你的终端",
-        markUnread: "将这个终端标为未读 / 已读",
-        terminalNew: "打开启动面板",
-        terminalNewHere: "在这个终端的目录下打开启动面板",
-        terminalNewAdjacent: "直接在这个终端的目录下开一个 shell",
-        terminalClose: "关闭这个终端",
-        terminalRestart: "重启这个终端里的智能体",
-        terminalMovePrev: "将此终端前移",
-        terminalMoveNext: "将此终端后移",
-        filesFind: "在这个终端旁边，按文件名打开文件",
-        filesSearch: "在这个终端旁边，搜索文件内容",
-        commandPalette: "打开命令面板",
-        copy: "复制终端里选中的内容",
-        paste: "粘贴到终端",
-      },
-      list: "键盘快捷键",
-      notSet: "未设置",
-      sendRow: "把 {key} 发送到终端",
-      sendNone: "把按键发送到终端",
-      setUp: "设置快捷键…",
-    },
+    shortcuts: shortcutsZhCN,
 
     surviving: {
       intro:
@@ -141,8 +128,8 @@ export const zhCN: Messages = {
       sweepDisabledHint: "上面的清扫本身是关掉的，所以这里没有可重复的东西。",
       sweepRunning: "本服务器每 {hours} 小时重复一次清理。",
       sweepRunningOff: "本服务器仅在启动时清理一次，不会重复。",
-      sweepPending: "上面保存的间隔将从下次启动开始生效。",
-      sweepNote: "这个间隔在服务器启动时读取，所以在这里改动要下次启动才生效。",
+      sweepPending: "上面保存的间隔还没有到达这台服务器：请重新读取配置文件，或重启它。",
+      sweepNote: "在这里改动会立即生效，从上一次清理开始计算。",
       neverTitle: "永不自动结束。",
       neverHint: "它们会一直留着，直到你在这里停掉，或者从占着它的终端里结束它。",
       reapHint: "没有任何东西在用 —— 没人连接、这么久没有输出 —— 的会话{ended}。它的对话会保留。设为 0 就永不自动结束。",
@@ -212,7 +199,7 @@ export const zhCN: Messages = {
       prFooter: "在创建的 PR 末尾写上克隆名",
       prFooterHint: "在正文底部加一行 {line}，这样并排放着好几个克隆时，PR 能说明自己出自哪一个。",
       gitlabTitle: "自建 GitLab",
-      gitlabHint: "光看 URL 看不出这台主机跑的是哪种 forge，所以在这里声明，它的仓库就会用 {glab} 来读。需要 {authCommand}。下次服务器启动时生效。",
+      gitlabHint: "光看 URL 看不出这台主机跑的是哪种 forge，所以在这里声明，它的仓库就会用 {glab} 来读。需要 {authCommand}。立即生效。",
       gitlabField: "添加一台自建 GitLab 主机",
     },
 
@@ -228,11 +215,14 @@ export const zhCN: Messages = {
       worklogInterval: "多久运行一次：",
       worklogStepper: "开发工作日志的间隔",
       systemTasks: "内置的定时任务",
-      systemTasksHint: "两个都每小时运行一次，不关就一直开着。关掉某一个要等服务器下次启动才生效。",
+      systemTasksHint: "两个都每小时运行一次，不关就一直开着。开关立即生效。",
       feedRefresh: "刷新集合与订阅源",
       feedRefreshHint: "拉取你的 RSS/JSON 订阅源，并派发由 skill 支撑的集合更新，覆盖工作区和每个保存过的项目目录。一个订阅源都没注册时它什么也不做。",
       calendarSync: "同步 Google 日历",
       calendarSyncHint: "把有变动的日程拉进任何声明了 Google 日历的集合。在你连接账号之前它什么也不做。",
+      remoteServer: "实验功能：服务器运行在另一台机器上",
+      remoteServerHint:
+        "用于通过 SSH 隧道连接的服务器。隐藏或说明会在服务器屏幕上执行的操作（文件对话框、文件管理器、应用、Google 登录），并始终上传拖放的文件。立即生效；启动脚本在下次启动时读取。",
     },
 
     launchers: {
@@ -296,7 +286,6 @@ export const zhCN: Messages = {
       accountsIntro:
         "— Claude Code 或 Codex 的另一个登录，各自使用独立的配置目录。新单元格可以在启动表单中选择账户启动，其标题栏会显示该账户。会话始终留在启动时的账户上。",
       noAccounts: "尚未配置 — 所有单元格都使用默认登录。",
-      ...accountFormZhCN,
       addBackend: "添加一个后端…",
     },
 
@@ -421,6 +410,9 @@ export const zhCN: Messages = {
       loadAverageTitle: "Load average",
       loadAverageHint:
         "跑着你的会话的那台机器的负载，按核数的百分比表示 —— 100% 意味着每个核都有排队的活，这时再起一个智能体会让已经在跑的变慢。100% 转琥珀色，200% 转红色。不保留 load average 的主机（Windows）无论如何都不显示。",
+      searchBox: "在顶栏中间显示搜索框",
+      searchBoxTitle: "搜索框",
+      searchBoxHint: "在所有页面的顶栏中间显示一个打开命令面板的搜索框，与“命令”按钮和快捷键打开的是同一个面板。默认关闭。",
     },
 
     waitingRows: {
@@ -479,7 +471,7 @@ export const zhCN: Messages = {
       picker: "这个应用的语言",
       auto: "跟随浏览器的语言",
       autoResolved: "你的浏览器要的是 {locale}，所以这里按 {label} 显示。",
-      partial: "目前翻译过的是设置界面，以及网格上的状态词。应用的其余部分仍然是英文。",
+      partial: "目前翻译过的是设置界面、网格上的状态词，以及所有按钮的提示文字与屏幕阅读器文字。应用其余的文字仍然是英文。",
     },
   },
 
@@ -548,6 +540,7 @@ export const zhCN: Messages = {
   },
 
   launch: {
+    mcpGroupsNextStart: "从此目录下次启动的终端开始生效。已打开的单元仍使用启动时的工具，请重新启动它。",
     agentUnavailable: {
       missing: "此计算机上未安装 {agent}，因此无法在此启动。",
       noSuchPath: "{agent} 的命令覆盖设置指向的文件不存在，因此无法启动。",
@@ -558,41 +551,13 @@ export const zhCN: Messages = {
   },
 
   // 双键快捷键等待第二个键时显示的提示（#2265）。
-  commandPalette: {
-    open: "命令",
-    placeholder: "按名称运行操作",
-    close: "关闭命令面板",
-    empty: "没有匹配的操作。",
-    needsEnlarged: "仅在放大终端时",
-    needsNothingEnlarged: "仅在未放大时",
-    needsManualOrder: "仅限手动排序",
-    gridHidden: "仅在终端网格位于前台时",
-    hint: "Enter 运行 · Esc 关闭",
-    notSet: "无按键",
-    descriptions: {
-      zoomToggle: "放大光标所在的终端，或还原已放大的终端。",
-      zoomNext: "把放大移到屏幕顺序中的下一个终端。",
-      zoomPrev: "把放大移到上一个终端。",
-      focusNext: "在平铺网格中把光标移到下一个终端。",
-      focusPrev: "在平铺网格中把光标移到上一个终端。",
-      nextAttention: "前往等待你输入的终端，其次是已完成的，再其次是空闲的。",
-      markUnread: "把空闲的终端标为未读，把等待中的标为已读。对象是放大的终端，没有时是光标所在的终端。",
-      terminalNew: "在默认工作区打开启动面板。",
-      terminalNewHere: "在当前终端的目录打开启动面板。",
-      terminalNewAdjacent: "在当前终端的目录直接启动一个 shell，无需填写表单。",
-      terminalClose: "立即关闭当前终端，不作确认。",
-      terminalRestart: "重新启动当前终端中的代理，继续同一对话。",
-      terminalMovePrev: "在手动排序中将当前终端前移一位（网格和缩略图条中向左，列表中向上）。",
-      terminalMoveNext: "在手动排序中将当前终端后移一位（网格和缩略图条中向右，列表中向下）。",
-      filesFind: "在放大终端旁的 Files 面板中按名称查找文件。",
-      filesSearch: "在放大终端所在项目的文件内容中搜索。",
-    },
-  },
+  commandPalette: commandPaletteZhCN,
   // The path menu's file items. Its repository section stays in the forge's own words.
   pathMenu: {
     insertFilePath: "插入文件路径",
     reveal: "在文件管理器中显示",
     browseFiles: "在应用中浏览文件",
+    dirSettings: "此目录的设置",
     newTerminal: "在此处新建终端",
   },
   prefixKeys: {
@@ -620,9 +585,13 @@ export const zhCN: Messages = {
     items: {
       rooms: { label: "Rooms", detail: "终端之间的圆桌对话" },
       blueprints: { label: "蓝图", detail: "按模板逐步构建应用或文档" },
+      skills: { label: "Skills", detail: "列出并搜索 ~/.claude/skills 和各文件夹中的技能" },
+      processes: { label: "进程", detail: "各会话中运行的进程，以及可删除的 worktree" },
       worklog: { label: "Worklog", detail: "wiki 中的开发工作日志（#worklog）" },
+      usage: { label: "令牌用量", detail: "轮换中每个令牌剩余的 5 小时窗口和每周窗口" },
     },
   },
+  usageView: usageViewZhCN,
   rowMenu: {
     trigger: "此终端的操作",
     title: "操作",
@@ -637,6 +606,33 @@ export const zhCN: Messages = {
     wake: "唤醒",
     close: "关闭",
   },
+  fileOutline: {
+    button: "大纲",
+    tip: "此文件的标题（选择即可跳转）",
+    empty: "此文件没有标题。",
+  },
+  whatsNew: {
+    title: "新功能",
+    intro: "MulmoTerminal 已更新到 {version}。以下是自上次使用以来的变化。",
+    englishOnly: "版本说明以英文撰写。",
+    openOnWeb: "在网页中打开此页",
+    older: "更早的版本请查看更新日志。",
+    close: "知道了",
+  },
+  fileHistory: fileHistoryZhCN,
+  dirConfigSave: dirConfigSaveZhCN,
+  releaseNotes: releaseNotesZhCN,
+  dirConfigOpen: dirConfigOpenZhCN,
+  dirSettingsForm: dirSettingsFormZhCN,
+  themeEditor: themeEditorZhCN,
+  headerChips: headerChipsZhCN,
+  headerButtons: headerButtonsZhCN,
+  focusMode: focusModeZhCN,
+  settingsControls: settingsControlsZhCN,
+  ...filesTreeZhCN,
+  ...previewCodeCopyZhCN,
+  ...skillsViewZhCN,
+  ...processesViewZhCN,
   tips: tipsZhCN,
   forkTips: forkTipsZhCN,
   blueprints: blueprintsZhCN,

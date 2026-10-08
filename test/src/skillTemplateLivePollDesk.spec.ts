@@ -79,7 +79,6 @@ function loadDesk(): { moves: string[]; tell: Told; refuse: Refuse } {
   // Evaluated, because the page's own loader is not available here: this environment's jsdom does
   // not run <script> elements, and markup assigned through `innerHTML` never runs them anywhere. A
   // spec that only rendered the HTML would assert about buttons nothing had wired.
-  // eslint-disable-next-line sonarjs/code-eval -- the source is a file in this repository, read at test time
   new Function(script ?? "")();
 
   return {

@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import FilesPane from "../../../src/components/FilesPane.vue";
+import FileFinder from "../../../src/components/FileFinder.vue";
+import FileSearch from "../../../src/components/FileSearch.vue";
+import { isRecord } from "../../../common/isRecord";
 import { fakeCmEditor } from "../../helpers/cmEditorDouble";
+import { oneFile } from "./filesPaneFixture";
 
 // Don't instantiate real CodeMirror (needs a full DOM); capture the change callback so a
 // user edit can be simulated.
@@ -342,7 +346,7 @@ describe("FilesPane restoring a remembered tree", () => {
 
   it("re-opens the remembered directories, parents first, and the file", async () => {
     const w = mount(FilesPane, {
-      props: { cwd: "/proj", initialState: { openPath: "src/deep/app.ts", expanded: ["src/deep", "src"] } },
+      props: { cwd: "/proj", initialState: oneFile("src/deep/app.ts", { expanded: ["src/deep", "src"] }) },
     });
     await flushPromises();
 
@@ -399,7 +403,7 @@ describe("FilesPane restoring a remembered tree", () => {
     // level is just as wide and is spread across that many different parents.
     const first = Array.from({ length: WIDTH }, (_, i) => `d${i}`);
     const second = first.map((dir) => `${dir}/n0`);
-    mount(FilesPane, { props: { cwd: "/proj", initialState: { openPath: null, expanded: [...first, ...second] } } });
+    mount(FilesPane, { props: { cwd: "/proj", initialState: oneFile(null, { expanded: [...first, ...second] }) } });
     await flushPromises();
 
     [...first, ...second].forEach((path) => expect(started).toContain(path));
@@ -411,7 +415,7 @@ describe("FilesPane restoring a remembered tree", () => {
 
   it("skips anything that has since gone, without failing the rest", async () => {
     const w = mount(FilesPane, {
-      props: { cwd: "/proj", initialState: { openPath: null, expanded: ["gone", "src"] } },
+      props: { cwd: "/proj", initialState: oneFile(null, { expanded: ["gone", "src"] }) },
     });
     await flushPromises();
     expect(w.text()).toContain("deep"); // src still opened
@@ -450,7 +454,7 @@ describe("FilesPane restoring a remembered tree", () => {
     }) as unknown as typeof fetch;
 
     const w = mount(FilesPane, {
-      props: { cwd: "/proj", initialState: { openPath: "README.md", expanded: ["src"] } },
+      props: { cwd: "/proj", initialState: oneFile("README.md", { expanded: ["src"] }) },
     });
     await flushPromises(); // restore starts and blocks on srcListGate inside toggleDir("src")
 
@@ -465,19 +469,25 @@ describe("FilesPane restoring a remembered tree", () => {
   });
 
   it("reports what to remember", async () => {
-    const w = mount(FilesPane, { props: { cwd: "/proj", initialState: { openPath: "README.md", expanded: ["src"] } } });
+    const w = mount(FilesPane, { props: { cwd: "/proj", initialState: oneFile("README.md", { expanded: ["src"] }) } });
     await flushPromises();
     // Everything the host files away, in one assertion — so a field added to the snapshot has to
     // be named here rather than arriving unannounced (the caret and the tree's scroll came that
     // way in #2149).
     expect((w.vm as unknown as { snapshot: () => unknown }).snapshot()).toEqual({
-      openPath: "README.md",
+      // The open file is the only tab until the pane opens several (#2267).
+      tabs: [
+        {
+          path: "README.md",
+          showPreview: false,
+          // The file was just opened, so the caret is at its top — which is exactly what should be
+          // remembered about a file nobody has scrolled yet.
+          caret: { line: 1, col: 0 },
+          topLine: 1,
+        },
+      ],
+      activePath: "README.md",
       expanded: ["src"],
-      showPreview: false,
-      // The file was just opened, so the caret is at its top — which is exactly what should be
-      // remembered about a file nobody has scrolled yet.
-      caret: { line: 1, col: 0 },
-      topLine: 1,
       treeScrollTop: 0,
     });
   });
@@ -725,5 +735,49 @@ describe("the Canvas button", () => {
   it("is withheld when the cell's own directory is what the plugin refuses", async () => {
     expect(btn(await openRow("p.html", "/home/me/proj")).exists()).toBe(true);
     expect(btn(await openRow("p.html", "/home/me/.config/proj")).exists()).toBe(false);
+  });
+});
+
+// The palette's `/` and `#` (#2512): the text reaches the panel whether or not it is already open,
+// and a plain open afterwards starts empty rather than on the palette's last text.
+describe("FilesPane — a panel opened on text", () => {
+  beforeEach(mockFs);
+
+  const hasOpeners = (vm: unknown): vm is { openFinder: (query?: string) => void; openSearch: (query?: string) => void } =>
+    isRecord(vm) && typeof vm.openFinder === "function" && typeof vm.openSearch === "function";
+  const finderText = (w: ReturnType<typeof mount>) => w.find<HTMLInputElement>('[data-testid="file-finder-input"]').element.value;
+  const searchText = (w: ReturnType<typeof mount>) => w.find<HTMLInputElement>('[data-testid="file-search-input"]').element.value;
+
+  it("opens the finder on the text, takes new text while open, and a plain open starts empty", async () => {
+    const w = mount(FilesPane, { props: { cwd: "/proj" }, attachTo: document.body });
+    await flushPromises();
+    if (!hasOpeners(w.vm)) throw new Error("FilesPane exposes no openers");
+    w.vm.openFinder("app");
+    await flushPromises();
+    expect(finderText(w)).toBe("app");
+    w.vm.openFinder("lib");
+    await flushPromises();
+    expect(finderText(w)).toBe("lib");
+    w.findComponent(FileFinder).vm.$emit("close");
+    await flushPromises();
+    await w.find('[data-testid="files-find-btn"]').trigger("click");
+    await flushPromises();
+    expect(finderText(w)).toBe("");
+    w.unmount();
+  });
+
+  it("does the same for search in files", async () => {
+    const w = mount(FilesPane, { props: { cwd: "/proj" }, attachTo: document.body });
+    await flushPromises();
+    if (!hasOpeners(w.vm)) throw new Error("FilesPane exposes no openers");
+    w.vm.openSearch("TODO");
+    await flushPromises();
+    expect(searchText(w)).toBe("TODO");
+    w.findComponent(FileSearch).vm.$emit("close");
+    await flushPromises();
+    w.vm.openSearch();
+    await flushPromises();
+    expect(searchText(w)).toBe("");
+    w.unmount();
   });
 });

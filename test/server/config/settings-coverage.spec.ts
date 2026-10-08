@@ -32,7 +32,7 @@ const CONFIG_SKILL = "mulmoterminal-config";
 
 const REACHABLE_BY: Record<string, Reachable> = {
   cwdPresets: { ui: true, skill: "mulmoterminal-dirs" },
-  providers: { skill: "mulmoterminal-model" },
+  providers: { ui: true, skill: "mulmoterminal-model" },
   soundFile: { ui: true, skill: "mulmoterminal-notify" },
   soundKinds: { ui: true, skill: "mulmoterminal-notify" },
   sounds: { ui: true, skill: "mulmoterminal-notify" },
@@ -40,20 +40,21 @@ const REACHABLE_BY: Record<string, Reachable> = {
   gitlabHosts: { ui: true, skill: CONFIG_SKILL },
   repoDirs: { ui: true },
   launchers: { ui: true },
-  customAgents: { skill: "mulmoterminal-model" },
-  // Beside customAgents in the same skill (#2215). Unlike a provider or a custom agent, an account
-  // is not resolved and not run as written — it is just a login's config directory — so it gets a
-  // form like the launcher/MCP-server lists rather than staying display-only.
+  customAgents: { ui: true, skill: "mulmoterminal-model" },
+  // Beside customAgents in the same skill: both change how a cell's CLI is started (#2215).
   accounts: { ui: true, skill: "mulmoterminal-model" },
-  // Config-file only, like its two siblings in the same skill: it is a start-up decision (it gates
-  // whether the app runs without Claude Code at all), and a control that can only take effect on
-  // the next launch is a control that looks broken.
-  defaultAgent: { skill: "mulmoterminal-model" },
+  // Config.json only for now; the skill is how it is set (#2919).
+  tokenRotation: { skill: "mulmoterminal-model" },
+  // Half of it is a start-up decision (it gates whether the app runs without Claude Code at all), so
+  // the control offers an agent this machine cannot start only disabled — saving one would stop the
+  // next launch.
+  defaultAgent: { ui: true, skill: "mulmoterminal-model" },
   quickCommands: { ui: true },
   userMcpServers: { ui: true },
-  themes: { skill: "mulmoterminal-theme" },
-  buttons: { skill: "mulmoterminal-header" },
-  chips: { skill: "mulmoterminal-header" },
+  themes: { ui: true, skill: "mulmoterminal-theme" },
+  buttons: { ui: true, skill: "mulmoterminal-header" },
+  chips: { ui: true, skill: "mulmoterminal-header" },
+  commands: { skill: "mulmoterminal-header" },
   pushEnabled: { ui: true, skill: "mulmoterminal-notify" },
   pushKinds: { ui: true, skill: "mulmoterminal-notify" },
   worklogEnabled: { ui: true, skill: CONFIG_SKILL },
@@ -66,7 +67,11 @@ const REACHABLE_BY: Record<string, Reachable> = {
   // opened config.json — the argument for a control rather than against one.
   sessionReapIntervalHours: { ui: true, skill: CONFIG_SKILL },
   terminalSubmit: { ui: true, skill: "mulmoterminal-keys" },
-  keymap: { skill: "mulmoterminal-keys" },
+  keymap: { ui: true, skill: "mulmoterminal-keys" },
+  // Beside keymap: both decide what reaches an action, and neither has a control (#2540).
+  paletteAliases: { skill: "mulmoterminal-keys" },
+  // No Settings control: the palette's own panel adds one at a time (#2546), through its own route.
+  paletteFavorites: { skill: "mulmoterminal-keys" },
   copyOnSelect: { ui: true, skill: "mulmoterminal-keys" },
   questionPaneEnabled: { ui: true, skill: "mulmoterminal-keys" },
   decisionDigest: { ui: true, skill: CONFIG_SKILL },
@@ -77,23 +82,20 @@ const REACHABLE_BY: Record<string, Reachable> = {
   // Same owner as the other seven chrome colours, and for the same reason: it is one setting with
   // one shape, written to the global file as a DEFAULT and to a directory's file as an override.
   // Splitting the two halves across two skills would give one setting two owners.
-  headerStatusColors: { skill: "mulmoterminal-dirs" },
-  headerStatusTint: { skill: "mulmoterminal-dirs" },
+  headerStatusColors: { ui: true, skill: "mulmoterminal-dirs" },
+  headerStatusTint: { ui: true, skill: "mulmoterminal-dirs" },
   cockpitLines: { ui: true, skill: CONFIG_SKILL },
   showLoadAverage: { ui: true, skill: CONFIG_SKILL },
+  // Beside the load average in Settings → Grid header read-outs (#2569).
+  paletteSearchBox: { ui: true, skill: CONFIG_SKILL },
+  // Experimental (#2669): a box under Sessions and background tasks; the config skill documents it.
+  remoteServer: { ui: true, skill: CONFIG_SKILL },
   toolbarPins: { ui: true, skill: CONFIG_SKILL },
-  // Config-file only on purpose: a way to switch it off, not a feature to advertise.
-  playfulEffects: { skill: CONFIG_SKILL },
+  // On/off only in Settings, worded so it does not advertise: which pictures exist is left to find.
+  playfulEffects: { ui: true, skill: CONFIG_SKILL },
+  confetti: { ui: true, skill: CONFIG_SKILL },
   fontFamily: { ui: true, skill: "mulmoterminal-dirs" },
 };
-
-// The settings Settings can only SHOW. Each is structured enough that a form would be a small
-// editor with its own wrong-answer failure mode — a binding that steals a key the agent underneath
-// needs, a palette, a key in the wrong env var, a command that swallows the arguments it is handed,
-// a button whose command does nothing. Each has a section that displays its current state and
-// launches the owning skill, which is what the aria-label assertions in SettingsModal.spec pin.
-// Listed here so that moving one into the UI is a deliberate edit rather than a quiet lapse.
-const DISPLAY_ONLY = ["keymap", "themes", "providers", "customAgents", "buttons", "chips"];
 
 const readAll = (dir: string, ext: string): string => {
   const entries = readdirSync(dir, { withFileTypes: true, recursive: true });
@@ -111,10 +113,27 @@ const skillSource = (skill: string): string => readAll(path.join(SKILLS_DIR, ski
 // long before anything can save it, so "the string appears in the UI tree" would have passed
 // throughout the gap this exists to close.
 //
-// Three forms, named rather than pattern-guessed. A fourth way to write config should have to be
-// added here — there is no reason for there to be many.
-const writesKey = (source: string, key: string): boolean =>
-  source.includes(`postConfigField("${key}"`) || source.includes(`createGlobalFlag("${key}"`) || source.includes(`JSON.stringify({ ${key}:`);
+// Four forms, named rather than pattern-guessed. A fifth way to write config should have to be
+// added here — there is no reason for there to be many. The fourth is a list changed one entry at a
+// time on the server (#2620), so a tab never sends a copy that drops what it had not seen.
+const ONE_ENTRY_ROUTES: Partial<Record<string, string>> = {
+  customAgents: "/api/config/custom-agents/",
+  accounts: "/api/config/accounts/",
+  providers: "/api/config/providers/",
+  keymap: "/api/config/keymap/binding",
+  chips: "/api/config/chips/",
+  buttons: "/api/config/buttons/",
+  themes: "/api/config/themes/",
+};
+const writesKey = (source: string, key: string): boolean => {
+  const route = ONE_ENTRY_ROUTES[key];
+  return (
+    source.includes(`postConfigField("${key}"`) ||
+    source.includes(`createGlobalFlag("${key}"`) ||
+    source.includes(`JSON.stringify({ ${key}:`) ||
+    (route !== undefined && source.includes(route))
+  );
+};
 
 describe("every global setting is reachable", () => {
   it("classifies exactly the keys the config exposes", () => {
@@ -148,10 +167,5 @@ describe("every global setting is reachable", () => {
       .filter(([key, where]) => where.skill !== undefined && !skillSource(where.skill).includes(key))
       .map(([key, where]) => `${key} (expected in ${where.skill})`);
     expect(missing).toEqual([]);
-  });
-
-  it("keeps the display-only settings out of the UI's write paths", () => {
-    const editable = DISPLAY_ONLY.filter((key) => REACHABLE_BY[key]?.ui);
-    expect(editable).toEqual([]);
   });
 });

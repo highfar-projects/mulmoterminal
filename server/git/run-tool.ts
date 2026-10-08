@@ -8,6 +8,8 @@ export interface ToolRun {
   stderr: string;
   /** The call was killed at the deadline rather than finishing on its own. */
   timedOut: boolean;
+  /** The call was killed because its stdout passed `maxStdoutBytes`; `stdout` is then empty. */
+  overflow?: boolean;
   /** The exit code. Null when the process never ran (spawn refused or threw), or was killed — by
    *  the deadline, a signal, or `signal` aborting. */
   code: number | null;
@@ -27,6 +29,9 @@ export interface RunToolOpts {
   /** Kills the tree when it fires, for a caller whose own reason to wait has gone (a request the
    *  browser hung up on). Settles as `ok:false, code:null`, like a failed spawn. */
   signal?: AbortSignal | undefined;
+  /** Kills the tree once stdout passes this many bytes, for a caller that will not use an answer
+   *  that large anyway. Settles as `ok:false, overflow:true`. Unset reads all. */
+  maxStdoutBytes?: number | undefined;
 }
 
 // Run a local dev tool (git / gh) with argv only — no shell — collect its output, and
@@ -61,7 +66,16 @@ export function runTool(bin: string, args: string[], opts: RunToolOpts): Promise
 
     const outChunks: Buffer[] = [];
     const errChunks: Buffer[] = [];
-    stdout.on("data", (c: Buffer) => outChunks.push(c));
+    let received = 0;
+    stdout.on("data", (c: Buffer) => {
+      received += c.length;
+      if (opts.maxStdoutBytes !== undefined && received > opts.maxStdoutBytes) {
+        kill();
+        done({ ok: false, stdout: "", stderr: text(errChunks), timedOut: false, code: null, overflow: true });
+        return;
+      }
+      outChunks.push(c);
+    });
     // stderr MUST be read even when it is thrown away: git blocks on a full stderr pipe (a
     // repo that prints thousands of lfs/hook warnings easily exceeds the 64KB buffer), and an
     // unread pipe deadlocks the whole call. Discard the bytes, keep reading.

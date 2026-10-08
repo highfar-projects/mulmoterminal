@@ -60,6 +60,9 @@ export function hookSettingsJson({ host, port, sessionId, env = {}, unixSocket }
       Notification: entry,
       // SessionStart fires with source "clear" on /clear — used to reset the header prompt.
       SessionStart: entry,
+      // A turn that ended on an API error; `error_type: "rate_limit"` is what moves a rotated
+      // session to another credential (#2919).
+      StopFailure: entry,
       PreToolUse: toolEntry,
       PostToolUse: toolEntry,
       PostToolUseFailure: toolEntry,

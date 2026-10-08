@@ -62,6 +62,14 @@ button too, write it yourself in [`buttons`](#run) and you get both.
 
 ## 2. Add your first button {#first-button}
 
+**Without writing JSON:** Settings → **Header buttons and chips** adds a button to every terminal —
+one that runs a command in a new cell, types text into the agent, opens something (a URL, a folder, a
+view of the app, this branch's PR, a file picker) or runs one of the app's named operations — with an
+optional icon and condition. The pencil on a row edits that button in place (its id and place stay),
+and the others there remove or move it. The folder icon on a row puts that button in a folder — an
+existing one or a new one named there; a folder's buttons are listed under it, and one taken out lands
+right after the folder (the folder goes with its last button). Everything else is written as below.
+
 ### Which file to write in {#where}
 
 | File | Applies to |
@@ -193,24 +201,57 @@ Pressing it opens a cell like this and shows the output:
 > **Write only one per button.** Set several and **only the first** in that order takes effect; the
 > rest are silently ignored.
 
-### `run: "action"` — restart the agent in this cell {#run-action}
+### `run: "action"` — act on this cell {#run-action}
 
-Acts on the cell itself. One action so far:
+Acts on the cell itself — or, for the toolbar's operations at the end of the table, on the app. The
+names are the [keyboard shortcut](config.html#keymap) names, so the same operation is a button, a
+key, and a command-palette entry (the toolbar's are in the palette as its screen, Settings and
+choice rows):
+
+| `action` | What it does |
+|---|---|
+| `"terminal-new-here"` | Open the **launch panel** on this cell's directory — pick Claude, Codex, a shell, … (also the **＋** on row 2) |
+| `"terminal-new-adjacent"` | Start a **shell** in this cell's directory at once |
+| `"terminal-restart"` | Restart the agent in this cell (below) |
+| `"terminal-close"` | Close this cell |
+| `"zoom-toggle"` | Enlarge / collapse this cell |
+| `"terminal-move-prev"` / `"terminal-move-next"` | Move this cell one place (manual order only) |
+| `"mark-unread"` | Mark this cell unread / read |
+| `"terminal-park"` | Set this cell aside / wake it |
+| `"terminal-timeline"` | The **activity timeline** (Claude sessions only) |
+| `"terminal-talk"` | **Talk to another terminal** |
+| `"terminal-copy-code"` | **Copy the last code block** of the latest reply (the row-2 copy button) |
+| `"terminal-insert-path"` / `"terminal-reveal"` | **Insert a file path** at the prompt / **open the directory** in the file manager (the path menu's items) |
+| `"terminal-voice"` | **Voice input** on / off (the mic) |
+| `"terminal-diff"` / `"terminal-note"` | Open the **changes panel** (worktree with changes) / write or edit the **note** |
+| `"pane-files"` | The **files pane** beside this cell |
+| `"pane-prompts"` / `"pane-transcript"` | The **prompts you sent** / the **conversation** pane |
+| `"pane-tools"` / `"pane-canvas"` / `"pane-collections"` | The **tools used** / **Canvas** / **Collections** pane |
+| `"screen-wiki"`, `"screen-collections"`, … (every `screen-*`) | **Go to that screen** — the toolbar's doors |
+| `"settings-open"` / `"sound-toggle"` / `"view-toggle"` | Open Settings / notification sound on-off / enlarged view roster-strip |
+| `"order-auto"` / `"order-manual"` / `"order-priority"` | Set the cell order |
+| `"page-next"` / `"page-prev"` | Next / previous page of the grid |
+| `"terminal-reopen"` | Reopen the terminal closed most recently |
+
+A pane button toggles its pane on the enlarged cell. On a tiled cell it enlarges the cell and opens
+the pane, as *Browse files in the app* does. When the cell cannot do it — `terminal-timeline` on a
+non-Claude session, `terminal-talk` with no other terminal, a move outside manual order — the cell
+says so instead of doing nothing. `"restart"`, the name before the shortcut names were shared, still
+works.
 
 ```json
-{ "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "restart" }
+{ "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "terminal-restart" }
 ```
 
-`"restart"` ends the agent process and starts it again **in the same cell, in the same directory, on
+`"terminal-restart"` ends the agent process and starts it again **in the same cell, in the same directory, on
 the same conversation** — no going back to the launcher to pick the directory and hunt for the
 session in *or resume here*. This is what makes a changed MCP registration, an edited
 `~/.mulmoterminal/config.json` or an updated plugin take effect: those are read once, when the
 process starts.
 
 > **It costs a resume, and it asks nothing first.** The conversation is read back from its
-> transcript, which costs real tokens, and the agent is killed even mid-turn. There is no built-in
-> Restart button — this and the [`terminal-restart` shortcut](config.html#keymap) are the two ways
-> to have one.
+> transcript, which costs real tokens, and the agent is killed even mid-turn. Besides this button, the
+> cell's Tools menu and the [`terminal-restart` shortcut](config.html#keymap) restart it.
 
 ### Group buttons into a folder {#folder}
 
@@ -221,7 +262,7 @@ with its icon and label.
 ```json
 { "id": "ops", "icon": "construction", "label": "Operations",
   "items": [
-    { "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "restart" },
+    { "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "terminal-restart" },
     { "id": "test", "icon": "science", "label": "Run the tests", "run": "shell", "cmd": "yarn test" }
   ] }
 ```
@@ -231,6 +272,25 @@ with its icon and label.
   whose buttons are all hidden is not shown at all.
 - Ids stay unique across folders and plain buttons — a button inside a folder that repeats an id
   already used is dropped.
+
+### Commands for the command palette only {#commands}
+
+Something you run now and then does not need an icon on every header. Write it under **`commands`**
+instead of `buttons` — **exactly the same shape** (`run`, `when`, `${variables}`, folders) — and it
+appears only in the **command palette** (the toolbar's Commands button, or your `command-palette` key).
+
+```json
+{ "commands": [
+    { "id": "release", "label": "Cut a release", "run": "shell", "cmd": "yarn release" }
+  ] }
+```
+
+- It works in both files, `~/.mulmoterminal/config.json` and the project's `.mulmoterminal.json`,
+  merged by id like buttons.
+- The palette lists the commands **and every header button** of the terminal it acts on: the
+  enlarged one, or the one holding the cursor. `when` and `${variables}` resolve for that terminal,
+  and a `shell` command runs there. With no terminal to act on, none are listed.
+- A command cannot take an id a button already has; it is dropped.
 
 ---
 

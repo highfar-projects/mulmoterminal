@@ -9,6 +9,8 @@ const m = vi.hoisted(() => ({
   submitText: vi.fn(),
   insertText: vi.fn(),
   openTerminalAt: vi.fn(),
+  runAppAction: vi.fn((action: string) => action.length > 0),
+  requestGridCellAction: vi.fn((key: string | null, action: string) => key !== null && action.length > 0),
 }));
 vi.mock("../../../src/composables/useFilesView", () => ({ filesGotoIndex: m.filesGotoIndex }));
 vi.mock("../../../src/composables/useGithubView", () => ({ githubGotoIndex: m.githubGotoIndex }));
@@ -17,8 +19,11 @@ vi.mock("../../../src/composables/useCollectionBrowse", () => ({ browseGotoIndex
 vi.mock("../../../src/composables/useAccountingView", () => ({ accountingViewOpen: m.accountingViewOpen }));
 vi.mock("../../../src/composables/useTerminalConnections", () => ({ submitText: m.submitText, insertText: m.insertText }));
 vi.mock("../../../src/composables/useNewTerminal", () => ({ openTerminalAt: m.openTerminalAt }));
+vi.mock("../../../src/composables/runAppAction", () => ({ runAppAction: m.runAppAction }));
+vi.mock("../../../src/composables/useGridCellAction", () => ({ requestGridCellAction: m.requestGridCellAction }));
 
 import { runHeaderButton } from "../../../src/composables/useHeaderAction";
+import { setRemoteServer, REMOTE_SERVER_DECLINE_EN } from "../../../src/composables/remoteServer";
 import type { HeaderButton } from "../../../src/composables/useHeaderButtons";
 
 const btn = (over: Partial<HeaderButton>): HeaderButton => ({ id: "x", label: "X", run: "open", ...over });
@@ -44,6 +49,20 @@ describe("runHeaderButton", () => {
     runHeaderButton(btn({ run: "open", open: { url: "javascript:alert(1)" } }), null, null);
     expect(open).not.toHaveBeenCalled();
     open.mockRestore();
+  });
+
+  // #2669 (experimental): the file manager would open on the server's screen.
+  it("open reveal with remoteServer → says why and sends nothing", async () => {
+    const f = vi.fn();
+    vi.stubGlobal("fetch", f);
+    const report = vi.fn();
+    setRemoteServer(true);
+    runHeaderButton(btn({ run: "open", open: { reveal: "/dir" } }), null, null, report);
+    await Promise.resolve();
+    expect(report).toHaveBeenCalledWith(REMOTE_SERVER_DECLINE_EN);
+    expect(f).not.toHaveBeenCalled();
+    setRemoteServer(false);
+    vi.unstubAllGlobals();
   });
 
   it("open reveal → POST /api/open-dir", () => {
@@ -112,6 +131,51 @@ describe("runHeaderButton", () => {
     runHeaderButton(btn({ run: "open", open: { pickFile: true } }), null, null);
     expect(f).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
+  });
+
+  it("action → hands the action to the cell's handler, and says nothing when it was done", () => {
+    const report = vi.fn();
+    runHeaderButton(btn({ run: "action", action: "terminal-new-here" }), "cell-3", "/x", report);
+    expect(m.requestGridCellAction).toHaveBeenCalledWith("cell-3", "terminal-new-here");
+    expect(report).not.toHaveBeenCalled();
+  });
+
+  it("action → reports why when the cell declines, and ignores an action it does not know", () => {
+    const report = vi.fn();
+    m.requestGridCellAction.mockReturnValueOnce(false);
+    runHeaderButton(btn({ run: "action", action: "terminal-talk" }), "cell-3", "/x", report);
+    expect(report).toHaveBeenCalledWith("There is no other terminal to talk to.");
+
+    runHeaderButton(btn({ run: "action", action: "reboot" }), "cell-3", "/x", report);
+    expect(m.requestGridCellAction).toHaveBeenCalledTimes(1);
+
+    m.requestGridCellAction.mockReturnValueOnce(false);
+    runHeaderButton(btn({ run: "action", action: "pane-files" }), "single", "/x", report);
+    expect(report).toHaveBeenLastCalledWith("This button acts on a terminal in the grid.");
+  });
+
+  // #2653: a grid cell declining a self action says why, rather than the outside-grid fallback.
+  it.each(["terminal-copy-code", "terminal-insert-path", "terminal-reveal", "terminal-voice", "terminal-diff", "terminal-note"])(
+    "action → %s declined in the grid names its own reason",
+    (action) => {
+      const report = vi.fn();
+      m.requestGridCellAction.mockReturnValueOnce(false);
+      runHeaderButton(btn({ run: "action", action }), "cell-3", "/x", report);
+      expect(report).toHaveBeenCalledTimes(1);
+      expect(report.mock.calls[0]?.[0]).not.toBe("This button acts on a terminal in the grid.");
+    },
+  );
+
+  it("action → runs a toolbar operation for the app, and says so when it is not available", () => {
+    const report = vi.fn();
+    runHeaderButton(btn({ run: "action", action: "screen-wiki" }), "cell-3", "/x", report);
+    expect(m.runAppAction).toHaveBeenCalledWith("screen-wiki");
+    expect(m.requestGridCellAction).not.toHaveBeenCalled();
+    expect(report).not.toHaveBeenCalled();
+
+    m.runAppAction.mockReturnValueOnce(false);
+    runHeaderButton(btn({ run: "action", action: "screen-prs" }), "cell-3", "/x", report);
+    expect(report).toHaveBeenCalledTimes(1);
   });
 
   it("shell → defensive no-op warn (Terminal.vue emits `run` instead; server suppresses shell here)", () => {

@@ -46,6 +46,18 @@ const type = async (w: Awaited<ReturnType<typeof open>>, text: string) => {
   await flushPromises();
 };
 
+// The command palette's `/` hands its text over as the `seed` prop, also to a finder already open.
+describe("FileFinder — text handed over", () => {
+  it("opens on the seed's text and takes a new seed while open", async () => {
+    const w = mount(FileFinder, { props: { cwd: "/proj", seed: { text: "app" } }, attachTo: document.body });
+    await flushPromises();
+    expect(w.find<HTMLInputElement>('[data-testid="file-finder-input"]').element.value).toBe("app");
+    await w.setProps({ seed: { text: "lib" } });
+    expect(w.find<HTMLInputElement>('[data-testid="file-finder-input"]').element.value).toBe("lib");
+    w.unmount();
+  });
+});
+
 describe("FileFinder — what it asks for", () => {
   it("asks for the project it was given", async () => {
     await open();

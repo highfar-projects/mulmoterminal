@@ -44,7 +44,7 @@ type MountedHandler = (
 // a mock req/res — no HTTP server needed (mirrors gitRemote.spec). Each is wrapped to
 // carry the method and path Express would have set: the origin guard reads both, since it
 // is the same rule the central gate applies (a safe method is never judged by origin).
-function routes(isAllowedOrigin: (o?: string) => boolean): Record<string, Handler> {
+function routes(isAllowedOrigin: (o?: string) => boolean, homeDir?: string): Record<string, Handler> {
   const map: Record<string, Handler> = {};
   const capture =
     (method: string) =>
@@ -52,7 +52,7 @@ function routes(isAllowedOrigin: (o?: string) => boolean): Record<string, Handle
       map[`${method} ${p}`] = (req, res) => h({ ...req, method, path: p }, res);
     };
   const app = { get: capture("GET"), post: capture("POST") } as unknown as Express;
-  mountWorktreeRoutes(app, { isAllowedOrigin });
+  mountWorktreeRoutes(app, homeDir === undefined ? { isAllowedOrigin } : { isAllowedOrigin, homeDir });
   return map;
 }
 
@@ -68,6 +68,15 @@ describe("worktree routes: origin guard + validation", () => {
     const d = makeRes();
     await r["POST /api/worktrees/remove"]({ headers: { origin: "https://evil.example" }, body: { repoDir: "/x", path: "/y" } }, d);
     expect(d.statusCode).toBe(403);
+  });
+
+  it("403s a cleanup removal from a disallowed origin, 400s one without repoDir or path", async () => {
+    const denied = makeRes();
+    await routes(deny)["POST /api/worktrees/cleanup/remove"]({ headers: { origin: "https://evil.example" }, body: { repoDir: "/x", path: "/y" } }, denied);
+    expect(denied.statusCode).toBe(403);
+    const missing = makeRes();
+    await routes(allow)["POST /api/worktrees/cleanup/remove"]({ headers: {}, body: { repoDir: "/x" } }, missing);
+    expect(missing.statusCode).toBe(400);
   });
 
   it("400s create when the task is missing or blank", async () => {
@@ -207,6 +216,30 @@ describe("worktree routes: create → list → remove lifecycle", () => {
       const empty = makeRes();
       await r["GET /api/worktrees"]({ headers: {}, query: { cwd: repo } }, empty);
       expect((empty.payload as { worktrees: unknown[] }).worktrees).toEqual([]);
+    },
+    GIT_TEST_TIMEOUT_MS,
+  );
+
+  // The launch form sends the directory as typed: `~/repo` must reach the same repo, through
+  // every route the form calls with it — list, create and remove.
+  it.skipIf(!hasGit)(
+    "expands a leading ~ in cwd and repoDir to the home directory",
+    async () => {
+      const r = routes(allow, path.dirname(repo));
+      const typed = `~/${path.basename(repo)}`;
+
+      const created = makeRes();
+      await r["POST /api/worktrees/create"]({ headers: {}, body: { repoDir: typed, task: "Tilde" } }, created);
+      expect(created.statusCode).toBe(200);
+      const wt = created.payload as { path: string };
+
+      const listed = makeRes();
+      await r["GET /api/worktrees"]({ headers: {}, query: { cwd: typed } }, listed);
+      expect(listed.payload).toMatchObject({ isGit: true, worktrees: [{ path: wt.path }] });
+
+      const removed = makeRes();
+      await r["POST /api/worktrees/remove"]({ headers: {}, body: { repoDir: typed, path: wt.path, force: true, deleteBranch: true } }, removed);
+      expect(removed.statusCode).toBe(200);
     },
     GIT_TEST_TIMEOUT_MS,
   );

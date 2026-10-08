@@ -40,7 +40,7 @@ const makeDeps = (workPhase: WorkPhase | null = null) => ({
 });
 
 // A pty entry with just the fields the lifecycle reads.
-const fakeEntry = (over: Record<string, unknown> = {}) => ({ term: { kill: vi.fn() }, ws: null, cwd: "/work", tmux: false, ...over }) as never;
+const fakeEntry = (over: Record<string, unknown> = {}) => ({ term: { kill: vi.fn() }, ws: null, cwd: "/work", tmux: false, agent: "claude", ...over }) as never;
 
 const clearRegistry = () => {
   for (const map of [ptys, activity, knownSessions, lastPrompts, lastResponses, aiTitles, launchChoices]) map.clear();
@@ -193,14 +193,22 @@ describe("setWorking / setWaiting", () => {
 // is shouldRefreshReply's; what is pinned here is that the lifecycle actually asks it about THIS
 // session, since passing a constant would read as working right up to the clear.
 describe("publishActivity's reply refresh", () => {
-  const endATurn = () => {
-    ptys.set(ID, fakeEntry({ ws: {} }));
+  const endATurn = (agent = "claude") => {
+    ptys.set(ID, fakeEntry({ ws: {}, agent }));
     createSessionLifecycle(makeDeps()).setWaiting(ID, true, "Stop");
   };
 
   it("re-reads the transcript when a turn ends", () => {
     endATurn();
     expect(lastResponses.get(ID)).toBe("the reply on disk");
+  });
+
+  // The entry's agent, not a constant: codex ends turns with `waiting` too, and the read would be
+  // of a claude transcript that is not its conversation (#2124).
+  it("does not read claude's transcript for another agent's session", () => {
+    lastResponses.delete(ID);
+    endATurn("codex");
+    expect(lastResponses.has(ID)).toBe(false);
   });
 
   it("leaves a cleared session's blank reply alone", () => {

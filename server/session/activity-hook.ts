@@ -53,6 +53,9 @@ export function activityHookEffects(event: string, active: boolean, notification
         ];
   }
   if (event === "Notification") return active || !isActionableNotification(notificationType) ? [] : [{ kind: "waiting", value: true }];
+  // A turn that ended on an API error sends this INSTEAD of Stop, so without it the working dot
+  // stays lit on a session that has stopped. Nothing more: the error is on screen, not output to read.
+  if (event === "StopFailure") return [{ kind: "working", value: false }];
   return [];
 }
 

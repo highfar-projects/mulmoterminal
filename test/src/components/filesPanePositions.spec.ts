@@ -4,6 +4,7 @@ import { fakeCmEditor } from "../../helpers/cmEditorDouble";
 import FilesPane from "../../../src/components/FilesPane.vue";
 import type { FilesPaneState } from "../../../src/components/filesPaneState";
 import { MD_PREVIEW_FROM_FRAME } from "../../../common/mdPreviewMessage";
+import { frontTab, oneFile } from "./filesPaneFixture";
 
 const fakeEditor = fakeCmEditor("", { line: 12, col: 4 }, 9);
 vi.mock("../../../src/composables/usePubSub", () => ({
@@ -48,22 +49,26 @@ describe("FilesPane remembering where the reader was", () => {
     fs();
   });
 
+  // The caret belongs to the open FILE (#2267): with nothing open there is no tab to carry one.
   it("reports the caret and the tree's scroll in what it remembers", async () => {
-    const w = mount(FilesPane, { props: { cwd: "/proj" } });
+    const w = mount(FilesPane, { props: { cwd: "/proj", initialState: oneFile("notes.md") } });
     await flushPromises();
+    // The reader moves in the file after it opened; loading it put the caret at the top.
+    fakeEditor.goTo({ line: 12, col: 4 });
+    fakeEditor.scrollLineToTop(9);
     // Assigned, not redefined: `defineProperty` makes it read-only, and the pane writes to it when
     // the root changes — which then throws inside teardown rather than failing an assertion here.
     w.find('[aria-label="File tree"]').element.scrollTop = 240;
 
-    const snapshot = (w.vm as unknown as { snapshot: () => { caret?: unknown; topLine?: number; treeScrollTop?: number } }).snapshot();
-    expect(snapshot.caret).toEqual({ line: 12, col: 4 });
-    expect(snapshot.topLine).toBe(9); // what was on SCREEN, which scrolling moves and the caret does not
+    const snapshot = (w.vm as unknown as { snapshot: () => FilesPaneState }).snapshot();
+    expect(frontTab(snapshot)?.caret).toEqual({ line: 12, col: 4 });
+    expect(frontTab(snapshot)?.topLine).toBe(9); // what was on SCREEN, which scrolling moves and the caret does not
     expect(snapshot.treeScrollTop).toBe(240);
   });
 
   it("puts the caret back in the file it was remembered for", async () => {
     mount(FilesPane, {
-      props: { cwd: "/proj", initialState: { openPath: "notes.md", expanded: [], caret: { line: 31, col: 2 } } },
+      props: { cwd: "/proj", initialState: oneFile("notes.md", { expanded: [], caret: { line: 31, col: 2 } }) },
     });
     await flushPromises();
 
@@ -79,7 +84,7 @@ describe("FilesPane remembering where the reader was", () => {
     }) as unknown as typeof fetch;
 
     const w = mount(FilesPane, {
-      props: { cwd: "/proj", initialState: { openPath: "notes.md", expanded: [], caret: { line: 31, col: 2 } } },
+      props: { cwd: "/proj", initialState: oneFile("notes.md", { expanded: [], caret: { line: 31, col: 2 } }) },
     });
     await flushPromises();
 
@@ -88,7 +93,7 @@ describe("FilesPane remembering where the reader was", () => {
   });
 
   it("opens a file with no remembered caret at the top, asking for nothing", async () => {
-    mount(FilesPane, { props: { cwd: "/proj", initialState: { openPath: "notes.md", expanded: [] } } });
+    mount(FilesPane, { props: { cwd: "/proj", initialState: oneFile("notes.md", { expanded: [] }) } });
     await flushPromises();
 
     expect(fakeEditor.setDoc).toHaveBeenCalledWith("# hello", "notes.md");
@@ -98,7 +103,7 @@ describe("FilesPane remembering where the reader was", () => {
   // The rows have to exist before there is anything to scroll past, and the remembered expansions
   // are what create them — so the scroll is restored last, after they have rendered.
   it("scrolls the tree back after the remembered directories have opened", async () => {
-    const w = mount(FilesPane, { props: { cwd: "/proj", initialState: { openPath: null, expanded: ["src"], treeScrollTop: 180 } } });
+    const w = mount(FilesPane, { props: { cwd: "/proj", initialState: oneFile(null, { expanded: ["src"], treeScrollTop: 180 }) } });
     await flushPromises();
     await flushPromises();
 
@@ -111,7 +116,7 @@ describe("FilesPane remembering where the reader was", () => {
   // 130 — and a restore that only placed the caret put them back at the top of the file (#2149).
   it("puts back what was on screen, not only where the cursor was", async () => {
     mount(FilesPane, {
-      props: { cwd: "/proj", initialState: { openPath: "notes.md", expanded: [], caret: { line: 1, col: 0 }, topLine: 130 } },
+      props: { cwd: "/proj", initialState: oneFile("notes.md", { expanded: [], caret: { line: 1, col: 0 }, topLine: 130 }) },
     });
     await flushPromises();
 
@@ -123,7 +128,7 @@ describe("FilesPane remembering where the reader was", () => {
   // after it or the caret's scroll wins and the reader lands somewhere they never were.
   it("applies the remembered screen after the caret, not before", async () => {
     mount(FilesPane, {
-      props: { cwd: "/proj", initialState: { openPath: "notes.md", expanded: [], caret: { line: 200, col: 2 }, topLine: 180 } },
+      props: { cwd: "/proj", initialState: oneFile("notes.md", { expanded: [], caret: { line: 200, col: 2 }, topLine: 180 }) },
     });
     await flushPromises();
 
@@ -138,7 +143,7 @@ describe("FilesPane remembering where the reader was", () => {
   // for (Codex on #2156).
   it("keeps the reader's place when the open file is re-read under them", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    const w = mount(FilesPane, { props: { cwd: "/proj", initialState: { openPath: "notes.md", expanded: [], caret: { line: 200, col: 0 } } } });
+    const w = mount(FilesPane, { props: { cwd: "/proj", initialState: oneFile("notes.md", { expanded: [], caret: { line: 200, col: 0 } }) } });
     await flushPromises();
     expect(fakeEditor.caretAt()).toEqual({ line: 200, col: 0 });
 
@@ -161,7 +166,7 @@ describe("FilesPane remembering where the reader was", () => {
   // Codex found this gap one field after the caret's — a rule written field by field earns that.
   it("keeps what is on screen when the open file is re-read under them", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    const w = mount(FilesPane, { props: { cwd: "/proj", initialState: { openPath: "notes.md", expanded: [], topLine: 130 } } });
+    const w = mount(FilesPane, { props: { cwd: "/proj", initialState: oneFile("notes.md", { expanded: [], topLine: 130 }) } });
     await flushPromises();
     expect(fakeEditor.topLine()).toBe(130);
 
@@ -182,7 +187,7 @@ describe("FilesPane remembering where the reader was", () => {
 
   // Opening ANOTHER file is not a re-read: that caret belongs to the text it was in.
   it("does not carry a caret into a different file", async () => {
-    const w = mount(FilesPane, { props: { cwd: "/proj", initialState: { openPath: "notes.md", expanded: [], caret: { line: 200, col: 0 } } } });
+    const w = mount(FilesPane, { props: { cwd: "/proj", initialState: oneFile("notes.md", { expanded: [], caret: { line: 200, col: 0 } }) } });
     await flushPromises();
     fakeEditor.goTo.mockClear();
 
@@ -201,13 +206,13 @@ describe("FilesPane remembering where the reader was", () => {
     ["a remembered top", 0],
     ["nothing remembered", undefined],
   ])("does not leave the previous root's scroll behind when re-rooted with %s", async (_case, treeScrollTop) => {
-    const w = mount(FilesPane, { props: { cwd: "/left", initialState: { openPath: null, expanded: ["src"], treeScrollTop: 300 } } });
+    const w = mount(FilesPane, { props: { cwd: "/left", initialState: oneFile(null, { expanded: ["src"], treeScrollTop: 300 }) } });
     await flushPromises();
     await flushPromises();
     const tree = w.find('[aria-label="File tree"]').element;
     expect(tree.scrollTop).toBe(300);
 
-    await w.setProps({ cwd: "/right", initialState: { openPath: null, expanded: ["src"], ...(treeScrollTop === undefined ? {} : { treeScrollTop }) } });
+    await w.setProps({ cwd: "/right", initialState: oneFile(null, { expanded: ["src"], ...(treeScrollTop === undefined ? {} : { treeScrollTop }) }) });
     await (w.vm as unknown as { reload: () => Promise<void> }).reload();
     await flushPromises();
     await flushPromises();
@@ -216,7 +221,7 @@ describe("FilesPane remembering where the reader was", () => {
   });
 
   it("leaves the tree at the top when nothing was remembered", async () => {
-    const w = mount(FilesPane, { props: { cwd: "/proj", initialState: { openPath: null, expanded: ["src"] } } });
+    const w = mount(FilesPane, { props: { cwd: "/proj", initialState: oneFile(null, { expanded: ["src"] }) } });
     await flushPromises();
     await flushPromises();
 
@@ -256,7 +261,8 @@ describe("FilesPane remembering where the reader was in Preview", () => {
    *  pane can identify it by. */
   const reportScroll = (wrapper: ReturnType<typeof mount>, scrollY: number) => {
     const frame = wrapper.find("iframe").element;
-    const event = new MessageEvent("message", { data: { source: MD_PREVIEW_FROM_FRAME, kind: "scroll", scrollY } });
+    const token = new URL(wrapper.find("iframe").attributes("src") ?? "", "https://x").searchParams.get("wire");
+    const event = new MessageEvent("message", { data: { source: MD_PREVIEW_FROM_FRAME, kind: "scroll", scrollY, token } });
     Object.defineProperty(event, "source", { value: frame.contentWindow });
     window.dispatchEvent(event);
   };
@@ -269,32 +275,32 @@ describe("FilesPane remembering where the reader was in Preview", () => {
   it("reports where Preview was scrolled to in what it remembers", async () => {
     const w = mount(FilesPane, {
       attachTo: document.body,
-      props: { cwd: "/proj", initialState: { openPath: "notes.md", expanded: [], showPreview: true } },
+      props: { cwd: "/proj", initialState: oneFile("notes.md", { expanded: [], showPreview: true }) },
     });
     await flushPromises();
     reportScroll(w, 317);
 
-    expect(snapshotOf(w).previewScrollTop).toBe(317);
+    expect(frontTab(snapshotOf(w))?.previewScrollTop).toBe(317);
   });
 
   // Absent, not zero: "nothing was remembered" and "they were at the top" are the same place, and
   // the smaller snapshot is the one that says so.
   it("says nothing about a document nobody scrolled", async () => {
-    const w = mount(FilesPane, { props: { cwd: "/proj", initialState: { openPath: "notes.md", expanded: [], showPreview: true } } });
+    const w = mount(FilesPane, { props: { cwd: "/proj", initialState: oneFile("notes.md", { expanded: [], showPreview: true }) } });
     await flushPromises();
 
-    expect(snapshotOf(w).previewScrollTop).toBeUndefined();
+    expect(frontTab(snapshotOf(w))?.previewScrollTop).toBeUndefined();
   });
 
   // It comes back so it can be handed to the next document that says it is ready — the pane holds
   // the place across a reload the frame does on its own.
   it("takes a remembered position back for the file it was remembered for", async () => {
     const w = mount(FilesPane, {
-      props: { cwd: "/proj", initialState: { openPath: "notes.md", expanded: [], showPreview: true, previewScrollTop: 240 } },
+      props: { cwd: "/proj", initialState: oneFile("notes.md", { expanded: [], showPreview: true, previewScrollTop: 240 }) },
     });
     await flushPromises();
 
-    expect(snapshotOf(w).previewScrollTop).toBe(240);
+    expect(frontTab(snapshotOf(w))?.previewScrollTop).toBe(240);
   });
 
   // A position in one document is not a position in another. Opening another file drops the mode
@@ -303,14 +309,14 @@ describe("FilesPane remembering where the reader was in Preview", () => {
   it("forgets it when another file is opened", async () => {
     const w = mount(FilesPane, {
       attachTo: document.body,
-      props: { cwd: "/proj", initialState: { openPath: "notes.md", expanded: [], showPreview: true } },
+      props: { cwd: "/proj", initialState: oneFile("notes.md", { expanded: [], showPreview: true }) },
     });
     await flushPromises();
     reportScroll(w, 317);
-    expect(snapshotOf(w).previewScrollTop).toBe(317);
+    expect(frontTab(snapshotOf(w))?.previewScrollTop).toBe(317);
     await (w.vm as unknown as { openFile: (p: string) => Promise<void> }).openFile("other.md");
     await flushPromises();
 
-    expect(snapshotOf(w).previewScrollTop).toBeUndefined();
+    expect(frontTab(snapshotOf(w))?.previewScrollTop).toBeUndefined();
   });
 });

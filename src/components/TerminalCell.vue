@@ -21,6 +21,7 @@ import { opensOnConfiguredDefault } from "./cellLaunchAgent";
 import { launchAgentPick } from "../composables/launchAgentPick";
 import { customAgentIdOf, customAgentPick, isCustomAgentId, type AgentPick, type CustomAgent } from "../../common/customAgents";
 import { accountLabel, type AgentAccount } from "../../common/agentAccounts";
+import type { CellCredential } from "../composables/cellCredential";
 import AccountMark from "./AccountMark.vue";
 import { unsavedWork } from "./unsavedWork";
 import { shouldPromptTidy } from "./mergedTidy";
@@ -47,11 +48,14 @@ import ModelContextBadge from "./ModelContextBadge.vue";
 import type { LaunchChoice } from "./wsUrl";
 import type { RunCommand } from "./runCommand";
 import { useHeaderButtons } from "../composables/useHeaderButtons";
+import { CELL_CHIP_IDS, isCellChipId } from "../../common/headerChips";
 import CellPathMenu from "./CellPathMenu.vue";
-import { registerCellRestart } from "../composables/useCellRestart";
+import { registerCellAction } from "../composables/useCellAction";
+import type { CellSelfAction } from "../../common/headerActions";
 import { reapSessionOnServer, restartSession } from "../composables/restartSession";
 import TimelineOverlay from "./TimelineOverlay.vue";
 import CopyCodeBlock from "./CopyCodeBlock.vue";
+import { pickFileInto, revealDir } from "../composables/useHeaderAction";
 import CockpitHeader from "./CockpitHeader.vue";
 import CockpitRowMenu from "./CockpitRowMenu.vue";
 import CellChromeButtons from "./CellChromeButtons.vue";
@@ -99,6 +103,7 @@ import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTim
 const ASK_MSG_MS = 4000;
 
 const termRef = useTemplateRef<InstanceType<typeof TerminalView>>("termRef");
+const copyCodeRef = useTemplateRef<InstanceType<typeof CopyCodeBlock>>("copyCodeRef");
 
 // Clicking the header background zooms this cell (mirrors clicking the terminal body) —
 // in the tiled grid and as a filmstrip thumbnail alike. Only the already-expanded cell
@@ -478,10 +483,8 @@ const context = ref<CellContext | null>(null);
 // (git/diff/ctx/usage) render in that order — others are hidden — and custom chips render as text. `dir`,
 // the project badge, the status dot/activity, and the row-2 tools timeline stay structural.
 const { chips: headerChips, env: worktreeEnv } = useHeaderButtons({ cwd, session: sessionId, agent, model: computed(() => context.value?.model ?? null) });
-const ROW1_BUILTIN_CHIPS = new Set(["git", "work", "diff", "ctx", "usage", "env"]);
 // `env` is in the defaults and costs nothing to a project that declares no `worktreeEnv`: the
 // chip renders nothing when there are no values, so this only shows up where it was asked for.
-const DEFAULT_CELL_CHIP_IDS = ["git", "work", "diff", "ctx", "usage", "env"];
 interface CellChipView {
   key: string;
   builtin: string | null;
@@ -489,12 +492,12 @@ interface CellChipView {
 }
 const cellChips = computed<CellChipView[]>(() => {
   const configured = headerChips.value;
-  if (configured === null) return DEFAULT_CELL_CHIP_IDS.map((id) => ({ key: `b-${id}`, builtin: id, custom: null }));
+  if (configured === null) return CELL_CHIP_IDS.map((id) => ({ key: `b-${id}`, builtin: id, custom: null }));
   const views: CellChipView[] = [];
   // Key by index so a config that repeats a built-in (sanitizeChips allows duplicates) can't collide.
   configured.forEach((chip, i) => {
     if (chip.kind === "custom") views.push({ key: `c-${i}`, builtin: null, custom: { label: chip.label, text: chip.text } });
-    else if (ROW1_BUILTIN_CHIPS.has(chip.id)) views.push({ key: `b-${i}-${chip.id}`, builtin: chip.id, custom: null });
+    else if (isCellChipId(chip.id)) views.push({ key: `b-${i}-${chip.id}`, builtin: chip.id, custom: null });
   });
   return views;
 });
@@ -744,7 +747,11 @@ const launchChoice = ref<LaunchChoice | null>(props.initialLaunchChoice ?? null)
 // cell like the model choice, so a relaunch in the same cell repeats it. The server binds a session
 // to its account when it first starts, so this only ever decides a NEW session.
 const accountId = ref<string | null>(props.initialAccount ?? null);
-const accountMarkLabel = computed(() => (accountId.value ? accountLabel(props.accounts ?? [], accountId.value) : null));
+// The rotation credential the server started this session's process on (#2919) — a different
+// subscription from the cell beside it, in the same home, so it wears the same mark an account does.
+const cellCredential = ref<CellCredential | null>(null);
+const accountMarkLabel = computed(() => (accountId.value ? accountLabel(props.accounts ?? [], accountId.value) : (cellCredential.value?.label ?? null)));
+const accountMarkDetail = computed(() => (accountId.value ? null : (cellCredential.value?.detail ?? null)));
 
 // Start what the Agent Picker picked, in `dir`. EVERY launch in the form goes through here: the
 // picker decides for the dir field, for a preset chip, and for a worktree alike, and a rule
@@ -1026,16 +1033,84 @@ async function restart(): Promise<void> {
   }
 }
 
-// Both ways in — a `run: "action"` header button and the `terminal-restart` shortcut — land here.
-// False while this cell is still on its launch form, so the caller can say so rather than leaving
-// a button that silently does nothing.
-onUnmounted(
-  registerCellRestart(`cell-${props.uid}`, () => {
-    if (!launched.value || !sessionId.value) return false;
-    void restart();
-    return true;
-  }),
-);
+// What this cell does by itself, however it was asked — a header button, a shortcut, the palette —
+// all through the grid (TerminalGrid.runCellAction). False when it cannot do it now (still on its
+// launch form, not a Claude session, no one to talk to), so the caller can say so rather than
+// leaving a button that silently does nothing. Wrapped in arrows: several are declared further down.
+const SELF_ACTIONS: Record<CellSelfAction, () => boolean> = {
+  "terminal-restart": () => startRestart(),
+  "terminal-timeline": () => openTimeline(),
+  "terminal-talk": () => openTalk(),
+  "terminal-park": () => parkOrWake(),
+  "terminal-copy-code": () => copyLastCode(),
+  "terminal-insert-path": () => insertPickedPath(),
+  "terminal-reveal": () => revealHere(),
+  "terminal-voice": () => termRef.value?.toggleVoice() ?? false,
+  "terminal-diff": () => openDiffIfAny(),
+  "terminal-note": () => editNote(),
+};
+// Every one of them but set-aside needs the terminal itself: on the launch form there is no session,
+// no prompt and no directory yet chosen, only the draft the form is showing. Stated as the rule
+// rather than per action, because checking each one separately missed two of them in review.
+const runCellAction = (action: CellSelfAction): boolean => (launched.value || action === "terminal-park") && SELF_ACTIONS[action]();
+
+function parkOrWake(): boolean {
+  togglePark();
+  return true;
+}
+
+// The diff chip's panel, where there is a chip: a worktree with something ahead or uncommitted.
+function openDiffIfAny(): boolean {
+  if (!showDiffBadge.value) return false;
+  openDiff();
+  return true;
+}
+
+function editNote(): boolean {
+  if (!sessionId.value) return false;
+  startMemoEdit();
+  return true;
+}
+
+// The row-2 copy button's own copy; absent until a session exists, as the button is.
+function copyLastCode(): boolean {
+  if (!copyCodeRef.value) return false;
+  void copyCodeRef.value.copyLastBlock();
+  return true;
+}
+
+// The path menu's two items, with the same failure reports it gives.
+function insertPickedPath(): boolean {
+  void pickFileInto(`cell-${props.uid}`, (message) => void termRef.value?.showHint(message, "folder_open"));
+  return true;
+}
+
+function revealHere(): boolean {
+  if (!cwd.value) return false;
+  void revealDir(cwd.value, showAskMsg);
+  return true;
+}
+
+function startRestart(): boolean {
+  if (!launched.value || !sessionId.value) return false;
+  void restart();
+  return true;
+}
+
+function openTimeline(): boolean {
+  if (!sessionId.value || agent.value !== "claude") return false;
+  timelineOpen.value = true;
+  return true;
+}
+
+function openTalk(): boolean {
+  refreshAskTargets();
+  if (!talkAvailable.value) return false;
+  openAskMenu();
+  return true;
+}
+
+onUnmounted(registerCellAction(`cell-${props.uid}`, runCellAction));
 
 // Closing a WORKTREE cell offers to keep or remove the room first (never silently
 // discards uncommitted/unpushed work); other cells just tear down.
@@ -1639,7 +1714,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                  on the filmstrip thumbnail too (the CockpitHeader above), unlike the info chips
                  below, because it is identity rather than status. -->
             <CollectionMark :collection="collection" />
-            <AccountMark v-if="launched" :label="accountMarkLabel" />
+            <AccountMark v-if="launched" :label="accountMarkLabel" :detail="accountMarkDetail" />
             <!-- The path is NOT here any more — it is the lead item on row 2 (see the
                `header-lead` template below). It had `min-w-[16ch]`, a floor of roughly a third of
                this track, and once it hit that floor the only thing left that could shrink was the
@@ -1902,6 +1977,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
           @session="onSession"
           @input="onTerminalInput"
           @cwd="onServerCwd"
+          @credential="(credential) => (cellCredential = credential)"
           @run="(cmd) => emit('runSpare', cmd)"
           @canvas="emit('canvas')"
         >
@@ -1927,7 +2003,19 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
             />
           </template>
           <template #header-actions>
-            <CopyCodeBlock v-if="sessionId" :class="CELL_BTN" :session-id="sessionId" :cwd="cwd" :agent="agent" />
+            <CopyCodeBlock v-if="sessionId" ref="copyCodeRef" :class="CELL_BTN" :session-id="sessionId" :cwd="cwd" :agent="agent" />
+            <!-- Row 2, away from close (#2353): the launch panel on this directory, with the agent to
+                 pick — which the path menu's "New terminal here", a plain shell, cannot offer. -->
+            <button
+              class="cell-btn"
+              :class="CELL_BTN"
+              data-testid="cell-new-here-btn"
+              :data-tip="t('tips.cell.newHere')"
+              :aria-label="t('tips.cell.newHere')"
+              @click="emit('new-here')"
+            >
+              <span class="material-symbols-outlined" aria-hidden="true">add</span>
+            </button>
           </template>
         </TerminalView>
         <div

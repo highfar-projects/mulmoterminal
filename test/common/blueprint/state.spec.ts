@@ -72,6 +72,29 @@ describe("applyEvent — the happy path", () => {
     });
   });
 
+  it("keeps a question's choices only as long as the question", () => {
+    const choices = [{ label: "Fix" }, { label: "Leave", recommended: true as const }];
+    const asked = run([
+      ["init", { type: "start" }],
+      ["init", { type: "ask", question: "Fix the type?", choices }],
+    ]);
+    expect(asked.steps.init).toMatchObject({ status: "awaiting-answer", question: "Fix the type?", choices });
+    expect(blueprintStateSchema.parse(JSON.parse(JSON.stringify(asked)))).toEqual(asked);
+    const reasked = run([["init", { type: "ask", question: "Which region?" }]], asked);
+    expect(reasked.steps.init.choices).toBeUndefined();
+    const answered = run([["init", { type: "answer", answer: "Fix", atMs: 5 }]], asked);
+    expect(answered.steps.init.choices).toBeUndefined();
+    expect(answered.steps.init.answers).toEqual([{ question: "Fix the type?", answer: "Fix", atMs: 5 }]);
+  });
+
+  it("treats an empty list of choices as a plain question", () => {
+    const asked = run([
+      ["init", { type: "start" }],
+      ["init", { type: "ask", question: "q", choices: [] }],
+    ]);
+    expect(asked.steps.init.choices).toBeUndefined();
+  });
+
   it("reports nothing current once every step passed", () => {
     const done = run([
       ["init", { type: "start" }],
@@ -304,6 +327,23 @@ describe("applyEvent — a repeating step", () => {
   it("starts the next round from a passed round, with that round's answers cleared and its check kept", () => {
     const result = apply(passedRound(), "work", { type: "repeat" });
     expect(result.ok && result.state.steps.work).toMatchObject({ status: "running", round: 1, answers: [], lastCheck: { ok: true } });
+  });
+
+  it("keeps a finished round's answers, numbered from 1, when the next round starts, beside the rounds before it", () => {
+    const first = apply(passedRound(), "work", { type: "repeat" });
+    if (!first.ok) throw new Error(first.reason);
+    expect(first.state.steps.work?.earlierRounds).toEqual([{ round: 1, question: "which?", answer: "this", atMs: 2 }]);
+    const asked = apply(first.state, "work", { type: "ask", question: "and now?" });
+    if (!asked.ok) throw new Error(asked.reason);
+    const answered = apply(asked.state, "work", { type: "answer", answer: "that", atMs: 5 });
+    if (!answered.ok) throw new Error(answered.reason);
+    const checked = apply(answered.state, "work", passed(6));
+    if (!checked.ok) throw new Error(checked.reason);
+    const second = apply(checked.state, "work", { type: "repeat" });
+    expect(second.ok && second.state.steps.work?.earlierRounds).toEqual([
+      { round: 1, question: "which?", answer: "this", atMs: 2 },
+      { round: 2, question: "and now?", answer: "that", atMs: 5 },
+    ]);
   });
 
   it("counts rounds up", () => {

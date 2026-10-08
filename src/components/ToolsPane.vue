@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted } from "vue";
-import { useSessionFeed } from "../composables/useSessionFeed";
-import { readToolCall, type ToolCall } from "./toolCall";
+import { useToolCallFeed } from "../composables/useToolCallFeed";
+import type { ToolCall } from "./toolCall";
 import { onToolGroupsAnnounced } from "../composables/useToolGroupsAnnounce";
 import { isRecord, optionalString } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
@@ -153,19 +153,13 @@ function callKey(c: ToolCall, i: number): string {
   return c.toolUseId ?? `${c.toolName}-${i}`;
 }
 
-// Keying by tool_use_id lets a PostToolUse complete the "running" entry its
-// PreToolUse created.
-useSessionFeed(toolCalls, {
-  sessionId: () => props.sessionId,
-  historyUrl: (id) => `/api/tool-calls/${encodeURIComponent(id)}`,
-  historyKey: "toolCalls",
-  channel: (id) => `toolcalls:${id}`,
-  identify: (call) => call.toolUseId,
-  parse: readToolCall,
-  onSessionChange: () => {
+useToolCallFeed(
+  toolCalls,
+  () => props.sessionId,
+  () => {
     expandedCalls.value = new Set();
   },
-});
+);
 
 function toggleTool(name: string) {
   const next = new Set(expandedTools.value);

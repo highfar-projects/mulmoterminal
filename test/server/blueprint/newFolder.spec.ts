@@ -1,7 +1,16 @@
 // @vitest-environment node
 import path from "node:path";
 import { describe, it, expect } from "vitest";
-import { expandHome, folderHomes, folderPlan, nameCandidates, NAME_TRIES, type Presence } from "../../../server/blueprint/newFolder";
+import {
+  expandHome,
+  folderCandidates,
+  folderHomes,
+  trustPlace,
+  folderPlan,
+  nameCandidates,
+  NAME_TRIES,
+  type Presence,
+} from "../../../server/blueprint/newFolder";
 
 const DIR = path.resolve("/work/new");
 
@@ -62,5 +71,32 @@ describe("expandHome", () => {
     ["~~/x", "/"],
   ])("leaves %s (separator %s) as it is", (input, separator) => {
     expect(expandHome(input, HOME, separator)).toBe(input);
+  });
+});
+
+describe("folderCandidates", () => {
+  const resolved = (dirs: string[]): string[] => dirs.map((dir) => path.resolve(dir));
+
+  it("puts the recent builds' folders first in their order, then the saved ones, each once", () => {
+    expect(folderCandidates(["/w/b", "/w/a", "/w/b"], ["/s/x", "/w/a", "/s/y"], 10)).toEqual(resolved(["/w/b", "/w/a", "/s/x", "/s/y"]));
+  });
+
+  it("counts two spellings of one folder once, and leaves out a relative path", () => {
+    expect(folderCandidates(["/w/a/", "/w/./a"], ["w/a", "", "/w/a/../a"], 10)).toEqual(resolved(["/w/a"]));
+  });
+
+  it("is empty with nothing to offer", () => {
+    expect(folderCandidates([], [], 10)).toEqual([]);
+  });
+
+  it("takes at most the given number of recent builds' folders, counted after repeats are dropped, and every saved one", () => {
+    expect(folderCandidates(["/w/a", "/w/a", "/w/b", "/w/c"], ["/s/x", "/w/c"], 2)).toEqual(resolved(["/w/a", "/w/b", "/s/x", "/w/c"]));
+  });
+});
+
+describe("trustPlace", () => {
+  it("is the folder when it is there, and its parent while it is still to be made", () => {
+    expect(trustPlace(path.join("/w", "docs"), false)).toBe(path.join("/w", "docs"));
+    expect(trustPlace(path.join("/w", "docs"), true)).toBe("/w".replace("/", path.sep));
   });
 });

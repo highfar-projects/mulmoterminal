@@ -22,6 +22,35 @@ describe("scanForUserInput", () => {
     expect(scan(`${ESC}[24;80R`).fromUser).toBe(false);
   });
 
+  // Every other reply xterm.js 6 writes from `triggerDataEvent`, spelled the way it writes them.
+  it("does not read the rest of xterm.js's replies as typing", () => {
+    [
+      `${ESC}[?24;80R`, // DEC private cursor position
+      `${ESC}[0n`, // device status
+      `${ESC}[?2026;2$y`, // private mode report
+      `${ESC}[4;2$y`, // ANSI mode report
+      `${ESC}[4;600;800t`, // text area in pixels
+      `${ESC}[6;17;9t`, // cell in pixels
+      `${ESC}[8;24;80t`, // text area in cells
+      `${ESC}]4;1;rgb:cdcd/3131/3131${ESC}\\`, // palette colour
+      `${ESC}P1$r0m${ESC}\\`, // setting report: SGR
+      `${ESC}P1$r2 q${ESC}\\`, // setting report: cursor style
+      `${ESC}P0$r${ESC}\\`, // setting report: invalid request
+    ].forEach((reply) => expect(scan(reply)).toEqual({ fromUser: false, pending: "" }));
+  });
+
+  it("holds a mode report split before its final letter", () => {
+    const first = scan(`${ESC}[?2026;2$`);
+    expect(first).toEqual({ fromUser: false, pending: `${ESC}[?2026;2$` });
+    expect(scan("y", first.pending)).toEqual({ fromUser: false, pending: "" });
+  });
+
+  it("still reads keys that share a reply's first bytes as typing", () => {
+    [`${ESC}[1;5C`, `${ESC}[3~`, `${ESC}[15;2~`, `${ESC}[27;5;9~`, `${ESC}[97;5u`, `${ESC}P`, `${ESC}[200~text${ESC}[201~`].forEach((key) =>
+      expect(scan(key).fromUser).toBe(true),
+    );
+  });
+
   // The other half, and the one that must not slip: these ARE the user answering.
   it("reads anything a person could have typed as typing", () => {
     expect(scan("a").fromUser).toBe(true);

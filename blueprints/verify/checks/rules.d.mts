@@ -11,11 +11,18 @@ export type Event = {
 };
 export type Amount = { readonly id: string; readonly label: string; readonly value: number; readonly unit: string; readonly citation: Citation };
 export type Total = Amount & { readonly parts: readonly string[] };
-export type Facts = { readonly events?: readonly Event[]; readonly amounts?: readonly Amount[]; readonly totals?: readonly Total[] };
+export type Product = Amount & { readonly of: readonly string[] };
+export type Facts = {
+  readonly events?: readonly Event[];
+  readonly amounts?: readonly Amount[];
+  readonly totals?: readonly Total[];
+  readonly products?: readonly Product[];
+};
 export type Problem = { readonly id: string; readonly rule: string; readonly entries: readonly string[]; readonly detail: Readonly<Record<string, unknown>> };
 
 export declare const weekdayIndex: (written: unknown) => number | undefined;
 export declare const weekdayOfDate: (iso: unknown) => number | undefined;
+export declare const weekdayLike: (written: unknown, index: number) => string | undefined;
 export declare const isMonthDay: (value: unknown) => boolean;
 export declare const minutesOf: (time: unknown) => number | undefined;
 export declare const problemsIn: (facts: Facts) => Problem[];

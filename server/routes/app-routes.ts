@@ -33,6 +33,8 @@ import type { AgentAvailability } from "../../common/agentAvailability.js";
 import { mountIssueWorkRoutes } from "../routes/issue-work-routes.js";
 import type { SpawnIssueSession } from "../session/issue-session-spawn.js";
 import { mountDirRoutes } from "../routes/dir-routes.js";
+import { mountDirConfigWriteRoute } from "../routes/dir-config-write-route.js";
+import { mountDirConfigEntriesRoute } from "../routes/dir-config-entries-route.js";
 import { mountGuiMcpRoutes } from "../routes/gui-mcp-routes.js";
 import { mountDropRoutes } from "../routes/drop-routes.js";
 import { mountOpenDirRoute } from "../files/open-dir.js";
@@ -46,6 +48,7 @@ import { mountCommandSummaryRoute } from "../session/command-summary.js";
 import { mountCostRoute } from "../session/cost.js";
 import { mountShutdownRoute } from "./shutdown-routes.js";
 import { mountCollectionRoutes } from "../backends/collections.js";
+import { mountCollectionActionIndex } from "../backends/collectionActionIndexRoute.js";
 // "Would this collection survive a clone?" — mounts itself beside the collection routes.
 import { mountSelfContainmentRoutes } from "../backends/collectionSelfContainment.js";
 // "What would publishing this app put on screen?" — computed, never written.
@@ -62,6 +65,7 @@ import { mountNotificationRoutes } from "../backends/notifier.js";
 import { mountWhisperRoutes } from "../backends/whisper.js";
 import { mountSchedulerRoutes } from "../backends/scheduler.js";
 import { mountFilesRoutes } from "../backends/files.js";
+import { mountFilesPageRoute } from "../backends/filesPage.js";
 import {
   hookedSessions,
   ptys,
@@ -71,10 +75,13 @@ import {
   devTerminalSessionsHydrated,
   hasAllGuiTools,
   allToolsSessionsHydrated,
+  sessionCwd,
 } from "../session/registry.js";
 import { mountShortcutsRoutes } from "../backends/shortcuts.js";
 import { mountDecisionRoutes } from "./decision-routes.js";
+import { mountWhatsNewRoutes } from "../whatsNew/routes.js";
 import { mountRoomRoutes } from "./room-routes.js";
+import { mountSkillCatalogRoutes } from "./skill-catalog-routes.js";
 import { mountTranslationRoutes } from "../backends/translation.js";
 import { mountHtmlDispatchRoute, mountHtmlFileRoute, mountHtmlPreviewRoute } from "../backends/html.js";
 import { mountShapeScriptDispatchRoute } from "../backends/shapescript.js";
@@ -95,7 +102,9 @@ import type { createCopilotSpawner } from "../session/spawn-copilot.js";
 import type { createCursorSpawner } from "../session/spawn-cursor.js";
 import type { createTranslationWorker } from "../session/translation-worker.js";
 import type { createTitleManager } from "../session/session-title.js";
-import { tmuxHasSession, tmuxKillSession } from "../infra/tmux.js";
+import { tmuxHasSession, tmuxKillSession, tmuxPanePidsBySessionAsync } from "../infra/tmux.js";
+import { mountProcessRoutes } from "./process-routes.js";
+import { listProcessDetails } from "../infra/process-list.js";
 import type { SessionActivityDeps } from "../session/session-activity-deps.js";
 import { mountSpaFallback } from "../infra/spa-fallback.js";
 import { mountRateLimitRoutes, type RateLimitRouteDeps } from "../agents/rate-limit-routes.js";
@@ -107,6 +116,10 @@ export interface AppRouteDeps extends SessionActivityDeps {
   agentAvailability: readonly AgentAvailability[];
   clientDir: string;
   rateLimits: RateLimitRouteDeps;
+  /** A rotated session's turn ended on a usage limit: move it to another credential (#2919). */
+  onRateLimited?: (sessionId: string) => void;
+  /** A live session's turn ended: move it if its credential is at the switch line (#2919). */
+  onTurnEnded?: (sessionId: string) => void;
   isAllowedOrigin: (origin: string | undefined, remoteAddress: string | undefined) => boolean;
   publish: (channel: string, data: unknown) => void;
   sessionChannel: (id: string) => string;
@@ -215,6 +228,7 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
   // card and (later) the collections toolbar. The engine itself is configured below
   // once CLAUDE_CWD is the confirmed workspace.
   mountCollectionRoutes(app);
+  mountCollectionActionIndex(app);
   mountSelfContainmentRoutes(app);
   mountSharedAppPreviewRoutes(app);
 
@@ -265,6 +279,7 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
   // fields, custom-view <img> URLs, and terminal file-path links. Rooted at the shared
   // workspace; a `?cwd=` is honoured only for a live session's own directory.
   mountFilesRoutes(app, { workspace: CLAUDE_CWD, sessionCwds: () => [...ptys.values()].map((entry) => entry.cwd) });
+  mountFilesPageRoute(app, { workspace: CLAUDE_CWD, sessionCwds: () => [...ptys.values()].map((entry) => entry.cwd) });
 
   // Serve presentHtml pages for the View's iframe (GET /artifacts/html/<rest>) with an
   // HTML preview CSP. The View navigates the iframe to this URL (htmlArtifactPreviewUrl).
@@ -281,6 +296,10 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
   // Read-only decision log (GET /api/decisions?cwd=) — the questions a human was asked in this
   // project and what they chose, read back out of Claude's own transcripts. Writes nothing.
   mountDecisionRoutes(app);
+
+  // The dated release guides a user has not been shown since their last upgrade, recorded as
+  // seen as they are answered (POST /api/whats-new).
+  mountWhatsNewRoutes(app);
 
   // Local voice input (POST /api/transcribe + model status/download) — macOS only,
   // whisper.cpp via @mulmoclaude/core/whisper. Models live in the shared
@@ -318,6 +337,7 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
   // The agent hook endpoint (routes/hook-routes.ts). Session lifecycle, the title
   // bookkeeping and the tool stores stay here; the fan-out that reads them moves out.
   mountSessionFacingRoutes(app, deps);
+  mountProcessesPageRoutes(app, deps);
 }
 
 // The session-facing half: hooks, tool history, and everything the browser asks about a
@@ -343,6 +363,18 @@ const toolRouteDeps = (deps: AppRouteDeps): Parameters<typeof mountToolRoutes>[1
   questionPaneEnabled: getQuestionPaneEnabled,
 });
 
+// The two ways the browser writes a file: the Files view's editor (GET /api/files/browse/{list,text,md},
+// PUT .../write — all ?cwd=&path=, contained within that project dir) and the Settings form's
+// directory config (PUT /api/dir-config, #2722). They share one backup store, and a directory's
+// config saved by either tells every view the same way.
+function mountBrowserFileWrites(app: Express, publish: AppRouteDeps["publish"]): void {
+  const backupRoot = path.join(MULMOTERMINAL_HOME, "backups");
+  const onDirConfigWritten = (cwd: string) => publish(DIR_CONFIG_CHANNEL, { cwd });
+  mountFilesBrowseRoutes(app, { defaultCwd: CLAUDE_CWD, backupRoot, onDirConfigWritten });
+  mountDirConfigWriteRoute(app, { backupRoot, onDirConfigWritten });
+  mountDirConfigEntriesRoute(app, { backupRoot, onDirConfigWritten });
+}
+
 function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
   mountHookRoute(app, {
     setWorking: deps.setWorking,
@@ -361,6 +393,8 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
     // Express serves the built SPA on PORT; under `yarn dev` the UI is Vite's own server,
     // whose port the backend only knows when CLIENT_PORT is set in its environment.
     uiPort: String(process.env.CLIENT_PORT || PORT),
+    ...(deps.onRateLimited ? { onRateLimited: deps.onRateLimited } : {}),
+    ...(deps.onTurnEnded ? { onTurnEnded: deps.onTurnEnded } : {}),
   });
 
   // The tools pane: the toolResult sink, its replay, the available-tool list and the
@@ -385,14 +419,12 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
     });
   });
 
-  // Project-scoped file browsing + editing for the full-screen Files view
-  // (GET /api/files/browse/{list,text,md}, PUT .../write — all ?cwd=&path=). Each
-  // terminal browses its own session's project dir; paths are contained within it.
-  mountFilesBrowseRoutes(app, { defaultCwd: CLAUDE_CWD, backupRoot: path.join(MULMOTERMINAL_HOME, "backups") });
+  mountBrowserFileWrites(app, deps.publish);
 
   // Directory-scoped reads for a terminal cell: scripts, skills, dir config, git status,
   // PR phase, resolved header, custom sound. All keyed by ?cwd= (see routes/dir-routes.ts).
   mountDirRoutes(app);
+  mountSkillCatalogRoutes(app);
   mountGuiMcpRoutes(app);
 
   // GRID-ONLY (dev_tool): POST /api/open-dir reveals a cell's working directory in the
@@ -471,5 +503,16 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
     // moment as a number (session/surviving-sessions.ts).
     survivingSessions: () => survivingSessions(Date.now(), getSessionIdleReapDays()),
     armedReapIntervalHours,
+  });
+}
+
+// The Processes page (#2219): what each session is running, and ending one of those processes.
+function mountProcessesPageRoutes(app: Express, deps: AppRouteDeps): void {
+  mountProcessRoutes(app, {
+    isAllowedOrigin: deps.isAllowedOrigin,
+    listProcesses: listProcessDetails,
+    listPanePids: tmuxPanePidsBySessionAsync,
+    cwdOf: sessionCwd,
+    sendSignal: (pid, signal) => process.kill(pid, signal),
   });
 }

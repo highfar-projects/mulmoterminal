@@ -1,6 +1,6 @@
 ---
 name: mulmoterminal-config
-description: The way into configuring MulmoTerminal, and the way to find out how it is configured now. Use for a broad or unsure request — "configure MulmoTerminal", "set this up", "customize this", "what can I change?", first-run setup — and route to the skill that owns the area. Also answers "how is this set up right now?", "why isn't my setting working?", "did that take effect?" by reading the live config — the global `~/.mulmoterminal/config.json`, each project's `.mulmoterminal.json`, and what the app ACTUALLY parsed from them — including keys it dropped in validation, which is the difference between a setting you never made and one that silently never applied. Owns the global settings that have no skill of their own — work comments on an issue (issueWorkComments), the PR clone footer (prWorkdirFooter), the closing summary (appendSystemPrompt), the decision digest (decisionDigest), the periodic dev-work log (worklogEnabled), roster row length (cockpitLines), the grid header's load read-out (showLoadAverage), the occasional terminal theatre (playfulEffects), pinned collections on the toolbar (toolbarPins), a self-hosted GitLab (gitlabHosts), a project's Skill menu (skills), and a project's Mulmo menu (decks). When the request names another area, go straight to that skill instead — mulmoterminal-dirs (colours, grid order, project names, font size), mulmoterminal-theme (your own colour scheme), mulmoterminal-header (buttons and chips), mulmoterminal-keys (shortcuts, copy-on-select, Enter behaviour), mulmoterminal-model (other models and backends, and your own command for starting Claude Code), mulmoterminal-notify (sounds and push).
+description: The way into configuring MulmoTerminal, and the way to find out how it is configured now. Use for a broad or unsure request — "configure MulmoTerminal", "set this up", "customize this", "what can I change?", first-run setup — and route to the skill that owns the area. Also answers "how is this set up right now?", "why isn't my setting working?", "did that take effect?" by reading the live config — the global `~/.mulmoterminal/config.json`, each project's `.mulmoterminal.json`, and what the app ACTUALLY parsed from them — including keys it dropped in validation, which is the difference between a setting you never made and one that silently never applied. Owns the global settings that have no skill of their own — work comments on an issue (issueWorkComments), the PR clone footer (prWorkdirFooter), the closing summary (appendSystemPrompt), the decision digest (decisionDigest), the periodic dev-work log (worklogEnabled), roster row length (cockpitLines), the grid header's load read-out (showLoadAverage), a search box in the middle of the top bar (paletteSearchBox), an experimental switch for a server on another machine (remoteServer), the occasional terminal theatre (playfulEffects), confetti and when it falls (confetti), pinned collections on the toolbar (toolbarPins), a self-hosted GitLab (gitlabHosts), a project's Skill menu (skills), a project's Mulmo menu (decks), and the files a project shows on the phone (mobileFiles). When the request names another area, go straight to that skill instead — mulmoterminal-dirs (colours, grid order, project names, font size), mulmoterminal-theme (your own colour scheme), mulmoterminal-header (buttons and chips), mulmoterminal-keys (shortcuts, copy-on-select, Enter behaviour), mulmoterminal-model (other models and backends, and your own command for starting Claude Code), mulmoterminal-notify (sounds and push).
 ---
 
 # Configuring MulmoTerminal — start here
@@ -110,8 +110,9 @@ phrase it as a general question:
     still use it).
   - Chrome colours while a session is busy or waiting — the working/attention colours take over,
     and the configured ones only show when the cell is idle.
-  - A global change that needs a **tab reload**, or `fontFamily` / a provider key, which need a
-    **server restart**.
+  - A global change that needs a **tab reload**, a hand-edit the server has not read yet (Settings →
+    **Reload config file**, or `POST /api/config/reload`), or a provider key in the environment,
+    which needs a **server restart**.
 - **Then** the settings that are working, grouped by area, briefly.
 
 Offer to fix what you found, and route to the owning skill for anything they pick.
@@ -137,12 +138,14 @@ State these when they matter; they are the ones that cost people an afternoon.
 - **Malformed values are silently dropped**, so an invalid field just never takes effect. Check with
   the audit above rather than assuming a write landed.
 - **When it takes effect**: per-project → immediately. Most global → **reload the tab**.
-  `fontFamily`, provider keys, and any hand-edit made while the server is running → **restart the
-  server**.
+  A global file written with your own Write/Edit tool, or by hand, is not read until something asks:
+  `POST /api/config/reload` (Settings → **Reload config file** does the same) adopts it, or refuses
+  and keeps the running config when the file does not parse or its keymap would stop the start — say
+  what it answered. A provider key lives in the environment, which only a **server restart** re-reads.
 
 ## The settings that live here
 
-None is big enough to warrant its own skill. **All but `skills`, `decks` and `playfulEffects` also have a Settings control** — offer that first, and use these when the user would rather be told the key, or is
+None is big enough to warrant its own skill. **All of them but `mobileFiles` also have a Settings control** (`skills` and `decks` per project, in Settings → Directory settings → Change here) — offer that first, and use these when the user would rather be told the key, or is
 setting up a machine without opening the browser.
 
 ### `skills` — the header's Skill menu, per project
@@ -184,6 +187,26 @@ asking the agent. Two sources, and it never searches the disk:
 - **Why you list them:** searching for decks finds whatever parses as one, which in a real
   workspace was 217 test fixtures from a checked-out repository against 33 real decks.
 
+### `mobileFiles` — files the phone may open, per project
+
+What the phone (the mulmoserver remote) may list and open from this project. **Nothing is shared
+until this key is set** — the workspace included.
+
+```json
+{ "mobileFiles": { "dirs": ["output"], "extensions": ["md", "html", "pdf", "png"] } }
+```
+
+- `dirs` — directories **relative to this file**, inside it. `../`, an absolute path, a symlink
+  out, a missing directory or a file are dropped; if none survives, the whole key is dropped and
+  shows under *ignored* in Settings → Directory settings.
+- `extensions` — narrowed to what the host serves: `md`, `markdown`, `html`, `htm`, `pdf`, `png`,
+  `jpg`, `jpeg`, `gif`, `webp`. Anything else (`env`, `json`, `svg`) is dropped.
+- Hidden files and directories (`.env`, `.git/`) and `node_modules` are never listed, at any depth.
+- No Settings control: the file is the only way to set it. Settings shows it as **Phone files**.
+- A worktree does not inherit it — a worktree shares nothing until its own file says so.
+- Files that do not fit a command document are put in the user's own Storage area for an hour and
+  deleted. Images a document names are embedded only when they sit in a declared directory.
+
 ### `appendSystemPrompt` — the closing summary
 
 Every session is asked to end a reply with a short summary of what was asked, what was achieved and
@@ -195,7 +218,8 @@ otherwise only recoverable by scrolling the whole session.
 ```
 
 - **On by default**; only an explicit `false` turns it off. Set it globally in
-  `~/.mulmoterminal/config.json`, or per project — **the project wins**.
+  `~/.mulmoterminal/config.json`, or per project — **the project wins**. The per-project value is
+  also a select in Settings → Directory settings → Change here.
 - **Nothing in the app reads what the summary says.** Turning it off costs no feature; the roster's
   "last reply" and push notifications just become the raw tail of the reply.
 - Applies to sessions started **from then on**. No restart, but a running session keeps what it
@@ -287,7 +311,7 @@ many days.
   row there is marked **due to be ended** when the next sweep will take it.
 - **This one applies at once.** `startReapSchedule` takes the threshold as a function and re-reads
   it on every tick, so a change reaches the running server immediately — including `0`, which
-  stops an already-armed timer from ending anything. Only the cadence below waits for a restart.
+  stops an already-armed timer from ending anything. The cadence below applies at once too.
 
 ### `sessionReapIntervalHours` — looking again while the server is up
 
@@ -312,17 +336,16 @@ sessions that go idle after boot sit there until the next restart. This repeats 
 - A second stepper in **Settings → Sessions that survived a restart**, beside the one that sets
   the threshold. It is disabled while the threshold is `0`, because then there is nothing to
   repeat.
-- **Nothing in that section names a TIME the next sweep will run, and that is the rule.** The
-  timer is armed once at boot, so the saved number and the running one are different things until
-  a restart. Every clock-naming sentence is false in half the reachable states: "ends at next
-  start" is wrong for a server that booted with a cadence, and "ends on the next sweep" would be
-  wrong for one that has a cadence saved and has not restarted. Knowing the cadence does not fix
-  that — a cadence is not a countdown, and nothing knows when the current interval started.
+- **Nothing in that section names a TIME the next sweep will run, and that is the rule.** A cadence
+  saved through `POST /api/config` (or the stepper) re-arms the running server at once, counted from
+  its LAST sweep so repeated saves never push the next one back (#2626); a hand-edit reaches it on a
+  config reload or a restart. Until then the saved number and the running one can still differ, so a
+  clock-naming sentence can still be false, and the section names the event instead.
 - **What the section says instead**, each part true whatever was armed: a doomed row names the
   **event** — **due to be ended**, "the next sweep ends it"; the stepper's hint states what is
   **saved**, because that is what the control edits; and the line below it states what this server
-  actually **armed**, reported on `/api/tmux/sessions` (#2184), adding that a saved change applies
-  from the next start when the two differ. When a reply does not carry the armed cadence, or
+  actually **armed**, reported on `/api/tmux/sessions` (#2184), adding that the saved change has not
+  reached the server yet when the two differ. When a reply does not carry the armed cadence, or
   carries a value the server could not have meant, that line falls back to the general sentence
   about the cadence being read at startup rather than substituting the saved number, which would
   read as fact while being a guess.
@@ -338,6 +361,9 @@ wiki pages.
 
 - **Off by default, and it costs tokens** — each run spawns an LLM session. Say so before enabling.
 - The interval is whole hours, clamped to 1–168. Anything else falls back to 6.
+- Written through `POST /api/config` (or its Settings control), it applies at once — the running
+  scheduler rebuilds its built-in tasks. A hand-edit applies once the file is reloaded
+  (`POST /api/config/reload`, or Settings → Reload config file).
 
 ### `feedRefreshEnabled` / `calendarSyncEnabled` — the two always-on scheduled tasks
 
@@ -352,8 +378,9 @@ Google Calendar sync. These switch them off.
 - **Both default ON.** Only an explicit `false` turns one off — an absent key, `null`, `0` or the
   string `"false"` all leave it running, so an existing config never changes behaviour on upgrade.
   Same rule as `enabled` on a task in `config/scheduler/tasks.json`.
-- **Takes effect at the next server start.** The scheduler registers once at boot, so flipping
-  either one mid-session changes nothing until a restart.
+- **Saved through `POST /api/config` (or the Settings checkboxes), it applies at once** — the
+  running scheduler rebuilds its built-in tasks. A hand-edit applies once the file is reloaded
+  (`POST /api/config/reload`, or Settings → Reload config file) or the server restarts.
 - Turning one off does not delete anything already fetched; it stops the *scheduled* run. Feeds
   and calendar collections still update when someone asks for them explicitly.
 - **These do not touch the tasks you wrote.** `config/scheduler/tasks.json` is a separate list with
@@ -395,17 +422,67 @@ percentage of its cores (`load 334%` = 66.8 on 20 cores). **On unless set to `fa
   `os.loadavg()` returns zeros there, and 0% would read as "idle" rather than "not measured".
 - Also in Settings, under **Grid header read-outs**.
 
+### `paletteSearchBox` — a search box in the middle of the top bar
+
+Whether the top bar shows a search box in its middle, on every screen, that opens the command palette —
+the same palette the toolbar's Commands button and its key open. **Off unless set to `true`.**
+
+```json
+{ "paletteSearchBox": true }
+```
+
+- Clicking the box (or focusing it and pressing Enter) opens the palette, where the typing happens.
+  It shows the palette's key when one is bound.
+- Also in Settings, under **Grid header read-outs**.
+
+### `remoteServer` — experimental: the server runs on another machine
+
+For someone running the server on a Linux box, a VPS or a container and using it through an SSH
+tunnel (the guide page `remote.html`). **Off unless set to `true`**; nothing can detect it, since
+through a tunnel the browser's connection comes from loopback exactly as a local one does.
+
+```json
+{ "remoteServer": true }
+```
+
+- Withholds what would act on the SERVER's screen: the path menu's Insert a file path and Reveal,
+  the launch form's folder button (hidden); the file dialog, file manager and OS-app actions from a
+  header button, a key or the Files pane (they say why).
+- A dropped file is always uploaded, never inserted as a path from the browser's machine.
+- The launcher opens no browser on the server (also without SSH), and Settings' Google sign-in
+  points to `npx mulmoterminal google login` on the server instead.
+- Also a box under Settings → **Sessions and background tasks**, which applies at once. A hand
+  edit of the SERVER's `~/.mulmoterminal/config.json` needs a restart.
+
 ### `playfulEffects` — the occasional theatre on a terminal
 
 **On unless switched off.** When and why it appears is left for the user to find; do not explain
-it. Asked to turn it off, write:
+it. Settings → Theme has an on/off switch for it (no picture choice). Asked to turn it off, write:
 
 ```json
 { "playfulEffects": "off" }
 ```
 
 `"random"` (the default) lets each session pick its own; one of `bomb`, `volcano`, `kettle`,
-`rocket`, `dynamite`, `balloon` or `skull` uses that one everywhere.
+`rocket`, `dynamite`, `balloon`, `skull` or `sumo` uses that one everywhere.
+
+### `confetti` — a celebration over the whole page
+
+Off for every event until asked; the `confetti` keymap action (the keys skill binds it) and the
+command palette's "Throw confetti" row work with no setting at all. **Settings → Theme → Confetti** has a tick for every style and every event and a "Try it" button — offer that first, and use the key when the user would rather be told it. The key is an object:
+
+```json
+{ "confetti": { "styles": ["sakura", "fireworks"], "events": ["pr-merged"] } }
+```
+
+- `styles` — which kinds may fall; each celebration mixes three picked at random from the list (all of them when the list has three or fewer). Any of
+  `cracker`, `fireworks`, `sakura`, `rain`, `balloons`. Absent, empty or all-unknown means all five.
+- `events` — what sets one off by itself: `pr-merged` (a pull request this session watched turn
+  merged), `turn-finished` (an agent finished a turn) and `command-done` (a Run command exited 0).
+  Absent or empty means none. The same event within a few seconds is one celebration.
+
+A hand edit of the file needs a server restart, then a tab reload. Someone who has asked the OS for
+less motion gets no confetti at all.
 
 ### `toolbarPins` — pinned collections on the toolbar itself
 

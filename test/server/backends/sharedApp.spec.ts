@@ -21,6 +21,7 @@ import { publishSharedApp } from "../../../server/backends/sharedApp/publish.js"
 import { unpublishSharedApp } from "../../../server/backends/sharedApp/unpublish.js";
 import { makeTempDir } from "../../support/tempDir";
 import { fakeServerTimestamp } from "../../support/serverTimestamp.js";
+import { isRecord } from "../../../common/isRecord.js";
 
 const AID = "app-under-test";
 const OWNER = { uid: "uid-owner", email: "owner@example.com" };
@@ -138,6 +139,12 @@ function writeCollection(root: string, slug: string): void {
   writeFileSync(path.join(root, ".claude", "skills", slug, "schema.json"), JSON.stringify(schemaFor(slug)));
 }
 
+/** A schema the rows already written under the plain one do not satisfy: `note` becomes required. */
+function requireNoteOnBookings(): void {
+  const fields = { ...schemaFor("bookings").fields, note: { type: "string", label: "Note", required: true } };
+  writeFileSync(path.join(root, ".claude", "skills", "bookings", "schema.json"), JSON.stringify({ ...schemaFor("bookings"), fields }));
+}
+
 function writeApp(root: string, app: Record<string, unknown>): void {
   writeFileSync(path.join(root, "app.json"), JSON.stringify(app));
 }
@@ -149,6 +156,9 @@ const declaration = (extra: Record<string, unknown> = {}): Record<string, unknow
   members: { [OWNER.email]: { "*": "owner" } },
   ...extra,
 });
+
+/** No public page and no banner is written for these declarations, so both documents are cleared. */
+const NO_PAGE = [`delete apps/${AID}/config/view`, `delete apps/${AID}/config/banner`];
 
 const stamp = { now: () => 1_700_000_000_000, resolveCommit: () => Promise.resolve({ commit: "c0ffee", dirty: false }) };
 
@@ -182,13 +192,7 @@ describe("shared app publish / unpublish", () => {
     // The `delete` is unconditional and that is the point: `config/{docId}` is world-readable
     // forever, so a view withdrawn from the declaration and merely not rewritten stays fetchable.
     // An app that never had one pays one idempotent delete for the guarantee.
-    expect(docs.writes).toEqual([
-      `set apps/${AID}`,
-      `set apps/${AID}/collections/bookings`,
-      `set apps/${AID}/config/public`,
-      `delete apps/${AID}/config/view`,
-      `set apps/${AID}`,
-    ]);
+    expect(docs.writes).toEqual([`set apps/${AID}`, `set apps/${AID}/collections/bookings`, `set apps/${AID}/config/public`, ...NO_PAGE, `set apps/${AID}`]);
     expect(docs.doc(`apps/${AID}/collections`, "bookings")).toMatchObject({ publishedBy: OWNER.email, publishedCommit: "c0ffee" });
     expect(docs.app()?.public).toMatchObject({ enabled: true });
     expect(docs.app()?.memberEmails).toEqual([OWNER.email]);
@@ -251,10 +255,7 @@ describe("shared app publish / unpublish", () => {
     // now — not that they do not exist — and a publish that re-creates the app must still check
     // them, or it hands them to everybody under a schema nothing compared them against.
     docs.store.set(`apps/${AID}/collections/bookings/items`, new Map([["1", { id: "1" }]]));
-    writeFileSync(
-      path.join(root, ".claude", "skills", "bookings", "schema.json"),
-      JSON.stringify({ ...schemaFor("bookings"), fields: { ...schemaFor("bookings").fields, note: { type: "string", label: "Note", required: true } } }),
-    );
+    requireNoteOnBookings();
 
     const result = await publishSharedApp(root, stamp);
     expect(result.ok).toBe(false);
@@ -269,10 +270,7 @@ describe("shared app publish / unpublish", () => {
   it("stops at live records that would not fit, and confirming writes them anyway", async () => {
     await publishSharedApp(root, stamp);
     docs.store.set(`apps/${AID}/collections/bookings/items`, new Map([["1", { id: "1" }]]));
-    writeFileSync(
-      path.join(root, ".claude", "skills", "bookings", "schema.json"),
-      JSON.stringify({ ...schemaFor("bookings"), fields: { ...schemaFor("bookings").fields, note: { type: "string", label: "Note", required: true } } }),
-    );
+    requireNoteOnBookings();
 
     const refused = await publishSharedApp(root, stamp);
     expect(refused.ok).toBe(false);
@@ -280,6 +278,65 @@ describe("shared app publish / unpublish", () => {
 
     const confirmed = await publishSharedApp(root, { ...stamp, confirm: true });
     expect(confirmed.ok === true && confirmed.recordIssues).toBe(1);
+  });
+
+  // Publish REPLACES the live roster with app.json's, so an app.json older than the live roster
+  // (another owner invited someone after this copy was written) silently locks them out (#1964).
+  describe("people a publish would take off the live roster", () => {
+    const GUEST = "guest@example.com";
+    const withGuest = () => declaration({ members: { [OWNER.email]: { "*": "owner" }, [GUEST]: { "*": "viewer" } } });
+    const liveMembers = (): string[] => {
+      const members = docs.app()?.members;
+      return isRecord(members) ? Object.keys(members) : [];
+    };
+
+    it("stops and names them, having written nothing", async () => {
+      writeApp(root, withGuest());
+      expect((await publishSharedApp(root, stamp)).ok).toBe(true);
+      writeApp(root, declaration());
+      const writesBefore = docs.writes.length;
+
+      const refused = await publishSharedApp(root, stamp);
+      expect(refused.ok).toBe(false);
+      expect(refused.ok === false && refused.problems.join("\n")).toContain(`${GUEST} (viewer)`);
+      expect(refused.ok === false && refused.partial).toBe(false);
+      expect(docs.writes).toHaveLength(writesBefore);
+      expect(liveMembers()).toContain(GUEST);
+    });
+
+    it("removes them with confirmRemovals, and says who", async () => {
+      writeApp(root, withGuest());
+      await publishSharedApp(root, stamp);
+      writeApp(root, declaration());
+
+      const confirmed = await publishSharedApp(root, { ...stamp, confirmRemovals: true });
+      expect(confirmed.ok === true && confirmed.removedMembers).toEqual([GUEST]);
+      expect(liveMembers()).not.toContain(GUEST);
+    });
+
+    // `confirm` accepts records that do not fit the schema. Spending it on somebody losing access
+    // is exactly what a separate consent exists to prevent.
+    it("is not overridden by `confirm`", async () => {
+      writeApp(root, withGuest());
+      await publishSharedApp(root, stamp);
+      writeApp(root, declaration());
+
+      const refused = await publishSharedApp(root, { ...stamp, confirm: true });
+      expect(refused.ok === false && refused.problems.join("\n")).toContain("confirmRemovals");
+    });
+
+    it("asks for both consents at once when records and the roster both need one", async () => {
+      writeApp(root, withGuest());
+      await publishSharedApp(root, stamp);
+      docs.store.set(`apps/${AID}/collections/bookings/items`, new Map([["1", { id: "1" }]]));
+      requireNoteOnBookings();
+      writeApp(root, declaration());
+
+      const refused = await publishSharedApp(root, stamp);
+      const text = refused.ok === false ? refused.problems.join("\n") : "";
+      expect(text).toContain("would not satisfy the schema");
+      expect(text).toContain(GUEST);
+    });
   });
 
   it("does not mistake a fault for an absent app and rebuild it", async () => {
@@ -408,7 +465,7 @@ describe("shared app publish / unpublish", () => {
     const result = await unpublishSharedApp(root);
     expect(result.ok === true && result.wasOpen).toBe(true);
     // The page comes down with the settings, for the reason the publish above deletes it.
-    expect(docs.writes).toEqual([`set apps/${AID}`, `delete apps/${AID}/config/public`, `delete apps/${AID}/config/view`]);
+    expect(docs.writes).toEqual([`set apps/${AID}`, `delete apps/${AID}/config/public`, ...NO_PAGE]);
     expect(docs.app()).not.toHaveProperty("public");
     // The roster goes on using the app while it is closed, so its schemas stay.
     expect(docs.doc(`apps/${AID}/collections`, "bookings")).toBeDefined();
@@ -505,7 +562,7 @@ describe("shared app publish / unpublish", () => {
     expect(docs.writes).toEqual([
       `set apps/${AID}/collections/bookings`,
       `set apps/${AID}/config/public`,
-      `delete apps/${AID}/config/view`,
+      ...NO_PAGE,
       `set apps/${AID}`,
       "set appSlugs/sakura-hair",
       `set apps/${AID}`,
@@ -515,7 +572,7 @@ describe("shared app publish / unpublish", () => {
     await unpublishSharedApp(root);
     expect(docs.doc("appSlugs", "sakura-hair")).toEqual({ aid: AID, published: false });
     // Reversed: what grants is taken away first.
-    expect(docs.writes).toEqual([`set apps/${AID}`, "set appSlugs/sakura-hair", `delete apps/${AID}/config/public`, `delete apps/${AID}/config/view`]);
+    expect(docs.writes).toEqual([`set apps/${AID}`, "set appSlugs/sakura-hair", `delete apps/${AID}/config/public`, ...NO_PAGE]);
   });
 
   it("does not make the name resolve when the app is not open to anonymous visitors", async () => {

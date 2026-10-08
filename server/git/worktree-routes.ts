@@ -2,7 +2,8 @@
 // uses these to detect a git repo, list/reuse existing worktrees, and create/remove
 // them. Mutations are same-origin guarded like the other local-only routes; remove
 // uses POST (not DELETE) so a request body survives every proxy.
-import type { Express, Request, Response } from "express";
+import os from "node:os";
+import type { Express } from "express";
 import { repoRoot, defaultBaseBranch, listWorktrees, createWorktree, removeWorktree, isDirty } from "./worktrees.js";
 import { releaseWorktreeEnv } from "../config/worktree-env.js";
 import { worktreeDiff } from "./worktree-diff.js";
@@ -12,9 +13,14 @@ import { isIssueNumber } from "../../common/prPhase.js";
 import { dirSession, survivorSnapshot } from "../session/dir-session.js";
 import { tmuxAttachedCounts } from "../infra/tmux.js";
 import { requestBody } from "../routes/requestBody.js";
+import { expandTilde } from "../files/pathContainment.js";
+import { cleanupRowAt, deleteBranchIfAt, worktreeCleanupRows } from "./worktree-cleanup.js";
+import { cleanupBlockers, readConfirmedIgnored, sameIgnored } from "../../common/worktreeCleanup.js";
+import { rememberedSessionCwds } from "../session/registry.js";
 
 interface WorktreeRouteOptions {
   isAllowedOrigin: (origin: string | undefined, remoteAddress: string | undefined) => boolean;
+  homeDir?: string;
 }
 
 // A failed git/gh command is a 500; a precondition the user can fix (no remote, not
@@ -25,28 +31,62 @@ function statusFor(result: { ok: boolean; reason?: string | undefined }): number
   return SERVER_ERROR_REASONS.has(result.reason ?? "") ? 500 : 409;
 }
 
-async function handleCreateWorktree(req: Request, res: Response): Promise<void> {
-  const { repoDir, task, issue } = requestBody(req.body);
-  if (typeof repoDir !== "string" || typeof task !== "string" || !task.trim()) {
-    res.status(400).json({ error: "repoDir and a non-empty task are required" });
-    return;
-  }
-  // An unusable `issue` is refused rather than dropped: the number ends up in the branch name
-  // and from there in the PR's `Fixes`, so silently creating an UNANCHORED worktree would look
-  // like it worked and only diverge later, once nothing closes the issue.
-  if (issue !== undefined && !isIssueNumber(issue)) {
-    res.status(400).json({ error: "issue must be a positive integer" });
-    return;
-  }
-  const wt = await createWorktree(repoDir, task, issue);
-  if (!wt) {
-    res.status(500).json({ error: "could not create the worktree (is this a git repo?)" });
-    return;
-  }
-  res.json(wt);
+// The launch form sends the directory as typed, so `~/repo` must name the same repo the cell
+// spawns in (workspaceRequest expands it the same way).
+const homeExpander =
+  (homeDir: string) =>
+  (dir: string): string =>
+    expandTilde(dir, homeDir);
+
+async function worktreeListing(cwd: string) {
+  const repo = cwd ? await repoRoot(cwd) : null;
+  if (!repo) return { isGit: false, base: null, worktrees: [] };
+  const list = await listWorktrees(repo);
+  const tmuxCounts = tmuxAttachedCounts();
+  const running = await survivorSnapshot();
+  const now = Date.now();
+  const worktrees = await Promise.all(
+    list.map(async (w) => ({ ...w, dirty: await isDirty(w.path), session: await dirSession(w.path, tmuxCounts, now, running) })),
+  );
+  return { isGit: true, base: await defaultBaseBranch(repo), worktrees };
 }
 
-export function mountWorktreeRoutes(app: Express, { isAllowedOrigin }: WorktreeRouteOptions): void {
+// The Processes page's worktree list (#2219) and its removal.
+function mountWorktreeCleanupRoutes(app: Express, isAllowedOrigin: WorktreeRouteOptions["isAllowedOrigin"], fromHome: (dir: string) => string): void {
+  // Every managed worktree of the repos terminals have run in, with what keeps each from being
+  // removed (#2219). Read-only; removal is the route below, which reads the worktree again.
+  app.get("/api/worktrees/cleanup", async (_req, res) => {
+    res.json({ worktrees: await worktreeCleanupRows(await rememberedSessionCwds()) });
+  });
+
+  // Remove a cleanup candidate and its branch. Every condition that made it a candidate is read
+  // again here, not trusted from the list, and 409 names what now holds it. The worktree goes
+  // without `--force`, so git refuses one that turned dirty; the branch goes only while it is still
+  // at the commit found merged, so a commit made in between keeps it (`branchDeleted: false`). The
+  // gitignored files it deletes must be the ones the person confirmed, or it is refused.
+  app.post("/api/worktrees/cleanup/remove", async (req, res) => {
+    if (!requestOriginAllowed(req, isAllowedOrigin)) return res.status(403).end();
+    const body = requestBody(req.body);
+    const { repoDir, path: worktreePath } = body;
+    const confirmed = readConfirmedIgnored(body);
+    if (typeof repoDir !== "string" || typeof worktreePath !== "string" || confirmed === null) {
+      return res.status(400).json({ error: "repoDir, path, and the confirmed ignored files are required" });
+    }
+    const row = await cleanupRowAt(fromHome(repoDir), fromHome(worktreePath));
+    if (row === null) return res.status(404).json({ error: "not a managed worktree" });
+    const blockers = cleanupBlockers(row);
+    if (blockers.length > 0) return res.status(409).json({ blockers });
+    if (!sameIgnored(confirmed, row)) return res.status(409).json({ ignoredChanged: true, ignored: row.ignored, ignoredCount: row.ignoredCount });
+    const result = await removeWorktree(row.repo, row.path);
+    if (!result.ok) return res.status(result.reason === "failed" ? 500 : 409).json(result);
+    releaseWorktreeEnv(row.path);
+    const branchDeleted = row.branch !== null && (await deleteBranchIfAt(row.repo, row.branch, row.head));
+    return res.json({ ok: true, branchDeleted });
+  });
+}
+
+export function mountWorktreeRoutes(app: Express, { isAllowedOrigin, homeDir = os.homedir() }: WorktreeRouteOptions): void {
+  const fromHome = homeExpander(homeDir);
   // Repo status + the managed worktrees for a cell's chosen dir (each with `dirty`
   // so the UI can confirm before deleting). A non-git dir is `isGit:false`, not an
   // error — the launcher just hides the worktree UI.
@@ -56,30 +96,34 @@ export function mountWorktreeRoutes(app: Express, { isAllowedOrigin }: WorktreeR
   // working tree somebody is already in. Both inputs are read ONCE for the whole list — a
   // per-row tmux probe would be one process spawn per worktree.
   app.get("/api/worktrees", async (req, res) => {
-    const cwd = typeof req.query.cwd === "string" ? req.query.cwd : "";
-    const repo = cwd ? await repoRoot(cwd) : null;
-    if (!repo) return res.json({ isGit: false, base: null, worktrees: [] });
-    const list = await listWorktrees(repo);
-    const tmuxCounts = tmuxAttachedCounts();
-    const running = await survivorSnapshot();
-    const now = Date.now();
-    const worktrees = await Promise.all(
-      list.map(async (w) => ({ ...w, dirty: await isDirty(w.path), session: await dirSession(w.path, tmuxCounts, now, running) })),
-    );
-    res.json({ isGit: true, base: await defaultBaseBranch(repo), worktrees });
+    res.json(await worktreeListing(typeof req.query.cwd === "string" ? fromHome(req.query.cwd) : ""));
   });
 
   // Read-only diff of a worktree vs its base branch (ahead/dirty counts + changed
   // files + patch), so a cell can show what the agent changed. A non-worktree dir
   // is `isWorktree:false`, not an error.
   app.get("/api/worktrees/diff", async (req, res) => {
-    const cwd = typeof req.query.cwd === "string" ? req.query.cwd : "";
+    const cwd = typeof req.query.cwd === "string" ? fromHome(req.query.cwd) : "";
     res.json(cwd ? await worktreeDiff(cwd) : { isWorktree: false, base: null, ahead: 0, dirty: 0, files: [], patch: "", truncated: false });
   });
 
+  mountWorktreeCleanupRoutes(app, isAllowedOrigin, fromHome);
+
   app.post("/api/worktrees/create", async (req, res) => {
     if (!requestOriginAllowed(req, isAllowedOrigin)) return res.status(403).end();
-    await handleCreateWorktree(req, res);
+    const { repoDir, task, issue } = requestBody(req.body);
+    if (typeof repoDir !== "string" || typeof task !== "string" || !task.trim()) {
+      return res.status(400).json({ error: "repoDir and a non-empty task are required" });
+    }
+    // An unusable `issue` is refused rather than dropped: the number ends up in the branch name
+    // and from there in the PR's `Fixes`, so silently creating an UNANCHORED worktree would look
+    // like it worked and only diverge later, once nothing closes the issue.
+    if (issue !== undefined && !isIssueNumber(issue)) {
+      return res.status(400).json({ error: "issue must be a positive integer" });
+    }
+    const wt = await createWorktree(fromHome(repoDir), task, issue);
+    if (!wt) return res.status(500).json({ error: "could not create the worktree (is this a git repo?)" });
+    res.json(wt);
   });
 
   // Remove a managed worktree. 409 for a client-resolvable conflict (dirty → the UI
@@ -91,14 +135,15 @@ export function mountWorktreeRoutes(app: Express, { isAllowedOrigin }: WorktreeR
     if (typeof repoDir !== "string" || typeof worktreePath !== "string") {
       return res.status(400).json({ error: "repoDir and path are required" });
     }
+    const worktreeDir = fromHome(worktreePath);
     // Strict `=== true` (not `!!`) for the destructive flags: a mistyped truthy
     // payload (e.g. the string "false") must fall back to the SAFE default — never
     // force-remove a dirty worktree or delete a branch on a malformed request.
-    const result = await removeWorktree(repoDir, worktreePath, { deleteBranch: deleteBranch === true, force: force === true });
+    const result = await removeWorktree(fromHome(repoDir), worktreeDir, { deleteBranch: deleteBranch === true, force: force === true });
     // Only once the removal succeeded, and from here rather than inside removeWorktree: releasing
     // a port a worktree is still using would hand it to the next tree while a dev server holds it.
     if (result.ok) {
-      releaseWorktreeEnv(worktreePath);
+      releaseWorktreeEnv(worktreeDir);
       return res.json(result);
     }
     res.status(result.reason === "failed" ? 500 : 409).json(result);
@@ -109,7 +154,7 @@ export function mountWorktreeRoutes(app: Express, { isAllowedOrigin }: WorktreeR
     if (!requestOriginAllowed(req, isAllowedOrigin)) return res.status(403).end();
     const { cwd } = requestBody(req.body);
     if (typeof cwd !== "string") return res.status(400).json({ error: "cwd is required" });
-    const result = await pushWorktree(cwd);
+    const result = await pushWorktree(fromHome(cwd));
     res.status(statusFor(result)).json(result);
   });
 
@@ -119,7 +164,7 @@ export function mountWorktreeRoutes(app: Express, { isAllowedOrigin }: WorktreeR
     if (!requestOriginAllowed(req, isAllowedOrigin)) return res.status(403).end();
     const { cwd } = requestBody(req.body);
     if (typeof cwd !== "string") return res.status(400).json({ error: "cwd is required" });
-    const result = await createOrOpenPR(cwd);
+    const result = await createOrOpenPR(fromHome(cwd));
     res.status(statusFor(result)).json(result);
   });
 }

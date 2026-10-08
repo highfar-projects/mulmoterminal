@@ -10,9 +10,11 @@
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, type ComputedRef, type Ref, type ShallowRef } from "vue";
 import { createEditor, langKindForFilename, type CmEditor } from "../components/cmEditor";
 import { askTheMachine, bankText, browseQuery, writeBuffer } from "../components/filesPaneApi";
-import type { FilesPaneState } from "../components/filesPaneState";
+import type { DirConfigSaveReport } from "../../common/dirConfigSaveReport";
+import type { FilesTabState } from "../components/filesPaneState";
 import { restoresPreview, staysOnSameFile } from "../components/filesPreviewMode";
-import { diskVersion, previewQuery } from "../components/filesPreviewSrc";
+import { diskVersion, previewSrcFor } from "../components/filesPreviewSrc";
+import { fileMediaKind, filePreviewKind, type FilePreviewKind } from "../components/filePreviewKind";
 import { activeThemeVars } from "./useTheme";
 import { previewThemeFromVars } from "../../common/previewTheme";
 import { absoluteUnder } from "./canvasOpenFile";
@@ -30,7 +32,7 @@ export interface FileConflict {
  *  fact — carrying the caret alone left a reader who never clicks at the top of the file (Codex
  *  found that twice, once per field, which is what a field-by-field rule earns). It is the shape a
  *  snapshot already stores, so neither end converts: a remembered state IS a place. */
-export type FilePlace = Pick<FilesPaneState, "caret" | "topLine" | "previewScrollTop">;
+export type FilePlace = Pick<FilesTabState, "caret" | "topLine" | "previewScrollTop">;
 
 /** The open file itself — what the functions below decide from and what the pane renders. Declared
  *  once: the context they take and the surface they are returned behind are the same buffer seen
@@ -39,6 +41,8 @@ export interface OpenFileBuffer {
   openPath: Ref<string | null>;
   openName: ComputedRef<string>;
   isMarkdown: ComputedRef<boolean>;
+  /** What the Preview shows this file as, or null when it has none (#2269). */
+  previewKind: ComputedRef<FilePreviewKind | null>;
   dirty: Ref<boolean>;
   /** Bumped on every edit. The search panel needs a dependency that MOVES — see its own comment. */
   editSeq: Ref<number>;
@@ -58,6 +62,9 @@ export interface OpenFileBuffer {
    *  which is what makes it ride the snapshot, the carry across a re-read and the reset on
    *  leaving without any of them learning about previews. */
   previewScrollTop: Ref<number>;
+  /** What the last save said about a directory's config file (#2624): whether it parsed, and which
+   *  keys did not take effect. Null for any other file, and cleared when another file is read. */
+  dirConfigReport: Ref<DirConfigSaveReport | null>;
   editor: ShallowRef<CmEditor | null>;
 }
 
@@ -114,35 +121,60 @@ async function mayLeaveCurrent(ctx: OpenFileCtx, pathRel: string, force: boolean
 /** `remembered` is a restore asking for the view mode that path was left in. It is applied HERE
  *  rather than by the caller after the await, so the decision sits inside this request's own
  *  generation guard: a load that lost its race must not hand its mode to the file that won. */
-async function loadFile(ctx: OpenFileCtx, pathRel: string, force: boolean, remembered: FilesPaneState | null): Promise<void> {
+async function loadFile(ctx: OpenFileCtx, pathRel: string, force: boolean, remembered: FilesTabState | null): Promise<void> {
   if (!(await mayLeaveCurrent(ctx, pathRel, force))) return;
   const id = ++ctx.reqId.n;
   ctx.fileError.value = null;
   ctx.conflict.value = null;
-  ctx.unpreviewable.value = null;
+  ctx.dirConfigReport.value = null;
   // What survives a re-read of the SAME file, and what a different file leaves behind: the mode
   // belongs to the file it was turned on for, and so does the reader's place in it. Carried across
   // the read rather than restored from a snapshot, because this path has no snapshot — the agent
   // editing the file you are reading is what triggers it (see staysOnSameFile).
   const staying = staysOnSameFile(ctx.openPath.value, pathRel);
   const carried = staying ? placeNow(ctx) : null;
+  // A re-read of the same picture keeps it on screen until the new one lands, instead of an empty
+  // editor for the length of the round trip; adoptText clears it when text is what arrives.
+  if (!staying) ctx.unpreviewable.value = null;
   if (!staying) {
     ctx.showPreview.value = false;
     ctx.previewScrollTop.value = 0;
   }
   try {
-    const res = await fetchWithTimeout(`/api/files/browse/text?${qs(ctx, pathRel)}`);
-    const data = await jsonBody(res);
-    // 415 is the one non-ok status that is not a failure: the file is simply not text, and showing
-    // it as one is what destroyed spreadsheets before this existed (#2038).
-    if (!res.ok && res.status !== 415) throw new Error(failureReason(data, res.status));
+    // A picture, PDF, video or sound is never read as text: the text route refuses anything over
+    // the edit cap, and these are often bigger than that — which left them saying "too large to
+    // edit" (#2269, #2674).
+    const adopt = fileMediaKind(pathRel) !== null ? await readMedia(ctx, pathRel) : await readText(ctx, pathRel);
     if (id !== ctx.reqId.n) return;
-    if (res.status === 415) adoptUnpreviewable(ctx, pathRel, data);
-    else adoptText(ctx, pathRel, data);
+    adopt();
     restorePlace(ctx, pathRel, remembered, carried);
   } catch (e) {
     if (id === ctx.reqId.n) ctx.fileError.value = e instanceof Error ? e.message : String(e);
   }
+}
+
+/** Read `pathRel` as text; returns how to adopt what came back, so the caller adopts it only if
+ *  its read is still the current one. */
+async function readText(ctx: OpenFileCtx, pathRel: string): Promise<() => void> {
+  const res = await fetchWithTimeout(`/api/files/browse/text?${qs(ctx, pathRel)}`);
+  const data = await jsonBody(res);
+  // 415 and 413 are not failures: the file is not text, or too large to edit, and showing it as
+  // text is what destroyed spreadsheets before this existed (#2038). Both still offer Open in OS.
+  if (res.ok) return () => adoptText(ctx, pathRel, data);
+  if (res.status === 415 || res.status === 413) return () => adoptUnpreviewable(ctx, pathRel, data);
+  throw new Error(failureReason(data, res.status));
+}
+
+/** A picture, PDF, video or sound: only its version is read, so the external-change check has
+ *  something to compare and does not rebuild it on every tick. Over the edit cap the version route
+ *  answers 413 too; the file still shows, with no version — and that check then stands aside. */
+async function readMedia(ctx: OpenFileCtx, pathRel: string): Promise<() => void> {
+  const res = await fetchWithTimeout(`/api/files/browse/version?${qs(ctx, pathRel)}`);
+  const data = await jsonBody(res);
+  if (!res.ok && res.status !== 413) throw new Error(failureReason(data, res.status));
+  const version = typeof data.version === "string" ? data.version : null;
+  if (res.ok && version === null) throw new Error(`not found: ${pathRel}`);
+  return () => adoptMedia(ctx, pathRel, version);
 }
 
 function placeNow(ctx: OpenFileCtx): FilePlace {
@@ -167,7 +199,7 @@ function goToPlace(ctx: OpenFileCtx, place: FilePlace): void {
 
 /** Put the reader back, from whichever of the two sources this read has. They are exclusive: a
  *  restore knows where they were LAST TIME, a same-file re-read where they are NOW. */
-function restorePlace(ctx: OpenFileCtx, pathRel: string, remembered: FilesPaneState | null, carried: FilePlace | null): void {
+function restorePlace(ctx: OpenFileCtx, pathRel: string, remembered: FilesTabState | null, carried: FilePlace | null): void {
   if (remembered) return applyRemembered(ctx, remembered);
   if (carried && ctx.openPath.value === pathRel && !ctx.unpreviewable.value) goToPlace(ctx, carried);
 }
@@ -175,13 +207,15 @@ function restorePlace(ctx: OpenFileCtx, pathRel: string, remembered: FilesPaneSt
 /** Put back what was remembered about the file that just landed. Both halves ask about what
  *  ACTUALLY arrived rather than what was asked for: the path may hold something else now, or
  *  nothing this pane can show. */
-function applyRemembered(ctx: OpenFileCtx, remembered: FilesPaneState): void {
+function applyRemembered(ctx: OpenFileCtx, remembered: FilesTabState): void {
   ctx.showPreview.value = restoresPreview(remembered, {
     openPath: ctx.openPath.value,
-    isMarkdown: ctx.isMarkdown.value,
+    // Whether there is a Preview to LOAD, not only a kind: an HTML page with no root has no URL,
+    // and coming back in a Preview that shows nothing leaves no button to leave it by.
+    previewable: previewSrcOf(ctx, ctx.cwd()) !== "",
     unpreviewable: ctx.unpreviewable.value !== null,
   });
-  if (remembered.openPath !== ctx.openPath.value || ctx.unpreviewable.value) return;
+  if (remembered.path !== ctx.openPath.value || ctx.unpreviewable.value) return;
   goToPlace(ctx, remembered);
 }
 
@@ -190,6 +224,7 @@ function applyRemembered(ctx: OpenFileCtx, remembered: FilesPaneState): void {
 function adoptText(ctx: OpenFileCtx, pathRel: string, data: Record<string, unknown>): void {
   ctx.openPath.value = pathRel;
   ctx.baseVersion.value = typeof data.version === "string" ? data.version : null;
+  ctx.unpreviewable.value = null;
   ctx.editor.value?.setDoc(typeof data.text === "string" ? data.text : "", pathRel.split("/").pop() ?? pathRel);
   ctx.dirty.value = false;
 }
@@ -206,6 +241,13 @@ function adoptUnpreviewable(ctx: OpenFileCtx, pathRel: string, data: Record<stri
   // A file the server will not serve as text has no preview to be in. Reachable now that the mode
   // survives a re-read of the same path: the open `.md` can come back 415 on an external change.
   ctx.showPreview.value = false;
+}
+
+/** Show a picture, PDF, video or sound. It is "not text" as far as editing goes — nothing can be
+ *  saved over it — but it keeps its version, which the URL carries so a redrawn chart is fetched again. */
+function adoptMedia(ctx: OpenFileCtx, pathRel: string, version: string | null): void {
+  adoptUnpreviewable(ctx, pathRel, { error: "this file is shown as media" });
+  ctx.baseVersion.value = version;
 }
 
 async function save(ctx: OpenFileCtx): Promise<void> {
@@ -236,6 +278,7 @@ async function save(ctx: OpenFileCtx): Promise<void> {
   ctx.baseVersion.value = outcome.version;
   ctx.dirty.value = false;
   ctx.conflict.value = null;
+  ctx.dirConfigReport.value = outcome.dirConfig;
 }
 
 /** Edit ↔ Preview. Preview renders the file ON DISK, so unsaved edits are saved first — the same
@@ -247,11 +290,18 @@ async function togglePreview(ctx: OpenFileCtx): Promise<void> {
     ctx.showPreview.value = false;
     return;
   }
+  if (await savedInPlace(ctx)) ctx.showPreview.value = true;
+}
+
+/** Save unsaved edits WITHOUT leaving the file, for something that is about to read it from disk —
+ *  the Preview, or a line reference handed to the agent. True only when the disk now holds the
+ *  buffer and the same file is still open. Unlike `flush` (which is for leaving), a lost race is not
+ *  success here: `save` raises the conflict banner and the buffer stays unsaved, so this says no. */
+async function savedInPlace(ctx: OpenFileCtx): Promise<boolean> {
   const generation = ctx.reqId.n;
   if (ctx.dirty.value) await save(ctx);
   // The save is a round trip; the reader may have opened another file meanwhile.
-  if (ctx.dirty.value || ctx.reqId.n !== generation) return;
-  ctx.showPreview.value = true;
+  return !ctx.dirty.value && ctx.reqId.n === generation;
 }
 
 /** Conflict banner — take the disk's copy. The buffer is banked first, so "discard" costs
@@ -341,6 +391,24 @@ function onPageHide(ctx: OpenFileCtx): void {
   void writeBuffer(qs(ctx, pathRel), text, ctx.baseVersion.value, true);
 }
 
+/** Leave the open file with nothing in its place — the last tab closing. Saved on the way out like
+ *  any other departure, and kept when it could be neither saved nor backed up, for `flush`'s reason.
+ *  The generation moves first so a read still in flight cannot land in the emptied pane. */
+async function closeFile(ctx: OpenFileCtx): Promise<boolean> {
+  if (!(await flush(ctx))) return false;
+  ctx.reqId.n += 1;
+  ctx.openPath.value = null;
+  ctx.baseVersion.value = null;
+  ctx.conflict.value = null;
+  ctx.unpreviewable.value = null;
+  ctx.fileError.value = null;
+  ctx.showPreview.value = false;
+  ctx.previewScrollTop.value = 0;
+  ctx.editor.value?.setDoc("", "");
+  ctx.dirty.value = false;
+  return true;
+}
+
 /** Everything the pane's re-root has to undo here. The generation is bumped FIRST, for the reason
  *  the pane's own teardown gives: a read already in flight would otherwise land after the re-root
  *  and adopt the OLD project's content, because its `id === reqId` check still passes. */
@@ -361,15 +429,21 @@ export interface OpenFile extends OpenFileBuffer {
    *  file does — without it the browser keeps serving the rendering it already has, and a full
    *  page reload was the only way to see an edit another cell's agent had made (#2136). */
   previewSrc: ComputedRef<string>;
+  /** The token the Markdown Preview's document was given, and the only one its messages may carry. */
+  previewToken: ComputedRef<string | null>;
   /** Which read is current, for a caller whose own decision depends on not having been overtaken. */
   generation: () => number;
   attach: (host: HTMLElement) => void;
   teardown: () => void;
-  load: (pathRel: string, force?: boolean, remembered?: FilesPaneState | null) => Promise<void>;
+  load: (pathRel: string, force?: boolean, remembered?: FilesTabState | null) => Promise<void>;
   flush: () => Promise<boolean>;
+  /** Save and put nothing in the file's place. False when it could not be left. */
+  close: () => Promise<boolean>;
   save: () => Promise<void>;
   /** Switch between Edit and Preview, saving unsaved edits before Preview. */
   togglePreview: () => Promise<void>;
+  /** Save here and report whether the disk now holds the buffer (see `savedInPlace`). */
+  savedInPlace: () => Promise<boolean>;
   discardAndReload: () => Promise<void>;
   overwrite: () => void;
   openInOs: () => Promise<void>;
@@ -383,13 +457,30 @@ export interface OpenFile extends OpenFileBuffer {
 // document then follows the reader's system theme as it always did.
 const previewTheme = computed(() => (activeThemeVars.value ? previewThemeFromVars(activeThemeVars.value) : null));
 
-export function useOpenFile(cwd: () => string | null): OpenFile {
+/** The Preview frame's `src` for the open file, or "" when it has no Preview. */
+function previewSrcOf(buffer: OpenFileBuffer, cwd: string | null, token: string | null = null): string {
+  const kind = buffer.previewKind.value;
+  const pathRel = buffer.openPath.value;
+  if (!pathRel || !kind) return "";
+  return previewSrcFor(kind, cwd, pathRel, diskVersion(buffer.baseVersion.value, buffer.conflict.value), previewTheme.value, token);
+}
+
+/** The Markdown Preview's document with a token of its own (#2515): a fresh one whenever the
+ *  document does, which is exactly when the src would change anyway. */
+function previewOf(buffer: OpenFileBuffer, cwd: string | null): { src: string; token: string | null } {
+  const token = buffer.previewKind.value === "markdown" ? crypto.randomUUID() : null;
+  return { src: previewSrcOf(buffer, cwd, token), token };
+}
+
+/** The refs one open file is made of, empty. */
+function newBuffer(): OpenFileBuffer {
   const openPath = ref<string | null>(null);
   const openName = computed(() => (openPath.value ? (openPath.value.split("/").pop() ?? "") : ""));
-  const buffer: OpenFileBuffer = {
+  return {
     openPath,
     openName,
     isMarkdown: computed(() => langKindForFilename(openName.value) === "markdown"),
+    previewKind: computed(() => (openName.value ? filePreviewKind(openName.value) : null)),
     dirty: ref(false),
     editSeq: ref(0),
     saving: ref(false),
@@ -399,9 +490,15 @@ export function useOpenFile(cwd: () => string | null): OpenFile {
     conflict: ref<FileConflict | null>(null),
     showPreview: ref(false),
     previewScrollTop: ref(0),
+    dirConfigReport: ref<DirConfigSaveReport | null>(null),
     editor: shallowRef<CmEditor | null>(null),
   };
+}
+
+export function useOpenFile(cwd: () => string | null): OpenFile {
+  const buffer = newBuffer();
   const ctx: OpenFileCtx = { ...buffer, cwd, reqId: { n: 0 } };
+  const preview = computed(() => previewOf(buffer, cwd()));
 
   const pageHide = (): void => onPageHide(ctx);
   let stopWatchingExternal: (() => void) | null = null;
@@ -421,11 +518,8 @@ export function useOpenFile(cwd: () => string | null): OpenFile {
 
   return {
     ...buffer,
-    previewSrc: computed(() =>
-      openPath.value
-        ? `/api/files/browse/md?${previewQuery(cwd(), openPath.value, diskVersion(buffer.baseVersion.value, buffer.conflict.value), previewTheme.value)}`
-        : "",
-    ),
+    previewSrc: computed(() => preview.value.src),
+    previewToken: computed(() => preview.value.token),
     generation: () => ctx.reqId.n,
     attach: (host) =>
       (buffer.editor.value = createEditor(host, () => {
@@ -438,8 +532,10 @@ export function useOpenFile(cwd: () => string | null): OpenFile {
     teardown: () => teardown(ctx),
     load: (pathRel, force = false, remembered = null) => loadFile(ctx, pathRel, force, remembered),
     flush: () => flush(ctx),
+    close: () => closeFile(ctx),
     save: () => save(ctx),
     togglePreview: () => togglePreview(ctx),
+    savedInPlace: () => savedInPlace(ctx),
     discardAndReload: () => discardAndReload(ctx),
     overwrite: () => overwrite(ctx),
     openInOs: () => openInOs(ctx),

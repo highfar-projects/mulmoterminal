@@ -1,0 +1,169 @@
+{
+  "steps": [
+    {
+      "id": "import",
+      "insertAfter": "data",
+      "title": "記録を移す",
+      "description": "写したコレクションの記録と、記録が指す画像・ファイルを、アプリのデータベースと data/files/ に移す。何度走らせても同じ結果になるようにする。形だけ写したビルドでは何もしない。",
+      "skill": "skills/import",
+      "check": "sh \"$BLUEPRINT_USECASE/checks/import.sh\"",
+      "bases": ["local"]
+    },
+    {
+      "id": "acceptance",
+      "insertAfter": "run-check",
+      "title": "必須の機能を試験で確かめる",
+      "description": "Each must-have in the spec gets a test that shows it working end to end through the API.",
+      "skill": "skills/acceptance",
+      "check": "sh \"$BLUEPRINT_BASE/checks/tests-pass.sh\" acceptance",
+      "bases": ["local"]
+    },
+    {
+      "id": "actions",
+      "insertAfter": "run-check",
+      "bases": ["local"],
+      "title": "アクションを機能にする",
+      "description": "元のアクションと自動取り込みのうち、仕様で「機能にする」と決めたものを作り、「人が手で行う」ものの手順を README に書く。",
+      "skill": "skills/actions",
+      "check": "sh \"$BLUEPRINT_USECASE/checks/actions.sh\" local"
+    },
+    {
+      "id": "import",
+      "insertAfter": "data-rules",
+      "bases": ["firebase"],
+      "title": "記録を移す（エミュレータ）",
+      "description": "写したコレクションの記録を Firestore に、記録が指す画像・ファイルを Cloud Storage に移す仕組みを作り、エミュレータで確かめる。形だけ写したビルドでは何もしない。",
+      "skill": "skills/import-firebase",
+      "check": "sh \"$BLUEPRINT_USECASE/checks/import-firebase.sh\" emulator"
+    },
+    {
+      "id": "features",
+      "insertAfter": "data-rules",
+      "bases": ["firebase"],
+      "title": "機能と画面",
+      "description": "仕様の必須の機能を、画面とクライアントの処理として作る。Firestore のルールの内側で動くことをエミュレータで確かめる。",
+      "skill": "skills/features-firebase",
+      "check": "sh \"$BLUEPRINT_BASE/checks/emulator-test.sh\" features"
+    },
+    {
+      "id": "design",
+      "insertAfter": "data-rules",
+      "bases": ["firebase"],
+      "title": "見た目を合わせる",
+      "description": "選んだ見た目（MulmoTerminal と同じ、またはひな形）で画面をそろえる。MulmoTerminal のコレクションの画面と同じ部品とクラスを Tailwind で使い、元のコレクションのアイコンを見出しに引き継ぐ。決まりを DESIGN.md に残す。",
+      "skill": "skills/design",
+      "check": "sh \"$BLUEPRINT_USECASE/checks/design.sh\""
+    },
+    {
+      "id": "acceptance",
+      "insertAfter": "data-rules",
+      "bases": ["firebase"],
+      "title": "必須の機能を試験で確かめる",
+      "description": "Each must-have gets a test against the emulators that walks it end to end as a signed-in user, and is refused for everyone it should be refused for.",
+      "skill": "skills/acceptance-firebase",
+      "check": "sh \"$BLUEPRINT_BASE/checks/emulator-test.sh\" acceptance"
+    },
+    {
+      "id": "actions",
+      "insertAfter": "data-rules",
+      "bases": ["firebase"],
+      "title": "アクションを機能にする",
+      "description": "元のアクションと自動取り込みのうち、仕様で「機能にする」と決めたものを、画面の操作・関数・定期実行の関数として作り、「人が手で行う」ものの手順を README に書く。",
+      "skill": "skills/actions-firebase",
+      "check": "sh \"$BLUEPRINT_USECASE/checks/actions.sh\" firebase"
+    },
+    {
+      "id": "import-production",
+      "insertAfter": "deploy-production",
+      "bases": ["firebase"],
+      "title": "記録を本番に移す",
+      "description": "エミュレータで確かめた仕組みで、写しの記録と画像・ファイルを本番の Firestore と Cloud Storage に移し、本番を読み直して元と突き合わせる。形だけ写したビルドでは何もしない。",
+      "skill": "skills/import-production",
+      "check": "sh \"$BLUEPRINT_USECASE/checks/import-firebase.sh\" prod",
+      "gates": ["deploy-production", "credential"]
+    },
+    {
+      "id": "import",
+      "insertAfter": "data",
+      "bases": ["cloudflare"],
+      "title": "記録を移す",
+      "description": "写したコレクションの記録を D1 に、記録が指す画像・ファイルを R2 に移す仕組みを作り、手元の空の状態に 2 回移して確かめる。形だけ写したビルドでは何もしない。",
+      "skill": "skills/import-cloudflare",
+      "check": "sh \"$BLUEPRINT_USECASE/checks/import-d1.sh\" local"
+    },
+    {
+      "id": "acceptance",
+      "insertAfter": "run-check",
+      "bases": ["cloudflare"],
+      "title": "必須の機能を試験で確かめる",
+      "description": "Each must-have in the spec gets a test that shows it working end to end through the Worker, inside the Workers runtime.",
+      "skill": "skills/acceptance-cloudflare",
+      "check": "sh \"$BLUEPRINT_BASE/checks/tests-pass.sh\" acceptance"
+    },
+    {
+      "id": "actions",
+      "insertAfter": "run-check",
+      "bases": ["cloudflare"],
+      "title": "アクションを機能にする",
+      "description": "元のアクションと自動取り込みのうち、仕様で「機能にする」と決めたものを Worker の操作・定期実行（Cron Trigger）として作り、「人が手で行う」ものの手順を README に書く。",
+      "skill": "skills/actions-cloudflare",
+      "check": "sh \"$BLUEPRINT_USECASE/checks/actions.sh\" cloudflare"
+    },
+    {
+      "id": "import-production",
+      "insertAfter": "deploy",
+      "bases": ["cloudflare"],
+      "title": "記録を本番に移す",
+      "description": "手元で確かめた仕組みで、写しの記録と画像・ファイルを本番の D1 と R2 に移し、wrangler で読み直して元と突き合わせる。形だけ写したビルドでは何もしない。",
+      "skill": "skills/import-production-cloudflare",
+      "check": "sh \"$BLUEPRINT_USECASE/checks/import-d1.sh\" remote",
+      "gates": ["deploy-production", "credential"]
+    },
+    {
+      "id": "import",
+      "insertAfter": "data",
+      "bases": ["supabase"],
+      "title": "記録を移す",
+      "description": "写したコレクションの記録を Postgres に、記録が指す画像・ファイルを Storage に移す仕組みを作り、手元のデータベースを作り直して 2 回移して確かめる。形だけ写したビルドでは何もしない。",
+      "skill": "skills/import-supabase",
+      "check": "sh \"$BLUEPRINT_USECASE/checks/import-supabase.sh\" local"
+    },
+    {
+      "id": "acceptance",
+      "insertAfter": "run-check",
+      "bases": ["supabase"],
+      "title": "必須の機能を試験で確かめる",
+      "description": "Each must-have in the spec gets a test against the local Supabase stack that walks it end to end as the user the spec names, and is refused for everyone it should be refused for.",
+      "skill": "skills/acceptance-supabase",
+      "check": "sh \"$BLUEPRINT_BASE/checks/tests-pass.sh\" acceptance"
+    },
+    {
+      "id": "actions",
+      "insertAfter": "run-check",
+      "bases": ["supabase"],
+      "title": "アクションを機能にする",
+      "description": "元のアクションと自動取り込みのうち、仕様で「機能にする」と決めたものを、Postgres の関数・Edge Functions・定期実行として作り、「人が手で行う」ものの手順を README に書く。",
+      "skill": "skills/actions-supabase",
+      "check": "sh \"$BLUEPRINT_USECASE/checks/actions.sh\" supabase"
+    },
+    {
+      "id": "import-production",
+      "insertAfter": "deploy",
+      "bases": ["supabase"],
+      "title": "記録を本番に移す",
+      "description": "手元で確かめた仕組みで、写しの記録と画像・ファイルを本番の Postgres と Storage に移し、Supabase の CLI で読み直して元と突き合わせる。形だけ写したビルドでは何もしない。",
+      "skill": "skills/import-production-supabase",
+      "check": "sh \"$BLUEPRINT_USECASE/checks/import-supabase.sh\" linked",
+      "gates": ["deploy-production", "credential"]
+    },
+    {
+      "id": "design",
+      "insertAfter": "auth",
+      "bases": ["local", "cloudflare", "supabase"],
+      "title": "見た目を合わせる",
+      "description": "選んだ見た目（MulmoTerminal と同じ、またはひな形）で画面をそろえる。MulmoTerminal のコレクションの画面と同じ部品とクラスを Tailwind で使い、元のコレクションのアイコンを見出しに引き継ぐ。決まりを DESIGN.md に残す。",
+      "skill": "skills/design",
+      "check": "sh \"$BLUEPRINT_USECASE/checks/design.sh\""
+    }
+  ]
+}

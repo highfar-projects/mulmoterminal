@@ -9,6 +9,7 @@
 // route meant for the agent accepts only AGENT_EVENT_TYPES.
 import { z } from "zod";
 import type { PlanStep } from "./plan.js";
+import { askChoiceSchema, type AskChoice } from "./askChoices.js";
 import { stepNoticeSchema, type StepNotice } from "./stepNotice.js";
 
 export const STEP_STATUSES = ["pending", "awaiting-approval", "running", "awaiting-answer", "passed", "failed"] as const;
@@ -18,6 +19,8 @@ const stepStateSchema = z.object({
   status: z.enum(STEP_STATUSES),
   approved: z.boolean().default(false),
   question: z.string().optional(),
+  // Offered with `question`, and gone with it.
+  choices: z.array(askChoiceSchema).optional(),
   answers: z.array(z.object({ question: z.string(), answer: z.string(), atMs: z.number() })).default([]),
   // `notice` is set when the executor stopped the step itself; `output` is then its English.
   lastCheck: z.object({ ok: z.boolean(), output: z.string(), atMs: z.number(), notice: stepNoticeSchema.optional() }).optional(),
@@ -26,6 +29,9 @@ const stepStateSchema = z.object({
   reasonNotice: stepNoticeSchema.optional(),
   // Which round of a repeating step this is; absent is the first. Answers belong to a round.
   round: z.number().int().positive().optional(),
+  // The answers of this step's finished rounds, kept when a round ends: a fact the person gave in one round still holds
+  // in the next, and in the steps after. `round` counts from 1.
+  earlierRounds: z.array(z.object({ round: z.number().int().positive(), question: z.string(), answer: z.string(), atMs: z.number() })).optional(),
 });
 
 export const blueprintStateSchema = z.object({ steps: z.record(z.string(), stepStateSchema) });
@@ -37,7 +43,7 @@ export type StepEvent =
   | { type: "start" }
   | { type: "approve" }
   | { type: "reject"; reason: string }
-  | { type: "ask"; question: string }
+  | { type: "ask"; question: string; choices?: AskChoice[] }
   | { type: "answer"; answer: string; atMs: number }
   | { type: "check"; ok: boolean; output: string; atMs: number; notice?: StepNotice }
   | { type: "retry" }
@@ -70,6 +76,7 @@ const answer: StepTransition = (_step, current, event) =>
         ...current,
         status: "running",
         question: undefined,
+        choices: undefined,
         answers: [...current.answers, { question: current.question ?? "", answer: event.answer, atMs: event.atMs }],
       };
 
@@ -79,15 +86,19 @@ const check: StepTransition = (_step, current, event) => {
   return event.ok ? { ...current, status: "passed", lastCheck, reason: undefined } : { ...current, status: "failed", lastCheck, reason: "check failed" };
 };
 
+// A plain question replaces earlier choices too: they were options for the question it replaces.
+const askedOf = (event: StepEvent): Pick<StepState, "question" | "choices"> =>
+  event.type !== "ask" ? {} : { question: event.question, choices: event.choices && event.choices.length > 0 ? event.choices : undefined };
+
 // `${status}:${event}` → what happens. A pair not listed is refused.
 const TRANSITIONS: Readonly<Record<string, StepTransition>> = {
   "pending:start": start,
   "awaiting-approval:approve": (_step, current) => ({ ...current, status: "running", approved: true }),
   "awaiting-approval:reject": (_step, current, event) => ({ ...current, status: "failed", reason: event.type === "reject" ? event.reason : "rejected" }),
-  "running:ask": (_step, current, event) => ({ ...current, status: "awaiting-answer", question: event.type === "ask" ? event.question : undefined }),
+  "running:ask": (_step, current, event) => ({ ...current, status: "awaiting-answer", ...askedOf(event) }),
   // Asking again before an answer came replaces the question: the agent corrected itself, and the
   // person should see what it asks now — not a stale first try that nothing can move past.
-  "awaiting-answer:ask": (_step, current, event) => ({ ...current, question: event.type === "ask" ? event.question : current.question }),
+  "awaiting-answer:ask": (_step, current, event) => (event.type === "ask" ? { ...current, ...askedOf(event) } : current),
   "awaiting-answer:answer": answer,
   "running:check": check,
   // Approval survives a retry: a billing step whose check failed is not a new billing decision.
@@ -101,8 +112,10 @@ const TRANSITIONS: Readonly<Record<string, StepTransition>> = {
     ...current,
     status: "running",
     round: (current.round ?? 0) + 1,
+    earlierRounds: [...(current.earlierRounds ?? []), ...current.answers.map((entry) => ({ ...entry, round: (current.round ?? 0) + 1 }))],
     answers: [],
     question: undefined,
+    choices: undefined,
     reason: undefined,
   }),
 };

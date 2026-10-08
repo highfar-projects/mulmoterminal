@@ -68,8 +68,8 @@ const REFUSED_HOW: Record<HeadlessWrite["reason"], string> = {
 const REFUSED_BY: Record<HeadlessWrite["reason"], (cid: string) => string[]> = {
   rules: () => ["    That is the answer this run exists to bring back — a visitor pressing this button gets the same refusal, and the page cannot see why."],
   taken: (cid) => [
-    `    That is NOT a verdict about a visitor. The id was already in use, and under \`idFrom: "auth.uid"\` the record it collided with is YOUR OWN — somebody else has a ` +
-      `different uid and would be accepted. Remove your record from '${cid}' if you want this button exercised for real.`,
+    `    That is NOT a verdict about a visitor. The id was already in use, and where the id is built from the submitter (\`idFrom: "auth.uid"\` or \`"pseudonym"\`) ` +
+      `the record it collided with is YOUR OWN — somebody else has a different id and would be accepted. Remove your record from '${cid}' if you want this button exercised for real.`,
   ],
   host: () => [
     "    The database never saw it: this run could not get as far as writing. That is about the app or about this run — a projection that would not build, a required " +

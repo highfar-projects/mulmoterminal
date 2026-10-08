@@ -1,6 +1,8 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { githubIconOf } from "../../../common/githubIcons";
+import { CELL_ACTIONS, HEADER_ACTIONS } from "../../../common/headerActions";
+import { APP_ACTIONS } from "../../../common/appActions";
 import {
   sanitizeButtons,
   sanitizeChips,
@@ -87,10 +89,11 @@ describe("sanitizeChips", () => {
 
 describe("sanitizeHeaderConfig", () => {
   it("assembles buttons + chips, defaulting a non-object to null/null", () => {
-    expect(sanitizeHeaderConfig(null)).toEqual({ buttons: null, chips: null });
+    expect(sanitizeHeaderConfig(null)).toEqual({ buttons: null, chips: null, commands: [] });
     expect(sanitizeHeaderConfig({ buttons: [{ id: "a", label: "A", run: "shell", cmd: "x" }], chips: ["dir"] })).toEqual({
       buttons: [{ id: "a", label: "A", run: "shell", cmd: "x" }],
       chips: ["dir"],
+      commands: [],
     });
   });
 });
@@ -196,8 +199,13 @@ describe("sanitizeButtons open.pickFile", () => {
 describe("sanitizeButtons run:action", () => {
   it("keeps a button whose action is a known one", () => {
     expect(sanitizeButtons([{ id: "r", icon: "restart_alt", label: "Restart", run: "action", action: "restart" }])).toEqual([
-      { id: "r", icon: "restart_alt", label: "Restart", run: "action", action: "restart" },
+      { id: "r", icon: "restart_alt", label: "Restart", run: "action", action: "terminal-restart" },
     ]);
+  });
+  it("keeps every action the client dispatches, and rewrites the old `restart` to its current name", () => {
+    // One at a time: the whole list is longer than a header may hold (MAX_BUTTONS).
+    const kept = HEADER_ACTIONS.map((action) => sanitizeButtons([{ id: action, label: action, run: "action", action }])?.[0]);
+    expect(kept.map((b) => (b && "action" in b ? b.action : null))).toEqual([...CELL_ACTIONS, ...APP_ACTIONS, "terminal-restart"]);
   });
   it("drops one naming an unknown action, or none at all", () => {
     expect(sanitizeButtons([{ id: "r", label: "R", run: "action", action: "reboot" }])).toEqual([]);
@@ -230,7 +238,7 @@ describe("sanitizeButtons folders", () => {
         when: "isGitRepo",
         order: 5,
         items: [
-          { id: "restart", icon: "restart_alt", label: "Restart the agent", run: "action", action: "restart" },
+          { id: "restart", icon: "restart_alt", label: "Restart the agent", run: "action", action: "terminal-restart" },
           { id: "test", icon: "science", label: "Run the tests", run: "shell", cmd: "yarn test" },
         ],
       },
@@ -271,5 +279,33 @@ describe("sanitizeButtons folders", () => {
     );
     const ops = configured(merged.buttons).find((e) => e.id === "ops");
     expect(folderOf(ops).items.map((b) => b.id)).toEqual(["restart"]);
+  });
+});
+
+// #2465. Commands merge by id like buttons, and never share an id with a button.
+describe("mergeHeaderConfig commands", () => {
+  const shell = (id: string, cmd = "x") => ({ id, label: id, run: "shell" as const, cmd });
+
+  it("lets the project override a global command by id, and keeps the rest", () => {
+    const merged = mergeHeaderConfig(
+      { buttons: null, chips: null, commands: [shell("a", "global"), shell("b")] },
+      { buttons: null, chips: null, commands: [shell("a", "project")] },
+    );
+    expect(merged.commands?.map((c) => ("cmd" in c ? [c.id, c.cmd] : [c.id]))).toEqual([
+      ["a", "project"],
+      ["b", "x"],
+    ]);
+  });
+
+  it("drops a command whose id a button has, including a default button's", () => {
+    const merged = mergeHeaderConfig({ buttons: [shell("deploy")], chips: null, commands: [shell("deploy"), shell("other")] }, { buttons: null, chips: null });
+    expect(merged.commands?.map((c) => c.id)).toEqual(["other"]);
+    const onDefaults = mergeHeaderConfig({ buttons: null, chips: null, commands: [shell("pr"), shell("other")] }, { buttons: null, chips: null });
+    expect(onDefaults.commands?.map((c) => c.id)).toEqual(["other"]);
+  });
+
+  it("reads commands from a config file, and none when absent", () => {
+    expect(sanitizeHeaderConfig({ commands: [shell("a")] }).commands?.map((c) => c.id)).toEqual(["a"]);
+    expect(sanitizeHeaderConfig({}).commands).toEqual([]);
   });
 });

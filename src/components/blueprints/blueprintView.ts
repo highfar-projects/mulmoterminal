@@ -33,6 +33,23 @@ const WAIT_KEYS: Record<WaitKind, string> = {
 
 export const waitKey = (kind: WaitKind | null): string | null => (kind ? WAIT_KEYS[kind] : null);
 
+export const RUN_GROUPS = ["waiting", "working", "done", "archived"] as const;
+export type RunGroup = (typeof RUN_GROUPS)[number];
+type Groupable = { current: unknown; waitingOn: WaitKind | null; archived: boolean };
+
+// A build waiting for the person comes first — it is their turn; then what is still running; then what is done.
+// A build the person put away goes last whatever its state: they said they are done looking at it.
+const groupOf = (summary: Groupable): RunGroup => {
+  if (summary.archived) return "archived";
+  if (summary.waitingOn !== null) return "waiting";
+  return summary.current === null ? "done" : "working";
+};
+
+/** The builds in the order the list shows them: by group, each group in the order given (newest first), empty groups left out. */
+export function runGroups<R extends Groupable>(runs: readonly R[]): { group: RunGroup; runs: R[] }[] {
+  return RUN_GROUPS.map((group) => ({ group, runs: runs.filter((summary) => groupOf(summary) === group) })).filter((entry) => entry.runs.length > 0);
+}
+
 // Keyed by gate rather than written into the message path: the gate ids carry hyphens.
 const GATE_KEYS: Record<BlueprintGate, string> = {
   review: "blueprints.gates.review",
@@ -66,9 +83,52 @@ export function presetGroups<P extends { base: string }>(presets: readonly P[], 
     .filter((group) => group.presets.length > 0);
 }
 
+/**
+ * The examples a group shows before it is opened: the first of each usecase, so every kind of task is in view and
+ * the form below is not pushed off the screen by a task's second and third example. The rest are `hidden`.
+ */
+export function firstOfEachUsecase<P extends { usecase: string }>(presets: readonly P[]): { shown: P[]; hidden: P[] } {
+  const firstIndex = new Map<string, number>();
+  presets.forEach((preset, index) => {
+    if (!firstIndex.has(preset.usecase)) firstIndex.set(preset.usecase, index);
+  });
+  const isFirst = (preset: P, index: number): boolean => firstIndex.get(preset.usecase) === index;
+  return { shown: presets.filter(isFirst), hidden: presets.filter((preset, index) => !isFirst(preset, index)) };
+}
+
 /** The usecases that say they can be built on `baseSlug`. */
 export const usecasesFor = (packs: readonly PackChoice[], baseSlug: string): PackChoice[] =>
   packs.filter((pack) => pack.manifest.kind === "usecase" && pack.manifest.bases.includes(baseSlug));
+
+const basesOf = (pack: PackChoice | undefined): readonly string[] => (pack?.manifest.kind === "usecase" ? pack.manifest.bases : []);
+/** The installed bases the usecase `usecaseSlug` can be built on, in the base selector's order; none for an unknown usecase. */
+export const basesFor = (packs: readonly PackChoice[], usecaseSlug: string): PackChoice[] => {
+  const usecase = packs.find((pack) => pack.slug === usecaseSlug && pack.manifest.kind === "usecase");
+  return basePacks(packs).filter((base) => basesOf(usecase).includes(base.slug));
+};
+
+export interface UsecaseGroup {
+  /** The one base these usecases are built on, or null for those that can be built on several. */
+  base: string | null;
+  title: string | null;
+  usecases: PackChoice[];
+}
+
+/**
+ * Every usecase that can be built on an installed base, grouped so the choice says where it runs: those with one such
+ * base under it, in the bases' order, and those with several (an app, on a platform chosen next) second. A usecase no
+ * installed base can build is not offered at all.
+ */
+export function usecaseGroups(packs: readonly PackChoice[]): UsecaseGroup[] {
+  const usecases = packs.filter((pack) => pack.manifest.kind === "usecase").map((pack) => ({ pack, bases: basesFor(packs, pack.slug) }));
+  const single = basePacks(packs).map((base) => ({
+    base: base.slug,
+    title: base.manifest.title,
+    usecases: usecases.filter((entry) => entry.bases.length === 1 && entry.bases[0]?.slug === base.slug).map((entry) => entry.pack),
+  }));
+  const several = { base: null, title: null, usecases: usecases.filter((entry) => entry.bases.length > 1).map((entry) => entry.pack) };
+  return [...single.slice(0, 1), several, ...single.slice(1)].filter((group) => group.usecases.length > 0);
+}
 
 /** A form field's text turned into the answer its question expects; undefined while it is blank. */
 export function answerFromInput(question: HearingQuestion, raw: string): HearingAnswer | undefined {
@@ -77,6 +137,9 @@ export function answerFromInput(question: HearingQuestion, raw: string): Hearing
   const value = Number(raw);
   return Number.isFinite(value) ? value : undefined;
 }
+
+/** Whether a path can be one line of a one-per-line answer: a name with a line break in it would read as two paths. */
+export const fitsOnALine = (path: string): boolean => !/[\r\n]/u.test(path);
 
 /** The non-blank lines of a one-per-line answer, trimmed. */
 export const answerLines = (text: string): string[] =>

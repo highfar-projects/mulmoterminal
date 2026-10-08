@@ -5,12 +5,33 @@
 // setting that was misspelled or rejected looked exactly like a setting that was never made.
 // Each directory expands to the values the app resolved, plus the keys it dropped and the
 // keys it doesn't know — which is what tells those two cases apart.
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, useTemplateRef, watch } from "vue";
 import { parseDirConfigDetail, sortDirPathsByName, type DirConfigDetailView } from "./dirConfigDetail";
 import { presetLabel } from "./presets";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
+import { useI18n } from "vue-i18n";
+import { lastSegment } from "../../common/pathSegments";
+import { DIR_CONFIG_FILE, ensureDirConfigFile } from "./dirConfigOpen";
+import DirSettingsForm from "./settings/DirSettingsForm.vue";
 
-const props = defineProps<{ paths: string[] }>();
+// `focus`: a directory to open and scroll to — the one a cell asked for (#2729).
+const props = defineProps<{ paths: string[]; focus?: string | null | undefined }>();
+// Asks the host to open `name` in `dir` in the Files view; Settings closes itself to show it.
+const emit = defineEmits<{ (e: "open-file", dir: string, name: string): void }>();
+const { t } = useI18n();
+
+const OPEN_BUTTON =
+  "ml-2 cursor-pointer rounded border border-border bg-elevated px-2 py-0.5 font-sans text-[11px] text-secondary hover:bg-hover hover:text-fg disabled:opacity-60";
+
+const creating = ref<string | null>(null);
+const createFailed = ref<string | null>(null);
+async function createAndOpen(dir: string) {
+  creating.value = dir;
+  const made = await ensureDirConfigFile(dir);
+  creating.value = null;
+  createFailed.value = made ? null : dir;
+  if (made) emit("open-file", dir, DIR_CONFIG_FILE);
+}
 
 const listed = computed(() => sortDirPathsByName(props.paths));
 
@@ -32,6 +53,26 @@ async function load(path: string) {
   }
 }
 
+// A save answers with the directory as it now is, which replaces what the row was showing.
+function onSaved(path: string, detail: DirConfigDetailView) {
+  details.value = { ...details.value, [path]: detail };
+}
+
+const list = useTemplateRef<HTMLElement>("list");
+watch(
+  () => props.focus,
+  async (dir) => {
+    if (!dir) return;
+    await nextTick();
+    const row = [...(list.value?.querySelectorAll<HTMLDetailsElement>("details[data-dir]") ?? [])].find((element) => element.dataset.dir === dir);
+    if (!row) return;
+    row.open = true;
+    void load(dir);
+    row.scrollIntoView({ block: "start" });
+  },
+  { immediate: true },
+);
+
 // A directory removed from the list (a preset was deleted) must not keep a stale entry around.
 watch(
   () => props.paths,
@@ -45,9 +86,9 @@ watch(
 
 <template>
   <p v-if="!paths.length" class="mb-3 mt-1.5 text-[12px] text-dim">No directories yet — open a terminal somewhere and it will be listed here.</p>
-  <ul v-else class="m-0 list-none p-0" data-testid="dir-preview-list">
+  <ul v-else ref="list" class="m-0 list-none p-0" data-testid="dir-preview-list">
     <li v-for="path in listed" :key="path" class="border-b border-border last:border-b-0">
-      <details data-testid="dir-preview-row" @toggle="load(path)">
+      <details data-testid="dir-preview-row" :data-dir="path" @toggle="load(path)">
         <summary class="flex cursor-pointer items-center gap-2 py-2 text-[13px] text-fg">
           <span data-testid="dir-preview-name" class="flex-none font-semibold">{{ presetLabel(path) }}</span>
           <span class="min-w-0 flex-auto truncate text-left font-mono text-[11px] text-dim [direction:rtl]" :data-tip="path"
@@ -60,9 +101,13 @@ watch(
             <p v-if="!details[path].exists" data-testid="dir-preview-gone" class="m-0 text-[var(--warn-text,#e0a030)]">
               This directory no longer exists — the entry is left over from a project that was moved or deleted.
             </p>
-            <p v-else-if="!details[path].file && !details[path].localFile && !details[path].repoFile" class="m-0 text-dim">
-              No <code>.mulmoterminal.json</code> here — this directory uses the global settings.
-            </p>
+            <template v-else-if="!details[path].file && !details[path].localFile && !details[path].repoFile">
+              <p class="m-0 text-dim">No <code>.mulmoterminal.json</code> here — this directory uses the global settings.</p>
+              <button type="button" :class="OPEN_BUTTON" data-testid="dir-preview-create" :disabled="creating === path" @click="createAndOpen(path)">
+                {{ t("dirConfigOpen.create") }}
+              </button>
+              <p v-if="createFailed === path" class="m-0 mt-1 text-[11px] text-err-text" role="alert">{{ t("dirConfigOpen.failed") }}</p>
+            </template>
             <template v-else>
               <!-- Listed in the order they are applied, weakest first, so the panel reads the way
                    the merge runs. `repo.json` is the open file every tool can read; the two below
@@ -72,6 +117,9 @@ watch(
               </p>
               <p v-if="details[path].file" class="m-0 font-mono text-[11px] text-dim">
                 {{ details[path].file }}
+                <button type="button" :class="OPEN_BUTTON" data-testid="dir-preview-open" @click="emit('open-file', path, lastSegment(details[path].file))">
+                  {{ t("dirConfigOpen.open") }}
+                </button>
               </p>
               <!-- Named separately, and second, because that is the order they are applied in.
                    A reader looking for why a value is not what their file says needs to see that
@@ -82,6 +130,14 @@ watch(
               <p v-if="details[path].localFile" data-testid="dir-preview-local-file" class="m-0 font-mono text-[11px] text-dim">
                 {{ details[path].localFile }}
                 <span class="font-sans">{{ details[path].file ? "(this checkout only — wins over the file above)" : "(this checkout only)" }}</span>
+                <button
+                  type="button"
+                  :class="OPEN_BUTTON"
+                  data-testid="dir-preview-open-local"
+                  @click="emit('open-file', path, lastSegment(details[path].localFile))"
+                >
+                  {{ t("dirConfigOpen.open") }}
+                </button>
               </p>
               <p class="m-0 mb-2 mt-2 text-[11px] text-dim">
                 Everything below comes from {{ details[path].file && details[path].localFile ? "those files" : "that file" }} — no global setting or default is
@@ -122,6 +178,7 @@ watch(
                 Not settings this app reads (a typo?): <code>{{ details[path].source.unknown.join(", ") }}</code>
               </p>
             </template>
+            <DirSettingsForm v-if="details[path].exists" :path="path" :detail="details[path]" @saved="(detail) => onSaved(path, detail)" />
           </template>
           <p v-else class="m-0 text-dim">Reading…</p>
         </div>

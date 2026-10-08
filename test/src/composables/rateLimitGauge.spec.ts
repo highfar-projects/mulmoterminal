@@ -1,11 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { rateLimitReadout, gaugeWindows, gaugeTitle, resetsAt, WARN_PERCENT } from "../../../src/composables/rateLimitGauge";
+import { rateLimitReadout, gaugeWindows, gaugeTitle, resetsIn, WARN_PERCENT } from "../../../src/composables/rateLimitGauge";
 import type { RateLimitSnapshot } from "../../../src/composables/rateLimitGauge";
+import { i18n } from "../../../src/i18n";
+
+// The words, through the real messages under the pinned English locale.
+const t = i18n.global.t;
 
 // The note and the gauges come out of one call, so the tests below read them the same way rather
 // than through two entry points that could be given different snapshots.
-const gaugesOf = (snapshot: RateLimitSnapshot | null, now_ms: number) => rateLimitReadout(snapshot, now_ms).gauges;
-const noteOf = (snapshot: RateLimitSnapshot | null, now_ms: number) => rateLimitReadout(snapshot, now_ms).note;
+const gaugesOf = (snapshot: RateLimitSnapshot | null, now_ms: number) => rateLimitReadout(snapshot, now_ms, t).gauges;
+const noteOf = (snapshot: RateLimitSnapshot | null, now_ms: number) => rateLimitReadout(snapshot, now_ms, t).note;
 
 const window = (usedPercentage: number, resetsAt_sec: number | null = null) => ({ usedPercentage, resetsAt_sec });
 const NOW = 1_700_000_000_000;
@@ -71,7 +75,7 @@ describe("rateLimitReadout gauges", () => {
   // reporter concluded that Codex was not being picked up at all.
   it("marks the surviving agent when a note stands in for the other", () => {
     const noted = { claude: null, codex: { fiveHour: null, sevenDay: window(71) }, claudeProbe: "no-report" as const };
-    const readout = rateLimitReadout(noted, NOW);
+    const readout = rateLimitReadout(noted, NOW, t);
 
     expect(readout.note).toBeTruthy();
     expect(readout.gauges).toMatchObject([{ agent: "codex", marked: true, windows: [{ label: "7d", percent: 71, warn: false }] }]);
@@ -80,7 +84,7 @@ describe("rateLimitReadout gauges", () => {
   // The same shape without a note is a solo Codex user, who has nothing to tell it apart from.
   it("leaves the solo agent unmarked when there is no note beside it", () => {
     const solo = { claude: null, codex: { fiveHour: null, sevenDay: window(71) }, claudeProbe: "ok" as const };
-    const readout = rateLimitReadout(solo, NOW);
+    const readout = rateLimitReadout(solo, NOW, t);
 
     expect(readout.note).toBeNull();
     expect(readout.gauges.map((g) => g.marked)).toEqual([false]);
@@ -94,62 +98,32 @@ describe("rateLimitReadout gauges", () => {
   });
 });
 
-describe("resetsAt", () => {
+describe("resetsIn", () => {
   const inMinutes = (m: number) => Math.floor(NOW / 1000) + m * 60;
-  // The expected wall-clock text is built by the same Intl call the code makes, not typed out: the
-  // exact separators are ICU's and move between Node versions, and pinning them here would fail on
-  // the formatting rather than on the answer.
-  const clock = (sec: number, locale: string) => new Date(sec * 1000).toLocaleString(locale, { dateStyle: "medium", timeStyle: "medium" });
 
-  it("names the moment the window turns over, with the countdown after it", () => {
-    const at = inMinutes(135);
-    expect(resetsAt(at, NOW, "en-GB")).toBe(`resets at ${clock(at, "en-GB")} (in 2h 15m)`);
-  });
-
-  // The whole point of the absolute time: the 7d window's countdown is days' worth of hours, which
-  // is not a time of day anyone can act on by itself.
-  it("keeps the countdown readable for a window days away", () => {
-    const at = inMinutes(60 * 49 + 5);
-    expect(resetsAt(at, NOW, "en-GB")).toContain("(in 49h 5m)");
-  });
-
-  it("reads as minutes alone under the hour", () => {
-    expect(resetsAt(inMinutes(20), NOW, "en-GB")).toContain("(in 20m)");
-  });
-
-  // Written in the reader's own locale, which is what the default argument asks the browser for —
-  // the same moment, in the order and script that reader writes dates in.
-  it("writes the moment in the locale it is given", () => {
-    const at = inMinutes(135);
-    expect(resetsAt(at, NOW, "ja-JP")).toBe(`resets at ${clock(at, "ja-JP")} (in 2h 15m)`);
-    expect(resetsAt(at, NOW, "ja-JP")).not.toBe(resetsAt(at, NOW, "en-US"));
-  });
-
-  // To the second, because the reset is a moment rather than a day (and the user asked for it).
-  it("says the second, not just the minute", () => {
-    const at = Math.floor(NOW / 1000) + 3600 + 45;
-    expect(resetsAt(at, NOW, "en-GB")).toMatch(/\d:\d\d:\d\d/);
+  it("reads as hours and minutes, or minutes alone", () => {
+    expect(resetsIn(inMinutes(135), NOW, t)).toBe("resets in 2h 15m");
+    expect(resetsIn(inMinutes(20), NOW, t)).toBe("resets in 20m");
   });
 
   // A stale reading whose reset has passed should say nothing rather than count backwards.
   it("says nothing for an unknown or elapsed reset", () => {
-    expect(resetsAt(null, NOW, "en-GB")).toBe("");
-    expect(resetsAt(inMinutes(-5), NOW, "en-GB")).toBe("");
+    expect(resetsIn(null, NOW, t)).toBe("");
+    expect(resetsIn(inMinutes(-5), NOW, t)).toBe("");
   });
 });
 
 describe("gaugeTitle", () => {
   it("carries the numbers and when each window resets", () => {
-    const title = gaugeTitle("claude", { fiveHour: window(27, Math.floor(NOW / 1000) + 3600), sevenDay: window(83) }, NOW);
+    const title = gaugeTitle("claude", { fiveHour: window(27, Math.floor(NOW / 1000) + 3600), sevenDay: window(83) }, NOW, t);
     expect(title).toContain("claude rate limit");
-    expect(title).toContain("5h 27% used, resets at ");
-    expect(title).toContain("(in 1h 0m)");
+    expect(title).toContain("5h 27% used, resets in 1h 0m");
     expect(title).toContain("7d 83% used");
   });
 
   it("is empty when there is nothing to say", () => {
-    expect(gaugeTitle("codex", null, NOW)).toBe("");
-    expect(gaugeTitle("codex", { fiveHour: null, sevenDay: null }, NOW)).toBe("");
+    expect(gaugeTitle("codex", null, NOW, t)).toBe("");
+    expect(gaugeTitle("codex", { fiveHour: null, sevenDay: null }, NOW, t)).toBe("");
   });
 
   // This string is also the aria-label, so it has to agree with what is on screen. Filtering only
@@ -159,13 +133,13 @@ describe("gaugeTitle", () => {
     const limits = { fiveHour: window(83, past), sevenDay: window(40, Math.floor(NOW / 1000) + 3600) };
 
     expect(gaugeWindows(limits, NOW).map((w) => w.label)).toEqual(["7d"]);
-    expect(gaugeTitle("claude", limits, NOW)).not.toContain("83");
-    expect(gaugeTitle("claude", limits, NOW)).toContain("7d 40% used");
+    expect(gaugeTitle("claude", limits, NOW, t)).not.toContain("83");
+    expect(gaugeTitle("claude", limits, NOW, t)).toContain("7d 40% used");
   });
 
   it("says nothing at all when every window it holds has expired", () => {
     const past = Math.floor(NOW / 1000) - 60;
-    expect(gaugeTitle("claude", { fiveHour: window(83, past), sevenDay: null }, NOW)).toBe("");
+    expect(gaugeTitle("claude", { fiveHour: window(83, past), sevenDay: null }, NOW, t)).toBe("");
   });
 });
 
@@ -241,7 +215,7 @@ describe("rateLimitReadout with accounts", () => {
 
   // A new account's trust answers start empty, so its probe meets the trust prompt first — and a
   // gauge that is simply absent would never say so.
-  const notesOf = (snapshot: RateLimitSnapshot) => rateLimitReadout(snapshot, NOW).accountNotes;
+  const notesOf = (snapshot: RateLimitSnapshot) => rateLimitReadout(snapshot, NOW, t).accountNotes;
   const stuck = { ...work, limits: null, probe: "no-report" as const, probeStall: "trust-prompt" as const };
 
   it("names a claude account whose check is stuck, with how to clear it from a cell on it", () => {
@@ -256,6 +230,18 @@ describe("rateLimitReadout with accounts", () => {
   it("gives an account the same reasons as the default login", () => {
     expect(notesOf({ ...claudeOnly, accounts: [{ ...stuck, probeStall: "unknown" }] })[0]?.note).toMatch(/^Work: .*no answer/);
     expect(notesOf({ ...claudeOnly, accounts: [{ ...stuck, probe: "no-windows" }] })[0]?.note).toMatch(/API-key billing/);
+  });
+
+  it("names a rotation token's address in its title, and keeps the short label (#2919)", () => {
+    const token = { ...work, id: "ss", label: "SS", email: "me@example.com" };
+    const gauge = gaugesOf({ ...claudeOnly, accounts: [token] }, NOW)[1];
+    expect(gauge?.label).toBe("SS");
+    expect(gauge?.title).toContain("SS · me@example.com (claude) rate limit");
+  });
+
+  it("says a subscription at its usage limit is that, not 'no answer' (#2919)", () => {
+    expect(notesOf({ ...claudeOnly, accounts: [{ ...stuck, probeStall: "usage-limit" }] })[0]?.note).toMatch(/^Work: .*usage limit/);
+    expect(noteOf({ claude: null, codex: null, claudeProbe: "no-report", claudeStall: "usage-limit" }, NOW)).toMatch(/usage limit/);
   });
 
   it("says nothing for an account that is showing, not yet measured, or codex", () => {

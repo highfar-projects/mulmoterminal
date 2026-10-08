@@ -7,29 +7,28 @@ import { hookSocketPath } from "../infra/hook-socket.js";
 import { devcontainerAuthEnv } from "../infra/claude-credentials.js";
 import { guiMcpEnv, carriesFullGuiMcp, directoryGroupsMcpConfigJson, fullGuiAllowedTools } from "./mcp-config.js";
 import type { ToolGroup } from "../../common/toolGroups.js";
-import { getUserMcpServers, getPrWorkdirFooter, getAppendSystemPrompt, getTerminalSubmit, getCustomAgents } from "../config/config-routes.js";
+import { getUserMcpServers, getPrWorkdirFooter, getAppendSystemPrompt, getTerminalSubmit, getCustomAgents, getTokenRotation } from "../config/config-routes.js";
+import type { TokenAssignment } from "../agents/token-assignment.js";
 import { submitSequenceForAgent } from "../../common/terminalSubmit.js";
 import { buildClaudeArgs } from "../agents/claude-args.js";
 import { refuseUnsupportedPermissionMode } from "../agents/claude-help-probe.js";
 import { claudeAdapter } from "../agents/claude.js";
 import { appendedSystemPrompt } from "../agents/appended-prompt.js";
-import {
-  claimFullGuiMcp,
-  customAgentSessions,
-  hookedSessions,
-  knownSessions,
-  launchChoices,
-  ptys,
-  rememberCustomAgentSession,
-  resetSessionToolGroups,
-} from "./registry.js";
-import { ptySpawn, ptyWouldReattach, type PtySpawnEnv } from "./pty-spawn.js";
-import { ptyExitLine, ptyStartLine } from "./pty-exit-log.js";
+import { customAgentSessions, hookedSessions, knownSessions, launchChoices, rememberCustomAgentSession, resetSessionToolGroups } from "./registry.js";
+import { ptyWouldReattach, type PtySpawnEnv } from "./pty-spawn.js";
+import { ptyExitLine } from "./pty-exit-log.js";
+import { startAgentPty, type StartedAgentPty } from "./agent-pty-start.js";
+import { spawnWithFullGuiClaim } from "./spawn-with-full-gui-claim.js";
 import { attachDraftInjection } from "./draft-injection.js";
-import { sendExitAndClose } from "./ws-frames.js";
+import { sendExitAndClose, sendFrame } from "./ws-frames.js";
 import { wireBufferedOutput } from "./output-relay.js";
 import { sessionExistsOnDisk } from "./session-reads.js";
-import { accountSpawnEnv, accountTokenEnv } from "./session-home.js";
+import { accountSpawnEnv } from "./session-home.js";
+import { boundAccount } from "./account-sessions.js";
+import { sessionCredential, type SessionCredential } from "./session-credential.js";
+import { rememberTokenSession, sessionToken } from "./token-sessions.js";
+import { movedNoticeLine, takeMovedFrom } from "./rotation-notice.js";
+import { rotationLoginLabel } from "../../common/tokenRotation.js";
 import type { PtyEntry } from "./types.js";
 import type { SpawnDeps } from "./spawn-deps.js";
 import { handlePtyExit } from "./pty-exit.js";
@@ -37,6 +36,7 @@ import { loadDirConfig } from "../config/dir-config.js";
 import { repoRootSync } from "../git/repo-root-sync.js";
 import { workdirFooter } from "../git/pr-footer.js";
 import { getProviders } from "../config/config-routes.js";
+import { claudeRendererEnv } from "./claude-fullscreen-env.js";
 import { requireResolution, resolveProvider, type DirModelChoice } from "./provider-env.js";
 import { settingsArgument, mcpConfigArgument, appendedPromptArgument, withSettingsCleanup, type AppendedPromptArgument } from "./session-settings.js";
 import { ensureDropsDir } from "./session-drops.js";
@@ -127,10 +127,7 @@ function resolveSessionBackend(input: { cwd: string; sessionId: string; launch?:
   // Remembered so a later resume continues on the backend this session began on, instead of
   // silently moving to the directory's default mid-conversation.
   if (input.launch) launchChoices.set(input.sessionId, choice);
-  // An account's OAuth token rides the settings file's env block beside a provider's (fork-only,
-  // session-home.ts accountTokenEnv says why not the pty env).
-  const tokenEnv = accountTokenEnv(input.sessionId);
-  return { dir, resolved: Object.keys(tokenEnv).length ? { ...resolved, env: { ...resolved.env, ...tokenEnv } } : resolved };
+  return { dir, resolved };
 }
 
 /**
@@ -142,6 +139,52 @@ function resolveSessionBackend(input: { cwd: string; sessionId: string; launch?:
  * Its own function for the same reason resolveSessionBackend is — the spawn body is at its line
  * budget, and this is a value derived from two sources rather than part of spawning.
  */
+/**
+ * The credential this session's process is started with: the provider's, or — for a plain claude
+ * cell on the default home, with rotation on — the token chosen for it (#2919). Its own function
+ * for the reason resolveSessionBackend is.
+ */
+function sessionCredentialFor(
+  deps: SpawnDeps,
+  sessionId: string,
+  resolved: ReturnType<typeof requireResolution>,
+  customAgentId: string | undefined,
+  resuming: boolean,
+): SessionCredential {
+  const agentId = resuming ? customAgentSessions.get(sessionId) : customAgentId;
+  const runsCustomAgent = agentId !== undefined && getCustomAgents().some((candidate) => candidate.id === agentId);
+  const onAccount = boundAccount("claude", sessionId) !== undefined;
+  // A reattach starts nothing, but its settings file is still rewritten: it has to name the token the
+  // running process was started with, never a fresh choice (spawnEntry records only a new process).
+  // Asked only with rotation on, so the spawn's own reattach probe (spawnEntry) stays the only one
+  // otherwise. A session ending between the two starts on its recorded token, which is still true.
+  const assign = (): TokenAssignment | null => {
+    if (!getTokenRotation().enabled) return null;
+    return ptyWouldReattach(sessionId, true) ? (deps.keptAssignment?.(sessionToken(sessionId)) ?? null) : (deps.assignToken?.() ?? null);
+  };
+  return sessionCredential(resolved, { providerEnv: resolved.env, runsCustomAgent, onAccount }, assign);
+}
+
+/** Which rotation credential this session's process runs on, for the cell's mark (#2919): the token
+ *  just chosen for a new process, or the one a reattached process was recorded on. Nothing is sent
+ *  while rotation is off, so a cell without it sees no new frame at all. */
+function announceCredential(sessionId: string, ws: WebSocket | null): void {
+  const rotation = getTokenRotation();
+  if (!rotation.enabled) return;
+  const tokenId = sessionToken(sessionId);
+  const token = rotation.tokens.find((candidate) => candidate.id === tokenId);
+  // `label` is what fits on the mark; `detail` names the address too, for its hover.
+  const label = tokenId === undefined ? null : (token?.label ?? rotationLoginLabel(rotation, tokenId));
+  sendFrame(ws, { type: "credential", label, detail: tokenId === undefined ? null : rotationLoginLabel(rotation, tokenId) });
+}
+
+/** The line a session moved off a spent credential prints as its new process starts (#2919). */
+function printMovedNotice(sessionId: string, ws: WebSocket | null, tokenId: string | null): void {
+  const move = takeMovedFrom(sessionId);
+  if (move === undefined || tokenId === null) return;
+  sendFrame(ws, { type: "output", data: movedNoticeLine(move, rotationLoginLabel(getTokenRotation(), tokenId)) });
+}
+
 function sessionAddDirs(sessionId: string, configured: string[] | null | undefined): string[] | null | undefined {
   const dropsDirectory = ensureDropsDir(sessionId);
   return dropsDirectory ? [...(configured ?? []), dropsDirectory] : configured;
@@ -293,17 +336,18 @@ export function createClaudeSpawner(deps: SpawnDeps) {
 
     const { dir, resolved } = resolveSessionBackend({ cwd, sessionId, launch, canResume });
     const addDirs = sessionAddDirs(sessionId, dir.addDirs);
+    const credential = sessionCredentialFor(deps, sessionId, resolved, customAgentId, canResume);
 
-    const hookSettings = sessionHookSettings(deps.hookSettingsJson, sessionId, resolved.env, dir.devcontainer === true);
+    const hookSettings = sessionHookSettings(deps.hookSettingsJson, sessionId, credential.env, dir.devcontainer === true);
     const { mcpConfig, directoryGroupsJson } = sessionMcpConfig(deps.mcpConfigJson(sessionId, "127.0.0.1"), sessionId, fullGuiMcp, directoryMcpGroups);
     const args = buildClaudeArgs({
       model: resolved.model,
       sessionId,
       resume,
       canResume,
-      // A provider session's settings carry its token, so they go to a 0600 file instead of
-      // argv — see session-settings.ts.
-      settings: settingsArgument(sessionId, hookSettings, Object.keys(resolved.env).length > 0),
+      // A provider session's settings carry its token, as a rotated one's do, so they go to a 0600
+      // file instead of argv — see session-settings.ts.
+      settings: settingsArgument(sessionId, hookSettings, Object.keys(credential.env).length > 0),
       permissionMode: deps.permissionMode,
       attachGuiMcp: fullGuiMcp || directoryGroupsJson !== null,
       mcpConfig,
@@ -325,8 +369,8 @@ export function createClaudeSpawner(deps: SpawnDeps) {
     // The settings file is already on disk and may hold a provider token, so a failed
     // spawn has to take it with it — a session that never starts never reaches reap(),
     // where the cleanup normally happens (#579).
-    const entry = withSettingsCleanup(sessionId, spawnEntry);
-    const spawnedAtMs = Date.now();
+    const { entry, spawnedAtMs } = withSettingsCleanup(sessionId, spawnEntry);
+    announceCredential(sessionId, entry.ws);
 
     // A NEW claude process gets whatever the user's MCP config says NOW, so anything this id
     // learned under a previous one is stale — including a group the user has since removed.
@@ -349,21 +393,20 @@ export function createClaudeSpawner(deps: SpawnDeps) {
     // The all-tools claim rides the SAME probe rather than taking its own: asking twice would widen
     // exactly the window this is placed here to keep narrow. It is passed the answer instead of
     // asking, and decides for itself what a reattach means for each direction (see claimFullGuiMcp).
-    function recordCapabilitiesForThisSpawn(): void {
+    function spawnEntry(): StartedAgentPty {
       const reattaching = ptyWouldReattach(sessionId, true);
       if (!reattaching) resetSessionToolGroups(sessionId);
-      claimFullGuiMcp(sessionId, attachGuiMcp, cwd, reattaching, "claude");
+      // Only a NEW process is on the chosen token; a reattached one keeps the token it started with.
+      if (!reattaching) rememberTokenSession(sessionId, credential.tokenId);
+      if (!reattaching) printMovedNotice(sessionId, ws, credential.tokenId);
+      return spawnWithFullGuiClaim({ sessionId, attachGuiMcp, cwd, wouldReattach: reattaching, agent: "claude" }, () => {
+        const where = { devcontainer: { cwd, enabled: dir.devcontainer === true }, permissionMode: deps.permissionMode };
+        const program = sessionProgram(deps.claudeBin, sessionId, customAgentId, canResume ? resume : null, credential.unset, where);
+        const spawnEnv = { ...program.spawnEnv, env: { ...program.spawnEnv.env, ...claudeRendererEnv(sessionId, cwd) } };
+        // "claude" whatever wrapper started it — see sessionProgram.
+        return startAgentPty({ sessionId, ws, cwd, agent: "claude", file: program.file, args: [...program.prefixArgs, ...args], spawnEnv, note: program.note });
+      });
     }
-
-    function spawnEntry(): PtyEntry {
-      recordCapabilitiesForThisSpawn();
-      const where = { devcontainer: { cwd, enabled: dir.devcontainer === true }, permissionMode: deps.permissionMode };
-      const program = sessionProgram(deps.claudeBin, sessionId, customAgentId, canResume ? resume : null, resolved.unset, where);
-      const { term, tmux, reattached } = ptySpawn(sessionId, program.file, [...program.prefixArgs, ...args], cwd, true, program.spawnEnv);
-      console.log(ptyStartLine({ agent: "claude", pid: term.pid, cwd, tmux, reattached, sessionId, note: program.note }));
-      return { term, ws, buffer: "", cwd, tmux, active: false, agent: "claude" }; // "claude" whatever wrapper started it — see sessionProgram
-    }
-    ptys.set(sessionId, entry);
     // Every claude spawn above carries `--settings` with the Pre/PostToolUse hooks, so from here
     // on this session reports its own tool calls — which is what stops the MCP broker recording
     // its GUI calls a second time (mcp/gui-call-history.ts).

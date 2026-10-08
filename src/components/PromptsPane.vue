@@ -12,9 +12,10 @@ import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import type { TerminalAgent } from "../../common/sessionAgent";
-import type { PromptEntry } from "../../common/promptHistory";
+import { readPrompt, type PromptEntry } from "../../common/promptHistory";
 import { PROMPT_SUBMITTED_CHANNEL, isPromptSubmittedEvent } from "../../common/promptChannel";
 import { isTextSelected } from "./textSelected";
+import { clockLabel } from "./clockLabel";
 import { useI18n } from "vue-i18n";
 
 const { t } = useI18n();
@@ -33,13 +34,6 @@ const prompts = ref<PromptEntry[]>([]);
 const truncated = ref(false);
 const loading = ref(false);
 const failed = ref(false);
-
-// `text` is the row; without it there is nothing to draw. A missing or unreadable `at` is an
-// ordinary case the row renders as a blank time, so it is normalised rather than rejected.
-const readPrompt = (value: unknown): PromptEntry | null => {
-  if (!isRecord(value) || typeof value.text !== "string" || !value.text) return null;
-  return { at: typeof value.at === "number" ? value.at : null, text: value.text };
-};
 
 // `loading` too: the early return below bumps `req`, so a request already in flight fails its
 // own `my === req` check and never reaches the `finally` that would clear it. Left set, the pane
@@ -123,25 +117,10 @@ onUnmounted(() => {
   unsubscribe();
 });
 
-// The time alone for today, with the date once it is older — "11:31" is enough to place a prompt
-// from this morning, and useless for one from Tuesday.
-const startOfToday = (): number => {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
-};
-function formatTime(at: number | null): string {
-  if (at === null) return "";
-  const d = new Date(at);
-  if (Number.isNaN(d.getTime())) return "";
-  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  return at >= startOfToday() ? time : `${d.toLocaleDateString([], { month: "numeric", day: "numeric" })} ${time}`;
-}
-
 // The time is INSIDE the toggle, so a label naming only the action would replace it in the
 // accessible name and cost a screen reader the one thing that places the prompt in time.
 const toggleLabel = (at: number | null, isOpen: boolean): string =>
-  [formatTime(at), isOpen ? t("tips.panes.collapsePrompt") : t("tips.panes.showWholePrompt")].filter(Boolean).join(" ");
+  [clockLabel(at), isOpen ? t("tips.panes.collapsePrompt") : t("tips.panes.showWholePrompt")].filter(Boolean).join(" ");
 
 // Which rows are showing their full text. A long prompt is clamped so the list stays scannable,
 // and clicking one opens it in place — the pane reads, and this is still reading.
@@ -222,7 +201,7 @@ watch(prompts, () => {
             :data-tip="opened.has(index) ? t('tips.panes.collapse') : t('tips.panes.showWholePrompt')"
             @click="toggle(index)"
           >
-            <span data-testid="prompt-time" class="text-[11px] tabular-nums text-dim">{{ formatTime(prompt.at) }}</span>
+            <span data-testid="prompt-time" class="text-[11px] tabular-nums text-dim">{{ clockLabel(prompt.at) }}</span>
             <span class="material-symbols-outlined text-[16px] text-dim" aria-hidden="true">{{ opened.has(index) ? "expand_less" : "expand_more" }}</span>
           </button>
           <p

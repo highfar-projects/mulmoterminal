@@ -8,7 +8,8 @@ import { toInsertText } from "./dropPaths";
 import { absoluteUnder, canOpenInCanvas, type StoriesRoots } from "../composables/canvasOpenFile";
 
 interface RowActionChrome {
-  label: string;
+  /** The i18n key of the item's words (`filesRowMenu.*`); the pane says them in the app's language. */
+  labelKey: string;
   /** Material Symbols ligature. */
   icon: string;
 }
@@ -29,6 +30,25 @@ export type FilesRowAction =
       pathAbs: string;
     })
   | (RowActionChrome & {
+      /** Open the file in a tab of its own, beside the one in front (#2267). Relative, like the
+       *  tree's own clicks. */
+      id: "open-tab";
+      pathRel: string;
+    })
+  | (RowActionChrome & {
+      /** A new file or folder in `dirRel` — the row's own folder, or the folder a file row is in (#2578).
+       *  `rowRel` is the row the menu was opened on, where the keyboard goes back if nothing is made. */
+      id: "new-file" | "new-folder";
+      dirRel: string;
+      rowRel: string;
+    })
+  | (RowActionChrome & {
+      /** Rename the row's entry in place, or move it to the Trash (#2578). */
+      id: "rename" | "trash";
+      pathRel: string;
+      isDir: boolean;
+    })
+  | (RowActionChrome & {
       id: "open-canvas";
       /** RELATIVE to the tree's root, which is what `open-in-canvas` already carries from the
        *  pane's own button — the receiver resolves it against the pane's cwd, so an absolute one
@@ -44,6 +64,8 @@ export interface FilesRowTarget {
   isDir: boolean;
   /** The tree's root. */
   cwd: string | null;
+  /** False while the root is not listed (loading, or it could not be read): nothing new goes there. */
+  rootListed?: boolean;
   /** The terminal an insert goes to, or null where there is none — the full-screen Files view. */
   terminal: { cwd: string | null } | null;
   /** Where a Canvas could be opened, or null where there is no cell to put one beside. Separate
@@ -51,6 +73,8 @@ export interface FilesRowTarget {
    *  a declined re-root, so "a terminal to insert into" and "a cell to draw beside" genuinely part
    *  company. `roots` is consulted for stories only (see canOpenInCanvas). */
   canvas: { roots: StoriesRoots } | null;
+  /** Whether the machine has a Trash the server knows; without one the row offers no delete (#2578). */
+  trash?: boolean;
 }
 
 // The same icon for both, and it is the one the path menu's "Insert a file path" already uses:
@@ -62,6 +86,9 @@ const ICON = "attach_file";
 // the tree. The Canvas panel's own icon.
 const CANVAS_ICON = "space_dashboard";
 
+// The tab-strip glyph, for the one action that adds to the strip.
+const TAB_ICON = "tab";
+
 // The OS's own window, not ours — the same glyph the header uses for a cell's working directory.
 const REVEAL_ICON = "folder_open";
 
@@ -72,26 +99,59 @@ const REVEAL_ICON = "folder_open";
 // this is the two halves of the module agreeing rather than a fix for an observed case.)
 const withoutTrailingSeparator = (dir: string): string => (dir.endsWith("/") || dir.endsWith("\\") ? dir.slice(0, -1) : dir);
 
+/** Whether a path relative to `root` means the same file in a terminal at `terminalCwd` — the one
+ *  question behind every relative-path offer to the terminal (this menu, and `@file#L…`). */
+export const sameDirectory = (terminalCwd: string | null, root: string): boolean =>
+  terminalCwd !== null && withoutTrailingSeparator(terminalCwd) === withoutTrailingSeparator(root);
+
 /**
  * The menu for one row. Empty means no menu at all — the caller leaves the browser's own.
  *
  * A LIST rather than two booleans so a later action (a text file's contents, say) is an entry
  * here and nothing else.
  */
-export function filesRowActions({ pathRel, isDir, cwd, terminal, canvas }: FilesRowTarget): FilesRowAction[] {
+/** New entries in `dirRel`; `rowRel` is where the keyboard goes back if nothing is made. */
+const newEntryActions = (dirRel: string, rowRel: string): FilesRowAction[] => [
+  { id: "new-file", labelKey: "filesRowMenu.newFile", icon: "note_add", dirRel, rowRel },
+  { id: "new-folder", labelKey: "filesRowMenu.newFolder", icon: "create_new_folder", dirRel, rowRel },
+];
+
+/** The tree's own file operations (#2578), last in the menu: they change the tree rather than look
+ *  at it. A new entry goes in the row's folder, or beside a file row. */
+function fileOpActions(pathRel: string, isDir: boolean, trash: boolean): FilesRowAction[] {
+  const dirRel = isDir ? pathRel : pathRel.slice(0, Math.max(0, pathRel.lastIndexOf("/")));
+  const actions: FilesRowAction[] = [
+    ...newEntryActions(dirRel, pathRel),
+    { id: "rename", labelKey: "filesRowMenu.rename", icon: "drive_file_rename_outline", pathRel, isDir },
+  ];
+  if (trash) actions.push({ id: "trash", labelKey: "filesRowMenu.trash", icon: "delete", pathRel, isDir });
+  return actions;
+}
+
+export function filesRowActions(target: FilesRowTarget): FilesRowAction[] {
+  if (target.cwd === null) return [];
+  // The root itself — the tree's empty space, or an empty folder (#2694): only something new goes there.
+  if (target.pathRel === "") return target.rootListed === false ? [] : newEntryActions("", "");
+  return [...viewActions(target), ...fileOpActions(target.pathRel, target.isDir, target.trash === true)];
+}
+
+function viewActions({ pathRel, isDir, cwd, terminal, canvas }: FilesRowTarget): FilesRowAction[] {
   // No root means no path worth offering: the tree is on the server's default and its rows cannot
   // be resolved against anything the terminal — or the plugins' file layer — knows.
   if (pathRel === "" || cwd === null) return [];
   const actions: FilesRowAction[] = [];
-  // First, because "show me this" is the stronger reason to right-click a row than "type its path"
-  // — it is what #1374 exists for — and a keyboard opening focuses the first item.
+  // A plain click replaces the front tab, so this — and Cmd/Ctrl+click — is how a second tab is
+  // asked for. First because it is the menu's only way to READ the file.
+  if (!isDir) actions.push({ id: "open-tab", labelKey: "filesRowMenu.openTab", icon: TAB_ICON, pathRel });
+  // Before the inserts, because "show me this" is the stronger reason to right-click a row than
+  // "type its path" — it is what #1374 exists for.
   //
   // Asked of canOpenInCanvas rather than answered here: a second opinion could only be a weaker
   // one, reporting success for a file that then renders nothing (canvasOpenFile.ts says so at
   // length). Which is also why a mulmoScript inside a PROJECT is absent — the plugin resolves
   // stories against the workspace alone (receptron/mulmoclaude#3014).
   if (canvas && canOpenInCanvas(absoluteUnder(cwd, pathRel), canvas.roots)) {
-    actions.push({ id: "open-canvas", label: "Open in the Canvas", icon: CANVAS_ICON, pathRel });
+    actions.push({ id: "open-canvas", labelKey: "filesRowMenu.openCanvas", icon: CANVAS_ICON, pathRel });
   }
   // Second: this is how a file LEAVES the app. Not for reading it — for dragging it into a mail
   // composer or an upload form, or for dropping a file too big to paste into a folder the agent
@@ -99,7 +159,7 @@ export function filesRowActions({ pathRel, isDir, cwd, terminal, canvas }: Files
   // because neither use needs one.
   actions.push({
     id: "reveal",
-    label: isDir ? "Open this folder" : "Show in folder",
+    labelKey: isDir ? "filesRowMenu.openFolder" : "filesRowMenu.showInFolder",
     icon: REVEAL_ICON,
     pathAbs: absoluteUnder(cwd, pathRel),
   });
@@ -107,10 +167,10 @@ export function filesRowActions({ pathRel, isDir, cwd, terminal, canvas }: Files
   // Only when a relative path means the same thing at the other end. The pane keeps the cell it
   // is on when a re-root could not be saved out of, so the tree and the terminal on screen can
   // be two different projects — and `src/index.ts` would then name a file in the wrong one.
-  if (terminal.cwd !== null && withoutTrailingSeparator(terminal.cwd) === withoutTrailingSeparator(cwd)) {
-    actions.push({ id: "insert-relative", label: "Insert relative path", icon: ICON, text: toInsertText([pathRel]) });
+  if (sameDirectory(terminal.cwd, cwd)) {
+    actions.push({ id: "insert-relative", labelKey: "filesRowMenu.insertRelative", icon: ICON, text: toInsertText([pathRel]) });
   }
-  actions.push({ id: "insert-absolute", label: "Insert absolute path", icon: ICON, text: toInsertText([absoluteUnder(cwd, pathRel)]) });
+  actions.push({ id: "insert-absolute", labelKey: "filesRowMenu.insertAbsolute", icon: ICON, text: toInsertText([absoluteUnder(cwd, pathRel)]) });
   return actions;
 }
 

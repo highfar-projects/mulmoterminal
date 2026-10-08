@@ -41,6 +41,10 @@ export interface HookDeps extends SessionActivityDeps {
   publishQuestion: (event: AskQuestionEvent | AskQuestionDone) => void;
   /** Which port this host's UI answers on, so a receiver can open it instead of guessing. */
   uiPort: string;
+  /** A turn ended on a usage limit (#2919). Absent: nothing reacts to one. */
+  onRateLimited?: (sessionId: string) => void;
+  /** A live session's turn ended normally — the moment it can move without interrupting work. */
+  onTurnEnded?: (sessionId: string) => void;
 }
 
 // Activity hooks update a session's working / needs-attention flags. `active` (this
@@ -228,6 +232,8 @@ function hookFields(body: Record<string, unknown>) {
     // Which KIND of notification — a subagent finishing arrives here as `agent_completed`, and
     // must not be read as the agent waiting on the user (#874).
     notificationType: typeof body.notification_type === "string" ? body.notification_type : undefined,
+    // What a StopFailure says the turn failed on (`rate_limit`, `overloaded`, …).
+    errorType: typeof body.error_type === "string" ? body.error_type : undefined,
   };
 }
 
@@ -252,6 +258,16 @@ const TRANSLATE_HOOK = new Map<string, (hookName: string | undefined, payload: u
   ["cursor", cursorHookBody],
   ["codex", codexHookBody],
 ]);
+
+// What a turn's end sets off beyond the activity flags. A hidden translation worker that ends its
+// turn while still pending never called submitTranslation — fail it now rather than hang until the
+// timeout (when it DID submit, the entry is already resolved and the reject is a no-op). A turn that
+// failed on a usage limit may move a rotated session to another credential (#2919).
+function handleTurnEnd(deps: HookDeps, sessionId: string, live: boolean, fields: HookFields): void {
+  if (fields.event === "Stop") failPendingTranslation(sessionId, "[translation] worker ended its turn without calling submitTranslation");
+  if (live && fields.event === "Stop") deps.onTurnEnded?.(sessionId);
+  if (live && fields.event === "StopFailure" && fields.errorType === "rate_limit") deps.onRateLimited?.(sessionId);
+}
 
 async function handleHookRequest(deps: HookDeps, req: Request, res: Response) {
   // express hands `req.body` back as `any`, so every field below is read through a check —
@@ -317,10 +333,7 @@ async function handleHookRequest(deps: HookDeps, req: Request, res: Response) {
     if (entry && agent === "cursor" && event === "Stop") recordCursorStop(sessionId, raw);
     handleActivityHook(deps, sessionId, active, fields);
     await handleToolHook(deps, sessionId, event, toolPayload(body), cwd);
-    // A hidden translation worker that ends its turn while still pending never called
-    // submitTranslation — fail it now rather than hang until the timeout. (When it DID
-    // submit, the entry is already resolved and this reject is a no-op.)
-    if (event === "Stop") failPendingTranslation(sessionId, "[translation] worker ended its turn without calling submitTranslation");
+    handleTurnEnd(deps, sessionId, entry !== undefined, fields);
     console.log(`[hook] ${event} for ${sessionId}`);
   }
   res.json({ ok: true });

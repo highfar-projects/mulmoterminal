@@ -18,9 +18,10 @@ measure is what they will measure. Below it is written `chaff …` for short.
 
 ## 1. Measure
 
-- **Genre**: `chaff genres` lists them. Pick the nearest to the answer `kind`. For contracts,
-  rules, papers or books there is no dedicated genre yet: pick the closest (`technical/spec` for rules and
-  contracts, `blog/essay` for long prose) and say so in the report.
+- **Genre**: `chaff genres` lists them, each with what it is for. Pick the one for the answer `kind` —
+  contracts (`legal/contract`), rules and regulations (`legal/statute`), manuals (`docs/manual`), FAQs,
+  glossaries, papers and literature have genres of their own. Only when none fits, pick the closest and say so in
+  the report. A genre chaff does not know stops every run, so copy it from the list.
 - **Language**: from the answer, or what chaff detects on the sources.
 - **Thresholds**: `chaff eval .blueprint/sources` sweeps each rule's limits over the models and
   recommends one. Read it rule by rule.
@@ -45,8 +46,13 @@ Write `chaff.yaml` with `genre`, `language` and `rules:` (`strict | normal | rel
   `avoid: use` pairs, and `preferred-term: normal` turns the rule on. Only pairs the models actually show.
 - **Spacing between Japanese and Latin letters or digits**: when the models are consistent, turn on
   `latin-spacing: normal` (Japanese). It does not take a side: in a document that mixes both ways, it reports the less common one.
-- The last two are experimental rules: off by default, and on when named in `rules:` (or for every
-  experimental rule, with `experimental: true` or `--experimental`). Name them in `rules:`.
+- **Consistency the models keep** in English: contractions (`contraction-consistency`), the Oxford comma
+  (`oxford-comma-consistency`) and heading case (`title-case-consistency`). Like `latin-spacing`, each takes
+  no side: where one form clearly leads, it reports the other. Turn one on when the models keep that form.
+- These, and `preferred-term`, are experimental rules (`chaff rules --json` marks them `experimental`): off
+  by default, and **on when named in `rules:` with a level** (or for every experimental rule, with
+  `experimental: true` or `--experimental`). "Experimental, so it does not run" is true only while it is not
+  named — name it, and prove it in the counter step.
 - chaff reports a rule name it does not know and a value it cannot read on stderr, for `rules --json` and
   lint alike. Read that output: an unknown name or an unreadable value is a setting that does nothing. A
   number on a rule that reads meaning (L4) is warned about too; that rule runs as `normal`. Record every level you set in

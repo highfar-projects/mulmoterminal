@@ -87,8 +87,8 @@ describe("AppToolbar entries for optional features", () => {
     expect(labelsOf(await mountAt("/terminals"))).not.toContain("Pull requests");
   });
 
-  it("leaves Rooms and Worklog out of the feature menu while they are not set up, and keeps Blueprints", async () => {
-    expect(await featureMenuItems(await mountAt("/terminals"))).toEqual(["feature-menu-blueprints"]);
+  it("leaves Rooms and Worklog out of the feature menu while they are not set up, and keeps Blueprints, Skills and Processes", async () => {
+    expect(await featureMenuItems(await mountAt("/terminals"))).toEqual(["feature-menu-blueprints", "feature-menu-skills", "feature-menu-processes"]);
   });
 
   it.each(["Rooms", "Worklog", "Blueprints"])("offers no %s button on the toolbar itself", async (label) => {
@@ -110,17 +110,29 @@ describe("AppToolbar entries for optional features", () => {
 
   it("offers Worklog in the feature menu once it is turned on", async () => {
     setWorklogEnabled(true);
-    expect(await featureMenuItems(await mountAt("/terminals"))).toEqual(["feature-menu-blueprints", "feature-menu-worklog"]);
+    expect(await featureMenuItems(await mountAt("/terminals"))).toEqual([
+      "feature-menu-blueprints",
+      "feature-menu-skills",
+      "feature-menu-processes",
+      "feature-menu-worklog",
+    ]);
   });
 
   it("offers Rooms in the feature menu once the server lists a room, read when the toolbar mounts", async () => {
     roomsOnServer = ["standup"];
-    expect(await featureMenuItems(await mountAt("/terminals"))).toEqual(["feature-menu-rooms", "feature-menu-blueprints"]);
+    expect(await featureMenuItems(await mountAt("/terminals"))).toEqual([
+      "feature-menu-rooms",
+      "feature-menu-blueprints",
+      "feature-menu-skills",
+      "feature-menu-processes",
+    ]);
   });
 
   it.each([
     ["rooms", "/rooms", undefined],
     ["blueprints", "/blueprints", undefined],
+    ["skills", "/skills", undefined],
+    ["processes", "/processes", undefined],
     ["worklog", "/wiki", "worklog"],
   ])("opens %s from its menu entry", async (entry, path, tag) => {
     roomsOnServer = ["standup"];

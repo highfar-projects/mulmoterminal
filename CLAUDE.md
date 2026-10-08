@@ -305,9 +305,9 @@ a slower way to do what the UI already does is not pressed.
 
 ## Publishing a release
 
-`/publish` drives the mechanics (bump, tag, npm, GitHub release). Three things are this repo's own.
-The first two are easy to skip because the release still "works" without them; the third is the one
-a spec will stop you on:
+`/publish` drives the mechanics (bump, tag, npm, GitHub release). Four things are this repo's own.
+The first two are easy to skip because the release still "works" without them; the last two are the
+ones a spec will stop you on:
 
 **1. `docs/ChangeLog.md`** — English, newest-first, the same per-PR detail as the GitHub release.
 It records **what changed and why**.
@@ -317,6 +317,18 @@ feature **the day it ships**. The changelog explains what changed; it does not t
 turn a thing on, and for something like `keymap` there is otherwise nowhere to look. Write the
 procedure: open this file, paste this, restart what, how to tell it worked, what breaks on a Mac.
 
+- **This page IS the release note users read.** After an upgrade the app opens it in a What's new
+  dialog (`server/whatsNew/`), in the UI language. So write it for someone who has never read the
+  docs: where to click, what they will see, what each word means — not the changelog's PR-speak.
+  - **Sort everything under three fixed headings**, present even when a section is "nothing":
+    `## New features` / `## What looks different` / `## Under the hood` and
+    `## 新機能` / `## 画面の変化` / `## 見えない変化`. New features say how to try them; UI changes say
+    what moved and where; invisible changes say what a user might notice (speed, a fix, a changed
+    default) and that nothing needs doing.
+  - **Cover every user-facing changelog entry**, and mention its PR as `#1234` (a link is fine).
+    `test/docs/release-guides.spec.ts` fails when a page after 7.1.0 lacks a heading or a PR.
+  - The dialog loads the page's images from the published site, so a screenshot must be committed
+    and published by the time the release is installed.
 - **Both languages**, and `nav_order` must be a **unique** sequence running **newest release
   first** — ordered by release date, not by version number sorted as text, so 1.11.1 sits above
   1.11.0. **`nav_order` DESCENDS as the version rises**: the oldest release page is `10000000`,
@@ -374,6 +386,13 @@ than people, so a stale field is a wrong answer nobody can see is wrong. Unlike 
 in the same commit and `yarn test` goes red until it is there. Leave `updated` alone — it means
 "when a human last read this file against reality", not "when it was last touched". Nothing checked
 any of it until #1988, and the version had sat on 4.4.0 for twelve releases.
+
+**4. The feature list, `docs/guide/{en,ja}/feature-list.md`** — every capability the product has
+now, one line each with the release it arrived in as `(vX.Y.Z)`, grouped by area (#2818). It is what
+an introduction, a post or a comparison is written from, so a release that leaves it behind makes
+every later one wrong. Add the release's user-visible additions (not fixes) under their area, drop
+anything the release removed, and move `as_of:` in the front matter to the new version — in both
+languages. **Enforced**: a spec pins `as_of` to `package.json` and refuses a `(v…)` later than it.
 
 ## Filing issues
 - Before filing a **bug / "broken" / "weird behaviour"** issue about MulmoTerminal, run the

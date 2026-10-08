@@ -197,6 +197,10 @@ written in **your own config file** — not that a condition was true.
 `chips` reorders and hides the info display on row 1, and adds your own. Omit it and the default set
 stays.
 
+The global list can also be edited without writing JSON: **Settings → Header buttons and chips** adds a
+built-in or your own chip, removes one, moves one up or down, and goes back to the default set. The
+open terminals pick the change up at once. A project's own `.mulmoterminal.json` list still wins there.
+
 ```json
 { "chips": ["git", "ctx", { "label": "Which environment this project deploys to", "text": "env staging" }] }
 ```
@@ -271,7 +275,7 @@ Drop it in the project root. It re-lists the default button itself, then adds Gi
     { "id": "compact", "icon": "compress", "label": "Compact this conversation", "run": "input", "text": "/compact", "when": "agent == claude", "order": 40 },
     { "id": "test", "icon": "science", "label": "Run the tests", "run": "shell", "cmd": "yarn test", "order": 50 },
     { "id": "diff", "icon": "difference", "label": "Show what this branch changed", "run": "shell", "cmd": "git diff --stat origin/main...HEAD", "when": "isGitRepo", "order": 60 },
-    { "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "restart", "order": 70 }
+    { "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "terminal-restart", "order": 70 }
   ],
   "chips": [
     "git",

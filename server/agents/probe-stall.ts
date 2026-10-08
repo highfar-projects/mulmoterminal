@@ -15,7 +15,7 @@ import path from "node:path";
 import { ESC, squashForMarker, stripPtyEscapes, trustDialogIsUp } from "../session/pty-scan.js";
 
 /** Why a probe went silent, as far as its own screen can prove. */
-export type ProbeStall = "trust-prompt" | "unknown";
+export type ProbeStall = "trust-prompt" | "usage-limit" | "unknown";
 
 // How much of the probe's output to keep. The pty is 120x30, so this holds a few full repaints —
 // enough that a dialog painted at startup is still there when the probe gives up 90 seconds later,
@@ -28,7 +28,17 @@ export const PROBE_SCREEN_TAIL_CHARS = 16_000;
 export const appendProbeScreen = (held: string, chunk: string): string => (held + chunk).slice(-PROBE_SCREEN_TAIL_CHARS);
 
 /** What the screen proves, or `unknown` when it proves nothing. */
-export const classifyProbeStall = (screen: string): ProbeStall => (trustDialogIsUp(squashForMarker(screen)) ? "trust-prompt" : "unknown");
+// Claude Code's own words when a subscription is out of a window, as it puts them in the transcript
+// and on screen: "You've hit your weekly limit", "… your session limit", "… your limit" (#2919). The
+// probe then never gets a status line, because the block comes before any response.
+const USAGE_LIMIT_MARKER = /you['’]vehityour(?:weekly|session)?limit/u;
+
+/** Why a probe's terminal never reported, read off what it showed. */
+export function classifyProbeStall(screen: string): ProbeStall {
+  const squashed = squashForMarker(screen);
+  if (trustDialogIsUp(squashed)) return "trust-prompt";
+  return USAGE_LIMIT_MARKER.test(squashed) ? "usage-limit" : "unknown";
+}
 
 // A TUI does not write rows and spaces — it MOVES THE CURSOR — so a stream with its escapes merely
 // stripped is one unreadable 16,000-character line with every word run together. Measured on real

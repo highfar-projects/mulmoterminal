@@ -6,6 +6,9 @@ import { existsSync, copyFileSync } from "node:fs";
 import path from "node:path";
 import { isRecord } from "../../common/isRecord.js";
 import { SHOW_LOAD_AVERAGE_DEFAULT, sanitizeShowLoadAverage } from "../../common/showLoadAverage.js";
+import { PALETTE_SEARCH_BOX_DEFAULT, sanitizePaletteSearchBox } from "../../common/paletteSearchBox.js";
+import { REMOTE_SERVER_DEFAULT, sanitizeRemoteServer } from "../../common/remoteServer.js";
+import { CONFETTI_DEFAULT, sanitizeConfetti, type Confetti } from "../../common/confetti.js";
 import { PLAYFUL_EFFECTS_DEFAULT, sanitizePlayfulEffects, type PlayfulEffects } from "../../common/playfulEffects.js";
 import { sanitizePresets } from "./cwd-presets.js";
 import { sanitizeButtons, sanitizeChips } from "./header-config.js";
@@ -27,13 +30,15 @@ import {
 } from "./config-schema.js";
 import { DEFAULT_TERMINAL_SUBMIT_MODE, isTerminalSubmitMode, type TerminalSubmitMode } from "../../common/terminalSubmit.js";
 import type { QuickCommand } from "../../common/quickCommands.js";
-import { isCustomAgentId, type CustomAgent } from "../../common/customAgents.js";
-import { isAccountHome, isAccountId, isEnvVarName, type AgentAccount } from "../../common/agentAccounts.js";
+import { CUSTOM_AGENT_COMMAND_MAX, CUSTOM_AGENT_LABEL_MAX, CUSTOM_AGENTS_MAX, isCustomAgentId, type CustomAgent } from "../../common/customAgents.js";
+import { sanitizePaletteAliases, sanitizePaletteFavorites, type PaletteAliases } from "../../common/paletteConfig.js";
+import { sanitizeTokenRotation, TOKEN_ROTATION_OFF, type TokenRotation } from "../../common/tokenRotation.js";
+import { ACCOUNT_HOME_MAX, ACCOUNT_LABEL_MAX, ACCOUNTS_MAX, isAccountHome, isAccountId, type AgentAccount } from "../../common/agentAccounts.js";
 import { DEFAULT_PUSH_KINDS, PUSH_KINDS, type PushKind } from "../../common/pushKinds.js";
 import { DEFAULT_SOUND_KINDS, NOTIFY_KINDS, type NotifyKind } from "../../common/notifyKinds.js";
 import { parsePresetRef } from "../../common/notifySounds.js";
 import { MODEL_ID_ALLOWED } from "../../common/modelIds.js";
-import { sanitizeKeymap, type Keymap } from "../../common/keymap.js";
+import { sanitizeKeymap, unrecognisedKeymapEntries, type Keymap } from "../../common/keymap.js";
 import { sanitizeCockpitLines, DEFAULT_COCKPIT_LINES, type CockpitLines } from "../../common/cockpitLines.js";
 import { sanitizeToolbarPins } from "../../common/toolbarPins.js";
 import {
@@ -53,6 +58,7 @@ import { sanitizeGitlabHosts } from "../../common/gitlabHosts.js";
 import { DEFAULT_WORKLOG_INTERVAL_HOURS, sanitizeWorklogIntervalHours } from "../../common/worklogInterval.js";
 import { DEFAULT_REAP_IDLE_DAYS, sanitizeReapIdleDays, DEFAULT_REAP_INTERVAL_HOURS, sanitizeReapIntervalHours } from "../../common/sessionReap.js";
 import { GUI_SERVER_ID } from "../../common/toolGroups.js";
+import { CUSTOM_THEMES_MAX } from "../../common/themeEntries.js";
 
 export interface AppConfig {
   cwdPresets: CwdPreset[];
@@ -83,9 +89,15 @@ export interface AppConfig {
   // entry's command, so the session resumes, reports cost, and reaches the GUI tools like any
   // other Claude cell — see common/customAgents.ts.
   customAgents: CustomAgent[];
+  // The command palette's short names for rows and the rows pinned first (#2540), by row key.
+  paletteAliases: PaletteAliases;
+  paletteFavorites: string[];
   // Second logins for claude / codex, each in its own config home, offered when launching a cell
   // (#2215). Empty = one login per agent, exactly as before — see common/agentAccounts.ts.
   accounts: AgentAccount[];
+  // Several subscriptions behind the default home, one picked per new session (#2919). Off by
+  // default; the entries name where each token is kept, never the token — see common/tokenRotation.ts.
+  tokenRotation: TokenRotation;
   // Phrases the phone offers as chips on a session's terminal view (#830), optionally
   // scoped to session kinds. Empty by default — no chips until the user adds one.
   quickCommands: QuickCommand[];
@@ -96,6 +108,8 @@ export interface AppConfig {
   buttons: HeaderEntry[] | null;
   // Global header display chips, or null when unconfigured (the client keeps its default set).
   chips: HeaderChip[] | null;
+  // Global command-palette entries, shaped like buttons (#2465); [] when none.
+  commands: HeaderEntry[];
   // Send a Web Push (sendPush Cloud Function). Off by default; only fires while the RemoteHost
   // channel is connected (that's what supplies the Firebase auth). The master switch — which
   // KINDS it sends is `pushKinds`.
@@ -146,8 +160,15 @@ export interface AppConfig {
   // question the grid screen poses and could not answer. A host that keeps no load average
   // (Windows) draws nothing whatever this says.
   showLoadAverage: boolean;
+  // A search box in the middle of the top bar that opens the command palette (#2569). Off by default.
+  paletteSearchBox: boolean;
+  // Experimental: the browser is on another machine (an SSH tunnel), so actions that act on this
+  // machine's screen are withheld (#2669). Off by default.
+  remoteServer: boolean;
   // A little theatre on the terminal now and then. "off" switches it off; a picture name fixes the picture.
   playfulEffects: PlayfulEffects;
+  // Which celebrations exist and which app events set one off; see common/confetti.ts.
+  confetti: Confetti;
   // Which pinned favourites the toolbar shows without opening Collections (#1984), as
   // `"<kind>:<slug>"` keys in the order they are drawn. Empty by default — the toolbar is
   // unchanged until the user promotes one. The pins themselves live in the workspace file
@@ -208,7 +229,6 @@ export interface AppConfig {
 
 // A user-defined colour scheme (#996). `extends` names a built-in to start from, so a theme
 // that only recolours the accent is three lines; without it `colors` has to be complete.
-const CUSTOM_THEMES_MAX = 24;
 export function sanitizeCustomThemes(input: unknown): CustomTheme[] {
   if (!Array.isArray(input)) return [];
   const seen = new Set<string>();
@@ -294,10 +314,6 @@ export function sanitizeLaunchers(input: unknown): Launcher[] {
   return out;
 }
 
-const CUSTOM_AGENT_LABEL_MAX = 24;
-const CUSTOM_AGENT_COMMAND_MAX = 500;
-const CUSTOM_AGENTS_MAX = 8;
-
 // Same shape of rule as sanitizeLaunchers, with the ID as the identity rather than the label:
 // the id is what a running session is remembered by and what the browser sends back, so a
 // duplicate would make two entries indistinguishable on the wire while both still rendered.
@@ -329,42 +345,22 @@ export function sanitizeCustomAgents(input: unknown): CustomAgent[] {
   return out;
 }
 
-const ACCOUNT_LABEL_MAX = 24;
-const ACCOUNT_HOME_MAX = 500;
-const ACCOUNTS_MAX = 8;
-
 // The id is the identity, as for custom agents: it is what a session's record names, so two
 // entries sharing one would make that record ambiguous. A relative home is dropped rather than
 // resolved (common/agentAccounts.ts says why).
-// The fork's own accounts, written before upstream's #2215 landed, were Claude-only and named the
-// home `configDir`. Such an entry is read as the claude account it always was, so a config written
-// then keeps working rather than being dropped on load.
-function legacyAccount(v: unknown): unknown {
-  if (!isRecord(v) || v.home !== undefined || typeof v.configDir !== "string") return v;
-  const { configDir, ...rest } = v;
-  return { agent: "claude", ...rest, home: configDir };
-}
-
-// Only a claude login reads CLAUDE_CODE_OAUTH_TOKEN, and only a well-formed name is looked up.
-const accountTokenEnvVar = (agent: AgentAccount["agent"], name: string | undefined): string | undefined => {
-  const trimmed = name?.trim();
-  return agent === "claude" && isEnvVarName(trimmed) ? trimmed : undefined;
-};
-
 export function sanitizeAccounts(input: unknown): AgentAccount[] {
   if (!Array.isArray(input)) return [];
   const seen = new Set<string>();
   const out: AgentAccount[] = [];
   for (const v of input) {
-    const parsed = accountSchema.safeParse(legacyAccount(v));
+    const parsed = accountSchema.safeParse(v);
     if (!parsed.success) continue;
     const id = parsed.data.id.trim();
     const label = parsed.data.label.trim().slice(0, ACCOUNT_LABEL_MAX);
     const home = parsed.data.home.trim();
     if (!isAccountId(id) || !label || !isAccountHome(home) || home.length > ACCOUNT_HOME_MAX || seen.has(id)) continue;
     seen.add(id);
-    const oauthTokenEnvVar = accountTokenEnvVar(parsed.data.agent, parsed.data.oauthTokenEnvVar);
-    out.push({ id, label, agent: parsed.data.agent, home, ...(oauthTokenEnvVar ? { oauthTokenEnvVar } : {}) });
+    out.push({ id, label, agent: parsed.data.agent, home });
     if (out.length >= ACCOUNTS_MAX) break;
   }
   return out;
@@ -551,7 +547,10 @@ export const emptyConfig = (): AppConfig => ({
   repoDirs: {},
   launchers: [],
   customAgents: [],
+  paletteAliases: {},
+  paletteFavorites: [],
   accounts: [],
+  tokenRotation: TOKEN_ROTATION_OFF,
   quickCommands: [],
   userMcpServers: [],
   headerStatusColors: {},
@@ -559,6 +558,7 @@ export const emptyConfig = (): AppConfig => ({
   themes: [],
   buttons: null,
   chips: null,
+  commands: [],
   pushEnabled: false,
   pushKinds: [...DEFAULT_PUSH_KINDS],
   worklogEnabled: false,
@@ -578,7 +578,10 @@ export const emptyConfig = (): AppConfig => ({
   appendSystemPrompt: true,
   autoDirIcon: true,
   showLoadAverage: SHOW_LOAD_AVERAGE_DEFAULT,
+  paletteSearchBox: PALETTE_SEARCH_BOX_DEFAULT,
+  remoteServer: REMOTE_SERVER_DEFAULT,
   playfulEffects: PLAYFUL_EFFECTS_DEFAULT,
+  confetti: CONFETTI_DEFAULT,
   toolbarPins: [],
   cockpitLines: { ...DEFAULT_COCKPIT_LINES },
   fontFamily: null,
@@ -647,7 +650,10 @@ function sanitizeAppConfig(raw: unknown): AppConfig {
     repoDirs: sanitizeRepoDirs(o.repoDirs),
     launchers: sanitizeLaunchers(o.launchers),
     customAgents: sanitizeCustomAgents(o.customAgents),
+    paletteAliases: sanitizePaletteAliases(o.paletteAliases),
+    paletteFavorites: sanitizePaletteFavorites(o.paletteFavorites),
     accounts: sanitizeAccounts(o.accounts),
+    tokenRotation: sanitizeTokenRotation(o.tokenRotation),
     quickCommands: sanitizeQuickCommands(o.quickCommands),
     userMcpServers: sanitizeUserMcpServers(o.userMcpServers),
     headerStatusColors: sanitizeHeaderStatusColors(o.headerStatusColors),
@@ -655,6 +661,7 @@ function sanitizeAppConfig(raw: unknown): AppConfig {
     themes: sanitizeCustomThemes(o.themes),
     buttons: sanitizeButtons(o.buttons),
     chips: sanitizeChips(o.chips),
+    commands: sanitizeButtons(o.commands) ?? [],
     pushEnabled: sanitizePushEnabled(o.pushEnabled),
     pushKinds: sanitizePushKinds(o.pushKinds),
     worklogEnabled: sanitizeWorklogEnabled(o.worklogEnabled),
@@ -674,7 +681,10 @@ function sanitizeAppConfig(raw: unknown): AppConfig {
     appendSystemPrompt: sanitizeAppendSystemPrompt(o.appendSystemPrompt),
     autoDirIcon: sanitizeAutoDirIcon(o.autoDirIcon),
     showLoadAverage: sanitizeShowLoadAverage(o.showLoadAverage),
+    paletteSearchBox: sanitizePaletteSearchBox(o.paletteSearchBox),
+    remoteServer: sanitizeRemoteServer(o.remoteServer),
     playfulEffects: sanitizePlayfulEffects(o.playfulEffects),
+    confetti: sanitizeConfetti(o.confetti),
     toolbarPins: sanitizeToolbarPins(o.toolbarPins),
     cockpitLines: sanitizeCockpitLines(o.cockpitLines),
     fontFamily: normalizeFontFamily(o.fontFamily),
@@ -690,10 +700,15 @@ function sanitizeAppConfig(raw: unknown): AppConfig {
 //
 // The known set comes from `emptyConfig()` rather than a second list, because that object is
 // typed AppConfig — a field added to the config cannot be missing from it.
+//
+// `keymap` is the one known key that holds such names one level down: an action a newer version
+// added is a keymap entry this build drops. Those ride along under `keymap`, for the write to put back.
 export function unknownConfigKeys(raw: unknown): Record<string, unknown> {
   if (!isRecord(raw)) return {};
   const known = new Set(Object.keys(emptyConfig()));
-  return Object.fromEntries(Object.entries(raw).filter(([key]) => !known.has(key)));
+  const keymap = unrecognisedKeymapEntries(raw.keymap);
+  const keymapEntry: [string, unknown][] = Object.keys(keymap).length > 0 ? [["keymap", keymap]] : [];
+  return Object.fromEntries([...Object.entries(raw).filter(([key]) => !known.has(key)), ...keymapEntry]);
 }
 
 // "missing" and "corrupt" are DIFFERENT and a caller about to overwrite must tell them
@@ -766,7 +781,10 @@ export function mergeConfigUpdate(base: AppConfig, body: Record<string, unknown>
     repoDirs: updated("repoDirs", sanitizeRepoDirs, base.repoDirs),
     launchers: updated("launchers", sanitizeLaunchers, base.launchers),
     customAgents: updated("customAgents", sanitizeCustomAgents, base.customAgents),
+    paletteAliases: updated("paletteAliases", sanitizePaletteAliases, base.paletteAliases),
+    paletteFavorites: updated("paletteFavorites", sanitizePaletteFavorites, base.paletteFavorites),
     accounts: updated("accounts", sanitizeAccounts, base.accounts),
+    tokenRotation: updated("tokenRotation", sanitizeTokenRotation, base.tokenRotation),
     quickCommands: updated("quickCommands", sanitizeQuickCommands, base.quickCommands),
     userMcpServers: updated("userMcpServers", sanitizeUserMcpServers, base.userMcpServers),
     headerStatusColors: updated("headerStatusColors", sanitizeHeaderStatusColors, base.headerStatusColors),
@@ -774,6 +792,7 @@ export function mergeConfigUpdate(base: AppConfig, body: Record<string, unknown>
     themes: updated("themes", sanitizeCustomThemes, base.themes),
     buttons: updated("buttons", sanitizeButtons, base.buttons),
     chips: updated("chips", sanitizeChips, base.chips),
+    commands: updated("commands", (input) => sanitizeButtons(input) ?? [], base.commands),
     pushEnabled: updated("pushEnabled", sanitizePushEnabled, base.pushEnabled),
     pushKinds: updated("pushKinds", sanitizePushKinds, base.pushKinds),
     worklogEnabled: updated("worklogEnabled", sanitizeWorklogEnabled, base.worklogEnabled),
@@ -795,7 +814,10 @@ export function mergeConfigUpdate(base: AppConfig, body: Record<string, unknown>
     appendSystemPrompt: updated("appendSystemPrompt", sanitizeAppendSystemPrompt, base.appendSystemPrompt),
     autoDirIcon: updated("autoDirIcon", sanitizeAutoDirIcon, base.autoDirIcon),
     showLoadAverage: updated("showLoadAverage", sanitizeShowLoadAverage, base.showLoadAverage),
+    paletteSearchBox: updated("paletteSearchBox", sanitizePaletteSearchBox, base.paletteSearchBox),
+    remoteServer: updated("remoteServer", sanitizeRemoteServer, base.remoteServer),
     playfulEffects: updated("playfulEffects", sanitizePlayfulEffects, base.playfulEffects),
+    confetti: updated("confetti", sanitizeConfetti, base.confetti),
     toolbarPins: updated("toolbarPins", sanitizeToolbarPins, base.toolbarPins),
     cockpitLines: updated("cockpitLines", sanitizeCockpitLines, base.cockpitLines),
   };
@@ -816,7 +838,10 @@ export function toPublicAppConfig(config: AppConfig): AppConfig {
     repoDirs: config.repoDirs,
     launchers: config.launchers,
     customAgents: config.customAgents,
+    paletteAliases: config.paletteAliases,
+    paletteFavorites: config.paletteFavorites,
     accounts: config.accounts,
+    tokenRotation: config.tokenRotation,
     quickCommands: config.quickCommands,
     userMcpServers: config.userMcpServers,
     headerStatusColors: config.headerStatusColors,
@@ -824,6 +849,7 @@ export function toPublicAppConfig(config: AppConfig): AppConfig {
     themes: config.themes,
     buttons: config.buttons,
     chips: config.chips,
+    commands: config.commands,
     pushEnabled: config.pushEnabled,
     pushKinds: config.pushKinds,
     worklogEnabled: config.worklogEnabled,
@@ -842,7 +868,10 @@ export function toPublicAppConfig(config: AppConfig): AppConfig {
     appendSystemPrompt: config.appendSystemPrompt,
     autoDirIcon: config.autoDirIcon,
     showLoadAverage: config.showLoadAverage,
+    paletteSearchBox: config.paletteSearchBox,
+    remoteServer: config.remoteServer,
     playfulEffects: config.playfulEffects,
+    confetti: config.confetti,
     toolbarPins: config.toolbarPins,
     cockpitLines: config.cockpitLines,
     fontFamily: config.fontFamily,
@@ -865,8 +894,18 @@ export function toPublicAppConfig(config: AppConfig): AppConfig {
 export function serializableAppConfig(config: AppConfig, unknownKeys: Record<string, unknown>): Record<string, unknown> {
   const known = toPublicAppConfig(config);
   const extras = Object.entries(unknownKeys).filter(([key]) => !Object.hasOwn(known, key));
-  return Object.fromEntries([...Object.entries(known), ...extras]);
+  const written = Object.entries(known).map(([key, value]: [string, unknown]): [string, unknown] => [
+    key,
+    key === "keymap" ? withCarriedEntries(value, unknownKeys.keymap) : value,
+  ]);
+  return Object.fromEntries([...written, ...extras]);
 }
+
+// This build's keymap, then the entries it did not recognise (unknownConfigKeys) — its own always win.
+const withCarriedEntries = (keymap: unknown, carried: unknown): unknown =>
+  isRecord(keymap) && isRecord(carried)
+    ? Object.fromEntries([...Object.entries(keymap), ...Object.entries(carried).filter(([name]) => !Object.hasOwn(keymap, name))])
+    : keymap;
 
 // Persist the whole config; returns false on any write failure so the caller can
 // surface it instead of reporting a false success.

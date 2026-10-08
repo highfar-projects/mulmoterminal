@@ -8,13 +8,13 @@ import { announceListening } from "./announce-listening.js";
 import { bindSecurityWarning } from "./allowed-origin.js";
 import { boundAddress, isLoopbackBinding } from "./loopback.js";
 import { tmuxAvailable, tmuxListSessionIds } from "./tmux.js";
-import { startReapSchedule } from "../session/reap-schedule.js";
+import { rearmReapSchedule, startReapSchedule } from "../session/reap-schedule.js";
 import { survivingAfterSweep } from "../session/reap-idle-sessions.js";
 import { pruneOrphanSettings } from "../session/session-settings.js";
 import { pruneOrphanDrops } from "../session/session-drops.js";
 import { wireMachineGlobalHooks } from "../agents/machine-global-hooks.js";
 import { startUpdateStatusRefresh } from "../config/update-status.js";
-import { getSessionIdleReapDays, getSessionReapIntervalHours } from "../config/config-routes.js";
+import { getSessionIdleReapDays, getSessionReapIntervalHours, onSessionReapIntervalChanged } from "../config/config-routes.js";
 import { earliestStartedAt, liveInstances, registerInstance } from "../../bin/instances.js";
 import { BIND_HOST, PORT } from "../config/env.js";
 
@@ -45,7 +45,10 @@ function sweepSurvivingSessions(): ReadonlySet<string> {
   // ptys hold anything, so "in use" means somebody else's, and it is the moment the pile is
   // largest. `cleanup-orphans` has existed since #367 with no caller — this is that caller, with a
   // rule that is about now instead of about the past (#1467).
-  const reaped = startReapSchedule({ intervalHours: getSessionReapIntervalHours(), idleDays: getSessionIdleReapDays, log: (line) => console.log(line) });
+  const log = (line: string) => console.log(line);
+  const reaped = startReapSchedule({ intervalHours: getSessionReapIntervalHours(), idleDays: getSessionIdleReapDays, log });
+  // A cadence saved while we are up re-arms counted from the sweep just made (#2626).
+  onSessionReapIntervalChanged((intervalHours) => rearmReapSchedule({ intervalHours, idleDays: getSessionIdleReapDays, log }));
   return survivingAfterSweep(surviving, reaped);
 }
 

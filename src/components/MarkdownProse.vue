@@ -10,9 +10,9 @@
 import { computed } from "vue";
 import { renderMarkdownProse } from "../markdownProse";
 
-const props = defineProps<{ markdown: string }>();
+const props = defineProps<{ markdown: string; trustedImageOrigin?: string; imagesAsLinks?: boolean }>();
 
-const html = computed(() => renderMarkdownProse(props.markdown));
+const html = computed(() => renderMarkdownProse(props.markdown, { trustedImageOrigin: props.trustedImageOrigin, imagesAsLinks: props.imagesAsLinks }));
 </script>
 
 <template>

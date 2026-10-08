@@ -1,7 +1,7 @@
 // Host tool: `renderShapeScript` — rasterise a ShapeScript model to a PNG the
 // AGENT can look at, so it can judge its own model before showing it to anyone.
 //
-// The tool itself lives in `@mulmoclaude/shapescript-plugin/render`: the schema,
+// The tool itself lives in `@gui-chat-plugin/shapescript/render`: the schema,
 // the defaults, the four-view sheet and the sentence naming the file are shared
 // with MulmoClaude, because those are the parts a MODEL sees and two copies of
 // them drift without anyone noticing. This module supplies the two things that
@@ -19,8 +19,8 @@ import {
   RENDER_SHAPE_SCRIPT_PROMPT,
   RENDER_SHAPE_SCRIPT_SCHEMA,
   RENDER_SHAPE_SCRIPT_TOOL_NAME,
-} from "@mulmoclaude/shapescript-plugin/render";
-import { isShapeArtifactPath, isPresentableShapePath, toArtifactsRelative } from "@mulmoclaude/shapescript-plugin";
+} from "@gui-chat-plugin/shapescript/render";
+import { isShapeArtifactPath, isPresentableShapePath, toArtifactsRelative } from "@gui-chat-plugin/shapescript";
 import type { ToolDefinition } from "gui-chat-protocol";
 import { artifactsFileOps, artifactsRoot } from "../backends/artifacts.js";
 import { shapeScriptByPath } from "../backends/openPath.js";

@@ -4,26 +4,31 @@
 // an agent is working this only says so.
 import { computed, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { loadReport, loadRun, sendEvent, type PersonEvent, type ReportView } from "../../composables/blueprintsApi";
+import { archiveRun, loadReport, loadRun, loadRunSource, sendEvent, type PersonEvent, type ReportView } from "../../composables/blueprintsApi";
 import { currentStep } from "../../../common/blueprint/state";
 import type { BlueprintRunView } from "../../../common/blueprint/run";
 import type { PlanStep } from "../../../common/blueprint/plan";
 import { elapsedParts, gateKey, roundNumber, stepLook } from "./blueprintView";
 import { latestOnly } from "./latestOnly";
 import { failureText } from "./refusalText";
-import { checkOutputText, stopReasonText } from "./stepNoticeText";
+import { checkOutputText, gaveUpAfter, stopReasonText, untrustedFolder } from "./stepNoticeText";
+import { MAX_FAILED_CHECKS } from "../../../common/blueprint/executorPolicy";
 import BlueprintLiveActivity from "./BlueprintLiveActivity.vue";
 import BlueprintSpecReview from "./BlueprintSpecReview.vue";
 import BlueprintChangedFiles from "./BlueprintChangedFiles.vue";
+import BlueprintOriginalsDiff from "./BlueprintOriginalsDiff.vue";
 import BlueprintNextSteps from "./BlueprintNextSteps.vue";
+import BlueprintTargets from "./BlueprintTargets.vue";
+import { filesGotoFile } from "../../composables/useFilesView";
+import { openTerminalAt } from "../../composables/useNewTerminal";
 import MarkdownProse from "../MarkdownProse.vue";
 
 const props = defineProps<{ runId: string }>();
-const { t } = useI18n();
+const emit = defineEmits<{ archived: [] }>();
+const { t, locale } = useI18n();
 
 // Fast enough that an approval visibly moves the build on; a step takes minutes, not seconds.
 const RUN_POLL_MS = 2000;
-const SPEC_FILE = ".blueprint/spec.md";
 
 const view = ref<BlueprintRunView | null>(null);
 const loadError = ref<string | null>(null);
@@ -36,8 +41,14 @@ const reads = latestOnly();
 
 const current = computed(() => (view.value ? currentStep(view.value.run.steps, view.value.state) : null));
 const currentState = computed(() => (view.value && current.value ? view.value.state.steps[current.value.id] : undefined));
+// Only a person can trust a folder; the step says where, and a terminal opened there asks them.
+// The build tried to fix the step by itself this many times before stopping; said in the person's language above the check's own output.
+const gaveUpAttempts = computed(() =>
+  view.value && current.value ? gaveUpAfter(currentState.value, view.value.run.failedChecks[current.value.id] ?? 0, MAX_FAILED_CHECKS) : null,
+);
+const trustFolder = computed(() => untrustedFolder(currentState.value));
 const reviewing = computed(() => current.value?.gates.includes("review") ?? false);
-// What the build produced is written up in the usecase's report; once every step is done it is shown here,
+// What the build produced is written up in its report (the usecase's, else the base's); once every step is done it is shown here,
 // because it sits in the hidden .blueprint/ folder a person would not open.
 const finished = computed(() => view.value !== null && current.value === null);
 const report = ref<ReportView | null>(null);
@@ -78,6 +89,19 @@ async function refresh(): Promise<void> {
   } else loadError.value = failureText(t, result);
 }
 
+// Asked once per build shown, not on every poll: taking a shared app's copy again reads its records from Firestore.
+const sourceChangedAt = ref<string | null>(null);
+watch(
+  () => props.runId,
+  async (runId) => {
+    sourceChangedAt.value = null;
+    const result = await loadRunSource(runId);
+    if (runId !== props.runId || !result.ok || result.value.status !== "changed") return;
+    sourceChangedAt.value = new Date(result.value.takenAt).toLocaleString(locale.value);
+  },
+  { immediate: true },
+);
+
 void refresh();
 const pollTimer = setInterval(() => void refresh(), RUN_POLL_MS);
 onUnmounted(() => clearInterval(pollTimer));
@@ -97,6 +121,24 @@ async function act(event: PersonEvent): Promise<void> {
   if (reads.isLatest(ticket)) view.value = result.value;
 }
 
+const archived = computed(() => view.value?.run.archivedAtMs != null);
+// The server refuses to put a build away under a working agent; the button says so rather than failing.
+// Shown by the button, not with the step's errors: a finished build has no step section to show them in.
+const archiveError = ref<string | null>(null);
+const agentWorking = computed(() => view.value !== null && (view.value.run.activeSessionId !== null || view.value.run.revisionSessionId !== null));
+
+async function setArchived(next: boolean): Promise<void> {
+  if (sending.value) return;
+  sending.value = true;
+  const ticket = reads.take();
+  const result = await archiveRun(props.runId, next);
+  sending.value = false;
+  archiveError.value = result.ok ? null : failureText(t, result);
+  if (!result.ok) return;
+  if (reads.isLatest(ticket)) view.value = result.value;
+  emit("archived");
+}
+
 const statusOf = (stepId: string) => view.value?.state.steps[stepId]?.status ?? "pending";
 const roundOf = (step: Pick<PlanStep, "id" | "repeatWhile">) => roundNumber(step, view.value?.state.steps[step.id]);
 </script>
@@ -106,8 +148,28 @@ const roundOf = (step: Pick<PlanStep, "id" | "repeatWhile">) => roundNumber(step
     <p v-if="loadError && !view" class="m-0 font-sans text-[13px] text-err-text">{{ t("blueprints.loadError") }} {{ loadError }}</p>
 
     <template v-if="view">
-      <p class="m-0 font-sans text-[12px] text-dim">
-        {{ t("blueprints.run.projectDir") }}: <span class="font-mono text-secondary">{{ view.run.projectDir }}</span>
+      <div class="flex flex-wrap items-center gap-3">
+        <p class="m-0 font-sans text-[12px] text-dim">
+          {{ t("blueprints.run.projectDir") }}: <span class="font-mono text-secondary">{{ view.run.projectDir }}</span>
+        </p>
+        <span class="flex-1"></span>
+        <button
+          type="button"
+          data-testid="blueprint-archive"
+          class="flex cursor-pointer items-center gap-1 rounded-[4px] border border-border bg-base px-2.5 py-1 font-sans text-[12px] text-secondary hover:bg-hover hover:text-fg disabled:cursor-default disabled:opacity-40"
+          :disabled="sending || (!archived && agentWorking)"
+          :data-tip="!archived && agentWorking ? t('blueprints.run.archiveWhileWorking') : undefined"
+          @click="setArchived(!archived)"
+        >
+          <span class="material-symbols-outlined text-[15px]" aria-hidden="true">{{ archived ? "unarchive" : "archive" }}</span>
+          {{ archived ? t("blueprints.run.unarchive") : t("blueprints.run.archive") }}
+        </button>
+      </div>
+      <p v-if="archiveError" class="m-0 font-sans text-[12px] text-err-text" data-testid="blueprint-archive-error">{{ archiveError }}</p>
+      <p v-if="archived" class="m-0 font-sans text-[12px] text-dim" data-testid="blueprint-archived-note">{{ t("blueprints.run.archivedNote") }}</p>
+      <p v-if="sourceChangedAt" class="m-0 flex items-start gap-1.5 font-sans text-[12px] text-secondary" data-testid="blueprint-source-changed">
+        <span class="material-symbols-outlined text-[15px]" aria-hidden="true">update</span>
+        {{ t("blueprints.run.sourceChanged", { takenAt: sourceChangedAt }) }}
       </p>
 
       <section v-if="current" class="flex max-w-[1280px] flex-col gap-3 rounded-md border border-border bg-panel p-4" data-testid="blueprint-current">
@@ -131,18 +193,32 @@ const roundOf = (step: Pick<PlanStep, "id" | "repeatWhile">) => roundNumber(step
 
         <template v-if="currentState?.status === 'awaiting-approval'">
           <ul class="m-0 flex flex-col gap-1 pl-5 font-sans text-[13px] text-fg">
-            <li v-for="gate in current.gates" :key="gate">{{ t(gateKey(gate)) }}</li>
+            <li v-for="gate in current.gates" :key="gate">{{ t(gateKey(gate), { step: current.title }) }}</li>
           </ul>
+          <div v-if="current.reads.length" class="flex flex-col gap-1.5" data-testid="blueprint-reads">
+            <p class="m-0 font-sans text-[12px] text-secondary">{{ t("blueprints.run.readFirst") }}</p>
+            <div class="flex flex-wrap gap-1.5">
+              <button
+                v-for="file in current.reads"
+                :key="file"
+                type="button"
+                data-testid="blueprint-read-file"
+                class="flex cursor-pointer items-center gap-1.5 rounded-[4px] border border-border bg-base px-2.5 py-1 font-mono text-[12px] text-fg hover:bg-hover"
+                @click="filesGotoFile(view.run.projectDir, file)"
+              >
+                <span class="material-symbols-outlined text-[15px]" aria-hidden="true">description</span>{{ file }}
+              </button>
+            </div>
+          </div>
           <BlueprintSpecReview
             v-if="reviewing"
             :run-id="runId"
             :revision-session-id="view.run.revisionSessionId"
             :chat-count="view.run.specChat.length"
+            :project-dir="view.run.projectDir"
+            :expects-spec="current.reads.length === 0"
             @sent="refresh"
           />
-          <p v-if="reviewing" class="m-0 font-sans text-[11px] text-dim">
-            {{ t("blueprints.run.specFile", { file: `${view.run.projectDir}/${SPEC_FILE}` }) }}
-          </p>
           <div class="flex flex-wrap items-center gap-2">
             <button
               type="button"
@@ -180,6 +256,26 @@ const roundOf = (step: Pick<PlanStep, "id" | "repeatWhile">) => roundNumber(step
           <div class="font-sans text-[13px] text-fg" data-testid="blueprint-question-text">
             <MarkdownProse :markdown="currentState.question ?? ''" />
           </div>
+          <div v-if="currentState.choices?.length" class="flex flex-col gap-1.5" data-testid="blueprint-choices">
+            <button
+              v-for="choice in currentState.choices"
+              :key="choice.label"
+              type="button"
+              data-testid="blueprint-choice"
+              class="flex cursor-pointer flex-col items-start gap-0.5 rounded-[4px] border bg-base px-3 py-2 text-left font-sans hover:bg-hover disabled:opacity-40"
+              :class="choice.recommended ? 'border-accent' : 'border-border'"
+              :disabled="sending"
+              @click="act({ type: 'answer', answer: choice.label })"
+            >
+              <span class="flex items-center gap-2 text-[13px] text-fg">
+                {{ choice.label }}
+                <span v-if="choice.recommended" data-testid="blueprint-choice-recommended" class="text-[11px] text-accent">{{
+                  t("blueprints.run.recommended")
+                }}</span>
+              </span>
+              <span v-if="choice.description" class="text-[12px] text-secondary">{{ choice.description }}</span>
+            </button>
+          </div>
           <textarea
             v-model="answer"
             data-testid="blueprint-answer"
@@ -204,6 +300,9 @@ const roundOf = (step: Pick<PlanStep, "id" | "repeatWhile">) => roundNumber(step
           <p v-if="stopReasonText(t, currentState)" data-testid="blueprint-stop-reason" class="m-0 font-sans text-[13px] text-err-text">
             {{ stopReasonText(t, currentState) }}
           </p>
+          <p v-if="gaveUpAttempts !== null" data-testid="blueprint-gave-up" class="m-0 font-sans text-[13px] text-fg">
+            {{ t("blueprints.run.gaveUp", { count: gaveUpAttempts }) }}
+          </p>
           <details v-if="currentState.lastCheck && !currentState.lastCheck.ok" open class="font-sans text-[12px] text-secondary">
             <summary class="cursor-pointer">{{ t("blueprints.run.checkOutput") }}</summary>
             <pre
@@ -211,6 +310,18 @@ const roundOf = (step: Pick<PlanStep, "id" | "repeatWhile">) => roundNumber(step
               class="m-0 mt-2 max-h-[320px] overflow-auto rounded-[4px] bg-base p-2 font-mono text-[11px] whitespace-pre-wrap text-fg"
               >{{ checkOutputText(t, currentState.lastCheck) }}</pre>
           </details>
+          <div v-if="trustFolder" class="flex flex-col items-start gap-1" data-testid="blueprint-run-trust">
+            <button
+              type="button"
+              data-testid="blueprint-run-open-trust"
+              class="flex cursor-pointer items-center gap-1.5 rounded-[4px] border border-border bg-base px-3 py-1.5 font-sans text-[13px] text-fg hover:bg-hover"
+              @click="openTerminalAt(trustFolder, null, 'claude')"
+            >
+              <span class="material-symbols-outlined text-[16px]" aria-hidden="true">terminal</span>
+              {{ t("blueprints.run.openToTrust") }}
+            </button>
+            <p class="m-0 font-sans text-[11px] text-dim">{{ t("blueprints.run.openToTrustHint", { dir: trustFolder }) }}</p>
+          </div>
           <div>
             <button
               type="button"
@@ -234,9 +345,7 @@ const roundOf = (step: Pick<PlanStep, "id" | "repeatWhile">) => roundNumber(step
 
       <p v-else class="m-0 font-sans text-[14px] text-ok" data-testid="blueprint-finished">{{ t("blueprints.run.finished") }}</p>
 
-      <BlueprintNextSteps v-if="finished && report?.pair" :pair="report.pair" :project-dir="view.run.projectDir" />
-
-      <BlueprintChangedFiles v-if="finished && report" :project-dir="view.run.projectDir" :files="report.changed.files" :more="report.changed.more" />
+      <BlueprintTargets :run-id="runId" :steps="view.run.steps" :state="view.state" />
 
       <section v-if="finished && report?.markdown" class="flex flex-col gap-2" data-testid="blueprint-report">
         <h3 class="m-0 font-sans text-[13px] font-[650] text-fg">{{ t("blueprints.run.report") }}</h3>
@@ -245,6 +354,19 @@ const roundOf = (step: Pick<PlanStep, "id" | "repeatWhile">) => roundNumber(step
           <MarkdownProse :markdown="report.markdown" />
         </div>
       </section>
+
+      <BlueprintOriginalsDiff v-if="finished" :run-id="runId" />
+
+      <BlueprintNextSteps
+        v-if="finished && report?.pair"
+        :pair="report.pair"
+        :project-dir="view.run.projectDir"
+        :answers="view.run.answers"
+        :changed-files="report.changed.files"
+        :language="view.run.language ?? null"
+      />
+
+      <BlueprintChangedFiles v-if="finished && report" :project-dir="view.run.projectDir" :files="report.changed.files" :more="report.changed.more" />
 
       <section class="flex flex-col gap-1">
         <h3 class="m-0 mb-1 font-sans text-[13px] font-[650] text-fg">{{ t("blueprints.run.steps") }}</h3>

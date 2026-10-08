@@ -1,6 +1,6 @@
 // Dispatch a header action button. `input` types text into the running session; `open` opens a
 // url / reveals a dir / opens the in-app file explorer or a view; `action` acts on the CELL this
-// terminal is in (restart its agent). `shell` is handled upstream in Terminal.vue (it emits `run`
+// terminal is in (restart its agent, open one of its panes, …). `shell` is handled upstream in Terminal.vue (it emits `run`
 // to open a command cell), so it never reaches here — the branch below is only a defensive no-op
 // warn.
 import { filesGotoIndex } from "./useFilesView";
@@ -9,11 +9,15 @@ import { wikiGotoIndex } from "./useWikiBrowse";
 import { browseGotoIndex } from "./useCollectionBrowse";
 import { accountingViewOpen } from "./useAccountingView";
 import { submitText, insertText } from "./useTerminalConnections";
-import { requestCellRestart } from "./useCellRestart";
+import { requestGridCellAction } from "./useGridCellAction";
+import { isCellAction, type CellAction } from "../../common/headerActions";
+import { isAppAction } from "../../common/appActions";
+import { runAppAction } from "./runAppAction";
 import { openTerminalAt } from "./useNewTerminal";
 import { toInsertText } from "../components/dropPaths";
 import type { HeaderButton, OpenTarget } from "./useHeaderButtons";
 import { pickPaths } from "./pickPaths";
+import { isRemoteServer, REMOTE_SERVER_DECLINE_EN } from "./remoteServer";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
@@ -43,7 +47,8 @@ function openUrl(url: string): void {
 // Reveal a directory in the OS file manager. The route answers only once the opener has actually
 // started, so a host that has none (a bare Linux box with no `xdg-open`) reports it rather than
 // leaving the button looking broken (#1447).
-async function revealDir(dirPath: string, report: ReportProblem): Promise<void> {
+export async function revealDir(dirPath: string, report: ReportProblem): Promise<void> {
+  if (isRemoteServer()) return report(REMOTE_SERVER_DECLINE_EN); // it would open on the server's screen (#2669)
   try {
     const res = await fetchWithTimeout("/api/open-dir", {
       method: "POST",
@@ -78,7 +83,25 @@ function dispatchOpen(open: OpenTarget, cwd: string | null, slotKey: string | nu
   else if (open.pickFile) void pickFileInto(slotKey, report);
 }
 
-const RESTART_UNAVAILABLE_EN = "There is no agent running in this terminal to restart.";
+// Why a grid cell declined. Anything not listed can only fail by the terminal not being a grid cell
+// (the single view), which is the fallback.
+const DECLINED_EN: Partial<Record<CellAction, string>> = {
+  "terminal-restart": "There is no agent running in this terminal to restart.",
+  "terminal-timeline": "The activity timeline is only for a Claude session.",
+  "terminal-talk": "There is no other terminal to talk to.",
+  "terminal-park": "Only a running agent terminal can be set aside.",
+  "terminal-copy-code": "There is no session in this terminal to copy from yet.",
+  "terminal-insert-path": "This terminal has not started yet.",
+  "terminal-reveal": "This terminal has not started yet.",
+  "terminal-voice": "Voice input is not available here.",
+  "terminal-diff": "This terminal has no changes to show.",
+  "terminal-note": "A note needs a running session in this terminal.",
+  "terminal-move-prev": "Moving a terminal needs manual order.",
+  "terminal-move-next": "Moving a terminal needs manual order.",
+};
+const OUTSIDE_GRID_EN = "This button acts on a terminal in the grid.";
+// A toolbar operation declines only for a screen that is not set up, or a view / order with no grid.
+const APP_DECLINED_EN = "That is not available here — it is not set up, or needs the terminal grid.";
 
 const logProblem: ReportProblem = (message) => console.warn(`[header] ${message}`);
 
@@ -92,9 +115,10 @@ export function runHeaderButton(button: HeaderButton, slotKey: string | null, cw
     return;
   }
   if (button.run === "action") {
-    // Only a grid cell registers a restart handler, so a terminal that is not one (a command cell,
-    // a launcher) says so rather than looking broken.
-    if (button.action === "restart" && !requestCellRestart(slotKey)) report(RESTART_UNAVAILABLE_EN);
+    const action = button.action;
+    if (isAppAction(action)) {
+      if (!runAppAction(action)) report(APP_DECLINED_EN);
+    } else if (isCellAction(action) && !requestGridCellAction(slotKey, action)) report(DECLINED_EN[action] ?? OUTSIDE_GRID_EN);
     return;
   }
   // run === "shell" is dispatched by Terminal.vue (emits `run` → command cell); reaching here is a bug.

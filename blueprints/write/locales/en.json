@@ -1,0 +1,81 @@
+{
+  "manifest": {
+    "title": "Write a document (to your style)",
+    "description": "Writes the document you ask for, from an article, paper, regulation or manual up to a whole book, to the folder's style (STYLE.md and chaff.yaml). After a person checks the brief and the outline, it writes one part (chapter) at a time and checks each part with chaff. Sentences taken from your sources stay as quotes, and are checked to be in the original."
+  },
+  "hearing": {
+    "kind": {
+      "label": "What kind of document is it?",
+      "why": "This decides how the outline is built and how it is checked",
+      "options": {
+        "記事・ブログ・コラム": "Article, blog or column",
+        "論文・レポート": "Paper or report",
+        "規程・契約書・約款": "Regulation, contract or terms",
+        "マニュアル・手順書": "Manual or procedure",
+        "本（章に分けて書く）": "Book (written in chapters)",
+        "その他": "Other"
+      }
+    },
+    "topic": {
+      "label": "What will it be about?",
+      "why": "This is where the brief and the outline start",
+      "placeholder": "e.g. How to use the new expenses system"
+    },
+    "audience": {
+      "label": "Who will read it, and what should they be able to do after reading it?",
+      "why": "This decides what to write and what to leave out",
+      "placeholder": "e.g. New staff. After reading, they can file an expense claim on their own"
+    },
+    "points": {
+      "label": "Things that must be in it (one per line)",
+      "why": "These become the main points of the brief, and are checked to be in it when the writing is done",
+      "placeholder": "e.g.\nClaims are due on the 25th of each month\nAttach a photo of each receipt"
+    },
+    "sources": {
+      "label": "Sources to refer to (one file, folder or URL per line; leave empty if none)",
+      "why": "Facts are taken from these, and sentences taken from them are checked, as quotes, to be in the original",
+      "placeholder": "e.g.\ndocs/expenses-policy.md\nhttps://example.com/manual"
+    },
+    "length": {
+      "label": "Length",
+      "why": "This decides how it is split into parts",
+      "options": {
+        "短い（2,000 字・800 語くらいまで）": "Short (up to about 2,000 Japanese characters or 800 words)",
+        "中くらい（8,000 字・3,000 語くらいまで）": "Medium (up to about 8,000 Japanese characters or 3,000 words)",
+        "長い（章に分けて書く）": "Long (written in chapters)"
+      }
+    },
+    "style": {
+      "label": "Which style should it follow?",
+      "why": "If this folder has the STYLE.md and chaff.yaml that \"Make a style\" wrote, it is written to them",
+      "options": {
+        "このフォルダの規約（STYLE.md と chaff.yaml）": "This folder's style (STYLE.md and chaff.yaml)",
+        "chaff の既定のまま": "chaff's defaults"
+      }
+    }
+  },
+  "steps": {
+    "brief": {
+      "title": "Write the brief",
+      "description": "Puts the purpose, the readers, the main points, the facts to take from the sources and what is not yet decided into a brief, and gathers the sources."
+    },
+    "outline": {
+      "title": "Decide the outline",
+      "description": "For each part (chapter or section), decides the file to write, the points to put in, and the length."
+    },
+    "draft": {
+      "title": "Write one part at a time",
+      "description": "Writes the parts of the outline one at a time, and checks that chaff finds nothing against the style and that sentences taken from the sources are in the original. Repeats while any are left."
+    },
+    "report": {
+      "title": "Report",
+      "description": "What was written, what was checked, and what could not be fully checked."
+    }
+  },
+  "presets": {
+    "tebiki": {
+      "title": "Write a guide for new staff",
+      "description": "Writes a short guide to \"what to do on your first day\", after checking the brief and the outline. No sample document is needed. Run the \"Make a style\" example in the same folder first, and it is written to that style."
+    }
+  }
+}

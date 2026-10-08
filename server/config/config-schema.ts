@@ -11,6 +11,7 @@
 //   2. The `sound` path confinement (a filesystem realpath check) stays in dir-config.ts — it
 //      touches the disk, which does not belong in a pure schema.
 import path from "node:path";
+import { DIR_BACKGROUND_FITS } from "../../common/dirBackground.js";
 import { z } from "zod";
 // Shared with the client dir-config parser so the two can't drift — see common/themeColors.ts.
 import { THEME_COLOR_KEYS, PALETTE_COLOR_RE } from "../../common/themeColors.js";
@@ -26,6 +27,8 @@ import { DIR_ICON_MAX_CHARS } from "../../common/dirIcon.js";
 import { HEADER_STATUS_KEYS, HEADER_STATUS_TINTS, sanitizeHeaderStatusColors, sanitizeHeaderStatusTint } from "../../common/headerStatusColors.js";
 import type { QuickCommand } from "../../common/quickCommands.js";
 import { isRecord } from "../../common/isRecord.js";
+import type { DirConfigKey } from "../../common/dirConfigSource.js";
+import { HEADER_ACTIONS } from "../../common/headerActions.js";
 import {
   ENV_NAME_RE,
   MAX_PORT_BASE,
@@ -37,23 +40,21 @@ import {
 } from "../../common/worktreeEnv.js";
 import { CUSTOM_AGENT_KINDS, type CustomAgent } from "../../common/customAgents.js";
 import { ACCOUNT_AGENTS, type AgentAccount } from "../../common/agentAccounts.js";
+import { MAX_HEADER_CHIPS } from "../../common/headerChips.js";
+import { MAX_HEADER_BUTTONS } from "../../common/headerButtonEntries.js";
+import { VIEW_TARGETS } from "../../common/viewTargets.js";
+import { MAX_MOBILE_FILE_DIRS, MOBILE_FILE_EXTENSION_PATTERN, normalizeMobileFileExtensions } from "../../common/mobileFiles.js";
 
 // ---- shared constants ---------------------------------------------------------------------
 
-export const VIEW_TARGETS = ["diff", "prs", "wiki", "collections", "accounting"] as const;
-// What a `run: "action"` button acts on: the CELL it sits in, not the directory or the session's
-// text. Its own list rather than another `run` type per action, because `run` says how a button
-// acts (type into the session / run a command / open something / act on this cell) — one run type
-// per action name would spend the vocabulary on the first two entries.
-export const ACTION_TARGETS = ["restart"] as const;
 export const RUN_TYPES = ["shell", "input", "open", "action"] as const;
 export const BUILTIN_CHIPS = ["dir", "git", "work", "ctx", "usage", "status", "diff", "tools", "env"] as const;
 
 export const NAME_MAX_CHARS = 40;
 // Runtime caps (sanitizeButtons / sanitizeChips truncate past these), mirrored by the JSON Schema
 // so the skill can't emit a config whose tail is silently dropped at load time.
-export const MAX_BUTTONS = 32;
-export const MAX_CHIPS = 16;
+export const MAX_BUTTONS = MAX_HEADER_BUTTONS;
+export const MAX_CHIPS = MAX_HEADER_CHIPS;
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
 // ---- primitives ---------------------------------------------------------------------------
@@ -64,7 +65,11 @@ const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 // is reported instead of silently falling back (useTheme.ts).
 export const themeIdSchema = z.string().regex(CUSTOM_THEME_ID_RE);
 export const viewTargetSchema = z.enum(VIEW_TARGETS);
-export const actionTargetSchema = z.enum(ACTION_TARGETS);
+// What a `run: "action"` button acts on: the CELL it sits in, not the directory or the session's
+// text. Its own list rather than another `run` type per action, because `run` says how a button
+// acts (type into the session / run a command / open something / act on this cell) — one run type
+// per action name would spend the vocabulary on the first two entries.
+export const actionTargetSchema = z.enum(HEADER_ACTIONS);
 export const runTypeSchema = z.enum(RUN_TYPES);
 export const builtinChipSchema = z.enum(BUILTIN_CHIPS);
 
@@ -172,7 +177,6 @@ export const accountSchema = z.object({
   label: z.string(),
   agent: z.enum(ACCOUNT_AGENTS),
   home: z.string(),
-  oauthTokenEnvVar: z.string().optional(),
 }) satisfies z.ZodType<AgentAccount>;
 
 // Validation for common/quickCommands.ts's QuickCommand, which the settings UI edits and so
@@ -349,10 +353,6 @@ export const dirDevcontainerWorkspaceFolderField = z.string().trim().min(1).null
 export const dirProviderField = z.string().trim().min(1).nullable().catch(null);
 export const dirModelField = z.string().trim().min(1).nullable().catch(null);
 
-// Fork-only: which `accounts[]` entry a NEW session in this directory starts on by default.
-// Absent/invalid => no default, same as an unset `provider`/`model`: the default login.
-export const dirAccountField = z.string().trim().min(1).nullable().catch(null);
-
 // A per-dir allowlist for the header Skill menu: which skill slugs to show, in this
 // order. Trimmed, deduped, capped. null when unset/garbage/empty — which means
 // "no filter, show every discovered skill" (absent config == show all).
@@ -377,6 +377,20 @@ export const dirDecksField = z
   .transform((arr) => {
     const cleaned = [...new Set(arr.map((s) => s.trim()).filter(Boolean))].slice(0, MAX_DECK_DECLARATIONS);
     return cleaned.length ? cleaned : null;
+  })
+  .nullable()
+  .catch(null);
+
+// What the phone may see of this directory (#2911): directories relative to the file, and the
+// extensions inside them. Declared rather than discovered, like `decks`, and narrowed to the
+// host's allowlist here; the directories are resolved and contained by dir-config.ts. Null when
+// either list ends up empty, which leaves the project invisible to the phone.
+export const dirMobileFilesField = z
+  .object({ dirs: z.array(z.string()), extensions: z.array(z.string()) })
+  .transform(({ dirs, extensions }) => {
+    const cleanedDirs = [...new Set(dirs.map((d) => d.trim()).filter(Boolean))].slice(0, MAX_MOBILE_FILE_DIRS);
+    const cleanedExtensions = normalizeMobileFileExtensions(extensions);
+    return cleanedDirs.length && cleanedExtensions.length ? { dirs: cleanedDirs, extensions: cleanedExtensions } : null;
   })
   .nullable()
   .catch(null);
@@ -552,6 +566,18 @@ const writableDirConfigSchema = z.object({
   // `false` means "no icon here" and, unlike omitting the key, stops MulmoTerminal looking for
   // the favicon the repository already ships (#1428).
   icon: z.union([nonEmptyText.max(DIR_ICON_MAX_CHARS), z.literal(false)]).optional(),
+  // A picture drawn faintly behind this directory's terminals: a path relative to this file, an
+  // http(s) URL or a data: image — alone, or with how strongly and how it fills the cell.
+  backgroundImage: z
+    .union([
+      nonEmptyText.max(DIR_ICON_MAX_CHARS),
+      z.object({
+        image: nonEmptyText.max(DIR_ICON_MAX_CHARS),
+        opacity: z.number().gt(0).max(1).optional(),
+        fit: z.enum(DIR_BACKGROUND_FITS).optional(),
+      }),
+    ])
+    .optional(),
   badgeColor: z.string().regex(HEX_COLOR_RE).optional(),
   headerColor: z.string().regex(HEX_COLOR_RE).optional(),
   headerTextColor: z.string().regex(HEX_COLOR_RE).optional(),
@@ -577,24 +603,31 @@ const writableDirConfigSchema = z.object({
   // Rank in the grid's "priority" sort mode, ascending. Omit to sort after everything that sets it.
   orderPriority: z.number().int().optional(),
   sound: nonEmptyText.optional(),
-  // Per-notification-kind sound, overriding `sound` for that kind. Each value is either
-  // `preset:<id>` or a path relative to this directory, same as `sound`. partialRecord for
+  // Per-notification-kind sound, overriding `sound` for that kind. Each value, like `sound`'s, is
+  // either `preset:<id>` or a path relative to this directory. partialRecord for
   // the same reason `colors` uses it: z.record over an enum marks every key required in the
   // generated JSON Schema, which would reject the usual one-or-two-kind object.
   sounds: z.partialRecord(z.enum(NOTIFY_KINDS), nonEmptyText).optional(),
   buttons: z.array(writableHeaderEntrySchema).max(MAX_BUTTONS).optional(),
   chips: z.array(writableHeaderChipSchema).max(MAX_CHIPS).optional(),
+  // Listed in the command palette only, never in the header (#2465). Written like `buttons`.
+  commands: z.array(writableHeaderEntrySchema).max(MAX_BUTTONS).optional(),
   // Header Skill-menu allowlist: show only these skill slugs, in this order. Omit to show all.
   skills: z.array(nonEmptyText).max(MAX_SKILL_FILTER).optional(),
   // Header Mulmo-menu decks: paths, relative to this file, of mulmoScripts kept in this
   // repository. The workspace's own `artifacts/stories` is always offered; this adds to it.
   decks: z.array(nonEmptyText).max(MAX_DECK_DECLARATIONS).optional(),
+  // Directories (relative to this file) and extensions the phone may list and open (#2911).
+  mobileFiles: z
+    .object({
+      dirs: z.array(nonEmptyText).min(1).max(MAX_MOBILE_FILE_DIRS),
+      extensions: z.array(z.string().regex(MOBILE_FILE_EXTENSION_PATTERN)).min(1),
+    })
+    .optional(),
   // Which backend this directory's sessions run on (#579). `provider` names an entry in the
   // global config's `providers`; `model` alone picks a different model on Anthropic itself.
   provider: nonEmptyText.optional(),
   model: nonEmptyText.optional(),
-  // Fork-only: the `accounts[]` id a NEW session here starts on when the launch form picked none.
-  account: nonEmptyText.optional(),
   // Extra directories this dir's sessions may read/edit — Claude Code's `--add-dir` (#908).
   // Relative entries resolve against this file's own directory. Claude only; codex has no
   // equivalent flag and ignores the key.
@@ -606,7 +639,16 @@ const writableDirConfigSchema = z.object({
   // database name. Each tree (the checkout itself and every managed worktree) is reserved a
   // distinct value, exported into its terminals. Omit and nothing is set, as before.
   worktreeEnv: worktreeEnvSchema.optional(),
+  // Fork-only, written by the launcher rather than by hand (config/devcontainer-flag.ts) — listed
+  // so the file's schema describes everything the loader reads.
+  devcontainer: z.boolean().optional(),
+  devcontainerWorkspaceFolder: nonEmptyText.optional(),
 });
+
+/** Whether `value` is one the file may hold under `key` — the same rule the Files pane's editor marks. */
+export function isWritableDirConfigValue(key: DirConfigKey, value: unknown): boolean {
+  return writableDirConfigSchema.shape[key].safeParse(value).success;
+}
 
 export function dirConfigJsonSchema(): Record<string, unknown> {
   return z.toJSONSchema(writableDirConfigSchema);

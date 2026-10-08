@@ -4,6 +4,7 @@
 import { computed, type ComputedRef } from "vue";
 import { router } from "../router";
 import { overlayOriginState, overlayReturnPath } from "./overlayOrigin";
+import { locationFromQuery, locationQuery, type FileLocation } from "./filePathLocation";
 
 /** Open the Files view rooted at `cwd` (the terminal's project dir). */
 export function filesGotoIndex(cwd: string | null): void {
@@ -13,8 +14,8 @@ export function filesGotoIndex(cwd: string | null): void {
 /** Open the Files view rooted at `cwd` with `path` (project-relative) already open in the
  *  editor — what a clicked source path in terminal output does, so the file lands where the
  *  app can highlight and edit it instead of in a tab showing its bytes (#808). */
-export function filesGotoFile(cwd: string | null, path: string): void {
-  pushFilesRoute(cwd ? { cwd, path } : { path });
+export function filesGotoFile(cwd: string | null, path: string, location?: FileLocation): void {
+  pushFilesRoute({ ...(cwd ? { cwd, path } : { path }), ...locationQuery(location) });
 }
 
 function pushFilesRoute(query: Record<string, string>): void {
@@ -30,6 +31,7 @@ export function useFilesView(): {
   isOpen: ComputedRef<boolean>;
   cwd: ComputedRef<string | null>;
   requestedPath: ComputedRef<string | null>;
+  requestedLocation: ComputedRef<FileLocation | null>;
   close: () => void;
 } {
   return {
@@ -39,6 +41,8 @@ export function useFilesView(): {
     // A file to open on arrival — the ?path= query. The view owns what happens next; this
     // only reports what the URL asked for.
     requestedPath: computed(() => queryString("path")),
+    // Where in it — the ?line=&col= a clicked `a.ts:42` carries.
+    requestedLocation: computed(() => locationFromQuery(queryString("line"), queryString("col"))),
     close: filesClose,
   };
 }

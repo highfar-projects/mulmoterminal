@@ -448,6 +448,7 @@ describe("buildScreenMeta", () => {
     memoOf: () => "ask Tom before merging",
     summaryOf: () => "Adding meta to the phone view",
     promptOf: () => "add the memo",
+    mobileFilesProjectOf: () => "proj-1",
     memosHydrated: Promise.resolve(),
     ...over,
   });
@@ -461,6 +462,7 @@ describe("buildScreenMeta", () => {
       summary: "Adding meta to the phone view",
       prompt: "add the memo",
       githubUrl: "https://github.com/o/r",
+      mobileFilesProject: "proj-1",
     });
   });
 
@@ -536,12 +538,20 @@ describe("buildScreenMeta", () => {
   // no image has no icon: all lose the key rather than arriving as "", which the phone would draw
   // as an empty labelled row — or, for the icon, as a broken picture.
   it("drops what the host could not answer, key and all", async () => {
-    const unanswered = { branchOf: async () => null, memoOf: () => "", githubUrlOf: async () => null, iconOf: () => "" };
+    const unanswered = { branchOf: async () => null, memoOf: () => "", githubUrlOf: async () => null, iconOf: () => "", mobileFilesProjectOf: () => "" };
     const meta = await buildScreenMeta("a", sources(unanswered));
     expect(meta).toEqual({ cwd: "/repo", summary: "Adding meta to the phone view", prompt: "add the memo" });
     expect(Object.hasOwn(meta, "memo")).toBe(false);
     expect(Object.hasOwn(meta, "branch")).toBe(false);
     expect(Object.hasOwn(meta, "icon")).toBe(false);
+    expect(Object.hasOwn(meta, "mobileFilesProject")).toBe(false);
+  });
+
+  // No directory, no project to link to — and asking would resolve "" against every root.
+  it("does not look for a sharing project when the session has no directory", async () => {
+    const mobileFilesProjectOf = vi.fn(() => "proj-1");
+    await buildScreenMeta("a", sources({ cwdOf: () => "", mobileFilesProjectOf }));
+    expect(mobileFilesProjectOf).not.toHaveBeenCalled();
   });
 
   // A session that outlived the server has no cwd, so there is no directory to have an icon —

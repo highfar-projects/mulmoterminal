@@ -93,11 +93,12 @@ export async function readAppViewFile(root: string, view: { path: string }, publ
 
   const opened = await openContained(inside.full, view.path, where);
   if (!opened.ok) return opened;
-  const bytes = viewDocumentBytes({ html: opened.html, publishedAt });
+  const html = opened.bytes.toString("utf8");
+  const bytes = viewDocumentBytes({ html, publishedAt });
   return (
-    contentProblems(opened.html, bytes, view.path, where) ?? {
+    contentProblems(html, bytes, view.path, where) ?? {
       ok: true,
-      view: { html: opened.html, bytes, warnings: viewWarnings(opened.html, view.path, where) },
+      view: { html, bytes, warnings: viewWarnings(html, view.path, where) },
     }
   );
 }
@@ -173,7 +174,12 @@ async function finalComponent(full: string): Promise<"link" | "plain" | "gone" |
   }
 }
 
-async function openContained(full: string, declared: string, where: string): Promise<{ ok: true; html: string } | { ok: false; problems: string[] }> {
+export async function openContained(
+  full: string,
+  declared: string,
+  where: string,
+  maxBytes = Number.POSITIVE_INFINITY,
+): Promise<{ ok: true; bytes: Buffer } | { ok: false; problems: string[] }> {
   // `lstat` first, on every platform. Where `O_NOFOLLOW` works this only makes the
   // refusal say what is actually wrong; where it does not, it is the whole defence
   // — and it is deliberately not behind a platform branch, since a Windows-only
@@ -220,7 +226,15 @@ async function openContained(full: string, declared: string, where: string): Pro
     if (!info.isFile()) {
       return { ok: false, problems: [`${where}.path names '${declared}', which is not a file.`] };
     }
-    return { ok: true, html: await handle.readFile("utf8") };
+    // Sized before it is read, through the same descriptor: a file over the limit is refused rather
+    // than loaded whole only to be refused afterwards.
+    if (info.size > maxBytes) {
+      return {
+        ok: false,
+        problems: [`${where}.path names '${declared}', which is ${info.size} bytes — over the ${maxBytes}-byte limit. Nothing was written.`],
+      };
+    }
+    return { ok: true, bytes: await handle.readFile() };
   } catch {
     return {
       ok: false,
@@ -241,7 +255,7 @@ async function openContained(full: string, declared: string, where: string): Pro
  *
  *  What is published lands on a document whose rule is `allow read: if true`,
  *  so a mistake here is not a broken page but somebody's `.env` handed out. */
-async function containedPath(root: string, declared: string, where: string): Promise<{ ok: true; full: string } | { ok: false; problems: string[] }> {
+export async function containedPath(root: string, declared: string, where: string): Promise<{ ok: true; full: string } | { ok: false; problems: string[] }> {
   const real = await realpath(root).catch(() => path.resolve(root));
   const wanted = path.resolve(real, declared);
   // The DECLARED components, before anything is resolved: resolving first

@@ -5,6 +5,7 @@
 // default header); an empty `buttons` array means nothing extra is shown.
 import { ref, type Ref } from "vue";
 import { useAutoRefresh } from "./useAutoRefresh";
+import { headerConfigRevision } from "./headerConfigRevision";
 import type { TerminalAgent } from "../../common/sessionAgent";
 import { isRecord, optionalBoolean, optionalString } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
@@ -29,7 +30,7 @@ export interface HeaderButton {
   // No `cmd`: a shell button's command stays server-side and is re-resolved by id at exec time.
   text?: string;
   open?: OpenTarget;
-  // What a `run: "action"` button does to the cell it sits in ("restart"). A plain string like
+  // What a `run: "action"` button does to the cell it sits in (common/headerActions.ts). A plain string like
   // `open.view`, for the same reason: the server validates it against its own list, and an
   // unknown one reaches a dispatcher that acts on none of them.
   action?: string;
@@ -118,6 +119,8 @@ interface Params {
 
 export function useHeaderButtons(params: Params) {
   const buttons = ref<HeaderEntry[]>([]);
+  // The command palette's own entries (#2465), shaped and checked like the buttons.
+  const commands = ref<HeaderEntry[]>([]);
   const chips = ref<ResolvedChip[] | null>(null);
   const env = ref<WorktreeEnvValue[]>([]);
   let requestSeq = 0;
@@ -126,6 +129,7 @@ export function useHeaderButtons(params: Params) {
     const cwd = params.cwd.value;
     if (!cwd) {
       buttons.value = [];
+      commands.value = [];
       chips.value = null;
       env.value = [];
       return;
@@ -140,18 +144,20 @@ export function useHeaderButtons(params: Params) {
       const data = res.ok ? await jsonBody(res) : {};
       if (seq !== requestSeq) return;
       buttons.value = isUnknownArray(data.buttons) ? toHeaderEntries(data.buttons) : [];
+      commands.value = isUnknownArray(data.commands) ? toHeaderEntries(data.commands) : [];
       chips.value = isUnknownArray(data.chips) ? data.chips.filter(isResolvedChip) : null;
       env.value = isUnknownArray(data.env) ? data.env.filter(isWorktreeEnvValue) : [];
     } catch {
       if (seq === requestSeq) {
         buttons.value = [];
+        commands.value = [];
         chips.value = null;
         env.value = [];
       }
     }
   }
 
-  useAutoRefresh(refresh, [params.cwd, params.session, params.agent, () => params.model?.value]);
+  useAutoRefresh(refresh, [params.cwd, params.session, params.agent, () => params.model?.value, () => headerConfigRevision.value]);
 
-  return { buttons, chips, env, refresh };
+  return { buttons, commands, chips, env, refresh };
 }

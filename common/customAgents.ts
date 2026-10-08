@@ -59,6 +59,12 @@ export interface CustomAgent {
 // Nothing about `_` is harder to carry than `-`, so the stricter rule was buying nothing.
 export const CUSTOM_AGENT_ID_RE = /^[a-z0-9][a-z0-9_-]{0,31}$/;
 
+// What the config keeps of an entry. Longer text is cut and a ninth entry dropped, so Settings
+// holds the same limits before it sends rather than finding out from the echo.
+export const CUSTOM_AGENT_LABEL_MAX = 24;
+export const CUSTOM_AGENT_COMMAND_MAX = 500;
+export const CUSTOM_AGENTS_MAX = 8;
+
 /** Whether `value` is a usable custom-agent id AND is not one of the built-in picker options —
  *  an entry calling itself "claude" would be shadowed by the built-in button and never reachable,
  *  which looks like the config was ignored. */

@@ -1,0 +1,21 @@
+{
+  "steps": [
+    {
+      "id": "pair",
+      "title": "旧版と新版の条を対応づける",
+      "description": "旧版のどの条が新版のどの条になったかを一組ずつ書き、変わった・足された・消えたを付ける。変わったかどうかは条の本文を機械で比べて確かめる。",
+      "skill": "skills/pair",
+      "check": "node \"$BLUEPRINT_USECASE/checks/comparison.mjs\""
+    },
+    {
+      "id": "report",
+      "title": "新旧対照表をつくる",
+      "description": "対応づけを確かめてから、変わった条・足された条・消えた条を新旧対照表にする。",
+      "skill": "skills/report",
+      "check": "node \"$BLUEPRINT_USECASE/checks/report.mjs\"",
+      "gates": ["review"],
+      "reads": [".blueprint/comparison.txt"],
+      "revises": [".blueprint/comparison.json"]
+    }
+  ]
+}

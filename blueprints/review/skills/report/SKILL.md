@@ -8,7 +8,8 @@ description: "Report what was found, what was checked, and what could not be che
 Write `.blueprint/review-report.md` for the person, in their language and in plain words:
 
 - `## 見つけたこと` / `## Findings` — every finding by its `id`, most severe first: what is wrong, where
-  (the address), and the proposal when there is one. The check looks for each `id`.
+  (named as the document does: 第4条第2項, Section 3.2(a), or a section's heading in 「」, "…" in an English report — not chaff's
+  index such as `4.2` or `h1.3`), and the proposal when there is one. The check looks for each `id`.
 - `## 確かめたこと` / `## What was checked` — every quotation was found in the document by `chaff cite`;
   every structure problem chaff reported was addressed or dismissed with a reason; the originals are
   unchanged; with proposals, each corrected copy's name and that it has no more structure problems than the

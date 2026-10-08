@@ -412,7 +412,7 @@ vi.mock("../../../src/composables/useTerminalConnections", async (orig) => ({
 }));
 
 import { setActiveKeymap } from "../../../src/composables/activeKeymap";
-import { paletteHost } from "../../../src/composables/commandPalette";
+import { paletteGridView, paletteHost, paletteTerminals } from "../../../src/composables/commandPalette";
 import { resetImeComposition } from "../../../src/composables/imeComposition";
 import { PAGE_SIZE } from "../../../src/components/gridTabs";
 import { connView } from "../../../src/composables/useTerminalConnections";
@@ -421,10 +421,17 @@ const uuid = (n: number) => `${String(n % 10).repeat(8)}-aaaa-aaaa-aaaa-aaaaaaaa
 
 // A TerminalGrid stub that reports the props the shortcuts drive, and can raise focus-cell the
 // way the real grid does when a terminal takes the cursor.
+// The grid decides a pane / the cell's own actions (TerminalGrid.runCellAction); what reaches it from
+// a key is what this records.
+const cellActions: [string, number][] = [];
 const ShortcutGridStub = {
   name: "TerminalGrid",
   props: ["cells", "listRows", "expandedUid", "reorderable"],
-  emits: ["focus-cell"],
+  emits: ["focus-cell", "cell-shortcut"],
+  setup: (_props: unknown, { expose }: { expose: (e: Record<string, unknown>) => void }) => {
+    expose({ runCellAction: (action: string, uid: number) => cellActions.push([action, uid]) > 0 });
+    return {};
+  },
   template: '<div class="shortcut-stub" />',
 };
 
@@ -468,6 +475,44 @@ const cellOrder = (w: ReturnType<typeof mount>): number[] =>
 // #2266. The command palette's picks reach the grid only while the grid has the keyboard: over the
 // launch panel (or another view) a pick would act on a grid the user is not looking at.
 describe("GridView and the command palette", () => {
+  // #2465. The terminal a command acts on: the enlarged one, else the one holding the cursor.
+  it("tells the palette which terminal a command acts on", async () => {
+    const w = await mountShortcutGrid(3, { expanded: 2 });
+    expect(paletteTerminals.value?.current()).toBe(2);
+    w.unmount();
+    const tiled = await mountShortcutGrid(3);
+    expect(paletteTerminals.value?.current()).toBeNull();
+    gridOf(tiled).vm.$emit("focus-cell", 1);
+    await flushPromises();
+    expect(paletteTerminals.value?.current()).toBe(1);
+    tiled.unmount();
+  });
+
+  // #2458. The palette switches this grid's view and cell order through what it registers.
+  it("lets the palette switch its view and its cell order", async () => {
+    const w = await mountShortcutGrid(3, { expanded: 0 });
+    const view = paletteGridView.value;
+    expect(view?.listMode()).toBe(true);
+    view?.toggleListMode();
+    expect(view?.listMode()).toBe(false);
+    expect(view?.sortMode()).toBe("manual");
+    view?.setSortMode("auto");
+    await flushPromises();
+    expect(view?.sortMode()).toBe("auto");
+    w.unmount();
+    expect(paletteGridView.value).toBeNull();
+  });
+
+  // #2446. A terminal row names a cell of THIS grid; going to it enlarges it in place of the enlarged one.
+  it("goes to a terminal the palette names", async () => {
+    const w = await mountShortcutGrid(4, { expanded: 0 }, { "terminal-new": "F7" });
+    expect(paletteTerminals.value?.list().map((terminal) => terminal.uid)).toEqual([0, 1, 2, 3]);
+    paletteTerminals.value?.goTo(3);
+    await flushPromises();
+    expect(gridOf(w).props("expandedUid")).toBe(3);
+    w.unmount();
+  });
+
   it("runs a palette pick, and refuses one while the launch panel is open", async () => {
     const w = await mountShortcutGrid(4, {}, { "terminal-new": "F7" });
     paletteHost.value?.run("zoom-toggle");
@@ -581,6 +626,39 @@ describe("GridView keyboard shortcuts (#829)", () => {
     const panel = w.findComponent({ name: "LaunchPanel" });
     expect(panel.exists()).toBe(true);
     expect(panel.props("initialDir")).toBe("/w/second");
+    w.unmount();
+  });
+
+  // #2635: a pane or a cell's own action from a key goes to the grid for the cursor's cell when
+  // nothing is enlarged, and for the enlarged one when something is.
+  it("hands pane and cell-own shortcuts to the grid, for the cursor's cell or the enlarged one", async () => {
+    cellActions.length = 0;
+    const w = await mountShortcutGrid(3, {}, { ...DEFAULT_KEYMAP, "pane-prompts": "F6", "terminal-park": "F7" });
+    gridOf(w).vm.$emit("focus-cell", 1);
+    await flushPromises();
+    await press("F6");
+    await press("F8"); // enlarge the cursor's cell
+    gridOf(w).vm.$emit("focus-cell", 2);
+    await flushPromises();
+    await press("F7");
+    expect(cellActions).toEqual([
+      ["pane-prompts", 1],
+      ["terminal-park", 1],
+    ]);
+    w.unmount();
+  });
+
+  // A header button asks the grid, and what needs the whole grid comes back as `cell-shortcut`: the
+  // launch panel it opens starts on THAT cell's directory, as the shortcut's does.
+  it("opens the launch panel on the cell a cell-shortcut names", async () => {
+    const cells = [
+      { uid: 0, session: uuid(0), cwd: "/w/first" },
+      { uid: 1, session: uuid(1), cwd: "/w/second" },
+    ];
+    const w = await mountShortcutGrid(2, { cells });
+    gridOf(w).vm.$emit("cell-shortcut", 1, "terminal-new-here");
+    await flushPromises();
+    expect(w.findComponent({ name: "LaunchPanel" }).props("initialDir")).toBe("/w/second");
     w.unmount();
   });
 
@@ -1336,6 +1414,21 @@ describe("GridView close cleans up the cell's slot (#1533)", () => {
     w.unmount();
   });
 
+  // #2800. Both ways a close reaches here record it, so an accidental one can be reopened.
+  it("records the closed cell for the palette's recently closed list", async () => {
+    slots.live.add("cell-1");
+    const w = await mountCloseGrid();
+    w.findComponent(CloseGridStub).vm.$emit("close", 1);
+    w.findComponent(CloseGridStub).vm.$emit("close", 2);
+    await flushPromises();
+    const stored: unknown = JSON.parse(localStorage.getItem("mt-recently-closed") ?? "[]");
+    expect(stored).toMatchObject([
+      { kind: "session", session: uuid(2), cwd: "/w" },
+      { kind: "session", session: uuid(1), cwd: "/w" },
+    ]);
+    w.unmount();
+  });
+
   it("does nothing extra when the cell already tore itself down", async () => {
     const w = await mountCloseGrid(); // no slot registered as live — teardown() already released it
     w.findComponent(CloseGridStub).vm.$emit("close", 1);
@@ -1426,6 +1519,23 @@ describe("GridView roster metadata fetch (#2121)", () => {
     // The directory still travels with it: it is what locates claude's transcript and partitions
     // grok's store, and a rewritten query string is exactly where it would be dropped.
     expect(metaRequests().every((u) => new URL(u, "http://localhost").searchParams.get("cwd") === "/w")).toBe(true);
+    w.unmount();
+  });
+
+  // #2458. The palette can switch the view from another screen; the roster is not on screen there,
+  // so switching back to it must not start polling for it.
+  it("does not poll the roster when the view is switched from another screen", async () => {
+    localStorage.setItem("grid_v2", JSON.stringify({ cells: [{ uid: 30, session: CLAUDE_CELL, cwd: "/w" }], expanded: 30, page: 0, sortMode: "manual" }));
+    const w = mount(GridView, { global: { stubs: { TerminalGrid: OrderStub, AppToolbar: ToolbarStub, SettingsModal: SettingsStub } } });
+    await flushPromises();
+    await router.push("/wiki");
+    await flushPromises();
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockClear();
+    paletteGridView.value?.toggleListMode();
+    paletteGridView.value?.toggleListMode();
+    await flushPromises();
+    expect(metaRequests()).toEqual([]);
+    await router.push("/terminals");
     w.unmount();
   });
 });

@@ -13,7 +13,9 @@
       "description": "残すと決めたなら、確かめた答えを FAQ.md に書き足す。",
       "skill": "skills/keep",
       "check": "node \"$BLUEPRINT_USECASE/checks/replies.mjs\" keep",
-      "gates": ["review"]
+      "gates": ["review"],
+      "reads": [".blueprint/replies.md"],
+      "revises": [".blueprint/replies.json"]
     }
   ]
 }

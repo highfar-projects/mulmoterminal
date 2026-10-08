@@ -1,6 +1,10 @@
 import { ref } from "vue";
 import { isRecord } from "../../common/isRecord";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
+import { isRemoteServer } from "./remoteServer";
+
+const GOOGLE_ON_REMOTE_SERVER_EN =
+  "The server runs on another machine (remoteServer), where this sign-in would finish. Run `npx mulmoterminal google login` on the server instead.";
 
 // The /api/google/status payload. `linked` reflects a stored refresh token — the
 // token itself never leaves the host. `pending` is true while a consent flow is
@@ -99,6 +103,12 @@ export function useGoogleLink() {
   // The follow-up poll is forced rather than conditional on `pending`: the flow is
   // live now regardless of what the last status said (or whether one ever loaded).
   async function connect(): Promise<void> {
+    // Consent completes on a listener on the SERVER's machine, which a browser elsewhere cannot
+    // reach (#2669); the CLI on the server is the way there.
+    if (isRemoteServer()) {
+      error.value = GOOGLE_ON_REMOTE_SERVER_EN;
+      return;
+    }
     busy.value = true;
     error.value = "";
     try {

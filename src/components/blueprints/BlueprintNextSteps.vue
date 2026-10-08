@@ -5,9 +5,19 @@ import { onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { listPacks, type PackList } from "../../composables/blueprintsApi";
 import { blueprintsViewFollowUp } from "../../composables/useBlueprintsView";
+import type { PersonLanguage } from "../../../common/blueprint/personLanguage";
 import { nextOptions, usecaseTitle, type NextOption } from "./nextSteps";
+import type { HearingAnswers } from "../../../common/blueprint/hearing";
 
-const props = defineProps<{ pair: { base: string; usecase: string }; projectDir: string }>();
+// `answers` and `changedFiles`: the finished build's own, for the steps that carry them over.
+// `language`: the finished build's report language, which the next one keeps.
+const props = defineProps<{
+  pair: { base: string; usecase: string };
+  projectDir: string;
+  answers: HearingAnswers;
+  changedFiles: readonly string[];
+  language: PersonLanguage | null;
+}>();
 const { t } = useI18n();
 
 const packs = ref<PackList>([]);
@@ -17,7 +27,7 @@ onMounted(async () => {
   const result = await listPacks();
   if (!result.ok) return;
   packs.value = result.value.packs;
-  options.value = nextOptions(result.value.packs, props.pair);
+  options.value = nextOptions(result.value.packs, props.pair, props.answers, props.changedFiles);
 });
 
 function goOn(option: NextOption): void {
@@ -27,6 +37,7 @@ function goOn(option: NextOption): void {
     answers: option.answers,
     projectDir: props.projectDir,
     after: usecaseTitle(packs.value, props.pair.usecase),
+    ...(props.language === null ? {} : { language: props.language }),
   });
 }
 </script>
@@ -44,7 +55,7 @@ function goOn(option: NextOption): void {
         class="flex cursor-pointer items-center gap-1.5 rounded-[4px] border border-border bg-base px-3 py-1.5 font-sans text-[12px] text-fg hover:bg-hover"
         @click="goOn(option)"
       >
-        <span class="material-symbols-outlined text-[15px]">arrow_forward</span>{{ option.title }}
+        <span class="material-symbols-outlined text-[15px]" aria-hidden="true">arrow_forward</span>{{ option.title }}
       </button>
     </div>
   </section>

@@ -8,8 +8,8 @@ description: 複数の AI コーディングエージェントをブラウザの
 
 # MulmoTerminal ガイド（日本語）
 
-> **6.7.0 が出ました。** ほかのターミナルと話す入口が道具メニューへ移り、キーボードやコマンドパレットからターミナルを動かせるようになり、
-> 文書の設計図が同じフォルダで次の段階へ進めるようになりました。[セットアップガイド](v6.7.0.html)
+> **9.4.0 が出ました。** 紙吹雪の設定が Settings に入り、キー・PR のマージ・Konami コードで出す方法をガイドにまとめました。
+> [セットアップガイド](v9.4.0.html)
 
 **はじめての方へ。** ターミナルの開き方から、Node.js・Claude Code・git / gh の入れ方
 （mac / Windows）、起動コマンド、つまずいたときの対処まで、**インストールと起動は 1 ページ**に
@@ -244,6 +244,7 @@ npx mulmoterminal@latest    # → http://localhost:34567 が開く
 3. [よくある質問（FAQ）](faq.html)（既存セッション・Windows・トークン代・他ツールとの違い）
 4. [応用編 — シナリオ別の使い方](scenarios.html)
 5. [機能一覧](features.html)（4 本柱で整理）
+   - [全機能リスト](feature-list.html)（いまある機能をすべて、入った版つきで一行ずつ）
 6. [セル同士を会話させる](conversation.html)（1往復の受け渡し・円卓・部屋）
 7. [設定方法](config.html)（設定モーダル・`config.json`・`.mulmoterminal.json`・**DSL 拡張**）
 8. [スマホ通知（Web Push）](notifications.html)（iPhone / Android の設定）

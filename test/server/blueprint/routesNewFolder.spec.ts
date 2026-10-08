@@ -6,7 +6,7 @@ import express from "express";
 import { z } from "zod";
 import type { Server } from "node:http";
 import { tmpdir } from "node:os";
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { mountBlueprintRoutes } from "../../../server/blueprint/routes";
 import type { BlueprintExecutor } from "../../../server/blueprint/executor";
@@ -23,6 +23,7 @@ let workspace = "";
 const created: string[] = [];
 const failures = { create: false };
 const recent: { runs: BlueprintRunSummary[] } = { runs: [] };
+const saved: { folders: string[] } = { folders: [] };
 
 const unused = (): never => {
   throw new Error("not used here");
@@ -39,12 +40,24 @@ const executor: BlueprintExecutor = {
   humanEvent: unused,
   ask: unused,
   specView: unused,
+  targetsView: unused,
   reportView: unused,
   say: unused,
+  archive: unused,
   recover: async () => undefined,
 };
 
-const summary = (projectDir: string): BlueprintRunSummary => ({ id: "run-1", projectDir, createdAtMs: 1, current: null, waitingOn: null, passed: 1, total: 1 });
+const summary = (projectDir: string): BlueprintRunSummary => ({
+  id: "run-1",
+  projectDir,
+  createdAtMs: 1,
+  current: null,
+  waitingOn: null,
+  passed: 1,
+  total: 1,
+  usecaseTitle: null,
+  archived: false,
+});
 const under = (dir: string, parent: string): boolean => dir === parent || dir.startsWith(`${parent}${path.sep}`);
 
 let server: Server;
@@ -69,6 +82,8 @@ beforeAll(async () => {
     },
     workspace,
     home: trustedParent,
+    savedFolders: () => saved.folders,
+    collections: { list: async () => [], snapshot: async () => ({ kind: "unknown" }) },
     ensureOwner: async () => undefined,
   });
   server = app.listen(0, "127.0.0.1");
@@ -84,6 +99,7 @@ beforeEach(() => {
   created.length = 0;
   failures.create = false;
   recent.runs = [];
+  saved.folders = [];
 });
 
 const start = async (projectDir: string, preset: string | null = "itaku-keiyaku") => {
@@ -126,9 +142,32 @@ describe("starting a build in a folder that does not exist yet", () => {
     expect(await exists(path.join(trustedParent, "missing"))).toBe(false);
   });
 
+  it("refuses a folder whose .blueprint is a link out of it, or a file, and writes nothing", async () => {
+    const outside = path.join(root, "outside-records");
+    await mkdir(outside, { recursive: true });
+    const linked = path.join(trustedParent, "linked-records");
+    await mkdir(linked);
+    await symlink(outside, path.join(linked, ".blueprint"));
+    expect(await start(linked)).toMatchObject({ status: 409, body: { refusal: { code: "record-folder-not-real", dir: linked } } });
+    expect(await readdir(outside)).toEqual([]);
+    const filed = path.join(trustedParent, "filed-records");
+    await mkdir(filed);
+    await writeFile(path.join(filed, ".blueprint"), "x");
+    expect(await start(filed)).toMatchObject({ status: 409, body: { refusal: { code: "record-folder-not-real", dir: filed } } });
+    expect(created).toEqual([]);
+    expect(await readdir(filed)).toEqual([".blueprint"]);
+  });
+
+  it("refuses a folder Claude Code does not trust, naming that folder as the place to answer its prompt", async () => {
+    expect(await start(untrustedParent)).toMatchObject({
+      status: 409,
+      body: { refusal: { code: "untrusted", dir: untrustedParent, trustIn: untrustedParent } },
+    });
+  });
+
   it("refuses a new folder Claude Code would not trust, before making it", async () => {
     const dir = path.join(untrustedParent, "new");
-    expect(await start(dir)).toMatchObject({ status: 409, body: { refusal: { code: "untrusted", dir } } });
+    expect(await start(dir)).toMatchObject({ status: 409, body: { refusal: { code: "untrusted", dir, trustIn: untrustedParent } } });
     expect(await exists(dir)).toBe(false);
   });
 
@@ -241,5 +280,22 @@ describe("the files a question may pick from", () => {
     expect(await filesIn(path.join(trustedParent, "a-file.txt"))).toEqual({ status: 200, body: { files: [], more: false } });
     expect((await filesIn("relative/dir")).status).toBe(400);
     expect((await filesIn(path.parse(trustedParent).root)).status).toBe(400);
+  });
+});
+
+describe("the folders the form offers to pick", () => {
+  const known = async (): Promise<string[]> =>
+    z.object({ folders: z.array(z.string()) }).parse(await (await fetch(`${base}/api/blueprints/known-folders`)).json()).folders;
+
+  it("gives the recent builds' folders, then the saved ones, each once, leaving out what is not a folder now", async () => {
+    const aFile = path.join(root, "a-file.txt");
+    await writeFile(aFile, "x");
+    recent.runs = [summary(trustedParent), summary(path.join(root, "gone")), summary(workspace)];
+    saved.folders = [workspace, untrustedParent, aFile, "relative/dir"];
+    expect(await known()).toEqual([trustedParent, workspace, untrustedParent]);
+  });
+
+  it("is empty when there are no builds and nothing is saved", async () => {
+    expect(await known()).toEqual([]);
   });
 });

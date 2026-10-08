@@ -27,6 +27,7 @@ import { projectScopeForCwd, rootForProjectId } from "../infra/project-root.js";
 import { manageCollectionHandlerFor } from "../infra/collection-tool.js";
 import { runRenderShapeScript } from "../infra/shapescript-render-tool.js";
 import { runExportShapeScriptUsdz } from "../infra/shapescript-usdz-tool.js";
+import { runExportShapeScriptStl } from "../infra/shapescript-stl-tool.js";
 import { runManageShapeScript } from "../infra/shapescript-manage-tool.js";
 import { manageSharedApp } from "../infra/shared-app-tool.js";
 import { useSharedApp } from "../infra/use-shared-app-tool.js";
@@ -245,6 +246,7 @@ export function mountPluginRoutes(app: Express, deps: PluginRouteDeps): void {
   mountCollectionRoute(app);
   mountRenderShapeScriptRoute(app);
   mountExportShapeScriptUsdzRoute(app);
+  mountExportShapeScriptStlRoute(app);
   mountManageShapeScriptRoute(app);
   mountSharedAppRoute(app);
   mountUseSharedAppRoute(app);
@@ -313,6 +315,24 @@ function mountExportShapeScriptUsdzRoute(app: Express): void {
       // reason goes back as the envelope message rather than as a transport error.
       console.error(`[exportShapeScriptUsdz] dispatch failed: ${messageOf(err)}`);
       return res.json({ message: `exportShapeScriptUsdz failed: ${messageOf(err)}` });
+    }
+  });
+}
+
+function mountExportShapeScriptStlRoute(app: Express): void {
+  // Host tool: exportShapeScriptStl — a printable STL (one watertight solid through
+  // manifold, mm, Z up) with a printability report. Workspace-scoped and answered
+  // with an ABSOLUTE path, exactly as exportShapeScriptUsdz is. A big lattice can take
+  // a minute; the bridge's call to this route has no timeout of its own.
+  app.post("/api/plugin/exportShapeScriptStl", async (req, res) => {
+    try {
+      const { message } = await runExportShapeScriptStl(isRecord(req.body) ? req.body : {});
+      return res.json({ message });
+    } catch (err) {
+      // A bad argument, a model that will not evaluate or one with nothing to print
+      // is the agent's to fix, so the reason goes back as the envelope message.
+      console.error(`[exportShapeScriptStl] dispatch failed: ${messageOf(err)}`);
+      return res.json({ message: `exportShapeScriptStl failed: ${messageOf(err)}` });
     }
   });
 }

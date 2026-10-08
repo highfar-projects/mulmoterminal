@@ -16,9 +16,9 @@ import { Marked, type Token, type Tokens } from "marked";
 import type { Express, Request, Response } from "express";
 import os from "node:os";
 import { hasErrnoCode } from "../errors.js";
-import { backupCurrentFile, storeBackup } from "./backup-store.js";
+import { backupCurrentFile, backupHolds, listBackups, readBackup, storeBackup } from "./backup-store.js";
 import { losslessText } from "./editableText.js";
-import { containedPath, expandTilde, resolveBase, resolveContained, rewriteContainerPath } from "./pathContainment.js";
+import { containedPath, expandTilde, namedBase, resolveBase, resolveContained, rewriteContainerPath } from "./pathContainment.js";
 import { servedImageSrc, type ServedDoc } from "./mdImageSrc.js";
 import { loadDirConfig } from "../config/dir-config.js";
 import { listProjectFiles } from "./project-files.js";
@@ -26,11 +26,19 @@ import { answered, modeFromProbe, parseSearchOutput, searchArgv, SEARCH_TIMEOUT_
 import { CONTEXT_RADIUS_LINES, isSearchable, lineWindow, type SearchRequest, type SearchResult } from "../../common/fileSearch.js";
 import { git } from "../git/worktrees.js";
 import { htmlDoc, jsonHtmlDoc, tableHtmlDoc, delimiterForExtension, themeStyle } from "./renderedDoc.js";
+import { fenceColourer } from "./codeHighlight.js";
+import { numberedCodeRenderer } from "./previewCodeFence.js";
+import { previewCodeBlocks } from "../../common/previewCodeBlocks.js";
 import { previewThemeFromQuery, type PreviewTheme } from "../../common/previewTheme.js";
-import { mdPreviewEmbedCsp, mdPreviewReporterTag, newPreviewNonce, wantsMdPreviewEmbed } from "./mdPreviewEmbed.js";
-import { MD_PREVIEW_EMBED_PARAM } from "../../common/mdPreviewMessage.js";
+import { mdPreviewEmbedCsp, newPreviewNonce, wantsMdPreviewEmbed } from "./mdPreviewEmbed.js";
+import { mdPreviewReporterTag } from "./mdPreviewReporter.js";
+import { isPreviewToken, MD_PREVIEW_EMBED_PARAM, MD_PREVIEW_TOKEN_PARAM } from "../../common/mdPreviewMessage.js";
 import { requestBody } from "../routes/requestBody.js";
+import { mountFilesTreeRoutes } from "./files-tree-routes.js";
 import { splitFrontmatter } from "@mulmoclaude/markdown-utils/markdown/frontmatter";
+import { mountFilesGitStatusRoute } from "./files-git-status.js";
+import { dirConfigDetail, dirConfigDirOf } from "../config/dir-config.js";
+import { dirConfigSaveReport, type DirConfigSaveReport } from "../../common/dirConfigSaveReport.js";
 
 // Cap on the bytes served to the editor / accepted on write — a text editor, not a
 // blob store. Large/binary files are refused rather than streamed into a textarea.
@@ -103,6 +111,11 @@ export function listEntries(absDir: string): BrowseEntry[] {
 // the server's default cwd; browseRel defaults to "" (the base itself).
 const browseBase = (req: Request, defaultCwd: string): string =>
   resolveBase(typeof req.query.cwd === "string" ? req.query.cwd : null, defaultCwd, os.homedir());
+/** The browse base for a raw `?cwd=` value, for a route mounted outside this file. */
+const baseResolver =
+  (defaultCwd: string) =>
+  (cwd: unknown): string =>
+    resolveBase(typeof cwd === "string" ? cwd : null, defaultCwd, os.homedir());
 const browseRel = (req: Request): string => (typeof req.query.path === "string" ? req.query.path : "");
 
 // Resolve `path` under the request's project base; 403 (and returns null) if it escapes
@@ -127,11 +140,30 @@ function containedFor(req: Request, res: Response, defaultCwd: string): string |
   return abs;
 }
 
-type RenderDoc = (text: string, title: string, doc: ServedDoc) => string | Promise<string>;
+/** `containedFor` for a request that CHANGES a file: a cwd that was named but is no longer a
+ *  directory is refused rather than read as the default workspace, where the write would land on a
+ *  same-named file in another folder (Codex on #2676). */
+function containedForChange(req: Request, res: Response, defaultCwd: string): string | null {
+  const base = namedBase(typeof req.query.cwd === "string" ? req.query.cwd : null, defaultCwd, os.homedir());
+  if (base === null) {
+    res.status(404).json({ error: "that directory is not there any more" });
+    return null;
+  }
+  const abs = resolveContained(base, browseRel(req), os.homedir());
+  if (!abs) {
+    res.status(403).json({ error: "path escapes the project root" });
+    return null;
+  }
+  return abs;
+}
+
+/** `theme` is the app's colours when the Files pane asked for them (#2263), else null: a document
+ *  that has no use for them ignores it. */
+type RenderDoc = (text: string, title: string, doc: ServedDoc, theme: PreviewTheme | null) => string | Promise<string>;
 
 /** The same document for a host that will embed it, carrying the nonce the one permitted script
  *  has to declare. A route that has no reason to be embedded does not define one. */
-type EmbedDoc = (text: string, title: string, nonce: string, doc: ServedDoc, theme: PreviewTheme | null) => string | Promise<string>;
+type EmbedDoc = (text: string, title: string, nonce: string, doc: ServedDoc, theme: PreviewTheme | null, token: string | null) => string | Promise<string>;
 
 /** Where the served document sits, measured LEXICALLY from the request rather than from the real
  *  path: a browser resolves a relative `src` against where the document appears to be, and a
@@ -204,11 +236,17 @@ function mountRenderedRoute(app: Express, routePath: string, defaultCwd: string,
       res.setHeader("Content-Security-Policy", mdPreviewEmbedCsp(nonce));
       // The pane's theme, when it sent one (#2263). A value that is not a hex colour drops the
       // whole theme, so the document falls back to the reader's system colours.
-      res.send(await embed(text, title, nonce, doc, previewThemeFromQuery(req.query)));
+      // The host's token for this document (#2515), stamped on everything its reporter says. It rides
+      // in this URL, so the URL must not follow the frame anywhere: a page the document navigates its
+      // frame to would otherwise read it back from `document.referrer`. Chromium already sends no
+      // referrer from this opaque-origin document (measured); the header makes that every browser's.
+      res.setHeader("Referrer-Policy", "no-referrer");
+      const token = req.query[MD_PREVIEW_TOKEN_PARAM];
+      res.send(await embed(text, title, nonce, doc, previewThemeFromQuery(req.query), isPreviewToken(token) ? token : null));
       return;
     }
     res.setHeader("Content-Security-Policy", "sandbox");
-    res.send(await render(text, title, doc));
+    res.send(await render(text, title, doc, previewThemeFromQuery(req.query)));
   });
 }
 
@@ -313,16 +351,19 @@ function mountSearchRoute(app: Express, defaultCwd: string): void {
   });
 }
 
-/** A 1-based line number off the query string, or null for anything that is not one.
+/** A whole number of at least `min` off the query string, or null for anything that is not one.
  *
  *  Digits only, so `"1e3"`, `"1.5"` and a leading `+` are all refused rather than coerced into a
- *  line that was never asked for — and `Number.isSafeInteger` catches the run of digits too long to
+ *  number that was never asked for — and `Number.isSafeInteger` catches the run of digits too long to
  *  survive being a number at all. */
-const lineParam = (value: unknown): number | null => {
+const wholeNumberParam = (value: unknown, min: number): number | null => {
   if (typeof value !== "string" || !/^\d+$/.test(value)) return null;
-  const line = Number(value);
-  return Number.isSafeInteger(line) && line > 0 ? line : null;
+  const whole = Number(value);
+  return Number.isSafeInteger(whole) && whole >= min ? whole : null;
 };
+
+const FIRST_LINE = 1;
+const FIRST_BLOCK = 0;
 
 /** The lines around one line of a file, for the search panel's peek at a result (#2159).
  *
@@ -337,11 +378,26 @@ function mountLinesRoute(app: Express, defaultCwd: string): void {
   app.get("/api/files/browse/lines", (req, res) => {
     const abs = containedFor(req, res, defaultCwd);
     if (!abs) return;
-    const around = lineParam(req.query.line);
+    const around = wholeNumberParam(req.query.line, FIRST_LINE);
     if (around === null) return res.status(400).json({ error: "line must be a positive integer" });
     const text = readTextOr4xx(res, abs);
     if (text === null) return;
     res.json(lineWindow(text, around, CONTEXT_RADIUS_LINES));
+  });
+}
+
+/** The `index`-th code block as the Preview draws it, for its copy button (#2615). Read-only like
+ *  `/lines` and for the same reason: pressing a button is not opening the file, so no backup rotates. */
+function mountCodeBlockRoute(app: Express, defaultCwd: string): void {
+  app.get("/api/files/browse/code-block", (req, res) => {
+    const abs = containedFor(req, res, defaultCwd);
+    if (!abs) return;
+    const index = wholeNumberParam(req.query.index, FIRST_BLOCK);
+    if (index === null) return res.status(400).json({ error: "index must be a whole number" });
+    const text = readTextOr4xx(res, abs);
+    if (text === null) return;
+    const block = previewCodeBlocks(text)[index];
+    return block ? res.json(block) : res.status(404).json({ error: "no such code block", kind: "no-block" });
   });
 }
 
@@ -354,13 +410,18 @@ const isImageToken = (token: Token): token is Tokens.Image => token.type === "im
  *  rewrite depends on where THIS document sits. Front matter is metadata, not body (#2264): only a
  *  block that parses as YAML counts, as on the Canvas and in MulmoClaude — a document may open
  *  with a `---` rule, and that is body. */
-const mdBody = async (text: string, doc: ServedDoc): Promise<string> =>
-  new Marked({
+const mdBody = async (text: string, doc: ServedDoc): Promise<string> => {
+  const colour = fenceColourer();
+  return new Marked({
     walkTokens(token) {
       if (!isImageToken(token)) return;
       token.href = servedImageSrc(token.href, doc) ?? token.href;
     },
+    // A fence in a language with a grammar is coloured here (#2579); every block is numbered for the
+    // Preview's copy button (#2615).
+    renderer: { code: numberedCodeRenderer(colour) },
   }).parse(splitFrontmatter(text).body);
+};
 
 /** The Markdown document every caller has always had. */
 const renderMd = async (text: string, title: string, doc: ServedDoc): Promise<string> => htmlDoc(await mdBody(text, doc), title);
@@ -368,14 +429,16 @@ const renderMd = async (text: string, title: string, doc: ServedDoc): Promise<st
 /** The same document with the scroll reporter as its last body element (#2157). Composed here
  *  rather than inside `htmlDoc` so the shared document shell stays a shell that never runs
  *  anything, whoever calls it. */
-const embedMd = async (text: string, title: string, nonce: string, doc: ServedDoc, theme: PreviewTheme | null): Promise<string> =>
-  htmlDoc((await mdBody(text, doc)) + mdPreviewReporterTag(nonce), title, theme ? themeStyle(theme) : "");
+const embedMd = async (text: string, title: string, nonce: string, doc: ServedDoc, theme: PreviewTheme | null, token: string | null): Promise<string> =>
+  htmlDoc((await mdBody(text, doc)) + mdPreviewReporterTag(nonce, token), title, theme ? themeStyle(theme) : "");
 
 export function mountFilesBrowseRoutes(app: Express, deps: BrowseDeps): void {
   const { defaultCwd, backupRoot } = deps;
 
   mountSearchRoute(app, defaultCwd);
   mountLinesRoute(app, defaultCwd);
+  mountCodeBlockRoute(app, defaultCwd);
+  mountFilesGitStatusRoute(app, { base: baseResolver(defaultCwd), maxHeadBytes: MAX_EDIT_BYTES });
 
   app.get("/api/files/browse/list", (req, res) => {
     const root = browseBase(req, defaultCwd);
@@ -450,21 +513,45 @@ export function mountFilesBrowseRoutes(app: Express, deps: BrowseDeps): void {
   serveRendered("/api/files/browse/md", renderMd, embedMd);
   serveRendered("/api/files/browse/json", (text, title) => jsonHtmlDoc(text, title));
   // The delimiter comes from the file's own extension, so one route serves .csv and .tsv.
-  serveRendered("/api/files/browse/table", (text, title) => tableHtmlDoc(text, title, delimiterForExtension(path.extname(title))));
+  serveRendered("/api/files/browse/table", (text, title, _doc, theme) => tableHtmlDoc(text, title, delimiterForExtension(path.extname(title)), theme));
 
   mountWriteRoute(app, deps);
+  mountFilesTreeRoutes(app, { base: (cwd) => namedBase(typeof cwd === "string" ? cwd : null, defaultCwd, os.homedir()) });
   mountBackupRoute(app, deps);
 }
 
-type BrowseDeps = { defaultCwd: string; backupRoot: string };
+type BrowseDeps = {
+  defaultCwd: string;
+  backupRoot: string;
+  /** Told when a save wrote a directory's `.mulmoterminal.json` / `.local.json`, so every open
+   *  view re-reads that directory's config — the same signal an agent's write already sends. */
+  onDirConfigWritten?: (dir: string) => void;
+};
 
-function mountWriteRoute(app: Express, { defaultCwd, backupRoot }: BrowseDeps): void {
+// Only for a directory's config file: what the pane should say about the save (#2624). Best-effort —
+// the write has already landed, so a report that cannot be built is left out, never a failed save.
+function dirConfigReportFor(file: string, text: string, onDirConfigWritten: BrowseDeps["onDirConfigWritten"]): { dirConfig?: DirConfigSaveReport } {
+  const dir = dirConfigDirOf(file);
+  if (dir === null) return {};
+  try {
+    onDirConfigWritten?.(dir);
+  } catch (err) {
+    console.warn("[files] telling the views about a saved directory config failed", err);
+  }
+  try {
+    return { dirConfig: dirConfigSaveReport(text, dirConfigDetail(dir).source) };
+  } catch {
+    return {};
+  }
+}
+
+function mountWriteRoute(app: Express, { defaultCwd, backupRoot, onDirConfigWritten }: BrowseDeps): void {
   // Conditional write. `baseVersion` is the version the editor loaded (null = "I expect no
   // file here"); it is REQUIRED, because an optional one is a blind-write escape hatch and
   // blind writes are what this endpoint stopped doing. A mismatch answers 409 with the
   // version now on disk, which the caller can re-send to overwrite deliberately.
   app.put("/api/files/browse/write", (req, res) => {
-    const abs = containedFor(req, res, defaultCwd);
+    const abs = containedForChange(req, res, defaultCwd);
     if (!abs) return;
     const body = requestBody(req.body);
     const text = body.text;
@@ -490,7 +577,11 @@ function mountWriteRoute(app: Express, { defaultCwd, backupRoot }: BrowseDeps): 
       backupCurrentFile(abs, backupRoot);
       const bytes = Buffer.from(text, "utf8");
       fs.writeFileSync(abs, bytes);
-      res.json({ ok: true, version: versionOfBytes(bytes) });
+      // The LEXICAL path, not `abs`: containment resolved symlinks to decide the write was allowed,
+      // but a view is keyed by the cwd string it launched with, and the signal is matched exactly —
+      // a project opened through a symlink would never hear about its own config (#1002).
+      const asRequested = path.resolve(browseBase(req, defaultCwd), browseRel(req));
+      res.json({ ok: true, version: versionOfBytes(bytes), ...dirConfigReportFor(asRequested, text, onDirConfigWritten) });
     } catch {
       res.status(500).json({ error: "failed to write file" });
     }
@@ -501,11 +592,30 @@ function mountBackupRoute(app: Express, { defaultCwd, backupRoot }: BrowseDeps):
   // Bank a buffer the CLIENT is about to discard — the conflict banner's "Reload", where the
   // content being dropped only ever existed in the editor. Nothing else can save it.
   app.put("/api/files/browse/backup", (req, res) => {
-    const abs = containedFor(req, res, defaultCwd);
+    const abs = containedForChange(req, res, defaultCwd);
     if (!abs) return;
     const { text } = requestBody(req.body);
     if (typeof text !== "string") return res.status(400).json({ error: "body.text (string) required" });
     if (Buffer.byteLength(text, "utf8") > MAX_EDIT_BYTES) return res.status(413).json({ error: "content too large" });
-    res.json({ stored: storeBackup(abs, text, backupRoot) !== null });
+    // `stored` means the store holds this text now: true for a copy it already had, false when the
+    // write failed — which the client must hear, since it banks text it is about to throw away.
+    storeBackup(abs, text, backupRoot);
+    res.json({ stored: backupHolds(abs, text, backupRoot) });
+  });
+
+  // The file's history (#2574): the generations above, newest first, and one of them by id.
+  app.get("/api/files/browse/backups", (req, res) => {
+    const abs = containedFor(req, res, defaultCwd);
+    if (!abs) return;
+    res.json({ backups: listBackups(abs, backupRoot) });
+  });
+
+  app.get("/api/files/browse/backup", (req, res) => {
+    const abs = containedFor(req, res, defaultCwd);
+    if (!abs) return;
+    const id = req.query.id;
+    const text = typeof id === "string" ? readBackup(abs, backupRoot, id) : null;
+    if (text === null) return res.status(404).json({ error: "no such backup" });
+    res.json({ text });
   });
 }

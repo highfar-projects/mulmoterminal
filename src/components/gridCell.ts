@@ -93,7 +93,9 @@ export interface GridCellEmits {
       | "toggle-prompts"
       | "toggle-transcript"
       | "open-canvas"
-      | "open-files",
+      | "open-files"
+      // The row-2 `+`: open the launch panel on this cell's directory.
+      | "new-here",
   ): void;
   // Swap this cell left (-1) or right (+1) in manual sort mode.
   (e: "move", dir: -1 | 1): void;

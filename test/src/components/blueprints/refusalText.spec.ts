@@ -16,14 +16,17 @@ const SAMPLES: Record<RefusalCode, Refusal> = {
   "not-a-directory": { code: "not-a-directory", dir: "/Users/me/notes.txt" },
   "no-parent": { code: "no-parent", dir: "/Users/me/missing" },
   "folder-taken": { code: "folder-taken", dir: "/Users/me/work/keihi" },
-  untrusted: { code: "untrusted", dir: "/Users/me/work" },
+  "record-folder-not-real": { code: "record-folder-not-real", dir: "/Users/me/work/cloned" },
+  untrusted: { code: "untrusted", dir: "/Users/me/work/keiyaku", trustIn: "/Volumes/shared" },
   "folder-busy": { code: "folder-busy", dir: "/Users/me/work", runId: "run-00000007" },
   "samples-clash": { code: "samples-clash", files: ["contract.txt", "memo.md"] },
+  "personal-data": { code: "personal-data", fields: [{ collection: "people", field: "email", label: "Email" }], members: 3 },
   "held-elsewhere": { code: "held-elsewhere", port: "34567" },
   "revision-pending": { code: "revision-pending" },
   "spec-not-at-review": { code: "spec-not-at-review" },
   "message-pending": { code: "message-pending" },
   "agent-working": { code: "agent-working" },
+  "revision-check-failed": { code: "revision-check-failed" },
   "registry-url-not-allowed": { code: "registry-url-not-allowed", urls: ["http://example.com/r.json", "file:///tmp/r.json"] },
   "registry-unknown": { code: "registry-unknown", url: "https://example.com/r.json" },
   "pack-not-listed": { code: "pack-not-listed", url: "https://example.com/r.json", slug: "acme-tool" },
@@ -51,8 +54,13 @@ function translatorFor(locale: keyof typeof LOCALES): (key: string, values: Reco
   return (key, values) => i18n.global.t(key, values);
 }
 
-const valuesIn = (refusal: Refusal | StepNotice): string[] =>
-  Object.entries(refusal).flatMap(([key, value]) => (key === "code" ? [] : [value].flat().map(String)));
+// Every value a refusal carries, down through a list of objects (personal-data's fields), as text.
+const leavesOf = (value: unknown): string[] => {
+  if (Array.isArray(value)) return value.flatMap(leavesOf);
+  if (typeof value === "object" && value !== null) return Object.values(value).flatMap(leavesOf);
+  return [String(value)];
+};
+const valuesIn = (refusal: Refusal | StepNotice): string[] => Object.entries(refusal).flatMap(([key, value]) => (key === "code" ? [] : leavesOf(value)));
 
 describe("failureText", () => {
   describe.each(Object.keys(LOCALES) as (keyof typeof LOCALES)[])("in %s", (locale) => {

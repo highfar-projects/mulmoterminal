@@ -53,6 +53,8 @@ describe("badArrayField", () => {
       "providers",
       "themes",
       "toolbarPins",
+      "commands",
+      "paletteFavorites",
     ]);
   });
 

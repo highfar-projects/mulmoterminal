@@ -1,0 +1,55 @@
+{
+  "manifest": {
+    "title": "Tidy up (refactoring, tests, CI)",
+    "description": "Tidies the code and tests without changing how it behaves. Lists the candidates and gets your approval, then repeats, one at a time: \"tests that guard it, move it, prove it behaves the same, PR, merge if CI is green\"."
+  },
+  "hearing": {
+    "goals": {
+      "label": "What do you want to tidy up?",
+      "why": "This is what the candidates are looked for in",
+      "options": {
+        "長すぎる・複雑な関数を分ける": "Split functions that are too long or complicated",
+        "同じことをしている重複をまとめる": "Merge duplicates that do the same thing",
+        "テストのない大事なところにテストを書く": "Write tests for important parts that have none",
+        "使われていないコードを片付ける": "Clear away code that is not used",
+        "型と入力の検査を整える": "Tidy up types and input checks"
+      }
+    },
+    "maxChanges": {
+      "label": "The most changes (PRs) to make this time",
+      "why": "One change is one PR. This keeps a run from going on too long"
+    },
+    "merge": {
+      "label": "How far should each PR go?",
+      "why": "A merge is hard to undo, so decide first whether it is automatic",
+      "options": {
+        "CI が緑なら自動でマージする": "Merge automatically if CI is green",
+        "PR まで（マージは自分でする）": "Up to the PR (I merge it myself)"
+      }
+    },
+    "focus": {
+      "label": "Places you are especially concerned about",
+      "why": "Moves those candidates up the list",
+      "placeholder": "e.g. the calculations under src/billing/ — every fix breaks something elsewhere"
+    },
+    "avoid": {
+      "label": "Files or places to leave alone",
+      "why": "Left out of the candidates",
+      "placeholder": "e.g. src/generated/ (generated code)"
+    }
+  },
+  "steps": {
+    "survey": {
+      "title": "List what could be tidied",
+      "description": "Finds candidates, weighs what each is worth and how risky it is, and makes a plan. For any that are skipped, writes down why."
+    },
+    "tranche": {
+      "title": "Tidy them one at a time",
+      "description": "Each item in the plan, one at a time: tests that guard it, move it, prove it behaves the same, break the code on purpose to check the tests catch it, checks, PR, merge if CI is green. Repeats while any are left."
+    },
+    "report": {
+      "title": "Report",
+      "description": "What was tidied, what was checked and how, what could not be fully checked, and what was skipped."
+    }
+  }
+}

@@ -1,0 +1,35 @@
+// The language the person reads, taken from the screen they started the build on: what the agent writes for them
+// follows it, not the documents' language nor the interview's (whose options are Japanese whatever the screen shows).
+import { z } from "zod";
+
+/** The UI's locales. */
+export const personLanguageSchema = z.enum(["en", "ja", "zh-CN", "zh-TW", "ko"]);
+export type PersonLanguage = z.infer<typeof personLanguageSchema>;
+
+/** The English name an agent is told. */
+export const PERSON_LANGUAGES: Readonly<Record<PersonLanguage, string>> = {
+  en: "English",
+  ja: "Japanese",
+  "zh-CN": "Simplified Chinese",
+  "zh-TW": "Traditional Chinese",
+  ko: "Korean",
+};
+
+/** Each language in its own words, for a choice the person makes whatever language the screen is in. */
+export const PERSON_LANGUAGE_NAMES: Readonly<Record<PersonLanguage, string>> = {
+  en: "English",
+  ja: "日本語",
+  "zh-CN": "简体中文",
+  "zh-TW": "繁體中文",
+  ko: "한국어",
+};
+
+export const isPersonLanguage = (raw: string): raw is PersonLanguage => personLanguageSchema.safeParse(raw).success;
+
+/** The prompt line that says it; none for a build started before the language was recorded. */
+export const personLanguageLine = (language: PersonLanguage | null | undefined): string[] =>
+  language
+    ? [
+        `The user reads ${PERSON_LANGUAGES[language]}. Write what you tell them — reports, replies, the questions you ask — in ${PERSON_LANGUAGES[language]}, whatever language the documents or .blueprint/answers.json are in. The documents themselves keep the language their SKILL gives them: do not translate a document, a quotation or an app's text into it.`,
+      ]
+    : [];

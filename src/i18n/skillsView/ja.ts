@@ -1,0 +1,37 @@
+// The Skills viewer (#2815), out of the locale file, which is at its line cap.
+export const skillsViewJa = {
+  skillsView: {
+    title: "Skills",
+    sources: "場所",
+    region: "Skills",
+    close: "Skills を閉じる",
+    search: "名前・説明・フォルダで検索",
+    user: "ユーザー (~/.claude/skills)",
+    overrides: "ユーザーのスキルを上書き",
+    loading: "スキルを読み込んでいます…",
+    loadFailed: "スキルを読み込めませんでした。",
+    empty: "スキルが見つかりません。~/.claude/skills、有効なプラグイン、ターミナルを開いたことのあるフォルダの .claude/skills にあるスキルがここに並びます。",
+    noMatch: "この検索に合うスキルはありません。",
+    pick: "スキルを選ぶと SKILL.md を表示します。",
+    docFailed: "この SKILL.md を読み込めませんでした。",
+    modes: "探す場所",
+    mode: { local: "このマシン", remote: "skills.sh" },
+    remote: {
+      placeholder: "skills.sh を検索",
+      search: "検索",
+      privacy: "検索語は「検索」を押したときだけ skills.sh に送られます。",
+      intro: "公開スキルの一覧 skills.sh を検索して、まだ入っていないスキルを探して読めます。ここからは何もインストールしません。",
+      searchFailed: "いま skills.sh を検索できませんでした。ブラウザで検索できます:",
+      results: "検索結果",
+      installed: "同じ名前あり",
+      installs: "{count} 回インストール",
+      copy: "コピー",
+      copied: "コピーしました",
+      openPage: "skills.sh で開く",
+      installNote:
+        "インストールするときは、この行を自分でターミナルで実行してください。スキルは、エージェントがあなたの権限で従う指示書です。先に中身を読んでください。",
+      executables: "このスキルには、コードを実行できるファイルが {count} 個含まれています:",
+      files: "すべてのファイル（{count}）",
+    },
+  },
+};

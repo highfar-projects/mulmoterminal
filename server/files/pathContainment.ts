@@ -21,6 +21,16 @@ export function resolveBase(cwd: string | null, defaultCwd: string, homeDir: str
   return defaultCwd;
 }
 
+/** `resolveBase` for a request that CHANGES files: a cwd that was named but is not an existing
+ *  directory is null rather than the default. Falling back is fine for reading; for a rename or a
+ *  Trash it would act on a same-named entry in another folder (the pane's folder was removed while
+ *  the tree still showed it). No cwd at all still means the default, as everywhere. */
+export function namedBase(cwd: string | null, defaultCwd: string, homeDir: string): string | null {
+  if (cwd === null || cwd === "") return defaultCwd;
+  const base = resolveBase(cwd, defaultCwd, homeDir);
+  return base === defaultCwd && path.resolve(expandTilde(cwd, homeDir)) !== path.resolve(defaultCwd) ? null : base;
+}
+
 // The serving base for a raw-file request: the workspace root when no cwd is given, or
 // the requested cwd ONLY if it is the root or a server-known session directory. Returns
 // null when a cwd is given but unauthorized — so a caller can't repoint serving at an
@@ -154,14 +164,23 @@ export function containForWatching(roots: Iterable<string>, candidatePath: strin
 //
 // Windows only: `con` is a perfectly ordinary filename on POSIX, and refusing it there would
 // break a real file for no reason.
+// The superscript digits ¹²³ are reserved too, and so are the console's CONIN$/CONOUT$ (Microsoft's
+// "Naming Files, Paths, and Namespaces"). Not COM0/LPT0: listed there, but Windows opens them as files,
+// and refusing them would lock a real `com0.txt` out of the whole file API.
+const DEVICE_DIGITS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "\u00B9", "\u00B2", "\u00B3"];
 const WINDOWS_DEVICE_NAMES = new Set([
   "CON",
   "PRN",
   "AUX",
   "NUL",
-  ...Array.from({ length: 9 }, (_, i) => `COM${i + 1}`),
-  ...Array.from({ length: 9 }, (_, i) => `LPT${i + 1}`),
+  "CONIN$",
+  "CONOUT$",
+  ...DEVICE_DIGITS.map((digit) => `COM${digit}`),
+  ...DEVICE_DIGITS.map((digit) => `LPT${digit}`),
 ]);
+
+// ASCII letters only: `toUpperCase` turns a Turkish dotless ı into I, and `conın$` is no device.
+const asciiUpper = (text: string): string => text.replace(/[a-z]/g, (letter) => letter.toUpperCase());
 
 // Counted rather than matched: an anchored `[. ]+$` backtracks over a long run.
 function trimTrailingDotsAndSpaces(text: string): string {
@@ -179,7 +198,7 @@ export function namesAWindowsDevice(rel: string, platform: NodeJS.Platform = pro
     // an NTFS alternate data stream (and `NUL:` is the legacy device spelling), neither of
     // which stops the name in front of it being a device.
     const stem = trimTrailingDotsAndSpaces(segment.split(/[.:]/)[0] ?? "");
-    return WINDOWS_DEVICE_NAMES.has(stem.toUpperCase());
+    return WINDOWS_DEVICE_NAMES.has(asciiUpper(stem));
   });
 }
 

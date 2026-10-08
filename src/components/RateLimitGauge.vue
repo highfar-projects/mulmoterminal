@@ -9,6 +9,9 @@ import { computed, onMounted, onUnmounted } from "vue";
 import { useRateLimits } from "../composables/useRateLimits";
 import { rateLimitReadout } from "../composables/rateLimitGauge";
 import AgentMark from "./AgentMark.vue";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 const { snapshot, start, stop } = useRateLimits();
 onMounted(start);
@@ -23,7 +26,7 @@ onUnmounted(stop);
 // information: "here is what we know about your usage" (#1011).
 const view = computed(() => {
   const now_ms = Date.now();
-  return { now_ms, ...rateLimitReadout(snapshot.value, now_ms) };
+  return { now_ms, ...rateLimitReadout(snapshot.value, now_ms, t) };
 });
 const gauges = computed(() => view.value.gauges);
 const probeNote = computed(() => view.value.note);

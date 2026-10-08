@@ -18,7 +18,9 @@ beforeEach(() => {
   served = detail();
   requested = [];
   globalThis.fetch = vi.fn(async (url: string) => {
-    requested.push(String(url));
+    // The form under an expanded row asks for the launch options too; this file is about the
+    // preview's own reads of the directory, so only those are counted.
+    if (String(url).startsWith("/api/dir-config-detail")) requested.push(String(url));
     return { ok: true, json: async () => served };
   }) as unknown as typeof fetch;
 });
@@ -148,5 +150,64 @@ describe("the local override file (#1430)", () => {
     await expand(w);
     expect(w.find('[data-testid="dir-preview-local-file"]').exists()).toBe(false);
     expect(w.find('[data-testid="dir-preview-local-keys"]').exists()).toBe(false);
+  });
+});
+
+// #2624. Each file the panel names opens in the Files view, and a directory with none gets one.
+describe("DirConfigPreview opening a config in Files", () => {
+  it("asks to open the shared and the local file by name", async () => {
+    served = detail({ localFile: "/proj/a/.mulmoterminal.local.json" });
+    const w = mountPreview(["/proj/a"]);
+    await expand(w);
+    await w.find('[data-testid="dir-preview-open"]').trigger("click");
+    await w.find('[data-testid="dir-preview-open-local"]').trigger("click");
+    expect(w.emitted("open-file")).toEqual([
+      ["/proj/a", ".mulmoterminal.json"],
+      ["/proj/a", ".mulmoterminal.local.json"],
+    ]);
+  });
+
+  it("creates an empty config where there is none, then asks to open it", async () => {
+    served = detail({ file: null, config: {} });
+    const w = mountPreview(["/proj/a"]);
+    await expand(w);
+    const writes: [string, RequestInit | undefined][] = [];
+    globalThis.fetch = vi.fn(async (url: string, init?: RequestInit) => {
+      writes.push([String(url), init]);
+      return { ok: true, status: 200, json: async () => ({}) };
+    }) as unknown as typeof fetch;
+    await w.find('[data-testid="dir-preview-create"]').trigger("click");
+    await flushPromises();
+    expect(writes).toHaveLength(1);
+    expect(writes[0][0]).toBe("/api/files/browse/write?cwd=%2Fproj%2Fa&path=.mulmoterminal.json");
+    expect(JSON.parse(String(writes[0][1]?.body))).toEqual({ text: "{}\n", baseVersion: null });
+    expect(w.emitted("open-file")).toEqual([["/proj/a", ".mulmoterminal.json"]]);
+  });
+
+  it("opens a file someone made first, and says so when it cannot make one", async () => {
+    served = detail({ file: null, config: {} });
+    const w = mountPreview(["/proj/a"]);
+    await expand(w);
+    let status = 409;
+    globalThis.fetch = vi.fn(async () => ({ ok: status < 300, status, json: async () => ({}) })) as unknown as typeof fetch;
+    await w.find('[data-testid="dir-preview-create"]').trigger("click");
+    await flushPromises();
+    expect(w.emitted("open-file")).toHaveLength(1);
+    status = 403;
+    await w.find('[data-testid="dir-preview-create"]').trigger("click");
+    await flushPromises();
+    expect(w.emitted("open-file")).toHaveLength(1);
+    expect(w.find('[role="alert"]').exists()).toBe(true);
+  });
+
+  // #2729: a cell's path menu opens Settings on its own directory.
+  it("opens the row it is asked to focus, and reads it", async () => {
+    const w = mount(DirConfigPreview, { props: { paths: ["/proj/a", "/proj/b"], focus: "/proj/b" }, attachTo: document.body });
+    await flushPromises();
+    const rows = w.findAll('[data-testid="dir-preview-row"]');
+    const open = rows.map((row) => (row.element instanceof HTMLDetailsElement ? row.element.open : false));
+    expect(open).toEqual([false, true]);
+    expect(requested).toEqual(["/api/dir-config-detail?cwd=%2Fproj%2Fb"]);
+    w.unmount();
   });
 });

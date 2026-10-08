@@ -7,7 +7,8 @@
 import { useI18n } from "vue-i18n";
 
 const { t } = useI18n();
-defineProps<{ label: string | null }>();
+// `detail` is the longer name the hover gives — a rotation token's label with its address (#2919).
+defineProps<{ label: string | null; detail?: string | null }>();
 </script>
 
 <template>
@@ -15,7 +16,7 @@ defineProps<{ label: string | null }>();
     v-if="label"
     data-testid="cell-account-mark"
     class="inline-flex max-w-[12ch] flex-none items-center gap-1 rounded-[10px] border border-border bg-elevated px-[7px] py-px font-mono text-[11px] text-secondary"
-    :data-tip="t('tips.cell.runsOnAccount', { account: label })"
+    :data-tip="t('tips.cell.runsOnAccount', { account: detail ?? label })"
     ><span class="material-symbols-outlined text-[13px]" aria-hidden="true">account_circle</span><span class="truncate">{{ label }}</span></span
   >
 </template>

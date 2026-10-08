@@ -58,6 +58,13 @@
       "check": "sh \"$BLUEPRINT_BASE/checks/smoke.sh\""
     },
     {
+      "id": "security",
+      "title": "セキュリティ診断",
+      "description": "OWASP Top 10:2025 に沿って作ったものを攻撃する側の目で読み、突ける穴を直して試験で確かめ、報告を書く。判定は起動したサーバーに攻撃と同じ形のリクエスト（別の名前の Host、別のサイトからの変更、壊れた JSON）を送って確かめる。",
+      "skill": "skills/security",
+      "check": "sh \"$BLUEPRINT_BASE/checks/security.sh\""
+    },
+    {
       "id": "handover",
       "title": "使い方の説明とバックアップ",
       "description": "起動の仕方、データファイルの場所とバックアップの仕方を README に書く。",

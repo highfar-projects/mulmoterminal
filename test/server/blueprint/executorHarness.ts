@@ -14,6 +14,8 @@ export const step = (id: string, gates: ComposedStep["gates"] = []): ComposedSte
   skill: `skills/${id}`,
   check: `check-${id}`,
   gates,
+  reads: [],
+  revises: [],
   origin: "base",
 });
 

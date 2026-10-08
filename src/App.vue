@@ -16,9 +16,14 @@ import WikiBrowseOverlay from "./components/WikiBrowseOverlay.vue";
 import GithubOverlay from "./components/GithubOverlay.vue";
 import RoomsOverlay from "./components/RoomsOverlay.vue";
 import BlueprintsOverlay from "./components/blueprints/BlueprintsOverlay.vue";
+import SkillsOverlay from "./components/SkillsOverlay.vue";
+import ProcessesOverlay from "./components/processes/ProcessesOverlay.vue";
+import UsageOverlay from "./components/usage/UsageOverlay.vue";
 import FilesOverlay from "./components/FilesOverlay.vue";
+import ConfettiOverlay from "./components/ConfettiOverlay.vue";
 import HoverTip from "./components/HoverTip.vue";
 import ServerStoppedOverlay from "./components/ServerStoppedOverlay.vue";
+import WhatsNewDialog from "./components/WhatsNewDialog.vue";
 import GridView from "./components/GridView.vue";
 import { useSessions } from "./composables/useSessions";
 import { useAppConfig } from "./composables/useAppConfig";
@@ -29,6 +34,8 @@ import { useUnloadGuard } from "./composables/useUnloadGuard";
 import { usePubSub } from "./composables/usePubSub";
 import { openTerminalAt } from "./composables/useNewTerminal";
 import { installDataTips } from "./composables/useDataTips";
+import { useWhatsNew } from "./composables/useWhatsNew";
+import { useI18n } from "vue-i18n";
 import { LAUNCH_TERMINAL_CHANNEL, isLaunchAgent, type LaunchAgent } from "../common/launchAgent";
 import { isRecord } from "../common/isRecord";
 
@@ -74,6 +81,9 @@ useAttentionSound(soundEnabled, soundConfig);
 
 // Reflect session activity in the tab's favicon (idle / working / attention).
 useFaviconState(sessions);
+
+// After an upgrade, the release guides for every version since the dialog was last closed.
+const { whatsNew, dismiss: dismissWhatsNew } = useWhatsNew(useI18n().locale.value);
 </script>
 
 <template>
@@ -97,6 +107,11 @@ useFaviconState(sessions);
   <RoomsOverlay />
   <!-- Blueprint builds; opened by the toolbar's architecture button. -->
   <BlueprintsOverlay />
+  <!-- Every skill on disk across the folders terminals ran in; opened from the feature menu. -->
+  <SkillsOverlay />
+  <!-- What each session is running, and worktrees that can go; opened from the feature menu. -->
+  <ProcessesOverlay />
+  <UsageOverlay />
   <!-- Full-screen file explorer + editor; opened by the toolbar's Files button, or by a terminal
        header's Files button rooted at that terminal's own directory. -->
   <FilesOverlay />
@@ -104,7 +119,10 @@ useFaviconState(sessions);
        document can never hold two — it teleports to <body> and positions itself against whichever
        chip the pointer is on. -->
   <HoverTip />
+  <WhatsNewDialog v-if="whatsNew" :whats-new="whatsNew" @close="dismissWhatsNew" />
   <!-- Over everything, including the settings modal it was pressed in: once the server is gone
        nothing behind it works, and a live-looking pane underneath would say otherwise (#1820). -->
   <ServerStoppedOverlay />
+  <!-- A celebration over everything (the confetti shortcut, an opted-in event, the Konami code); takes no clicks. -->
+  <ConfettiOverlay />
 </template>

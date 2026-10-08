@@ -24,7 +24,10 @@ import { APPS_COLLECTION, PUBLIC_CONFIG_DOC, appConfigPath } from "@receptron/sh
 import { PUBLIC_VIEW_DOC } from "./publicView.js";
 import type { SharedAppFailure } from "./context.js";
 import { runWrites } from "./writes.js";
+import { existingForkDocs, forkWithdrawals } from "./forkWrites.js";
+import { bannerRemoval } from "./bannerWrites.js";
 import { setSlugPublished } from "./slug.js";
+import { SIGN_IN_STEP } from "./signInStep.js";
 
 export interface UnpublishSuccess {
   ok: true;
@@ -42,7 +45,7 @@ export type UnpublishResult = UnpublishSuccess | SharedAppFailure;
 export async function unpublishSharedApp(root: string): Promise<UnpublishResult> {
   const handle = firestoreHandle();
   if (!handle) {
-    return { ok: false, partial: false, problems: ["unpublish needs a signed-in Firestore session: connect remote-host first."] };
+    return { ok: false, partial: false, problems: [`unpublish needs a signed-in Firestore session: ${SIGN_IN_STEP}`] };
   }
   const manifest = loadAppManifest(root);
   if (!manifest.ok) return { ok: false, partial: false, problems: [appManifestReason(manifest, root)] };
@@ -75,6 +78,10 @@ export async function unpublishSharedApp(root: string): Promise<UnpublishResult>
   // rendering data. Exactly the reverse of publish, for the reverse reason: what is taken away
   // first is what grants.
   const slug = typeof existing.slug === "string" ? existing.slug : undefined;
+  // The copy a visitor could make, if the app offered one: its pages are the STAFF pages, and
+  // `config/*` stays world-readable after the app is closed. Read before anything is written.
+  const fork = await existingForkDocs(handle, aid, "unpublish");
+  if (!fork.ok) return fork;
 
   const failure = await runWrites(
     [
@@ -97,6 +104,8 @@ export async function unpublishSharedApp(root: string): Promise<UnpublishResult>
           await handle.docs.delete(appConfigPath(aid), PUBLIC_VIEW_DOC);
         },
       },
+      ...forkWithdrawals(handle, aid, fork.ids),
+      ...bannerRemoval(handle, aid),
       // THE MEMBERS' AND PARTICIPANTS' PAGES STAY, and that is a change of meaning rather than an
       // omission. They used to come down here, because `live:` meant "published" and a take-down
       // took the published things away — the roster went on working from the `staged:` copy at

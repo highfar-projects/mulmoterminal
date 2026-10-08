@@ -19,6 +19,7 @@ import {
   serverEnvFiles,
   serverNodeArgs,
   stopCommandFor,
+  stopCommandForThis,
 } from "../../bin/cli-args.js";
 import { NODE_DOWNLOAD_URL } from "../../bin/node-install.js";
 
@@ -588,5 +589,18 @@ describe("stopCommandFor", () => {
   it("is what the already-running prompt prints", () => {
     const text = runningInstancesPrompt([{ pid: 42, port: 34567 }], "npx mulmoterminal@latest stop");
     expect(text).toContain("npx mulmoterminal@latest stop");
+  });
+});
+
+// #2683. The ready banner narrows its stop command once another server is running.
+describe("stopCommandForThis", () => {
+  it("keeps the plain command while this is the only server", () => {
+    expect(stopCommandForThis("mulmoterminal stop", 34567, [{ port: 34567 }])).toBe("mulmoterminal stop");
+    expect(stopCommandForThis("mulmoterminal stop", 34567, [])).toBe("mulmoterminal stop");
+  });
+
+  it("names this server's port once another one is running", () => {
+    expect(stopCommandForThis("mulmoterminal stop", 34599, [{ port: 34567 }, { port: 34599 }])).toBe("mulmoterminal stop --port 34599");
+    expect(stopCommandForThis("npx mulmoterminal@latest stop", 34599, [{ port: null }])).toBe("npx mulmoterminal@latest stop --port 34599");
   });
 });

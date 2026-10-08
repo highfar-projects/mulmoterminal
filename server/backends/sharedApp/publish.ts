@@ -53,6 +53,8 @@ import {
 import { recordRefusal, scanRecords, type RecordScan } from "./records.js";
 import { oversizeProblem, publicFormOf, publicInputProblems, type PublicForm } from "./publicForm.js";
 import { allTierWrites, pageIdsOf, planTierWrites, type PlannedTier } from "./appViews.js";
+import { forkWrites, planFork, type ForkPlan } from "./forkWrites.js";
+import { bannerWrites, readBanner, type Banner } from "./bannerWrites.js";
 import { PUBLIC_VIEW_DOC, declaredView, readAppViewFile, type ViewFile } from "./publicView.js";
 import { frozenKeyProblems } from "./exclusivity.js";
 import { scopedFieldProblems } from "./scopedFields.js";
@@ -60,6 +62,7 @@ import { claimApp, reserveHeldSlug, type SlugRequest } from "./establish.js";
 import { publicFaceOf, type PublicFace } from "../../../common/sharedAppPublicFace.js";
 import { setSlugPublished } from "./slug.js";
 import { runWrites, type WriteStep } from "./writes.js";
+import { removalRefusal, rosterRemovals } from "./rosterRemovals.js";
 
 export interface PublishSuccess {
   ok: true;
@@ -84,6 +87,8 @@ export interface PublishSuccess {
   dirty: boolean;
   recordIssues: number;
   recordIssuesCapped: boolean;
+  /** Addresses this publish took off the live roster, with `confirmRemovals`. Empty otherwise. */
+  removedMembers: string[];
   /** Said about the published page without stopping it — see `viewWarnings`. */
   warnings: string[];
 }
@@ -99,7 +104,8 @@ interface PublishStepsInput {
   slug: string | undefined;
   form: PublicForm;
   view: ViewFile | null;
-  tiers: readonly PlannedTier[];
+  /** Every page this run writes: the tiers, and the forkable copy (see `planPages`). */
+  pages: { tiers: readonly PlannedTier[]; fork: ForkPlan; banner: Banner | null };
   /** Written already by `claimApp`, byte for byte, when this publish created the app document to
    *  make the record scan answerable. Writing it twice is harmless and saying so is not: the
    *  second write is skipped so the step list reads as what actually happened. */
@@ -109,7 +115,7 @@ interface PublishStepsInput {
   live: Record<string, unknown> | null;
 }
 
-function publishSteps({ handle, aid, stamp, face, slug, form, view, tiers, established, live }: PublishStepsInput): WriteStep[] {
+function publishSteps({ handle, aid, stamp, face, slug, form, view, pages, established, live }: PublishStepsInput): WriteStep[] {
   return [
     ...face.schemas.map(({ cid, doc }) => ({
       what: `the schema for '${cid}' (apps/${aid}/collections/${cid})`,
@@ -165,7 +171,12 @@ function publishSteps({ handle, aid, stamp, face, slug, form, view, tiers, estab
     // publish drops them. Before the app document and the authorization, like everything else that
     // is only DATA: a run that stops here leaves an app whose pages are newer than its roster,
     // which is the direction to be wrong in.
-    ...allTierWrites(handle, aid, tiers, stamp),
+    ...allTierWrites(handle, aid, pages.tiers, stamp),
+    // The copy a visitor may make, or its withdrawal. Data like the pages above, so before the app
+    // document and the authorization.
+    ...forkWrites(handle, aid, pages.fork, stamp.publishedAt),
+    // The theme's banner (receptron/mulmoserver#336), or its removal — data, like the pages.
+    ...bannerWrites(handle, aid, pages.banner, face.public !== undefined, stamp.publishedAt),
     // The app document WITHOUT `public`: the rule configuration lands beside the schemas it was
     // projected with, so the public write path is never judged by one version's constraints
     // against another's schema. Skipped when `claimApp` wrote exactly this a moment ago.
@@ -225,6 +236,7 @@ async function publishGate(
   collections: readonly LoadedCollection[],
   root: string,
   confirm: boolean | undefined,
+  removals: string[] | null,
 ): Promise<{ ok: true; scan: RecordScan } | SharedAppFailure> {
   const schemas = schemasOf(collections);
   const drifted = publicInputProblems(authored, schemas);
@@ -236,8 +248,10 @@ async function publishGate(
   const scoped = scopedFieldProblems(authored, schemas);
   if (scoped.length > 0) return { ok: false, partial: false, problems: scoped };
   const scan = await scanRecords(collections, root);
-  const refusal = recordRefusal(scan, confirm);
-  return refusal ? { ok: false, partial: false, problems: refusal } : { ok: true, scan };
+  // Both consents at once when both are needed: returning one, then the other, costs a whole
+  // round trip for an answer that was already known.
+  const refusals = [...(recordRefusal(scan, confirm) ?? []), ...(removals ?? [])];
+  return refusals.length > 0 ? { ok: false, partial: false, problems: refusals } : { ok: true, scan };
 }
 
 /** The two questions that are asked of the PAGE and of the live records before
@@ -395,6 +409,30 @@ async function takeName(request: SlugRequest, established: boolean, ran: RunStat
   return { ok: true, slug: reserved?.slug ?? request.held };
 }
 
+/** Every page this publish writes, read off disk and paired with what is already there — the
+ *  members' and participants' tiers, and the forkable copy made of them — so a page withdrawn from
+ *  `views` (or a copy no longer offered) is removed rather than left readable. */
+async function planPages(
+  handle: SharedAppHandle,
+  aid: string,
+  request: {
+    root: string;
+    authored: AuthoredApp;
+    stamp: PublishStamp;
+    schemas: ReturnType<typeof schemasOf>;
+    form: PublicForm;
+    view: ViewFile | null;
+    liveOwner: unknown;
+  },
+): Promise<{ ok: true; tiers: PlannedTier[]; warnings: string[]; fork: ForkPlan; banner: Banner | null } | SharedAppFailure> {
+  const tiers = await planTierWrites(handle, aid, request);
+  if (!tiers.ok) return tiers;
+  const fork = await planFork(handle, aid, { ...request, tiers: tiers.tiers });
+  if (!fork.ok) return fork;
+  const banner = await readBanner(request.root, request.authored);
+  return banner.ok ? { ...tiers, fork: fork.plan, banner: banner.banner } : { ok: false, partial: false, problems: banner.problems };
+}
+
 async function runPublish(root: string, opts: SharedAppOptions, ran: RunState): Promise<PublishResult> {
   // Before anything reads the declaration: the app has to HAVE an id, and publish refuses rather
   // than minting one (`requireAid`). The id is written where the declaration is — `init`, and the
@@ -416,7 +454,8 @@ async function runPublish(root: string, opts: SharedAppOptions, ran: RunState): 
   // run, and the one every refusal after it is partial BECAUSE of.
   if (established) ran.wrote = true;
 
-  const gate = await publishGate(authored, collections, root, opts.confirm);
+  const removed = rosterRemovals(existingApp, authored.members);
+  const gate = await publishGate(authored, collections, root, opts.confirm, removalRefusal(removed, opts.confirmRemovals));
   if (!gate.ok) return { ...gate, partial: gate.partial || established };
   const scan = gate.scan;
 
@@ -432,9 +471,7 @@ async function runPublish(root: string, opts: SharedAppOptions, ran: RunState): 
   const page = await pageGate(root, authored, existingApp, handle, stamp.publishedAt);
   if (!page.ok) return { ok: false, partial: established, problems: page.problems };
 
-  // The members' and participants' pages, read off disk and paired with what is already there, so
-  // a page withdrawn from `views` is removed rather than left readable.
-  const pages = await planTierWrites(handle, aid, { root, authored, stamp });
+  const pages = await planPages(handle, aid, { root, authored, stamp, schemas: schemasOf(collections), form, view: page.view, liveOwner: existingApp?.owner });
   if (!pages.ok) return { ...pages, partial: established };
 
   const named = await takeName({ handle, aid, root, wanted: authored.slug, held, appDoc: stillOpen(appDoc, existingApp) }, established, ran);
@@ -450,7 +487,7 @@ async function runPublish(root: string, opts: SharedAppOptions, ran: RunState): 
     slug,
     form,
     view: page.view,
-    tiers: pages.tiers,
+    pages,
     // Already written, byte for byte: `claimApp` wrote this projection, and a reservation made
     // just now rewrote the same thing with the name on it.
     established,
@@ -480,6 +517,7 @@ async function runPublish(root: string, opts: SharedAppOptions, ran: RunState): 
     dirty,
     recordIssues: scan.records,
     recordIssuesCapped: scan.capped,
+    removedMembers: removed.map((removal) => removal.email),
     // The pages', and what the standing instructions say without stopping — a brief nothing will
     // ever wake up, or one somebody pasted a page into. Said at publish as well as at `check`
     // because publish is the step that makes the brief real for everyone reading the app.

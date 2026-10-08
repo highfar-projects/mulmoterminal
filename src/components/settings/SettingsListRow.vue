@@ -8,7 +8,8 @@
 // rather than fourteen buttons all called "Remove".
 import { useI18n } from "vue-i18n";
 
-defineProps<{ name: string }>();
+// `disabled` holds the remove button while a change to the list is still out.
+defineProps<{ name: string; disabled?: boolean }>();
 const emit = defineEmits<{ (e: "remove"): void }>();
 
 const { t } = useI18n();
@@ -20,6 +21,7 @@ const { t } = useI18n();
     <button
       class="cursor-pointer rounded-md border-0 bg-transparent px-1.5 py-1 text-[14px] text-muted hover:bg-[var(--err-hover-bg)] hover:text-err-text"
       type="button"
+      :disabled="disabled"
       :data-tip="t('settings.common.remove', { name })"
       :aria-label="t('settings.common.remove', { name })"
       @click="emit('remove')"

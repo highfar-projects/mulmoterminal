@@ -1,0 +1,76 @@
+{
+  "steps": [
+    {
+      "id": "spec",
+      "title": "仕様書を書く",
+      "description": "ヒアリングの答えから、土台と用途の仕様の雛形を埋める。表ごとに、誰が読めて誰が書けるかを必ず書く。決まっていない点は一覧にする。",
+      "skill": "skills/spec",
+      "check": "sh \"$BLUEPRINT_BASE/checks/spec.sh\""
+    },
+    {
+      "id": "prerequisites",
+      "title": "道具の確認",
+      "description": "Node（22 以上）と yarn と、起動した Docker Desktop を確かめる。Supabase の CLI と wrangler はプロジェクトに入れるので、ここでは要らない。",
+      "skill": "skills/prerequisites",
+      "check": "sh \"$BLUEPRINT_BASE/checks/prerequisites.sh\"",
+      "gates": ["review"]
+    },
+    {
+      "id": "scaffold",
+      "title": "アプリの雛形",
+      "description": "手元の Supabase 一式、Vue の画面、画面を配る Cloudflare の設定、手元の Supabase に当てる試験の土台を一つのフォルダに作る。",
+      "skill": "skills/scaffold",
+      "check": "sh \"$BLUEPRINT_BASE/checks/scaffold.sh\""
+    },
+    {
+      "id": "data",
+      "title": "データと権限",
+      "description": "仕様の「扱うもの」を Postgres の表にし、行ごとの権限（RLS）で誰が読めて誰が書けるかを決める。マイグレーション、試しのデータ、利用者ごとに試す試験を書く。",
+      "skill": "skills/data",
+      "check": "sh \"$BLUEPRINT_BASE/checks/tests-pass.sh\" data"
+    },
+    {
+      "id": "ui",
+      "title": "画面",
+      "description": "仕様の画面を Vue で作り、ブラウザから Supabase を読み書きする。",
+      "skill": "skills/ui",
+      "check": "sh \"$BLUEPRINT_BASE/checks/tests-pass.sh\" ui"
+    },
+    {
+      "id": "auth",
+      "title": "ログイン",
+      "description": "仕様のログインの方式を Supabase Auth で入れる。登録を誰に開くかを仕様どおりに設定する。",
+      "skill": "skills/auth",
+      "check": "sh \"$BLUEPRINT_BASE/checks/tests-pass.sh\" auth"
+    },
+    {
+      "id": "run-check",
+      "title": "起動して確かめる",
+      "description": "手元の Supabase につないだ画面をビルドして手元で配り、画面が開き、Supabase に届く設定になっていることを確かめる。",
+      "skill": "skills/run-check",
+      "check": "sh \"$BLUEPRINT_BASE/checks/smoke.sh\""
+    },
+    {
+      "id": "security",
+      "title": "セキュリティ診断",
+      "description": "OWASP Top 10:2025 に沿って作ったものを攻撃する側の目で読み、突ける穴を直して試験で確かめ、報告を書く。判定は手元の Supabase で、ログインしていない人と何も持たない利用者として全部の表を読み書きしてみて、仕様で許したこと以外が通らないことを確かめる。",
+      "skill": "skills/security",
+      "check": "sh \"$BLUEPRINT_BASE/checks/security.sh\""
+    },
+    {
+      "id": "deploy",
+      "title": "Supabase と Cloudflare に公開",
+      "description": "Supabase のプロジェクトにマイグレーションを当て、本番の Supabase につないだ画面を Cloudflare で公開する。公開した URL が今回のビルドを配り、本番の Supabase を指し、秘密の鍵を含まないことを確かめる。",
+      "skill": "skills/deploy",
+      "check": "sh \"$BLUEPRINT_BASE/checks/deploy-check.sh\"",
+      "gates": ["deploy-production", "credential"]
+    },
+    {
+      "id": "handover",
+      "title": "使い方の説明と引き継ぎ",
+      "description": "公開した URL、手元での動かし方、次に直すときの手順、データのバックアップを README と使い始め方に書く。",
+      "skill": "skills/handover",
+      "check": "sh \"$BLUEPRINT_BASE/checks/handover.sh\""
+    }
+  ]
+}

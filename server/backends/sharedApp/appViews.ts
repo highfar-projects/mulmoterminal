@@ -90,7 +90,7 @@ function unreachableProblems(
     .map(
       (cid) =>
         `${view.where}.collections names '${cid}', which a participant cannot read: it is not in participantRead, and public.submit.${cid} declares no ` +
-        'emailField, no uidField and no idFrom "auth.uid", so there is no row the rules would call theirs. The page would be refused the read, not handed fewer records.',
+        'emailField, no uidField and no idFrom "auth.uid" or "pseudonym", so there is no row the rules would call theirs. The page would be refused the read, not handed fewer records.',
     );
 }
 

@@ -1,6 +1,6 @@
 ---
 name: mulmoterminal-header
-description: Put your own action buttons and info chips in a MulmoTerminal session header — either everywhere (`buttons` / `chips` in `~/.mulmoterminal/config.json`, which has no Settings UI) or for one project (`<project>/.mulmoterminal.json`). Buttons run a shell command in a new cell, type text into the running agent (`/compact`), or open a URL, the file explorer, a diff/PR/wiki overlay, or a new terminal. Chips show live context — branch, context left, diff counts, the PR or issue being worked on. Use when the user wants to add, remove, reorder or hide header buttons or chips, wants a one-click build/test/deploy on a session, wants the header to show something it doesn't, or asks why a button is missing or does nothing. For colours and grid order use mulmoterminal-dirs; for keyboard shortcuts use mulmoterminal-keys.
+description: Put your own action buttons and info chips in a MulmoTerminal session header — either everywhere (`buttons` / `chips` in `~/.mulmoterminal/config.json`; the global chips, global buttons of every `run` type, and folders can also be changed in Settings → Header buttons and chips) or for one project (`<project>/.mulmoterminal.json`, also editable in Settings → Directory settings). Buttons run a shell command in a new cell, type text into the running agent (`/compact`), or open a URL, the file explorer, a diff/PR/wiki overlay, or a new terminal. Chips show live context — branch, context left, diff counts, the PR or issue being worked on. `commands` are written exactly like buttons but appear only in the command palette. Use when the user wants to add, remove, reorder or hide header buttons or chips, wants a one-click build/test/deploy on a session, wants the header to show something it doesn't, or asks why a button is missing or does nothing. For colours and grid order use mulmoterminal-dirs; for keyboard shortcuts use mulmoterminal-keys.
 ---
 
 # Header buttons and chips
@@ -13,8 +13,9 @@ is the thing to get right, and it has no UI anywhere.
 
 | File | Applies to | Settings UI |
 |---|---|---|
-| `~/.mulmoterminal/config.json` → `buttons` / `chips` | every directory | **none** |
-| `<project>/.mulmoterminal.json` → `buttons` / `chips` | that project | **none** |
+| `~/.mulmoterminal/config.json` → `buttons` | every directory | Settings → Header buttons and chips: add a `shell`, `input`, `open` or `action` button, edit one in place (id, `order` and `emoji` kept), remove or move any top-level entry, put a button in a folder (existing or new) or take it out, change a folder's name / icon / `when`, back to the built-in set. Reordering inside a folder is written here |
+| `~/.mulmoterminal/config.json` → `chips` | every directory | Settings → Header buttons and chips (add, remove, reorder, back to the default set) |
+| `<project>/.mulmoterminal.json` → `buttons` / `chips` / `commands` | that project | Settings → Directory settings → Change here → Header: the same editors as the global ones, on that project's lists (commands have no folders). An unset list there is empty, not the built-in set |
 
 Ask which the user means. "A button for `yarn build`" is usually per-project (the command only
 exists there); "show me the branch everywhere" is global.
@@ -142,7 +143,9 @@ An array, ≤ 32 entries:
     `view` (`"diff"` / `"prs"` / `"wiki"` / `"collections"` / `"accounting"`) ·
     `terminal` (dir → a new cell running `$SHELL`) · `pr: true` (this branch's PR; the button hides
     when there is none) · `pickFile: true` (OS file dialog → insert the path).
-  - `"action"` → `action` — acts on the cell itself. One value: `"restart"`.
+  - `"action"` → `action` — acts on the cell itself, named like the `keymap` actions:
+    `"terminal-new-here"` · `"terminal-restart"` · `"pane-files"` · … (the full list is under
+    *`run: "action"`* below).
 - `when` — visibility condition (below). `order` — sort key, lower first, unset last.
 
 ### A folder — several buttons behind one icon
@@ -154,7 +157,7 @@ crowd the row.
 ```json
 { "id": "ops", "icon": "construction", "label": "Operations",
   "items": [
-    { "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "restart" },
+    { "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "terminal-restart" },
     { "id": "test", "icon": "science", "label": "Run the tests", "run": "shell", "cmd": "yarn test" }
   ] }
 ```
@@ -167,10 +170,34 @@ crowd the row.
 - Ids are unique across folders and top-level buttons: a button inside a folder that repeats an id
   already used is dropped. A shell button inside a folder still runs by its id.
 
-## `run: "action"` — restart the agent in this cell
+## `run: "action"` — act on this cell
+
+The names are the `keymap` action names (the `mulmoterminal-keys` skill), so one operation is a
+button, a key and a command-palette entry under ONE name. Reach for these when someone misses a
+button the header used to have:
+
+| `action` | What it does |
+|---|---|
+| `"terminal-new-here"` | Launch panel on this cell's directory (also the `+` on row 2) |
+| `"terminal-new-adjacent"` | A shell in this cell's directory, at once |
+| `"terminal-restart"` | Restart the agent (below) |
+| `"terminal-close"` / `"zoom-toggle"` | Close / enlarge-collapse this cell |
+| `"terminal-move-prev"` / `"terminal-move-next"` | Move this cell (manual order only; declines otherwise) |
+| `"mark-unread"` / `"terminal-park"` | Mark unread-read / set aside-wake |
+| `"terminal-timeline"` / `"terminal-talk"` | Activity timeline (Claude only) / talk to another terminal |
+| `"terminal-copy-code"` / `"terminal-insert-path"` / `"terminal-reveal"` / `"terminal-voice"` / `"terminal-diff"` / `"terminal-note"` | Copy the last code block / insert a file path / reveal the directory / mic on-off / changes panel / note |
+| `"pane-files"` | The files PANE beside this cell (not the full-screen view `open.files` gives) |
+| `"pane-prompts"` / `"pane-transcript"` / `"pane-tools"` / `"pane-canvas"` / `"pane-collections"` | The History / Tools menu panes |
+| `"screen-*"` (e.g. `"screen-wiki"`), `"settings-open"`, `"sound-toggle"`, `"confetti"`, `"view-toggle"`, `"order-auto"` / `"-manual"` / `"-priority"`, `"page-next"` / `"page-prev"`, `"terminal-reopen"` | The toolbar's operations — act on the app, not this cell; a screen not set up (prs / rooms / worklog) shows a hint instead |
+
+A pane action toggles the pane on the enlarged cell, and on a tile enlarges the cell and opens it.
+A cell that cannot do it now shows a hint instead. Write the current names; `"restart"` (the name
+before they were shared) is still accepted and read as `"terminal-restart"`.
+
+### `"restart"`
 
 ```json
-{ "buttons": [{ "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "restart" }] }
+{ "buttons": [{ "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "terminal-restart" }] }
 ```
 
 Ends the agent process and starts it again **in the same cell, on the same conversation** — no trip
@@ -187,8 +214,32 @@ Three things to say when you offer it:
   harmless, and it is not.
 - **Nothing else changes**: same directory, same agent, same model, same custom agent.
 
-There is no built-in Restart button and no default binding; this and the `terminal-restart` shortcut
-(the `mulmoterminal-keys` skill) are the two ways to have one.
+It is also an item in the cell's Tools menu, and the `terminal-restart` shortcut (the
+`mulmoterminal-keys` skill, no default binding) does the same; this button is for one click.
+
+## `commands` — entries for the command palette only
+
+`commands` is a list written **exactly like `buttons`** (same `run` types, `when`, `${var}`,
+folders) that the **command palette lists and the header never shows**. Use it for something run
+now and then, which does not deserve an icon on every header.
+
+- Both levels take it — `commands` in `~/.mulmoterminal/config.json` and in
+  `<project>/.mulmoterminal.json` — merged by id like buttons (the project's entry wins).
+- **No defaults**: absent means none.
+- The palette lists the commands, and also every header button (folders unpacked), of the terminal
+  it acts on — the enlarged one, or the one holding the cursor. `when` and `${var}` resolve against
+  that terminal, and a shell command runs there. With no terminal to act on, none are listed.
+- **Ids are shared with buttons**: a command whose id a button already has is dropped, because a
+  shell entry is run by its id.
+
+```json
+{
+  "commands": [
+    { "id": "release", "label": "Cut a release", "run": "shell", "cmd": "yarn release" },
+    { "id": "status", "label": "Ask for a status line", "run": "input", "text": "Summarise where this stands in one line." }
+  ]
+}
+```
 
 ## Chips — schema
 

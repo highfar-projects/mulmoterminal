@@ -1,24 +1,31 @@
 ---
 name: mulmoterminal-model
-description: Run MulmoTerminal sessions on something other than Anthropic's default, three ways — register an Anthropic-compatible backend (OpenRouter, Moonshot, a local Ollama bridge, a company gateway) as a `providers` entry in `~/.mulmoterminal/config.json`, which has no Settings UI; pin a `provider` / `model` per project in its `.mulmoterminal.json`; or add a `customAgents` entry, your OWN command line for starting Claude Code (`ollama launch claude --model … --`, a wrapper script, a pinned binary), which then appears in the Agent Picker beside Claude / Codex / Antigravity / Grok / Shell and gets Claude Code's own arguments appended. Knows the measured pass rates of the built-in model list, and the misconfigurations that break a session in ways that are hard to diagnose from inside it (a trailing `/v1`, too small an output budget, an API key written to disk, a provider named but never registered, a custom agent that swallows the arguments it is handed). Use when the user wants to use OpenRouter, Kimi, GLM, DeepSeek, Qwen, a local or self-hosted model, a cheaper model, a different Anthropic model for one project, or to launch Claude Code through a command of their own, or to run some cells on a second Claude Code / Codex subscription (`accounts`) — or when a session refuses to start, returns empty replies, or 404s after they changed models.
+description: Run MulmoTerminal sessions on something other than Anthropic's default, three ways — register an Anthropic-compatible backend (OpenRouter, Moonshot, a local Ollama bridge, a company gateway) as a `providers` entry in `~/.mulmoterminal/config.json` (also added in Settings → Models and backends); pin a `provider` / `model` per project in its `.mulmoterminal.json`; or add a `customAgents` entry, your OWN command line for starting Claude Code (`ollama launch claude --model … --`, a wrapper script, a pinned binary), which then appears in the Agent Picker beside Claude / Codex / Antigravity / Grok / Shell and gets Claude Code's own arguments appended. Knows the measured pass rates of the built-in model list, and the misconfigurations that break a session in ways that are hard to diagnose from inside it (a trailing `/v1`, too small an output budget, an API key written to disk, a provider named but never registered, a custom agent that swallows the arguments it is handed). Use when the user wants to use OpenRouter, Kimi, GLM, DeepSeek, Qwen, a local or self-hosted model, a cheaper model, a different Anthropic model for one project, or to launch Claude Code through a command of their own, or to run some cells on a second Claude Code / Codex subscription (`accounts`) — or when a session refuses to start, returns empty replies, or 404s after they changed models.
 ---
 
 # Run on another model
 
 The keys, and the job each one does:
 
-- **`~/.mulmoterminal/config.json` → `providers`** — register a backend once. No Settings UI.
+- **`~/.mulmoterminal/config.json` → `providers`** — register a backend once. Also added and
+  removed in Settings → Models and backends, which refuses a `/v1` base URL and a key in place of the
+  variable's name.
 - **`<project>/.mulmoterminal.json` → `provider` / `model`** — what this project launches on.
-  Both are defaults; the launch form can override them for a single session.
+  Both are defaults; the launch form can override them for a single session. Also a select in
+  Settings → Directory settings → Change here, which offers the models of the registered providers.
 - **`~/.mulmoterminal/config.json` → `customAgents`** — the user's own COMMAND for starting Claude
   Code, offered in the Agent Picker. For when the model is reached by running something else
   (`ollama launch claude …`, a wrapper script, a second Claude Code install) rather than by an
-  HTTP endpoint. No Settings UI.
+  HTTP endpoint. Also added and removed in Settings → Models and backends.
 - **`~/.mulmoterminal/config.json` → `accounts`** — a SECOND LOGIN for Claude Code or Codex (another
-  subscription), kept in its own config directory and picked per cell in the launch form. No Settings UI.
+  subscription), kept in its own config directory and picked per cell in the launch form. Also added
+  and removed in Settings → Models and backends.
+- **`~/.mulmoterminal/config.json` → `tokenRotation`** — several Claude subscriptions behind the ONE
+  default config directory, with MulmoTerminal choosing which one each new session runs on so the
+  weekly windows drain evenly. config.json only (beta).
 - **`~/.mulmoterminal/config.json` → `defaultAgent`** (or `--agent <id>` on the command line) —
   which of the seven agent CLIs a NEW cell starts as, and the only thing that relaxes the
-  Claude-Code-required check at start-up (#2082). No Settings UI.
+  Claude-Code-required check at start-up (#2082). Also a select in Settings → Models and backends.
 
 None is needed to use Anthropic's default. Only do this when the user asked for another model.
 
@@ -33,7 +40,8 @@ Picker starts on it.
 { "defaultAgent": "codex" }
 ```
 
-`--agent codex` does the same for one launch and is NOT written back to the file.
+`--agent codex` does the same for one launch and is NOT written back to the file. Settings →
+Models and backends → Default agent writes the same key, and offers an agent that is not installed only disabled.
 Valid ids: `claude`, `codex`, `antigravity`, `grok`, `muse`, `copilot`, `cursor`.
 
 **It does not re-point anything that already exists.** A grid cell records its agent only when it
@@ -107,7 +115,8 @@ hard to diagnose from inside it:
 For a model that is reached by **running a command** rather than by calling an endpoint. The entry
 becomes a button in the **Agent Picker** — the Claude / Codex / Antigravity / Grok / Shell toggle at the
 top of an empty cell — and picking it starts a real session: resumable transcript, cost and
-context, "waiting for you", GUI tools. Global only; no Settings UI.
+context, "waiting for you", GUI tools. Global only. Settings → Models and backends adds and removes
+entries (the id comes from the name there); write the file yourself for anything it does not cover.
 
 ```json
 {
@@ -209,11 +218,6 @@ account is its own config directory — its own login, transcripts, history and 
 launch form of an empty cell offers it in an ACCOUNT select under the model; the cell's header then
 names it. A user with no entries sees nothing change.
 
-**Settings → Models and backends has a form for this** (this fork): id, label, agent, config
-directory and an optional token env var, added inline — no JSON editing needed for the common case.
-Reach for this skill instead when the user wants the `oauthTokenEnvVar` explained, wants to migrate
-an older `{ id, label, configDir }` entry, or wants the full walkthrough (`/login`, the trust prompt).
-
 ```json
 {
   "accounts": [
@@ -229,14 +233,8 @@ an older `{ id, label, configDir }` entry, or wants the full walkthrough (`/logi
 | `label` | What the launch form and the cell show, ≤ 24 chars. |
 | `agent` | `"claude"` or `"codex"`. |
 | `home` | The config directory: absolute, or starting with `~/`. A relative path is dropped. Claude Code is started with `CLAUDE_CONFIG_DIR`, Codex with `CODEX_HOME`, set to it. |
-| `oauthTokenEnvVar` | Optional, claude only (this fork). The NAME of an env var in the server's environment holding a `claude setup-token` token for this login — never the token itself. It reaches the session as `CLAUDE_CODE_OAUTH_TOKEN` through the 0600 settings file. For a login nobody has run `/login` in. |
 
-Eight entries maximum. An older fork entry written as `{ id, label, configDir }` is still read, as a
-claude account with `home` = `configDir`; rewrite it in the shape above when you touch it.
-
-A project can name its default in its own `.mulmoterminal.json` (this fork): `"account": "work"`. A
-NEW session there starts on it when the launch form's ACCOUNT select is left on Default login; an
-id belonging to another agent's account is ignored for that agent. A worktree inherits it.
+Eight entries maximum.
 
 ### Signing in
 
@@ -266,6 +264,61 @@ switches — handed to it at launch.
   not in `providers`' `env`. MulmoTerminal then reads the default directory while the session writes
   elsewhere, so the session list, resume, cost and history all come back empty.
 - A partial `POST /api/config` merge like the others: send `accounts` **complete**.
+
+## Several subscriptions, chosen per session — `tokenRotation` (beta)
+
+For a user with more than one Claude subscription who wants them used EVENLY without picking one
+per cell. Unlike `accounts`, every conversation stays in the default `~/.claude`, so any session can
+be resumed on any subscription — the same as switching with `/login`, done automatically.
+
+1. For each subscription, the user runs `claude setup-token` in their OWN terminal (it signs in
+   through the browser) and stores the printed token, e.g. in the macOS keychain:
+   `security add-generic-password -a mulmoterminal -s mulmoterminal-token-a -w` (with nothing after
+   `-w` it prompts, so the token never reaches the shell history). **Never ask the user to paste a
+   token into the chat, and never write one into config.json** — an entry names where it is kept.
+2. Add the key:
+
+```json
+"tokenRotation": {
+  "enabled": true,
+  "includeDefaultLogin": true,
+  "tokens": [
+    { "id": "a", "label": "Personal", "email": "me@example.com", "keychain": "mulmoterminal-token-a" },
+    { "id": "b", "label": "Work", "email": "me@work.example", "file": "~/.mulmoterminal/tokens/b" }
+  ]
+}
+```
+
+- `keychain` is read with `security find-generic-password -a <keychainAccount> -s <keychain> -w`;
+  `keychainAccount` defaults to `mulmoterminal`. Off macOS, use `file` (a file holding only the
+  token). It must be `chmod 600` and owned by the user: a file anyone else can read is refused,
+  with the reason in the server log. Exactly one of the two per entry; an entry with both or neither is dropped.
+- `email` is what the user signs in with — shown beside that token's usage so they can tell which
+  subscription is which. MulmoTerminal cannot read it from the token.
+- `includeDefaultLogin` (default `true`): the `/login` credential is one more candidate. Once EVERY
+  subscription is a token, advise `false`: the `/login` account is always one of them, so it would be
+  counted twice, and which one it duplicates changes whenever the user runs `/login` again.
+- **How it chooses**: by the 7-day window's remaining percent per hour until it resets, highest first
+  — room that is about to reset is used before it is lost — divided by one plus the sessions already
+  running on it, so cells opened together spread over several subscriptions. A token whose 5-hour window is at 90% or
+  more, or whose 7-day window is at 98% or more, is skipped; so is one whose usage probe found it at
+  its limit. Each token's usage is measured by a short probe
+  under that token, and appears as its own gauge beside the header's usage gauge.
+- **Which cells rotate**: a plain Claude cell on the default directory only. A provider, a custom
+  agent or an `accounts` login already says whose subscription it runs on and is never rotated.
+- A token is chosen when a session's process STARTS (new, or resumed after it exited). A running
+  session keeps its token; reconnecting to it changes nothing.
+- **At 98%**: a session that ends a turn on a subscription at 98% (either window) moves to another one
+  then, between turns.
+- **When a running session hits its limit**, it moves by itself: that subscription is held out, the
+  cell reconnects and resumes the same conversation on the next choice, and prints one line naming
+  both. The prompt that hit the limit is NOT re-sent — the user sends it again. If every other
+  subscription is held out too, the session stays where it is with Claude Code's own limit message.
+  Only sessions rotation started are moved; a provider's 429 never is.
+- The cell's header names the subscription it runs on. Claude Code's own `/status` may still name the
+  `/login` account — only a display; usage is counted against the header's subscription.
+- A token that cannot be read is skipped for that spawn, with a warning in the server log naming the
+  entry (never the value).
 
 ## Choosing a model — never invent an id
 

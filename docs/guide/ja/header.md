@@ -60,6 +60,8 @@ Actions** が並びます。GitLab（gitlab.com、または `gitlabHosts` に書
 
 ## 2. 最初のボタンを 1 個足す {#first-button}
 
+**JSON を書かずに:** 設定 → **ヘッダーのボタンとチップ** で、すべての端末にボタンを足せます。新しいセルでコマンドを実行する、エージェントに文字を入力する、何かを開く（URL・フォルダ・アプリの画面・このブランチの PR・ファイル選択）、アプリの名前付きの操作を実行する、の 4 種類で、アイコンと出す条件も付けられます。今あるボタンは、行の鉛筆で中身を直せ（id と位置はそのまま）、削除と並べ替えもできます。行のフォルダのアイコンで、そのボタンを既存のフォルダか、その場で名前を付けた新しいフォルダに入れられます。フォルダの中のボタンはその下に並び、外に出すとフォルダのすぐ後ろに置かれます（最後の 1 つを出すとフォルダは消えます）。それ以外は下のように書きます。
+
 ### どのファイルに書くか {#where}
 
 | ファイル | 効く範囲 |
@@ -192,22 +194,55 @@ Actions** が並びます。GitLab（gitlab.com、または `gitlabHosts` に書
 > **1 つのボタンには 1 つだけ書いてください。** 複数書くと上の順で**最初の 1 つだけ**が効き、
 > 残りは黙って無視されます。
 
-### `run: "action"` — このセルのエージェントを再起動する {#run-action}
+### `run: "action"` — このセルに対する操作 {#run-action}
 
-セル自身に効く操作です。今のところ 1 つだけ:
+セル自身に効く操作です（表の最後のツールバーの操作は、アプリに効きます）。名前は
+[キーボードショートカット](config.html#keymap)と同じなので、同じ操作をボタン・キー・コマンドパレットの
+どれからでも使えます（ツールバーの操作は、パレットでは画面・設定・切り替えの行として出ます）:
+
+| `action` | 動作 |
+|---|---|
+| `"terminal-new-here"` | このセルのディレクトリで**起動パネル**を開く。Claude・Codex・シェルなどを選んで起動できる（2段目の **＋** と同じ） |
+| `"terminal-new-adjacent"` | このセルのディレクトリで**シェル**をすぐ起動する |
+| `"terminal-restart"` | このセルのエージェントを再起動する（下記） |
+| `"terminal-close"` | このセルを閉じる |
+| `"zoom-toggle"` | このセルを拡大する / 元に戻す |
+| `"terminal-move-prev"` / `"terminal-move-next"` | このセルを1つ前 / 後ろへ移す（手動の並び順のときのみ） |
+| `"mark-unread"` | このセルを未読 / 既読にする |
+| `"terminal-park"` | このセルを休ませる / 起こす |
+| `"terminal-timeline"` | **アクティビティのタイムライン**（Claude のセッションのみ） |
+| `"terminal-talk"` | **他のターミナルと話す** |
+| `"terminal-copy-code"` | 最新の返事の**最後のコードブロックをコピー**する（2段目のコピーボタンと同じ） |
+| `"terminal-insert-path"` / `"terminal-reveal"` | 入力欄に**ファイルのパスを挿入**する / **ディレクトリをファイルマネージャで開く**（パスメニューの項目と同じ） |
+| `"terminal-voice"` | **音声入力**のオン / オフ（マイク） |
+| `"terminal-diff"` / `"terminal-note"` | **変更パネル**を開く（変更のある worktree） / **メモ**を書く・直す |
+| `"pane-files"` | このセルの横に**ファイルペイン**を開く |
+| `"pane-prompts"` / `"pane-transcript"` | **送ったプロンプト** / **会話**のペイン |
+| `"pane-tools"` / `"pane-canvas"` / `"pane-collections"` | **使ったツール** / **キャンバス** / **コレクション**のペイン |
+| `"screen-wiki"`・`"screen-collections"` など（`screen-*` のすべて） | **その画面へ移動**する（ツールバーの入口と同じ） |
+| `"settings-open"` / `"sound-toggle"` / `"view-toggle"` | 設定を開く / 通知音のオン・オフ / 拡大時の表示を一覧・サムネイル列で切り替える |
+| `"order-auto"` / `"order-manual"` / `"order-priority"` | 並び順を選ぶ |
+| `"page-next"` / `"page-prev"` | グリッドの次 / 前のページへ |
+| `"terminal-reopen"` | 最後に閉じたターミナルを開き直す |
+
+ペインのボタンは、拡大中のセルではそのペインの開閉を切り替えます。並べて表示しているセルでは、
+「アプリでファイルを見る」と同じく、セルを拡大してからペインを開きます。そのセルでできないとき
+（Claude 以外のセッションで `terminal-timeline`、ほかのターミナルが無いときの `terminal-talk`、手動の
+並び順でないときの移動）は、何もしないのではなくセルにその旨が出ます。名前をショートカットと共通に
+する前の `"restart"` も、そのまま使えます。
 
 ```json
-{ "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "restart" }
+{ "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "terminal-restart" }
 ```
 
-`"restart"` は、エージェントのプロセスを終了して、**同じセル・同じディレクトリ・同じ会話のまま**起動し
+`"terminal-restart"` は、エージェントのプロセスを終了して、**同じセル・同じディレクトリ・同じ会話のまま**起動し
 直します。ランチャーに戻ってディレクトリを選び直し、*or resume here* から会話を探す必要はありません。
 MCP の登録変更・`~/.mulmoterminal/config.json` の編集・plugin の更新が効くようになるのはこれです。
 これらはプロセス起動時に一度だけ読まれるからです。
 
 > **resume の代償があり、確認は出ません。** 会話は transcript から読み直され、実際にトークンを消費します。
-> 作業中でもエージェントは終了します。組み込みの Restart ボタンはありません。このボタンと
-> [`terminal-restart` ショートカット](config.html#keymap)が、再起動する手段のすべてです。
+> 作業中でもエージェントは終了します。このボタンのほかに、セルの道具メニューと
+> [`terminal-restart` ショートカット](config.html#keymap)からも再起動できます。
 
 ### ボタンをフォルダにまとめる {#folder}
 
@@ -218,7 +253,7 @@ MCP の登録変更・`~/.mulmoterminal/config.json` の編集・plugin の更�
 ```json
 { "id": "ops", "icon": "construction", "label": "Operations",
   "items": [
-    { "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "restart" },
+    { "id": "restart", "icon": "restart_alt", "label": "Restart the agent", "run": "action", "action": "terminal-restart" },
     { "id": "test", "icon": "science", "label": "Run the tests", "run": "shell", "cmd": "yarn test" }
   ] }
 ```
@@ -227,6 +262,23 @@ MCP の登録変更・`~/.mulmoterminal/config.json` の編集・plugin の更�
 - フォルダ自体の `when` は、フォルダごと出すかを決めます。中のボタンはそれぞれ自分の `when` を持てます。
   中のボタンがすべて隠れるときは、フォルダも出ません。
 - `id` はフォルダの中と外を通して一意です。すでに使われている `id` を持つフォルダ内のボタンは捨てられます。
+
+### コマンドパレットにだけ出すコマンド {#commands}
+
+たまにしか実行しないものに、毎回ヘッダーのアイコンは要りません。`buttons` の代わりに **`commands`** に
+書くと、**書き方はまったく同じ**（`run`、`when`、`${変数}`、フォルダ）で、**コマンドパレット**
+（ツールバーのコマンドボタンか、`command-palette` に割り当てたキー）にだけ出ます。
+
+```json
+{ "commands": [
+    { "id": "release", "label": "Cut a release", "run": "shell", "cmd": "yarn release" }
+  ] }
+```
+
+- `~/.mulmoterminal/config.json` とプロジェクトの `.mulmoterminal.json` のどちらにも書けて、ボタンと同じく `id` でマージされます。
+- パレットには、操作の対象のターミナル（拡大中のもの、なければカーソルのあるもの）の**コマンドとヘッダーのボタンが全部**並びます。
+  `when` と `${変数}` はそのターミナルについて決まり、`shell` のコマンドはそこで動きます。対象のターミナルが無いときは並びません。
+- ボタンがすでに使っている `id` のコマンドは捨てられます。
 
 ---
 

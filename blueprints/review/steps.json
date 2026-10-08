@@ -13,7 +13,9 @@
       "description": "指摘ごとに直し方を書き、案を反映した文書を原本とは別のファイルに作る。",
       "skill": "skills/propose",
       "check": "node \"$BLUEPRINT_USECASE/checks/findings.mjs\" propose",
-      "gates": ["review"]
+      "gates": ["review"],
+      "reads": [".blueprint/findings.txt"],
+      "revises": [".blueprint/findings.json"]
     },
     {
       "id": "report",

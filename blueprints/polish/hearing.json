@@ -4,6 +4,7 @@
       "id": "targets",
       "label": "整えたい文書（ファイル・フォルダを 1 行に 1 つ。このフォルダの中の場所で）",
       "why": "候補はこの中から選ぶ",
+      "placeholder": "例:\ndocs/\nREADME.md",
       "kind": "text",
       "lines": true,
       "pick": "files"
@@ -13,25 +14,90 @@
       "label": "どの規約に合わせますか",
       "why": "このフォルダに「規約をつくる」で作った STYLE.md と chaff.yaml があれば、それに合わせる",
       "kind": "select",
-      "options": ["このフォルダの規約（STYLE.md と chaff.yaml）", "chaff の既定のまま"]
+      "options": ["このフォルダの規約（STYLE.md と chaff.yaml）", "chaff の既定のまま"],
+      "needsPath": {
+        "このフォルダの規約（STYLE.md と chaff.yaml）": "chaff.yaml"
+      }
+    },
+    {
+      "id": "kind",
+      "label": "どんな文書ですか",
+      "why": "種類ごとの物差し（文の長さの上限、太字の多さなど）で chaff が測る",
+      "kind": "select",
+      "options": [
+        "指定しない（chaff に任せる）",
+        "ブログ（技術記事）",
+        "ブログ（エッセイ・読み物）",
+        "会社のサイトの記事（オウンドメディア）",
+        "報告書",
+        "提案書・企画書",
+        "メール",
+        "プレスリリース",
+        "議事録",
+        "マニュアル・手順書",
+        "README・技術文書",
+        "仕様書",
+        "契約書・利用規約",
+        "規程・社内規則",
+        "よくある質問（FAQ）",
+        "用語集",
+        "判決文",
+        "特許明細書",
+        "論文",
+        "小説・物語",
+        "文学のエッセイ・随筆",
+        "詩",
+        "戯曲・脚本",
+        "演説・挨拶の原稿",
+        "書き起こし（会見・会議での発言の記録）"
+      ],
+      "default": "指定しない（chaff に任せる）",
+      "showIf": {
+        "id": "style",
+        "equals": "chaff の既定のまま"
+      }
     },
     {
       "id": "scope",
       "label": "どこまで直しますか",
       "why": "機械が見つけた所だけか、手引きの決まり（語調・表記など）にも合わせるか",
       "kind": "select",
-      "options": ["chaff が指摘した所だけ", "手引き（STYLE.md）の決まりにも合わせる"]
+      "options": ["chaff が指摘した所だけ", "手引き（STYLE.md）の決まりにも合わせる"],
+      "needsPath": {
+        "手引き（STYLE.md）の決まりにも合わせる": "STYLE.md"
+      },
+      "showIf": {
+        "id": "style",
+        "equals": "このフォルダの規約（STYLE.md と chaff.yaml）"
+      }
+    },
+    {
+      "id": "shelved",
+      "label": "棚上げした指摘も直しますか",
+      "why": "「既存の文書に chaff を入れる」で棚上げした指摘は、ふだん chaff が黙っている。直すと、残りが少しずつ減る",
+      "kind": "select",
+      "options": ["新しい指摘だけ", "棚上げした指摘も直す"],
+      "default": "新しい指摘だけ",
+      "needsPath": {
+        "棚上げした指摘も直す": ".chaff-baseline.json"
+      },
+      "showIf": {
+        "id": "style",
+        "equals": "このフォルダの規約（STYLE.md と chaff.yaml）"
+      }
     },
     {
       "id": "maxFiles",
       "label": "今回整えるファイルの数の上限",
       "why": "一回の作業を区切る。残りは次の回に回す",
-      "kind": "number"
+      "kind": "number",
+      "default": 5
     },
     {
       "id": "avoid",
       "label": "触らないでほしいファイルや場所（任意）",
       "why": "候補から外す",
+      "placeholder": "例: docs/legal/（法務が確認済みのため）",
       "kind": "text",
       "required": false
     }

@@ -7,9 +7,14 @@ import { readFileSync } from "node:fs";
 import { createPubSub } from "./infra/pubsub.js";
 import { hideErrorStacks } from "./infra/hide-error-stacks.js";
 import { allowedToolNames, autoAllowedToolNames, toolSummaries } from "./infra/plugins-registry.js";
-import { getPlayfulEffects, getUserMcpServers, APP_CONFIG_FILE } from "./config/config-routes.js";
+import { getPlayfulEffects, getUserMcpServers, getTokenRotation, APP_CONFIG_FILE } from "./config/config-routes.js";
+import { rotateNearLimit, rotateOnLimit, type LimitRotationDeps, type LimitRotationOutcome } from "./session/limit-rotation.js";
+import { noteMovedFrom } from "./session/rotation-notice.js";
+import { sessionToken } from "./session/token-sessions.js";
+import { rotationLoginLabel } from "../common/tokenRotation.js";
+import { countLiveSessions } from "./agents/token-assignment.js";
 import { enforceKeymap } from "./config/keymap-check.js";
-import { tmuxCancelCopyMode, tmuxPaneInMode, tmuxPanePidsAsync, tmuxRedrawClient, tmuxTerminalModes, tmuxWindowSize } from "./infra/tmux.js";
+import { tmuxCancelCopyMode, tmuxPaneInMode, tmuxPanePidsBySessionAsync, tmuxRedrawClient, tmuxTerminalModes, tmuxWindowSize } from "./infra/tmux.js";
 import { browserOriginHostnames, createIsAllowedOrigin } from "./infra/allowed-origin.js";
 import { serverErrorExit } from "./infra/server-exit.js";
 import { PORT, BIND_HOST, CLAUDE_CWD } from "./config/env.js";
@@ -75,6 +80,7 @@ import { onListening } from "./infra/on-listening.js";
 import { startHookSocketListener } from "./infra/hook-socket.js";
 import { installProcessGuards } from "./infra/process-guards.js";
 import { setProcessTitle } from "../bin/process-title.js";
+import { enableShapeScriptManifold } from "./infra/shapescript-csg.js";
 
 // Register the top-level uncaughtException/unhandledRejection guards before any async boot
 // work runs, so a single unhandled error can't silently kill the backend and disconnect
@@ -206,13 +212,7 @@ const heatWatch = createHeatWatch({
   enabled: () => getPlayfulEffects() !== "off",
   connectedSessions: () => new Map([...ptys].flatMap(([id, entry]) => (entry.ws ? [[id, entry.ws] as const] : []))),
   listProcesses: () => listProcessRows(),
-  listPanePids: async () => {
-    const byPid = await tmuxPanePidsAsync();
-    if (!byPid) return null;
-    const bySession = new Map<string, number[]>();
-    byPid.forEach((id, pid) => bySession.set(id, [...(bySession.get(id) ?? []), pid]));
-    return bySession;
-  },
+  listPanePids: tmuxPanePidsBySessionAsync,
   publish: (id, level, finale) => {
     const frame: HeatFrame = { type: "heat", level, finale };
     sendFrame(ptys.get(id)?.ws, frame);
@@ -277,6 +277,17 @@ const { forgetTitle, noteTitleTurn, maybeGenerateTitle, freshenRosterTitle } = c
   resolveTitle: (input) => resolveSessionTitle(input),
 });
 
+// The 5h / 7d rate-limit gauge (#387) — store, Codex reading and Claude probe (rate-limit-service.ts).
+// Before the spawners: a new claude session's rotation token is chosen from its readings (#2919).
+// A new session's token is shared among the claude sessions already running on it (#2926).
+const rateLimits = createRateLimitService((tokenId) =>
+  countLiveSessions(
+    [...ptys].filter(([, entry]) => entry.agent === "claude").map(([sessionId]) => sessionId),
+    sessionToken,
+    tokenId,
+  ),
+);
+
 // The PTY spawners (session/spawn-*.ts). They take what index.ts still owns — the session
 // lifecycle it drives, and this file's port and live user config bound into the two payload
 // builders (session/hook-settings.ts, session/mcp-config.ts) — as deps.
@@ -308,6 +319,8 @@ const spawnDeps: SpawnDeps = {
   publishSessionCreated: (sessionId) => pubsub?.publish(SESSIONS_CHANNEL, { id: sessionId, working: false, event: "created" }),
   publishActivity: (sessionId) => publishActivity(sessionId),
   publishPromptSubmitted: (sessionId) => pubsub?.publish(PROMPT_SUBMITTED_CHANNEL, { sessionId } satisfies PromptSubmittedEvent),
+  assignToken: () => rateLimits.assignToken(),
+  keptAssignment: (tokenId) => rateLimits.keptAssignment(tokenId),
 };
 const { spawnClaudePty } = createClaudeSpawner(spawnDeps);
 const { spawnCodexPty } = createCodexSpawner(spawnDeps);
@@ -377,9 +390,6 @@ enforceKeymap(APP_CONFIG_FILE, {
 const browserHostnames = browserOriginHostnames(BIND_HOST, process.env.MULMOTERMINAL_ALLOWED_ORIGINS);
 const isAllowedOrigin = createIsAllowedOrigin(browserHostnames);
 
-// The 5h / 7d rate-limit gauge (#387) — store, Codex reading and Claude probe (rate-limit-service.ts).
-const rateLimits = createRateLimitService();
-
 // What a removed feature left on disk (infra/legacy-cleanup.ts). Fire-and-forget.
 runLegacyCleanupsOnce();
 
@@ -391,9 +401,28 @@ hideErrorStacks(app);
 // Generous body limit: PostToolUse hook payloads carry the tool's full output
 // (a big Read/Bash result can blow past Express's 100kb default, which would 413
 // the hook and leave its tool-call entry stuck on "running").
+// A rotated session moves to another credential when it hits its usage limit, or ends a turn at the
+// switch line (session/limit-rotation.ts).
+const limitRotationDeps: LimitRotationDeps = {
+  rotationEnabled: () => getTokenRotation().enabled,
+  sessionToken,
+  markSpent: rateLimits.markSpent,
+  hasFreeChoice: rateLimits.hasFreeChoice,
+  isNearLimit: rateLimits.isNearLimit,
+  entryOf: (id) => ptys.get(id),
+  reap: (id) => reap(id),
+  labelOf: (tokenId) => rotationLoginLabel(getTokenRotation(), tokenId),
+  noteMovedFrom,
+};
+const logMove = (sessionId: string, why: string, outcome: LimitRotationOutcome): void => {
+  if (outcome !== "not-rotated" && outcome !== "below-limit") console.log(`[token-rotation] ${sessionId} ${why}: ${outcome}`);
+};
+
 mountAppRoutes(app, {
   clientDir: __dirname,
   rateLimits,
+  onRateLimited: (sessionId) => logMove(sessionId, "hit its usage limit", rotateOnLimit(limitRotationDeps, sessionId)),
+  onTurnEnded: (sessionId) => logMove(sessionId, "ended a turn at the switch line", rotateNearLimit(limitRotationDeps, sessionId)),
   isAllowedOrigin,
   publish: (channel, data) => pubsub?.publish(channel, data),
   sessionChannel,
@@ -450,6 +479,9 @@ pubsub = createPubSub(listeners, isAllowedOrigin);
 // before the scheduler that triggers it is registered.
 await initBackends({ pubsub, spawnClaudePty, retain: (sessionId) => scheduledSessions.register(sessionId) });
 
+// ShapeScript CSG through manifold before the first request (infra/shapescript-csg.ts).
+await enableShapeScriptManifold();
+
 // Let a phone drive MulmoTerminal over the Firestore command channel
 // (backends/remoteHost/hostBindings.ts).
 initRemoteHost({
@@ -478,7 +510,7 @@ startDecisionDigestSchedule();
 // User-task scheduler: cron tasks from config/scheduler/tasks.json fire on schedule
 // and spawn a NEW chat seeded with the task's prompt (e.g. the workout-log weekly
 // nudge). Non-fatal: a scheduler failure must never abort startup.
-initScheduling({ spawnChat: scheduledSessions.spawnScheduledChat, projectRoots: listProjectRoots().map((project) => project.cwd) });
+initScheduling({ spawnChat: scheduledSessions.spawnScheduledChat, projectRoots: () => listProjectRoots().map((project) => project.cwd) });
 
 // The terminal WebSocket endpoints (routes/ws-routes.ts).
 mountTerminalWebSockets({

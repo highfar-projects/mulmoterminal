@@ -16,6 +16,10 @@
 // belongs upstream, where it runs against the parser's own source, and it is there. What this
 // host can usefully pin is that no build WITHOUT that fix can be the one installed here.
 //
+// The fix shipped as @mulmoclaude/shapescript-plugin 1.1.1. The package moved to
+// receptron/gui-chat-plugins as @gui-chat-plugin/shapescript, continuing the same version
+// line from 8.0.0, so the floor still means the same build under the new name.
+//
 // Reads what is INSTALLED as well as what is declared, for the reason mulmoclaudePeerRanges
 // gives: a range resolves to one version, and that version is the one that runs.
 import { describe, it, expect } from "vitest";
@@ -25,7 +29,7 @@ import { dirname, join } from "node:path";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-const PKG = "@mulmoclaude/shapescript-plugin";
+const PKG = "@gui-chat-plugin/shapescript";
 /** The first build where an unmatched brace throws instead of looping (mulmoclaude#3058). */
 const FLOOR = [1, 1, 1] as const;
 

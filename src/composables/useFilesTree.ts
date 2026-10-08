@@ -23,6 +23,9 @@ export interface TreeNode {
   children: TreeNode[];
 }
 
+/** The tree's root as if it were a row — what a menu opened on no row, or in an empty folder, acts on. */
+export const ROOT_ROW: TreeNode = { name: "", path: "", dir: true, size: 0, expanded: true, loaded: true, children: [] };
+
 /** One visible row: a node and how deep it sits, so the template renders a flat list rather than a
  *  recursive component. */
 export interface TreeRow {
@@ -72,14 +75,26 @@ export function findIn(nodes: TreeNode[], target: string): TreeNode | null {
  *  Without that, a tree painted from the cache collapses under the user a round trip after they
  *  clicked it — which is exactly the window the cache exists to fill. What is carried is REAL:
  *  those children were fetched, whatever painted the parent. */
-export function adoptListing(before: TreeNode[] | null, entries: ListingEntry[]): TreeNode[] {
+export function adoptListing(before: TreeNode[] | null, entries: ListingEntry[], parentPath = ""): TreeNode[] {
   const open = new Map((before ?? []).filter((node) => node.loaded).map((node) => [node.path, node]));
   return entries.map((entry) => {
-    const node = makeNode(entry, "");
+    const node = makeNode(entry, parentPath);
     const was = open.get(node.path);
     if (was?.dir && node.dir) Object.assign(node, { children: was.children, loaded: true, expanded: was.expanded });
     return node;
   });
+}
+
+/** A directory's children read again, keeping what is open under it. One never opened is left
+ *  alone, and one that cannot be read keeps the listing on screen. */
+async function refreshDir(roots: TreeNode[], cwd: string | null, dirRel: string): Promise<void> {
+  const node = findIn(roots, dirRel);
+  if (!node?.dir || !node.loaded) return;
+  try {
+    node.children = adoptListing(node.children, await fetchListing(cwd, node.path), node.path);
+  } catch {
+    // The next open of the directory reads it again.
+  }
 }
 
 /** One directory's listing, off the wire. */
@@ -101,6 +116,9 @@ export interface FilesTree {
   rows: ComputedRef<TreeRow[]>;
   loadRoot: () => Promise<void>;
   toggleDir: (node: TreeNode) => Promise<void>;
+  /** Read one directory again (the root for ""), keeping what is open under it (#2578). A directory
+   *  that was never opened is left alone; it is read when it is. */
+  refresh: (dirRel: string) => Promise<void>;
   findNode: (target: string) => TreeNode | null;
   /** Nothing has been read for the root this pane is moving to. Bumps the generation too, so an
    *  answer already in flight cannot land in the new tree. */
@@ -161,6 +179,7 @@ export function useFilesTree(cwd: () => string | null): FilesTree {
     rows: computed(() => flattenRows(roots.value ?? [])),
     loadRoot,
     toggleDir,
+    refresh: (dirRel) => (dirRel === "" ? loadRoot() : refreshDir(roots.value ?? [], cwd(), dirRel)),
     findNode: (target) => findIn(roots.value ?? [], target),
     reset: () => {
       reqId += 1;

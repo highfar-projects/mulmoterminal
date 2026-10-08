@@ -29,7 +29,7 @@ import { EMPTY_TURN, type LastTurn } from "../session/last-turn.js";
 const readString = (value: unknown): string => (typeof value === "string" ? value : "");
 
 /** The `content` array of a transcript record, or an empty one for anything else. */
-function contentOf(record: Record<string, unknown>): unknown[] {
+export function contentOf(record: Record<string, unknown>): unknown[] {
   if (!isRecord(record.message)) return [];
   const content: unknown = record.message.content;
   return Array.isArray(content) ? content : [];

@@ -20,7 +20,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { classifyFilePath } from "@mulmoclaude/core/artifacts";
 import { MARKDOWN_EXTENSIONS, HTML_EXTENSIONS } from "@mulmoclaude/core/files";
 import { isPresentableHtmlPath } from "@mulmoclaude/html-plugin";
-import { SHAPE_EXTENSIONS } from "@mulmoclaude/shapescript-plugin";
+import { SHAPE_EXTENSIONS } from "@gui-chat-plugin/shapescript";
 import { isRecord } from "../../common/isRecord.js";
 import { SESSION_ID_RE } from "../config/env.js";
 import { isSamePath } from "../infra/path-within.js";
@@ -63,6 +63,8 @@ export const PRESENT_PATH_EXTENSIONS = new Map<string, readonly string[]>([
   ["renderShapeScript", SHAPE_EXTENSIONS],
   // exportShapeScriptUsdz too — third taker of the same `path`.
   ["exportShapeScriptUsdz", SHAPE_EXTENSIONS],
+  // exportShapeScriptStl — the same `path`, for a printable STL.
+  ["exportShapeScriptStl", SHAPE_EXTENSIONS],
   // manageShapeScript (publish / update by `path`) — fourth.
   ["manageShapeScript", SHAPE_EXTENSIONS],
 ]);

@@ -25,9 +25,10 @@ export interface RosterPoll {
 export function useRosterPoll(refresh: () => void, expandedUid: Ref<number | null>, onRoute: () => boolean): RosterPoll {
   let rosterTimer: ReturnType<typeof setInterval> | null = null;
   // The roster is shown only while zoomed AND in list mode (the grid can be zoomed into the
-  // thumbnail strip instead).
+  // thumbnail strip instead). On the grid's route too: the palette can switch the view from another
+  // screen (#2458).
   const listModeOn = ref(true);
-  const rosterVisible = () => expandedUid.value !== null && listModeOn.value;
+  const rosterVisible = () => expandedUid.value !== null && listModeOn.value && onRoute();
 
   const startPoll = () => {
     if (!rosterVisible() || rosterTimer !== null) return;

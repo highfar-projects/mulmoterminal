@@ -3,12 +3,14 @@
 // document (chaff cite). What the facts mean is decided later, by machine, in report.mjs.
 import { writeFileSync } from "node:fs";
 import { fromBase } from "./base.mjs";
-import { shapeProblems, unquotedValues } from "./facts.mjs";
+import { FACT_KINDS, shapeProblems, unquotedValues } from "./facts.mjs";
+import { factsText } from "./factsView.mjs";
 const { fail, quotationProblems, readJson } = await import(fromBase("chaff.mjs"));
 const { documentSource, documentsNamed, fingerprint } = await import(fromBase("documents.mjs"));
+const { placeNamer } = await import(fromBase("places.mjs"));
 
 const FACTS = ".blueprint/facts.json";
-const SHAPE = '{ "events": [...], "amounts": [...], "totals": [...] }';
+const SHAPE = '{ "events": [...], "amounts": [...], "totals": [...], "products": [...] }';
 
 const answers = readJson(".blueprint/answers.json", "the interview answers");
 const documents = documentsNamed(answers?.documents);
@@ -17,9 +19,9 @@ const facts = readJson(FACTS, SHAPE);
 const malformed = shapeProblems(facts);
 if (malformed.length > 0) fail(`${FACTS}:\n${malformed.map((line) => "  " + line).join("\n")}`);
 
-const entries = ["events", "amounts", "totals"].flatMap((key) => (facts[key] ?? []).map((entry) => ({ key, entry })));
+const entries = FACT_KINDS.flatMap((key) => (facts[key] ?? []).map((entry) => ({ key, entry })));
 if (entries.length === 0)
-  fail(`${FACTS} holds no events, amounts or totals: extract what the documents say, or say in the report that there was nothing to check`);
+  fail(`${FACTS} holds no events, amounts, totals or products: extract what the documents say, or say in the report that there was nothing to check`);
 
 const unquoted = entries.flatMap(({ key, entry }) => unquotedValues(key, entry).map((value) => `  ${entry.id}: ${value} is not in its quotation`));
 if (unquoted.length > 0) fail(`values that were not read from the quoted text:\n${unquoted.join("\n")}`);
@@ -32,4 +34,6 @@ const missing = quotationProblems(
 if (missing.length > 0) fail(missing.join("\n"));
 
 writeFileSync(".blueprint/.facts-checked", fingerprint(FACTS));
+// The facts as a person reads them before approving the report.
+writeFileSync(".blueprint/facts.txt", factsText(facts, placeNamer(documentSource(documents))));
 console.log(`${entries.length} fact(s), each written in its quotation, and every quotation found in the documents`);

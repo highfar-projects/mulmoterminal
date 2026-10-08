@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { askTheMachine, bankText, browseQuery, writeBuffer } from "../../../src/components/filesPaneApi";
+import { setRemoteServer, REMOTE_SERVER_DECLINE_EN } from "../../../src/composables/remoteServer";
 
 // These outcomes are the ones that matter most in the Files pane and were the hardest to arrange
 // while they lived inside it: a save that LOSES the version race, a backup store that refuses, a
@@ -44,7 +45,17 @@ describe("browseQuery", () => {
 describe("writeBuffer", () => {
   it("reports the new version on a save", async () => {
     globalThis.fetch = answering({ status: 200, body: { ok: true, version: "v2" } });
-    expect(await writeBuffer("path=a.ts", "hi", "v1")).toEqual({ status: "saved", version: "v2" });
+    expect(await writeBuffer("path=a.ts", "hi", "v1")).toEqual({ status: "saved", version: "v2", dirConfig: null });
+  });
+
+  // #2624: a directory config's save carries what took; any other file carries nothing.
+  it("reads the directory-config report a save carries", async () => {
+    globalThis.fetch = answering({ status: 200, body: { ok: true, version: "v2", dirConfig: { parsed: true, ignored: ["headerColor"], unknown: [] } } });
+    expect(await writeBuffer("path=.mulmoterminal.json", "{}", "v1")).toEqual({
+      status: "saved",
+      version: "v2",
+      dirConfig: { parsed: true, ignored: ["headerColor"], unknown: [] },
+    });
   });
 
   // 409 is the agent in this very directory having written the file first. Nothing was saved, and
@@ -72,7 +83,7 @@ describe("writeBuffer", () => {
 
   it("reports no version when the body's is not a string", async () => {
     globalThis.fetch = answering({ status: 200, body: { version: 7 } });
-    expect(await writeBuffer("path=a.ts", "hi", null)).toEqual({ status: "saved", version: null });
+    expect(await writeBuffer("path=a.ts", "hi", null)).toEqual({ status: "saved", version: null, dirConfig: null });
   });
 });
 
@@ -116,5 +127,18 @@ describe("askTheMachine", () => {
   it("names the subject when the request never got out", async () => {
     globalThis.fetch = refusing("Failed to fetch");
     expect(await askTheMachine("/api/files/open", "/proj/a.ts", "could not open a.ts")).toBe("could not open a.ts: Failed to fetch");
+  });
+});
+
+// #2669 (experimental). Reveal and open-in-OS act on the server's screen; with remoteServer neither is sent.
+describe("askTheMachine with remoteServer", () => {
+  it("sends nothing and says why", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    setRemoteServer(true);
+    expect(await askTheMachine("/api/files/open", "/proj/a.ts", "could not open a.ts")).toBe(REMOTE_SERVER_DECLINE_EN);
+    expect(fetchMock).not.toHaveBeenCalled();
+    setRemoteServer(false);
+    vi.unstubAllGlobals();
   });
 });

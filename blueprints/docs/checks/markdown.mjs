@@ -82,3 +82,33 @@ export const skeletonChanges = (before, after) => {
     ...(differs(was.links, now.links) ? ["link targets"] : []),
   ];
 };
+
+const headingLevel = (line) => /^(#{1,6}) /u.exec(line)?.[1].length ?? 0;
+
+/**
+ * The text under the first `##` or `###` heading starting with one of `names` (the depths a report's sections may
+ * have), up to the next heading at the same depth or above. Empty when there is none.
+ */
+export const sectionText = (markdown, names) => {
+  const lines = String(markdown).split("\n");
+  const start = lines.findIndex((line) => [2, 3].includes(headingLevel(line)) && names.some((name) => line.replace(/^#+ /u, "").trim().startsWith(name)));
+  if (start < 0) return "";
+  const depth = headingLevel(lines[start] ?? "");
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((line) => headingLevel(line) > 0 && headingLevel(line) <= depth);
+  return rest.slice(0, end < 0 ? rest.length : end).join("\n");
+};
+
+// A letter or a digit of any script: a name next to one is part of a longer word (支払い方法, 第4条の2).
+const WORD = /[\p{L}\p{N}]/u;
+
+/** Whether `text` names `name` as a whole: not as the start, end or middle of a longer word. */
+export const namedIn = (text, name) => {
+  const source = String(text);
+  const escaped = String(name).replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  return [...source.matchAll(new RegExp(escaped, "gu"))].some((match) => {
+    const start = match.index ?? 0;
+    const [before, after] = [source.slice(0, start).slice(-1), source.slice(start + name.length, start + name.length + 1)];
+    return !WORD.test(before) && !WORD.test(after);
+  });
+};

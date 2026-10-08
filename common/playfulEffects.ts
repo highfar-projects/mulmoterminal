@@ -3,7 +3,7 @@
 // the picture and draws the level.
 import { isRecord } from "./isRecord.js";
 
-export const HEAT_PATTERNS = ["bomb", "volcano", "kettle", "rocket", "dynamite", "balloon", "skull"] as const;
+export const HEAT_PATTERNS = ["bomb", "volcano", "kettle", "rocket", "dynamite", "balloon", "skull", "sumo"] as const;
 export type HeatPattern = (typeof HEAT_PATTERNS)[number];
 export const isHeatPattern = (value: unknown): value is HeatPattern => HEAT_PATTERNS.some((pattern) => pattern === value);
 

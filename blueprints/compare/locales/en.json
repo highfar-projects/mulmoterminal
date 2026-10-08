@@ -1,0 +1,43 @@
+{
+  "manifest": {
+    "title": "Compare versions (a side-by-side table)",
+    "description": "Matches the old and new versions of a contract or regulation article by article, and makes a side-by-side table of what changed, what was added and what was removed. Whether an article changed is decided by comparing its text by machine, so saying an unchanged article \"changed\", or the reverse, does not pass. The originals do not change."
+  },
+  "hearing": {
+    "old": {
+      "label": "The old version (one file in this folder)",
+      "why": "What to compare from. Each article is matched to the new version",
+      "placeholder": "e.g. contracts/service-agreement-2025.md"
+    },
+    "new": {
+      "label": "The new version (one file in this folder)",
+      "why": "What to compare to",
+      "placeholder": "e.g. contracts/service-agreement-2026.md"
+    },
+    "focus": {
+      "label": "Anything to look at especially",
+      "why": "Changes about that point are written first and in more detail",
+      "placeholder": "e.g. whether the payment and termination terms changed"
+    }
+  },
+  "steps": {
+    "pair": {
+      "title": "Match the articles of the old and new versions",
+      "description": "Writes, pair by pair, which article of the old version became which article of the new one, and marks each changed, added or removed. Whether an article changed is checked by comparing its text by machine."
+    },
+    "report": {
+      "title": "Make the side-by-side table",
+      "description": "After checking the matching, makes a side-by-side table of the articles that changed, were added and were removed."
+    }
+  },
+  "presets": {
+    "itaku-kaitei": {
+      "title": "Compare a revised service contract",
+      "description": "Matches the old version (kyu.txt) and the revised version (shin.txt) of the sample service contract article by article, and makes a side-by-side table showing that the fee and the number of reports changed, that an article on reporting was added, and that the article on deliverables was removed so the article on the contract period moved up. The originals do not change."
+    },
+    "ryohi-kaitei": {
+      "title": "Compare a revised travel expense regulation",
+      "description": "Matches the old version (kyu.txt) and the revised version (shin.txt) of the sample travel expense regulation article by article, and makes a side-by-side table showing that the caps on the daily allowance and lodging went up, that a proviso added the cases where no trip is ordered, that the article on ticket books was removed so the article on settling expenses moved up and its deadline got shorter, and that an article on when the regulation takes effect was added. The originals do not change."
+    }
+  }
+}

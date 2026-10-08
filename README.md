@@ -4,7 +4,7 @@
 
 > **This is a fork.** [highfar-projects/mulmoterminal](https://github.com/highfar-projects/mulmoterminal)
 > follows [receptron/mulmoterminal](https://github.com/receptron/mulmoterminal) release by release and
-> adds persistent sessions on native Windows (psmux), devcontainer sessions and multiple accounts.
+> adds persistent sessions on native Windows (psmux) and devcontainer sessions.
 > Start it with **`npx github:highfar-projects/mulmoterminal`** — `npx mulmoterminal@latest` starts
 > upstream, not this fork. See [This fork](#this-fork) for Windows and WSL2.
 
@@ -182,15 +182,26 @@ than as bytes (files within the session's working directory only):
 | `.json` | **indented** in a new tab (Chrome and Safari otherwise show one long line) |
 | `.csv` `.tsv` | a **table** in a new tab, with a sticky header that scrolls inside its own box |
 | source, config, logs, and `.txt` — 46 extensions | the app's own **Files** view (`/files?path=`), where CodeMirror highlights it, the tree is right there, and it can be edited |
-| images, PDF, SVG, HTML, video | raw bytes in a new tab, which the browser renders better than an editor would |
+| `.html` `.htm` | the **rendered page** in a new tab, under the same sandboxed policy as the Files pane's Preview: its scripts run at an opaque origin with no fetch or XHR (so they cannot reach the app or its API), and an image beside it loads by its relative path (a relative stylesheet or script does not). The raw route answers `.html` as plain text, so opening one there showed its source |
+| images, PDF, SVG, video, audio | raw bytes in a new tab, which the browser renders better than an editor would |
 | everything else — `.xlsx`, `.docx`, `.zip`, a `Makefile` | the app's own **Files** view. A tab cannot display these, so opening one there is not a view — it is a download starting with no warning. The pane names the file and offers **Open in OS**, which hands it to the application that owns it (Excel for an `.xlsx`) |
 
+**A line after the path is followed.** `src/a.ts:42`, `src/a.ts:42:7` (gcc, clang, `eslint -f unix`,
+stack traces) and `src/a.ts(12,5)` (tsc) are one link. In the pane, and in the Files view, the file
+opens as text with the caret on that line and column — an HTML page, an SVG or a table included, and a
+tab reading in Preview switches to Edit. An image, a PDF, a video or an audio file has no line to go
+to and simply opens as itself. A route that renders the file in a new tab (`.md`, `.json`,
+`.csv`, `.html` with no cell enlarged) ignores the line. When the pane beside an enlarged cell takes
+the click, the keyboard stays in the terminal; the full-screen Files view, with no terminal beside it,
+puts it in the editor. (ESLint's default output puts the path on a line of its own, with no line number to follow.)
+
 **While a grid cell is enlarged, the [Files pane](#files-view-browse--edit) takes the click first** — every
-row above except the last one, since the pane is the same editor plus a Markdown preview. The
-file opens *beside* the terminal that printed it, and the pane opens itself if it was closed.
-It declines, leaving the routing above untouched, when nothing is enlarged, when the path is
-not under that cell's own directory (the pane cannot walk above its root), or for the raw-bytes
-row, where it would only show an empty editor.
+row above, since the pane is the same editor with a Preview for Markdown, HTML and SVG, shows an
+image as a picture and a PDF in a frame, and plays a video or an audio file with the browser's own
+controls (seeking included, whatever the file's size). The file opens *beside* the terminal
+that printed it, and the pane opens itself if it was closed. It declines, leaving the routing
+above untouched, when nothing is enlarged, or when the path is not under that cell's own directory
+(the pane cannot walk above its root). A file too large to edit as text still offers **Open in OS**.
 
 Highlighting in the Files view covers the JS/TS family, JSON and Markdown (the modes
 `cmEditor.ts` bundles); other languages open as plain text.
@@ -298,7 +309,7 @@ npx github:highfar-projects/mulmoterminal#main     # the same, pinned to the new
   `npx github:highfar-projects/mulmoterminal --cwd ~/mulmoclaude` (on Windows, the full path).
 - Every subcommand works the same way: `npx github:highfar-projects/mulmoterminal init`, `… stop`.
 - **Settings that belong to you go in `~/.mulmoterminal/.env`** (`CLAUDE_PERMISSION_MODE`,
-  `WAIT_REAP_GRACE_MS`, an account's token). Upstream reads only the `.env` in the directory `npx`
+  `WAIT_REAP_GRACE_MS`). Upstream reads only the `.env` in the directory `npx`
   was run from, so starting from somewhere else silently dropped them. This fork reads
   `~/.mulmoterminal/.env` first and the launch directory's `.env` after it, so the launch directory
   still overrides it, and a variable set in the shell still beats both. `yarn dev` reads the same
@@ -371,6 +382,7 @@ Needs **Node ≥ 22.12**, plus these CLIs — on your `PATH`, or named by the ma
 | Recommended | `tmux` | [session persistence](#session-persistence-tmux) — terminals survive a server restart | `brew install tmux` · `sudo apt install tmux` · `sudo dnf install tmux` · Windows: `winget install psmux` on this fork ([This fork](#windows-persistent-sessions-with-psmux)); without it, plain PTYs |
 | Optional | any other agent CLI | a cell can run **Codex**, **Antigravity** (`agy`), **Grok**, **Muse**, **GitHub Copilot CLI** or **Cursor CLI** instead of Claude — install only the ones you use, and a missing one simply fails to start that cell. What each can do is [the capability matrix](docs/agent-capability-matrix.md); how to install and pick one is the [agents guide](https://receptron.github.io/mulmoterminal/guide/en/agents.html) | e.g. `npm i -g @openai/codex` |
 | Optional | `ffmpeg` | video rendering from the [mulmo-script panel](#wiki-collections--the-gui-panel) (its plugin ships enabled) | `brew install ffmpeg` · `sudo apt install ffmpeg` · `sudo dnf install ffmpeg` |
+| Optional | `remotion` packages | MulmoCast's `remotion` beats, where Claude Code writes each scene as a Remotion component (mulmocast 2.13.0). Not a dependency of this app: install them yourself, into your home directory so an `npx` upgrade does not lose them — `init` reports whether mulmocast can see them | [Remotion scenes](https://receptron.github.io/mulmoterminal/guide/en/mulmocast.html#remotion) · [日本語](https://receptron.github.io/mulmoterminal/guide/ja/mulmocast.html#remotion) |
 | Optional | `ollama` | [`claude-ollama`](https://receptron.github.io/mulmoterminal/guide/en/claude-ollama.html) — Claude Code against a fully local model | [ollama.com/download](https://ollama.com/download) |
 | Linux only | a file dialog | the launcher's **Choose a folder** button and the path menu's **Insert a file path**, which open an OS dialog on the machine the server runs on. macOS and Windows have one built in; **WSL** uses the Windows one over interop and needs nothing installed. A Linux desktop needs one of these — without any, they say so and you type the path instead (#1447) | `sudo apt install zenity` · `sudo dnf install zenity` · `kdialog`, `qarma` and `yad` also work |
 
@@ -391,12 +403,14 @@ mulmoterminal
 
 **Stopping it.** `Ctrl+C` in the terminal that started it — or, if you can no longer find that
 terminal, **Settings → Quit MulmoTerminal** in the browser, or **`npx mulmoterminal@latest stop`**
-from any terminal (installed globally, just `mulmoterminal stop`). All three run the same shutdown:
+from any terminal (installed globally, just `mulmoterminal stop`; it stops every server running on
+this machine, and `--port <port>` stops only that one). All three run the same shutdown:
 with `tmux` installed the agent sessions survive and come back under **Settings → Sessions that
 survived a restart**; without it they end with the server.
 
 **First-run setup (optional).** `npx mulmoterminal@latest init` checks your environment (Node ≥ 22.12
-and every CLI in the table above), seeds the launcher's **directory
+and every CLI in the table above), says how to update when Node is behind the latest LTS of its line
+or Claude Code is behind its `stable` release, seeds the launcher's **directory
 presets** from the projects in your Claude Code history, and writes `~/.mulmoterminal/config.json`.
 It's **idempotent** — re-run it any time to refresh the presets; it overwrites the managed parts
 and keeps your other settings. When `claude` is installed it can hand off to the
@@ -717,6 +731,17 @@ up for Codex, loaded by description.
 
 ---
 
+## Running the server on another machine
+
+The server can live on a Linux box, a VPS or a container while your browser stays on your laptop:
+start it there over SSH (`npx mulmoterminal`), and reach it through an SSH tunnel
+(`ssh -N -L 34567:127.0.0.1:34567 you@server`, then open `http://localhost:34567`). Started over
+SSH, the launcher opens no browser on the server and prints that command. It still listens on
+loopback only — nothing is opened to the network. Logging the agents in on the server, Docker, and
+the few actions that act on the server's machine: [Run the server on another machine](https://receptron.github.io/mulmoterminal/guide/en/remote.html).
+
+---
+
 ## Session persistence (tmux)
 
 If **`tmux` is installed**, MulmoTerminal runs each Claude session and launcher inside
@@ -861,7 +886,7 @@ The Settings modal (the gear button) persists per-user UI choices to `~/.mulmote
 
 ![The Settings modal — a sidebar of grouped sections beside the one being edited](https://raw.githubusercontent.com/receptron/mulmoterminal/main/docs/guide/images/settings-tabs.png)
 
-*Open it from the gear button in the toolbar. The **sidebar** groups the sections — Appearance, Projects, Header & launch, Input, Models & servers, Notifications, Integrations, Sessions, Help — and one is on screen at a time; on a phone the sidebar becomes a picker above the section. Settings is available in **English and Japanese**: it follows your browser's language unless you pick one under **Language** (per browser, like the theme). Only this modal is translated so far. Under the title, a **Version** row shows what is running: the version from the shipped `package.json`, plus a `commit <sha>` chip on a git checkout — there the version is only whatever was last released, so the commit is what identifies the build. When something newer exists, the row is followed by the header badge's update notice, command included. Pick a **theme**, set the **terminal font size**, **font** and **scroll speed** (and whether sending **returns to the latest output**), set a custom **attention sound**, list the repos the cross-repo **PRs & Issues** view should aggregate, add **launch commands** for grid cells, register your own **MCP servers**, and turn on the switches for what this app writes on your behalf — **issue work comments**, the **PR clone footer**, the **closing summary**, the **decision digest**, the **dev worklog** — no need to hand-edit the config file. Four settings stay with their skill because a form would be the wrong tool for them (`keymap`, `themes`, `providers`, `buttons`/`chips`); Settings shows what each is doing now and launches that skill. Note that **theme, font size, scroll speed and the return-to-latest switch are stored per browser** (they're display preferences, so a phone and a desktop keep their own); the rest live in `~/.mulmoterminal/config.json` and are shared by every client.*
+*Open it from the gear button in the toolbar. The **sidebar** groups the sections — Appearance, Projects, Header & launch, Input, Models & servers, Notifications, Integrations, Sessions, Help — and one is on screen at a time; on a phone the sidebar becomes a picker above the section. The interface is available in **English, 日本語, 简体中文, 繁體中文 and 한국어**: it follows your browser's language unless you pick one under **Language** (per browser, like the theme). Translated so far: this modal, the grid's status words, and every button's hover tip and screen-reader label; the rest of the app's words are still English. Under the title, a **Version** row shows what is running: the version from the shipped `package.json`, plus a `commit <sha>` chip on a git checkout — there the version is only whatever was last released, so the commit is what identifies the build. When something newer exists, the row is followed by the header badge's update notice, command included. Pick a **theme**, set the **terminal font size**, **font** and **scroll speed** (and whether sending **returns to the latest output**), set a custom **attention sound**, list the repos the cross-repo **PRs & Issues** view should aggregate, add **launch commands** for grid cells, register your own **MCP servers**, and turn on the switches for what this app writes on your behalf — **issue work comments**, the **PR clone footer**, the **closing summary**, the **decision digest**, the **dev worklog** — no need to hand-edit the config file. Three settings stay with their skill because a form would be the wrong tool for them (`keymap`, `themes`, `buttons`/`chips`); Settings shows what each is doing now and launches that skill. Backends (`providers`), custom agents and accounts are added and removed in **Models and backends**. Note that **theme, font size, scroll speed and the return-to-latest switch are stored per browser** (they're display preferences, so a phone and a desktop keep their own); the rest live in `~/.mulmoterminal/config.json` and are shared by every client.*
 
 | Field        | Meaning |
 | ------------ | ------- |
@@ -875,6 +900,7 @@ The Settings modal (the gear button) persists per-user UI choices to `~/.mulmote
 | `launchers`  | `{ label, command }` entries offered in a grid cell's launcher besides the agents — any interactive command. A plain shell needs no entry: the Agent Picker's **Shell** option opens `$SHELL` unconfigured. |
 | `customAgents` | `{ id, label, agent, command }` entries offered in the **Agent Picker** — your own way of starting Claude Code (`ollama launch claude --model … --`, a wrapper script). Unlike a launcher, Claude Code's own argv is **appended** to `command`, so the cell is a real session: resume, cost, context, GUI tools. `agent` says which agent's arguments to append and is required (`"claude"` is the only value today); `command` must stop taking arguments where Claude Code's begin — hence the trailing `--` above. Up to 8. |
 | `accounts` | **Beta** ([setup guide](docs/guide/en/accounts.md)). `{ id, label, agent, home }` entries — a second login for Claude Code (`agent: "claude"`) or Codex (`"codex"`), kept in its own config directory `home` (absolute or `~/…`). Picked per cell in the launch form's **ACCOUNT** select (the cell's header then names it); a session started on one runs with `CLAUDE_CONFIG_DIR` / `CODEX_HOME` set to it, and is bound to that account for good: resume, cost, titles and history are read from there, session lists show every account's rows, and the toolbar shows each account's 5h / 7d usage beside the default's. An account pointed at `~/.claude` / `~/.codex` itself is treated as the default login: no variable, no gauge of its own. A cell with no account gets no such variable added (whatever MulmoTerminal's own environment carries is inherited as before), so configuring none changes nothing. Up to 8. |
+| `tokenRotation` | **Beta** ([setup guide](docs/guide/en/token-rotation.md)). `{ enabled, includeDefaultLogin, tokens: [{ id, label, email?, keychain \| file }] }` — several Claude subscriptions behind the one `~/.claude`. Each new plain Claude process starts on the subscription whose 7-day window has the most room per hour until its reset; a session whose subscription is at 98% moves to another at the end of its turn, and one that hits its limit moves at once — the cell reconnects and resumes the same conversation. A token is named by where it is kept (a keychain item, or a `chmod 600` file), never written here. Provider, custom-agent and account cells are never rotated. Up to 8. |
 | `quickCommands` | `{ label, text, agents? }` phrases the **phone** offers as chips on a session's terminal view. Tapping one puts `text` in the input box; it is not sent until you press send. `agents` scopes a chip to session kinds — any of `SESSION_AGENTS` (`"claude"`, `"codex"`, `"antigravity"`, `"grok"`, `"muse"`, `"copilot"`, `"cursor"`, `"shell"`); omit it to offer the chip everywhere. Empty by default. |
 | `userMcpServers` | `{ id, url }` HTTP MCP servers merged into the `--mcp-config` of the **Claude** sessions that carry the full GUI MCP (codex is handed the GUI server alone, `codexGuiMcpServers`) — a cell whose working directory is the **workspace**, and a session the server starts itself (the phone, a scheduled task) unless it asks for a grid cell's shape, as an issue's seed session does (`issueSpawnOptions`). A cell in a project directory does not get this merge; the MCP config the user wrote is read either way. Takes effect on the next session. |
 | `buttons`    | Header action buttons — see [Header buttons](#header-buttons). Omit to keep the defaults; set to replace them. |
@@ -883,7 +909,7 @@ The Settings modal (the gear button) persists per-user UI choices to `~/.mulmote
 | `pushKinds` | Which moments push: `"finished"` (a turn ended, ✅) and/or `"waiting"` (the agent stopped to ask — a permission prompt or a question, ❓, **once per prompt**). Omit to keep both; `[]` for none. A kind added in a later version stays off until you tick it. |
 | `worklogEnabled` | `true` to run the built-in **dev worklog** batch (see below). Off by default (each run spawns an LLM session, so it costs tokens). Editable in Settings → **Sessions and background tasks**. |
 | `worklogIntervalHours` | Worklog cadence in hours (default `6`, clamped to `1`–`168`). A stepper in the same Settings section covers the range. |
-| `feedRefreshEnabled` | `false` stops the hourly **collection/feed refresh** (one scheduled task per root — the workspace and every saved project directory). **On by default**; only an explicit `false` turns it off, so an existing config keeps the behaviour it has. Takes effect at the next server start — the scheduler registers once at boot. Feeds still refresh on demand. Checkbox in Settings → **Sessions**. |
+| `feedRefreshEnabled` | `false` stops the hourly **collection/feed refresh** (one scheduled task per root — the workspace and every saved project directory). **On by default**; only an explicit `false` turns it off, so an existing config keeps the behaviour it has. Saved from Settings (or any `POST /api/config`), it applies at once — the running scheduler rebuilds its built-in tasks; a hand-edit applies after **Settings → Reload config file** (or a restart). Feeds still refresh on demand. Checkbox in Settings → **Sessions**. |
 | `calendarSyncEnabled` | `false` stops the hourly **Google Calendar sync** (pulls changed events into collections that declare a calendar). Same default and the same restart rule as `feedRefreshEnabled`; calendar collections still sync on demand. Checkbox in the same Settings section. With both off and `worklogEnabled` off, no **built-in** task is registered. Your own tasks in `config/scheduler/tasks.json` are unaffected — these switches do not touch them, and an enabled one still registers and still runs the tick loop. Only when there is no enabled user task either does the scheduler stop writing its state file and run logs. |
 | `terminalSubmit` | Which bytes Claude reads as **submit** vs **newline**: `"cr"` (default — Enter submits, Shift+Enter makes a newline) or `"esc-cr"` (for a Claude Code rebound the other way). Applies to the keyboard **and** the phone remote-view submit, for **Claude sessions only** (shell/codex keep plain Enter). See the [Configuration guide](https://receptron.github.io/mulmoterminal/guide/en/config.html#terminal-submit). Settings → **Terminal keys** offers both, worded as behaviour. |
 | `copyOnSelect` | `true` puts a **mouse selection on the clipboard the moment it settles**, with no key pressed (the PuTTY / iTerm2 behaviour). **Off by default** — it changes the clipboard when you may only have meant to highlight something. There is a checkbox in Settings → **Terminal keys**, applied at once; a hand edit of the file needs a **server restart, then a tab reload** (the server reads this file once at startup, and the browser reads the value from it on load). Composes with the `copy` keymap action rather than replacing it. Over plain `http://` the browser gives a page no clipboard access, so a fallback asks xterm to copy instead; see the [Configuration guide](https://receptron.github.io/mulmoterminal/guide/en/config.html#copy-on-select). |
@@ -895,6 +921,7 @@ The Settings modal (the gear button) persists per-user UI choices to `~/.mulmote
 | `autoDirIcon` | Whether a project that sets no `icon` shows the favicon its repository already ships (`public/favicon.svg`, `apple-touch-icon.png`, a web manifest — first hit wins, ordered by how the image survives at 14px). **On by default**; Settings → **Directory appearance** has the switch. A single project opts out with `"icon": false` in its own `.mulmoterminal.json`, which this does not override. A key that was written and got it wrong shows nothing rather than falling back — a broken setting has to look broken. `true` / `false` only. |
 | `cockpitLines` | `{ summary, prompt, response }` — how many lines each **cockpit-roster** row shows before it clamps (default `2` / `2` / `3`, each clamped to `1`–`20`). Raising them trades how many sessions fit on screen for reading a long one in place. Three steppers in Settings → **Waiting rows**. |
 | `showLoadAverage` | Whether the grid header draws this machine's **load average** beside the 5h / 7d usage windows, as a percentage of its cores (`load 334%` = a 20-core machine with 66.8 runnable processes). **On by default**; amber at 100%, red at 200%, hover for the raw 1 / 5 / 15-minute figures. Settings → **Grid header read-outs** has the switch. A host that keeps no load average (Windows) shows nothing rather than `0%`, whatever this says. `true` / `false` only. |
+| `remoteServer` | **Experimental.** The server runs on another machine than your browser (an SSH tunnel — [guide](https://receptron.github.io/mulmoterminal/guide/en/remote.html)): the actions that would act on the server's screen (the file dialog, the file manager, the OS app) are hidden or say why, and a dropped file is always uploaded. **Off unless `true`**; Settings → **Sessions and background tasks** has the box (or set it in the server's config). |
 | `fontFamily` | The **terminal font** every session renders in — a CSS font-family stack, e.g. `"'Cica', 'MS Gothic', monospace"`. Set it in Settings → **Terminal font**, applied at once; editing the file instead needs a **restart** (this config is read once at startup). Unset uses the built-in stack (JetBrains Mono / Fira Code / Menlo / Consolas, then CJK faces for Japanese, Korean and Chinese). Unlike the per-browser font **size**, this is one value for the whole host — it names fonts, and which fonts exist is a property of the machine. A directory can override it. See the [Configuration guide](https://receptron.github.io/mulmoterminal/guide/en/config.html#font-family). |
 
 Every MulmoTerminal on the machine shares this one file, so an older build could save over a key a
@@ -913,9 +940,14 @@ are items in the **path menu** (click the directory path on the terminal header)
 set** with your list (it is not merged on top), so listing your own — even a **shorter** one — is how
 you drop, reorder, or swap them.
 A button has an `id`, `label`, and a `run` of `"shell"` (run a command), `"input"` (send text to the
-agent), `"open"`, or `"action"` (act on the cell itself — `action: "restart"` ends the agent and
-starts it again in the same cell on the same conversation, which is how an MCP / config / plugin
-change takes effect; it costs a resume and asks nothing first). An `open` button targets one of `url` / `reveal` (OS file manager) / `files`
+agent), `"open"`, or `"action"` (act on the cell itself, named like the `keymap` actions so one operation is
+a button, a key and a command-palette entry — `action: "terminal-restart"` ends the agent and starts
+it again in the same cell on the same conversation, which is how an MCP / config / plugin change
+takes effect; it costs a resume and asks nothing first. `"terminal-new-here"` opens the launch panel
+on the cell's directory, and `"pane-files"` / `"pane-prompts"` / … / `"terminal-timeline"` /
+`"terminal-talk"` / `"terminal-park"` / `"terminal-copy-code"` / `"terminal-insert-path"` / `"terminal-reveal"` /
+`"terminal-voice"` / `"terminal-diff"` / `"terminal-note"` do what the cell's menus and buttons do, and `"screen-*"` / `"settings-open"` /
+`"sound-toggle"` / `"confetti"` / `"view-toggle"` / `"order-*"` / `"page-next"` / `"page-prev"` do what the toolbar and the page tabs do; the old name `"restart"` still works). An `open` button targets one of `url` / `reveal` (OS file manager) / `files`
 (in-app explorer) / `view` (a built-in overlay) / `terminal` (a dir → a new cell running `$SHELL`,
 opened next to the current one) / `pr: true` (open the current branch's PR — the button is hidden when
 there's no open PR) / `pickFile: true` (OS file dialog → insert the path).
@@ -975,7 +1007,7 @@ channel is connected (its Google sign-in supplies the notification auth). With R
 disconnected, or with no device registered, the toggle is a no-op.
 
 **Dev worklog (cross-clone).** Set `worklogEnabled: true` in
-`~/.mulmoterminal/config.json` (and **restart** — the scheduler reads its tasks at boot)
+`~/.mulmoterminal/config.json` (or switch it on in Settings, which applies at once; after a hand-edit use Settings → **Reload config file**)
 to register a built-in scheduled task. Every `worklogIntervalHours` (default 6) it spawns
 a Claude session that reviews the work you did across **all your saved working dirs**
 (`cwdPresets`) since it last ran, and writes it up as a short manager-style report.
@@ -1123,6 +1155,20 @@ and expands each one to the values in force, with a swatch per color and the pat
 they came from. It also names the keys it **dropped** (a color that isn't `#rrggbb`, a size out
 of range) and the keys it doesn't read at all (`badgeColour`, a global-only setting) — which is
 what tells "I never set that" apart from "I set it and it didn't take".
+
+**Changing it there.** Under the values, **Change here** is a form for the name, the seven chrome
+colors, how the header shows a running session (`headerStatusTint`) and its colour per status
+(`headerStatusColors`), the terminal theme and palette (`colors`), font size, font family, grid priority, the model its
+sessions start on (`provider` / `model`), the closing summary (`appendSystemPrompt`) and extra
+directories (`addDirs`), its icon, terminal background, and attention sounds (`sound` / `sounds`), and its header buttons,
+chips and command-palette entries (`buttons` / `chips` / `commands`) with the same editors the global
+lists use, its Skill menu (`skills`, in order), Mulmo menu decks (`decks`) and per-worktree variables
+(`worktreeEnv`) — every key the file can hold. **This checkout only** moves a key into
+`.mulmoterminal.local.json` (and **Share** moves it back). A cell's path menu has **This directory's
+settings**, which opens Settings on that directory. Each change is written to
+the directory's file at once and applies without a restart; **Use global** takes the key out
+again. A key `.mulmoterminal.local.json` already holds is written there. Keys the form doesn't
+show are left as they are, and a file that isn't a JSON object is not touched — fix it in Files.
 
 ---
 
@@ -1338,7 +1384,12 @@ rooted at **that terminal's project directory** — so after Claude says "wrote 
 you can jump straight there to read or edit it. The left pane is a lazy-loaded directory
 tree; clicking a file opens it in a **CodeMirror** editor (Markdown / JS-TS / JSON
 highlighting, everything else as plain text). Markdown files get a **Preview** toggle
-that renders via the server's sandboxed `…/md` HTML. **Save** (or ⌘/Ctrl-S) writes back.
+that renders via the server's sandboxed `…/md` HTML; a `.csv` / `.tsv` previews as a table (the
+same `…/table` document a clicked path opens, in the app's colours), and an `.html` / `.svg` as the
+page or picture it is. **Save** (or ⌘/Ctrl-S) writes back. **History** lists the versions the pane
+kept of the file (in `~/.mulmoterminal/backups`, taken when it is opened or reloaded here and before a save
+here replaces it — the newest few), to compare with the buffer or restore as an undoable edit (unsaved edits
+are kept as a version first).
 
 **The open view follows the file on disk.** When an agent in another cell — or any editor —
 rewrites what you are looking at, the editor and the preview catch up on their own; there is
@@ -1360,11 +1411,11 @@ shrinks the pane rather than reflowing xterm into garbage. It works in both zoom
 terminals, and whether it's open plus how wide it is are remembered per browser.
 
 **Coming back looks the way you left it.** The pane remembers the open file, the directories
-you had expanded, and — for a Markdown file — whether you were reading it in **Preview** or
+you had expanded, and — for a file with a Preview — whether you were reading it in **Preview** or
 editing it: per cell while the session lasts, and per directory across a browser reload (the
 first pane to open on that directory claims it, so a second terminal in the same repository
 starts on its own empty tree). A remembered Preview only comes back over that same file while
-it is still Markdown the server can render; anything else opens in the editor.
+it is still a file the pane can preview; anything else opens in the editor.
 
 It comes back to **where** you were, too: the line at the top of the editor, the line the caret was
 on, and how far down the tree was scrolled. The top line matters on its own — scrolling moves
@@ -1381,6 +1432,43 @@ opening the pane on one you have been to before shows that tree at once and swap
 server says when it arrives — including any directory you expanded while waiting. A directory the
 pane has not read before says so (`Loading…`) rather than claiming to be empty, and a read that
 fails shows the error rather than a tree it can no longer vouch for.
+
+**Several files open as tabs, when you ask for them.** A plain click in the tree replaces the file
+in front, as it always has — so someone who never wants a tab never sees one. **Cmd+click** (Ctrl+click
+off macOS) or the row menu's **Open in a new tab** adds a tab, and a strip of tabs appears under the
+header once there are two. Opening a file that already has a tab goes to that tab, from the tree, the
+finder, the search or a clicked terminal path alike. Switching tabs saves the one you leave, exactly as
+opening another file does, so only the front tab can hold unsaved edits; each tab keeps its own place
+(Preview or editor, caret, scroll) and the whole strip is remembered with the rest of the pane. Close a
+tab with its **×**, a middle click, or **Delete** while it has focus; ←/→, Home and End move between them.
+The tree follows the tab in front, as VS Code's explorer does: its folders open and its row comes into
+view (a reload still puts the tree back where you left it).
+
+**The tree shows what git sees.** In a git repository a changed file is tinted and lettered as in VS
+Code's explorer — `M` modified, `A` added, `U` untracked, `R` renamed — and a folder holding changes
+carries a dot, so a collapsed tree still says where the agent has been. It is read when the tree
+loads or reloads, after a save or an outside change to the open file, and every thirty seconds.
+
+**The editor marks what changed since the last commit.** A bar beside each line that is new (green)
+or changed (amber), and a notch where lines were removed, as VS Code's gutter shows them — kept up
+to date as you type. **Changes** in the header also shows the removed lines in place, as a unified
+diff. Nothing is marked for a file outside git or one not yet committed.
+
+**HTML pages, images, PDFs, video and audio show in the pane too.** An `.html` file has a **Preview** like a Markdown
+file: the page itself, sandboxed as presentHtml pages are — its scripts run on an opaque origin with
+no fetch/XHR; images and the curated CDN list still load, and so does an image it links beside it,
+while a relative stylesheet or script does not. An `.svg` previews as the picture it draws, a PNG, JPEG, GIF or WebP opens as the image
+rather than as "not text", a PDF opens in a frame, and a video or audio file plays with the
+browser's controls, seeking by range rather than fetching the whole file. A text file too large to edit
+says so and still offers **Open in OS**. A path to any of these clicked in terminal output opens in the pane when
+it is up, so a chart an agent just wrote stays in the grid. They are served only under the workspace
+or a terminal's directory, like every other file the app hands to the browser.
+
+**A link in the Preview opens in the pane.** A link to another file (`./b.md`, `../README.md`) is
+resolved against the document it is in and opens in a new tab — in Preview when it is Markdown — or
+goes to the tab that file already has. A link that climbs above the pane's folder is not opened and
+the pane says so; an external link opens in a new browser tab, and a `#heading` link scrolls the
+document.
 
 The toggle is not the only way in: while a cell is enlarged, **clicking a file path the agent
 printed** opens it here too, rather than in a new tab or full-screen — see
@@ -1762,6 +1850,28 @@ narrow and tall for one record you are discussing — and each position keeps it
 
 ## More features
 
+- **Skills viewer** — **More features** → **Skills** lists every Claude skill on disk in three
+  columns — where it lives, its skills, its `SKILL.md`. The places are your `~/.claude/skills`,
+  each enabled plugin (skills shown as `plugin:skill`), and the `.claude/skills` of each folder a
+  terminal has run in (folders with none are left out). A project skill with the same name as one
+  of yours is marked as overriding it. The search (name, description or folder) narrows both lists.
+  Switch to **skills.sh** to search the public directory at [skills.sh](https://skills.sh) for
+  skills you do not have yet and read one before installing it: its `SKILL.md`, every file it would
+  bring, and a warning listing the files that can run code. Nothing is installed from the viewer —
+  it shows the `npx skills add …` line to copy and run yourself. Your search words go to skills.sh
+  only when you press **Search**.
+- **Processes** — **More features** → **Processes** shows what mulmoterminal has left running.
+  The **Processes** tab lists each tmux session with the process tree under its panes — `yarn dev`,
+  vite, MCP bridges, the agent itself — with CPU, memory and how long each has run, and an **End**
+  button per process (SIGTERM, then SIGKILL if the same process is still there a few seconds later).
+  A session's own shell is not offered: close its terminal in the grid, or end a session that is
+  open nowhere from Settings > Sessions. Busy and day-old
+  processes are highlighted, never ended for you. It reads only while the page is open. The
+  **Worktrees** tab lists the managed worktrees of the folders your terminals have run in and what
+  keeps each from going — uncommitted or untracked files, commits not in the base branch, a
+  terminal standing in it. One with none of those gets a **Remove** button (the worktree and its
+  merged branch); nothing is removed automatically. Gitignored files (a local `.env`, `node_modules/`)
+  do not hold a worktree back, but they go with it, so the row and the confirmation name them.
 - **Grid of parallel sessions** — the ＋ Terminal / grid view runs many sessions at once,
   auto-sizing by count across pages. Cell borders signal state at a glance — **working**
   (pulsing blue), **blocked** (amber — needs a permission / answer), **done** (blue —
@@ -2106,6 +2216,7 @@ From a shell: `mulmoterminal room read <room>` · `room post <room> <text…> [-
 | -------- | ------- |
 | `GET\|POST /api/config` | User UI config (`cwdPresets`, `soundFile`, `soundKinds`, `sounds`, `prRepos`, `launchers`, `quickCommands`, `userMcpServers`, `providers`). |
 | `GET /api/sound?kind=` · `/api/dir-sound?cwd=&kind=` · `/api/sound-preset/:id` · `/api/dir-config?cwd=` | Custom / per-directory / preset attention sound + per-dir config. `kind` selects a config entry, never a path. |
+| `PUT /api/dir-config` | The Settings form's save: `{ cwd, set: { key: value }, unset: [key] }` for the keys the form edits (`common/dirConfigForm.ts`), each validated like the Files pane's editor. Other keys and their order are kept; a file that isn't a JSON object answers 422 and is not written. Answers with the new `dir-config-detail`. |
 | `GET /api/dir-config-detail?cwd=` | The same per-dir config, **plus** the settings a running terminal doesn't need (`provider`, `model`, `skills`, `addDirs`, header button/chip **labels**), **plus** which keys the file set and how each fared (applied / dropped in validation / not a setting at all). Read-only; backs the Settings modal's **Directory settings** preview. Unlike the other `?cwd=` routes this one does **not** fall back to the default workspace — it reports on the directory it was asked about, so a path that no longer exists comes back as `exists:false`. Sound paths and button commands stay server-side. |
 | `GET /api/launch-options` | The Anthropic-compatible backends this server can reach, each with its models and — when it can't — the reason. Reports the **name** of the env var a key is read from, never the key. |
 | `GET /api/update-status` | What is running and whether anything newer exists: `install` (`npm` / `git`), `version`, `commit` (a checkout's short HEAD sha), `latest` (npm, only when newer) and the one-line `notice`. Backs the header's **Update** badge and the Settings version line. Served from memory, recomputed at startup and every 3 hours — a long-running server started with `npx mulmoterminal@latest` is current when it starts, so only a later check can tell it a release shipped. `ready` is false until the first check lands. |

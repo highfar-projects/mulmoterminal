@@ -7,10 +7,11 @@
 // shipped one of the same name.
 import path from "node:path";
 import { access, readdir, readFile } from "node:fs/promises";
-import { blueprintManifestSchema, incompatibility, BLUEPRINT_SLUG_RE, type BlueprintManifest } from "../../common/blueprint/manifest.js";
+import { blueprintManifestSchema, incompatibility, inPackOrder, BLUEPRINT_SLUG_RE, type BlueprintManifest } from "../../common/blueprint/manifest.js";
 import { basePlanSchema, composePlan, usecaseStepsSchema, type ComposedStep } from "../../common/blueprint/plan.js";
 import { hearingSchema, type Hearing } from "../../common/blueprint/hearing.js";
 import { presetsFileSchema, type Preset, type PresetListing } from "../../common/blueprint/presets.js";
+import { overlayProblems, packLocaleSchema, type Described } from "../../common/blueprint/packLocale.js";
 import { readSamples } from "./samples.js";
 
 export const PACK_SOURCES = ["builtin", "installed"] as const;
@@ -54,15 +55,21 @@ async function packsIn(root: PackRoot): Promise<PackSummary[]> {
   return summaries.flatMap(({ slug, manifest }) => (manifest ? [{ slug, manifest, source: root.source }] : []));
 }
 
-/** Every readable pack, each slug once — from the first root that has it. */
+// Only a pack that ships with MulmoTerminal places itself: an installed one cannot take the form's default base.
+const shippedOrder = (pack: PackSummary): number | undefined => (pack.source === "builtin" ? pack.manifest.order : undefined);
+
+/** Every readable pack, each slug once — from the first root that has it — in the order people see them. */
 export async function listPacks(roots: readonly PackRoot[]): Promise<PackSummary[]> {
   const perRoot = await Promise.all(roots.map(packsIn));
   const seen = new Set<string>();
-  return perRoot.flat().filter((pack) => {
-    if (seen.has(pack.slug)) return false;
-    seen.add(pack.slug);
-    return true;
-  });
+  return inPackOrder(
+    perRoot.flat().filter((pack) => {
+      if (seen.has(pack.slug)) return false;
+      seen.add(pack.slug);
+      return true;
+    }),
+    shippedOrder,
+  );
 }
 
 function pairProblems(base: BlueprintManifest | null, usecase: BlueprintManifest | null): string[] {
@@ -93,22 +100,58 @@ export async function loadPackPair(roots: readonly PackRoot[], baseSlug: string,
   }
 }
 
-async function stepsOf(packDir: string, manifest: BlueprintManifest): Promise<{ id: string; skill: string }[]> {
+/**
+ * The files a step's review conversation may change, as its pack declares them now: a build stores its steps when it
+ * starts, and one started before the pack declared them has none. Empty when the pack or the step cannot be read.
+ */
+export async function declaredRevises(packDir: string, stepId: string): Promise<string[]> {
+  const read = async (file: string, schema: typeof usecaseStepsSchema | typeof basePlanSchema) =>
+    schema.parse(await readJson(path.join(packDir, file))).steps.find((step) => step.id === stepId)?.revises ?? [];
+  const usecase = await read("steps.json", usecaseStepsSchema).catch(() => []);
+  return usecase.length > 0 ? usecase : read("plan.json", basePlanSchema).catch(() => []);
+}
+
+/** A usecase pack's interview, as written in its folder. */
+export const readHearing = async (packDir: string): Promise<Hearing> => hearingSchema.parse(await readJson(path.join(packDir, "hearing.json")));
+
+async function stepsOf(packDir: string, manifest: BlueprintManifest): Promise<(Described & { skill: string; reads: string[]; revises: string[] })[]> {
   if (manifest.kind === "base") return basePlanSchema.parse(await readJson(path.join(packDir, "plan.json"))).steps;
-  hearingSchema.parse(await readJson(path.join(packDir, "hearing.json")));
+  await readHearing(packDir);
   // Presets are optional, but a broken one is refused here rather than dropped silently when listed.
   await readPresets(packDir);
   return usecaseStepsSchema.parse(await readJson(path.join(packDir, "steps.json"))).steps;
 }
 
+// An overlay in another language is optional, but one that is broken, stale or leaves something out is refused here
+// rather than shown half-translated on the form.
+async function overlayProblemsOf(packDir: string, manifest: BlueprintManifest, steps: readonly Described[]): Promise<string[]> {
+  const file = path.join(packDir, "locales", "en.json");
+  if (!(await exists(file))) return [];
+  const usecase = manifest.kind === "usecase";
+  const problems = overlayProblems(packLocaleSchema.parse(await readJson(file)), {
+    manifest,
+    hearing: usecase ? await readHearing(packDir) : null,
+    steps,
+    presets: usecase ? await readPresets(packDir) : [],
+  });
+  return problems.map((problem) => `locales/en.json: ${problem}`);
+}
+
 /** Why a pack directory could not be run — empty when it can. What an install is held to. */
 export async function packProblems(packDir: string): Promise<string[]> {
   try {
-    const steps = await stepsOf(packDir, await readManifest(packDir));
+    const manifest = await readManifest(packDir);
+    const steps = await stepsOf(packDir, manifest);
+    const overlay = await overlayProblemsOf(packDir, manifest, steps);
+    // A gate that names files to read but none it may change would have its conversation edit those reads — often
+    // views a check redraws — and the edit would be lost.
+    const undeclared = steps
+      .filter((step) => step.reads.length > 0 && step.revises.length === 0)
+      .map((step) => `step "${step.id}" names files to read but no files its review may change (revises)`);
     const missing = await Promise.all(
       steps.map(async (step) => ((await exists(path.join(packDir, step.skill, "SKILL.md"))) ? null : `step "${step.id}" has no ${step.skill}/SKILL.md`)),
     );
-    return missing.filter((problem): problem is string => problem !== null);
+    return [...missing.filter((problem): problem is string => problem !== null), ...undeclared, ...overlay];
   } catch (err) {
     return [err instanceof Error ? err.message : String(err)];
   }

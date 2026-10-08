@@ -9,6 +9,8 @@
 import { ref, nextTick, watch, onUnmounted, useTemplateRef } from "vue";
 import { useI18n } from "vue-i18n";
 import { openTerminalAt } from "../composables/useNewTerminal";
+import { openDirSettings } from "../composables/settingsOpener";
+import { remoteServer } from "../composables/remoteServer";
 import { pickFileInto } from "../composables/useHeaderAction";
 import { menuPlacement, type MenuPlacement } from "../composables/menuPlacement";
 import { jsonBody } from "../jsonBody";
@@ -105,6 +107,10 @@ function openForgePage(url: string) {
 // arbitrary path, while the pane can only ever be rooted at the enlarged cell.
 function browseFiles() {
   emit("open-files");
+}
+// This directory's own settings (#2729): Settings opens on Directory settings with this row open.
+function openThisDirSettings() {
+  if (props.cwd) openDirSettings(props.cwd);
 }
 function newTerminalHere() {
   if (props.cwd) openTerminalAt(props.cwd, props.slotKey);
@@ -244,14 +250,17 @@ onUnmounted(() => {
     >
       <!-- Insert a file path leads: it is the one item that acts on the prompt the user is in the
          middle of writing, and the one reached for most. -->
-      <button v-if="slotKey" type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(insertFilePath)">
+      <button v-if="slotKey && !remoteServer" type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(insertFilePath)">
         <span class="material-symbols-outlined text-[15px]" aria-hidden="true">attach_file</span> {{ t("pathMenu.insertFilePath") }}
       </button>
-      <button type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(openDir)">
+      <button v-if="!remoteServer" type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(openDir)">
         <span class="material-symbols-outlined text-[15px]" aria-hidden="true">folder</span> {{ t("pathMenu.reveal") }}
       </button>
       <button type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(browseFiles)">
         <span class="material-symbols-outlined text-[15px]" aria-hidden="true">folder_open</span> {{ t("pathMenu.browseFiles") }}
+      </button>
+      <button type="button" data-testid="cell-path-dir-settings" :class="PATH_MENU_ITEM" @click="pathMenuAction(openThisDirSettings)">
+        <span class="material-symbols-outlined text-[15px]" aria-hidden="true">tune</span> {{ t("pathMenu.dirSettings") }}
       </button>
       <button type="button" data-testid="cell-path-item" :class="PATH_MENU_ITEM" @click="pathMenuAction(newTerminalHere)">
         <span class="material-symbols-outlined text-[15px]" aria-hidden="true">terminal</span> {{ t("pathMenu.newTerminal") }}

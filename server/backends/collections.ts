@@ -20,7 +20,6 @@ import {
   configureCollectionHost,
   discoverCollections,
   loadCollection,
-  enrichItems,
   readCustomViewHtml,
   validateRecordObject,
   recordFieldProblem,
@@ -69,6 +68,7 @@ import { clampCapabilities, isCapability, mintViewToken, requireViewToken } from
 // The shared manageCollection binding — the query route reuses its queryItems
 // action so a view can never do more than the agent's own data plane.
 import { manageCollectionHandlerFor } from "../infra/collection-tool.js";
+import { parseListParam, sendToolResult } from "./viewDataParams.js";
 import { hostLogger } from "./hostLogger.js";
 import { getCwdPresets } from "../config/config-routes.js";
 import { isManagedWorkspace } from "./workspaceSetup.js";
@@ -178,7 +178,7 @@ function sanitizeLogValues(params: Record<string, string>): Record<string, strin
 
 /** Wrap a route so an unexpected throw becomes a logged 500 rather than an
  *  unhandled rejection. `op` names the endpoint in the log line. */
-function guarded<P extends Record<string, string>>(op: string, handler: RequestHandler<P>): RequestHandler<P> {
+export function guarded<P extends Record<string, string>>(op: string, handler: RequestHandler<P>): RequestHandler<P> {
   return async (req, res, next) => {
     try {
       await handler(req, res, next);
@@ -796,14 +796,15 @@ const remoteViewItemsHandler: RequestHandler<{ slug: string; viewId: string }> =
 // already typed as a mode, which is what forced the assertion it replaces.
 const isViewWriteMode = (value: unknown): value is ViewWriteMode => VIEW_WRITE_MODES.some((mode) => mode === value);
 
-// Scoped read: the view's enriched records as `{ items }` — the shape custom views
-// fetch from `window.__MC_VIEW.dataUrl`. Guarded by the view token only.
+// Scoped read: `getItems`, exactly as MulmoClaude serves it — `?ids=` / `?fields=` narrow the
+// rows and columns, the answer is `{ collection, count, items, missing?, warning? }`, and an
+// unprojected read past MAX_UNSELECTIVE_ITEMS is refused. Persisted views are written against
+// that contract (custom-view.md) and run unchanged on both hosts. Guarded by the view token only.
 const viewDataGetHandler: RequestHandler<{ slug: string }> = async (req, res) => {
-  const scope = resolveProjectRoot(req);
-  const collection = await resolveCollection(res, req.params.slug, scope);
-  if (!collection) return;
-  const items = await enrichItems(collection, await storeFor(collection, scope).list(), scope);
-  res.json({ items });
+  const ids = parseListParam(req.query.ids);
+  const fields = parseListParam(req.query.fields);
+  const getItems = manageCollectionHandlerFor(resolveProjectRoot(req).workspaceRoot);
+  sendToolResult(res, await getItems({ action: "getItems", slug: req.params.slug, ...(ids ? { ids } : {}), ...(fields ? { fields } : {}) }));
 };
 
 // Scoped write: apply per-record updates from a custom view (e.g. the vocabulary
@@ -880,12 +881,7 @@ const viewDataQueryHandler: RequestHandler<{ slug: string }> = async (req, res) 
     // token against that same root, so running the query against any other one would hand a
     // project-scoped view another project's rows for a shared slug.
     const query = manageCollectionHandlerFor(resolveProjectRoot(req).workspaceRoot);
-    const raw = await query({ action: "queryItems", slug: req.params.slug, query: body.query });
-    try {
-      res.json(JSON.parse(raw));
-    } catch {
-      res.status(400).json({ error: raw });
-    }
+    sendToolResult(res, await query({ action: "queryItems", slug: req.params.slug, query: body.query }));
   } catch (err) {
     log.warn("collections", "view-data query failed", { slug: req.params.slug.replace(/[\r\n]/g, " "), error: errorMessage(err) });
     res.status(500).json({ error: "collection query failed" });

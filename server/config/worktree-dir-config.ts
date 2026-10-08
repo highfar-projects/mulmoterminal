@@ -36,7 +36,7 @@ const HUE_STEP_DEGREES = 12;
 //
 // `headerStatusTint` is here rather than tinted below because it is a MODE, not a colour — there
 // is no hue in "none" to rotate.
-const INHERITED_KEYS = ["name", "theme", "colors", "fontSize", "fontFamily", "provider", "model", "account", "worktreeEnv", "headerStatusTint"] as const;
+const INHERITED_KEYS = ["name", "theme", "colors", "fontSize", "fontFamily", "provider", "model", "worktreeEnv", "headerStatusTint"] as const;
 
 // The cell's chrome — everything a glance at the grid distinguishes one cell by. These get the
 // tint, so a worktree is recognisable both AS this project and as not the project's main tree.
@@ -44,9 +44,11 @@ const TINTED_COLOR_KEYS = ["badgeColor", "headerColor", "headerTextColor", "cell
 
 // Deliberately absent: `sound` / `sounds` point at a file inside the parent directory that the
 // worktree has no copy of, and `addDirs` resolves relative to the config's OWN directory — copied
-// verbatim it would silently grant a different set of directories. `buttons` / `chips` / `skills` /
+// verbatim it would silently grant a different set of directories. `buttons` / `commands` / `chips` / `skills` /
 // `decks` are the header's own contents, which a worktree composes for itself; a worktree still
 // gets the workspace's stories directory in its Mulmo menu, so that one is not left empty.
+// `mobileFiles` decides what leaves this machine for the phone, so a worktree shares nothing
+// until its own file says so.
 
 /** Each status entry's colours rotated, written in the object form the config accepts. Entries the
  *  project did not set stay unset, so the worktree's file says what the project's said. */

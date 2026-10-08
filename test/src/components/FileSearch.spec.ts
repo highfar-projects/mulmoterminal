@@ -119,6 +119,16 @@ const rows = (w: ReturnType<typeof open>) =>
 const searchCalls = () => vi.mocked(globalThis.fetch).mock.calls.filter(([input]) => String(input).includes("/browse/search")).length;
 
 describe("FileSearch", () => {
+  // The command palette's `#` hands its text over as the `seed` prop: the panel opens searching.
+  it("searches for the seed's text as it opens", async () => {
+    const w = mount(FileSearch, { props: { cwd: "/proj", buffer: null, seed: { text: "TODO" } }, attachTo: document.body });
+    await vi.runOnlyPendingTimersAsync();
+    await flushPromises();
+    expect(w.find<HTMLInputElement>('[data-testid="file-search-input"]').element.value).toBe("TODO");
+    expect(lastUrl).toContain("q=TODO");
+    w.unmount();
+  });
+
   it("does not ask anything until a query is typed", async () => {
     const w = open();
     await vi.runOnlyPendingTimersAsync();
@@ -161,6 +171,21 @@ describe("FileSearch", () => {
     // route passes it through. Nothing new is asked, because an empty query is not a search.
     expect(inFlight?.aborted).toBe(true);
     expect(searchCalls()).toBe(before);
+    expect(rows(w)).toEqual([]);
+    w.unmount();
+  });
+
+  // The palette's `#` can change the text of an open panel while a search runs. The old answer must
+  // not land during the debounce, under text it does not match.
+  it("drops a running search's answer once the text has changed, before the debounce runs", async () => {
+    const answers: ((body: unknown) => void)[] = [];
+    globalThis.fetch = vi.fn<typeof fetch>(async () => new Promise<Response>((resolve) => answers.push((body) => resolve(new Response(JSON.stringify(body))))));
+    const w = mount(FileSearch, { props: { cwd: "/proj", buffer: null, seed: { text: "needle" } }, attachTo: document.body });
+    await vi.advanceTimersByTimeAsync(DEBOUNCE_MS + 1);
+    expect(answers).toHaveLength(1); // the premise: the first search is in flight
+    await w.setProps({ seed: { text: "other" } });
+    answers[0]?.({ matches: DISK, truncated: false, source: "git" });
+    await flushPromises();
     expect(rows(w)).toEqual([]);
     w.unmount();
   });

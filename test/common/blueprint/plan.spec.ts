@@ -133,6 +133,20 @@ describe("step skill paths", () => {
   });
 });
 
+describe("files a step asks the person to read", () => {
+  it("defaults to none", () => {
+    expect(basePlanSchema.parse({ steps: [step("init")] }).steps[0]?.reads).toEqual([]);
+  });
+
+  it.each([["STYLE.md"], [".blueprint/brief.md"], ["notes/chaff.yaml"]])("accepts %j", (read) => {
+    expect(basePlanSchema.safeParse({ steps: [step("init", { reads: [read] })] }).success).toBe(true);
+  });
+
+  it.each([["../outside.md"], ["/etc/passwd"], [".blueprint/../../x"], ["a//b"], [""], ["a b.md"], ["C:\\x.md"]])("refuses %j", (read) => {
+    expect(basePlanSchema.safeParse({ steps: [step("init", { reads: [read] })] }).success).toBe(false);
+  });
+});
+
 describe("isContainedRelativePath", () => {
   const SEGMENT = /^[a-z0-9][a-z0-9_-]*$/;
   it.each([

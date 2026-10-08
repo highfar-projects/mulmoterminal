@@ -115,7 +115,8 @@ export function substituteShell(text: string, ctx: HeaderContext, quote: (value:
 // gate; it's a display-time visibility filter (applied in resolveHeader for /api/header). The security
 // boundary is "the command is in the user's config" + the same-origin guard on /ws/run.
 export function resolveButtonCommand(config: HeaderConfig, ctx: HeaderContext, buttonId: string, quote: (value: string) => string): string | null {
-  const button = flattenEntries(config.buttons ?? DEFAULT_BUTTONS).find((b) => b.id === buttonId && b.run === "shell");
+  // Commands run the same way (#2465); the merge keeps their ids apart from the buttons'.
+  const button = flattenEntries([...(config.buttons ?? DEFAULT_BUTTONS), ...(config.commands ?? [])]).find((b) => b.id === buttonId && b.run === "shell");
   return button?.cmd ? substituteShell(button.cmd, ctx, quote) : null;
 }
 
@@ -124,10 +125,10 @@ function resolveChip(chip: HeaderChip, ctx: HeaderContext): ResolvedChip | null 
   return evalWhen(chip.when, ctx) ? { kind: "custom", label: chip.label, text: substitute(chip.text, ctx) } : null;
 }
 
-// Whether the resolved config has any `pr` button — so the caller resolves ctx.prUrl (a gh call) only
-// when one is actually present, not on every /api/header fetch.
+// Whether the resolved config has any `pr` button or command (#2465) — so the caller resolves
+// ctx.prUrl (a gh call) only when one is actually present, not on every /api/header fetch.
 export function headerHasPrButton(config: HeaderConfig): boolean {
-  return flattenEntries(config.buttons ?? DEFAULT_BUTTONS).some((b) => b.open?.pr === true);
+  return flattenEntries([...(config.buttons ?? DEFAULT_BUTTONS), ...(config.commands ?? [])]).some((b) => b.open?.pr === true);
 }
 
 // A `pr` button is shown only when the branch has an open PR (ctx.prUrl set); otherwise it's dropped.
@@ -149,6 +150,7 @@ function resolveEntry(entry: HeaderEntry, ctx: HeaderContext): ResolvedEntry | n
 export function resolveHeader(config: HeaderConfig, ctx: HeaderContext): ResolvedHeader {
   // null buttons == unconfigured → the built-in defaults; an explicit list (even empty) replaces them.
   const buttons = (config.buttons ?? DEFAULT_BUTTONS).map((b) => resolveEntry(b, ctx)).filter((b): b is ResolvedEntry => b !== null);
+  const commands = (config.commands ?? []).map((b) => resolveEntry(b, ctx)).filter((b): b is ResolvedEntry => b !== null);
   const chips = config.chips === null ? null : config.chips.map((c) => resolveChip(c, ctx)).filter((c): c is ResolvedChip => c !== null);
-  return { buttons, chips, env: ctx.worktreeEnv };
+  return { buttons, commands, chips, env: ctx.worktreeEnv };
 }

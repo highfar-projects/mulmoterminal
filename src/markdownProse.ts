@@ -12,6 +12,15 @@
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 
+export interface ProseOptions {
+  /** The one remote origin whose images may load. Only for markdown this repo ships (the release
+   *  guides); an agent's reply never passes it, so its remote images stay links. */
+  trustedImageOrigin?: string | undefined;
+  /** Every image becomes a link, a same-origin one included: for markdown a stranger wrote, where a
+   *  relative `src` is a request to this app's own routes the moment the page renders. */
+  imagesAsLinks?: boolean | undefined;
+}
+
 /** Render `markdown` to HTML that is safe to hand to `v-html`.
  *
  *  `{ async: false }` makes marked return synchronously, but its declared return type is still
@@ -24,12 +33,15 @@ import DOMPurify from "dompurify";
  *  URLs. `rel` goes with `target` for the usual reason — an opened page must not reach `window.opener`
  *  — and it is set AFTER sanitizing so DOMPurify cannot be asked to allow an attribute we then have
  *  to trust it stripped correctly (Claude review, round 1). */
-export function renderMarkdownProse(markdown: string): string {
+export function renderMarkdownProse(markdown: string, options: ProseOptions = {}): string {
   const parsed = marked.parse(markdown, { async: false });
   const clean = DOMPurify.sanitize(typeof parsed === "string" ? parsed : "");
   const doc = new DOMParser().parseFromString(clean, "text/html");
   doc.body.querySelectorAll("*").forEach(keepPermittedAttributes);
-  doc.querySelectorAll("img[src]").forEach(unfetchedIfRemote);
+  doc.querySelectorAll("img[src]").forEach((image) => {
+    if (options.imagesAsLinks === true) asLink(image);
+    else unfetchedIfRemote(image, options.trustedImageOrigin);
+  });
   doc.querySelectorAll("a[href]").forEach((link) => {
     link.setAttribute("target", "_blank");
     link.setAttribute("rel", "noopener noreferrer");
@@ -87,14 +99,27 @@ function keepPermittedAttributes(element: Element): void {
  *  `data:` and a relative path stay as images: neither leaves this origin. A `src` that will not
  *  parse is treated as remote, because the safe reading of "I cannot tell what this is" is not to
  *  fetch it. */
-function unfetchedIfRemote(image: Element): void {
+function unfetchedIfRemote(image: Element, trustedOrigin: string | undefined): void {
   const src = image.getAttribute("src") ?? "";
-  if (!isRemoteUrl(src)) return;
+  if (!isRemoteUrl(src) || (trustedOrigin !== undefined && originOf(src) === trustedOrigin)) return;
+  asLink(image);
+}
+
+function asLink(image: Element): void {
+  const src = image.getAttribute("src") ?? "";
   const link = image.ownerDocument.createElement("a");
   link.setAttribute("href", src);
   link.textContent = image.getAttribute("alt")?.trim() || src;
   image.replaceWith(link);
 }
+
+const originOf = (src: string): string | null => {
+  try {
+    return new URL(src, window.location.href).origin;
+  } catch {
+    return null;
+  }
+};
 
 const isRemoteUrl = (src: string): boolean => {
   if (src.startsWith("data:")) return false;

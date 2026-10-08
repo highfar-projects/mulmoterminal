@@ -1,9 +1,25 @@
 import type { Messages } from "./messages";
+import { usageViewZhTW } from "./usageView/zh-TW";
 import { blueprintsZhTW } from "./blueprints/zh-TW";
 import { tipsZhTW } from "./tips/zh-TW";
 import { forkTipsZhTW } from "./forkTips/zh-TW";
-import { accountFormZhTW } from "./accountForm/zh-TW";
 import { LAUNCH_COMMAND } from "../../common/launchCommand";
+import { commandPaletteZhTW } from "./commandPalette/zh-TW";
+import { focusModeZhTW } from "./focusMode/zh-TW";
+import { fileHistoryZhTW } from "./fileHistory/zh-TW";
+import { dirConfigSaveZhTW } from "./dirConfigSave/zh-TW";
+import { releaseNotesZhTW } from "./releaseNotes/zh-TW";
+import { dirConfigOpenZhTW } from "./dirConfigOpen/zh-TW";
+import { dirSettingsFormZhTW } from "./dirSettingsForm/zh-TW";
+import { themeEditorZhTW } from "./themeEditor/zh-TW";
+import { headerChipsZhTW } from "./headerChips/zh-TW";
+import { headerButtonsZhTW } from "./headerButtons/zh-TW";
+import { settingsControlsZhTW } from "./settingsControls/zh-TW";
+import { shortcutsZhTW } from "./shortcuts/zh-TW";
+import { filesTreeZhTW } from "./filesTree/zh-TW";
+import { previewCodeCopyZhTW } from "./previewCodeCopy/zh-TW";
+import { skillsViewZhTW } from "./skillsView/zh-TW";
+import { processesViewZhTW } from "./processesView/zh-TW";
 
 // 繁體中文。`Messages` 就是 en.ts 的形狀，少一個鍵就會編譯失敗 —— 不會出現執行時悄悄退回
 // 英文、卻沒有人發現的狀況。
@@ -62,6 +78,7 @@ export const zhTW: Messages = {
       cost: "費用（估算）",
       quit: "結束 MulmoTerminal",
       help: "說明與使用者指南",
+      releaseNotes: "版本說明",
     },
 
     terminalKeys: {
@@ -81,37 +98,7 @@ export const zhTW: Messages = {
       },
     },
 
-    shortcuts: {
-      intro:
-        "唯讀；不論有沒有綁定，全都列在 {keymapKey} 底下。可以綁定兩類：MulmoTerminal 的操作（放大、跳到正在等你的代理程式、複製 / 貼上），以及送給終端機的按鍵序列（在 Mac 上用 Cmd+← 跳到行首）。你綁定的每個鍵都不再傳給終端機裡的程式，所以請用下面的按鈕來設定 —— 代理程式會先對照你既有的綁定，以及瀏覽器和 Mac 各自帶來的陷阱，然後才寫入。參考資料見{guide}。",
-      guide: "指南",
-      actions: {
-        zoomToggle: "放大 / 收合一個終端機",
-        zoomNext: "放大下一個終端機",
-        zoomPrev: "放大上一個終端機",
-        focusNext: "把游標移到下一個終端機（僅網格檢視）",
-        focusPrev: "把游標移到上一個終端機（僅網格檢視）",
-        nextAttention: "跳到正在等你的終端機",
-        markUnread: "將這個終端機標為未讀 / 已讀",
-        terminalNew: "開啟啟動面板",
-        terminalNewHere: "在這個終端機的目錄下開啟啟動面板",
-        terminalNewAdjacent: "直接在這個終端機的目錄下開一個 shell",
-        terminalClose: "關閉這個終端機",
-        terminalRestart: "重新啟動這個終端機裡的代理程式",
-        terminalMovePrev: "將此終端機前移",
-        terminalMoveNext: "將此終端機後移",
-        filesFind: "在這個終端機旁邊，依檔名開啟檔案",
-        filesSearch: "在這個終端機旁邊，搜尋檔案內容",
-        commandPalette: "開啟命令面板",
-        copy: "複製終端機裡選取的內容",
-        paste: "貼到終端機",
-      },
-      list: "鍵盤快速鍵",
-      notSet: "未設定",
-      sendRow: "把 {key} 送到終端機",
-      sendNone: "把按鍵送到終端機",
-      setUp: "設定快速鍵…",
-    },
+    shortcuts: shortcutsZhTW,
 
     surviving: {
       intro:
@@ -144,8 +131,8 @@ export const zhTW: Messages = {
       sweepDisabledHint: "上面的清掃本身是關掉的，所以這裡沒有可重複的東西。",
       sweepRunning: "本伺服器每 {hours} 小時重複一次清理。",
       sweepRunningOff: "本伺服器僅在啟動時清理一次，不會重複。",
-      sweepPending: "上面儲存的間隔將從下次啟動開始生效。",
-      sweepNote: "這個間隔在伺服器啟動時讀取，所以在這裡改動要下次啟動才生效。",
+      sweepPending: "上面儲存的間隔還沒有到達這台伺服器：請重新讀取設定檔，或重新啟動它。",
+      sweepNote: "在這裡改動會立即生效，從上一次清理開始計算。",
       neverTitle: "永不自動結束。",
       neverHint: "它們會一直留著，直到你在這裡停掉，或是從佔著它的終端機把它結束。",
       reapHint: "沒有任何東西在用 —— 沒人連線、這麼久沒有輸出 —— 的工作階段{ended}。它的對話會保留。設成 0 就永不自動結束。",
@@ -215,7 +202,7 @@ export const zhTW: Messages = {
       prFooter: "在建立的 PR 末尾寫上 clone 名稱",
       prFooterHint: "在內文底部加一行 {line}，這樣並排放著好幾個 clone 時，PR 能說明自己出自哪一個。",
       gitlabTitle: "自架 GitLab",
-      gitlabHint: "光看 URL 看不出這台主機跑的是哪種 forge，所以在這裡宣告，它的儲存庫就會用 {glab} 來讀。需要 {authCommand}。下次伺服器啟動時生效。",
+      gitlabHint: "光看 URL 看不出這台主機跑的是哪種 forge，所以在這裡宣告，它的儲存庫就會用 {glab} 來讀。需要 {authCommand}。立即生效。",
       gitlabField: "新增一台自架 GitLab 主機",
     },
 
@@ -231,11 +218,14 @@ export const zhTW: Messages = {
       worklogInterval: "多久執行一次：",
       worklogStepper: "開發工作紀錄的間隔",
       systemTasks: "內建的排程作業",
-      systemTasksHint: "兩個都每小時執行一次，不關就一直開著。關掉其中一個要等伺服器下次啟動才生效。",
+      systemTasksHint: "兩個都每小時執行一次，不關就一直開著。開關立即生效。",
       feedRefresh: "重新整理集合與訂閱來源",
       feedRefreshHint: "抓取你的 RSS/JSON 訂閱來源，並派送由 skill 支撐的集合更新，涵蓋工作區和每個存過的專案目錄。一個訂閱來源都沒註冊時它什麼也不做。",
       calendarSync: "同步 Google 日曆",
       calendarSyncHint: "把有變動的行程拉進任何宣告了 Google 日曆的集合。在你連結帳號之前它什麼也不做。",
+      remoteServer: "實驗功能：伺服器執行在另一台機器上",
+      remoteServerHint:
+        "用於透過 SSH 通道連線的伺服器。隱藏或說明會在伺服器畫面上執行的操作（檔案對話框、檔案管理器、應用程式、Google 登入），並一律上傳拖放的檔案。立即生效；啟動指令碼會在下次啟動時讀取。",
     },
 
     launchers: {
@@ -299,7 +289,6 @@ export const zhTW: Messages = {
       accountsIntro:
         "— Claude Code 或 Codex 的另一個登入，各自使用獨立的設定目錄。新儲存格可以在啟動表單中選擇帳戶啟動，其標題列會顯示該帳戶。工作階段始終留在啟動時的帳戶上。",
       noAccounts: "尚未設定 — 所有儲存格都使用預設登入。",
-      ...accountFormZhTW,
       addBackend: "新增一個後端…",
     },
 
@@ -424,6 +413,9 @@ export const zhTW: Messages = {
       loadAverageTitle: "Load average",
       loadAverageHint:
         "跑著你的工作階段的那台機器的負載，以核心數的百分比表示 —— 100% 意味著每個核心都有排隊的工作，這時再起一個代理程式會讓已經在跑的變慢。100% 轉琥珀色，200% 轉紅色。不保留 load average 的主機（Windows）無論如何都不顯示。",
+      searchBox: "在頂欄中間顯示搜尋框",
+      searchBoxTitle: "搜尋框",
+      searchBoxHint: "在所有頁面的頂欄中間顯示一個開啟命令面板的搜尋框，與「命令」按鈕和快捷鍵開啟的是同一個面板。預設關閉。",
     },
 
     waitingRows: {
@@ -484,7 +476,7 @@ export const zhTW: Messages = {
       picker: "這個應用程式的語言",
       auto: "跟著瀏覽器的語言",
       autoResolved: "你的瀏覽器要的是 {locale}，所以這裡以 {label} 顯示。",
-      partial: "目前翻譯過的是設定畫面，以及網格上的狀態詞。應用程式的其餘部分仍然是英文。",
+      partial: "目前翻譯過的是設定畫面、網格上的狀態詞，以及所有按鈕的提示文字與螢幕閱讀器文字。應用程式其餘的文字仍然是英文。",
     },
   },
 
@@ -553,6 +545,7 @@ export const zhTW: Messages = {
   },
 
   launch: {
+    mcpGroupsNextStart: "從此目錄下次啟動的終端機開始生效。已開啟的儲存格仍使用啟動時的工具，請重新啟動它。",
     agentUnavailable: {
       missing: "此電腦上未安裝 {agent}，因此無法在此啟動。",
       noSuchPath: "{agent} 的命令覆寫設定指向的檔案不存在，因此無法啟動。",
@@ -563,41 +556,13 @@ export const zhTW: Messages = {
   },
 
   // 雙鍵快捷鍵等待第二個鍵時顯示的提示（#2265）。
-  commandPalette: {
-    open: "命令",
-    placeholder: "依名稱執行動作",
-    close: "關閉命令面板",
-    empty: "沒有符合的動作。",
-    needsEnlarged: "僅在放大終端機時",
-    needsNothingEnlarged: "僅在未放大時",
-    needsManualOrder: "僅限手動排序",
-    gridHidden: "僅在終端機網格位於前景時",
-    hint: "Enter 執行 · Esc 關閉",
-    notSet: "無按鍵",
-    descriptions: {
-      zoomToggle: "放大游標所在的終端機，或還原已放大的終端機。",
-      zoomNext: "把放大移到畫面順序中的下一個終端機。",
-      zoomPrev: "把放大移到上一個終端機。",
-      focusNext: "在平鋪網格中把游標移到下一個終端機。",
-      focusPrev: "在平鋪網格中把游標移到上一個終端機。",
-      nextAttention: "前往等待你輸入的終端機，其次是已完成的，再其次是閒置的。",
-      markUnread: "把閒置的終端機標為未讀，把等待中的標為已讀。對象是放大的終端機，沒有時是游標所在的終端機。",
-      terminalNew: "在預設工作區開啟啟動面板。",
-      terminalNewHere: "在目前終端機的目錄開啟啟動面板。",
-      terminalNewAdjacent: "在目前終端機的目錄直接啟動 shell，無需填寫表單。",
-      terminalClose: "立即關閉目前的終端機，不作確認。",
-      terminalRestart: "重新啟動目前終端機中的代理，繼續同一對話。",
-      terminalMovePrev: "在手動排序中將目前終端機前移一位（格狀與縮圖列中向左，清單中向上）。",
-      terminalMoveNext: "在手動排序中將目前終端機後移一位（格狀與縮圖列中向右，清單中向下）。",
-      filesFind: "在放大終端機旁的 Files 面板中依名稱尋找檔案。",
-      filesSearch: "在放大終端機所在專案的檔案內容中搜尋。",
-    },
-  },
+  commandPalette: commandPaletteZhTW,
   // The path menu's file items. Its repository section stays in the forge's own words.
   pathMenu: {
     insertFilePath: "插入檔案路徑",
     reveal: "在檔案管理員中顯示",
     browseFiles: "在應用程式中瀏覽檔案",
+    dirSettings: "此目錄的設定",
     newTerminal: "在此處新增終端機",
   },
   prefixKeys: {
@@ -625,9 +590,13 @@ export const zhTW: Messages = {
     items: {
       rooms: { label: "Rooms", detail: "終端機之間的圓桌對話" },
       blueprints: { label: "藍圖", detail: "依範本逐步建置應用程式或文件" },
+      skills: { label: "Skills", detail: "列出並搜尋 ~/.claude/skills 與各資料夾中的技能" },
+      processes: { label: "處理程序", detail: "各工作階段中執行的處理程序，以及可刪除的 worktree" },
       worklog: { label: "Worklog", detail: "wiki 中的開發工作紀錄（#worklog）" },
+      usage: { label: "權杖用量", detail: "輪換中每個權杖剩餘的 5 小時視窗與每週視窗" },
     },
   },
+  usageView: usageViewZhTW,
   rowMenu: {
     trigger: "此終端機的操作",
     title: "操作",
@@ -642,6 +611,33 @@ export const zhTW: Messages = {
     wake: "喚醒",
     close: "關閉",
   },
+  fileOutline: {
+    button: "大綱",
+    tip: "此檔案的標題（選取即可跳轉）",
+    empty: "此檔案沒有標題。",
+  },
+  whatsNew: {
+    title: "新功能",
+    intro: "MulmoTerminal 已更新至 {version}。以下是自上次使用以來的變化。",
+    englishOnly: "版本說明以英文撰寫。",
+    openOnWeb: "在網頁中開啟此頁",
+    older: "更早的版本請查看更新紀錄。",
+    close: "知道了",
+  },
+  fileHistory: fileHistoryZhTW,
+  dirConfigSave: dirConfigSaveZhTW,
+  releaseNotes: releaseNotesZhTW,
+  dirConfigOpen: dirConfigOpenZhTW,
+  dirSettingsForm: dirSettingsFormZhTW,
+  themeEditor: themeEditorZhTW,
+  headerChips: headerChipsZhTW,
+  headerButtons: headerButtonsZhTW,
+  focusMode: focusModeZhTW,
+  settingsControls: settingsControlsZhTW,
+  ...filesTreeZhTW,
+  ...previewCodeCopyZhTW,
+  ...skillsViewZhTW,
+  ...processesViewZhTW,
   tips: tipsZhTW,
   forkTips: forkTipsZhTW,
   blueprints: blueprintsZhTW,

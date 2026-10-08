@@ -6,6 +6,8 @@ import type { Cell } from "../../../src/components/gridTabs.js";
 import type { RunCommand } from "../../../src/components/runCommand.js";
 import { setCockpitLines } from "../../../src/composables/cockpitLines";
 import { connView } from "../../../src/composables/useTerminalConnections";
+import { oneFile } from "./filesPaneFixture";
+import type { FilesPaneState } from "../../../src/components/filesPaneState";
 
 // Stub the cells so the page renderer can be tested without Terminal/xterm/pub-sub.
 // The host drives the pane through reload()/confirmDiscard(); spies here are what let the
@@ -13,7 +15,7 @@ import { connView } from "../../../src/composables/useTerminalConnections";
 const paneStub = vi.hoisted(() => ({
   reload: vi.fn(),
   flush: vi.fn(async () => undefined),
-  snapshot: vi.fn((): { openPath: string | null; expanded: string[]; showPreview?: boolean } => ({ openPath: "README.md", expanded: ["src"] })),
+  snapshot: vi.fn((): FilesPaneState => oneFile("README.md", { expanded: ["src"] })),
   showError: vi.fn(),
 }));
 // Only the roster menu's unread/read wire is replaced; everything else the grid calls stays real.
@@ -1066,14 +1068,14 @@ describe("file pane beside the enlarged cell", () => {
     await openPaneOnCell(w, 1);
     expect(paneOf(w).props("initialState")).toBeNull(); // never visited
 
-    paneStub.snapshot.mockReturnValueOnce({ openPath: "notes.md", expanded: ["docs"] });
+    paneStub.snapshot.mockReturnValueOnce(oneFile("notes.md", { expanded: ["docs"] }));
     await w.setProps({ expandedUid: 2 });
     await flushPromises();
     expect(paneOf(w).props("initialState")).toBeNull(); // cell 2 is new too
 
     await w.setProps({ expandedUid: 1 });
     await flushPromises();
-    expect(paneOf(w).props("initialState")).toEqual({ openPath: "notes.md", expanded: ["docs"] });
+    expect(paneOf(w).props("initialState")).toEqual(oneFile("notes.md", { expanded: ["docs"] }));
   });
 
   // Two terminals in the same repository is the ordinary case here. Keying the pane on the
@@ -1083,23 +1085,25 @@ describe("file pane beside the enlarged cell", () => {
     const w = mountCockpit([cell(1, "s1", "/same"), cell(2, "s2", "/same")], 1, []);
     await openPane(w);
     await openPaneOnCell(w, 1);
-    paneStub.snapshot.mockReturnValue({ openPath: "from-one.md", expanded: [] });
+    paneStub.snapshot.mockReturnValue(oneFile("from-one.md", { expanded: [] }));
 
     await w.setProps({ expandedUid: 2 });
     await flushPromises();
     expect(paneStub.reload).toHaveBeenCalledTimes(1); // it moved, despite the same cwd
     expect(paneOf(w).props("initialState")).toBeNull(); // cell 2 has its own (empty) memory
 
-    paneStub.snapshot.mockReturnValue({ openPath: "from-two.md", expanded: [] });
+    paneStub.snapshot.mockReturnValue(oneFile("from-two.md", { expanded: [] }));
     await w.setProps({ expandedUid: 1 });
     await flushPromises();
-    expect(paneOf(w).props("initialState")).toEqual({ openPath: "from-one.md", expanded: [] });
+    expect(paneOf(w).props("initialState")).toEqual(oneFile("from-one.md", { expanded: [] }));
   });
 
   // #958: what survives a RELOAD. The uid-keyed memory above cannot — a cell is not the same
   // number next time — so a copy goes to localStorage keyed by directory, and is read only
   // when the memory has nothing.
   describe("restoring across a reload", () => {
+    // Seeded in the ONE-FILE shape every browser already holds from before tabs (#2267): what the
+    // pane receives is that file as its only tab, which is the upgrade path.
     const seed = (cwd: string, state: { openPath: string | null; expanded: string[]; showPreview?: boolean }) =>
       localStorage.setItem("files_pane_state", JSON.stringify([{ cwd, state }]));
 
@@ -1111,7 +1115,7 @@ describe("file pane beside the enlarged cell", () => {
       seed("/one", { openPath: "notes.md", expanded: ["docs"], showPreview: true });
       const w = mountCockpit([cell(1, "s1", "/one"), cell(2)], 1, []);
       await openPane(w);
-      expect(paneOf(w).props("initialState")).toEqual({ openPath: "notes.md", expanded: ["docs"], showPreview: true });
+      expect(paneOf(w).props("initialState")).toEqual(oneFile("notes.md", { expanded: ["docs"], showPreview: true }));
     });
 
     // The stored entry describes ONE pane, not a default for the directory. Two terminals in
@@ -1122,9 +1126,9 @@ describe("file pane beside the enlarged cell", () => {
       const w = mountCockpit([cell(1, "s1", "/same"), cell(2, "s2", "/same")], 1, []);
       await openPane(w);
       await openPaneOnCell(w, 1);
-      expect(paneOf(w).props("initialState")).toEqual({ openPath: "notes.md", expanded: [], showPreview: false });
+      expect(paneOf(w).props("initialState")).toEqual(oneFile("notes.md", { expanded: [], showPreview: false }));
 
-      paneStub.snapshot.mockReturnValue({ openPath: "from-one.md", expanded: [] });
+      paneStub.snapshot.mockReturnValue(oneFile("from-one.md", { expanded: [] }));
       await w.setProps({ expandedUid: 2 });
       await flushPromises();
       expect(paneOf(w).props("initialState")).toBeNull();
@@ -1137,13 +1141,13 @@ describe("file pane beside the enlarged cell", () => {
       const cells = [cell(1, "s1", "/one"), cell(2)];
       const w = mountCockpit(cells, 1, []);
       await openPane(w);
-      paneStub.snapshot.mockReturnValue({ openPath: "one.md", expanded: ["src"], showPreview: true });
+      paneStub.snapshot.mockReturnValue(oneFile("one.md", { expanded: ["src"], showPreview: true }));
 
       await w.setProps({ cells: [cell(1, "s1", "/two"), cell(2)] });
       await flushPromises();
       expect(paneOf(w).props("cwd")).toBe("/two");
       expect(JSON.parse(localStorage.getItem("files_pane_state") ?? "[]")).toEqual([
-        { cwd: "/one", state: { openPath: "one.md", expanded: ["src"], showPreview: true } },
+        { cwd: "/one", state: oneFile("one.md", { expanded: ["src"], showPreview: true }) },
       ]);
     });
 
@@ -1159,12 +1163,12 @@ describe("file pane beside the enlarged cell", () => {
     it("writes what is on screen when the page goes away", async () => {
       const w = mountCockpit([cell(1, "s1", "/one"), cell(2)], 1, []);
       await openPane(w);
-      paneStub.snapshot.mockReturnValue({ openPath: "live.md", expanded: ["src"], showPreview: true });
+      paneStub.snapshot.mockReturnValue(oneFile("live.md", { expanded: ["src"], showPreview: true }));
 
       window.dispatchEvent(new Event("pagehide"));
       await flushPromises();
       expect(JSON.parse(localStorage.getItem("files_pane_state") ?? "[]")).toEqual([
-        { cwd: "/one", state: { openPath: "live.md", expanded: ["src"], showPreview: true } },
+        { cwd: "/one", state: oneFile("live.md", { expanded: ["src"], showPreview: true }) },
       ]);
     });
   });
@@ -1172,13 +1176,13 @@ describe("file pane beside the enlarged cell", () => {
   it("remembers across closing and re-opening the pane on the same cell", async () => {
     const w = mountCockpit([cell(1, "s1", "/one"), cell(2)], 1, []);
     await openPane(w);
-    paneStub.snapshot.mockReturnValueOnce({ openPath: "a.md", expanded: [] });
+    paneStub.snapshot.mockReturnValueOnce(oneFile("a.md", { expanded: [] }));
 
     await paneOf(w).vm.$emit("close");
     await flushPromises();
     await w.findComponent({ name: "TerminalCell" }).vm.$emit("open-files");
     await flushPromises();
-    expect(paneOf(w).props("initialState")).toEqual({ openPath: "a.md", expanded: [] });
+    expect(paneOf(w).props("initialState")).toEqual(oneFile("a.md", { expanded: [] }));
   });
 
   // A re-root that could not be saved out of never moved, so its snapshot belongs to the cell
@@ -1190,7 +1194,7 @@ describe("file pane beside the enlarged cell", () => {
     await openPaneOnCell(w, 1);
 
     paneStub.flush.mockResolvedValueOnce(false as unknown as undefined);
-    paneStub.snapshot.mockReturnValue({ openPath: "from-one.md", expanded: [] });
+    paneStub.snapshot.mockReturnValue(oneFile("from-one.md", { expanded: [] }));
     await w.setProps({ expandedUid: 2 });
     await flushPromises();
     expect(paneOf(w).props("cwd")).toBe("/one"); // stayed
@@ -1206,7 +1210,7 @@ describe("file pane beside the enlarged cell", () => {
 
     await w.setProps({ expandedUid: 1 });
     await flushPromises();
-    expect(paneOf(w).props("initialState")).toEqual({ openPath: "from-one.md", expanded: [] });
+    expect(paneOf(w).props("initialState")).toEqual(oneFile("from-one.md", { expanded: [] }));
   });
 
   // What survives a reload is keyed by SESSION (#1378): a uid is a different number next time,

@@ -2,7 +2,7 @@
 // file (AR Quick Look on iPhone / iPad, Quick Look preview on a Mac, or any USD
 // viewer).
 //
-// Everything about the tool lives in `@mulmoclaude/shapescript-plugin`: the
+// Everything about the tool lives in `@gui-chat-plugin/shapescript`: the
 // schema, the description, the export itself, and where under `artifacts/shapes/`
 // the file lands. It reaches storage only through the generic gui-chat-protocol
 // `files` capability, so this module contributes exactly the pair
@@ -20,7 +20,7 @@ import {
   EXPORT_USDZ_SCHEMA,
   EXPORT_USDZ_TOOL_NAME,
   toArtifactsRelative,
-} from "@mulmoclaude/shapescript-plugin";
+} from "@gui-chat-plugin/shapescript";
 import type { ToolDefinition } from "gui-chat-protocol";
 import { artifactsFileOps, artifactsRoot } from "../backends/artifacts.js";
 import { shapeScriptByPath } from "../backends/openPath.js";

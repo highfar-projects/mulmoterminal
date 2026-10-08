@@ -37,11 +37,12 @@ const FIXTURES: Record<string, unknown> = {
   sounds: { waiting: "preset:coin" },
   buttons: [{ id: "b1", label: "Deploy", run: "shell", cmd: "make deploy" }],
   chips: ["git"],
+  commands: [{ id: "c1", label: "Release", run: "shell", cmd: "make release" }],
   skills: ["review"],
   decks: ["decks/talk.json"],
+  mobileFiles: { dirs: ["sibling"], extensions: ["md"] },
   provider: "openrouter",
   model: "opus",
-  account: "work",
   addDirs: ["./sibling"], // created below — a path that doesn't exist is dropped by the loader
   appendSystemPrompt: false,
   worktreeEnv: { PORT: { kind: "port", base: 3000 } },
@@ -75,5 +76,27 @@ describe("every directory setting reaches the preview", () => {
     const detail = dirConfigDetail(dirSetting(key, FIXTURES[key]));
     expect(detail.source.applied).toContain(key);
     expect(dirConfigRows(detail.config, detail.extras).length).toBeGreaterThan(0);
+  });
+});
+
+// The Settings form (#2722) edits what THIS directory's files say, so its values must come from the
+// two files and nothing under them — and only for the keys it edits.
+describe("dirConfigDetail formValues", () => {
+  const made: string[] = [];
+  afterEach(() => made.splice(0).forEach((dir) => rmSync(dir, { recursive: true, force: true })));
+
+  it("merges the shared and local files, and leaves out repo.json and keys the app does not read", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "mt-formvalues-"));
+    made.push(dir);
+    writeFileSync(path.join(dir, "repo.json"), JSON.stringify({ name: "from-repo", color: "#abcdef" }));
+    writeFileSync(path.join(dir, ".mulmoterminal.json"), JSON.stringify({ fontSize: 14, headerColor: "#111111", colour: "#333333", fontFamily: 7 }));
+    writeFileSync(path.join(dir, ".mulmoterminal.local.json"), JSON.stringify({ headerColor: "#222222" }));
+    expect(dirConfigDetail(dir).formValues).toEqual({ headerColor: "#222222", fontSize: 14, fontFamily: 7 });
+  });
+
+  it("is empty for a directory with no files", () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "mt-formvalues-"));
+    made.push(dir);
+    expect(dirConfigDetail(dir).formValues).toEqual({});
   });
 });

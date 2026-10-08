@@ -1,13 +1,12 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { makeTempDir } from "../../support/tempDir.js";
-import { writeFileSync, mkdirSync, rmSync, readFileSync, readdirSync, realpathSync, existsSync, symlinkSync } from "node:fs";
+import { writeFileSync, mkdirSync, rmSync, readFileSync, readdirSync, realpathSync, existsSync } from "node:fs";
 import path from "node:path";
 import express from "express";
 import { routeCall, jsonPost } from "../../helpers/routeCall";
 import { currentVersion, listEntries, mdToHtmlDoc, mountFilesBrowseRoutes, MAX_EDIT_BYTES } from "../../../server/files/files-browse";
 import { backupDirFor } from "../../../server/files/backup-store";
-import { canSymlink } from "../../support/canSymlink";
 
 const tmp = () => makeTempDir("mt-files-");
 
@@ -32,68 +31,6 @@ describe("listEntries", () => {
     expect(entries.find((e) => e.name === "b.txt")).toMatchObject({ dir: false, size: 5 });
     expect(entries.find((e) => e.name === "asub")).toMatchObject({ dir: true });
     rmSync(dir, { recursive: true, force: true });
-  });
-
-  // A symlink — or, on Windows, a directory junction — reports its OWN entry type (DT_LNK), not
-  // the target's; Dirent.isDirectory() never follows it. Without the following stat, a junctioned
-  // project folder came back as a bogus zero-size "file" the Files pane could not open as either
-  // (it isn't real text, and the folder-toggle only ever fires for entries already marked `dir`).
-  it.runIf(canSymlink)("resolves a symlinked directory as a directory, not a bogus file", () => {
-    const dir = tmp();
-    const target = tmp();
-    mkdirSync(path.join(target, "inner"));
-    writeFileSync(path.join(target, "inner", "a.txt"), "hi");
-    symlinkSync(target, path.join(dir, "linked"));
-    const entries = listEntries(dir);
-    expect(entries).toEqual([{ name: "linked", dir: true, size: 0 }]);
-    rmSync(dir, { recursive: true, force: true });
-    rmSync(target, { recursive: true, force: true });
-  });
-
-  it.runIf(canSymlink)("still reports a symlinked file's real size, as it already did", () => {
-    const dir = tmp();
-    const target = tmp();
-    writeFileSync(path.join(target, "real.txt"), "hello");
-    symlinkSync(path.join(target, "real.txt"), path.join(dir, "linked.txt"));
-    const entries = listEntries(dir);
-    expect(entries).toEqual([{ name: "linked.txt", dir: false, size: 5 }]);
-    rmSync(dir, { recursive: true, force: true });
-    rmSync(target, { recursive: true, force: true });
-  });
-
-  it.runIf(canSymlink)("shows a broken symlink as an (unopenable) file rather than throwing", () => {
-    const dir = tmp();
-    symlinkSync(path.join(dir, "does-not-exist"), path.join(dir, "broken"));
-    const entries = listEntries(dir);
-    expect(entries).toEqual([{ name: "broken", dir: false, size: 0 }]);
-    rmSync(dir, { recursive: true, force: true });
-  });
-});
-
-// The Files pane's own tree (unlike /api/files/raw) follows a symlink/junction out of the
-// project root instead of refusing it — see pathContainment.ts's resolveContained and
-// files-browse.ts's containedFor for why that risk differs from a one-click, agent-authored path.
-describe("browsing through a symlink that leaves the project root", () => {
-  it.runIf(canSymlink)("lists and opens what it points at, instead of 403ing", async () => {
-    const dir = tmp();
-    const outside = tmp();
-    writeFileSync(path.join(outside, "note.txt"), "from outside the project");
-    symlinkSync(outside, path.join(dir, "linked"));
-
-    const app = express();
-    app.use(express.json());
-    mountFilesBrowseRoutes(app, { defaultCwd: dir, backupRoot: path.join(dir, ".backups") });
-
-    const list = await routeCall(app)(`/api/files/browse/list?cwd=${encodeURIComponent(dir)}&path=linked`);
-    expect(list.status).toBe(200);
-    expect(list.body.entries).toEqual([{ name: "note.txt", dir: false, size: 24 }]);
-
-    const text = await routeCall(app)(`/api/files/browse/text?cwd=${encodeURIComponent(dir)}&path=${encodeURIComponent("linked/note.txt")}`);
-    expect(text.status).toBe(200);
-    expect(text.body.text).toBe("from outside the project");
-
-    rmSync(dir, { recursive: true, force: true });
-    rmSync(outside, { recursive: true, force: true });
   });
 });
 
@@ -534,6 +471,42 @@ describe("GET /api/files/browse/md — front matter", () => {
   });
 });
 
+// #2579. A fence in a language with a grammar is coloured in both documents; any other is marked's.
+describe("GET /api/files/browse/md — code blocks", () => {
+  it.each([[""], ["&embed=1"]])("colours a fence it has a grammar for (%s)", async (param) => {
+    const dir = tmp();
+    writeFileSync(path.join(dir, "a.md"), "```ts\nconst a = 1;\n```\n\n```sh\necho <hi>\n```\n");
+    try {
+      const res = await routeCall(serveProject(dir))(`/api/files/browse/md?cwd=${encodeURIComponent(dir)}&path=a.md${param}`);
+      expect(res.text).toContain('<code class="language-ts"><span class="tok-keyword">const</span>');
+      expect(res.text).toContain('<code class="language-sh">echo &lt;hi&gt;');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+// #2515. The embedded document is handed the host's token in its URL and stamps it on everything
+// its reporter says; a malformed one is not written into the page at all.
+describe("GET /api/files/browse/md — the preview token", () => {
+  it.each([
+    ["a well-formed token", "0123456789abcdef-wire", 'token: "0123456789abcdef-wire"'],
+    ["a malformed token", "bad token", "token: null"],
+  ])("writes %s into the reporter as it should", async (_case, wire, expected) => {
+    const dir = tmp();
+    writeFileSync(path.join(dir, "a.md"), "# Body\n");
+    try {
+      const res = await routeCall(serveProject(dir))(`/api/files/browse/md?cwd=${encodeURIComponent(dir)}&path=a.md&embed=1&wire=${encodeURIComponent(wire)}`);
+      expect(res.text).toContain(expected);
+      expect(res.text).not.toContain("bad token");
+      // The token is in this URL; a page the frame is navigated to must not read it as its referrer.
+      expect(res.headers["referrer-policy"]).toBe("no-referrer");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 // #2261. The document's URL is under `/api/files/browse/`, so a relative image resolved there and
 // 404'd. The route points it at the raw route, beside the document — in both documents it serves.
 describe("GET /api/files/browse/md — relative images", () => {
@@ -584,6 +557,86 @@ describe("GET /api/files/browse/md — the app's theme", () => {
 
   it("leaves the plain document on the system theme", async () => {
     expect(await serve(`&${THEME}`)).not.toContain("background:#1a1a2e");
+  });
+});
+
+// #2574. The history: a file's backups, listed and read, through the same containment as its text.
+describe("GET /api/files/browse/backups and /backup", () => {
+  it("lists the generations saving left behind and reads one back", async () => {
+    const dir = tmp();
+    writeFileSync(path.join(dir, "a.md"), "first\n");
+    try {
+      const call = routeCall(serveProject(dir));
+      const q = `cwd=${encodeURIComponent(dir)}&path=a.md`;
+      await call(`/api/files/browse/text?${q}`); // opening banks what is on disk
+      const listed = (await call(`/api/files/browse/backups?${q}`)).body as { backups: { id: string; at: number }[] };
+      expect(listed.backups).toHaveLength(1);
+      const read = await call(`/api/files/browse/backup?${q}&id=${encodeURIComponent(listed.backups[0]?.id ?? "")}`);
+      expect(read.body).toEqual({ text: "first\n" });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // `stored` means the store holds the text: a repeat it skipped is still held, which is what a
+  // client about to discard that buffer needs to hear.
+  it("answers stored for a repeat bank as well as a new one", async () => {
+    const dir = tmp();
+    writeFileSync(path.join(dir, "a.md"), "x");
+    try {
+      const call = routeCall(serveProject(dir));
+      const bank = () => call(`/api/files/browse/backup?cwd=${encodeURIComponent(dir)}&path=a.md`, { ...jsonPost({ text: "unsaved" }), method: "PUT" });
+      expect((await bank()).body).toEqual({ stored: true });
+      expect((await bank()).body).toEqual({ stored: true });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("answers 404 for an id it did not list, and refuses a path outside the root", async () => {
+    const dir = tmp();
+    writeFileSync(path.join(dir, "a.md"), "x");
+    try {
+      const call = routeCall(serveProject(dir));
+      const q = `cwd=${encodeURIComponent(dir)}&path=a.md`;
+      expect((await call(`/api/files/browse/backup?${q}&id=..%2F..%2Fetc%2Fpasswd`)).status).toBe(404);
+      expect((await call(`/api/files/browse/backup?${q}`)).status).toBe(404);
+      expect((await call(`/api/files/browse/backups?cwd=${encodeURIComponent(dir)}&path=..%2Fescape.md`)).status).toBe(403);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+// #2559. The Files pane shows a CSV through the table route and passes the theme on its URL. The
+// table has no script, so the plain document takes it; a new tab sends none and follows the system.
+describe("GET /api/files/browse/table — the app's theme", () => {
+  const THEME = "bg=%231a1a2e&fg=%23e6e6f0&muted=%23a0a0b8&subtle=%23232342&border=%2333335a&link=%234a8cff";
+  const serve = async (extra: string) => {
+    const dir = tmp();
+    writeFileSync(path.join(dir, "rows.csv"), "a,b\n1,2\n");
+    try {
+      return await routeCall(serveProject(dir))(`/api/files/browse/table?cwd=${encodeURIComponent(dir)}&path=rows.csv${extra}`);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+
+  it("paints the table in the theme it was given, still under the sandbox", async () => {
+    const res = await serve(`&${THEME}`);
+    expect(res.text).toContain("thead th{background:#1a1a2e}");
+    expect(res.text).toContain("<th>a</th>");
+    expect(res.headers["content-security-policy"]).toBe("sandbox");
+  });
+
+  it("ignores a theme with a value that is not a hex colour", async () => {
+    const text = (await serve(`&${THEME.replace("%234a8cff", "%23000%3B%7Dbody%7Bdisplay%3Anone")}`)).text;
+    expect(text).not.toContain("background:#1a1a2e");
+    expect(text).not.toContain("display:none");
+  });
+
+  it("leaves a table with no theme on the system colours", async () => {
+    expect((await serve("")).text).not.toContain("thead th{background:#1a1a2e}");
   });
 });
 

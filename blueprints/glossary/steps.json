@@ -1,0 +1,21 @@
+{
+  "steps": [
+    {
+      "id": "collect",
+      "title": "用語を集める",
+      "description": "文書が定義する語、同じ語の書き方の違い、社内でしか通じない語を、原文の引用付きで用語集にする。文書が定義する語を落としていないことを機械で確かめる。",
+      "skill": "skills/collect",
+      "check": "node \"$BLUEPRINT_USECASE/checks/glossary.mjs\" collect"
+    },
+    {
+      "id": "apply",
+      "title": "chaff.yaml に入れて報告する",
+      "description": "用語集を確かめてから、望んだときだけ chaff.yaml に使う書き方と社内の言葉を入れ、残っている揺れを chaff が指摘することを確かめる。用語集と二重定義を報告にまとめる。",
+      "skill": "skills/apply",
+      "check": "node \"$BLUEPRINT_USECASE/checks/glossary.mjs\" apply && node \"$BLUEPRINT_USECASE/checks/report.mjs\"",
+      "gates": ["review"],
+      "reads": [".blueprint/glossary.txt"],
+      "revises": [".blueprint/glossary.json"]
+    }
+  ]
+}

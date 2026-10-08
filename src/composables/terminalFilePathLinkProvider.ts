@@ -19,7 +19,10 @@ import type { Terminal, ILinkProvider, ILink } from "@xterm/xterm";
 import { SOURCE_CODE_EXTENSIONS } from "../../common/sourceExtensions";
 import { browserDisplays } from "../../common/rawContentType";
 import { findFilePathLinks } from "./terminalFilePathLinks";
-import { rebaseOutsideCwd } from "./pathWithinCwd";
+import type { FileLocation } from "./filePathLocation";
+import { pathWithinCwd, rebaseOutsideCwd } from "./pathWithinCwd";
+import { fileMediaKind, filePreviewKind } from "../components/filePreviewKind";
+import { HTML_FILE_NAME, filesPageUrl } from "../../common/filesPage";
 
 export interface TerminalCell {
   chars: string;
@@ -30,6 +33,7 @@ export interface ColumnLink {
   text: string;
   startX: number; // 1-based, inclusive
   endX: number; // 1-based, inclusive
+  location?: FileLocation;
 }
 
 // Wide glyphs occupy two columns (a width-2 cell followed by a width-0 continuation cell);
@@ -52,6 +56,7 @@ export function computeFilePathLinks(cells: TerminalCell[]): ColumnLink[] {
     text: hit.text,
     startX: (colStart[hit.start] ?? 0) + 1,
     endX: (colEnd[hit.end - 1] ?? 0) + 1,
+    ...(hit.location ? { location: hit.location } : {}),
   }));
 }
 
@@ -79,8 +84,8 @@ const RAW_ROUTE = "/api/files/raw";
 // it can be edited (#808).
 //
 // The shared source set plus `.txt`. Prose (`.md` and friends) is deliberately absent — it
-// has its own rendered route in ROUTE_BY_EXTENSION — and so is `.html`, which opens at a URL
-// so the raw route can serve it under the sandbox CSP.
+// has its own rendered route in ROUTE_BY_EXTENSION — and so is `.html`, which opens as a rendered
+// page (`htmlPageUrl`).
 const IN_APP_EXTENSIONS = new Set<string>([...SOURCE_CODE_EXTENSIONS, ".txt"]);
 
 /** How a clicked path opens: in the app's own Files view, or at a URL in a new tab. */
@@ -98,9 +103,21 @@ export function fileViewerRoute(filePath: string): string {
   return ROUTE_BY_EXTENSION[fileExtension(filePath)] ?? RAW_ROUTE;
 }
 
+/** An HTML file's URL on the page route, which renders it rather than showing its source — or null
+ *  for a path that is not one, or that the route cannot address because it is not under `cwd`. A
+ *  backslash is left to the raw route: `pathWithinCwd` reads it as a separator, which on POSIX would
+ *  address a different file than the one clicked. */
+function htmlPageUrl(filePath: string, cwd: string): string | null {
+  if (!HTML_FILE_NAME.test(filePath) || filePath.includes("\\")) return null;
+  const pathRel = pathWithinCwd(filePath, cwd);
+  return pathRel === null ? null : filesPageUrl(cwd, pathRel);
+}
+
 export function fileLinkTarget(filePath: string, cwd: string): FileLinkTarget {
   const ext = fileExtension(filePath);
   if (IN_APP_EXTENSIONS.has(ext)) return { kind: "files" };
+  const pageUrl = htmlPageUrl(filePath, cwd);
+  if (pageUrl !== null) return { kind: "url", url: pageUrl };
   // A type with a rendered route of its own goes there, and that outranks the question below —
   // `.tsv` has the table route but no MIME the raw route knows, so asking "would a browser
   // display this" first would send it to the pane while its sibling `.csv` opened as a table
@@ -114,16 +131,19 @@ export function fileLinkTarget(filePath: string, cwd: string): FileLinkTarget {
 }
 
 /** Whether the Files pane beside a zoomed cell can show this path: anything the app renders
- *  as text or as Markdown. Derived from the two tables above rather than being a third one,
- *  so a new extension row reaches the pane without a second edit. What is left out is what
- *  only the raw route can answer — images, PDFs, bytes — where the pane would show an empty
- *  editor and a new tab is still the right place. */
+ *  as text or as Markdown, an HTML page, an image, a PDF, a video or a sound. Derived from the
+ *  tables above rather than being another one, so a new extension row reaches the pane without a
+ *  second edit. With no pane open the click still goes to a tab. */
 export function isPaneViewable(filePath: string): boolean {
   const ext = fileExtension(filePath);
   // Indexed like fileViewerRoute does, not `in`: the table is a plain object, so `in` also
   // answers for whatever Object.prototype carries. Every real key starts with a dot and no
   // inherited one does, which makes it safe today and needlessly load-bearing tomorrow.
   if (IN_APP_EXTENSIONS.has(ext) || ROUTE_BY_EXTENSION[ext] !== undefined) return true;
+  // What the pane now shows beside its text (#2269): an HTML page or an SVG in its Preview, and a
+  // picture, PDF, video or sound where it would have said "not text" (#2674). A chart an agent just
+  // wrote stays in the grid rather than leaving it for a browser tab.
+  if (filePreviewKind(filePath) !== null || fileMediaKind(filePath) !== null) return true;
   // And anything a TAB cannot display, because there the tab is not a view — it is a download
   // starting with no warning, which is the half of #2038 the user actually notices. The pane can
   // at least name the file and offer to open it in the app that owns it. Asked of the same table
@@ -151,11 +171,13 @@ export function createFilePathLinkProvider(
   term: Terminal,
   getCwd: () => string | null,
   openUrl: (url: string) => void,
-  openInFiles: (filePath: string, cwd: string) => void,
+  // `location` is the line an agent named after the path (`a.ts:42`). The pane and the Files view
+  // open the text at it; a route that renders the file in a new tab has no line to go to.
+  openInFiles: (filePath: string, cwd: string, location?: FileLocation) => void,
   // First chance at the click, ahead of the extension table: the Files pane beside an enlarged
   // cell, which can show most of these WITHOUT leaving the grid (#910). Returns whether it took
   // it; false falls through to the routing below, unchanged.
-  openInPane: (filePath: string, cwd: string) => boolean,
+  openInPane: (filePath: string, cwd: string, location?: FileLocation) => boolean,
 ): ILinkProvider {
   return {
     provideLinks(bufferLineNumber: number, callback: (links: ILink[] | undefined) => void): void {
@@ -170,14 +192,14 @@ export function createFilePathLinkProvider(
           // A Windows path is linked as printed (`.claude\x\a.md`) but opened `/`-separated, the
           // one shape the pane, the routes and the containment checks all compare in.
           const token = link.text.replace(/\\/g, "/");
-          if (openInPane(token, cwd)) return;
+          if (openInPane(token, cwd, link.location)) return;
           // A path outside the cell is served relative to its own directory: the routes contain
           // `path` within `cwd`, so handing them the cell's cwd refused it as an escape (#2260).
           const rebased = rebaseOutsideCwd(token, cwd);
           const base = rebased?.base ?? cwd;
           const filePath = rebased?.rel ?? token;
           const target = fileLinkTarget(filePath, base);
-          if (target.kind === "files") openInFiles(filePath, base);
+          if (target.kind === "files") openInFiles(filePath, base, link.location);
           else openUrl(target.url);
         },
       }));

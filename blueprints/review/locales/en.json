@@ -1,0 +1,60 @@
+{
+  "manifest": {
+    "title": "Read documents closely (find contradictions and gaps, propose fixes)",
+    "description": "Reads long contracts, regulations and specifications, and finds references to articles that do not exist, gaps in numbering, one term defined twice, and duties or deadlines that disagree. Every finding comes with its location and a quote from the original, and a machine checks that each quote is really in the original. Fixes are written to a separate file without changing the original."
+  },
+  "hearing": {
+    "documents": {
+      "label": "The documents to read (one file per line, inside this folder)",
+      "why": "Findings and quotes are made against these documents",
+      "placeholder": "e.g.\ndocs/design.md"
+    },
+    "kind": {
+      "label": "What kind of document is it?",
+      "why": "It changes which kinds of disagreement to look for",
+      "options": {
+        "契約書": "Contract",
+        "規程・約款・利用規約": "Regulation, standard terms or terms of service",
+        "仕様書・要件定義": "Specification or requirements",
+        "その他": "Other"
+      }
+    },
+    "focus": {
+      "label": "Anything you are especially concerned about",
+      "why": "That point is read first, and more deeply",
+      "placeholder": "e.g. whether any case of permissions is left out"
+    },
+    "proposals": {
+      "label": "How far should it go?",
+      "why": "Whether to draft fixes too, or only list the findings",
+      "options": {
+        "直し方の案まで作る（原本は変えずに別のファイルに）": "Draft fixes too (in a separate file, the original unchanged)",
+        "指摘だけ": "Findings only"
+      }
+    }
+  },
+  "steps": {
+    "read": {
+      "title": "Read closely and write the findings",
+      "description": "Handles every structural problem chaff found, reads for disagreements in meaning, and gives each finding its location and a quote from the original."
+    },
+    "propose": {
+      "title": "Propose fixes",
+      "description": "Writes a fix for each finding, and makes a version of the document with the proposals applied, in a file separate from the original."
+    },
+    "report": {
+      "title": "Report",
+      "description": "What was found, what was checked, and what could not be checked fully."
+    }
+  },
+  "presets": {
+    "itaku-keiyaku": {
+      "title": "Read an outsourcing contract closely",
+      "description": "Reads the sample contract (contract.txt) and finds references to articles that do not exist, a gap in article numbers, payment deadlines that disagree, and one word defined twice, then writes fixes to a separate file. The original is not changed."
+    },
+    "riyo-kiyaku": {
+      "title": "Read an online shop's terms of service closely",
+      "description": "Reads the sample terms of service (kiyaku.md) and points out, with quotes from the original, references to articles that do not exist, \"会員\" (member) defined twice, and a return deadline that disagrees with the refund deadline. No fixes are drafted; only the findings are reported. The original is not changed."
+    }
+  }
+}

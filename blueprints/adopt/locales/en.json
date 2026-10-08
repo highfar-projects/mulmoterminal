@@ -1,0 +1,67 @@
+{
+  "manifest": {
+    "title": "Bring chaff into a document folder (shelve today's findings)",
+    "description": "Brings chaff into a folder of documents you already have. It places a chaff.yaml that fits the kind of documents, shelves today's findings with chaff baseline, and from then on only new findings appear. If you want, it also makes a workflow that shows findings on the lines of a GitHub PR. The originals do not change."
+  },
+  "hearing": {
+    "places": {
+      "label": "The documents for chaff to watch (one folder or file in this folder per line)",
+      "why": "Today's findings in these documents are shelved, and from then on only new findings here appear",
+      "placeholder": "e.g.\ndocs/\nREADME.md"
+    },
+    "kind": {
+      "label": "What kind of documents are they?",
+      "why": "chaff measures them with the yardstick for that kind of document (how long a sentence may be, which checks to run)",
+      "options": {
+        "手順書・ヘルプ・マニュアル": "Procedure, help or manual",
+        "README・開発者向けの説明": "README or explanation for developers",
+        "仕様書・設計書": "Specification or design document",
+        "よくある質問": "FAQ",
+        "用語集": "Glossary",
+        "技術ブログ": "Technical blog",
+        "会社のサイトの記事（オウンドメディア）": "An article on a company site",
+        "報告書・社内文書": "Report or internal document",
+        "提案書・企画書": "Proposal",
+        "議事録": "Minutes",
+        "プレスリリース・お知らせ": "Press release or notice",
+        "契約書・利用規約": "Contract or terms of service",
+        "規程・社内規則": "Regulation or company rules",
+        "論文": "Academic paper",
+        "ブログ（エッセイ・読み物）": "Blog (essay, feature)",
+        "メール・手紙": "Email or letter",
+        "判決文": "Court judgment",
+        "特許明細書": "Patent specification",
+        "小説・物語": "Novel or story",
+        "文学のエッセイ・随筆": "Literary essay",
+        "詩": "Poetry",
+        "戯曲・脚本": "Play or script",
+        "演説・挨拶の原稿": "Speech or address (to be read aloud)",
+        "書き起こし（会見・会議での発言の記録）": "Transcript (what was said at a press conference or meeting)"
+      }
+    },
+    "ci": {
+      "label": "Show findings on GitHub PRs?",
+      "why": "If made, chaff runs every time a PR is opened, and new findings appear on their lines",
+      "options": {
+        "GitHub の PR に指摘を出すワークフローを作る": "Make a workflow that shows findings on GitHub PRs",
+        "作らない（手元で npx chaffjs を動かす）": "Don't make one (run npx chaffjs on your own machine)"
+      }
+    }
+  },
+  "steps": {
+    "survey": {
+      "title": "Measure today's findings",
+      "description": "Measures how many findings the documents have now, for the chosen kind, and drafts the settings to put in. Nothing changes yet."
+    },
+    "apply": {
+      "title": "Bring chaff in",
+      "description": "Places chaff.yaml, shelves today's findings in .chaff-baseline.json, and, if you want, adds a workflow that shows findings on PRs. Checks by machine that from then on only new findings appear."
+    }
+  },
+  "presets": {
+    "help-pages": {
+      "title": "Bring chaff into help pages",
+      "description": "Measures the sample help pages (login.md and export.md) as \"Procedure, help or manual\", shelves today's findings (a dropped-ら verb form and a \"here\" link that does not say where it goes), and from then on only new findings appear. It also makes a workflow that shows findings on GitHub PRs. The originals do not change."
+    }
+  }
+}

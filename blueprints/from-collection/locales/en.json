@@ -1,0 +1,159 @@
+{
+  "manifest": {
+    "title": "Turn a collection into an app",
+    "description": "Start from a collection in the workspace: its schema, screens and actions are copied into the build's folder and become the spec of an app you own as code, on this computer, on Firebase, on Cloudflare or on Supabase. With its records, they are moved into the new app too. The collection itself is not touched."
+  },
+  "hearing": {
+    "source": {
+      "label": "The collection (or shared app) to start from",
+      "why": "Its fields, screens and actions (for a shared app, also its members and roles, its sign-up requests and its email declarations) are copied from here into the spec. The original is not changed"
+    },
+    "copyRecords": {
+      "label": "Copy the records (the data inside) too?",
+      "why": "If yes, the records it has now, and the images and files they point to, are moved into the new app. Any personal information in them is copied into the new folder too. A shared app's records are read with your sign-in (you need a role that can read all of them). If no, only the shape is copied and you get an empty app"
+    },
+    "appName": {
+      "label": "The app's name (empty: the collection's name)",
+      "why": "Shown on the screens and in the instructions",
+      "placeholder": "e.g. Book Notes"
+    },
+    "whyApp": {
+      "label": "Why make it an app? (What does the collection not do?)",
+      "why": "This is how the must-haves are chosen. If you only want to copy what the collection has, say so",
+      "placeholder": "e.g. My family should be able to add books from their phones. As a collection, it only works on this computer"
+    },
+    "audience": {
+      "label": "Who will use it?",
+      "why": "This decides sign-in and who can see it",
+      "options": {
+        "自分だけ": "Only me",
+        "家族・友人など少人数": "A few people, such as family or friends",
+        "社内・チーム": "My company or team",
+        "不特定の人（公開）": "Anyone (public)"
+      }
+    },
+    "mustHaves": {
+      "label": "Features it must have from the start (empty: everything the collection can do)",
+      "why": "At the end, each one is proved to work by a test",
+      "placeholder": "e.g. add a book, search by title, mark whether it is lent out"
+    },
+    "later": {
+      "label": "Features that can wait",
+      "why": "They are left out of the first version",
+      "placeholder": "e.g. reading charts, adding a book by its barcode"
+    },
+    "signIn": {
+      "label": "How should people sign in?",
+      "why": "This decides how it is protected",
+      "options": {
+        "なし（このパソコンからだけ使う）": "No sign-in (used only from this computer)",
+        "共有のパスワード一つ": "One shared password",
+        "一人ずつのアカウント": "An account for each person"
+      }
+    },
+    "roles": {
+      "label": "Should there be roles? (for example, admin and regular user)",
+      "why": "These become the rules for who can do what",
+      "placeholder": "e.g. An admin can edit every book; family members can edit only the books they added"
+    },
+    "dataSensitivity": {
+      "label": "The most sensitive information it handles",
+      "why": "This decides how it is stored and how strict the backups are",
+      "options": {
+        "公開してよい情報のみ": "Only information that can be public",
+        "身内だけの情報": "Information for close people only",
+        "個人情報を含む": "Includes personal information",
+        "お金や健康など特に機微な情報": "Especially sensitive information, such as money or health"
+      }
+    },
+    "uiLanguage": {
+      "label": "The language of the screens",
+      "why": "The language the app is shown in",
+      "options": {
+        "日本語": "Japanese",
+        "English": "English",
+        "両方": "Both"
+      }
+    },
+    "design": {
+      "label": "Look",
+      "why": "\"The same as MulmoTerminal\" builds it with the same parts, colors and icons as the collection's screens you saw in MulmoTerminal. The others are templates that keep those parts' shapes and swap the colors and the roundness of the corners",
+      "options": {
+        "MulmoTerminal と同じ": "The same as MulmoTerminal",
+        "やわらかい（暖かい紙の色・丸い角）": "Soft (warm paper colors, round corners)",
+        "くっきり（白と黒・小さな角）": "Crisp (black and white, small corners)",
+        "落ち着いた（深い緑・やさしい灰色）": "Calm (deep green, gentle gray)"
+      }
+    }
+  },
+  "steps": {
+    "import@local": {
+      "title": "Move the records",
+      "description": "Moves the copied collection's records, and the images and files they point to, into the app's database and data/files/. Running it again gives the same result. A build that copied only the shape does nothing here."
+    },
+    "import@firebase": {
+      "title": "Move the records (emulators)",
+      "description": "Builds the way to move the copied collection's records into Firestore, and the images and files they point to into Cloud Storage, and checks it on the emulators. A build that copied only the shape does nothing here."
+    },
+    "import@cloudflare": {
+      "title": "Move the records",
+      "description": "Builds the way to move the copied collection's records into D1, and the images and files they point to into R2, and checks it by moving them twice into an empty local setup. A build that copied only the shape does nothing here."
+    },
+    "import@supabase": {
+      "title": "Move the records",
+      "description": "Builds the way to move the copied collection's records into Postgres, and the images and files they point to into Storage, and checks it by rebuilding the local database and moving them twice. A build that copied only the shape does nothing here."
+    },
+    "acceptance@local": {
+      "title": "Prove the must-haves by tests",
+      "description": "Each must-have in the spec gets a test that shows it working end to end through the API."
+    },
+    "acceptance@firebase": {
+      "title": "Prove the must-haves by tests",
+      "description": "Each must-have gets a test against the emulators that walks it end to end as a signed-in user, and is refused for everyone it should be refused for."
+    },
+    "acceptance@cloudflare": {
+      "title": "Prove the must-haves by tests",
+      "description": "Each must-have in the spec gets a test that shows it working end to end through the Worker, inside the Workers runtime."
+    },
+    "acceptance@supabase": {
+      "title": "Prove the must-haves by tests",
+      "description": "Each must-have in the spec gets a test against the local Supabase stack that walks it end to end as the user the spec names, and is refused for everyone it should be refused for."
+    },
+    "actions@local": {
+      "title": "Make the actions features",
+      "description": "Of the original actions and automatic imports, builds the ones the spec decided to \"make a feature\", and writes the steps for the ones \"a person does by hand\" in the README."
+    },
+    "actions@firebase": {
+      "title": "Make the actions features",
+      "description": "Of the original actions and automatic imports, builds the ones the spec decided to \"make a feature\" as screen actions, functions and scheduled functions, and writes the steps for the ones \"a person does by hand\" in the README."
+    },
+    "actions@cloudflare": {
+      "title": "Make the actions features",
+      "description": "Of the original actions and automatic imports, builds the ones the spec decided to \"make a feature\" as Worker operations and scheduled runs (Cron Triggers), and writes the steps for the ones \"a person does by hand\" in the README."
+    },
+    "actions@supabase": {
+      "title": "Make the actions features",
+      "description": "Of the original actions and automatic imports, builds the ones the spec decided to \"make a feature\" as Postgres functions, Edge Functions and scheduled runs, and writes the steps for the ones \"a person does by hand\" in the README."
+    },
+    "features": {
+      "title": "Features and screens",
+      "description": "Builds the spec's must-haves as screens and client-side code, and checks on the emulators that they work inside the Firestore rules."
+    },
+    "design": {
+      "title": "Match the look",
+      "description": "Makes the screens match the chosen look (the same as MulmoTerminal, or a template). Uses the same parts and classes as MulmoTerminal's collection screens, with Tailwind, and carries the original collection's icon over to the headings. Writes the rules down in DESIGN.md."
+    },
+    "import-production@firebase": {
+      "title": "Move the records to production",
+      "description": "With the way checked on the emulators, moves the copied records, images and files into the production Firestore and Cloud Storage, then reads production back and compares it with the original. A build that copied only the shape does nothing here."
+    },
+    "import-production@cloudflare": {
+      "title": "Move the records to production",
+      "description": "With the way checked locally, moves the copied records, images and files into the production D1 and R2, then reads them back with wrangler and compares them with the original. A build that copied only the shape does nothing here."
+    },
+    "import-production@supabase": {
+      "title": "Move the records to production",
+      "description": "With the way checked locally, moves the copied records, images and files into the production Postgres and Storage, then reads them back with the Supabase CLI and compares them with the original. A build that copied only the shape does nothing here."
+    }
+  }
+}

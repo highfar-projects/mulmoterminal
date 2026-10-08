@@ -25,7 +25,7 @@ afterEach(async () => {
   await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-const steps = [{ id: "a", title: "A", description: "", skill: "skills/a", check: "true", gates: [], origin: "base" as const }];
+const steps = [{ id: "a", title: "A", description: "", skill: "skills/a", check: "true", gates: [], reads: [], revises: [], origin: "base" as const }];
 const run = (id: string): BlueprintRun => ({
   id,
   projectDir: "/p",
@@ -33,11 +33,14 @@ const run = (id: string): BlueprintRun => ({
   usecasePackDir: "/u",
   steps,
   failedChecks: {},
+  failureOutputs: {},
   specChat: [],
   revisionSessionId: null,
   activeSessionId: null,
   sessions: [],
   createdAtMs: 1,
+  archivedAtMs: null,
+  language: null,
   answers: {},
 });
 
@@ -176,9 +179,21 @@ describe.skipIf(process.platform === "win32")("askCommand", () => {
         (err) => (err ? reject(err) : resolve()),
       ),
     );
+    await new Promise<void>((resolve, reject) =>
+      execFile(
+        "/bin/sh",
+        ["-c", `QUESTION='Fix it?' CHOICES='Fix: it'"'"'s cheap\n  Leave: free' RECOMMEND='Fix' ${askCommand(port, "run-00000001", "projects", "sess-1")}`],
+        { env: withoutQuestion },
+        (err) => (err ? reject(err) : resolve()),
+      ),
+    );
     expect(received).toEqual([
       { url: "/api/blueprints/runs/run-00000001/ask", body: { stepId: "projects", sessionId: "sess-1", question } },
       { url: "/api/blueprints/runs/run-00000001/ask", body: { stepId: "projects", sessionId: "sess-1", question: "Which region, Tokyo?" } },
+      {
+        url: "/api/blueprints/runs/run-00000001/ask",
+        body: { stepId: "projects", sessionId: "sess-1", question: "Fix it?", choices: "Fix: it's cheap\n  Leave: free", recommend: "Fix" },
+      },
     ]);
   });
 });

@@ -6,7 +6,12 @@ description: Colour-code and order the directories you actually work in, from wh
 # Colour and order the directories you work in
 
 MulmoTerminal reads `<project>/.mulmoterminal.json` to style every terminal opened in that
-directory. There is **no UI that writes this file** — this skill is the way it gets written.
+directory. **Settings → Directory settings → Change here** edits one directory's name, seven chrome
+colours, `headerStatusTint`, `headerStatusColors`, `theme`, `colors`, `fontSize`, `fontFamily`,
+`orderPriority`, `icon`, `backgroundImage` and `worktreeEnv` key by key, and moves a key between
+`.mulmoterminal.json` and `.mulmoterminal.local.json`. Everything else, and
+deciding a convention ACROSS directories, is this skill's job — point a user who only wants to change
+one of those keys in one place at that form.
 
 Two files ship next to this one:
 
@@ -221,7 +226,9 @@ chosen for a dark purple is not readable on a pale wash, which is the whole of #
   statement about a wash you can see, so it is on you to check it.
 
 `headerStatusTint: "none"` keeps `headerColor` in `working` and `done` instead of the wash. The
-status still reads from the cell border, the status dot and the pill.
+status still reads from the cell border, the status dot and the pill. The GLOBAL defaults of both
+this and `headerStatusColors` also have Settings controls (Header buttons and chips → Status colour on
+the header / Header colour per status); a project's own is written here.
 
 ```jsonc
 { "headerColor": "#8e44ad", "headerStatusTint": "none" }
@@ -435,8 +442,8 @@ Two consequences for this skill:
 
 `buttons` / `chips` → `mulmoterminal-header`. `provider` / `model` → `mulmoterminal-model`.
 `sound` / `sounds` → `mulmoterminal-notify`. `skills` (the header Skill menu's allowlist and order),
-`decks` (the header Mulmo menu's decks) and `appendSystemPrompt` (this directory's closing-summary
-override) → `mulmoterminal-config`.
+`decks` (the header Mulmo menu's decks), `mobileFiles` (files the phone may open) and `appendSystemPrompt`
+(this directory's closing-summary override) → `mulmoterminal-config`.
 **Preserve them when you merge** — this skill writes appearance keys and must not drop the rest.
 
 ## Example — continuing a convention

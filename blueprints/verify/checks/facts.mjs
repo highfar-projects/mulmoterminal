@@ -70,18 +70,46 @@ const onTwentyFour = (hours, marker) => {
 
 const clock = (hours, minutes) => minutesOf(`${hours}:${String(minutes).padStart(2, "0")}`);
 
-/** Every time a quotation writes, as minutes after midnight: 9:05, 9時5分, 9時15, 9時半, 午後3:00, 3 PM. */
-export const timesIn = (quote) => {
-  const text = asciiDigits(quote);
-  const suffix = (match) => /^ ?([ap])\.?m/iu.exec(text.slice(match.index + match[0].length))?.[1];
+const MARKER_AFTER = /^ ?([ap])\.?m/iu;
+// Between the two ends of a range: a dash, a tilde, or "to" (分 may close a Japanese start: 1時30分〜5時).
+const RANGE_JOIN = /^分? ?(?:[–—〜~～-]|to) ?$/u;
+
+const token = (match, hours, minutes, before, after) => ({ at: match.index, end: match.index + match[0].length, hours, minutes, before, after });
+
+// Every time the text writes, with where it sits and the AM/PM (午前/午後) written before or after it. Only what is
+// written as a time: the 3 of "3–6 pm" is not listed, since a bare number may as well be a day (October 1 to 5 pm).
+function timeTokens(text) {
+  const afterOf = (match) => MARKER_AFTER.exec(text.slice(match.index + match[0].length))?.[1];
   const colon = [...text.matchAll(/(午前|午後)? ?(?<!\d)(\d{1,2}):(\d{2})(?!\d)/gu)].map((match) =>
-    clock(onTwentyFour(Number(match[2]), match[1] ?? suffix(match)), Number(match[3])),
+    token(match, Number(match[2]), Number(match[3]), match[1], afterOf(match)),
   );
   const kanji = [...text.matchAll(/(午前|午後)? ?(?<!\d)(\d{1,2})時(\d{0,2})(?!\d)(半?)/gu)].map((match) =>
-    clock(onTwentyFour(Number(match[2]), match[1]), match[4] ? 30 : Number(match[3] || 0)),
+    token(match, Number(match[2]), match[4] ? 30 : Number(match[3] || 0), match[1], undefined),
   );
-  const bare = [...text.matchAll(/(?<![\d:])(\d{1,2}) ?([ap])\.?m\b/giu)].map((match) => clock(onTwentyFour(Number(match[1]), match[2]), 0));
-  return new Set([...colon, ...kanji, ...bare].filter((minutes) => minutes !== undefined));
+  const bare = [...text.matchAll(/(?<![\d:])(\d{1,2}) ?([ap])\.?m\b/giu)].map((match) => token(match, Number(match[1]), 0, undefined, match[2]));
+  return [...colon, ...kanji, ...bare].sort((a, b) => a.at - b.at);
+}
+
+// A range often writes AM/PM once for both ends: 1:00–5:00 PM (after the end), 午後1時〜5時 (before the start). The
+// unmarked end gains a reading with the shared marker; its own plain reading stays.
+function sharedReading(first, second, text) {
+  if (!RANGE_JOIN.test(text.slice(first.end, second.at))) return [];
+  if (first.before === undefined && first.after === undefined && second.after !== undefined) {
+    return [clock(onTwentyFour(first.hours, second.after), first.minutes)];
+  }
+  if (first.before !== undefined && second.before === undefined && second.after === undefined) {
+    return [clock(onTwentyFour(second.hours, first.before), second.minutes)];
+  }
+  return [];
+}
+
+/** Every time a quotation writes, as minutes after midnight: 9:05, 9時5分, 9時15, 9時半, 午後3:00, 3 PM, 1:00–5:00 PM. */
+export const timesIn = (quote) => {
+  const text = asciiDigits(quote);
+  const tokens = timeTokens(text);
+  const plain = tokens.map((entry) => clock(onTwentyFour(entry.hours, entry.before ?? entry.after), entry.minutes));
+  const shared = tokens.slice(1).flatMap((second, index) => sharedReading(tokens[index], second, text));
+  return new Set([...plain, ...shared].filter((minutes) => minutes !== undefined));
 };
 
 const SIGNS = ["-", "−", "▲", "△"];
@@ -130,14 +158,17 @@ const amountProblem = (amount) => {
   return typeof amount.label === "string" && amount.label.trim() ? null : 'needs a "label"';
 };
 
+/** The lists facts.json may hold. */
+export const FACT_KINDS = ["events", "amounts", "totals", "products"];
+
 const listOf = (facts, key) => (facts?.[key] === undefined ? [] : facts[key]);
 
 /** What is malformed in facts.json, one line each: an entry, an id, a total's parts. Empty when it is well formed. */
 export const shapeProblems = (facts) => {
-  const lists = ["events", "amounts", "totals"].map((key) => [key, listOf(facts, key)]);
+  const lists = FACT_KINDS.map((key) => [key, listOf(facts, key)]);
   const notArrays = lists.filter(([, list]) => !Array.isArray(list)).map(([key]) => `"${key}" must be an array`);
   if (notArrays.length > 0) return notArrays;
-  const checks = { events: eventProblem, amounts: amountProblem, totals: amountProblem };
+  const checks = { events: eventProblem, amounts: amountProblem, totals: amountProblem, products: amountProblem };
   const entries = lists.flatMap(([key, list]) => list.map((entry, index) => ({ key, entry, index })));
   const problems = entries.flatMap(({ key, entry, index }) => {
     const named = typeof entry?.id === "string" ? ` (${entry.id})` : "";
@@ -156,7 +187,10 @@ export const shapeProblems = (facts) => {
   const doubleCounted = listOf(facts, "totals")
     .filter((total) => Array.isArray(total?.parts) && new Set(total.parts).size !== total.parts.length)
     .map((total) => `totals (${total?.id}): "parts" names an amount twice, which would count it twice`);
-  return [...problems, ...repeated, ...badParts, ...doubleCounted];
+  const badFactors = listOf(facts, "products")
+    .filter((entry) => !Array.isArray(entry?.of) || entry.of.length < 2 || entry.of.some((id) => !amountIds.has(id)))
+    .map((entry) => `products (${entry?.id}): "of" must list two or more ids of amounts, the ones multiplied`);
+  return [...problems, ...repeated, ...badParts, ...doubleCounted, ...badFactors];
 };
 
 /** "10-1" for 2026-10-01 and for 10-01. */

@@ -22,6 +22,7 @@ import { launchChips, type CwdPreset, type LaunchChip } from "./presets";
 import type { Launcher, LaunchPick } from "./launchers";
 import type { LaunchChoice } from "./wsUrl";
 import type { RunCommand } from "./runCommand";
+import type { ResumeRequest } from "./resumeRequest";
 import LaunchChipList from "./LaunchChipList.vue";
 import AgentMark from "./AgentMark.vue";
 import ModelPicker from "./ModelPicker.vue";
@@ -31,6 +32,7 @@ import { LAUNCH_ROW } from "./launchFormClasses";
 import { jsonBody } from "../jsonBody";
 import { isRecord } from "../../common/isRecord";
 import { filePickerOpen, pickPaths } from "../composables/pickPaths";
+import { remoteServer } from "../composables/remoteServer";
 import { useBusyAction } from "../composables/useBusyAction";
 import { useSessionStop } from "../composables/useSessionStop";
 import { worktreeRequestFailure } from "./cellChromeRules";
@@ -94,7 +96,7 @@ const emit = defineEmits<{
   // connect the wrong endpoint to a live id, so neither row may leave it out.
   // `account` is the login the row was found under, so the cell can say so; the server keeps the
   // session on that login whatever is sent.
-  (e: "resume", value: { id: string; cwd: string | null; agent?: TerminalAgent; account?: string | null }): void;
+  (e: "resume", value: ResumeRequest): void;
   (e: "run", value: RunCommand): void;
   (e: "launch", value: LaunchPick): void;
   // `retry-config`: read the config again after it could not be read at all — the button on the
@@ -875,6 +877,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
           @keydown.enter="startHere"
         />
         <button
+          v-if="!remoteServer"
           type="button"
           data-testid="cell-dir-pick"
           class="flex-none inline-flex items-center justify-center px-2 rounded-md border border-border bg-elevated text-secondary cursor-pointer enabled:hover:bg-hover enabled:hover:text-fg enabled:hover:border-accent disabled:cursor-default disabled:opacity-40"
@@ -967,6 +970,11 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
             />
           </span>
         </label>
+        <!-- A switch writes the directory's registration; a running agent was handed its tools when it
+             started, so without this the toggle looks like it did nothing. -->
+        <p data-testid="cell-mcp-next-start" class="m-0 font-sans text-[11px] leading-snug text-secondary" :class="LAUNCH_ROW">
+          {{ t("launch.mcpGroupsNextStart") }}
+        </p>
       </template>
     </template>
     <!-- Everything below is per-directory and is dropped the moment the field changes, so without

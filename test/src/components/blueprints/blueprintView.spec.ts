@@ -16,12 +16,20 @@ import {
   presetGroups,
   answerLines,
   toggleLine,
+  runGroups,
+  basesFor,
+  usecaseGroups,
+  RUN_GROUPS,
+  fitsOnALine,
 } from "../../../../src/components/blueprints/blueprintView";
 import { STEP_STATUSES, WAIT_KINDS } from "../../../../common/blueprint/state";
 import { BLUEPRINT_GATES } from "../../../../common/blueprint/plan";
 import { hearingSchema } from "../../../../common/blueprint/hearing";
 import { en } from "../../../../src/i18n/en";
 import { ja } from "../../../../src/i18n/ja";
+import { ko } from "../../../../src/i18n/ko";
+import { zhCN } from "../../../../src/i18n/zh-CN";
+import { zhTW } from "../../../../src/i18n/zh-TW";
 
 // A message key resolved against a bundle, so a key the helpers name but the bundle lacks is caught.
 const lookup = (bundle: unknown, key: string): unknown =>
@@ -33,6 +41,15 @@ describe("message keys the helpers name exist in the bundles", () => {
   it.each(keys)("%s", (key) => {
     expect(typeof lookup(en, key)).toBe("string");
     expect(typeof lookup(ja, key)).toBe("string");
+  });
+
+  it.each(Object.entries({ en, ja, ko, zhCN, zhTW }))("names every run group in %s", (_locale, bundle) => {
+    RUN_GROUPS.forEach((group) => expect(typeof lookup(bundle, `blueprints.runGroups.${group}`)).toBe("string"));
+  });
+
+  // The review gate is shown before the step it lets start, so every language has to name that step.
+  it.each(Object.entries({ en, ja, ko, zhCN, zhTW }))("the review gate names its step in %s", (_locale, bundle) => {
+    expect(lookup(bundle, gateKey("review"))).toMatch(/\{step\}/);
   });
 
   it("names nothing when nothing is waited on", () => {
@@ -196,5 +213,89 @@ describe("answerLines and toggleLine", () => {
 
   it("matches the whole line, not a part of it", () => {
     expect(toggleLine("notes/a.md", "a.md")).toBe("notes/a.md\na.md");
+  });
+});
+
+describe("fitsOnALine", () => {
+  it.each([
+    ["a.md", true],
+    ["docs/with space.md", true],
+    ["", true],
+    ["bad\nname.md", false],
+    ["odd\rname.md", false],
+    ["end\n", false],
+  ])("%j fits: %s", (path, fits) => {
+    expect(fitsOnALine(path)).toBe(fits);
+  });
+});
+
+describe("runGroups", () => {
+  const run = (id: string, current: string | null, waitingOn: "approval" | "answer" | "failure" | null, archived = false) => ({
+    id,
+    current,
+    waitingOn,
+    archived,
+  });
+
+  it("puts waiting builds first, running next, done last, keeping the given order inside each and leaving out empty groups", () => {
+    const runs = [run("d1", null, null), run("w1", "s", "failure"), run("r1", "s", null), run("w2", "s", "approval")];
+    expect(runGroups(runs).map((entry) => [entry.group, entry.runs.map((summary) => summary.id)])).toEqual([
+      ["waiting", ["w1", "w2"]],
+      ["working", ["r1"]],
+      ["done", ["d1"]],
+    ]);
+    expect(runGroups([run("d1", null, null)]).map((entry) => entry.group)).toEqual(["done"]);
+    expect(runGroups([])).toEqual([]);
+  });
+
+  it("puts a build away last, whatever it is waiting on, and out of every other group", () => {
+    const runs = [run("a1", "s", "approval", true), run("w1", "s", "approval"), run("a2", null, null, true), run("a3", "s", null, true)];
+    expect(runGroups(runs).map((entry) => [entry.group, entry.runs.map((summary) => summary.id)])).toEqual([
+      ["waiting", ["w1"]],
+      ["archived", ["a1", "a2", "a3"]],
+    ]);
+  });
+});
+
+describe("the tasks and the bases they run on", () => {
+  const base = (slug: string): PackChoice => ({
+    slug,
+    manifest: { kind: "base", slug, title: slug.toUpperCase(), version: "1", description: "", platform: "local", requires: [], credentials: [] },
+  });
+  const usecase = (slug: string, bases: string[]): PackChoice => ({
+    slug,
+    manifest: { kind: "usecase", slug, title: slug, version: "1", description: "", bases, next: [] },
+  });
+  const PACKS = [
+    base("docs"),
+    base("local"),
+    base("firebase"),
+    usecase("review", ["docs"]),
+    usecase("product", ["local", "firebase", "supabase"]),
+    usecase("internal", ["firebase"]),
+  ];
+
+  it("offers a task only the installed bases it can be built on, in the selector's order", () => {
+    expect(basesFor(PACKS, "product").map((pack) => pack.slug)).toEqual(["local", "firebase"]);
+    expect(basesFor(PACKS, "review").map((pack) => pack.slug)).toEqual(["docs"]);
+    expect(basesFor(PACKS, "unknown")).toEqual([]);
+    expect(basesFor(PACKS, "docs")).toEqual([]);
+  });
+
+  it("groups tasks under their one base, with those of several bases second", () => {
+    expect(usecaseGroups(PACKS).map((group) => [group.base, group.usecases.map((pack) => pack.slug)])).toEqual([
+      ["docs", ["review"]],
+      [null, ["product"]],
+      ["firebase", ["internal"]],
+    ]);
+    expect(usecaseGroups([base("docs")])).toEqual([]);
+    // Built only on bases that are not installed: nothing to build it on, so not offered — and a multi-base app with
+    // one installed base is that base's alone.
+    const partly = [...PACKS, usecase("orphan", ["missing-a", "missing-b"]), usecase("lone", ["firebase", "supabase"])];
+    expect(usecaseGroups(partly).map((group) => [group.base, group.usecases.map((pack) => pack.slug)])).toEqual([
+      ["docs", ["review"]],
+      [null, ["product"]],
+      ["firebase", ["internal", "lone"]],
+    ]);
   });
 });

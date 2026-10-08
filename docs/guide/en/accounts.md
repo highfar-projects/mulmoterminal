@@ -58,6 +58,10 @@ Every key and limit is in the reference: [Configuration → accounts](config.htm
 
 The list is read at startup. Restart MulmoTerminal, then reload the browser tab.
 
+Or skip steps 1 and 2: **Settings → Models and backends** adds an account under *Second subscriptions*
+(a name, Claude Code or Codex, and the directory), and it is offered in the launch form at once. The
+id is made from the name there.
+
 **How to tell it worked:** Settings → **Models and backends** lists the account under *Second
 subscriptions*.
 

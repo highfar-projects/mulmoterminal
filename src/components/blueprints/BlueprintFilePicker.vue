@@ -4,7 +4,7 @@
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { listFolderFiles } from "../../composables/blueprintsApi";
-import { answerLines, toggleLine } from "./blueprintView";
+import { answerLines, fitsOnALine, toggleLine } from "./blueprintView";
 import { failureText } from "./refusalText";
 
 const props = defineProps<{ projectDir: string; answer: string }>();
@@ -29,7 +29,7 @@ async function show(): Promise<void> {
   const result = await listFolderFiles(dir);
   loading.value = false;
   error.value = result.ok ? null : failureText(t, result);
-  files.value = result.ok ? result.value.files : [];
+  files.value = result.ok ? result.value.files.filter(fitsOnALine) : [];
   more.value = result.ok && result.value.more;
   listedFor.value = dir;
 }
@@ -50,7 +50,7 @@ function toggle(file: string): void {
         :disabled="folder === '' || loading"
         @click="show"
       >
-        <span class="material-symbols-outlined text-[15px]">folder_open</span>{{ t("blueprints.form.pickFiles") }}
+        <span class="material-symbols-outlined text-[15px]" aria-hidden="true">folder_open</span>{{ t("blueprints.form.pickFiles") }}
       </button>
       <span v-if="folder === ''" class="font-sans text-[11px] text-dim">{{ t("blueprints.form.pickNeedsFolder") }}</span>
     </div>

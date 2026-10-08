@@ -13,7 +13,9 @@
       "description": "部分（章・節）ごとに、書き出すファイル、入れる要点、長さを決める。",
       "skill": "skills/outline",
       "check": "node \"$BLUEPRINT_USECASE/checks/parts.mjs\" outline",
-      "gates": ["review"]
+      "gates": ["review"],
+      "reads": [".blueprint/brief.md"],
+      "revises": [".blueprint/brief.md"]
     },
     {
       "id": "draft",
@@ -22,7 +24,9 @@
       "skill": "skills/draft",
       "check": "node \"$BLUEPRINT_USECASE/checks/parts.mjs\" progress",
       "repeatWhile": "node \"$BLUEPRINT_USECASE/checks/parts.mjs\" more",
-      "gates": ["review"]
+      "gates": ["review"],
+      "reads": [".blueprint/outline.txt"],
+      "revises": [".blueprint/outline.json"]
     },
     {
       "id": "report",

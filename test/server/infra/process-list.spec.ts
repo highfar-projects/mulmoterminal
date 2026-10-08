@@ -2,7 +2,7 @@
 // `ps -o time` is printed differently on the two platforms this runs on; a row that cannot be read
 // must be dropped rather than guessed, or a session is billed for a process it never had.
 import { describe, it, expect } from "vitest";
-import { parseCpuTime, parseProcessRows } from "../../../server/infra/process-list";
+import { parseCpuTime, parseProcessDetails, parseProcessRows } from "../../../server/infra/process-list";
 
 describe("parseCpuTime", () => {
   it.each([
@@ -49,5 +49,39 @@ describe("parseProcessRows", () => {
 
   it("is empty for empty output", () => {
     expect(parseProcessRows("")).toEqual([]);
+  });
+});
+
+describe("parseProcessDetails", () => {
+  // As `LC_ALL=C ps -Ao pid=,ppid=,time=,rss=,etime=,lstart=,command=` prints on macOS, then Linux.
+  const MAC = "  412   400   0:03.21  51200    01:02:03 Thu Oct  2 18:00:00 2026     node  server/index.ts --port 3000\n";
+  const LINUX = "  77     1 00:00:01   2048 1-00:00:05 Wed Oct  1 17:59:55 2026 /usr/bin/vite\n";
+
+  it("reads every field, and keeps the command's own spacing", () => {
+    expect(parseProcessDetails(MAC)).toEqual([
+      {
+        pid: 412,
+        ppid: 400,
+        cpuSeconds: 3.21,
+        rssKb: 51200,
+        elapsedSeconds: 3723,
+        startedAt: "Thu Oct 2 18:00:00 2026",
+        command: "node  server/index.ts --port 3000",
+      },
+    ]);
+  });
+
+  it("reads a Linux row with a day count in etime", () => {
+    expect(parseProcessDetails(LINUX)[0]).toMatchObject({ pid: 77, cpuSeconds: 1, elapsedSeconds: 86_405, command: "/usr/bin/vite" });
+  });
+
+  it.each([
+    ["no command", "  412   400   0:03.21  51200    01:02:03 Thu Oct  2 18:00:00 2026"],
+    ["a non-numeric rss", "  412   400   0:03.21  lots    01:02:03 Thu Oct  2 18:00:00 2026 node"],
+    ["an unreadable etime", "  412   400   0:03.21  51200    soon Thu Oct  2 18:00:00 2026 node"],
+    ["a header line", "  PID  PPID TIME RSS ELAPSED STARTED a b c d COMMAND"],
+    ["a blank line", ""],
+  ])("drops a row with %s", (_name, line) => {
+    expect(parseProcessDetails(`${line}\n`)).toEqual([]);
   });
 });

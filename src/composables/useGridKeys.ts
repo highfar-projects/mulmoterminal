@@ -7,6 +7,9 @@ import type { Keymap, KeymapAction } from "../../common/keymap";
 import { gateShortcut, isEditableTarget, type GridKeyState, type GridShortcut } from "./gridShortcut";
 import { isImeConfirming } from "./imeComposition";
 import { openCommandPalette, providePaletteHost } from "./commandPalette";
+import { runFocusMode } from "./focusMode";
+import { runAppAction } from "./runAppAction";
+import { isAppAction } from "../../common/appActions";
 import { usePrefixKeys, type PrefixKeys } from "./usePrefixKeys";
 
 export interface GridKeys {
@@ -21,7 +24,7 @@ export interface GridKeys {
 // The checks about the key itself; the host's `available` is the ones about the grid. A key
 // confirming an IME candidate is the IME's, not a shortcut: `gridShortcutFor` already refuses `e.isComposing`, and
 // this is the Safari case, where compositionend fires first and the flag is already false (#1353).
-function keyYieldsToPage(e: KeyboardEvent): boolean {
+export function keyYieldsToPage(e: KeyboardEvent): boolean {
   const target = e.target instanceof HTMLElement ? e.target : null;
   return (target !== null && isEditableTarget(target.tagName, Array.from(target.classList))) || isImeConfirming(e);
 }
@@ -31,11 +34,18 @@ export function useGridKeys(
   zoomed: () => boolean,
   available: () => boolean,
   manualOrder: Readonly<Ref<boolean>>,
+  filesOpen: () => boolean,
 ): GridKeys {
   const prefix = usePrefixKeys();
   const keyState = (): GridKeyState => ({ zoomed: zoomed(), manualOrder: manualOrder.value });
   const runAction = (action: KeymapAction): void => {
     if (action === "command-palette") return openCommandPalette();
+    // The app's, like the palette: full screen is the page's, not a cell's (#2580).
+    if (action === "focus-mode") return void runFocusMode();
+    if (isAppAction(action)) {
+      runAppAction(action);
+      return;
+    }
     const shortcut = gateShortcut(action, keyState());
     if (shortcut) run(shortcut);
   };
@@ -43,7 +53,13 @@ export function useGridKeys(
   onMounted(() => {
     // A pick is refused where the grid would not take the key — the rows already say so, and this is
     // the backstop for a row that was enabled when the list was drawn.
-    withdraw = providePaletteHost({ run: (action) => available() && runAction(action), zoomed, available, manualOrder: () => manualOrder.value });
+    withdraw = providePaletteHost({
+      run: (action) => available() && runAction(action),
+      zoomed,
+      available,
+      manualOrder: () => manualOrder.value,
+      filesOpen,
+    });
   });
   onBeforeUnmount(() => withdraw?.());
   return {

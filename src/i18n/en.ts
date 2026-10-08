@@ -13,10 +13,26 @@
 // that table holds no words. A spec pins that every id there has a message here and in every other
 // locale.
 import { blueprintsEn } from "./blueprints/en";
+import { usageViewEn } from "./usageView/en";
 import { tipsEn } from "./tips/en";
 import { forkTipsEn } from "./forkTips/en";
-import { accountFormEn } from "./accountForm/en";
 import { LAUNCH_COMMAND } from "../../common/launchCommand";
+import { commandPaletteEn } from "./commandPalette/en";
+import { focusModeEn } from "./focusMode/en";
+import { fileHistoryEn } from "./fileHistory/en";
+import { dirConfigSaveEn } from "./dirConfigSave/en";
+import { releaseNotesEn } from "./releaseNotes/en";
+import { dirConfigOpenEn } from "./dirConfigOpen/en";
+import { dirSettingsFormEn } from "./dirSettingsForm/en";
+import { themeEditorEn } from "./themeEditor/en";
+import { headerChipsEn } from "./headerChips/en";
+import { headerButtonsEn } from "./headerButtons/en";
+import { settingsControlsEn } from "./settingsControls/en";
+import { shortcutsEn } from "./shortcuts/en";
+import { filesTreeEn } from "./filesTree/en";
+import { previewCodeCopyEn } from "./previewCodeCopy/en";
+import { skillsViewEn } from "./skillsView/en";
+import { processesViewEn } from "./processesView/en";
 export const en = {
   settings: {
     title: "Settings",
@@ -66,6 +82,7 @@ export const en = {
       cost: "Cost (estimated)",
       quit: "Quit MulmoTerminal",
       help: "Help & user guide",
+      releaseNotes: "Release notes",
     },
 
     terminalKeys: {
@@ -87,37 +104,7 @@ export const en = {
       },
     },
 
-    shortcuts: {
-      intro:
-        "Read-only, and everything is listed whether it is bound or not, under {keymapKey}. Two kinds can be bound: MulmoTerminal actions (enlarge, jump to a waiting agent, copy / paste), and key sequences sent to the terminal (on a Mac, Cmd+← for start of line). Every key you bind stops reaching the program inside the terminal, so set them up with the button below — the agent checks each one against your existing bindings and the traps a browser or a Mac adds before writing it. The {guide} has the reference.",
-      guide: "guide",
-      actions: {
-        zoomToggle: "Enlarge / collapse a terminal",
-        zoomNext: "Enlarge the next terminal",
-        zoomPrev: "Enlarge the previous terminal",
-        focusNext: "Move the cursor to the next terminal (grid only)",
-        focusPrev: "Move the cursor to the previous terminal (grid only)",
-        nextAttention: "Jump to a terminal that needs you",
-        markUnread: "Mark this terminal unread / read",
-        terminalNew: "Open the launch panel",
-        terminalNewHere: "Open the launch panel on this terminal's directory",
-        terminalNewAdjacent: "Shell in this terminal's directory, straight away",
-        terminalClose: "Close this terminal",
-        terminalRestart: "Restart the agent in this terminal",
-        terminalMovePrev: "Move this terminal earlier",
-        terminalMoveNext: "Move this terminal later",
-        filesFind: "Open a file by name, beside this terminal",
-        filesSearch: "Search the contents of the files beside this terminal",
-        commandPalette: "Open the command palette",
-        copy: "Copy the terminal selection",
-        paste: "Paste into the terminal",
-      },
-      list: "Keyboard shortcuts",
-      notSet: "Not set",
-      sendRow: "Send {key} to the terminal",
-      sendNone: "Send keys to the terminal",
-      setUp: "Set up shortcuts…",
-    },
+    shortcuts: shortcutsEn,
 
     surviving: {
       intro:
@@ -150,8 +137,8 @@ export const en = {
       sweepDisabledHint: "The sweep is off above, so there is nothing for this to repeat.",
       sweepRunning: "This server repeats the sweep every {hours} hour(s).",
       sweepRunningOff: "This server sweeps once at start and does not repeat.",
-      sweepPending: "The saved cadence above applies from the next start.",
-      sweepNote: "The cadence is read when the server starts, so a change here applies from the next one.",
+      sweepPending: "The saved cadence above has not reached this server yet — reload the config file, or restart it.",
+      sweepNote: "A change here applies at once, counted from the last sweep.",
       neverTitle: "Never ended automatically.",
       neverHint: "They stay until you stop one here, or end it from the terminal holding it.",
       reapHint:
@@ -227,7 +214,7 @@ export const en = {
       prFooterHint: "a {line} line at the bottom of the body, so a PR says which of several side-by-side clones produced it.",
       gitlabTitle: "Self-hosted GitLab",
       gitlabHint:
-        "a URL does not say which forge a host runs, so declare it here to have its repos read with {glab}. Needs {authCommand}. Takes effect on the next server start.",
+        "a URL does not say which forge a host runs, so declare it here to have its repos read with {glab}. Needs {authCommand}. Takes effect at once.",
       gitlabField: "Add a self-hosted GitLab host",
     },
 
@@ -243,12 +230,15 @@ export const en = {
       worklogInterval: "How often it runs:",
       worklogStepper: "dev-work log interval",
       systemTasks: "Built-in scheduled tasks",
-      systemTasksHint: "Both run hourly and are on unless you turn them off. Switching one off takes effect the next time the server starts.",
+      systemTasksHint: "Both run hourly and are on unless you turn them off. Switching one takes effect at once.",
       feedRefresh: "Refresh collections and feeds",
       feedRefreshHint:
         "fetches your RSS/JSON feeds and dispatches skill-backed collection updates, for the workspace and every saved project directory. With no feeds registered it does nothing.",
       calendarSync: "Sync Google Calendar",
       calendarSyncHint: "pulls changed events into any collection that declares a Google calendar. Does nothing until you connect an account.",
+      remoteServer: "Experimental: the server runs on another machine",
+      remoteServerHint:
+        "for a server reached through an SSH tunnel. Hides or explains the actions that would act on the server's screen (its file dialog, file manager, apps, Google sign-in), and always uploads a dropped file. Takes effect at once; the launcher reads it at its next start.",
     },
 
     launchers: {
@@ -312,7 +302,6 @@ export const en = {
       accountsIntro:
         "— a second login for Claude Code or Codex, each in its own config directory. A new cell can be started on one from its launch form, and its header then names the account. A session stays on the account it was started on.",
       noAccounts: "None configured — every cell runs on the default login.",
-      ...accountFormEn,
       addBackend: "Add a backend…",
     },
 
@@ -440,6 +429,10 @@ export const en = {
       loadAverageTitle: "Load average",
       loadAverageHint:
         "the load on the machine running your sessions, as a percentage of its cores — 100% means every core has work queued, and starting another agent slows the ones already running. Amber at 100%, red at 200%. A host that keeps no load average (Windows) shows nothing either way.",
+      searchBox: "Show a search box in the middle of the top bar",
+      searchBoxTitle: "Search box",
+      searchBoxHint:
+        "a box in the middle of the top bar, on every screen, that opens the command palette — the same palette the Commands button and its key open. Off by default.",
     },
 
     waitingRows: {
@@ -500,7 +493,8 @@ export const en = {
       picker: "Language for this app",
       auto: "My browser's language",
       autoResolved: "Your browser asks for {locale}, so this reads as {label}.",
-      partial: "Settings and the grid's status words are translated so far. The rest of the app is still in English.",
+      partial:
+        "Settings, the grid's status words and every button's hover tip and screen-reader label are translated so far. The rest of the app's words are still in English.",
     },
   },
 
@@ -581,6 +575,8 @@ export const en = {
   },
 
   launch: {
+    mcpGroupsNextStart:
+      "Takes effect for the next terminal started in this directory — a cell already open here keeps the tools it started with, so restart it.",
     agentUnavailable: {
       missing: "{agent} is not installed on this machine, so it cannot be started here.",
       noSuchPath: "{agent}'s command override points at a file that is not there, so it cannot be started.",
@@ -591,41 +587,13 @@ export const en = {
   },
 
   // The hint shown while a two-key shortcut waits for its second key (#2265).
-  commandPalette: {
-    open: "Commands",
-    placeholder: "Run an action by name",
-    close: "Close the command palette",
-    empty: "No action matches that.",
-    needsEnlarged: "Needs an enlarged terminal",
-    needsNothingEnlarged: "Only while no terminal is enlarged",
-    needsManualOrder: "Only in manual order",
-    gridHidden: "Only while the terminal grid is in front",
-    hint: "Enter runs · Esc closes",
-    notSet: "No key",
-    descriptions: {
-      zoomToggle: "Enlarges the terminal the cursor is in, or collapses the enlarged one.",
-      zoomNext: "Moves the enlargement to the next terminal in the on-screen order.",
-      zoomPrev: "Moves the enlargement to the previous terminal.",
-      focusNext: "Walks the cursor to the next terminal in the tiled grid.",
-      focusPrev: "Walks the cursor to the previous terminal in the tiled grid.",
-      nextAttention: "Goes to the next terminal waiting for you, then finished ones, then idle ones.",
-      markUnread: "Marks an idle terminal unread, or a waiting one read — the enlarged terminal, or the one the cursor is in.",
-      terminalNew: "Opens the launch panel on the default workspace.",
-      terminalNewHere: "Opens the launch panel on the current terminal's directory.",
-      terminalNewAdjacent: "Starts a shell in the current terminal's directory, with no form.",
-      terminalClose: "Closes the current terminal at once, with no confirmation.",
-      terminalRestart: "Restarts the agent in the current terminal, resuming the same conversation.",
-      terminalMovePrev: "Moves the current terminal one place earlier in manual order — left in the grid and the strip, up in the roster.",
-      terminalMoveNext: "Moves the current terminal one place later in manual order — right in the grid and the strip, down in the roster.",
-      filesFind: "Finds a file by name in the Files pane beside the enlarged terminal.",
-      filesSearch: "Searches inside the files of the enlarged terminal's project.",
-    },
-  },
+  commandPalette: commandPaletteEn,
   // The path menu's file items. Its repository section stays in the forge's own words.
   pathMenu: {
     insertFilePath: "Insert a file path",
     reveal: "Reveal in the file manager",
     browseFiles: "Browse files in the app",
+    dirSettings: "This directory's settings",
     newTerminal: "New terminal here",
   },
   prefixKeys: {
@@ -654,9 +622,13 @@ export const en = {
     items: {
       rooms: { label: "Rooms", detail: "Round-table conversations between terminals" },
       blueprints: { label: "Blueprints", detail: "Build an app or documents step by step from a template" },
+      skills: { label: "Skills", detail: "Every skill in ~/.claude/skills and in your folders, with search" },
+      processes: { label: "Processes", detail: "What each session is running, and worktrees that can go" },
       worklog: { label: "Worklog", detail: "The dev work log in the wiki (#worklog)" },
+      usage: { label: "Token usage", detail: "What each rotation token has left of its 5h and weekly windows" },
     },
   },
+  usageView: usageViewEn,
   rowMenu: {
     trigger: "Actions for this terminal",
     title: "Actions",
@@ -671,6 +643,33 @@ export const en = {
     wake: "Wake",
     close: "Close",
   },
+  fileOutline: {
+    button: "Outline",
+    tip: "Headings in this file — pick one to go there",
+    empty: "No headings in this file.",
+  },
+  whatsNew: {
+    title: "What's new",
+    intro: "MulmoTerminal was updated to {version}. Here is what changed since you last used it.",
+    englishOnly: "The release notes are written in English.",
+    openOnWeb: "Open this page on the web",
+    older: "Older releases are in the changelog.",
+    close: "Got it",
+  },
+  fileHistory: fileHistoryEn,
+  dirConfigSave: dirConfigSaveEn,
+  releaseNotes: releaseNotesEn,
+  dirConfigOpen: dirConfigOpenEn,
+  dirSettingsForm: dirSettingsFormEn,
+  themeEditor: themeEditorEn,
+  headerChips: headerChipsEn,
+  headerButtons: headerButtonsEn,
+  focusMode: focusModeEn,
+  settingsControls: settingsControlsEn,
+  ...filesTreeEn,
+  ...previewCodeCopyEn,
+  ...skillsViewEn,
+  ...processesViewEn,
   tips: tipsEn,
   forkTips: forkTipsEn,
   blueprints: blueprintsEn,

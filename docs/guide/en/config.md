@@ -81,6 +81,12 @@ is only whatever was last released and the commit is what identifies the build. 
 newer exists, the update notice from the header badge follows on the next line, command included.
 That row is what to quote in a bug report.
 
+Below it, **Reload config file** reads `~/.mulmoterminal/config.json` again — after you edited it by
+hand, or an agent did with its own tools — and reloads the page to show it, **without restarting**
+MulmoTerminal. If the file does not parse, or its `keymap` has an entry that would stop MulmoTerminal
+from starting, nothing is reloaded: the running settings stay, and the button says why. A provider
+key lives in the environment, so that one still needs a restart.
+
 ![The Settings modal — the sidebar scrolled to show Appearance down to Sessions, with Theme open and its Create a theme… button](../images/config-settings-modal.png)
 
 The **sidebar** groups the sections and shows one at a time; below `sm` (a phone) it becomes a picker
@@ -96,8 +102,9 @@ and how to stop it (close that cell); **Cancel** leaves you where you were, with
 Settings is available in **English, Japanese, Simplified Chinese, Traditional Chinese and Korean**.
 It follows your browser's language unless you pick one in **Language** — the first entry in the
 sidebar, because it is the one setting someone who cannot read the rest of the screen has to find
-first. This modal and the status words the grid and the roster keep on screen are what is translated
-so far; the rest of the app is still English, and the line under the picker says so.
+first. This modal, the status words the grid and the roster keep on screen, and every button's hover
+tip and screen-reader label are what is translated so far; the rest of the app's words are still
+English, and the line under the picker says so.
 
 - **Appearance** — Language, Theme, Terminal font, Terminal font size, Terminal scroll speed, Waiting rows, Grid header read-outs, Toolbar pins
 - **Projects** — Directory appearance, Directory settings
@@ -119,13 +126,14 @@ so far; the rest of the app is still English, and the line under the picker says
 | **Terminal font size** | The xterm font size in px (8–32). Applies to every terminal **in this browser** — a phone and a desktop each keep their own. A directory can override it with `fontSize` ([below](#per-dir)) |
 | **Terminal scroll speed** | How far one wheel notch or trackpad swipe moves the terminal (1× is xterm's own). Per browser, like the font size, because it is a property of the pointing device |
 | **Waiting rows** | In the roster beside an enlarged cell, a row whose agent is **waiting on you** carries an amber ring and blinks; one that has merely **finished** is green and still. The checkbox turns off the movement, not the colour — and no row blinks when your system asks for reduced motion. The three steppers below it set how many lines each row shows before clamping (`cockpitLines` → [Roster rows](#cockpit-lines)) |
+| **Grid header read-outs** | What the bar above the grid carries beside the usage windows: the machine's **load average** (on by default, `showLoadAverage`), and a **search box** in the middle of the top bar, on every screen, that opens the command palette (off by default, `paletteSearchBox`) |
 | **Toolbar pins** | Which of your pinned collections and feeds get a button in the toolbar itself, up to five. A tick per pinned entry; none ticked leaves the toolbar as it was (`toolbarPins` → [Favourites on the toolbar](#toolbar-pins)) |
 | **Directory appearance** | "Configure appearance…" — set a directory's name badge, colors, terminal palette, and grid position interactively, through the `mulmoterminal-dirs` skill |
-| **Directory settings** | What each directory's `.mulmoterminal.json` is **actually doing**. Expand a row for the values in force (colors with a swatch), **which file each came from**, **keys dropped in validation**, and **keys this app never reads**. Read-only — "Explain my settings…" starts the `mulmoterminal-config` skill to say why and fix it (→ [When a setting isn't working](#dir-settings-preview)) |
+| **Directory settings** | What each directory's `.mulmoterminal.json` is **actually doing**. Expand a row for the values in force (colors with a swatch), **which file each came from**, **keys dropped in validation**, and **keys this app never reads**. **Change here** below it edits the name, colours, status colours, theme, palette, font, grid priority, model, closing summary, extra directories, icon, background, sounds and header buttons / chips / commands (→ [Per-project settings](#per-dir)). "Explain my settings…" starts the `mulmoterminal-config` skill to say why and fix it (→ [When a setting isn't working](#dir-settings-preview)) |
 | **Launch commands** | Commands you can launch besides the agents in a grid cell (`{ label, command }`). A plain shell needs no entry — the launcher's **Shell** toggle opens `$SHELL` unconfigured |
 | **Header buttons and chips** | How many buttons and chips your global config declares, read-only — "built-in" when you have configured none. "Set up header buttons…" starts the `mulmoterminal-header` skill (→ [Customizing the header](#header)) |
 | **Terminal keys** | [Copy on select](#copy-on-select) (`copyOnSelect`, off), the [question pane](#question-pane) (`questionPaneEnabled`), and which bytes your Claude reads as **submit** ([Enter — submit vs. newline](#terminal-submit), `terminalSubmit`) |
-| **Keyboard shortcuts** | Every action and the `send` row, bound or not, read-only. **Everything starts as Not set** — "Set up shortcuts…" starts the `mulmoterminal-keys` skill to bind them in `keymap` (→ [Keyboard shortcuts](#keymap)) |
+| **Keyboard shortcuts** | Every action and the `send` row, bound or not, read-only. **Everything starts as Not set** — **Recommended keys** adds a starter set for this platform in one click (only to unbound actions and unused keys), and "Set up shortcuts…" starts the `mulmoterminal-keys` skill to bind anything else in `keymap` (→ [Keyboard shortcuts](#keymap)) |
 | **Voice input** | The language you **dictate in** (your browser's, per-clip detection, or a fixed one). Shown only on a machine that can transcribe |
 | **Models and backends** | The backends a session can run on and whether each can be **reached right now**, read-only. "Add a backend…" starts the `mulmoterminal-model` skill (→ [Using another model](providers.html)) |
 | **MCP servers** | Your own HTTP MCP servers (`userMcpServers`), merged into the **Claude and Copilot** sessions that have every GUI tool — a cell whose working directory is the **workspace**, and a session the server starts on its own (the phone, a scheduled task) unless it is started in a grid cell's shape, as an issue's seed session is. A cell in a project directory does not get this merge, and neither does Codex (the Claude MCP config **you** wrote — `.mcp.json` and the rest — is read in either directory → [which directory to launch in](basics.html#launch-dir)) |
@@ -136,7 +144,7 @@ so far; the rest of the app is still English, and the line under the picker says
 | **Pull request repos** | The repos aggregated by the cross-repo PR/Issue view (`owner/repo`) |
 | **Google account** | Google sign-in for the Calendar link (not the RemoteHost Connect) |
 | **Sessions and background tasks** | Whether replies [end with a closing summary](#append-system-prompt) (`appendSystemPrompt`, on — a directory's own setting wins), whether to [keep a digest of decisions](#decision-digest) (`decisionDigest`, off), and the [periodic dev-work log](#all-keys) with its interval in hours (`worklogEnabled`, off — each run costs tokens) |
-| **Sessions that survived a restart** | Every terminal still running from an earlier server, **across all directories** — the one place a session in a project you no longer open, or a plain shell, can be seen and ended. Each row says where it runs, what it is (`shell or unknown` when no agent conversation is recorded under it), how long it has been idle, and whether ending it loses anything. **Stop** ends that session only; a conversation with a transcript can be resumed afterwards. A row a terminal is holding shows `● open` instead, and is closed from there. The section also carries the two numbers that end a session unasked: `sessionIdleReapDays`, the idle days after which the server ends one, and `sessionReapIntervalHours`, how often it looks again. Rows those numbers will take are marked **due to be ended** — the event, never a clock, because the repeat is armed at boot and the saved number is not necessarily what the running server is doing. The line under the cadence says what this server actually armed, and tells you when a saved change is still waiting for the next start (#2184) |
+| **Sessions that survived a restart** | Every terminal still running from an earlier server, **across all directories** — the one place a session in a project you no longer open, or a plain shell, can be seen and ended. Each row says where it runs, what it is (`shell or unknown` when no agent conversation is recorded under it), how long it has been idle, and whether ending it loses anything. **Stop** ends that session only; a conversation with a transcript can be resumed afterwards. A row a terminal is holding shows `● open` instead, and is closed from there. The section also carries the two numbers that end a session unasked: `sessionIdleReapDays`, the idle days after which the server ends one, and `sessionReapIntervalHours`, how often it looks again. Rows those numbers will take are marked **due to be ended** — the event, never a clock, because the repeat is armed at boot and the saved number is not necessarily what the running server is doing. The line under the cadence says what this server actually armed, and tells you when a saved change has not reached it yet (#2184) — a change saved there applies at once, counted from the last sweep |
 | **Cost (estimated)** | Estimated cost readouts for Session / Today / Month |
 | **Help & user guide** | Links into this guide |
 
@@ -162,6 +170,12 @@ Why the misspelt key stays in the file at all: [keys this version doesn't know s
 ## Per-project settings — colors, names, ordering (`.mulmoterminal.json`) {#per-dir}
 
 Place this at the project root to change the appearance, sound, and header of **terminals (grid cells) opened in that directory**.
+
+Open it in the Files pane and the editor knows this file's keys: it offers them as you type (`Ctrl+Space` asks) and underlines a value the server would reject — a misspelt key or a colour it cannot read — before you save.
+
+To get to it from Settings: **Settings → Directory settings**, expand a directory, and press **Open in Files** beside its file — or, where it has none yet, **Create .mulmoterminal.json and open it**, which writes an empty `{}` first. Either one closes Settings and opens the file in the full-screen Files view.
+
+Or change it without opening the file: under the values, **Change here** has a row each for the name, the seven colours, the header's status style and its colour per status, the terminal theme and its palette, font size, font family, grid priority, the model its sessions start on, the closing-summary switch, extra directories (`addDirs`), the icon, the terminal background, the attention sounds, the header's buttons, chips and command-palette entries (the same editors as the global ones), the Skill menu, the Mulmo menu's decks and the per-worktree variables — every key the file can hold except `mobileFiles`, which is set in the file only. **This checkout only** moves a key into `.mulmoterminal.local.json`, and **Share** moves it back. From a terminal, the path menu (click the directory in its header) has **This directory's settings**, which opens Settings with that directory's row open. Setting any status colour here replaces the global set of status colours for that directory, as `headerStatusColors` in the file always has. The status colours and the palette are saved as a whole set, so an entry the app already ignores there (an unknown palette key, a value that is not a colour) is dropped by the next save from the form. A change is saved as soon as you leave the field (or pick the colour) and applies at once; **Use global** removes that key so the global setting applies again. Keys the form does not show are left as they are. A key `.mulmoterminal.local.json` already holds is written there, marked *this checkout only*.
 
 ### Which model to use
 
@@ -215,12 +229,15 @@ To recolour those states, name them:
 
 Only `working`, `done` and `blocked` — there is no `idle`, because `headerColor` is idle. A status
 you don't name keeps the theme's tint. **Omit `text` and a readable one is derived** from that
-background, so naming a single colour can never come out unreadable.
+background, so naming a single colour can never come out unreadable. The global default for every
+directory can also be picked in **Settings → Header buttons and chips → Header colour per status**,
+with a sample of each header beside its colours.
 
 Or keep your own colour throughout with `"headerStatusTint": "none"`, which leaves `headerColor` in
 place while **working** and **done**; the status still reads from the cell border, the status dot and
 the pill. It deliberately does not reach **blocked** — that is the state where nothing proceeds until
-you answer, so it keeps the theme's amber unless `headerStatusColors.blocked` says otherwise.
+you answer, so it keeps the theme's amber unless `headerStatusColors.blocked` says otherwise. The
+global default can also be switched in **Settings → Header buttons and chips → Status colour on the header**.
 
 Both keys also work in `~/.mulmoterminal/config.json`, where they are the default for every
 directory; a `.mulmoterminal.json` that names either one outranks it for that directory.
@@ -396,9 +413,8 @@ than the terminal background shows, on a light theme only what is darker.
 
 Both beat the global settings for terminals opened here, so one project can be told apart from
 another by ear. A file path is **relative to this directory** — an absolute path, or a `../`
-that escapes it, is rejected. `preset:<id>` works in **`sounds`** (per kind), so a project needs no
-audio file of its own — but **not in `sound`**, which takes a relative file path only and silently
-drops a preset reference. → [Notification sounds](#sounds)
+that escapes it, is rejected. `preset:<id>` works in both `sound` and `sounds`, so a project needs no
+audio file of its own. → [Notification sounds](#sounds)
 
 ### The terminal itself (xterm palette) {#dir-colors}
 
@@ -562,7 +578,7 @@ One of them no longer matches its menu item. *Browse files in the app* **in the 
 - `run: "input"` … send `text` to the running Claude/Codex (e.g. `/compact`).
 - `run: "open"` … write ONE per button. Set several and **only the first of this order** takes effect: `pr` (the current branch's PR — the server resolves it into `url`, so it beats a `url` written alongside) / `url` (browser, http/https only) / `reveal` (OS file manager: Finder/Explorer/xdg-open) / `files` (in-app explorer) / `view` (`prs`/`wiki`/`collections`/`accounting`; `diff` is accepted but has no dedicated screen and currently falls back to the files view) / `terminal` (a new terminal cell in that directory) / `pickFile` (OS file dialog, inserts the path).
 - `run: "shell"` … run `cmd` in a command cell (the id is resolved server-side, `${variables}` are shell-escaped, and the command never reaches the browser).
-- `run: "action"` … act on the cell itself. One `action` so far: `"restart"` — end the agent and start it again **in the same cell, on the same conversation**, which is how a changed MCP registration, an edited config or an updated plugin takes effect. It costs a **resume** (the conversation is read back from its transcript, with the token cost that implies) and it asks **nothing** first, even mid-turn. There is no built-in Restart button: this and the `terminal-restart` shortcut are the two ways to have one.
+- `run: "action"` … act on the cell itself — the launch panel here, a pane, the timeline, talk, or a restart; the full list is in [`run: "action"`](header.html#run-action). `"terminal-restart"` ends the agent and start it again **in the same cell, on the same conversation**, which is how a changed MCP registration, an edited config or an updated plugin takes effect. It costs a **resume** (the conversation is read back from its transcript, with the token cost that implies) and it asks **nothing** first, even mid-turn. Besides this button, the Tools menu and the `terminal-restart` shortcut restart it.
 - `${variables}` … `dir` `dirName` `branch` `repo` `remoteUrl` `ahead` `behind` `dirty` `agent` `model` `task` `session`. What each holds and when it is empty: [the variable table](header-reference.html#vars). **An unknown name does not blank — `${itStaysLiteral}`**, so a typo is visible.
 - `when` … `isGitRepo` / `!isGitRepo` / `var == value` / `var != value` / `var !=` (**an empty right-hand side means "has a value"**). Combine with `&&` / `||` (`&&` binds tighter); **there are no parentheses** → [every `when` form](header-reference.html#when).
 
@@ -638,6 +654,29 @@ Two sources, and it never searches your disk:
   repository opened for the first time needs a restart. Any other deck is still one right-click away
   in the file tree (**Open in the Canvas**).
 
+### Files the phone may open (`mobileFiles`) {#mobile-files}
+
+Which of this project's files the phone (the mulmoserver remote) can list and open — a report an
+agent wrote, a PDF, a chart image. **Nothing is shared until you add this key**, the workspace
+included.
+
+```json
+{ "mobileFiles": { "dirs": ["output"], "extensions": ["md", "html", "pdf", "png"] } }
+```
+
+- **`dirs`** — directories relative to this file, and inside it. `../`, an absolute path, a symlink
+  that leads out, or a directory that is not there is dropped; if none is left, the key is ignored
+  (Settings → Directory settings lists it under *ignored*).
+- **`extensions`** — only `md`, `markdown`, `html`, `htm`, `pdf`, `png`, `jpg`, `jpeg`, `gif` and
+  `webp` can be shared. Anything else you list is dropped.
+- Hidden files and folders (`.env`, `.git/`) and `node_modules` are never shown.
+- On the phone the list comes first, newest file at the top; a file is sent only when you open it.
+  A small markdown or html file travels with the reply. A larger file is placed in **your own**
+  storage area, readable only by your account, and deleted after an hour.
+- An html page is shown with every network request blocked, and the images it names are embedded
+  if they are inside a declared directory.
+- A worktree does not inherit this key.
+
 ### Closing summary for this directory (`appendSystemPrompt`)
 
 ```json
@@ -652,6 +691,11 @@ global setting, which is on. → [Turning off the closing summary](#append-syste
 Beyond the four built-ins (Midnight / Nord / Daylight / Solarized Light), define your own in
 `themes` in `~/.mulmoterminal/config.json` and it **appears in Settings' theme picker**. Picking it
 recolours the whole app — grid background, headers, panels, and the terminals themselves.
+
+The quickest way to start one needs no JSON: **Settings → Theme → Your own theme** copies the theme in
+use (**Make a copy**), then shows every colour of the copy with a picker. A change is painted at once so
+you can judge it on the real app; **Save** keeps it, and closing Settings without saving puts the saved
+colours back. The terminal's own palette (`term`, below) is still written by hand or by the theme skill.
 
 ```json
 {
@@ -1181,6 +1225,11 @@ Keyboard shortcuts are **opt-in**. There are no defaults: with no `keymap` in `c
 bound and no key is intercepted. That is deliberate — **every key you bind is a key the program inside the
 terminal stops receiving**, and only you know whether that trade is worth it for your workflow.
 
+The quickest way to bind one is **Settings → Keyboard shortcuts → Change** on its row: press the keys, and
+it is saved and works at once. **Clear** removes it. A binding that would stop MulmoTerminal from starting
+is refused there, and one the browser keeps for itself is saved with a warning. Two-key sequences and
+`send` entries are still written in the file (or with `/mulmoterminal-keys`).
+
 ```json
 {
   "keymap": {
@@ -1202,14 +1251,32 @@ terminal stops receiving**, and only you know whether that trade is worth it for
 | `next-attention` | **Move to the next terminal worth looking at** — awaiting input first, then finished-and-unreviewed, then idle; cells mid-turn are skipped. Cycles. **Never enlarges or collapses**: zoomed it moves which terminal is enlarged, un-zoomed it moves the keyboard focus there (the focused cell lifts), switching page if needed | no |
 | `mark-unread` | **Mark unread / read** — the cockpit roster row menu's item, from the keyboard. An idle terminal is marked unread (green, with no sound and no push), a finished or waiting one read; one mid-turn is left alone. Acts on the enlarged terminal, or un-zoomed on the one the cursor is in — where `next-attention` lands. Does nothing on a command or launcher cell, or one not yet started | no |
 | `terminal-new` | Open the **launch panel** on the default workspace (same as the toolbar's **＋**) | no |
-| `terminal-new-here` | Open the **launch panel** on the current terminal's working directory. With no terminal in view it falls back to the workspace rather than doing nothing | no |
+| `terminal-new-here` | Open the **launch panel** on the current terminal's working directory (same as the **＋** on its second header row). With no terminal in view it falls back to the workspace rather than doing nothing | no |
 | `terminal-new-adjacent` | Start a **shell** in the current terminal's working directory, straight away — no form to fill in. The closest thing to "split this terminal" | yes |
 | `terminal-close` | **Close** the current terminal (same as its close button) | yes |
 | `terminal-restart` | **Restart the agent** in the current terminal — same cell, same directory, same conversation. Costs a resume, and interrupts a turn in progress | yes |
 | `terminal-move-prev` / `terminal-move-next` | **Move the current terminal** one place earlier / later — left / right in the grid and the thumbnail strip, up / down in the roster. **Manual order only**; in auto or priority order it does nothing (the palette says so) | no — un-zoomed it moves the cell the cursor is in |
-| `files-find` | **Open a file by name** in the Files pane beside the current terminal — type part of a name or path, pick from the list, and it opens with the tree expanded to it. In a git repository the candidates come from git, so `.gitignore` applies; elsewhere the tree is walked, no ignore file is read, and only directories nobody authors by hand (`node_modules`, virtualenvs, caches) are skipped. Opens the pane first if it is not already up | yes |
-| `files-search` | **Search inside the files** of that project — the companion to `files-find`. Matches are grouped by file with the matching lines under them; picking one opens the file and puts the cursor on that line. The query is literal by default, with toggles for regular expressions and for matching case; otherwise case is smart — a lower-case query matches either case, one with a capital in it does not. In a git repository `.gitignore` applies, and a file your agent created a moment ago is searched too; elsewhere no ignore file is read. A file you have open with unsaved edits is searched from what is on your screen rather than from disk — in literal mode; with the regex toggle on it is left out instead, with a note asking you to save it, since running a half-typed pattern on the page can freeze it. Its out-of-date matches from disk are dropped either way. What you typed is emphasised in every line, a line whose match falls past the edge of the row is scrolled to it, and the result you are on opens onto the lines around it. Opens the pane first if it is not already up | yes |
-| `command-palette` | **Open the command palette** — every action above (except `copy` / `paste`) by name, with the key it is bound to. Type part of a name or the action id (`find`, `zoom`), then `Enter`; an action that cannot run in the current view is greyed out with the reason. The toolbar's **Commands** button opens it too, so it needs no binding. VS Code's key for it is free here — on a Mac write it `"Cmd+Shift+p"`, lowercase ([below](#macos-keys)) | no |
+| `terminal-timeline` | Open the current terminal's **activity timeline** (Claude sessions only) | no — un-zoomed it acts on the cell the cursor is in |
+| `terminal-talk` | **Talk to another terminal** from the current one | no — un-zoomed, the cursor's cell |
+| `terminal-park` | **Set the current terminal aside**, or wake it | no — un-zoomed, the cursor's cell |
+| `terminal-copy-code` / `terminal-insert-path` / `terminal-reveal` / `terminal-voice` / `terminal-diff` / `terminal-note` | On the current terminal: **copy the last code block** / **insert a file path** / **open its directory** in the file manager / **voice input** on-off / the **changes panel** / its **note** — the same as the row-2 buttons and the path menu | no — un-zoomed, the cursor's cell |
+| `pane-files` / `pane-prompts` / `pane-transcript` / `pane-tools` / `pane-canvas` / `pane-collections` | Open or close that **pane** beside the current terminal — the same panes as its History and Tools menus. On a tiled cell it enlarges it first | no — un-zoomed, the cursor's cell |
+| `files-find` | **Open a file by name** in the Files pane beside the current terminal — type part of a name or path, pick from the list, and it opens with the tree expanded to it. In a git repository the candidates come from git, so `.gitignore` applies; elsewhere the tree is walked, no ignore file is read, and only directories nobody authors by hand (`node_modules`, virtualenvs, caches) are skipped. Opens the pane first if it is not already up | yes — or the full-screen Files view is open |
+| `files-search` | **Search inside the files** of that project — the companion to `files-find`. Matches are grouped by file with the matching lines under them; picking one opens the file and puts the cursor on that line. The query is literal by default, with toggles for regular expressions and for matching case; otherwise case is smart — a lower-case query matches either case, one with a capital in it does not. In a git repository `.gitignore` applies, and a file your agent created a moment ago is searched too; elsewhere no ignore file is read. A file you have open with unsaved edits is searched from what is on your screen rather than from disk — in literal mode; with the regex toggle on it is left out instead, with a note asking you to save it, since running a half-typed pattern on the page can freeze it. Its out-of-date matches from disk are dropped either way. What you typed is emphasised in every line, a line whose match falls past the edge of the row is scrolled to it, and the result you are on opens onto the lines around it. Opens the pane first if it is not already up | yes — or the full-screen Files view is open |
+| `files-tab-close` | **Close the tab in front** in the Files pane, saving it first; the tab beside it comes forward, and closing the last one leaves the pane empty. Does nothing while the pane is closed — it does not open it | yes — or the full-screen Files view is open |
+| `files-tab-next` | **Bring the next tab forward** in the Files pane, going round from the last to the first. The file you leave is saved, as switching tabs always does. Does nothing while the pane is closed | yes — or the full-screen Files view is open |
+| `files-tab-prev` | **Bring the previous tab forward** — the mirror of `files-tab-next` | yes — or the full-screen Files view is open |
+| `files-insert-selection` | **Put `@file#L10-20` for the selected lines at the enlarged terminal's prompt** (the file alone when nothing is selected, or in Preview), as the pane's **@** button does. Not sent. Unsaved edits are saved first, so the numbers match the file the agent reads; if that save loses to another writer, nothing is inserted and the conflict banner shows. Relative when the terminal is in the pane's directory, absolute otherwise. Does nothing while the pane is closed | yes |
+| `command-palette` | **Open the command palette** — every action above (except `copy` / `paste`) by name, with the key it is bound to. Type part of a name or the action id (`find`, `zoom`), then `Enter`; an action that cannot run in the current view is greyed out with the reason. It also lists the app's **screens** (Terminals, Collections, Wiki, Files, …) — picking one goes there, from any screen — and the grid's **terminals** by path: type part of it (`term4` finds `~/ss/llm/mulmoterminal4`, the memo and summary count too) to go to that terminal — and each **Settings section**, which opens Settings on it — and it switches the **theme**, the app's **language**, the **sound**, the **enlarged view** (roster or strip) and the **cell order** in place. It also lists the header buttons and [`commands`](header.html#commands) of the terminal it acts on, and every collection's own actions ("Invoices: Summarise"), which start the chat the collection's button would, and "New terminal: <dir>" for the workspace and each recent directory, opening the default agent there (a custom default agent opens Claude instead), and "Start <agent> here" for each Agent Picker option (custom agents included) and "Launch: <label>" for each of your `launchers`, which start in the directory of the terminal it acts on — or the workspace when there is none — next to that terminal, and "Resume: <title>" for each past conversation of that directory in the default agent's history (Claude's for a custom default or Shell), leaving out one already open or held elsewhere. Each **Wiki page** is listed too ("Wiki: <title>", found by its title, slug, description or tags), and picking one opens it. Where the GitHub view is set up (Settings → Pull request repos), the open **PRs and Issues** of those repos are listed as "PR #12: <title>" / "Issue #34: <title>", found by title, repo or number (type the number bare or after the repo, `app#12`, since a leading `#` searches file contents), and picking one opens it in a new tab on its forge (GitHub, or GitLab for a GitLab repo). The list is read on the first opening and reused for a few minutes. The **recent prompts you sent** in the terminal it acts on (the same window the Prompts pane shows) are listed too, newest first, as "Prompt: <first line>" and found by any of their text; picking one brings that terminal forward and puts the prompt back at its input without sending it, so you can edit it first. The terminal it acts on also offers its **Run menu's scripts** as "Run: <name>" (found by name or command) and its **Skill menu's skills** as "Skill: /<name>"; picking one does what the menu does — a script runs in a new command cell, a skill is sent into that terminal's session. A command or launcher cell has neither menu, so it lists neither. **Tab** on a row opens its other actions: run it, add it to or remove it from the favorites (saved to the config), or copy its key; Esc goes back to the rows. Short names and pinned rows can be written in the global config as `paletteAliases` / `paletteFavorites` (the keys skill lists the row keys): an exact alias puts its row first, and favorites come first with nothing typed. Rows you pick often and recently come first — with nothing typed, and among rows that match equally well — remembered in this browser once the pick has actually run; a worse match is never lifted over a better one. Terminals, launchers, a terminal's commands, collection actions, Wiki pages, the sound switch, past prompts, scripts, skills and the `/` / `#` rows are not remembered, because what they point to can change between openings or terminals. Start with `>` to search only what runs — the actions, those commands, the collection actions, the new-terminal, start, launch and resume rows, and the scripts and skills —, `@` for terminals only, `/` to open the Files pane's **find by name** already filled in with what follows, `#` to open its **search in files** the same way (both need an enlarged terminal, as those actions do, or the full-screen Files view open; a terminal outside your home folder is found by its absolute path after `@`, since a leading `/` means file names), or `?` for the list — and the key opens it on every screen, not only the grid (a single key; a two-key sequence works on the grid only). The toolbar's **Commands** button opens it too, so it needs no binding — and so does a search box in the middle of the top bar, if you switch it on in Settings under **Grid header read-outs** (`paletteSearchBox`). VS Code's key for it is free here — on a Mac write it `"Cmd+Shift+p"`, lowercase ([below](#macos-keys)) | no |
+| `focus-mode` | **Focus mode** — the app full screen, and in Chrome, Edge or Arc the browser's **tab keys locked** (`Cmd`/`Ctrl`+`W`, `T`, `N`, `Shift`+`T`), so a binding on them — spelled as the browser reports the key: `"Cmd+w"` or `"Cmd+Shift+t"` on a Mac (lowercase while Cmd is held), `"Ctrl+w"` or `"Ctrl+Shift+T"` elsewhere; the startup warning says which — otherwise one [that cannot be bound](#combinations-that-cannot-be-bound) — reaches your keymap. Only those keys are taken (on a non-QWERTY layout, the keys that type `w`, `t` and `n` there as well): `Esc` still leaves full screen, as does pressing this key again. Safari and Firefox have no Keyboard Lock, and no browser offers it to a page opened over plain `http` from another machine (only `https` or `localhost`): the screen goes full and a notice says the tab keys still belong to the browser. On the Terminals screen, by its key or the command palette | no |
+| `screen-terminals` / `screen-collections` / `screen-feeds` / `screen-accounting` / `screen-files` / `screen-wiki` / `screen-prs` / `screen-rooms` / `screen-blueprints` / `screen-worklog` / `screen-skills` | **Go to that screen** — the toolbar's doors. PRs, Rooms and Worklog do nothing until they are set up, as the toolbar leaves them out. Works on **every screen**, not only the grid (a single key; two-key sequences only on the grid) | no |
+| `settings-open` | Open **Settings** | no |
+| `sound-toggle` | Turn the **notification sound** on / off (the toolbar's speaker) | no |
+| `confetti` | Throw **confetti** over the page — a mix of three styles picked at random from your list ([below](#confetti)) | no |
+| `view-toggle` | Switch the **enlarged view** between the roster and the thumbnail strip | no |
+| `order-auto` / `order-manual` / `order-priority` | Set the **cell order** (the toolbar's order menu) | no |
+| `page-next` / `page-prev` | Show the **next / previous page** of the tiled grid (9 terminals a page). Does nothing past the last page or before the first; also in the command palette | no |
+| `terminal-reopen` | **Reopen the terminal closed most recently**, beside the current one. An agent's conversation is resumed; a shell comes back as a new shell in the same directory. Every recently closed terminal is also in the command palette as "Reopen: …" | no |
 | `copy` | **Copy** the terminal's selection. Acts only when something IS selected — with no selection the key reaches the shell untouched, which is what makes `Ctrl+C` bindable here without losing **interrupt** | no |
 | `paste` | **Paste** into the terminal | no |
 
@@ -1231,7 +1298,7 @@ cursor is the "current terminal", so they are the pair that needs *nothing* enla
 
 {: .warning }
 > **`terminal-close` closes immediately, with no confirmation** — the same as clicking the cell's close button, which
-> ends that session. Bind it to something you won't hit by accident.
+> ends that session. Bind it to something you won't hit by accident. `terminal-reopen` brings the last one back.
 
 {: .warning }
 > **`terminal-restart` also acts immediately.** It kills the agent even mid-turn, and the conversation
@@ -1244,11 +1311,23 @@ cursor is the "current terminal", so they are the pair that needs *nothing* enla
 > `Cmd+P` is the browser's Print and cannot be taken — pick something else for `files-find`.
 > `Cmd+Shift+F` / `Ctrl+Shift+F`, the key VS Code uses for search-in-files, is free here.
 
+{: .note }
+> **The tab keys cannot have VS Code's.** `Cmd+W` / `Ctrl+W` close the browser tab and `Ctrl+Tab`
+> switches browser tabs — the page never sees them. A sequence after the prefix you already use
+> reads well: `"files-tab-close": "Cmd+k w"`, `"files-tab-next": "Cmd+k ]"`,
+> `"files-tab-prev": "Cmd+k ["`. The tabs' own × and ←/→ work without any binding.
+
 ### Ready-made keymaps
 
 Nothing is bound by default, so start from whichever of these matches the muscle memory you
 already have and edit from there. Every key below is checked against the traps in
 [Combinations that cannot be bound](#macos-keys).
+
+**Or let Settings add one.** **Settings → Keyboard shortcuts → Recommended keys** lists what it would
+add for the platform your browser is on and adds it in one click: on a Mac the Up/Down pair of
+**Arrows** below plus the line-editing `send` entries (`Cmd+←` / `Cmd+→` / `Cmd+Backspace`); on
+Windows and Linux all four **Arrows**. It only fills actions that are unbound and keys that no
+binding already uses — a binding you set keeps its key — and the keys work at once.
 
 **Minimal — just get into the zoom and back**
 
@@ -1438,13 +1517,13 @@ row, so the mechanism is visible before you have used it.
 - An IME composition always passes through, so Japanese/CJK candidate selection is never intercepted.
 - **On a Mac, function keys, `Option`+letter and `Cmd`+letter need care** — see [below](#macos-keys) before picking any of them.
 
-### Combinations that cannot be bound
+### Combinations that cannot be bound {#combinations-that-cannot-be-bound}
 
 MulmoTerminal runs in a browser tab, and some keys never reach a web page in a form it can suppress.
 
 | Combination | Why |
 |---|---|
-| `Cmd`/`Ctrl`+`W`, `Cmd`/`Ctrl`+`T`, `Cmd`/`Ctrl`+`N`, `Cmd`/`Ctrl`+`Shift`+`T` | **Reserved by the browser** (close/new tab, new window). A page cannot intercept them — binding one simply does nothing |
+| `Cmd`/`Ctrl`+`W`, `Cmd`/`Ctrl`+`T`, `Cmd`/`Ctrl`+`N`, `Cmd`/`Ctrl`+`Shift`+`T` | **Reserved by the browser** (close/new tab, new window). A page cannot intercept them — binding one simply does nothing, except in [focus mode](#keymap) in Chrome, Edge or Arc, which locks these keys for the page while it is on. It is the platform's tab key that is kept: **Cmd** on macOS (where `Ctrl`+`w`/`t`/`n` reach the page and work — written lowercase, like any letter without `Shift`) and **Ctrl** on Windows and Linux. The server warns at startup, naming the platform, and Settings → Keyboard shortcuts marks the row *never fires* and lists the keys for the browser you are in. Use a key the browser lets through instead — a two-key binding such as `"Cmd+k w"` on a Mac, `"Ctrl+Alt+k w"` elsewhere (lowercase — a browser reports the letter unshifted; on Windows `Cmd` is the Windows key, and plain `Ctrl+K` is the shell's kill-line) |
 | `Ctrl`+`Cmd`+`D` and similar on macOS | The **OS** may consume it first (this one opens Dictionary), so it may never reach the browser at all. Depends on your system settings |
 | `Ctrl`+`C` / `Ctrl`+`D` / `Ctrl`+`B` etc. | These *can* be bound, but they are what the shell, `readline` and `tmux` use. Binding one takes it away from the terminal — allowed, but rarely what you want |
 
@@ -1500,6 +1579,31 @@ a letter.
 > An **unknown action name only warns** and the app still starts — that is what a config written for a newer
 > MulmoTerminal looks like, and downgrading must not brick it. Further actions (reordering, page switching,
 > navigation) are tracked in [issue #829](https://github.com/receptron/mulmoterminal/issues/829).
+
+## Confetti (`confetti`) {#confetti}
+
+A celebration over the whole page. Two ways to start one, and the first needs no setting:
+
+- **By hand** — bind the `confetti` action to a key (see [Keyboard shortcuts](#keymap)), or pick **Throw confetti** in the command palette.
+- **By itself** — tick the events that should set one off in **Settings → Theme → Confetti**, or name them in `confetti.events`. None do until you say so. The same box has a tick for each style and a **Try it** button.
+
+```json
+{
+  "confetti": {
+    "styles": ["sakura", "fireworks", "cracker"],
+    "events": ["pr-merged"]
+  }
+}
+```
+
+| Key | Values |
+|---|---|
+| `styles` | Which kinds may fall; each celebration mixes three picked at random from the list (all of them if it has three or fewer). `cracker` (party poppers from the bottom corners), `fireworks`, `sakura` (cherry petals), `rain` (paper confetti falling), `balloons`. Absent or empty means all five. |
+| `events` | `pr-merged` (a pull request this session watched turn merged), `turn-finished` (an agent finished a turn), `command-done` (a Run command exited 0). Absent or empty means none. The same event within a few seconds is one celebration. |
+
+The ticks save as you click, with no restart. Restart the server after editing the file by hand, then reload the tab. If your OS asks for reduced motion, there is no confetti at all.
+
+There is one more way, and it is not in any menu: **up up down down left right left right b a**, pressed while no terminal or text field has the focus.
 
 ## Roster rows too long or too short (`cockpitLines`) {#cockpit-lines}
 
@@ -1705,6 +1809,11 @@ Claude Code can talk to any Anthropic-compatible backend. The backend goes in `p
 `config.json`, the **key in the server's environment** (never in a config file), and the default model
 in a project's `.mulmoterminal.json` — with a per-session override at launch.
 
+**Settings → Models and backends** adds and removes a backend without editing the file: a name, the
+base URL, the name of the environment variable holding the key, the model ids and the output budget.
+It refuses a base URL ending in `/v1` and anything that looks like a key where the variable's name
+belongs.
+
 ```json
 {
   "providers": [
@@ -1848,15 +1957,6 @@ on that login while the cell beside it runs on yours.
 | `label` | What the launch form and the cell show | 24 characters |
 | `agent` | `"claude"` or `"codex"` | **required** |
 | `home` | The config directory: absolute, or starting with `~/`. Claude Code is started with `CLAUDE_CONFIG_DIR`, Codex with `CODEX_HOME`, set to it | a relative path drops the entry |
-| `oauthTokenEnvVar` | Optional, claude accounts only (this fork). The **name** of an environment variable in the server's environment holding a `claude setup-token` token — never the token itself. The session gets it as `CLAUDE_CODE_OAUTH_TOKEN` | a name that is not an env var name is dropped |
-
-An older fork entry written as `{ id, label, configDir }` is still read as a claude account with
-`home` set to `configDir`.
-
-A project can set its default in its own `.mulmoterminal.json` (this fork): `"account": "work"`. A
-new session there starts on that account when the launch form's ACCOUNT select is left on
-**Default login**. An id that belongs to another agent's account is ignored for that agent, and a
-worktree inherits the setting.
 
 Up to 8 entries. `config.json` only — after editing it by hand, **restart** the server, then reload
 the tab.
@@ -2127,7 +2227,7 @@ What you write here appears in an empty cell's launcher under **OR RUN A SCRIPT*
 | `pushEnabled` | The Web Push master switch (default `false` → [Mobile notifications](notifications.html)) |
 | `pushKinds` | Which moments push: `"finished"` (a turn ended) and/or `"waiting"` (the agent stopped to ask). Omit to keep both; `[]` for none (→ [Which moments push](notifications.html#kinds)) |
 | `sessionIdleReapDays` | How long a terminal may sit with **nobody attached and no output** before a sweep ends it (default 7 days, `0` disables it, 0–365). The conversation is not lost — a transcript on disk resumes without the tmux session; the process and its scrollback are. Editable in Settings → **Sessions that survived a restart**, beside the list it acts on |
-| `sessionReapIntervalHours` | How often that sweep runs **again while the server is up** (default `0`, which is off — it then runs only at start; 0–168). A server you never restart otherwise never looks again. Weaker than the sweep at start: a session this server holds a pty for is skipped whatever its age. `sessionIdleReapDays` is still the threshold, and at `0` this changes nothing. Armed at boot, so a change takes effect at the next start, and until then the saved number and the running one are different things. The Settings section reports which is which. Editable in the same Settings section |
+| `sessionReapIntervalHours` | How often that sweep runs **again while the server is up** (default `0`, which is off — it then runs only at start; 0–168). A server you never restart otherwise never looks again. Weaker than the sweep at start: a session this server holds a pty for is skipped whatever its age. `sessionIdleReapDays` is still the threshold, and at `0` this changes nothing. Saved from Settings (or any `POST /api/config`), it re-arms the running server at once, counted from the last sweep — so saving it repeatedly never delays the next one; a hand-edit applies on **Reload config file** or a restart. The Settings section reports what the server armed. Editable in the same Settings section |
 | `worklogEnabled` / `worklogIntervalHours` | The periodic dev-work log — summarizes recent work across your saved directories into weekly wiki pages (default off / 6 hours, clamped to 1–168). Each run spawns an LLM session, so it costs tokens. Editable in Settings → **Sessions and background tasks** |
 | `decisionDigest` | Keep a Markdown digest of what this project already decided, for agents to read before asking again. **Off by default** (→ [What this project already decided](#decision-digest)) |
 | `terminalSubmit` | Which bytes mean **submit** vs **newline** — `"cr"` (default) or `"esc-cr"` (→ [Enter — submit vs. newline](#terminal-submit)) |
@@ -2138,6 +2238,9 @@ What you write here appears in an empty cell's launcher under **OR RUN A SCRIPT*
 | `prWorkdirFooter` | End a created PR's body with `work in <clone>` (→ [Which clone made this PR](#pr-workdir-footer)). **On by default**; `false` opts out |
 | `appendSystemPrompt` | Have replies end with a summary of what was asked / achieved / not done (→ [Turning off the closing summary](#append-system-prompt)). **On by default**; `false` opts out, and a directory's `.mulmoterminal.json` wins |
 | `toolbarPins` | Pinned collections / feeds that also get a button in the toolbar, e.g. `["collection:works"]`. Empty by default. **Five buttons** are drawn; the array itself may hold more (up to 50) — a key whose pin is currently unpinned is kept, not drawn, so do not tidy those out by hand (→ [A favourite you open all day](#toolbar-pins)) |
+| `showLoadAverage` | The machine's load average in the bar above the grid. **On unless `false`** (→ Settings → Grid header read-outs) |
+| `paletteSearchBox` | A search box in the middle of the top bar, on every screen, that opens the command palette. **Off unless `true`** (→ Settings → Grid header read-outs) |
+| `remoteServer` | **Experimental.** Say the server runs on another machine than your browser (an SSH tunnel — see [Run the server on another machine](remote.html)). Then the actions that act on the server's screen are withheld: the path menu's *Insert a file path* and *Reveal in the file manager* and the launch form's folder button are hidden; a header button, a key or the Files pane asking for the file dialog, the file manager or the OS app says why instead; and a dropped file is always uploaded, never inserted as your machine's path. The launcher opens no browser on the server, and Google sign-in points to `npx mulmoterminal google login` on the server. **Off unless set to `true`**; the box is under Settings → **Sessions and background tasks**. |
 | `cockpitLines` | How many lines each cockpit-roster row shows before clamping (default `2 / 2 / 3` → [Cockpit roster line counts](#cockpit-lines)) |
 | `fontFamily` | The font every terminal renders in — a CSS font-family stack (→ [Terminal font](#font-family)) |
 
@@ -2145,10 +2248,12 @@ What you write here appears in an empty cell's launcher under **OR RUN A SCRIPT*
 
 Every MulmoTerminal on the machine reads and writes this one file, so a key written by a newer
 version can be saved over by an older one. It isn't: **a top-level key this build doesn't
-recognise is written back untouched.** Run 2.4 and 2.2 side by side, or downgrade for an
-afternoon, and the newer version's settings are still there when you come back.
+recognise is written back untouched**, and so is a `keymap` entry naming an action it doesn't know.
+Run 2.4 and 2.2 side by side, or downgrade for an afternoon, and the newer version's settings are
+still there when you come back.
 
-A typo survives the same way — `copyOnSlect` stays in the file rather than being quietly dropped.
+A typo survives the same way — `copyOnSlect`, or a keymap entry for `zoom-toogle`, stays in the file
+rather than being quietly dropped (the startup warning names the keymap one; remove it by editing the file).
 That is the intended trade: a setting that "doesn't work" is easier to spot when the line is still
 there to look at.
 

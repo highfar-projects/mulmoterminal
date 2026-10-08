@@ -25,6 +25,7 @@ import { EMPTY_WORK_ITEM, isIssueNumber } from "../../common/prPhase.js";
 import { ensureWorkComment } from "../git/work-comment.js";
 import { isWorkCommentKind, workCommentDirLabel } from "../../common/workComment.js";
 import { isRecord } from "../../common/isRecord.js";
+import { dirConfigJsonSchema } from "../config/config-schema.js";
 import { prUrlForBranch } from "../git/pr-for-branch.js";
 import { applySkillFilter, discoverSkills } from "../backends/remoteHost/skills.js";
 
@@ -166,7 +167,10 @@ function mountDirListings(app: Express): void {
   app.get("/api/skills", async (req, res) => {
     const cwd = workspaceForRoute(req.query.cwd, res);
     if (cwd === null) return;
-    const skills = applySkillFilter(await discoverSkills({ workspaceRoot: cwd }), loadDirConfig(cwd).skills);
+    // `unfiltered=1` is the directory form's list to choose the menu's skills from (#2728): the
+    // allowlist cannot be edited from a list it has already narrowed.
+    const discovered = await discoverSkills({ workspaceRoot: cwd });
+    const skills = req.query.unfiltered === "1" ? discovered : applySkillFilter(discovered, loadDirConfig(cwd).skills);
     res.json({ cwd, skills });
   });
 
@@ -193,6 +197,12 @@ export function mountDirRoutes(app: Express): void {
   // Per-directory overrides (<cwd>/.mulmoterminal.json): the badge/name/theme a
   // terminal opened in this directory should use. cwd is validated like every other
   // cwd-scoped route; the raw sound path stays server-side (see /api/dir-sound).
+  // The JSON Schema of a directory's config file, for the Files pane's editor (#2625): it offers the
+  // keys and marks a value the loader would drop, while the file is being written.
+  app.get("/api/dir-config/schema", (_req, res) => {
+    res.json(dirConfigJsonSchema());
+  });
+
   app.get("/api/dir-config", (req, res) => {
     const cwd = workspaceForRoute(req.query.cwd, res);
     if (cwd === null) return;

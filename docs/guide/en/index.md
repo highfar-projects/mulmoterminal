@@ -8,8 +8,8 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **6.7.0 is out.** Talk to another terminal from the Tools menu, move a terminal from the keyboard or
-> the command palette, and document blueprints that step on in the same folder. [Setup guide](v6.7.0.html)
+> **9.4.0 is out.** Confetti has a box in Settings, and the guide explains how to throw it: a key, a merged PR, or the
+> Konami code. [Setup guide](v9.4.0.html)
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching
@@ -248,6 +248,7 @@ installing Node.js / Claude Code / git / gh on macOS and Windows, the
 3. [FAQ](faq.html) (existing sessions, Windows, token cost, how it compares)
 4. [Scenarios — workflows by example](scenarios.html)
 5. [Feature reference](features.html) (grouped by the four pillars)
+   - [Feature list](feature-list.html) (every capability today, one line each with the release it arrived in)
 6. [Making the cells talk to each other](conversation.html) (one-turn handoffs, round tables, the room)
 7. [Configuration](config.html) (settings modal · `config.json` · `.mulmoterminal.json` · the **DSL**)
 8. [Mobile notifications (Web Push)](notifications.html) (iPhone / Android setup)

@@ -24,11 +24,10 @@ import { guiMcpEnv } from "./mcp-config.js";
 import { buildCursorArgs } from "../agents/cursor-args.js";
 import { cursorAdapter } from "../agents/cursor.js";
 import { syncCursorHooksFile } from "../agents/cursor-hooks-file.js";
-import { ptys } from "./registry.js";
 import { entitledToolGroups, rememberEntitledToolGroups } from "./bridge-session.js";
 import type { ToolGroup } from "../../common/toolGroups.js";
-import { ptySpawn, ptyWouldReattach } from "./pty-spawn.js";
-import { ptyStartLine } from "./pty-exit-log.js";
+import { ptyWouldReattach } from "./pty-spawn.js";
+import { startAgentPty } from "./agent-pty-start.js";
 import { wireAgentPtyRelay } from "./pty-relay.js";
 import { seedPromptArgument, withSettingsCleanup } from "./session-settings.js";
 import type { PtyEntry } from "./types.js";
@@ -65,17 +64,18 @@ export function createCursorSpawner(deps: SpawnDeps) {
 
     // A spawn that throws never reaches reap(), where the seed file is normally cleaned up — the
     // same guarantee spawn-claude takes for its settings file (#579, #1518).
-    const { entry, spawnedAtMs } = withSettingsCleanup(sessionId, () => {
-      const { term, tmux, reattached } = ptySpawn(sessionId, deps.cursorBin, args, cwd, true, {
-        env: guiMcpEnv(sessionId, PORT),
-        binEnvVar: cursorAdapter.binEnvVar,
-      });
-      const at = Date.now();
-      console.log(ptyStartLine({ agent: "cursor", pid: term.pid, cwd, tmux, reattached, sessionId, note: null }));
-      const created: PtyEntry = { term, ws, buffer: "", cwd, tmux, active: false, agent: "cursor" };
-      ptys.set(sessionId, created);
-      return { entry: created, spawnedAtMs: at };
-    });
+    const { entry, spawnedAtMs } = withSettingsCleanup(sessionId, () =>
+      startAgentPty({
+        sessionId,
+        ws,
+        cwd,
+        agent: "cursor",
+        file: deps.cursorBin,
+        args,
+        spawnEnv: { env: guiMcpEnv(sessionId, PORT), binEnvVar: cursorAdapter.binEnvVar },
+        note: null,
+      }),
+    );
 
     wireAgentPtyRelay(entry, sessionId, spawnedAtMs, deps);
     return entry;

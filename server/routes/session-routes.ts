@@ -280,13 +280,24 @@ async function activitySnapshot(req: Request, res: Response) {
   res.json(out);
 }
 
+// The session a `?session=` route is about, and the directory to answer it from (its own, unless
+// `?cwd=` names another) — or null once the refusal has been sent.
+async function sessionRouteTarget(req: Request, res: Response): Promise<{ session: string; cwd: string } | null> {
+  const { session } = req.query;
+  if (typeof session !== "string" || !SESSION_ID_RE.test(session)) {
+    res.status(400).json({ error: "invalid session id" });
+    return null;
+  }
+  const cwd = workspaceForRoute(req.query.cwd, res, await cwdForSessionHydrated(session));
+  return cwd === null ? null : { session, cwd };
+}
+
 // The tool-activity timeline for a session (what the agent ran, newest last), so a
 // cell can show "what did it do?" without scrolling the raw transcript.
 async function toolTimeline(req: Request, res: Response) {
-  const { session } = req.query;
-  if (typeof session !== "string" || !SESSION_ID_RE.test(session)) return res.status(400).json({ error: "invalid session id" });
-  const cwd = workspaceForRoute(req.query.cwd, res, await cwdForSessionHydrated(session));
-  if (cwd === null) return;
+  const target = await sessionRouteTarget(req, res);
+  if (target === null) return;
+  const { session, cwd } = target;
   res.json(await sessionTimeline(cwd, session));
 }
 
@@ -294,10 +305,9 @@ async function toolTimeline(req: Request, res: Response) {
 // which answers what the agent then did. Under /api/transcript for the same reason last-turn is:
 // /api/session/:id would read "prompts" as a session id.
 async function userPrompts(req: Request, res: Response) {
-  const { session } = req.query;
-  if (typeof session !== "string" || !SESSION_ID_RE.test(session)) return res.status(400).json({ error: "invalid session id" });
-  const cwd = workspaceForRoute(req.query.cwd, res, await cwdForSessionHydrated(session));
-  if (cwd === null) return;
+  const target = await sessionRouteTarget(req, res);
+  if (target === null) return;
+  const { session, cwd } = target;
   res.json(await sessionPrompts(cwd, session, normalizeAgent(req.query.agent)));
 }
 
@@ -308,10 +318,9 @@ async function userPrompts(req: Request, res: Response) {
 // the page before it arrives. A malformed cursor is rejected rather than answered with the newest
 // page, which a client asking for "older" would append to what it already holds, forever.
 async function transcriptPage(req: Request, res: Response, agentOfSession: SessionRouteDeps["agentOfSession"]) {
-  const { session } = req.query;
-  if (typeof session !== "string" || !SESSION_ID_RE.test(session)) return res.status(400).json({ error: "invalid session id" });
-  const cwd = workspaceForRoute(req.query.cwd, res, await cwdForSessionHydrated(session));
-  if (cwd === null) return;
+  const target = await sessionRouteTarget(req, res);
+  if (target === null) return;
+  const { session, cwd } = target;
   // PRESENT but not a string — `?before=a&before=b` arrives as an array — is a bad cursor, not an
   // absent one. Falling back to null answered "give me the older page" with the NEWEST page, which
   // is the reply this cursor exists to prevent: a client would append the turns it already holds
@@ -336,11 +345,10 @@ async function transcriptPage(req: Request, res: Response, agentOfSession: Sessi
 // will read. Sits under /api/transcript because /api/session/:id would match "last-turn"
 // first and read it as a session id.
 async function lastTurn(req: Request, res: Response) {
-  const { session } = req.query;
-  if (typeof session !== "string" || !SESSION_ID_RE.test(session)) return res.status(400).json({ error: "invalid session id" });
+  const target = await sessionRouteTarget(req, res);
+  if (target === null) return;
+  const { session, cwd } = target;
   const agent = normalizeAgent(req.query.agent);
-  const cwd = workspaceForRoute(req.query.cwd, res, await cwdForSessionHydrated(session));
-  if (cwd === null) return;
   const turn = await sessionLastTurn(cwd, session, agent);
   // ?as=reply drops the prompt block: the caller is relaying an ANSWER back to whoever
   // asked, and that prompt is the asker's own text coming home.
@@ -568,41 +576,38 @@ async function museSessionList(req: Request, res: Response) {
   }
 }
 
-async function copilotSessionList(req: Request, res: Response) {
-  try {
-    const cwd = workspaceForRoute(req.query.cwd, res);
-    if (cwd === null) return;
-    const running = await survivorSnapshot();
-    const metas = await listCopilotSessionsForCwd(cwd);
-    const sorted = [...metas].sort((a, b) => b.mtimeMs - a.mtimeMs);
-    const sessions = sorted.slice(0, SESSION_LIST_LIMIT).map((m) => ({ id: m.id, title: m.title || m.id, mtime: m.mtimeMs }));
-    // No conversation map to join against, unlike codex/agy/muse: `--session-id` makes copilot's
-    // own id ours, so a running session is already keyed by the id this list reports.
-    res.json({ cwd, sessions: withAttached(sessions, [], running) });
-  } catch (err) {
-    console.error("[api] /api/copilot/sessions failed:", err);
-    res.status(500).json({ error: String(err) });
-  }
+type OwnIdSessionRow = { id: string; title: string; mtime: number };
+
+// The listing for an agent whose session id IS ours — copilot's `--session-id`, cursor's
+// `--resume <uuid>` — so there is no conversation map to join against, unlike codex/agy/muse: a
+// running session is already keyed by the id the list reports.
+function ownIdSessionList(route: string, listRows: (cwd: string) => Promise<OwnIdSessionRow[]>) {
+  return async (req: Request, res: Response): Promise<void> => {
+    try {
+      const cwd = workspaceForRoute(req.query.cwd, res);
+      if (cwd === null) return;
+      const running = await survivorSnapshot();
+      res.json({ cwd, sessions: withAttached(await listRows(cwd), [], running) });
+    } catch (err) {
+      console.error(`[api] ${route} failed:`, err);
+      res.status(500).json({ error: String(err) });
+    }
+  };
 }
 
-async function cursorSessionList(req: Request, res: Response) {
-  try {
-    const cwd = workspaceForRoute(req.query.cwd, res);
-    if (cwd === null) return;
-    const running = await survivorSnapshot();
-    // Cursor keeps no index to query, so this is a directory read — asynchronous, and given the
-    // limit, because the helper uses it to decide how much I/O to do: every chat is stat'ed to be
-    // sorted, but only the rows that will be SHOWN have their title read (cursor-sessions.ts).
-    const metas = await listCursorSessionsForCwd(cwd, undefined, SESSION_LIST_LIMIT);
-    const sessions = metas.map((m) => ({ id: m.id, title: m.title || m.id, mtime: m.mtimeMs }));
-    // No conversation map to join against: `--resume <uuid>` makes cursor's own id ours, so a
-    // running session is already keyed by the id this list reports.
-    res.json({ cwd, sessions: withAttached(sessions, [], running) });
-  } catch (err) {
-    console.error("[api] /api/cursor/sessions failed:", err);
-    res.status(500).json({ error: String(err) });
-  }
-}
+const copilotSessionList = ownIdSessionList("/api/copilot/sessions", async (cwd) => {
+  const metas = await listCopilotSessionsForCwd(cwd);
+  const sorted = [...metas].sort((a, b) => b.mtimeMs - a.mtimeMs);
+  return sorted.slice(0, SESSION_LIST_LIMIT).map((m) => ({ id: m.id, title: m.title || m.id, mtime: m.mtimeMs }));
+});
+
+const cursorSessionList = ownIdSessionList("/api/cursor/sessions", async (cwd) => {
+  // Cursor keeps no index to query, so this is a directory read — asynchronous, and given the
+  // limit, because the helper uses it to decide how much I/O to do: every chat is stat'ed to be
+  // sorted, but only the rows that will be SHOWN have their title read (cursor-sessions.ts).
+  const metas = await listCursorSessionsForCwd(cwd, undefined, SESSION_LIST_LIMIT);
+  return metas.map((m) => ({ id: m.id, title: m.title || m.id, mtime: m.mtimeMs }));
+});
 
 // Which handler answers each agent's listing. Keyed by the same type as the paths, so the two are
 // added together or not at all.

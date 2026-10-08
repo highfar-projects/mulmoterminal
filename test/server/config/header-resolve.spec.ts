@@ -294,3 +294,42 @@ describe("shellQuoteFor", () => {
     expect(win("")).toBe("''");
   });
 });
+
+// #2465. Commands resolve like buttons, beside them, and a shell command runs by its id.
+describe("commands", () => {
+  const cfg = (): HeaderConfig => ({
+    buttons: [{ id: "b", label: "B", run: "input", text: "hi" }],
+    chips: null,
+    commands: [
+      { id: "release", label: "Release", run: "shell", cmd: "make release BRANCH=${branch}" },
+      { id: "note", label: "Note", run: "input", text: "on ${branch}" },
+      { id: "codexOnly", label: "Codex", run: "input", text: "x", when: "agent == codex" },
+    ],
+  });
+
+  it("resolves them apart from the buttons, applying when and ${vars} as for buttons", () => {
+    const header = resolveHeader(cfg(), ctx({ branch: "feat/x" }));
+    expect(header.buttons.map((b) => b.id)).toEqual(["b"]);
+    expect(header.commands.map((b) => b.id)).toEqual(["release", "note"]);
+    expect(header.commands.find((b) => b.id === "note")).toMatchObject({ text: "on feat/x" });
+    // A shell command's cmd never reaches the client, as a shell button's does not.
+    expect(JSON.stringify(header.commands)).not.toContain("make release");
+  });
+
+  it("runs a shell command by its id", () => {
+    expect(resolveButtonCommand(cfg(), ctx({ branch: "feat/x" }), "release", posixQuote)).toBe("make release BRANCH='feat/x'");
+  });
+
+  it("lists none when the config has none", () => {
+    expect(resolveHeader({ buttons: [], chips: null }, ctx()).commands).toEqual([]);
+  });
+});
+
+// #2465. A palette-only command can open the PR too, so it asks for the PR URL as a button does.
+describe("headerHasPrButton with commands", () => {
+  it("counts a pr command, and the command resolves once the PR URL is known", () => {
+    const config: HeaderConfig = { buttons: [], chips: null, commands: [{ id: "openpr", label: "Open PR", run: "open", open: { pr: true } }] };
+    expect(headerHasPrButton(config)).toBe(true);
+    expect(resolveHeader(config, ctx({ prUrl: "https://github.com/o/r/pull/1" })).commands.map((c) => c.id)).toEqual(["openpr"]);
+  });
+});

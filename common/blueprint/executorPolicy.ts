@@ -5,9 +5,14 @@ import type { PlanStep } from "./plan.js";
 import { currentStep, type BlueprintState } from "./state.js";
 
 // Failed checks one step may have before the build stops for a person. Enough for an agent to read
-// its own check output and fix it; small enough that a step it cannot fix does not burn turn after
-// turn. Sessions that stopped to ask are not failures and do not count.
-export const MAX_FAILED_CHECKS = 3;
+// its own check output and fix it, and then for repair attempts that change approach; small enough that a step it
+// cannot fix does not burn turn after turn. Sessions that stopped to ask are not failures and do not count.
+export const MAX_FAILED_CHECKS = 5;
+
+// Failed checks in a row after which an attempt is a repair: doing the same again has not worked, so the attempt is
+// told every failure so far and to find why they all failed before changing anything. A person who cannot fix the
+// step either is the last resort, not the next one.
+export const REPAIR_AFTER = 3;
 
 // Rounds one repeating step may run before the build moves on regardless. A list that never empties —
 // an agent that keeps finding more, or a `repeatWhile` that cannot say no — must not run forever; what
@@ -53,4 +58,15 @@ export function nextAction(inputs: ExecutorInputs): ExecutorAction {
   if (status === "awaiting-answer") return { kind: "wait", stepId: step.id, on: "answer" };
   if (status === "running") return inputs.sessionActive ? { kind: "wait", stepId: step.id, on: "agent" } : { kind: "spawn", stepId: step.id };
   return forFailed(step.id, inputs);
+}
+
+/**
+ * The step a build stopped at because another build was working in its folder, or null. Only that stop is resumed by
+ * itself when the folder frees: every other stop waits for something a person or the agent has to change.
+ */
+export function waitsOnBusyFolder(steps: readonly PlanStep[], state: BlueprintState): string | null {
+  const step = currentStep(steps, state);
+  if (!step) return null;
+  const stepState = state.steps[step.id];
+  return stepState?.status === "failed" && stepState.lastCheck?.notice?.code === "folder-busy" ? step.id : null;
 }

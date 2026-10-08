@@ -1,11 +1,11 @@
 <script setup lang="ts">
 // A skull, as the danger sign: its eyes light red, the jaw chatters, and it cracks and crumbles.
 import { computed } from "vue";
-import { HOT, type HeatPalette } from "./heatPalette";
-import type { StageLevel } from "./stageLevel";
+import { HOT } from "./heatPalette";
+import type { HeatFigureProps } from "./heatFigure";
 import HeatGlow from "./HeatGlow.vue";
 
-const props = defineProps<{ level: StageLevel; palette: HeatPalette; animate: boolean }>();
+const props = defineProps<HeatFigureProps>();
 
 const chatter = computed(() => (props.level === 4 ? "0.15s" : "0.4s"));
 const TEETH = [80, 90, 100, 110, 120];

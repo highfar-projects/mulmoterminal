@@ -48,11 +48,14 @@ grouped in `handlers/terminalSession.ts`.
 | `listCollections` | `project?` | `{ collections }` (feed-backed ones excluded) |
 | `getCollection` | `slug`, `project?`, `offset?`, `limit?` | one page of the collection's items |
 | `listShortcuts` | — | `{ shortcuts }` |
-| `listSkills` | `project?` | `{ skills }` (collection slugs excluded) |
+| `listSkills` | `project?`, `sessionId?` | `{ skills }` (collection slugs excluded). With a claude session's `sessionId`: that session's directory's skills plus its enabled plugins' `plugin:skill` ids; another agent's session gets the plain list |
 | `listAccountingBooks` | — | `{ books: { id, name }[] }` |
 | `getRemoteView` | `slug`, `viewId`, `project?`, `locale?` | `{ view, srcdoc, bytes }` |
 | `getRemoteViewItems` | `slug`, `viewId`, `project?`, `offset?`, `limit?`, `fields?` | `{ page, inlined, omitted }` |
 | `mutateRemoteViewItem` | `slug`, `viewId`, `project?`, `op`, `id`, `patch?` | `{ op, item }` / `{ op, id }` |
+| `listMobileFileProjects` | — | `{ projects: { id, label }[] }` — only projects that declare `mobileFiles` |
+| `listMobileFiles` | `project?`, `offset?`, `limit?` | `MobileFileListing` |
+| `getMobileFile` | `project?`, `path` | `MobileFileContent` |
 
 ### Which project a command means (`project`)
 
@@ -233,8 +236,14 @@ out costs the bottom of the list.
   prompt?: string;           //  │
   icon?: string;             //  │ the dir's image as an <img src> (#1556)
   githubUrl?: string;        // ─┘ the repository ROOT, never /tree/<branch> (#832)
+  mobileFilesProject?: string; // the opaque project id to pass to listMobileFiles (#2915)
 }
 ```
+
+`mobileFilesProject` is set only when the DEEPEST project containing the session's directory
+declares `mobileFiles` — a registered sub-project that shares nothing does not fall back to the
+enclosing workspace's files. It is an id, never a path, the same one `listMobileFileProjects`
+returns.
 
 `icon` is the src itself, not an `iconId`: one screen carries one image, so there is nothing to
 deduplicate it against. Same two sources and the same per-image cap as the list above.
@@ -354,6 +363,38 @@ for; "what did I ask for" is a different question (`PromptsPane`, desktop only).
 **Sub-agents are not expanded.** They live in `<sessionId>/subagents/agent-*.jsonl`, one file each,
 and range from 284 to 20,614 lines — far past any budget. The `Task` tool's own `tool_result` in the
 main file IS the sub-agent's final report, so its opening lines appear in the flow anyway.
+
+### `MobileFileListing` / `MobileFileContent`
+
+What the phone may open of a project (#2911). Types in `common/mobileFiles.ts`.
+
+```ts
+interface MobileFileListing {
+  configured: boolean;          // false: the project declares no `mobileFiles` — say how to add it
+  files: { path: string; kind: "markdown" | "html" | "pdf" | "image"; bytes: number; modifiedAt: string }[];
+  total: number; offset: number; limit: number;
+  truncated: boolean;           // the walk stopped at its budget; older files may be missing
+}
+
+type MobileFileContent =
+  | { delivery: "inline"; kind: "markdown" | "html"; path: string; text: string; omittedImages: number }
+  | { delivery: "storage"; kind: MobileFileKind; path: string; storagePath: string;
+      contentType: string; bytes: number; expiresAt: string; omittedImages: number };
+```
+
+- **Declared, never discovered.** A project shares nothing until its `.mulmoterminal.json` has
+  `mobileFiles: { dirs, extensions }`; the workspace is no exception. `path` is relative to the
+  project root and is re-checked against the declaration on every `getMobileFile` — a listing is
+  not a capability.
+- **`inline`** carries the document whole. `html` is already wrapped: a CSP meta leads the
+  document (`connect-src 'none'`, `img-src data: blob:`), so show it in a sandboxed iframe
+  (`sandbox="allow-scripts"`, no `allow-same-origin`) as it is. Markdown arrives raw — render it
+  through the phone's sanitising renderer. Relative images inside a declared directory are already
+  `data:` URLs; `omittedImages` counts the ones that were not.
+- **`storage`** names an object under `downloads/{uid}/`. Read it with the signed-in user's
+  own credentials (`getBlob`) — **never `getDownloadURL`**, whose token URL anyone holding it can
+  open. The host deletes it at `expiresAt` (an hour), sweeps leftovers when the phone next lists or
+  opens, and the bucket's lifecycle rule removes anything older than a day.
 
 ## The rules that keep coming up
 

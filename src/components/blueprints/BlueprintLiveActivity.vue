@@ -3,8 +3,8 @@
 // history and live channel the tools pane reads, so a build is watched rather than waited on.
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { useSessionFeed } from "../../composables/useSessionFeed";
-import { readToolCall, type ToolCall } from "../toolCall";
+import { useToolCallFeed } from "../../composables/useToolCallFeed";
+import type { ToolCall } from "../toolCall";
 import { toolCallSummary } from "./blueprintView";
 
 const props = defineProps<{ sessionId: string }>();
@@ -14,14 +14,7 @@ const { t } = useI18n();
 const SHOWN_CALLS = 8;
 
 const calls = ref<ToolCall[]>([]);
-useSessionFeed(calls, {
-  sessionId: () => props.sessionId,
-  historyUrl: (id) => `/api/tool-calls/${encodeURIComponent(id)}`,
-  historyKey: "toolCalls",
-  channel: (id) => `toolcalls:${id}`,
-  identify: (call) => call.toolUseId,
-  parse: readToolCall,
-});
+useToolCallFeed(calls, () => props.sessionId);
 
 const recent = computed(() => [...calls.value].sort((a, b) => b.at - a.at).slice(0, SHOWN_CALLS));
 </script>

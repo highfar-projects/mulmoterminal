@@ -41,13 +41,14 @@ import {
   viewConfigDocId,
   type ProjectedViewWrite,
 } from "@receptron/sharedapp";
-import { capabilitiesFor, projectedWritesOf, type ViewCapability, type WriteTier } from "@receptron/sharedapp/view";
+import { pseudonymOf, capabilitiesFor, projectedWritesOf, type ViewCapability, type WriteTier } from "@receptron/sharedapp/view";
 import { firestoreHandle } from "@mulmoclaude/core/collection/server";
 import { isRecord } from "../../../../common/isRecord.js";
 import { currentFirestore } from "../../remoteHost/session.js";
 import { itemsPath } from "../itemWrites.js";
 import { refused } from "../refused.js";
 import type { SharedAppHandle } from "../context.js";
+import { SIGN_IN_STEP } from "../signInStep.js";
 
 /** The tiers, widest first. An intent is offered to each in turn and the first that carries it
  *  wins — see `judgeTiers` in `intent.ts` for why that is not a permission decision. */
@@ -146,6 +147,9 @@ export interface JoinedApp {
    *  "no published duty" — never "invent one" — and so does a document that carries none. */
   briefs: Partial<Record<BriefTier, AppBrief[]>>;
   handle: SharedAppHandle;
+  /** This reader's per-app pseudonym (`pseudonymOf(uid, aid)`), for an app whose rows are named by it.
+   *  Absent where it was never computed, and then such rows are not looked up. */
+  pseudonym?: string;
 }
 
 export type JoinedAppResult = { ok: true; app: JoinedApp } | { ok: false; problems: string[] };
@@ -180,7 +184,7 @@ const readable = (doc: Record<string, unknown> | null): boolean => {
 const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
 const NO_SESSION =
-  "this needs a signed-in session: connect remote-host first. A shared app answers to `request.auth` and nothing else — " +
+  `this needs a signed-in session: ${SIGN_IN_STEP} A shared app answers to \`request.auth\` and nothing else — ` +
   "everything here is read and written as YOU, which is the whole point of this tool.";
 
 /** Read a document: the document, or null for absent-or-refused.
@@ -249,12 +253,19 @@ function rosterTier(fromTier: ProjectedViewWrite[] | null, fromPublic: Projected
   return mergeByCid(fromTier, fromPublic);
 }
 
+/** The reader's pseudonym for this app, beside the app — computed once, so the sync own-row
+ *  selector can name rows an app keys by it. */
+const withPseudonym = async (result: JoinedAppResult, uid: string): Promise<JoinedAppResult> => {
+  if (!result.ok) return result;
+  return { ok: true, app: { ...result.app, pseudonym: await pseudonymOf(uid, result.app.aid) } };
+};
+
 /** Resolve a URL name to everything this reader can learn about the app behind it. */
 export async function joinApp(slug: string): Promise<JoinedAppResult> {
   const handle = firestoreHandle();
   if (!handle) return { ok: false, problems: [NO_SESSION] };
   try {
-    return await readApp(handle, slug);
+    return withPseudonym(await readApp(handle, slug), handle.uid);
   } catch (err) {
     // A read that BROKE, as opposed to one the rules refused — the refusals are already null above.
     // Reported rather than absorbed: every absorbed one narrows this answer silently.
@@ -453,6 +464,14 @@ export interface ReadRecords {
   more?: boolean;
 }
 
+/** The `uidField` query: by the uid, or — under `uidForm: "pseudonym"` — by this reader's pseudonym for
+ *  the app. Nothing where that pseudonym was never computed, so no row is claimed on a guess. */
+const uidSelector = (field: string, form: unknown, uid: string, pseudonym: string | undefined): { field: string; value: string }[] => {
+  if (form !== "pseudonym") return [{ field, value: uid }];
+  if (pseudonym === undefined) return [];
+  return [{ field, value: pseudonym }];
+};
+
 /** The own-row selector this collection declares, out of the PUBLISHED submit block.
  *
  *  These are the same three the rules identify an own row by (`ownRow`), asked in the only terms a
@@ -469,12 +488,13 @@ export function ownSelector(app: JoinedApp, cid: string): { fields: { field: str
   // submissions hold the uid — and querying one field only would hide half of what is theirs, as an
   // empty answer rather than as an error.
   const fields = [
-    ...(typeof raw.uidField === "string" ? [{ field: raw.uidField, value: handle.uid }] : []),
+    ...(typeof raw.uidField === "string" ? uidSelector(raw.uidField, raw.uidForm, handle.uid, app.pseudonym) : []),
     ...(typeof raw.emailField === "string" ? [{ field: raw.emailField, value: handle.email }] : []),
   ];
   if (fields.length > 0) return { fields };
   if (raw.idFrom === "auth.uid") return { id: handle.uid };
-  if (raw.idFrom === "auth.uid+field") return "unlistable";
+  if (raw.idFrom === "pseudonym") return app.pseudonym === undefined ? null : { id: app.pseudonym };
+  if (raw.idFrom === "auth.uid+field" || raw.idFrom === "pseudonym+field") return "unlistable";
   return null;
 }
 
@@ -519,7 +539,7 @@ export async function readRecords(app: JoinedApp, cid: string, limit: number): P
       scope: "none",
       rows: [],
       note:
-        "this collection builds its ids as `uid_<field>`, and the rules grant a submitter the document they can NAME rather than a range of them — " +
+        "this collection builds its ids from you (your uid, or this app's pseudonym of it) joined to a field, and the rules grant a submitter the document they can NAME rather than a range of them — " +
         "so your rows cannot be listed at all. Name the record directly if you know which one it is",
     };
   if ("id" in want) {

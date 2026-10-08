@@ -6,6 +6,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { appRequest } from "../../helpers/appRequest.js";
 import { initCollectionsBackend, mountCollectionRoutes } from "../../../server/backends/collections.js";
+import { mountCollectionActionIndex } from "../../../server/backends/collectionActionIndexRoute.js";
 import { isAuthorizedImagePath } from "../../../server/backends/customViewRoutes.js";
 import { listRegistry, importRegistry } from "@mulmoclaude/core/collection/registry/server";
 
@@ -23,7 +24,7 @@ vi.mock("@mulmoclaude/core/collection/registry/server", () => ({
 // inject a crafted collection: a collection-level `kind: "mutate"` action can't
 // exist on disk (the schema refine rejects it), yet the route's defensive 400
 // must still be covered.
-import { buildWorkspaceOntology, deleteCollection, deleteCustomView, loadCollection } from "@mulmoclaude/core/collection/server";
+import { buildWorkspaceOntology, deleteCollection, deleteCustomView, loadCollection, MAX_UNSELECTIVE_ITEMS } from "@mulmoclaude/core/collection/server";
 import { isRecord } from "../../../common/isRecord.js";
 import { makeTempDir } from "../../support/tempDir";
 vi.mock("@mulmoclaude/core/collection/server", async (importOriginal) => {
@@ -199,6 +200,25 @@ beforeAll(async () => {
   mkdirSync(path.join(ws, "data", "photoscol", "items"), { recursive: true });
   writeFileSync(path.join(ws, "data", "photoscol", "items", "p1.json"), JSON.stringify({ id: "p1", name: "First", photo: "data/photoscol/images/pic.png" }));
 
+  // One record past the unprojected-read cap, so view-data's refusal is reachable.
+  const BIG_SCHEMA = {
+    title: "Big",
+    icon: "list",
+    dataPath: "data/bigcol/items",
+    primaryKey: "id",
+    fields: { id: { type: "string", label: "ID", primary: true, required: true }, name: { type: "string", label: "Name" } },
+    views: [{ id: "bv", file: "views/bv.html", label: "Big view", capabilities: ["read"] }],
+  };
+  mkdirSync(path.join(ws, ".claude", "skills", "bigcol"), { recursive: true });
+  writeFileSync(path.join(ws, ".claude", "skills", "bigcol", "schema.json"), JSON.stringify(BIG_SCHEMA));
+  mkdirSync(path.join(ws, "data", "bigcol", "items"), { recursive: true });
+  Array.from({ length: MAX_UNSELECTIVE_ITEMS + 1 }, (_, index) => `b${index}`).forEach((id) =>
+    writeFileSync(path.join(ws, "data", "bigcol", "items", `${id}.json`), JSON.stringify({ id, name: id })),
+  );
+  mkdirSync(path.join(ws, "data", "skills", "bigcol", "views"), { recursive: true });
+  writeFileSync(path.join(ws, "data", "skills", "bigcol", "schema.json"), JSON.stringify(BIG_SCHEMA));
+  writeFileSync(path.join(ws, "data", "skills", "bigcol", "views", "bv.html"), "<head></head><body>big</body>");
+
   // Point the collection host at the fixture. vitest isolates modules
   // per test file, so this configure is fresh for this worker.
   //
@@ -213,6 +233,7 @@ beforeAll(async () => {
   const app = express();
   app.use(express.json());
   mountCollectionRoutes(app);
+  mountCollectionActionIndex(app);
   request = appRequest(app);
 });
 
@@ -228,6 +249,19 @@ describe("GET /api/collections/list", () => {
     const body = (await res.json()) as { collections: Array<{ slug: string; title: string; source: string }> };
     const testcol = body.collections.find((c) => c.slug === "testcol");
     expect(testcol).toMatchObject({ slug: "testcol", title: "Test Collection", source: "project" });
+  });
+});
+
+// #2471. The command palette's list: collection-level actions only, no records.
+describe("GET /api/collections/actions", () => {
+  it("lists the fixture collection's collection-level action, and no record-level one", async () => {
+    const res = await request("/api/collections/actions");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { collections: Array<{ slug: string; title: string; actions: Array<{ id: string }> }> };
+    const testcol = body.collections.find((c) => c.slug === "testcol");
+    expect(testcol).toMatchObject({ slug: "testcol", title: "Test Collection", actions: [{ id: "audit", label: "Audit" }] });
+    expect(body.collections.some((c) => c.slug === "viewactcol")).toBe(false);
+    expect(JSON.stringify(body)).not.toContain("item1");
   });
 });
 
@@ -312,8 +346,43 @@ describe("custom view routes", () => {
     const { token } = (await mint.json()) as { token: string };
     const res = await request("/api/collections/testcol/view-data", { headers: { Authorization: `Bearer ${token}` } });
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { items: Array<{ id: string }> };
+    const body = (await res.json()) as { collection: string; count: number; items: Array<{ id: string }> };
+    expect(body).toMatchObject({ collection: "testcol", count: 1 });
     expect(body.items.map((i) => i.id)).toEqual(["item1"]);
+  });
+
+  async function viewDataRead(slug: string, viewId: string, query: string): Promise<Response> {
+    const mint = await request(`/api/collections/${slug}/view-token`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ viewId }),
+    });
+    const { token } = (await mint.json()) as { token: string };
+    return request(`/api/collections/${slug}/view-data${query}`, { headers: { Authorization: `Bearer ${token}` } });
+  }
+
+  it("narrows view-data to ?ids= and reports an unknown id as missing", async () => {
+    const res = await viewDataRead("testcol", "v1", "?ids=item1,%20nope");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { items: Array<{ id: string }>; missing?: string[] };
+    expect(body.items.map((i) => i.id)).toEqual(["item1"]);
+    expect(body.missing).toEqual(["nope"]);
+  });
+
+  it("projects view-data to ?fields=, keeping the primary key", async () => {
+    const res = await viewDataRead("testcol", "v1", "?fields=status");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { items: Array<Record<string, unknown>> };
+    expect(body.items).toEqual([{ id: "item1" }]);
+  });
+
+  it("refuses an unprojected view-data read past the cap, and serves the projected one", async () => {
+    const refused = await viewDataRead("bigcol", "bv", "");
+    expect(refused.status).toBe(400);
+    expect(((await refused.json()) as { error: string }).error).toEqual(expect.any(String));
+    const projected = await viewDataRead("bigcol", "bv", "?fields=name");
+    expect(projected.status).toBe(200);
+    expect(((await projected.json()) as { count: number }).count).toBe(MAX_UNSELECTIVE_ITEMS + 1);
   });
 
   it("grants a write token to a view that declares write", async () => {

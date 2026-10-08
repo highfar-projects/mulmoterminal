@@ -19,6 +19,7 @@
 //   the MIRROR travels in the SAME write. The rules read it with `getAfter()`, so a pair written
 //   singly is refused — and an undo that deleted the record alone would leave the slot saying
 //   `taken` about a booking that no longer exists.
+import { createHash } from "node:crypto";
 import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -289,6 +290,40 @@ describe("shared app preview writes", () => {
     const written = batched.find((op) => op.startsWith("set apps/"));
     const record = JSON.parse(written?.slice(written.indexOf("{")) ?? "{}") as Record<string, unknown>;
     expect(record.uid).toBe(OWNER.uid);
+  });
+
+  it("writes a pseudonym app's record at the app's pseudonym of the author, not at the uid", async () => {
+    // `idFrom: "pseudonym"` (#325): the rules require sha256(uid + ":" + aid) as the id. A preview that
+    // wrote at the uid would be refused where the published page succeeds.
+    const booking = bookingApp({ submit: { idFrom: "pseudonym", idField: undefined, idIn: undefined, mirror: undefined } });
+    writeApp({ ...booking, collections: { bookings: booking.collections.bookings, slots: {} } });
+
+    const result = await writePreviewSubmission(root, "bookings", { requesterName: "客", slot: "roomA-1000" });
+
+    expect(result.ok === false ? result.error : "").toBe("");
+    const pseudonym = createHash("sha256").update(`${OWNER.uid}:${AID}`).digest("hex");
+    const written = [...(docs.store.get(`apps/${AID}/collections/bookings/items`)?.keys() ?? [])];
+    expect(written).toEqual([pseudonym]);
+  });
+
+  it("writes a uidForm field as the author's pseudonym for the app, not their uid", async () => {
+    writeCollection("bookings", {
+      requesterName: { type: "string", label: "Name", required: true },
+      requesterEmail: { type: "email", label: "Email", required: true },
+      slot: { type: "string", label: "Slot", required: true },
+      status: { type: "enum", label: "Status", values: ["booked"] },
+      uid: { type: "string", label: "Who" },
+    });
+    writeApp(bookingApp({ submit: { uidField: "uid", uidForm: "pseudonym", createFields: ["requesterName", "requesterEmail", "slot", "status", "uid"] } }));
+
+    const result = await writePreviewSubmission(root, "bookings", { requesterName: "客", slot: "roomA-1000" });
+
+    expect(result.ok === false ? result.error : "").toBe("");
+    const written = batched.find((op) => op.startsWith("set apps/")) ?? "";
+    const pseudonym = createHash("sha256")
+      .update(OWNER.uid + ":" + AID)
+      .digest("hex");
+    expect(written).toContain(`"uid":"${pseudonym}"`);
   });
 
   it("makes the id the thing being claimed, and pairs the mirror in ONE batch", async () => {

@@ -44,7 +44,7 @@ it**:
 | **Switch view** (left of the rule) | **Grid** and **Collections** — the two places to be |
 | Pinned collections and feeds (left of the rule, its own group) | The favourites you promoted to the toolbar — one press each, from either view. Nothing shows until you promote one (→ [A favourite you open all day](config.html#toolbar-pins)) |
 | Inside Collections | **Feeds**, **Wiki**, **Files** appear once you are in the content section. **Accounting** is the first button on the Collections screen's own top row, ahead of the pinned favourites |
-| Inside the grid | **New terminal**, cell ordering, the status tally, and the **More features** menu (`widgets`) holding **Blueprints** — plus **Rooms** in it once a room exists and **Worklog** once it is turned on. **Pull requests** gets its own button once Settings lists a repository |
+| Inside the grid | **New terminal**, cell ordering, the status tally, and the **More features** menu (`widgets`) holding **Blueprints**, **Skills** and **Processes** — plus **Rooms** in it once a room exists and **Worklog** once it is turned on. **Pull requests** gets its own button once Settings lists a repository |
 | Always | sound, **Settings** (and, on the grid while a cell is enlarged, the roster / filmstrip switch) |
 
 A full-screen surface (Collections, Wiki, PRs, Accounting, Files) **returns to the view you opened
@@ -265,8 +265,9 @@ both ends.
 
 ## Tiling many, pages, and reordering
 
-- Add cells from the **launch panel**: the toolbar's **＋** opens it on the workspace (the
-  `terminal-new-here` [shortcut](config.html#keymap) opens it on the current terminal's directory).
+- Add cells from the **launch panel**: the toolbar's **＋** opens it on the workspace, and the **＋**
+  on a terminal's second header row, beside the code-block copy button, opens it on that terminal's
+  directory (so does the `terminal-new-here` [shortcut](config.html#keymap)).
   The cell appears when you start something. For a plain shell in a terminal's directory, use
   *New terminal here* in its path menu.
   Up to **9 cells** per page; overflow moves to the next page (tab).

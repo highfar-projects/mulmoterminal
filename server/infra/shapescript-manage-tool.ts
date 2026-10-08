@@ -2,7 +2,7 @@
 // gallery on mulmoserver (server.mulmocast.com/shapes): publish, update, delete,
 // get, getList.
 //
-// Everything a model sees lives in `@mulmoclaude/shapescript-plugin`: the schema,
+// Everything a model sees lives in `@gui-chat-plugin/shapescript`: the schema,
 // the description, the document a post is and its pinned key set, the keyword
 // rule. That entry is Firebase-free on purpose; what this module contributes is
 // the SESSION. The remote-host runner signs into mulmoserver's Firebase as the
@@ -34,8 +34,8 @@ import {
   type ShapePostDoc,
   type ShapePostExpect,
   type ShapePostPatch,
-} from "@mulmoclaude/shapescript-plugin";
-import { renderShapeThumbnail } from "@mulmoclaude/shapescript-plugin/render";
+} from "@gui-chat-plugin/shapescript";
+import { renderShapeThumbnail } from "@gui-chat-plugin/shapescript/render";
 import {
   collection,
   doc,

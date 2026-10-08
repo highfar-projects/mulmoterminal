@@ -11,13 +11,15 @@
 // setting used not to be distinguishable from opening every section at once, which is a GET each.
 import { computed, nextTick, onMounted, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { withEnglish } from "../i18n/englishAnchor";
+import { useSettingsTabLabel } from "./settings/useSettingsTabLabel";
 import { MODAL_FOCUSABLE } from "../utils/focusTrap";
 import { useModalKeyboard } from "../composables/useModalKeyboard";
 import { fetchVoiceInputStatus } from "../composables/voiceModelStatus";
+import { requestedSettingsTab } from "../composables/settingsOpener";
 import { launchAgent } from "../composables/useChatLauncher";
 import SettingsButton from "./SettingsButton.vue";
 import AppVersionLine from "./settings/AppVersionLine.vue";
+import ConfigReloadButton from "./settings/ConfigReloadButton.vue";
 import ThemeSection from "./settings/ThemeSection.vue";
 import TerminalFontSizeSection from "./settings/TerminalFontSizeSection.vue";
 import TerminalFontFamilySection from "./settings/TerminalFontFamilySection.vue";
@@ -27,6 +29,7 @@ import GridHeaderSection from "./settings/GridHeaderSection.vue";
 import ToolbarPinsSection from "./settings/ToolbarPinsSection.vue";
 import DirAppearanceSection from "./settings/DirAppearanceSection.vue";
 import DirSettingsSection from "./settings/DirSettingsSection.vue";
+import ReleaseNotesSection from "./settings/ReleaseNotesSection.vue";
 import NotificationSoundsSection from "./settings/NotificationSoundsSection.vue";
 import VoiceInputSection from "./settings/VoiceInputSection.vue";
 import WebPushSection from "./settings/WebPushSection.vue";
@@ -57,6 +60,7 @@ import type { NotifyKind } from "../../common/notifyKinds";
 import type { SoundMap } from "../composables/soundSettings";
 import type { SoundEmits } from "./settings/soundEmits";
 import type { BundledSkillName } from "../../common/bundledSkills";
+import { filesGotoFile } from "../composables/useFilesView";
 
 defineProps<{
   soundFile?: string | null;
@@ -92,7 +96,11 @@ const emit = defineEmits<
   }
 >();
 
-const { t, locale } = useI18n();
+const { t } = useI18n();
+
+// After the server adopted config.json again (#2627): a fresh page reads it the one way every screen
+// always does. Unsaved editor buffers are flushed on the way out, as on any reload.
+const reloadPage = (): void => window.location.reload();
 
 const modalEl = ref<HTMLElement>();
 const activeTab = ref<SettingsTabId>(DEFAULT_SETTINGS_TAB);
@@ -103,9 +111,24 @@ const SETTINGS_PANE_ID = "settings-pane";
 // than offering a setting for a mic that will never appear. It can only go absent → present, so no
 // tab can vanish from under the user.
 const voiceCapable = ref(false);
+const voiceProbed = ref(false);
 onMounted(async () => {
   voiceCapable.value = (await fetchVoiceInputStatus())?.capable ?? false;
+  voiceProbed.value = true;
 });
+
+// A section asked for by name (the command palette, #2450): shown, then forgotten, so the next plain
+// open starts where it always did. Voice waits for this modal's own probe and is dropped if the
+// probe says no — its tab is not in the sidebar then, and the pane would have nothing to point at.
+watch(
+  [requestedSettingsTab, voiceProbed],
+  ([tab, probed]) => {
+    if (tab === null || (tab === "voice" && !probed)) return;
+    if (tab !== "voice" || voiceCapable.value) activeTab.value = tab;
+    requestedSettingsTab.value = null;
+  },
+  { immediate: true },
+);
 
 // A pane is created the first time its tab is opened, and hidden rather than destroyed after that.
 // `v-if` alone throws away what a section is holding but has not saved — TerminalFontFamilySection
@@ -121,12 +144,7 @@ const visibleGroups = computed(() =>
   ),
 );
 
-// The LANGUAGE entry carries its English beside it, and it is the only one that does (#2204). It
-// is not a preference for bilingual labels: it is the way back for somebody who picked a language
-// they cannot read, and they have to find this row in a sidebar written entirely in that language
-// before the picker's endonyms can help them. Every other row is reachable once they are back.
-const tabLabel = (id: SettingsTabId): string =>
-  id === "language" ? withEnglish(t(`settings.tabs.${id}`), t(`settings.tabs.${id}`, {}, { locale: "en" }), locale.value) : t(`settings.tabs.${id}`);
+const tabLabel = useSettingsTabLabel();
 
 // Below `sm` the sidebar would leave a phone about 190px of pane — narrow enough that the sound
 // rows lose their own labels off the left edge. The groups become <optgroup>s of a native picker
@@ -187,6 +205,13 @@ function dismissConfirm() {
 
 // Escape's layered answer: the confirmation is what it dismisses while one is open, and only a
 // second press reaches the modal.
+// A directory's config opened from Directory settings (#2624): the full-screen Files view is where a
+// path that is not the enlarged cell's can be opened, and it sits under this modal, so the modal goes.
+function openInFiles(dir: string, name: string) {
+  emit("close");
+  filesGotoFile(dir, name);
+}
+
 function closeTopmost() {
   if (pendingSkill.value === null) {
     emit("close");
@@ -230,6 +255,7 @@ useModalKeyboard({
         <div class="min-w-0">
           <h2 class="m-0 text-[15px] font-semibold">{{ t("settings.title") }}</h2>
           <AppVersionLine />
+          <ConfigReloadButton @reloaded="reloadPage" />
         </div>
         <button
           class="cursor-pointer rounded-md border-0 bg-transparent px-1.5 py-1 text-[14px] text-muted hover:bg-[var(--err-hover-bg)] hover:text-err-text"
@@ -320,7 +346,7 @@ useModalKeyboard({
             <DirAppearanceSection @launch-skill="askBeforeLaunch" />
           </div>
           <div v-if="visitedTabs.has('dirSettings')" v-show="activeTab === 'dirSettings'" data-testid="settings-pane-dirSettings">
-            <DirSettingsSection :dir-paths="dirPaths" @launch-skill="askBeforeLaunch" />
+            <DirSettingsSection :dir-paths="dirPaths" @launch-skill="askBeforeLaunch" @open-file="openInFiles" />
           </div>
           <div v-if="visitedTabs.has('launchers')" v-show="activeTab === 'launchers'" data-testid="settings-pane-launchers">
             <LaunchersSection :launchers="launchers" @update-launchers="emit('update-launchers', $event)" />
@@ -388,6 +414,9 @@ useModalKeyboard({
           </div>
           <div v-if="visitedTabs.has('help')" v-show="activeTab === 'help'" data-testid="settings-pane-help">
             <HelpSection />
+          </div>
+          <div v-if="visitedTabs.has('releaseNotes')" v-show="activeTab === 'releaseNotes'" data-testid="settings-pane-releaseNotes">
+            <ReleaseNotesSection />
           </div>
         </div>
       </div>

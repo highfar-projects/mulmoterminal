@@ -24,8 +24,13 @@ const REPLIES = [
   `${ESC}\\[[IO]`, // focus in / out
   `${ESC}\\[\\?[\\d;]*c`, // primary device attributes
   `${ESC}\\[>[\\d;]*c`, // secondary / tertiary device attributes
-  `${ESC}\\[\\d+;\\d+R`, // cursor position report
+  `${ESC}\\[\\??\\d+;\\d+R`, // cursor position report, plain and DEC private
+  `${ESC}\\[0n`, // device status: OK
+  `${ESC}\\[\\??\\d+;\\d+\\$y`, // mode report (DECRQM)
+  `${ESC}\\[[468];\\d+;\\d+t`, // window, cell and text-area size reports
   `${ESC}\\]1[0-9];rgb:[\\da-fA-F/]*${ST}`, // colour queries — foreground, background, cursor
+  `${ESC}\\]4;\\d+;rgb:[\\da-fA-F/]*${ST}`, // palette colour
+  `${ESC}P[01]\\$r[^${ESC}${BEL}]*${ST}`, // setting report (DECRQSS)
 ].join("|");
 
 const ANY_REPLY = new RegExp(REPLIES, "g");
@@ -40,7 +45,7 @@ const ANY_REPLY = new RegExp(REPLIES, "g");
 // A LONE Escape is never held. It is how the user cancels the dialog, and holding it would let a
 // paced answer carry on typing into a question they had just dismissed — while the reply it might
 // theoretically have grown into is written whole by the emulator, in one frame, every time.
-const STILL_GROWING = new RegExp(`^${ESC}(?:\\[[?>]?[\\d;]*|\\][\\d;]*(?:rgb:[\\da-fA-F/]*)?)$`);
+const STILL_GROWING = new RegExp(`^${ESC}(?:\\[[?>]?[\\d;]*(?:\\d\\$)?|\\][\\d;]*(?:rgb:[\\da-fA-F/]*)?)$`);
 
 /** The longest tail worth holding. Bounded so a stream of junk cannot accumulate. */
 const MAX_PENDING = 64;

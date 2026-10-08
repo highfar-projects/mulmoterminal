@@ -13,7 +13,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { CollectionSchema } from "@mulmoclaude/core/collection";
 import { declarationProblems } from "../../../server/backends/sharedApp/context.js";
-import { APP_PROTOCOL, APP_PROTOCOL_BASE, parseAuthoredApp } from "@receptron/sharedapp";
+import { parseAuthoredApp, protocolFor } from "@receptron/sharedapp";
 import { modalCallIn } from "../../../server/backends/sharedApp/modalCall.js";
 import { formElementIn, readyNeverCalled } from "../../../server/backends/sharedApp/viewDefects.js";
 import { readdirSync } from "node:fs";
@@ -38,13 +38,18 @@ const TEMPLATE_FILES = readdirSync(TEMPLATES)
 const EXPECTED_TEMPLATES = [
   "ai-council.md",
   "append-feed.md",
+  "class-seats.md",
   "gym.md",
   "live-poll.md",
   "magazine.md",
   "meeting-room.md",
   "project-board.md",
+  "question-box.md",
   "salon.md",
+  "schedule-poll.md",
+  "survey-results.md",
   "survey.md",
+  "tally.md",
 ];
 
 /** The hue as CSS reads it — a NUMBER, in which `25` and `25.0` are one colour and `0` and `360`
@@ -136,6 +141,41 @@ describe("the shared-app templates", () => {
 
   it("magazine.md deploys as written", () => {
     expect(problemsFor("magazine.md", "editor@example.com", [])).toEqual([]);
+  });
+
+  it("class-seats.md deploys as written", () => {
+    expect(problemsFor("class-seats.md", "owner@dance.example.jp", [])).toEqual([]);
+  });
+
+  it("schedule-poll.md deploys as written", () => {
+    expect(problemsFor("schedule-poll.md", "organizer@example.jp", [])).toEqual([]);
+  });
+
+  it("question-box.md deploys as written", () => {
+    expect(problemsFor("question-box.md", "owner@example.jp", [])).toEqual([]);
+  });
+
+  it("tally.md deploys as written", () => {
+    expect(problemsFor("tally.md", "owner@example.jp", [])).toEqual([]);
+  });
+
+  it("survey-results.md deploys as written", () => {
+    expect(problemsFor("survey-results.md", "owner@example.jp", [])).toEqual([]);
+  });
+
+  it("survey-results.md keeps everything but the chosen answers out of the world-readable collection", () => {
+    // `tallies` is in `public.read`, so every field it carries is published to anyone. Its whole
+    // promise is that the address, the name and the free text live in `responses`, which is not.
+    const manifest = blocksOf("survey-results.md").get("app.json") as {
+      public?: { read?: string[]; submit?: Record<string, { createFields?: string[]; emailField?: string }> };
+    };
+    const read = manifest.public?.read ?? [];
+    const tallies = manifest.public?.submit?.tallies;
+    expect(read).toContain("tallies");
+    expect(read).not.toContain("responses");
+    expect([...(tallies?.createFields ?? [])].sort()).toEqual(["answers", "status"]);
+    expect(tallies?.emailField).toBeUndefined();
+    expect(manifest.public?.submit?.responses?.emailField).toBe("email");
   });
 
   it("shows no page the sandbox would silently break", () => {
@@ -272,23 +312,60 @@ describe("the shared-app templates", () => {
     // `plans/feat-shared-app-uid-identity.md`.
     //
     // AGAINST THE *BASE* CONTRACT, and this is the distinction the day a feature moved the number
-    // actually turned on. `APP_PROTOCOL` is the newest contract this compiler can EMIT — 2.0.0
-    // since article views, which a reader must understand to draw. `APP_PROTOCOL_BASE` is what an
+    // actually turned on. `APP_PROTOCOL_ARTICLE` (2.0.0) is the contract article views need, which a
+    // reader must understand to draw (`APP_PROTOCOL`, 3.0.0, is pseudonym ids). `APP_PROTOCOL_BASE` is what an
     // app that uses none of that keeps, and what every deployed reader already knows. A floor says
     // what the app NEEDS, so a template declaring the newer one would make every app written from
     // it refuse to draw on readers that could have drawn it perfectly well — the exact cost the
     // per-app stamp exists to avoid. A template that ships an article view will state its own.
     for (const file of TEMPLATE_FILES) {
-      const manifest = blocksOf(file).get("app.json") as { protocol?: unknown; views?: { article?: unknown }[] } | undefined;
+      const manifest = blocksOf(file).get("app.json") as Parameters<typeof protocolFor>[0] & { protocol?: unknown };
       // "A template that ships an article view will state its own" — the paragraph above, taken at
-      // its word. An `article` view is drawn by a reader that understands APP_PROTOCOL, so an app
-      // with one has to say so and an app without one must not: the floor is read off the FEATURES
-      // the declaration uses, never off which template it is. Derived here rather than listed,
-      // because a list of exceptions is the per-template number this test exists to refuse.
-      const drawsArticles = (manifest?.views ?? []).some((view) => view.article !== undefined);
-      const floor = drawsArticles ? APP_PROTOCOL : APP_PROTOCOL_BASE;
+      // its word, for every feature that moves the major (an article view or a slug id: 2.0.0; a
+      // pseudonym id: 3.0.0). The floor is read off the FEATURES the declaration uses, by the
+      // publisher's own `protocolFor`, never off which template it is — a list of exceptions is the
+      // per-template number this test exists to refuse.
+      const floor = protocolFor(manifest);
       expect(`${file}: ${String(manifest?.protocol)}`).toBe(`${file}: ${floor}`);
     }
+  });
+
+  it("names a PUBLIC row built from its submitter by the app's pseudonym, not by the uid", () => {
+    // The anonymous uid is the same in every app of the project, so a world-readable row whose id is
+    // the uid can be joined to the same person's named rows elsewhere (receptron/mulmoserver#325).
+    // And a uidField on such a row must hold the pseudonym too (`uidForm`), or the uid is in a field.
+    const exposed = TEMPLATE_FILES.flatMap((file) => {
+      const manifest = blocksOf(file).get("app.json") as
+        { public?: { read?: string[]; submit?: Record<string, { idFrom?: string; uidField?: string; uidForm?: string }> } } | undefined;
+      const open = new Set(manifest?.public?.read ?? []);
+      return Object.entries(manifest?.public?.submit ?? {})
+        .filter(([cid]) => open.has(cid))
+        .flatMap(([cid, submit]) => [
+          ...(submit.idFrom === "auth.uid" || submit.idFrom === "auth.uid+field" ? [`${file}: ${cid} id`] : []),
+          ...(submit.uidField !== undefined && submit.uidForm !== "pseudonym" ? [`${file}: ${cid} uidField`] : []),
+        ]);
+    });
+    expect(exposed).toEqual([]);
+  });
+
+  it("offers a copy only from the templates made to spread, and says what it costs", () => {
+    // `forkable` makes every page — the staff ones included — world-readable (receptron/mulmoserver#332).
+    // A play app wants to spread; a booking or a roster must not hand its desk to strangers.
+    const isForkable = (manifest: unknown): boolean =>
+      typeof manifest === "object" && manifest !== null && "forkable" in manifest && manifest.forkable === true;
+    const forkable = TEMPLATE_FILES.filter((file) => isForkable(blocksOf(file).get("app.json")));
+    expect(forkable).toEqual(["question-box.md", "survey-results.md", "tally.md"]);
+    for (const file of forkable) {
+      expect(readFileSync(path.join(TEMPLATES, file), "utf8"), file).toContain("それらのページも誰でも読めるようになります");
+    }
+  });
+
+  it("draws share cards only from the templates made to spread, and says the card stays on SNS", () => {
+    // `shareCard` puts a row's text on an image anyone can see (receptron/mulmoserver#336).
+    const declaresCard = (manifest: unknown): boolean => typeof manifest === "object" && manifest !== null && "shareCard" in manifest;
+    const carded = TEMPLATE_FILES.filter((file) => declaresCard(blocksOf(file).get("app.json")));
+    expect(carded).toEqual(["question-box.md", "survey-results.md", "tally.md"]);
+    for (const file of carded) expect(readFileSync(path.join(TEMPLATES, file), "utf8"), file).toContain("SNS 側に残ることがあります");
   });
 
   it("makes every template choose its own colour rather than inherit one", () => {
@@ -340,8 +417,60 @@ describe("the shared-app templates", () => {
       expect.arrayContaining([".claude/skills/tasks/schema.json", ".claude/skills/names/schema.json", ".claude/skills/assignments/schema.json"]),
     );
     expect([...blocksOf("append-feed.md").keys()]).toEqual(expect.arrayContaining([".claude/skills/messages/schema.json"]));
+    expect([...blocksOf("class-seats.md").keys()]).toEqual(
+      expect.arrayContaining([".claude/skills/classes/schema.json", ".claude/skills/seats/schema.json", ".claude/skills/bookings/schema.json"]),
+    );
+    expect([...blocksOf("schedule-poll.md").keys()]).toEqual(
+      expect.arrayContaining([".claude/skills/polls/schema.json", ".claude/skills/answers/schema.json"]),
+    );
+    expect([...blocksOf("question-box.md").keys()]).toEqual(expect.arrayContaining([".claude/skills/questions/schema.json"]));
+    expect([...blocksOf("tally.md").keys()]).toEqual(expect.arrayContaining([".claude/skills/votes/schema.json", ".claude/skills/notes/schema.json"]));
+    expect([...blocksOf("survey-results.md").keys()]).toEqual(
+      expect.arrayContaining([".claude/skills/questions/schema.json", ".claude/skills/tallies/schema.json", ".claude/skills/responses/schema.json"]),
+    );
     expect([...blocksOf("ai-council.md").keys()]).toEqual(
       expect.arrayContaining([".claude/skills/topics/schema.json", ".claude/skills/speakers/schema.json", ".claude/skills/messages/schema.json"]),
     );
+  });
+
+  // `/p/{slug}` opens only for addresses in `members`. A template whose public page takes records
+  // from anybody, and then puts what those people do next on a participant page, promises them a
+  // page they cannot open. Allowed only where the submitters ARE the roster (`audience:
+  // "participant"` on the submission) or the template says it invites them, and why.
+  const INVITES_ITS_PARTICIPANTS: Record<string, string> = {
+    "gym.md": "a members' gym: its read-access section invites each member, and says what a gym that does not loses",
+  };
+  it("puts nothing for a public submitter on a page only the roster opens", () => {
+    for (const file of TEMPLATE_FILES) {
+      const manifest = blocksOf(file).get("app.json") as
+        { views?: { id?: string; audience?: string }[]; public?: { enabled?: boolean; submit?: Record<string, { audience?: string }> } } | undefined;
+      const participantViews = (manifest?.views ?? []).filter((view) => view.audience === "participant").map((view) => view.id);
+      const openSubmit = Object.values(manifest?.public?.submit ?? {}).some((submit) => submit.audience !== "participant");
+      const verdict =
+        participantViews.length === 0 || !openSubmit || file in INVITES_ITS_PARTICIPANTS ? "reachable" : `unreachable ${participantViews.join(", ")}`;
+      expect(`${file}: ${verdict}`).toBe(`${file}: reachable`);
+    }
+  });
+
+  // A page that withdraws from a collection the declaration lets nobody delete from draws a button
+  // every press of which is refused — and the page test cannot see it, because it is handed the
+  // capability rather than deriving it.
+  it("declares a delete for every collection a page withdraws from", () => {
+    for (const file of TEMPLATE_FILES) {
+      const text = readFileSync(path.join(TEMPLATES, file), "utf8");
+      const manifest = blocksOf(file).get("app.json") as
+        { collections?: Record<string, { writerDelete?: boolean }>; public?: { submit?: Record<string, { selfDelete?: unknown }> } } | undefined;
+      const withdrawn = new Set([...text.matchAll(/view\.withdraw\("([A-Za-z0-9_-]+)"/g)].map((match) => match[1] ?? ""));
+      withdrawn.forEach((cid) => {
+        const deletable = manifest?.collections?.[cid]?.writerDelete === true || manifest?.public?.submit?.[cid]?.selfDelete !== undefined;
+        expect(`${file}: ${cid} ${deletable ? "has a delete" : "has no delete"}`).toBe(`${file}: ${cid} has a delete`);
+      });
+      // The reader's OWN withdrawal is `selfDelete` alone; the desk's `writerDelete` does not grant it.
+      const ownWithdrawn = new Set([...text.matchAll(/can\?\.([A-Za-z0-9_-]+)\?\.withdrawFrom/g)].map((match) => match[1] ?? ""));
+      ownWithdrawn.forEach((cid) => {
+        const own = manifest?.public?.submit?.[cid]?.selfDelete !== undefined;
+        expect(`${file}: ${cid} ${own ? "has selfDelete" : "has no selfDelete"}`).toBe(`${file}: ${cid} has selfDelete`);
+      });
+    }
   });
 });

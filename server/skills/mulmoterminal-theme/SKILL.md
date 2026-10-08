@@ -1,13 +1,15 @@
 ---
 name: mulmoterminal-theme
-description: Build a colour scheme of your own for MulmoTerminal — one that joins Midnight, Nord, Daylight and Solarized in Settings' theme picker and can then be pinned per project. Writes `themes` in `~/.mulmoterminal/config.json`, the whole-app palette (panels, borders, accent, text), which has no UI for creating one — Settings only lets you pick from what exists. Use when the user wants their own theme, a dark/light variant that isn't shipped, a scheme drawn from a painting, a photo or a brand's colours, or says the built-in themes are too dark, too blue, too low-contrast. For colouring ONE project's cell (its badge and header), or assigning an existing theme to a directory, use mulmoterminal-dirs instead.
+description: Build a colour scheme of your own for MulmoTerminal — one that joins Midnight, Nord, Daylight and Solarized in Settings' theme picker and can then be pinned per project. Writes `themes` in `~/.mulmoterminal/config.json`, the whole-app palette (panels, borders, accent, text). Settings → Theme can copy an existing theme and change its colours one by one; this skill is for a scheme described in words or drawn from an image, contrast checking, and the terminal's own `term` palette. Use when the user wants their own theme, a dark/light variant that isn't shipped, a scheme drawn from a painting, a photo or a brand's colours, or says the built-in themes are too dark, too blue, too low-contrast. For colouring ONE project's cell (its badge and header), or assigning an existing theme to a directory, use mulmoterminal-dirs instead.
 ---
 
 # Make a colour scheme of your own
 
 `themes` in `~/.mulmoterminal/config.json` defines schemes that appear in Settings' picker next to
 the four built-ins, and that a project can then name in its `.mulmoterminal.json` `theme` key.
-Settings can *choose* a theme; nothing in the app can *create* one. This skill is that path.
+Settings can choose a theme, and copy one and change its colours one at a time (Settings → Theme →
+Your own theme). What it cannot do is design one — from a mood, a photo or a brand, with contrast
+checked — or set the terminal's `term` palette. This skill is that path.
 
 This is the **whole app's** palette — panel backgrounds, borders, accent, text. A single project's
 badge and header colours are a different thing (`mulmoterminal-dirs`).

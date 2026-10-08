@@ -5,7 +5,8 @@ description: "Create the app skeleton: web app, Cloud Functions workspace, emula
 
 # App skeleton
 
-1. Web app: Vite + TypeScript (Vue unless the spec says otherwise). Use `yarn`.
+1. Web app: Vite + TypeScript (Vue unless the spec says otherwise). Use `yarn`. Keep `typescript` at `^6`, not 7:
+   a later check reads the test files through TypeScript's compiler API, which TypeScript 7 does not ship.
 2. `firebase init` for Hosting, Firestore, Functions (TypeScript) and Emulators (Auth, Firestore, Functions,
    Hosting). Copy `infra/firestore.rules`, `infra/firestore.indexes.json` and `infra/firebase.json` from the base
    pack over what init wrote, then merge in anything init generated that they lack.

@@ -21,12 +21,14 @@ import { computed, onBeforeUnmount, onMounted, ref, toRef, useTemplateRef, watch
 import { groupByFile, isSearchable, withBufferMatches, type SearchMatch, type SearchRequest } from "../../common/fileSearch";
 import { resultSummary, snippetView, splitAround, type SnippetView } from "./searchResultView";
 import { useSearchContext, type SelectedResult } from "../composables/useSearchContext";
-import { menuFocusMove } from "./filesRowActions";
+import { usePickerPanelKeys } from "../composables/usePickerPanelKeys";
+import SearchContextLines from "./SearchContextLines.vue";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { isRecord } from "../../common/isRecord";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 import { useI18n } from "vue-i18n";
+import type { FilesPanelSeed } from "../composables/filesPanelSeed";
 
 const { t } = useI18n();
 
@@ -34,15 +36,12 @@ const { t } = useI18n();
  *  this is not only about the network — typing "session" unthrottled would start seven greps. */
 const DEBOUNCE_MS = 180;
 
-/** The keys that move the selection. The same short list as the finder's, for the same reason: the
- *  keyboard is in a text field, where Home and End belong to the caret. */
-const LIST_KEYS = ["ArrowUp", "ArrowDown"];
-
 const props = defineProps<{
   cwd: string | null;
   /** The file open in the editor and its CURRENT text, when it has unsaved edits. Null when nothing
    *  is dirty — then the disk answer is complete on its own. */
   buffer: { path: string; text: string } | null;
+  seed?: FilesPanelSeed | undefined;
 }>();
 const emit = defineEmits<{ pick: [pathRel: string, line: number]; close: [] }>();
 
@@ -182,8 +181,22 @@ watch(
 
 watch([query, regex, caseSensitive, () => props.cwd], () => {
   if (timer) clearTimeout(timer);
+  // The running search answers what was asked before this change: it must not land during the
+  // debounce, under text it does not match.
+  latest++;
+  inFlight?.abort();
   timer = setTimeout(() => void runSearch(), DEBOUNCE_MS);
 });
+
+// The palette's `#` text, also when the panel is already open. After the watch above, so a text
+// arriving with the mount runs the search.
+watch(
+  () => props.seed,
+  (seed) => {
+    if (seed) query.value = seed.text;
+  },
+  { immediate: true },
+);
 
 // Typing changes what is under the cursor, so the selection returns to the top and the list scrolls
 // back with it — a narrowed list would otherwise open part-way down with its first row out of sight.
@@ -215,31 +228,7 @@ const keepActiveVisible = (): void => {
 watch(active, keepActiveVisible, { flush: "post" });
 watch(activeContext, keepActiveVisible, { flush: "post" });
 
-function onKeydown(event: KeyboardEvent): void {
-  if (event.isComposing) return; // an IME candidate list owns the arrows and Enter while composing
-  if (event.key === "Escape") {
-    event.preventDefault();
-    emit("close");
-    return;
-  }
-  if (event.key === "Enter") {
-    event.preventDefault();
-    pick(active.value);
-    return;
-  }
-  if (!LIST_KEYS.includes(event.key)) return;
-  const to = menuFocusMove(event.key, active.value, rows.value.length);
-  if (to === null) return;
-  event.preventDefault();
-  active.value = to;
-}
-
-// Clicking anywhere else is "not this after all". Pointerdown rather than click, so the pane
-// underneath does not also act on the same gesture.
-function onOutside(event: PointerEvent): void {
-  const target = event.target instanceof Node ? event.target : null;
-  if (!panel.value?.contains(target)) emit("close");
-}
+const { onKeydown, onOutside } = usePickerPanelKeys({ panel, active, rowCount: () => rows.value.length, pick, close: () => emit("close") });
 
 const isBufferPath = (path: string): boolean => props.buffer?.path === path;
 
@@ -358,12 +347,7 @@ onBeforeUnmount(() => {
           @pointerenter="active = row.index"
           @click="pick(row.index)"
         >
-          <div v-if="row.index === active && activeContext" aria-hidden="true" data-testid="file-search-context-before">
-            <div v-for="line in activeContext?.before ?? []" :key="line.line" class="flex items-baseline gap-2 text-dim">
-              <span class="w-10 flex-none text-right text-[11px] tabular-nums">{{ line.line }}</span>
-              <span class="min-w-0 truncate">{{ line.text }}<span v-if="line.clipped"> …</span></span>
-            </div>
-          </div>
+          <SearchContextLines v-if="row.index === active && activeContext" :lines="activeContext.before" data-testid="file-search-context-before" />
           <div data-testid="file-search-match-line" class="flex items-baseline gap-2">
             <span class="w-10 flex-none text-right text-[11px] tabular-nums text-dim">{{ row.match.line }}</span>
             <span class="min-w-0 truncate">
@@ -374,12 +358,7 @@ onBeforeUnmount(() => {
               <span v-if="row.match.clipped" class="text-dim"> …</span>
             </span>
           </div>
-          <div v-if="row.index === active && activeContext" aria-hidden="true" data-testid="file-search-context-after">
-            <div v-for="line in activeContext?.after ?? []" :key="line.line" class="flex items-baseline gap-2 text-dim">
-              <span class="w-10 flex-none text-right text-[11px] tabular-nums">{{ line.line }}</span>
-              <span class="min-w-0 truncate">{{ line.text }}<span v-if="line.clipped"> …</span></span>
-            </div>
-          </div>
+          <SearchContextLines v-if="row.index === active && activeContext" :lines="activeContext.after" data-testid="file-search-context-after" />
         </li>
       </template>
     </ul>

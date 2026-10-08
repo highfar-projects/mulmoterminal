@@ -687,6 +687,41 @@ export async function tmuxPanePidsAsync(): Promise<Map<number, string> | null> {
   return r.status === 0 ? parseTmuxPanePids(r.stdout) : null;
 }
 
+/** The same listing grouped by session: a session split into panes has a root per pane. Empty, not
+ *  null, when tmux holds nothing — no server yet is no sessions, not a failure. */
+export async function tmuxPanePidsBySessionAsync(): Promise<Map<string, number[]> | null> {
+  const r = await tmuxAsync(["list-panes", "-a", "-F", "#{pane_pid} #{session_name}"]);
+  if (tmuxHoldsNothing(r)) return new Map<string, number[]>();
+  if (r.status !== 0) return null;
+  const bySession = new Map<string, number[]>();
+  parseTmuxPanePids(r.stdout).forEach((id, pid) => bySession.set(id, [...(bySession.get(id) ?? []), pid]));
+  return bySession;
+}
+
+/** Parse `#{session_name}<TAB>#{pane_current_path}` rows into the directories our panes stand in.
+ *  The path is last and tab-separated because it may contain spaces. */
+export function parseTmuxPaneCwds(stdout: string): string[] {
+  return stdout.split("\n").flatMap((line) => {
+    const tab = line.indexOf("\t");
+    if (tab === -1 || !line.slice(0, tab).startsWith(SESSION_PREFIX)) return [];
+    const cwd = line.slice(tab + 1).trim();
+    return cwd ? [cwd] : [];
+  });
+}
+
+/** Where every pane of ours is standing now — a plain shell included, which no agent record knows
+ *  about. Null when tmux could not answer; empty when it holds nothing. */
+export async function tmuxPaneCwdsAsync(): Promise<string[] | null> {
+  const r = await tmuxAsync(["list-panes", "-a", "-F", "#{session_name}\t#{pane_current_path}"]);
+  if (tmuxHoldsNothing(r)) return [];
+  return r.status === 0 ? parseTmuxPaneCwds(r.stdout) : null;
+}
+
+/** A failed tmux call that is tmux saying it holds nothing — see `tmuxSessionIdsFrom` for why only
+ *  these two. */
+export const tmuxHoldsNothing = (result: { status: number | null; stderr: string }): boolean =>
+  result.status !== 0 && /no server running|no such file or directory/i.test(result.stderr);
+
 /** What `tmux list-sessions` reported, read as one of three answers rather than two.
  *
  *  `no server running` is not a failure: it is tmux saying, reliably, that it holds nothing. So is
@@ -702,7 +737,7 @@ export async function tmuxPanePidsAsync(): Promise<Map<number, string> | null> {
  *
  *  Pure so the three-way rule can be tested without a tmux server. */
 export function tmuxSessionIdsFrom(result: { status: number | null; stdout: string; stderr: string }): string[] | null {
-  if (result.status !== 0) return /no server running|no such file or directory/i.test(result.stderr) ? [] : null;
+  if (result.status !== 0) return tmuxHoldsNothing(result) ? [] : null;
   return result.stdout
     .split("\n")
     .filter((n) => n.startsWith(SESSION_PREFIX))

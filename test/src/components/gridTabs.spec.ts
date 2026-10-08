@@ -17,6 +17,7 @@ import {
   insertCellAfter,
   MAX_TERMINALS,
   revealCell,
+  jumpTo,
   shellCell,
   sessionCell,
   launchInCell,
@@ -46,6 +47,11 @@ import {
   type Cell,
   gridStatusSummary,
 } from "../../../src/components/gridTabs.js";
+import { gridStatusTitle, type GridStatusSummary } from "../../../src/components/gridTabs.js";
+import { i18n } from "../../../src/i18n";
+
+// The tooltip the toolbar shows, read through the real messages under the pinned English locale.
+const titleOf = (summary: GridStatusSummary): string => gridStatusTitle(summary, i18n.global.t);
 import type { AttentionStatus } from "../../../src/components/attentionStatus.js";
 
 const U = (n: number) => `${String(n % 10).repeat(8)}-aaaa-aaaa-aaaa-aaaaaaaaaaaa`;
@@ -554,6 +560,30 @@ describe("revealCell (page at where the cell is actually shown)", () => {
   // A uid the order doesn't carry (a full grid refused the insert) must not move the user.
   it("leaves the page alone for a uid the order does not hold", () => {
     expect(revealCell(ten(), 99, [0, 1, 2]).page).toBe(1);
+  });
+});
+
+// The palette's jump to a named terminal (#2446): what `next-attention` does with its pick.
+describe("jumpTo", () => {
+  const order = Array.from({ length: 10 }, (_, i) => i);
+
+  it("makes the terminal the enlarged one when one is enlarged", () => {
+    const zoomed = make(running(10), { expanded: 2 });
+    expect(jumpTo(zoomed, 7, order).expanded).toBe(7);
+  });
+
+  it("changes nothing for a uid no cell holds, enlarged or not", () => {
+    const zoomed = make(running(10), { expanded: 2 });
+    expect(jumpTo(zoomed, 99, order)).toBe(zoomed);
+    const tiled = make(running(10), { page: 1 });
+    expect(jumpTo(tiled, 99, order)).toBe(tiled);
+  });
+
+  it("brings the terminal's page on screen and leaves the grid a grid otherwise", () => {
+    const tiled = make(running(10), { page: 0 });
+    const jumped = jumpTo(tiled, 9, order);
+    expect(jumped.page).toBe(1);
+    expect(jumped.expanded).toBeNull();
   });
 });
 
@@ -1187,8 +1217,8 @@ describe("gridStatusSummary", () => {
   const counts = (over: Partial<Record<"blocked" | "done" | "working" | "idle", number>> = {}) => ({ blocked: 0, done: 0, working: 0, idle: 0, ...over });
 
   it("shows nothing when there are no counts", () => {
-    expect(gridStatusSummary(null)).toEqual({ show: false, title: "" });
-    expect(gridStatusSummary(undefined)).toEqual({ show: false, title: "" });
+    expect(gridStatusSummary(null)).toEqual({ show: false, parts: [] });
+    expect(gridStatusSummary(undefined)).toEqual({ show: false, parts: [] });
   });
 
   // The asymmetry this exists for: idle alone does not raise the badge — a wholly-idle grid
@@ -1205,16 +1235,16 @@ describe("gridStatusSummary", () => {
   it("includes idle in the title even though it does not raise the badge", () => {
     const s = gridStatusSummary(counts({ working: 1, idle: 3 }));
     expect(s.show).toBe(true);
-    expect(s.title).toBe("1 working · 3 idle");
+    expect(titleOf(s)).toBe("1 working · 3 idle");
   });
 
   // Reading order: blocked (needs you) first.
   it("orders the parts blocked, done, working, idle", () => {
-    expect(gridStatusSummary(counts({ blocked: 1, done: 2, working: 3, idle: 4 })).title).toBe("1 need input · 2 done (review) · 3 working · 4 idle");
+    expect(titleOf(gridStatusSummary(counts({ blocked: 1, done: 2, working: 3, idle: 4 })))).toBe("1 need input · 2 done (review) · 3 working · 4 idle");
   });
 
   it("omits a zero count from the title", () => {
-    expect(gridStatusSummary(counts({ blocked: 2, working: 1 })).title).toBe("2 need input · 1 working");
+    expect(titleOf(gridStatusSummary(counts({ blocked: 2, working: 1 })))).toBe("2 need input · 1 working");
   });
 });
 

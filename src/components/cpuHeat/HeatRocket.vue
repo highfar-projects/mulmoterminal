@@ -1,11 +1,12 @@
 <script setup lang="ts">
 // A rocket on the pad: the engine lights, roars, and on the finale the rocket leaves.
 import { computed } from "vue";
-import { HOT, type HeatPalette } from "./heatPalette";
+import { HOT } from "./heatPalette";
 import type { StageLevel } from "./stageLevel";
+import type { HeatFigureProps } from "./heatFigure";
 import HeatGlow from "./HeatGlow.vue";
 
-const props = defineProps<{ level: StageLevel; palette: HeatPalette; animate: boolean }>();
+const props = defineProps<HeatFigureProps>();
 
 const FLAME_BY_LEVEL: Record<StageLevel, number> = { 0: 0, 1: 0, 2: 16, 3: 28, 4: 38, 5: 60 };
 const flame = computed(() => FLAME_BY_LEVEL[props.level]);

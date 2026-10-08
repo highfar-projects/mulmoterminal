@@ -14,7 +14,15 @@ describe("tryOpenInPane", () => {
     const opener = vi.fn(() => true);
     setFilesPaneOpener(opener);
     expect(tryOpenInPane("/Users/me/proj/src/main.ts", CWD)).toBe(true);
-    expect(opener).toHaveBeenCalledWith(CWD, "src/main.ts");
+    expect(opener).toHaveBeenCalledWith(CWD, "src/main.ts", undefined);
+  });
+
+  // #2573. The line an agent named after the path rides along to the pane.
+  it("hands the pane the location named after the path", () => {
+    const opener = vi.fn(() => true);
+    setFilesPaneOpener(opener);
+    expect(tryOpenInPane("src/main.ts", CWD, { line: 42, col: 7 })).toBe(true);
+    expect(opener).toHaveBeenCalledWith(CWD, "src/main.ts", { line: 42, col: 7 });
   });
 
   // The pane is CodeMirror plus a Markdown preview, so the rendered routes belong to it too —
@@ -25,13 +33,25 @@ describe("tryOpenInPane", () => {
     expect(tryOpenInPane(name, CWD)).toBe(true);
   });
 
-  // A new tab is still the right answer for what the browser DISPLAYS: the pane cannot render
-  // these, and a tab shows them properly.
-  it.each(["shot.png", "paper.pdf", "clip.mp4"])("declines %s, leaving it to the raw route", (name) => {
+  // #2269: what an agent draws — a chart as a PNG, an SVG, an HTML report — stays in the grid.
+  it.each(["shot.png", "chart.svg", "report.html", "page.htm"])("takes %s into the pane", (name) => {
     const opener = vi.fn(() => true);
     setFilesPaneOpener(opener);
-    expect(tryOpenInPane(name, CWD)).toBe(false);
-    expect(opener).not.toHaveBeenCalled();
+    expect(tryOpenInPane(name, CWD)).toBe(true);
+    expect(opener).toHaveBeenCalledWith(CWD, name, undefined);
+  });
+
+  // #2674: a PDF, a video and a sound are drawn in the pane too, from the same raw route a tab used.
+  it.each(["paper.pdf", "clip.mp4", "memo.m4a"])("takes %s into the pane", (name) => {
+    const opener = vi.fn(() => true);
+    setFilesPaneOpener(opener);
+    expect(tryOpenInPane(name, CWD)).toBe(true);
+    expect(opener).toHaveBeenCalledWith(CWD, name, undefined);
+  });
+
+  it("leaves a PDF to its tab when no pane is open", () => {
+    setFilesPaneOpener(null);
+    expect(tryOpenInPane("paper.pdf", CWD)).toBe(false);
   });
 
   // But a tab is NOT a view for a type the browser cannot display — it is a download that starts

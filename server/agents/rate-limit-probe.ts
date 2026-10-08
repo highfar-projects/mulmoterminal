@@ -94,6 +94,9 @@ export interface ProbeDeps {
   sessionId: string;
   /** An account probe's report key (#2215), carried on its statusLine's URL; absent = default. */
   probeReportKey?: string;
+  /** Variables for the settings file's env block — a rotation token (#2919), kept off the child's
+   *  own environment, where same-user process inspection could read it. */
+  settingsEnv?: Readonly<Record<string, string>>;
   onSettled: (outcome: ProbeOutcome) => void;
 }
 
@@ -122,7 +125,8 @@ export function startRateLimitProbe(deps: ProbeDeps): () => void {
   try {
     const dir = mkdtempSync(path.join(tmpdir(), "mt-ratelimit-"));
     const file = path.join(dir, "settings.json");
-    writeFileSync(file, JSON.stringify({ statusLine: { type: "command", command: statusLineCommand(deps.host, deps.port, deps.probeReportKey) } }), {
+    const env = deps.settingsEnv && Object.keys(deps.settingsEnv).length > 0 ? { env: deps.settingsEnv } : {};
+    writeFileSync(file, JSON.stringify({ ...env, statusLine: { type: "command", command: statusLineCommand(deps.host, deps.port, deps.probeReportKey) } }), {
       mode: 0o600,
     });
     settings = { dir, file };

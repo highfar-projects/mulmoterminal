@@ -2,6 +2,7 @@
 // user last clicked": loading a file, and restoring a remembered pane (#2137). Both answer the
 // same question — the Markdown preview belongs to the FILE it was turned on for — and both are
 // pure, so a mode that outlives its file is catchable without mounting a pane.
+import type { FilesTabState } from "./filesPaneState";
 
 /** Whether the pane is staying on the file it is already on. Two things hang off it, and both are
  *  about the same idea — a re-read is not a departure:
@@ -16,11 +17,8 @@
  *  The same-path callers are the conflict banner's Reload and the external-change refresh. */
 export const staysOnSameFile = (openPath: string | null, nextPath: string): boolean => openPath === nextPath;
 
-/** The half of a remembered pane state the mode is decided from. */
-export interface RememberedView {
-  openPath: string | null;
-  showPreview?: boolean;
-}
+/** The half of a remembered tab the mode is decided from. */
+export type RememberedView = Pick<FilesTabState, "path" | "showPreview">;
 
 /** What the file a restore asked for turned out to be, once it had been read. */
 export interface ReopenedFile {
@@ -28,18 +26,15 @@ export interface ReopenedFile {
    *  remembered path there; the comparison is what keeps the answer right for a caller that asks
    *  earlier, when the read failed or another file is what arrived. */
   openPath: string | null;
-  isMarkdown: boolean;
+  /** It has a Preview at all — Markdown, an HTML page or an SVG (#2269). */
+  previewable: boolean;
   /** The server refused to serve it as text (415). */
   unpreviewable: boolean;
 }
 
-/** Whether a restored pane comes back in Preview. Only over the very path the mode was remembered
- *  for, and only while that path still holds Markdown the server served as text: a path holds
- *  whatever is there NOW, so the `.md` may since be a binary — and previewing one is a blank
- *  iframe with no editor behind it. Anything else falls back to the editor. */
+/** Whether a restored tab comes back in Preview. Only over the very path the mode was remembered
+ *  for, and only while that path still holds something with a Preview that the server served as
+ *  text: a path holds whatever is there NOW, so the `.md` may since be a binary — and previewing
+ *  one is a blank iframe with no editor behind it. Anything else falls back to the editor. */
 export const restoresPreview = (remembered: RememberedView, reopened: ReopenedFile): boolean =>
-  remembered.showPreview === true &&
-  remembered.openPath !== null &&
-  reopened.openPath === remembered.openPath &&
-  reopened.isMarkdown &&
-  !reopened.unpreviewable;
+  remembered.showPreview === true && reopened.openPath === remembered.path && reopened.previewable && !reopened.unpreviewable;

@@ -48,6 +48,12 @@ export interface RunnableLaunchConfig {
   command: string;
 }
 
+/** A skill the Skill menu offers: user + project `.claude/skills`. */
+export interface DiscoveredSkill {
+  slug: string;
+  description: string;
+}
+
 export interface Worktree {
   path: string;
   branch: string | null;
@@ -80,6 +86,10 @@ export interface LaunchConfigList {
   // The resolved cwd the listed configs belong to, so the command runs in the dir the list was
   // fetched for.
   cwd: string | null;
+}
+
+export interface SkillList {
+  skills: DiscoveredSkill[];
 }
 
 export interface WorktreeList {
@@ -119,6 +129,9 @@ const isRunnableScript = (row: unknown): row is RunnableScript =>
 
 const isRunnableLaunchConfig = (row: unknown): row is RunnableLaunchConfig =>
   isRecord(row) && typeof row.index === "number" && typeof row.label === "string" && typeof row.command === "string";
+
+// A skill with no slug cannot be launched, and one with no description renders a blank row.
+export const isDiscoveredSkill = (row: unknown): row is DiscoveredSkill => isRecord(row) && typeof row.slug === "string" && typeof row.description === "string";
 
 // The nested `session` too, when present: the row's resume decision reads `id` / `agent` /
 // `attached` off it (worktreeAction in CellLaunchForm), so a half-formed one would be asserted
@@ -223,6 +236,14 @@ export const useDirLaunchConfigs = () =>
     (dir) => `/api/launch-configs?cwd=${encodeURIComponent(dir)}`,
     (body, dir) => ({ configs: rowsOf(body.configs, isRunnableLaunchConfig), cwd: dirOf(body.cwd, dir) }),
     () => ({ configs: [], cwd: null }),
+  );
+
+// The skills a directory's session can run — the Skill menu's list, read for the command palette.
+export const useDirSkills = () =>
+  useDirList<SkillList>(
+    (dir) => `/api/skills?cwd=${encodeURIComponent(dir)}`,
+    (body) => ({ skills: rowsOf(body.skills, isDiscoveredSkill) }),
+    () => ({ skills: [] }),
   );
 
 // Per-agent isolation: when the dir is a git repo, the launcher can start an agent in its own

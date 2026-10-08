@@ -128,7 +128,7 @@ npx mulmoterminal@latest
 
 サーバーは既定で**ループバック（127.0.0.1）だけを待ち受けます**。これは、たまたま開いた悪意あるサイトがローカルの Claude を操作するのを防ぐためです。
 
-外部から使いたい場合は、**SSH ポートフォワード**を推奨します。スマホから使いたいだけなら、専用の経路が別にあります（→ [スマホから使う](phone.html)）。
+外部から使いたい場合は、**SSH ポートフォワード**を推奨します。手順、サーバでのエージェントのログイン、Docker は[サーバを別のマシンで動かす](remote.html)にあります。スマホから使いたいだけなら、専用の経路が別にあります（→ [スマホから使う](phone.html)）。
 
 ---
 
@@ -207,6 +207,47 @@ npx mulmoterminal@latest
 **ワークスペースで起動した Claude / Codex / Copilot のセッションは、GUI ツールを全部持ちます** — Canvas に描かせる・コレクションを触らせるといったツールが、何も登録せずに通る状態です。
 この 3 つならどれでも同じで、WORKING DIRECTORY 行の先頭にある **WORKSPACE** チップがそこへの近道です（Antigravity・Grok・Muse・Cursor は例外で、どこで動かしてもディレクトリに登録されたぶんだけ → [Antigravity・Grok・Muse・Cursor はどこでも登録が要る](basics.html#antigravity-gui-tools)）。**起動コマンド（launch command）はこれには当たりません** — コマンドラインを逐語的に実行するだけで、`claude` であっても GUI ツールは付きません。
 プロジェクトのディレクトリで起動したセルは、そのディレクトリに登録されているツールグループだけを持つので、GUI ツールが要るならランチャの MCP トグルで登録します（→ [どのディレクトリで起動するか](basics.html#launch-dir)）。
+
+### 開き直したセルで、最後の会話が消えていました。なくなったのですか？
+
+**なくなっていません。別のセッション ID で、ディスクに残っています。** Claude Code で会話を
+バックグラウンドに移すと（**←** キー、"Your conversation moved to the background"）、Claude Code は
+**新しい** セッション ID で続けます。それ以降の会話は新しい ID に書かれますが、セルが知っているのは
+古い ID のままです。
+
+ターミナルが動いている間は、何も起きていないように見えます。ページの再読み込みやサーバの再起動は、
+そのターミナルにつなぎ直すだけだからです。ところが、ターミナル自体が終わったあと（マシンの再起動や、
+セルを閉じたあと）にセルを開き直すと、知っている古い ID で再開します。会話は **←** を押した時点の
+状態に戻り、警告は出ません。
+
+続きを取り戻すには、そのフォルダで起動パネルを開き、**OR RESUME HERE** から続きが入っているほうの会話を選び
+ます（`claude --resume <新しい ID>` でも戻せます）。2 つは開始時刻が同じです。古いほうは分かれてから
+数秒で止まっているので、ずっと大きいほうが続きの入ったほうです。最終更新の時刻では見分けないでください。
+Claude Code の終了時に古いほうへもう一度書き込まれ、新しく見えることがあります。
+
+これは Claude Code の動きで、どのターミナルでも起きます。上流には
+[anthropics/claude-code#87984](https://github.com/anthropics/claude-code/issues/87984) として報告
+済みで、2 つの記録をつなぐ要望は
+[anthropics/claude-code#85004](https://github.com/anthropics/claude-code/issues/85004) にあります。
+
+
+### Claude セルでスクロールバーが消え、1 画面を超えて選択できません。なぜですか？ {#claude-fullscreen}
+
+**Claude Code がフルスクリーン表示で動いています。** フルスクリーン表示は代替画面（alternate
+screen）に描くので、スクロールバックがありません。ホイールは Claude 自身の表示をスクロールしますが、
+下のターミナルは動かないため、スクロールバーが出ず、選択も見えている画面の中に留まります。
+
+Claude Code は、設定で表示方式が決まっていないと、この表示を自分でオンにすることがあります。そこで
+**MulmoTerminal は、本人が選んでいない限り、Claude セルをフルスクリーン表示オフで起動します**。
+Claude の設定ファイル（`~/.claude/settings.json`、プロジェクトの `.claude/settings.json` /
+`.claude/settings.local.json`）のどれにも `tui` がなく、`CLAUDE_CODE_NO_FLICKER` も
+`CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN` も設定されていなければ、セルに `CLAUDE_CODE_NO_FLICKER=0` を渡します。
+
+- 従来の表示を明示的に使うなら、`~/.claude/settings.json` に `"tui": "default"` を書きます。
+- フルスクリーン表示を使うなら、`"tui": "fullscreen"` を書きます（Claude Code で `/tui fullscreen` でも
+  同じです）。MulmoTerminal はそれに手を出しません。その代わり、スクロールバーと長い選択は使えません。
+
+どちらも、変えたあとに起動したセルから効きます。動いているセルは **エージェントを再起動** で起動し直します。
 
 ---
 

@@ -3,11 +3,22 @@
   "kind": "usecase",
   "title": "規約をつくる（手本の文章から）",
   "version": "0.1.0",
+  "order": 80,
   "description": "手本にしたい文章やページから「うちの文章はこう書く」を取り出し、機械が毎回確かめる決まり（chaff.yaml）と、書くときに読む手引き（STYLE.md）にする。手本が自分の規約で指摘されないこと、わざと崩した文章には規約が効くことまで確かめる。",
   "bases": ["docs"],
   "report": ".blueprint/style-report.md",
   "next": [
-    { "usecase": "write", "answers": { "style": "このフォルダの規約（STYLE.md と chaff.yaml）" } },
-    { "usecase": "polish", "answers": { "style": "このフォルダの規約（STYLE.md と chaff.yaml）" } }
+    {
+      "usecase": "write",
+      "answers": {
+        "style": "このフォルダの規約（STYLE.md と chaff.yaml）"
+      }
+    },
+    {
+      "usecase": "polish",
+      "answers": {
+        "style": "このフォルダの規約（STYLE.md と chaff.yaml）"
+      }
+    }
   ]
 }

@@ -48,11 +48,15 @@ the answers before anything is kept.
 - `question`: the question exactly as it is in `questions`. One reply per question, none extra.
 - `found`: `true` when the documents answer it. Then at least one citation.
 - `citations`: `source` is the document's path as `documents` names it; `address` is where; `quote` is
-  copied character for character — the check runs `chaff cite` on every one. **Write every cited address in
-  the `answer` text** so the person can open the document there.
+  copied character for character — the check runs `chaff cite` on every one. **Name every cited place in
+  the `answer` text** so the person can open the document there: an article or item as the document numbers it
+  (第4条第2項, Section 3.1), and a section of a Markdown document by its heading, word for word, in 「」 (「作業用フォルダを信頼しておく」;
+  in an English answer, "Getting started") — the check looks for it in those marks.
+  chaff's index for a section (`h1.3`) goes in `address` only — it means nothing to the person.
 - `searched`: when `found` is `false`, the words and places you looked for.
 
-Also write `.blueprint/replies.md` for the person: each question as a heading, the answer, and the quotations.
+Also write `.blueprint/replies.md` for the person: each question as a heading, the answer, and the quotations,
+each with its place named as in the answer (never `h1.3`).
 
 ## Done when
 

@@ -17,5 +17,6 @@
       "installHint": "corepack enable"
     }
   ],
-  "credentials": []
+  "credentials": [],
+  "report": ".blueprint/start-here.md"
 }

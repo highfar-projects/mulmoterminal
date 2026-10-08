@@ -20,6 +20,7 @@ import {
   missingRequired,
   overLongFields,
   plannedWrite,
+  idOwnerOf,
   recordId,
   recordOf,
   writableFields,
@@ -160,7 +161,14 @@ export async function submitToApp(app: JoinedApp, cid: string, values: Record<st
   // `serverTimestamp` is what this host offers where the rules require GOOGLE's clock, and it is
   // handed over whether or not the app declares a `stampField` — that is the declaration's answer
   // rather than this module's.
-  const record = recordOf(plan.fields, plan.drawn, plan.submit, values, { uid: app.handle.uid, email: app.handle.email }, serverTimestamp);
+  const record = recordOf(
+    plan.fields,
+    plan.drawn,
+    plan.submit,
+    values,
+    { uid: app.handle.uid, email: app.handle.email, ...(app.pseudonym === undefined ? {} : { pseudonym: app.pseudonym }) },
+    serverTimestamp,
+  );
 
   // ASKED BEFORE THE ID IS BUILT, because both ways an absent id field goes wrong are silent:
   // `idFrom: "field"` produces `""`, and `auth.uid+field` produces `"<uid>_"` — a valid id, one per
@@ -184,7 +192,7 @@ export async function submitToApp(app: JoinedApp, cid: string, values: Record<st
         "start with a letter or digit, and be at most 64 characters",
     };
 
-  const id = recordId(plan.submit, app.handle.uid, record, randomUUID());
+  const id = recordId(plan.submit, await idOwnerOf(plan.submit.idFrom, app.handle.uid, app.aid), record, randomUUID());
   const write = plannedWrite(cid, plan.submit, id, record);
   const failed = await commitPlannedWrite(app.handle, app.aid, write);
   if (failed !== null) return { ok: false, reason: submitReason(failed), error: failed.error };

@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { LAUNCH_COMMAND as launcherCommand } from "../../bin/launch-command.js";
 import { LAUNCH_COMMAND as uiCommand } from "../../common/launchCommand";

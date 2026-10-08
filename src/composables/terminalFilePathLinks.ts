@@ -13,11 +13,16 @@
 // A Windows drive letter is the one `:` a path may carry: `C:\x\a.md` splits at the colon
 // into `C` and `\x\a.md`, so the second half is reclaimed together with its `C:` when that
 // letter stands alone (nothing path-like before it) and the rest starts at the root.
+// A location right after the path (`:42`, `:42:7`, `(12,5)`) joins the link's range and is
+// reported beside it, so the click can open the file at that line.
+
+import { locationAfterPath, type FileLocation } from "./filePathLocation";
 
 export interface FilePathLink {
   start: number; // inclusive UTF-16 index
-  end: number; // exclusive UTF-16 index
-  text: string;
+  end: number; // exclusive UTF-16 index — past the location when there is one
+  text: string; // the path alone
+  location?: FileLocation;
 }
 
 const PATH_TOKEN = /[^\s"'`()[\]{}<>（）「」【】:,;、。]+/g;
@@ -68,7 +73,8 @@ export function findFilePathLinks(line: string): FilePathLink[] {
     text = line.slice(start, end);
     if (!SEPARATOR.test(text)) continue;
     if (!endsInFileExtension(text)) continue;
-    links.push({ start, end, text });
+    const located = locationAfterPath(line.slice(end));
+    links.push(located ? { start, end: end + located.length, text, location: located.location } : { start, end, text });
   }
   return links;
 }

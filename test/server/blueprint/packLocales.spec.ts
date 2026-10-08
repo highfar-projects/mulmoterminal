@@ -1,0 +1,104 @@
+// @vitest-environment node
+// The shipped packs in English: every document pack has an overlay, each overlay covers its pack exactly, and the form's
+// routes lay it over the words while every value the checks compare stays as the pack wrote it.
+import { describe, expect, it } from "vitest";
+import { existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, writeFileSync, cpSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { packLocaleSchema } from "../../../common/blueprint/packLocale";
+import { localizedPacks, localizedPair, localizedPresets, localizedRunSteps, overlayReader } from "../../../server/blueprint/packLocales";
+import { packProblems, type PackRoot } from "../../../server/blueprint/packs";
+
+const PACKS = path.join(import.meta.dirname, "..", "..", "..", "blueprints");
+const ROOTS: PackRoot[] = [{ dir: PACKS, source: "builtin" }];
+const SHIPPED_PACKS = readdirSync(PACKS, { withFileTypes: true })
+  .filter((entry) => entry.isDirectory() && existsSync(path.join(PACKS, entry.name, "manifest.json")))
+  .map((entry) => entry.name);
+
+const readJson = (file: string): unknown => JSON.parse(readFileSync(file, "utf8"));
+const packsWithOverlay = readdirSync(PACKS).filter((slug) => existsSync(path.join(PACKS, slug, "locales", "en.json")));
+
+describe("the shipped packs' English overlays", () => {
+  it("cover every shipped pack", () => {
+    expect(SHIPPED_PACKS.length).toBeGreaterThan(0);
+    expect(SHIPPED_PACKS.filter((slug) => !packsWithOverlay.includes(slug))).toEqual([]);
+  });
+
+  it.each(packsWithOverlay)("%s covers its pack exactly", async (slug) => {
+    expect(await packProblems(path.join(PACKS, slug))).toEqual([]);
+  });
+});
+
+describe("the form's routes in English", () => {
+  it("show polish's questions, options and steps in English, and keep the values the checks compare", async () => {
+    const pair = await localizedPair(ROOTS, "docs", "polish", "en");
+    if (!pair.ok) throw new Error(pair.problems.join("; "));
+    const style = pair.hearing.questions.find((question) => question.id === "style");
+    expect(style?.label).toBe("Which style should they follow?");
+    expect(style?.options).toEqual(["このフォルダの規約（STYLE.md と chaff.yaml）", "chaff の既定のまま"]);
+    expect(style?.optionLabels?.["chaff の既定のまま"]).toBe("chaff's defaults");
+    expect(pair.steps.find((step) => step.id === "polish")?.title).toBe("Polish them one by one");
+  });
+
+  it("show the packs as written to a Japanese screen", async () => {
+    const pair = await localizedPair(ROOTS, "docs", "polish", "ja");
+    if (!pair.ok) throw new Error(pair.problems.join("; "));
+    expect(pair.hearing.questions.find((question) => question.id === "style")?.label).toBe("どの規約に合わせますか");
+    expect(pair.hearing.questions.every((question) => question.optionLabels === undefined)).toBe(true);
+  });
+
+  it("name the packs and examples in English", async () => {
+    const packs = await localizedPacks(ROOTS, "en");
+    expect(packs.find((pack) => pack.slug === "polish")?.manifest.title).toBe("Polish documents (without changing what they say)");
+    const presets = await localizedPresets(ROOTS, "en");
+    expect(presets.find((preset) => preset.usecase === "polish" && preset.id === "blog")?.title).toBe("Polish a blog post as a blog post");
+  });
+
+  it("refuse an installed pack whose overlay leaves something out", async () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), "bp-locale-"));
+    cpSync(path.join(PACKS, "polish"), path.join(root, "polish"), { recursive: true });
+    const overlayFile = path.join(root, "polish", "locales", "en.json");
+    const overlay = packLocaleSchema.parse(readJson(overlayFile));
+    writeFileSync(overlayFile, JSON.stringify({ ...overlay, steps: { ...overlay.steps, gone: { title: "Gone" } }, presets: {} }));
+    const problems = await packProblems(path.join(root, "polish"));
+    expect(problems).toContain('locales/en.json: words for step "gone", which the pack does not have');
+    expect(problems).toContain('locales/en.json: no words for example "blog"');
+  });
+
+  it("show a pack whose overlay is broken as written, rather than hiding the packs", async () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), "bp-locale-"));
+    cpSync(path.join(PACKS, "polish"), path.join(root, "polish"), { recursive: true });
+    mkdirSync(path.join(root, "polish", "locales"), { recursive: true });
+    writeFileSync(path.join(root, "polish", "locales", "en.json"), "{ not json");
+    const packs = await localizedPacks([{ dir: root, source: "installed" }], "en");
+    expect(packs.find((pack) => pack.slug === "polish")?.manifest.title).toBe("文書を整える（書いてあることは変えずに）");
+  });
+});
+
+describe("a build's steps in the screen's language", () => {
+  it("lay the packs' words over the Japanese titles a build stored, the base's own words first", async () => {
+    const pair = await localizedPair(ROOTS, "firebase", "from-collection", "ja");
+    if (!pair.ok) throw new Error(pair.problems.join("; "));
+    const run = { basePackDir: path.join(PACKS, "firebase"), usecasePackDir: path.join(PACKS, "from-collection"), steps: pair.steps };
+    const english = await localizedRunSteps(run, overlayReader("en"));
+    expect(english.find((step) => step.id === "spec")?.title).toBe("Write the spec");
+    expect(english.find((step) => step.id === "import")?.title).toBe("Move the records (emulators)");
+    expect(english.map((step) => step.id)).toEqual(pair.steps.map((step) => step.id));
+    expect(await localizedRunSteps(run, overlayReader("ja"))).toEqual(pair.steps);
+  });
+
+  it("keep a build whose packs are gone as it was stored", async () => {
+    const steps = [{ id: "a", title: "工程", description: "", skill: "s", check: "true", gates: [], reads: [], revises: [], origin: "usecase" as const }];
+    expect(await localizedRunSteps({ basePackDir: "/packs/gone", usecasePackDir: "/packs/gone-too", steps }, overlayReader("en"))).toEqual(steps);
+  });
+
+  it("read each pack's overlay once, however many builds share it", async () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), "bp-locale-"));
+    cpSync(path.join(PACKS, "polish"), path.join(root, "polish"), { recursive: true });
+    const read = overlayReader("en");
+    const first = await read(path.join(root, "polish"));
+    writeFileSync(path.join(root, "polish", "locales", "en.json"), "{ not json");
+    expect(await read(path.join(root, "polish"))).toBe(first);
+    expect(first?.manifest?.title).toBe("Polish documents (without changing what they say)");
+  });
+});

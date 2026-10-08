@@ -30,17 +30,20 @@ export const DIR_CONFIG_KEYS = [
   "sounds",
   "buttons",
   "chips",
+  "commands",
   "skills",
   "decks",
+  "mobileFiles",
   "provider",
   "model",
-  "account",
   "addDirs",
   "appendSystemPrompt",
   "worktreeEnv",
   "devcontainer",
   "devcontainerWorkspaceFolder",
 ] as const;
+
+export type DirConfigKey = (typeof DIR_CONFIG_KEYS)[number];
 
 export interface DirConfigSource {
   // Keys the file set that the app is using.
@@ -74,11 +77,12 @@ export const EMPTY_DIR_CONFIG_SOURCE: DirConfigSource = { applied: [], ignored: 
 export interface DirConfigExtras {
   provider: string | null;
   model: string | null;
-  // Fork-only: which `accounts[]` entry (global config, common/agentAccounts.ts) a NEW session here
-  // starts on when the launch form picked none. Never a secret — an account id, like `provider`.
-  account: string | null;
   skills: string[] | null;
   decks: string[] | null;
+  // What the phone may see (#2911): the declared directories relative to this one, and the
+  // extensions that survived the host's allowlist. Empty when the key is absent or was dropped.
+  mobileFileDirs: string[];
+  mobileFileExtensions: string[];
   addDirs: string[] | null;
   // Tri-state on purpose: `false` is a setting this file made, and the preview has to show it as
   // one. Carried here because a boolean cannot be read back off the per-cell config the way a
@@ -86,6 +90,7 @@ export interface DirConfigExtras {
   appendSystemPrompt: boolean | null;
   buttonLabels: string[];
   chipLabels: string[];
+  commandLabels: string[];
   // The repository file an icon was picked up from when the config named none (#1428), relative
   // to the directory. Null when the icon was configured, or when there is none — so the preview
   // can distinguish a setting from a discovery, which `iconUrl` cannot.
@@ -106,13 +111,15 @@ export interface DirConfigExtras {
 export const EMPTY_DIR_CONFIG_EXTRAS: DirConfigExtras = {
   provider: null,
   model: null,
-  account: null,
   skills: null,
   decks: null,
+  mobileFileDirs: [],
+  mobileFileExtensions: [],
   addDirs: null,
   appendSystemPrompt: null,
   buttonLabels: [],
   chipLabels: [],
+  commandLabels: [],
   autoIcon: null,
   worktreeEnvNames: [],
   devcontainer: null,

@@ -9,6 +9,7 @@ import type { SessionAgent, TerminalAgent } from "../../../../common/sessionAgen
 import type { SpawnedSession } from "../../../git/issue-work.js";
 import type { TerminalSessionListing } from "../dirIcons.js";
 import type { IngestResult } from "../ingestAttachments.js";
+import type { MobileFileStager } from "../mobileFileStaging.js";
 import type { SessionScreen } from "../terminalScreen.js";
 import type { TranscriptView } from "../../../../common/transcriptView.js";
 import type { AskQuestionEvent } from "../../../../common/askQuestion.js";
@@ -21,6 +22,9 @@ export interface RemoteHostHandlerDeps {
   // Download the phone's staged uploads (by storage_id) into the workspace and return
   // path-only attachments plus a deferred staging cleanup (remoteHost/ingestAttachments.ts).
   ingest: (storageIds: string[]) => Promise<IngestResult>;
+  // Stages a file too large for the command document in the owner's Storage for an hour (#2911).
+  // Built beside `ingest` for the same reason: it needs the LIVE session's storage and uid.
+  mobileFileStager: MobileFileStager;
   // The phone's remote terminal view (#435) — the picker's list and one session's
   // current screen. Wired in server/index.ts, where the PTY table lives. The list
   // arrives with its directory images already packed (#1556), since the same place

@@ -17,7 +17,8 @@
       "id": "maxChanges",
       "label": "今回進める変更（PR）の数の上限",
       "why": "一つの変更は一つの PR。長くなりすぎないように区切る",
-      "kind": "number"
+      "kind": "number",
+      "default": 3
     },
     {
       "id": "merge",
@@ -30,6 +31,7 @@
       "id": "focus",
       "label": "特に気になっている場所（任意）",
       "why": "候補の順位を上げる",
+      "placeholder": "例: src/billing/ の計算まわり。修正のたびに別の場所が壊れる",
       "kind": "text",
       "required": false
     },
@@ -37,6 +39,7 @@
       "id": "avoid",
       "label": "触らないでほしいファイルや場所（任意）",
       "why": "候補から外す",
+      "placeholder": "例: src/generated/（自動生成のため）",
       "kind": "text",
       "required": false
     }

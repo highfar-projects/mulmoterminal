@@ -30,6 +30,7 @@ import { DEFAULT_SOUND_KINDS } from "../../../common/notifyKinds.js";
 import { DEFAULT_PUSH_KINDS } from "../../../common/pushKinds.js";
 import { DEFAULT_COCKPIT_LINES } from "../../../common/cockpitLines.js";
 import { DEFAULT_HEADER_STATUS_TINT } from "../../../common/headerStatusColors.js";
+import { CONFETTI_DEFAULT } from "../../../common/confetti.js";
 import { PLAYFUL_EFFECTS_DEFAULT } from "../../../common/playfulEffects.js";
 import { sanitizeWorklogIntervalHours } from "../../../common/worklogInterval.js";
 
@@ -397,12 +398,16 @@ describe("loadAppConfig / saveAppConfig", () => {
     repoDirs: {},
     launchers: [],
     customAgents: [],
+    paletteAliases: {},
+    paletteFavorites: [],
     accounts: [],
+    tokenRotation: { enabled: false, includeDefaultLogin: true, tokens: [] },
     quickCommands: [],
     userMcpServers: [],
     themes: [],
     buttons: null,
     chips: null,
+    commands: [],
     pushEnabled: false,
     pushKinds: [...DEFAULT_PUSH_KINDS],
     worklogEnabled: false,
@@ -422,7 +427,10 @@ describe("loadAppConfig / saveAppConfig", () => {
     appendSystemPrompt: true,
     autoDirIcon: true,
     showLoadAverage: true,
+    paletteSearchBox: false,
+    remoteServer: false,
     playfulEffects: PLAYFUL_EFFECTS_DEFAULT,
+    confetti: CONFETTI_DEFAULT,
     toolbarPins: [],
     cockpitLines: { ...DEFAULT_COCKPIT_LINES },
     headerStatusColors: {},
@@ -445,12 +453,16 @@ describe("loadAppConfig / saveAppConfig", () => {
       repoDirs: {},
       launchers: [{ label: "Shell", command: "$SHELL" }],
       customAgents: [{ id: "nemotron", label: "Nemotron", agent: "claude" as const, command: "ollama launch claude --model nemotron-3-ultra:cloud --" }],
+      paletteAliases: { wk: "screen:wiki" }, // config.json-only (#2540), so the file is its only way home
+      paletteFavorites: ["screen:wiki", "zoom-toggle"],
       accounts: [{ id: "work", label: "Work", agent: "claude" as const, home: "~/.claude-work" }],
+      tokenRotation: { enabled: true, includeDefaultLogin: true, tokens: [{ id: "b", label: "Work", file: "~/.mulmoterminal/tokens/b" }] }, // config.json-only (#2919)
       quickCommands: [],
       userMcpServers: [{ id: "weather", url: "http://localhost:9000/mcp" }],
       themes: [],
       buttons: [{ id: "pr", label: "PR", run: "shell" as const, cmd: "gh pr create" }],
       chips: ["dir", "git"],
+      commands: [],
       pushEnabled: true,
       pushKinds: [...DEFAULT_PUSH_KINDS],
       worklogEnabled: true,
@@ -470,7 +482,10 @@ describe("loadAppConfig / saveAppConfig", () => {
       appendSystemPrompt: false, // same opt-out shape: defaults ON, so only `false` proves it persisted
       autoDirIcon: false, // same again (#1428): defaults ON, so only `false` proves it persisted
       showLoadAverage: false, // the same opt-out shape (#1786): only `false` proves it persisted
+      paletteSearchBox: true, // opt-in (#2569): only `true` proves it persisted
+      remoteServer: true, // experimental opt-in (#2669): only `true` proves it persisted
       playfulEffects: "off" as const, // defaults on, so only the opt-out proves it persisted
+      confetti: { styles: ["sakura" as const], events: ["pr-merged" as const] }, // a narrowed list and an opted-in event
       toolbarPins: ["collection:works"], // opt-in (#1984): only a promoted pin proves it persisted
       cockpitLines: { summary: 6, prompt: 2, response: 3 }, // a raised clamp must survive it too
       headerStatusColors: { working: { background: "#6d28d9", text: null } }, // a per-status header colour must round-trip too
@@ -520,7 +535,10 @@ describe("loadAppConfig / saveAppConfig", () => {
       repoDirs: {},
       launchers: [{ label: "S", command: "sh" }],
       customAgents: [],
+      paletteAliases: {},
+      paletteFavorites: [],
       accounts: [],
+      tokenRotation: { enabled: false, includeDefaultLogin: true, tokens: [] },
       quickCommands: [],
       userMcpServers: [{ id: "ok", url: "https://x/mcp" }],
       themes: [],
@@ -530,6 +548,7 @@ describe("loadAppConfig / saveAppConfig", () => {
       headerStatusTint: DEFAULT_HEADER_STATUS_TINT,
       buttons: null,
       chips: null,
+      commands: [],
       pushEnabled: false,
       pushKinds: [...DEFAULT_PUSH_KINDS],
       worklogEnabled: false,
@@ -548,7 +567,10 @@ describe("loadAppConfig / saveAppConfig", () => {
       appendSystemPrompt: true, // absent from the file — every config predating #1062 stays enabled
       autoDirIcon: true, // same: a config predating #1428 picks up the repo's own favicon
       showLoadAverage: true, // same: a config predating #1786 gets the load read-out
+      paletteSearchBox: false,
+      remoteServer: false,
       playfulEffects: PLAYFUL_EFFECTS_DEFAULT, // same: absent means on
+      confetti: CONFETTI_DEFAULT, // absent: every style, no event
       toolbarPins: [], // opt-in the other way (#1984): a config that predates it promotes nothing
       fontFamily: null,
       defaultAgent: null,
@@ -644,12 +666,16 @@ describe("#741 corrupt config is not silently wiped by a partial update", () => 
     repoDirs: {},
     launchers: [{ label: "Shell", command: "$SHELL" }],
     customAgents: [{ id: "nemotron", label: "Nemotron", agent: "claude" as const, command: "ollama launch claude --model nemotron-3-ultra:cloud --" }],
+    paletteAliases: {},
+    paletteFavorites: [],
     accounts: [{ id: "work", label: "Work", agent: "claude" as const, home: "~/.claude-work" }],
+    tokenRotation: { enabled: true, includeDefaultLogin: false, tokens: [{ id: "a", label: "Personal", keychain: "mulmoterminal-token-a" }] },
     quickCommands: [],
     userMcpServers: [{ id: "weather", url: "http://localhost:9000/mcp" }],
     themes: [],
     buttons: null,
     chips: null,
+    commands: [],
     pushEnabled: false,
     pushKinds: [...DEFAULT_PUSH_KINDS],
     worklogEnabled: false,
@@ -669,7 +695,10 @@ describe("#741 corrupt config is not silently wiped by a partial update", () => 
     appendSystemPrompt: true,
     autoDirIcon: true,
     showLoadAverage: true,
+    paletteSearchBox: false,
+    remoteServer: false,
     playfulEffects: PLAYFUL_EFFECTS_DEFAULT,
+    confetti: CONFETTI_DEFAULT,
     toolbarPins: [],
     cockpitLines: { ...DEFAULT_COCKPIT_LINES },
     headerStatusColors: {},
@@ -714,6 +743,14 @@ describe("#741 corrupt config is not silently wiped by a partial update", () => 
 });
 
 describe("mergeConfigUpdate", () => {
+  // #2540. A POST replaces the palette's aliases and favorites like any list, sanitized on the way in.
+  it("replaces the palette's aliases and favorites, sanitized, and keeps them when absent", () => {
+    const next = mergeConfigUpdate(emptyConfig(), { paletteAliases: { " wk ": "screen:wiki", bad: 3 }, paletteFavorites: ["screen:wiki", 5, "screen:wiki"] });
+    expect(next.paletteAliases).toEqual({ wk: "screen:wiki" });
+    expect(next.paletteFavorites).toEqual(["screen:wiki"]);
+    expect(mergeConfigUpdate(next, { pushEnabled: true }).paletteFavorites).toEqual(["screen:wiki"]);
+  });
+
   const baseConfig = (over: Partial<AppConfig> = {}): AppConfig => ({
     cwdPresets: [],
     soundFile: null,
@@ -724,12 +761,16 @@ describe("mergeConfigUpdate", () => {
     repoDirs: {},
     launchers: [],
     customAgents: [],
+    paletteAliases: {},
+    paletteFavorites: [],
     accounts: [],
+    tokenRotation: { enabled: false, includeDefaultLogin: true, tokens: [] },
     quickCommands: [],
     userMcpServers: [],
     themes: [],
     buttons: [{ id: "reveal", label: "Reveal in the file manager", run: "open", emoji: "📂", open: { reveal: "${dir}" } }],
     chips: ["git", "diff", "ctx", "usage"],
+    commands: [],
     pushEnabled: false,
     pushKinds: [...DEFAULT_PUSH_KINDS],
     worklogEnabled: false,
@@ -749,7 +790,10 @@ describe("mergeConfigUpdate", () => {
     appendSystemPrompt: true,
     autoDirIcon: true,
     showLoadAverage: true,
+    paletteSearchBox: false,
+    remoteServer: false,
     playfulEffects: PLAYFUL_EFFECTS_DEFAULT,
+    confetti: CONFETTI_DEFAULT,
     toolbarPins: [],
     cockpitLines: { ...DEFAULT_COCKPIT_LINES },
     headerStatusColors: {},

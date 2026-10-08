@@ -14,6 +14,8 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { computeUpdateNotice, isUpdateCheckDisabled } from "./update-check.js";
 import { detectNpxCacheDir, npxCacheHintLines } from "./npx-cache-hint.js";
+import { remotionCheck } from "./remotion-check.js";
+import { configuredRemoteServer, sshTunnelHintLines } from "./ssh-hint.js";
 import { planAfterServerExit } from "./server-supervision.js";
 import { LAUNCH_COMMAND } from "./launch-command.js";
 import { waitUntilReady } from "./wait-ready.js";
@@ -30,6 +32,7 @@ import {
   secondInstancePrompt,
   runningInstancesPrompt,
   stopCommandFor,
+  stopCommandForThis,
   SECOND_INSTANCE_NOTE,
   nodeMeetsMinimum,
   unsupportedNodeMessage,
@@ -107,6 +110,17 @@ function readConfiguredDefaultAgent() {
     return configuredDefaultAgent(JSON.parse(readFileSync(CONFIG_FILE, "utf8")));
   } catch {
     return null;
+  }
+}
+
+// The experimental `remoteServer` (#2669): the browser is on another machine, so the launcher opens
+// none here even when started without SSH (a service, a remote desktop). A missing or unreadable
+// file is simply "not set".
+function readRemoteServer() {
+  try {
+    return configuredRemoteServer(JSON.parse(readFileSync(CONFIG_FILE, "utf8")));
+  } catch {
+    return false;
   }
 }
 
@@ -224,18 +238,26 @@ function passStartupGate(args) {
 async function runInit(initArgs) {
   log("Setting up MulmoTerminal…\n");
 
+  const hasClaude = agentInstalled("claude");
+  // Imported here so a normal launch never loads the version check or reaches its network.
+  const { checkVersions } = await import("./check-versions.js");
+  const versionHints = await checkVersions({ claudeBin: hasClaude ? agentBin("claude") : null });
+
   const nodeOk = nodeMeetsMinimum(process.versions.node);
   console.log(nodeOk ? `  ✓ Node ${process.versions.node}` : `  ✗ Node ${process.versions.node} — MulmoTerminal needs ≥ ${MIN_NODE_LABEL}`);
+  versionHints.node.forEach((line) => console.log(line));
 
-  const hasClaude = agentInstalled("claude");
   if (hasClaude) {
     console.log("  ✓ Claude Code CLI");
+    versionHints.claude.forEach((line) => console.log(line));
   } else {
     console.log("  ✗ Claude Code CLI — not found");
     console.log("      → npm install -g @anthropic-ai/claude-code   (then run `claude` and log in)");
   }
 
   [...PATH_TOOLS, fileDialogTool()].filter(Boolean).forEach((tool) => console.log(toolCheckLine(tool)));
+  const remotionLine = await remotionCheck(PKG_DIR);
+  if (remotionLine) console.log(remotionLine);
 
   // Config half: derive working-dir presets from Claude history + write config.json.
   console.log("");
@@ -471,11 +493,16 @@ async function choosePort(requested, explicit) {
 //
 // `url` is where the BROWSER goes and `note` is what launchTarget wants said about that choice —
 // two different facts since #1889, and the note is null whenever the URL already covers it.
-function announceReady(url, note, noOpen) {
-  printReadyBanner(url, STOP_COMMAND);
+function announceReady(url, note, noOpen, sshHint, port) {
+  printReadyBanner(url, stopCommandForThis(STOP_COMMAND, port, liveInstances()));
   // Either the address a widened bind serves other machines on, or why the browser was NOT sent
   // to `localhost`. Null whenever the URL above already said everything.
   if (note) log(note);
+  // Over SSH the browser is on the other machine (see ssh-hint.js): say how to reach it, open nothing.
+  if (sshHint) {
+    sshHint.forEach((line) => log(line));
+    return;
+  }
   if (noOpen) return;
   try {
     // The command is a hardcoded literal; url is built by browserUrl from a numeric port, so it
@@ -542,7 +569,9 @@ function runServer({ port, probedAddress, localhostIsUnambiguous, noOpen, launch
       readyStarted = true;
       const localhostIsOurs = localhostIsUnambiguous && serverSaysLocalhostIsOurs !== false;
       const { url, note } = launchTarget(reachHost, port, localhostIsOurs);
-      cancelReady = waitUntilReady(port, () => announceReady(url, note, noOpen), { host: reachHost });
+      cancelReady = waitUntilReady(port, () => announceReady(url, note, noOpen, sshTunnelHintLines(process.env, port, readRemoteServer()), port), {
+        host: reachHost,
+      });
     };
     // The same message answers a second question now: whether this lifetime ever bound at all,
     // which is what a restart is allowed to depend on. Recorded BEFORE the address is looked at —

@@ -10,6 +10,7 @@ import express from "express";
 import { routeCall, jsonPost } from "../../helpers/routeCall";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { isRecord } from "../../../common/isRecord";
 import {
   unknownConfigKeys,
   unknownKeysOf,
@@ -131,6 +132,39 @@ describe("carrying unknown keys through a save (#966)", () => {
       }
       expect(JSON.parse(readFileSync(file, "utf8")).futureFeature).toBe("on");
     });
+  });
+
+  // #2650: `keymap` is known, but an action a newer build added is a keymap ENTRY this one drops.
+  it("keeps a newer version's keymap entry when this one rewrites the keymap", () => {
+    withDir((file) => {
+      writeFileSync(file, JSON.stringify({ keymap: { "some-future-action": "Ctrl+j", "files-find": "F2" } }));
+      const loaded = loadAppConfigResult(file);
+      const base = loaded.status === "ok" ? loaded.config : emptyConfig();
+      // The keymap is replaced whole, so this build's own entries are what it writes...
+      saveAppConfig(file, mergeConfigUpdate(base, { keymap: { "zoom-toggle": "F8" } }), unknownKeysOf(loaded));
+      // ...and the entry it could not read goes back beside them.
+      expect(JSON.parse(readFileSync(file, "utf8")).keymap).toEqual({ "zoom-toggle": "F8", "some-future-action": "Ctrl+j" });
+    });
+  });
+
+  it("keeps it through a save that does not touch the keymap, and through repeated saves", () => {
+    withDir((file) => {
+      writeFileSync(file, JSON.stringify({ keymap: { "some-future-action": "Ctrl+j" } }));
+      [true, false, true].forEach((pushEnabled) => {
+        const loaded = loadAppConfigResult(file);
+        const base = loaded.status === "ok" ? loaded.config : emptyConfig();
+        saveAppConfig(file, mergeConfigUpdate(base, { pushEnabled }), unknownKeysOf(loaded));
+      });
+      expect(JSON.parse(readFileSync(file, "utf8")).keymap).toEqual({ "some-future-action": "Ctrl+j" });
+    });
+  });
+
+  it("keeps an entry named __proto__ as data", () => {
+    const carried = unknownConfigKeys(JSON.parse('{"keymap":{"__proto__":"Ctrl+j"}}'));
+    const out = serializableAppConfig(emptyConfig(), carried);
+    const written = out.keymap;
+    expect(isRecord(written) && Object.hasOwn(written, "__proto__")).toBe(true);
+    expect(JSON.parse(JSON.stringify(out)).keymap).toEqual(JSON.parse('{"__proto__":"Ctrl+j"}'));
   });
 
   it("has nothing to carry from a missing or corrupt file", () => {

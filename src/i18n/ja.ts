@@ -1,9 +1,25 @@
 import type { Messages } from "./messages";
+import { usageViewJa } from "./usageView/ja";
 import { blueprintsJa } from "./blueprints/ja";
 import { tipsJa } from "./tips/ja";
 import { forkTipsJa } from "./forkTips/ja";
-import { accountFormJa } from "./accountForm/ja";
 import { LAUNCH_COMMAND } from "../../common/launchCommand";
+import { commandPaletteJa } from "./commandPalette/ja";
+import { focusModeJa } from "./focusMode/ja";
+import { fileHistoryJa } from "./fileHistory/ja";
+import { dirConfigSaveJa } from "./dirConfigSave/ja";
+import { releaseNotesJa } from "./releaseNotes/ja";
+import { dirConfigOpenJa } from "./dirConfigOpen/ja";
+import { dirSettingsFormJa } from "./dirSettingsForm/ja";
+import { themeEditorJa } from "./themeEditor/ja";
+import { headerChipsJa } from "./headerChips/ja";
+import { headerButtonsJa } from "./headerButtons/ja";
+import { settingsControlsJa } from "./settingsControls/ja";
+import { shortcutsJa } from "./shortcuts/ja";
+import { filesTreeJa } from "./filesTree/ja";
+import { previewCodeCopyJa } from "./previewCodeCopy/ja";
+import { skillsViewJa } from "./skillsView/ja";
+import { processesViewJa } from "./processesView/ja";
 
 // 日本語。`Messages` は en.ts の形そのものなので、キーを一つ落とすと型エラーになる — 実行時に
 // 英語へフォールバックして気づかない、という状態にはならない。
@@ -59,6 +75,7 @@ export const ja: Messages = {
       cost: "コスト（推定）",
       quit: "MulmoTerminal を終了",
       help: "ヘルプとユーザーガイド",
+      releaseNotes: "リリースノート",
     },
 
     terminalKeys: {
@@ -80,37 +97,7 @@ export const ja: Messages = {
       },
     },
 
-    shortcuts: {
-      intro:
-        "読み取り専用で、割り当ての有無にかかわらず全部 {keymapKey} の下に並びます。割り当てられるのは 2 種類 —— MulmoTerminal の操作（拡大、待っているエージェントへ移動、コピー / ペースト）と、ターミナルへのキー列送信（macOS で Cmd+← を行頭へ、など）。割り当てたキーはターミナル内のプログラムに届かなくなるので、下のボタンから設定してください —— エージェントが、既にある割り当てや、ブラウザ / Mac 固有の落とし穴と突き合わせてから書き込みます。{guide}にリファレンスがあります。",
-      guide: "ガイド",
-      actions: {
-        zoomToggle: "ターミナルを拡大 / 元に戻す",
-        zoomNext: "次のターミナルを拡大",
-        zoomPrev: "前のターミナルを拡大",
-        focusNext: "次のターミナルへカーソルを移す（グリッド表示のみ）",
-        focusPrev: "前のターミナルへカーソルを移す（グリッド表示のみ）",
-        nextAttention: "あなたを待っているターミナルへ移動",
-        markUnread: "このターミナルを未読 / 既読にする",
-        terminalNew: "起動パネルを開く",
-        terminalNewHere: "このターミナルのディレクトリで起動パネルを開く",
-        terminalNewAdjacent: "このターミナルのディレクトリで、そのままシェルを開く",
-        terminalClose: "このターミナルを閉じる",
-        terminalRestart: "このターミナルのエージェントを再起動する",
-        terminalMovePrev: "このターミナルを前へ移動",
-        terminalMoveNext: "このターミナルを後ろへ移動",
-        filesFind: "このターミナルの横で、ファイル名から探して開く",
-        filesSearch: "このターミナルの横で、ファイルの中身を全文検索する",
-        commandPalette: "コマンドパレットを開く",
-        copy: "ターミナルの選択範囲をコピー",
-        paste: "ターミナルにペースト",
-      },
-      list: "キーボードショートカット",
-      notSet: "未設定",
-      sendRow: "{key} をターミナルに送る",
-      sendNone: "ターミナルにキー列を送る",
-      setUp: "ショートカットを設定する…",
-    },
+    shortcuts: shortcutsJa,
 
     surviving: {
       intro:
@@ -143,8 +130,8 @@ export const ja: Messages = {
       sweepDisabledHint: "上でスイープ自体が無効なので、繰り返すものがありません。",
       sweepRunning: "このサーバーは {hours} 時間ごとにスイープを繰り返しています。",
       sweepRunningOff: "このサーバーは起動時に一度スイープするだけで、繰り返しません。",
-      sweepPending: "上で保存した間隔は次回の起動から適用されます。",
-      sweepNote: "この間隔はサーバ起動時に読まれるため、変更は次回起動から反映されます。",
+      sweepPending: "上で保存した間隔はまだこのサーバーに届いていません。設定ファイルを読み直すか、再起動してください。",
+      sweepNote: "ここで変えるとすぐに反映され、前回の片付けから数えます。",
       neverTitle: "自動では終了しません。",
       neverHint: "ここで止めるか、掴んでいるターミナルから終わらせるまで残ります。",
       reapHint: "誰も使っておらず、この日数だけ出力の無いセッションは{ended}。会話は残ります。0 にすると自動終了しません。",
@@ -219,7 +206,7 @@ export const ja: Messages = {
       prFooterHint: "本文の最後に {line} の 1 行を足します。横に並んだ複数のクローンのどれで作業したかが PR から分かります。",
       gitlabTitle: "セルフホストの GitLab",
       gitlabHint:
-        "URL を見てもそのホストがどの forge かは分からないので、ここで宣言すると {glab} でリポジトリを読みます。{authCommand} が必要です。次のサーバ起動から有効になります。",
+        "URL を見てもそのホストがどの forge かは分からないので、ここで宣言すると {glab} でリポジトリを読みます。{authCommand} が必要です。すぐに有効になります。",
       gitlabField: "セルフホストの GitLab ホストを追加",
     },
 
@@ -236,12 +223,15 @@ export const ja: Messages = {
       worklogInterval: "実行間隔:",
       worklogStepper: "開発作業ログの間隔",
       systemTasks: "組み込みの定期タスク",
-      systemTasksHint: "どちらも 1 時間ごとに実行され、切らない限り有効です。切り替えはサーバの次回起動から反映されます。",
+      systemTasksHint: "どちらも 1 時間ごとに実行され、切らない限り有効です。切り替えはすぐに反映されます。",
       feedRefresh: "コレクションとフィードを更新する",
       feedRefreshHint:
         "RSS/JSON フィードを取得し、スキル連動のコレクション更新を発行します。対象はワークスペースと保存済みの各プロジェクトディレクトリです。フィードを 1 つも登録していなければ何もしません。",
       calendarSync: "Google カレンダーを同期する",
       calendarSyncHint: "Google カレンダーを宣言しているコレクションに、変更されたイベントを取り込みます。アカウントを接続するまでは何もしません。",
+      remoteServer: "実験機能: サーバは別のマシンで動いている",
+      remoteServerHint:
+        "SSH トンネルでつないでいるサーバ向け。サーバの画面で動いてしまう操作（ファイルを選ぶダイアログ、ファイルマネージャ、アプリ、Google のサインイン）を隠すか理由を出し、ドロップしたファイルは常にアップロードします。すぐに効きます。起動スクリプトは次の起動から読みます。",
     },
 
     launchers: {
@@ -305,7 +295,6 @@ export const ja: Messages = {
       accountsIntro:
         "— Claude Code や Codex の別のログインを、それぞれ専用の設定ディレクトリで使います。新しいセルは起動画面からアカウントを選んで始められ、そのセルのヘッダーにアカウント名が出ます。セッションは、始めたときのアカウントのまま動き続けます。",
       noAccounts: "未設定 — すべてのセルが既定のログインで動きます。",
-      ...accountFormJa,
       addBackend: "バックエンドを追加する…",
     },
 
@@ -433,6 +422,9 @@ export const ja: Messages = {
       loadAverageTitle: "Load average",
       loadAverageHint:
         "セッションを動かしているマシンの負荷を、コア数に対する % で表示します。100% は全コアに実行待ちがある状態で、ここからエージェントを足すと今動いているものが遅くなります。100% で琥珀色、200% で赤。load average を持たないホスト（Windows）では、この設定にかかわらず何も出ません。",
+      searchBox: "上段の中央に検索欄を出す",
+      searchBoxTitle: "検索欄",
+      searchBoxHint: "上の段の中央に、どの画面でも、コマンドパレットを開く検索欄を出します。コマンドのボタンやキーで開くのと同じパレットです。既定はオフです。",
     },
 
     waitingRows: {
@@ -493,7 +485,8 @@ export const ja: Messages = {
       picker: "このアプリの言語",
       auto: "ブラウザの言語にあわせる",
       autoResolved: "このブラウザは {locale} を要求しているので、{label} で表示されます。",
-      partial: "いまのところ訳されているのは設定画面と、グリッドに出るステータス語です。ほかの画面は英語のままです。",
+      partial:
+        "いまのところ訳されているのは、設定画面、グリッドに出るステータス語、そしてすべてのボタンのツールチップと読み上げの文言です。ほかの画面の文言は英語のままです。",
     },
   },
 
@@ -564,6 +557,7 @@ export const ja: Messages = {
   },
 
   launch: {
+    mcpGroupsNextStart: "このフォルダで次に起動するターミナルから効きます。いま開いているセルは起動したときのツールのままなので、開き直してください。",
     agentUnavailable: {
       missing: "{agent} はこのマシンにインストールされていないため、ここでは起動できません。",
       noSuchPath: "{agent} のコマンドの指定先にファイルがないため、起動できません。",
@@ -574,41 +568,13 @@ export const ja: Messages = {
   },
 
   // 2打のショートカットが2打目を待っている間に出す案内（#2265）。
-  commandPalette: {
-    open: "コマンド",
-    placeholder: "動作の名前で実行",
-    close: "コマンドパレットを閉じる",
-    empty: "一致する動作はありません。",
-    needsEnlarged: "ターミナルの拡大中だけ",
-    needsNothingEnlarged: "拡大していないときだけ",
-    needsManualOrder: "手動の並び順のときだけ",
-    gridHidden: "ターミナルのグリッドが前面にあるときだけ",
-    hint: "Enter で実行 · Esc で閉じる",
-    notSet: "キーなし",
-    descriptions: {
-      zoomToggle: "カーソルのあるターミナルを拡大します。拡大中なら元に戻します。",
-      zoomNext: "拡大を、画面の並びで次のターミナルに移します。",
-      zoomPrev: "拡大を、前のターミナルに移します。",
-      focusNext: "並んだグリッドで、カーソルを次のターミナルに移します。",
-      focusPrev: "並んだグリッドで、カーソルを前のターミナルに移します。",
-      nextAttention: "入力待ちのターミナル、次に終わったもの、次に待機中のものへ移ります。",
-      markUnread: "待機中のターミナルを未読に、待っているものを既読にします。拡大中のターミナル、なければカーソルのあるターミナルが対象です。",
-      terminalNew: "既定のワークスペースで起動パネルを開きます。",
-      terminalNewHere: "今のターミナルのディレクトリで起動パネルを開きます。",
-      terminalNewAdjacent: "今のターミナルのディレクトリで、入力欄なしですぐにシェルを起動します。",
-      terminalClose: "今のターミナルを、確認なしですぐに閉じます。",
-      terminalRestart: "今のターミナルのエージェントを、同じ会話のまま起動し直します。",
-      terminalMovePrev: "手動の並び順で、今のターミナルを1つ前へ移します（グリッドとサムネイル列では左、一覧では上）。",
-      terminalMoveNext: "手動の並び順で、今のターミナルを1つ後ろへ移します（グリッドとサムネイル列では右、一覧では下）。",
-      filesFind: "拡大中のターミナルの横の Files ペインで、ファイルを名前で探します。",
-      filesSearch: "拡大中のターミナルのプロジェクトで、ファイルの中身を検索します。",
-    },
-  },
+  commandPalette: commandPaletteJa,
   // The path menu's file items. Its repository section stays in the forge's own words.
   pathMenu: {
     insertFilePath: "ファイルのパスを挿入",
     reveal: "ファイルマネージャで開く",
     browseFiles: "アプリでファイルを見る",
+    dirSettings: "このディレクトリの設定",
     newTerminal: "ここで新しいターミナル",
   },
   prefixKeys: {
@@ -636,9 +602,13 @@ export const ja: Messages = {
     items: {
       rooms: { label: "Rooms", detail: "端末どうしの円卓の会話" },
       blueprints: { label: "設計図", detail: "テンプレートからアプリや文書を段階的に作る" },
+      skills: { label: "Skills", detail: "~/.claude/skills と各フォルダのスキルを一覧・検索" },
+      processes: { label: "プロセス", detail: "各セッションで動いているプロセスと、消せる worktree" },
       worklog: { label: "Worklog", detail: "wiki にある開発作業ログ（#worklog）" },
+      usage: { label: "トークンの使用量", detail: "ローテーションの各トークンに残っている 5 時間枠と週の枠" },
     },
   },
+  usageView: usageViewJa,
   rowMenu: {
     trigger: "このセルの操作",
     title: "操作",
@@ -653,6 +623,33 @@ export const ja: Messages = {
     wake: "起こす",
     close: "閉じる",
   },
+  fileOutline: {
+    button: "見出し",
+    tip: "このファイルの見出し（選ぶとそこへ移動）",
+    empty: "このファイルには見出しがありません。",
+  },
+  whatsNew: {
+    title: "新しくなったこと",
+    intro: "MulmoTerminal が {version} になりました。前回使ってから変わったことをまとめています。",
+    englishOnly: "リリースの説明は英語で書かれています。",
+    openOnWeb: "このページを Web で開く",
+    older: "それより前の版は変更履歴にあります。",
+    close: "わかった",
+  },
+  fileHistory: fileHistoryJa,
+  dirConfigSave: dirConfigSaveJa,
+  releaseNotes: releaseNotesJa,
+  dirConfigOpen: dirConfigOpenJa,
+  dirSettingsForm: dirSettingsFormJa,
+  themeEditor: themeEditorJa,
+  headerChips: headerChipsJa,
+  headerButtons: headerButtonsJa,
+  focusMode: focusModeJa,
+  settingsControls: settingsControlsJa,
+  ...filesTreeJa,
+  ...previewCodeCopyJa,
+  ...skillsViewJa,
+  ...processesViewJa,
   tips: tipsJa,
   forkTips: forkTipsJa,
   blueprints: blueprintsJa,

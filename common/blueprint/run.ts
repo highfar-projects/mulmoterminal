@@ -5,6 +5,7 @@
 import { z } from "zod";
 import { planStepSchema } from "./plan.js";
 import { hearingAnswersSchema } from "./hearing.js";
+import { personLanguageSchema } from "./personLanguage.js";
 import { blueprintStateSchema, currentStep, waitingOn, STEP_STATUSES, WAIT_KINDS, type BlueprintState } from "./state.js";
 
 export const RUN_ID_RE = /^[a-z0-9-]{8,64}$/;
@@ -20,6 +21,8 @@ export const blueprintRunSchema = z.object({
   // Checks that failed for a step since a person last retried it; what stops a failing check from
   // looping forever.
   failedChecks: z.record(z.string(), z.number().int().nonnegative()).default({}),
+  // What each of those failed checks printed, oldest first: a repair attempt is shown them all, to see what keeps failing.
+  failureOutputs: z.record(z.string(), z.array(z.string())).default({}),
   // The session working on the current step, if one is. Its turn ending is what triggers a check.
   activeSessionId: z.string().nullable().default(null),
   // `answersAtStart`: how many answers the step had when the session began, so an answer that came
@@ -33,13 +36,24 @@ export const blueprintRunSchema = z.object({
   // `outcome` on an agent entry says why its text may be empty: it wrote no reply, or its session
   // ended first. The UI words those; the server does not.
   specChat: z
-    .array(z.object({ role: z.enum(["person", "agent"]), text: z.string(), atMs: z.number(), outcome: z.enum(["reply", "no-reply", "lost"]).optional() }))
+    .array(
+      z.object({
+        role: z.enum(["person", "agent"]),
+        text: z.string(),
+        atMs: z.number(),
+        outcome: z.enum(["reply", "no-reply", "lost", "check-failed"]).optional(),
+      }),
+    )
     .default([]),
   revisionSessionId: z.string().nullable().default(null),
   // The interview answers this build started with. Every build in a folder shares .blueprint/answers.json,
   // so the executor writes these back before each session and check; a build from before this was kept has
   // none, and leaves the file as it is.
   answers: hearingAnswersSchema.default({}),
+  // When the person put the build away from the list; null while it is shown. Nothing is deleted by it.
+  archivedAtMs: z.number().nullable().default(null),
+  /** The language of the screen the build was started on; null for one started before it was recorded. */
+  language: personLanguageSchema.nullable().default(null),
 });
 
 export type BlueprintRun = z.infer<typeof blueprintRunSchema>;
@@ -57,10 +71,14 @@ export const blueprintRunSummarySchema = z.object({
   waitingOn: z.enum(WAIT_KINDS).nullable(),
   passed: z.number(),
   total: z.number(),
+  // What the build makes (its usecase pack's title), so builds in one folder tell apart; null when unreadable.
+  usecaseTitle: z.string().nullable().default(null),
+  // Put away from the list by the person: shown last, folded, until brought back.
+  archived: z.boolean().default(false),
 });
 export type BlueprintRunSummary = z.infer<typeof blueprintRunSummarySchema>;
 
-export function summarizeRun(run: BlueprintRun, state: BlueprintState): BlueprintRunSummary {
+export function summarizeRun(run: BlueprintRun, state: BlueprintState, usecaseTitle: string | null = null): BlueprintRunSummary {
   const step = currentStep(run.steps, state);
   const status = step ? (state.steps[step.id]?.status ?? "pending") : null;
   return {
@@ -71,5 +89,7 @@ export function summarizeRun(run: BlueprintRun, state: BlueprintState): Blueprin
     waitingOn: waitingOn(run.steps, state)?.kind ?? null,
     passed: run.steps.filter((entry) => state.steps[entry.id]?.status === "passed").length,
     total: run.steps.length,
+    usecaseTitle,
+    archived: run.archivedAtMs !== null,
   };
 }

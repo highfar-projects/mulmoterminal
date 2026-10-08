@@ -1,0 +1,45 @@
+/* Design template "くっきり" (crisp): white and near-black, a deep blue main colour, small corners.
+ * Copy this file into the app unchanged and import it right after `@import "tailwindcss";`. It redefines the
+ * colours and corners MulmoTerminal's classes use (indigo for the main colour, slate and gray for the neutrals),
+ * so screens written with those classes take this design without changing a class. */
+@theme {
+  --color-indigo-50: oklch(0.975 0.024 262);
+  --color-indigo-100: oklch(0.945 0.048 262);
+  --color-indigo-200: oklch(0.885 0.08 262);
+  --color-indigo-300: oklch(0.805 0.12 262);
+  --color-indigo-400: oklch(0.705 0.152 262);
+  --color-indigo-500: oklch(0.6 0.16 262);
+  --color-indigo-600: oklch(0.52 0.16 262);
+  --color-indigo-700: oklch(0.45 0.147 262);
+  --color-indigo-800: oklch(0.38 0.128 262);
+  --color-indigo-900: oklch(0.31 0.104 262);
+  --color-indigo-950: oklch(0.24 0.08 262);
+  --color-slate-50: oklch(0.975 0.001 260);
+  --color-slate-100: oklch(0.945 0.001 260);
+  --color-slate-200: oklch(0.885 0.002 260);
+  --color-slate-300: oklch(0.805 0.003 260);
+  --color-slate-400: oklch(0.705 0.004 260);
+  --color-slate-500: oklch(0.6 0.004 260);
+  --color-slate-600: oklch(0.52 0.004 260);
+  --color-slate-700: oklch(0.45 0.004 260);
+  --color-slate-800: oklch(0.38 0.003 260);
+  --color-slate-900: oklch(0.31 0.003 260);
+  --color-slate-950: oklch(0.24 0.002 260);
+  --color-gray-50: oklch(0.975 0.001 260);
+  --color-gray-100: oklch(0.945 0.001 260);
+  --color-gray-200: oklch(0.885 0.002 260);
+  --color-gray-300: oklch(0.805 0.003 260);
+  --color-gray-400: oklch(0.705 0.004 260);
+  --color-gray-500: oklch(0.6 0.004 260);
+  --color-gray-600: oklch(0.52 0.004 260);
+  --color-gray-700: oklch(0.45 0.004 260);
+  --color-gray-800: oklch(0.38 0.003 260);
+  --color-gray-900: oklch(0.31 0.003 260);
+  --color-gray-950: oklch(0.24 0.002 260);
+  --color-white: oklch(1 0 0);
+  --radius-sm: 0.125rem;
+  --radius-md: 0.1875rem;
+  --radius-lg: 0.25rem;
+  --radius-xl: 0.375rem;
+  --radius-2xl: 0.5rem;
+}

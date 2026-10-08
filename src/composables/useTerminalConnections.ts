@@ -27,6 +27,7 @@
 // terminals (which are NOT persisted — their process is unresumable, so their slot
 // is released on unmount like before).
 import { reactive, watch } from "vue";
+import { credentialOf, forgetCredential, type CellCredential } from "./cellCredential";
 import { Terminal, type ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
@@ -103,6 +104,8 @@ const submittableFor = (c: Conn, text: string): string => (isClaudeTarget(c.targ
 export interface ConnHandlers {
   onSession?: (id: string) => void;
   onCwd?: (cwd: string) => void;
+  /** Which rotation credential the session's process runs on (#2919), or null for none. */
+  onCredential?: (credential: CellCredential | null) => void;
   // `exitCode` is the command's status when the server reported one, else null (a start
   // failure, or an agent session that ended without one). A Run cell reads it to tell a
   // clean finish from a broken build.
@@ -145,6 +148,7 @@ interface Conn {
   ws: WebSocket | null;
   knownSessionId: string | null;
   knownCwd: string | null; // server-resolved cwd, replayed on (re)attach
+  knownCredential: CellCredential | null; // the rotation credential, replayed on (re)attach
   target: ConnTarget;
   handlers: ConnHandlers;
   sawExit: boolean; // an intentional end (exit/superseded/error) — suppress reconnect
@@ -374,8 +378,8 @@ function registerFilePathLinks(term: Terminal, c: Conn): void {
       term,
       () => c.knownCwd,
       (url) => window.open(url, "_blank", "noopener,noreferrer"),
-      (filePath, cwd) => filesGotoFile(cwd, filePath),
-      (filePath, cwd) => tryOpenInPane(filePath, cwd),
+      (filePath, cwd, location) => filesGotoFile(cwd, filePath, location),
+      (filePath, cwd, location) => tryOpenInPane(filePath, cwd, location),
     ),
   );
 }
@@ -474,6 +478,7 @@ function ensure(key: string, target: ConnTarget, font: TerminalFont): Conn {
     ws: null,
     knownSessionId: target.sessionId,
     knownCwd: null,
+    knownCredential: null,
     target,
     handlers: {},
     sawExit: false,
@@ -647,6 +652,9 @@ function handleMessage(c: Conn, event: MessageEvent) {
     if (typeof msg.data === "string") c.term.write(msg.data);
   } else if (msg.type === "session") {
     applySessionFrame(c, msg);
+  } else if (msg.type === "credential") {
+    c.knownCredential = credentialOf(msg);
+    c.handlers.onCredential?.(c.knownCredential);
   } else if (msg.type === "paneMode" || msg.type === "heat") {
     applyViewFrame(connView.get(c.key), msg);
   } else {
@@ -676,10 +684,11 @@ export function attach(key: string, target: ConnTarget, handlers: ConnHandlers, 
   if (inherited) {
     const held = c.knownSessionId ?? "a fresh session still starting";
     console.warn(`[terminal] slot ${key} holds ${held} but the view asked for ${target.sessionId} — reconnecting instead of reusing`);
-    Object.assign(c, { knownSessionId: target.sessionId, knownCwd: null, reconnectAttempts: 0, sawExit: false });
+    Object.assign(c, { knownSessionId: target.sessionId, knownCwd: null, knownCredential: null, reconnectAttempts: 0, sawExit: false });
   }
   c.released = false;
   c.handlers = handlers;
+  if (inherited) forgetCredential(c);
   c.attachedEl = el;
   // Replay server-learned session/cwd to the freshly-bound handlers. Without this,
   // a slot that learned its id/cwd WHILE DETACHED (handlers were cleared) would
@@ -688,6 +697,7 @@ export function attach(key: string, target: ConnTarget, handlers: ConnHandlers, 
   // useful update; the parent's setters are idempotent for already-known values.
   if (c.knownSessionId) handlers.onSession?.(c.knownSessionId);
   if (c.knownCwd) handlers.onCwd?.(c.knownCwd);
+  if (c.knownCredential) handlers.onCredential?.(c.knownCredential);
   el.appendChild(c.host);
   if (theme) {
     c.theme = theme;
@@ -729,12 +739,14 @@ export function detach(key: string, el: HTMLElement | null) {
 // connectKey changed (session switch / relaunch in the same slot): point the slot
 // at the new target and reconnect. Closes the previous socket, so the previous
 // session falls back to the server's reap grace.
+
 export function retarget(key: string, target: ConnTarget) {
   const c = conns.get(key);
   if (!c) return;
   c.target = target;
   c.knownSessionId = target.sessionId;
   c.knownCwd = null;
+  forgetCredential(c);
   c.reconnectAttempts = 0;
   c.sawExit = false;
   c.released = false;
@@ -780,6 +792,8 @@ export function terminate(key: string) {
   release(key);
 }
 
+const SUBMIT_TEXT_MS = 60;
+
 // Submit a GUI-originated message into the PTY (text + a SEPARATE delayed submit — a
 // same-burst text+submit reads as a paste in Claude's TUI). The submit byte follows the
 // connection's `terminalSubmit` mapping (ESC+CR for a Claude cell in esc-cr mode), so a GUI
@@ -791,25 +805,27 @@ export function terminate(key: string) {
 export function submitText(key: string, text: string): boolean {
   const c = conns.get(key);
   if (!c) return false;
+  return writeThenSubmit(c, text, (guarded) => guarded, SUBMIT_TEXT_MS);
+}
+
+// The shared body of the two GUI submits: write `wrap(guarded text)`, then the submit byte after
+// `submitDelayMs`, both pinned to the socket captured now. The `false` used to be the whole answer,
+// and only one caller ever read it — the rest pressed a button into a closed socket and showed
+// nothing (#1315), so a closed socket is reported here, where every host passes.
+function writeThenSubmit(c: Conn, text: string, wrap: (guarded: string) => string, submitDelayMs: number): boolean {
   const sock = c.ws;
-  // The `false` used to be the whole answer, and only one caller ever read it — the rest pressed
-  // a button into a closed socket and showed nothing (#1315). Saying so here reaches every host,
-  // including the ones written after this line.
   if (!sock || sock.readyState !== WebSocket.OPEN) {
     reportDroppedInput(c);
     return false;
   }
   const submit = submitBytesFor(c);
-  // A GUI-originated submit is a submit like any other, so it gets the same return to the bottom
-  // as a typed Enter (#1546) — otherwise pressing a send button while scrolled up leaves the
-  // answer being written somewhere the user cannot see.
+  // A GUI-originated submit is a submit like a typed Enter, so it returns to the latest output the
+  // same way (#1546, Codex on #1547) — otherwise the answer is written somewhere the user cannot see.
   if (scrollsToBottomOnSubmit()) c.wheel.restoreToBottom();
-  sock.send(JSON.stringify({ type: "input", data: submittableFor(c, text) }));
+  sock.send(JSON.stringify({ type: "input", data: wrap(submittableFor(c, text)) }));
   setTimeout(() => {
-    if (c.ws === sock && sock.readyState === WebSocket.OPEN) {
-      sock.send(JSON.stringify({ type: "input", data: submit }));
-    }
-  }, 60);
+    if (c.ws === sock && sock.readyState === WebSocket.OPEN) sock.send(JSON.stringify({ type: "input", data: submit }));
+  }, submitDelayMs);
   return true;
 }
 
@@ -841,24 +857,10 @@ export function pasteText(key: string, text: string): boolean {
 const PASTE_SUBMIT_MS = 200;
 export function pasteAndSubmit(key: string, text: string): boolean {
   const c = conns.get(key);
-  const sock = c?.ws;
   if (!text || !c) return false; // nothing to deliver — not a drop (#1315)
-  if (!sock || sock.readyState !== WebSocket.OPEN) {
-    reportDroppedInput(c);
-    return false;
-  }
-  const submit = submitBytesFor(c);
-  // A paste-and-submit is a submit like a typed Enter or a send button, so it returns to the
-  // latest output the same way (#1546) — otherwise this path leaves the answer being written
-  // somewhere the user cannot see (Codex on #1547).
-  if (scrollsToBottomOnSubmit()) c.wheel.restoreToBottom();
   // The guard's space rides INSIDE the paste, where the TUI takes it as text — after the
   // terminator it would be a keystroke, and an open completion menu is what reads those (#1142).
-  sock.send(JSON.stringify({ type: "input", data: `${PASTE_START}${submittableFor(c, text)}${PASTE_END}` }));
-  setTimeout(() => {
-    if (c.ws === sock && sock.readyState === WebSocket.OPEN) sock.send(JSON.stringify({ type: "input", data: submit }));
-  }, PASTE_SUBMIT_MS);
-  return true;
+  return writeThenSubmit(c, text, (guarded) => `${PASTE_START}${guarded}${PASTE_END}`, PASTE_SUBMIT_MS);
 }
 
 // The slots whose conversation another cell can read. A snapshot, not a reactive view:

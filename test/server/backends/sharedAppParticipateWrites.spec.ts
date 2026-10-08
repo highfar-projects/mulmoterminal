@@ -17,10 +17,11 @@
 // The fake Firestore and the app published into it are `test/support/participateHarness.ts`, shared
 // with the sibling file: `vi.mock` is hoisted per FILE, so the mock itself cannot be — what travels
 // is what it is made of, and the mutable bag it answers from.
+import { createHash } from "node:crypto";
 import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
 import { setFirestoreAccessor, setSharedCollectionsSupport } from "@mulmoclaude/core/collection/server";
 import { useSharedApp } from "../../../server/infra/use-shared-app-tool.js";
-import { AID, bookingsPath, declareCaps, freshBag, ME, publishApp, slotsPath, type Bag } from "../../support/participateHarness.js";
+import { submitFor, AID, bookingsPath, declareCaps, freshBag, ME, publishApp, slotsPath, type Bag } from "../../support/participateHarness.js";
 import { makeTempDir } from "../../support/tempDir";
 
 // CREATED WITH `vi.hoisted` because the mock factory below is hoisted above the imports: a plain
@@ -103,6 +104,33 @@ describe("useSharedApp — writing to somebody else's app", () => {
     expect(said).toContain("not a place held");
     expect(said.toLowerCase()).not.toContain("reserved");
     expect(said.toLowerCase()).not.toContain("secured");
+  });
+
+  it("writes a pseudonym app's record at the app's pseudonym, never at the raw uid", async () => {
+    // `idFrom: "pseudonym"` (#325): the rules require sha256(uid + ":" + aid) as the id, so a record
+    // written at the uid would be refused — and would expose the uid if it were not.
+    publish({ idFromUid: true });
+    const submit = submitFor({ mirror: false, idFromUid: true, idFromSlug: false, bothIdentities: false, dottedEmailField: false });
+    const config = bag.docs.store.get(`apps/${AID}/config`)?.get("public") ?? {};
+    bag.docs.put(`apps/${AID}/config`, "public", { ...config, submit: { bookings: { ...submit, idFrom: "pseudonym" } } });
+    const said = await run({ action: "submit", slug: "sakura", cid: "bookings", values: { slot: "10:00" } });
+    const pseudonym = createHash("sha256").update(`${ME.uid}:${AID}`).digest("hex");
+    expect(said).toContain(`The record's id is \u00ab${pseudonym}\u00bb`);
+    expect(bag.batched.join("\n")).not.toContain(`${bookingsPath}/${ME.uid}`);
+  });
+
+  it("writes a uidForm app's uidField as the app's pseudonym, never the uid", async () => {
+    // `uidForm: "pseudonym"` (#325): the rules compare uidField with sha256(uid + ":" + aid).
+    publish({ bothIdentities: true });
+    const config = bag.docs.store.get(`apps/${AID}/config`)?.get("public") ?? {};
+    const submit = submitFor({ mirror: true, idFromUid: false, idFromSlug: false, bothIdentities: true, dottedEmailField: false });
+    bag.docs.put(`apps/${AID}/config`, "public", { ...config, submit: { bookings: { ...submit, uidForm: "pseudonym" } } });
+    bag.docs.put(slotsPath, "10:00", { state: "open" });
+    await run({ action: "submit", slug: "sakura", cid: "bookings", values: { slot: "10:00" } });
+    const pseudonym = createHash("sha256").update(`${ME.uid}:${AID}`).digest("hex");
+    const written = bag.batched.find((op) => op.startsWith(`set ${bookingsPath}/`)) ?? "";
+    expect(written).toContain(`"uid":"${pseudonym}"`);
+    expect(written).not.toContain(`"uid":"${ME.uid}"`);
   });
 
   it("refuses a slot somebody already holds, inside the transaction", async () => {

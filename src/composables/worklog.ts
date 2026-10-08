@@ -12,6 +12,8 @@ import { postConfigField } from "./postConfigField";
 const flag = createGlobalFlag("worklogEnabled", false);
 
 export const worklogEnabled = flag.state;
+/** The wiki tag the worklog's pages carry; its door opens the wiki filtered to it. */
+export const WORKLOG_TAG = "worklog";
 export const setWorklogEnabled = flag.set;
 export const saveWorklogEnabled = flag.save;
 

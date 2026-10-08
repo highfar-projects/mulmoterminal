@@ -6,6 +6,8 @@
 // see terminalFilePathLinks) and the CWD arrives with backslashes on Windows, so separators
 // are normalized before anything is compared.
 
+import { resolveRelativeSegments } from "../../common/resolveRelativeSegments";
+
 const DRIVE_PREFIX = /^[A-Za-z]:/;
 
 const toSlashes = (p: string): string => p.replace(/\\/g, "/");
@@ -20,21 +22,6 @@ const isAbsolute = (p: string): boolean => p.startsWith("/") || DRIVE_PREFIX.tes
 // the cwd — and treating it as cwd-relative sent `~/Downloads/x.md` to the pane, which the
 // server then refused as an escape once it expanded the tilde (#2260).
 const isHomeRelative = (p: string): boolean => p === "~" || p.startsWith("~/");
-
-/** `rel` with `.` dropped and `..` applied, or null when it climbs above the root. Empty
- *  (the root itself, or a path that cancels out) is null too — there is no file to open. */
-function resolveSegments(rel: string): string | null {
-  const out: string[] = [];
-  for (const segment of rel.split("/")) {
-    if (segment === "" || segment === ".") continue;
-    if (segment === "..") {
-      if (out.pop() === undefined) return null; // climbed past the root
-      continue;
-    }
-    out.push(segment);
-  }
-  return out.length ? out.join("/") : null;
-}
 
 /** `path` with `root` removed, or null when it names something outside. Compared segment by
  *  segment: a plain `startsWith` would let root `/a/b` swallow `/a/bc/d.ts`. */
@@ -56,7 +43,7 @@ export function pathWithinCwd(token: string, cwd: string | null): string | null 
   if (isHomeRelative(path)) return null;
   const root = toSlashes(cwd);
   const relative = isAbsolute(path) ? stripRoot(path, root) : path;
-  return relative === null ? null : resolveSegments(relative);
+  return relative === null ? null : resolveRelativeSegments(relative);
 }
 
 /** A path outside the cwd, re-expressed as its parent directory plus its name — the shape the
@@ -81,7 +68,7 @@ export function rebaseOutsideCwd(token: string, cwd: string | null): RebasedPath
   return { base: `${prefix}/${segments.join("/")}`, rel };
 }
 
-/** Like `resolveSegments`, except a `..` at the top stays at the top — as `path.resolve` does
+/** Like `resolveRelativeSegments`, except a `..` at the top stays at the top — as `path.resolve` does
  *  at a filesystem root — rather than failing. */
 function normalizedSegments(rel: string): string[] {
   return rel.split("/").reduce<string[]>((out, segment) => {
