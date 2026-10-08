@@ -10,7 +10,7 @@ import { runGlab, glabIssueViewArgs, glabTarget } from "./glab.js";
 import { normalizeGlabIssueDetail } from "./glab-items.js";
 import { forgeFromRepoEntry, projectPath } from "./forge-host.js";
 import { createWorktree, issueWorktree } from "./worktrees.js";
-import { claimLaunch, worktreeOccupancy, type WorktreeClaim, type WorktreeOccupancy } from "../session/worktree-session-limit.js";
+import { claimLaunch, worktreeOccupancy, type WorktreeClaim, type WorktreeOccupancy } from "../session/credentials/worktree-session-limit.js";
 import { createKeySerializer } from "../infra/serialize-per-key.js";
 import { isRecord } from "../../common/isRecord.js";
 import { worktreeAction, worktreeLimitReason, WORKTREE_LAUNCH_IN_FLIGHT } from "../../common/worktreeSession.js";

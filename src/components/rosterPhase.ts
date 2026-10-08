@@ -50,7 +50,7 @@ export const phaseDisplay = (phase: PrPhase): PhaseDisplay | null => (phase === 
  *  so does a stub in a spec, which is what keeps these callers testable without mounting. */
 export type TranslateKey = (key: string) => string;
 
-// The agent-side sub-phase of a "working" cell, mirroring server/session/workPhase.ts. Refines
+// The agent-side sub-phase of a "working" cell, mirroring server/session/activity/workPhase.ts. Refines
 // the "running" status word into what the agent is actually doing right now.
 export type WorkPhase = "planning" | "implementing";
 

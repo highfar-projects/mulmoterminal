@@ -2,9 +2,9 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 
 import { launchOptions } from "../../../server/config/launch-options.js";
-import { resolveProvider, type ProviderConfig } from "../../../server/session/provider-env.js";
+import { resolveProvider, type ProviderConfig } from "../../../server/session/spawn/setup/provider-env.js";
 import { sanitizeProviders } from "../../../server/config/app-config.js";
-import { launchChoiceFromParams } from "../../../server/session/launch-choice.js";
+import { launchChoiceFromParams } from "../../../server/session/spawn/launch-choice.js";
 
 const OPENROUTER: ProviderConfig = {
   id: "openrouter",

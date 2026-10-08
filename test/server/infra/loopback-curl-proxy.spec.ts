@@ -8,7 +8,7 @@ import { spawn } from "node:child_process";
 import { createServer, type Server } from "node:http";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { hookSettingsJson } from "../../../server/session/hook-settings.js";
+import { hookSettingsJson } from "../../../server/session/spawn/setup/hook-settings.js";
 import { statusLineCommand } from "../../../server/agents/statusline.js";
 import { copilotHooksJson } from "../../../server/agents/copilot/copilot-hooks-file.js";
 import { CODEX_PERMISSION_HOOK_COMMAND } from "../../../server/agents/codex/codex-hook.js";

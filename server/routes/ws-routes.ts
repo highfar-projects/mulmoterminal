@@ -19,8 +19,8 @@ import { resolveButtonCommand } from "../config/header/header-resolve.js";
 import { resolveScript } from "../files/scripts.js";
 import { shellQuoteFor } from "../infra/shell-quote.js";
 import { tmuxHasSession } from "../infra/tmux.js";
-import { defaultShellTarget, type LaunchTarget } from "../session/shell-command.js";
-import { launchChoiceFromParams } from "../session/launch-choice.js";
+import { defaultShellTarget, type LaunchTarget } from "../session/spawn/shell-command.js";
+import { launchChoiceFromParams } from "../session/spawn/launch-choice.js";
 import { antigravityBrainRoot, antigravityConversationExists } from "../agents/antigravity/antigravity-session.js";
 import { grokConversationExists, grokSessionsRoot } from "../agents/grok/grok-session.js";
 import { museSessionExistsForCwd } from "../agents/muse/muse-session.js";
@@ -41,8 +41,8 @@ import {
   sessionCwd,
   ptys,
 } from "../session/registry.js";
-import { ptyWouldReattach } from "../session/pty-spawn.js";
-import { bufferEarlyFrames, type EarlyFrames } from "../session/early-frames.js";
+import { ptyWouldReattach } from "../session/pty/pty-spawn.js";
+import { bufferEarlyFrames, type EarlyFrames } from "../session/pty/early-frames.js";
 // Re-exported so the endpoint guard keeps its long-standing import path (its spec, and any reader
 // looking for it where it has always been).
 export { settledEntry, startFailureMessageFor, wrongEndpointReason } from "./ws-endpoint-guard.js";
@@ -50,12 +50,12 @@ import { claudeStartFailureMessage, settledEntry, startFailureMessageFor } from 
 import { registeredGuiMcpGroups } from "../infra/gui-mcp-registration.js";
 import { TOOL_GROUPS, type ToolGroup } from "../../common/toolGroups.js";
 import { parseTerminalSize, type TerminalSize } from "../../common/terminalSize.js";
-import { handleCommandFrame } from "../session/pty-connection.js";
+import { handleCommandFrame } from "../session/pty/pty-connection.js";
 import { closeWithError } from "../session/ws-frames.js";
-import { settleCredential } from "../session/credential-announce.js";
+import { settleCredential } from "../session/credentials/credential-announce.js";
 import { sessionExistsOnDisk } from "../session/session-reads.js";
-import { clearedTranscripts } from "../session/cleared-transcripts.js";
-import { canStartLauncher, isContinuingSession, resolveReattachableId, resolveSession, type SessionResolution } from "../session/session-resolve.js";
+import { clearedTranscripts } from "../session/transcript/cleared-transcripts.js";
+import { canStartLauncher, isContinuingSession, resolveReattachableId, resolveSession, type SessionResolution } from "../session/list/session-resolve.js";
 import type { PtyEntry } from "../session/types.js";
 import type {
   SpawnClaudePty,
@@ -68,21 +68,21 @@ import type {
   SpawnCommandPty,
   SpawnLauncherPty,
   ResolveLauncher,
-} from "../session/spawners.js";
-import { syncDirectoryMcpForSpawnAsync, type SpawnDirectoryMcpPty } from "../session/spawn-directory-mcp.js";
+} from "../session/spawn/spawners.js";
+import { syncDirectoryMcpForSpawnAsync, type SpawnDirectoryMcpPty } from "../session/spawn/setup/spawn-directory-mcp.js";
 import { syncCursorDirectoryMcp } from "../agents/cursor/cursor-mcp.js";
 import { terminalWsKind, type TerminalWsKind } from "./terminal-ws-path.js";
 import { normalizeAgent, parseIndexParam } from "./routeParams.js";
 import { agentResumeId } from "../agents/agent-resume.js";
-import { claimLaunch, worktreeOccupancy } from "../session/worktree-session-limit.js";
-import { foreignTmuxSurvivorReason } from "../session/survivor-agent-guard.js";
+import { claimLaunch, worktreeOccupancy } from "../session/credentials/worktree-session-limit.js";
+import { foreignTmuxSurvivorReason } from "../session/reaping/survivor-agent-guard.js";
 import { worktreeRefusal } from "../../common/worktreeSession.js";
 import { ensureWorktreeEnv } from "../config/worktree/worktree-env.js";
 import { isCustomAgentId } from "../../common/customAgents.js";
 import { codexSessionRoot, resolveClaudeWithAccount, resolveCodexWithAccount } from "../session/session-home.js";
-import { accountDirectoryMcpGroups } from "../session/account-mcp.js";
+import { accountDirectoryMcpGroups } from "../session/accounts/account-mcp.js";
 import { createKeySerializer } from "../infra/serialize-per-key.js";
-import { killPty } from "../session/pty-kill.js";
+import { killPty } from "../session/pty/pty-kill.js";
 
 const sessionConnects = createKeySerializer();
 
@@ -111,7 +111,7 @@ export interface WsRouteDeps {
   spawnCommandPty: SpawnCommandPty;
   spawnLauncherPty: SpawnLauncherPty;
   resolveLauncher: ResolveLauncher;
-  /** The `--mcp-config` payload for a session, built per spawn (see session/mcp-config.ts). Needed
+  /** The `--mcp-config` payload for a session, built per spawn (see session/spawn/setup/mcp-config.ts). Needed
    *  here, not only in the spawners, because a LAUNCHER chip running claude in the workspace gets
    *  the same GUI MCP a claude cell there does — and its only lever is the command line. */
   mcpConfigJson: (sessionId: string, host?: string) => string;

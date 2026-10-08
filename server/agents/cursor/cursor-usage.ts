@@ -41,7 +41,7 @@
 // names it, so the percentage appears without another change here.
 import { isRecord } from "../../../common/isRecord.js";
 import type { SessionContextInfo } from "../../../common/sessionContext.js";
-import type { SessionUsage } from "../../session/transcript.js";
+import type { SessionUsage } from "../../session/transcript/transcript.js";
 
 export interface CursorBadges {
   usage: SessionUsage;

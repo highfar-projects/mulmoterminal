@@ -42,7 +42,7 @@ describe("portFromArgv", () => {
 
 // `parsePort` is the same rule, reached by the OTHER channel. It was extracted because
 // `process.env.PORT` used to skip validation entirely — and this value is interpolated into shell
-// commands written to disk for an agent to run later (server/session/hook-settings.ts's curl,
+// commands written to disk for an agent to run later (server/session/spawn/setup/hook-settings.ts's curl,
 // server/agents/copilot/copilot-hooks-file.ts's hook file), so an unusable value was not a bad bind, it was
 // whatever the string said (Codex review on #2063).
 describe("parsePort", () => {

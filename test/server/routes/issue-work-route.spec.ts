@@ -11,7 +11,7 @@ import type { Express } from "express";
 import { makeTempDir } from "../../support/tempDir.js";
 import { rmDirRetrying, GIT_TEST_TIMEOUT_MS } from "../git/wtTestUtil.js";
 import type { CwdPreset } from "../../../server/config/config-schema.js";
-import type { SpawnIssueSession } from "../../../server/session/issue-session-spawn.js";
+import type { SpawnIssueSession } from "../../../server/session/spawn/issue-session-spawn.js";
 import type { AgentAccount } from "../../../common/agentAccounts.js";
 
 const configState: { presets: CwdPreset[]; recorded: Record<string, string>; accounts: AgentAccount[] } = {

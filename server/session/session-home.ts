@@ -11,7 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import { isAccountId, type AccountAgent, type AgentAccount } from "../../common/agentAccounts.js";
 import { agentHome, agentHomeEnvVar, agentHomeSpelling } from "../agents/agent-homes.js";
-import { accountSessionsHydrated, boundAccount, rememberAccountSession } from "./account-sessions.js";
+import { accountSessionsHydrated, boundAccount, rememberAccountSession } from "./accounts/account-sessions.js";
 import { projectSessionsDir } from "./project-dir.js";
 import { codexRolloutExists } from "../agents/codex/codex-sessions.js";
 

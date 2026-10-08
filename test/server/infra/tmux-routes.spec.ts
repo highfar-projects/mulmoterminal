@@ -132,7 +132,7 @@ describe("mountTmuxRoutes — POST /api/tmux/cleanup-orphans", () => {
 
   // The route no longer carries the decision. It used to select orphans itself against
   // `isResumableTmuxSession` — a predicate made of permanent records, which is why it ended almost
-  // nothing (#1467). One rule now, in session/reap-idle-sessions.ts, and it is the same one the
+  // nothing (#1467). One rule now, in session/reaping/reap-idle-sessions.ts, and it is the same one the
   // server runs at boot; what is pinned here is that the route reports it faithfully.
   it("answers with exactly what the sweep ended", async () => {
     const { cleanup } = mountAndCapture(baseDeps({ sweep: () => swept }));

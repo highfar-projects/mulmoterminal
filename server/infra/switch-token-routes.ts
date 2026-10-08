@@ -1,9 +1,9 @@
 import type { Express } from "express";
 import { requestOriginAllowed } from "../routes/same-origin-guard.js";
-import { decideSwitch } from "../session/switch-token.js";
+import { decideSwitch } from "../session/credentials/switch-token.js";
 import { isRecord } from "../../common/isRecord.js";
 import type { TokenRotation } from "../../common/tokenRotation.js";
-import type { MovedFrom } from "../session/limit-rotation.js";
+import type { MovedFrom } from "../session/credentials/limit-rotation.js";
 
 export interface SwitchTokenRouteDeps {
   isAllowedOrigin: (origin: string | undefined, remoteAddress: string | undefined) => boolean;

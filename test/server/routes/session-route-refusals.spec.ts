@@ -28,7 +28,7 @@ vi.mock("../../../server/session/session-reads.js", async (importOriginal) => ({
   sessionPrompts: async () => (reads.push("prompts"), { prompts: [] }),
   sessionLastTurn: async () => (reads.push("last-turn"), { prompt: null, reply: null }),
 }));
-vi.mock("../../../server/session/transcript-view-read.js", async (importOriginal) => ({
+vi.mock("../../../server/session/transcript/transcript-view-read.js", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   sessionTranscriptPage: async () => (reads.push("view"), { turns: [] }),
 }));

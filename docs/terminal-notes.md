@@ -81,7 +81,7 @@ server   ── node-pty  ── tmux (persistence)  ── agent (claude / code
 Whether Enter submits or inserts a newline is decided by Claude Code from the received **bytes**,
 and that mapping is environment-dependent. `terminalSubmit` (`"cr"` default / `"esc-cr"`) picks
 which byte submits; it drives the browser key handler, the phone remote-view submit **and** the
-spawn-time `initialPrompt` injection (`session/draft-injection.ts`, #1148 — it had a hardcoded CR,
+spawn-time `initialPrompt` injection (`session/spawn/draft-injection.ts`, #1148 — it had a hardcoded CR,
 so a seeded prompt was typed and never sent on an `esc-cr` host), scoped
 to Claude sessions only (shell/codex keep plain CR). See the [config guide](guide/en/config.html#terminal-submit).
 Anything auto-submitted also ends its line with a space (`submittableLine`, #1142), or an open
@@ -167,7 +167,7 @@ from tmux's root bindings, which enter **copy-mode** (`copy-mode -e` / `copy-mod
 `mode-keys vi`, hjkl move a cursor — and the program receives nothing.
 
 - **Detected by asking, after input.** tmux announces no mode change, and only input moves a pane
-  in or out of copy-mode, so `server/session/pane-mode-watch.ts` probes `#{pane_in_mode}` for the
+  in or out of copy-mode, so `server/session/pty/pane-mode-watch.ts` probes `#{pane_in_mode}` for the
   one pane that just received an `input` frame (also on view-activate and reattach), settled and
   ticketed. A `paneMode` frame reaches the browser only when the answer changes; `Terminal.vue`
   shows `CopyModeBanner` while it is true.
@@ -352,7 +352,7 @@ Measured on tmux 3.6a against a live disagreement (client 120x40, window 80x24):
 | `refresh-client -t <our tty>` | 80x24 — unchanged |
 | resize the pty to 120x39, then back | **120x40 — repaired** |
 
-So `session/tmux-size-sync.ts` probes `#{window_width}x#{window_height}` once a resize burst
+So `session/pty/tmux-size-sync.ts` probes `#{window_width}x#{window_height}` once a resize burst
 settles and, on a disagreement, nudges the pty a row and back. **Do not reach for `resize-window`**
 — it works, and it switches that window to `window-size manual`, after which the window stops
 following its client for good.

@@ -7,15 +7,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 import { createSessionLifecycle } from "../../../server/session/lifecycle.js";
-import type { WorkPhase } from "../../../server/session/workPhase.js";
+import type { WorkPhase } from "../../../server/session/activity/workPhase.js";
 import { activity, aiTitles, hiddenSessions, knownSessions, lastPrompts, lastResponses, launchChoices, ptys } from "../../../server/session/registry.js";
-import { clearedTranscripts } from "../../../server/session/cleared-transcripts.js";
-import { killPty } from "../../../server/session/pty-kill.js";
+import { clearedTranscripts } from "../../../server/session/transcript/cleared-transcripts.js";
+import { killPty } from "../../../server/session/pty/pty-kill.js";
 import { tmuxKillSession } from "../../../server/infra/tmux.js";
 
 vi.mock("../../../server/infra/tmux.js", () => ({ tmuxKillSession: vi.fn() }));
-vi.mock("../../../server/session/pty-kill.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../../server/session/pty-kill.js")>()),
+vi.mock("../../../server/session/pty/pty-kill.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../server/session/pty/pty-kill.js")>()),
   killPty: vi.fn(),
 }));
 vi.mock("../../../server/session/session-settings.js", () => ({ cleanupSessionSettings: vi.fn() }));

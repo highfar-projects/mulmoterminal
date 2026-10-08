@@ -12,7 +12,7 @@
 // instead — see writeProbeScreen.
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { ESC, squashForMarker, stripPtyEscapes, trustDialogIsUp } from "../../session/pty-scan.js";
+import { ESC, squashForMarker, stripPtyEscapes, trustDialogIsUp } from "../../session/pty/pty-scan.js";
 
 /** Why a probe went silent, as far as its own screen can prove. */
 export type ProbeStall = "trust-prompt" | "usage-limit" | "unknown";

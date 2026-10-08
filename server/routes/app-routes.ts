@@ -16,14 +16,14 @@ import { mountConfigRoutes } from "../config/config-routes.js";
 import { mountFilesBrowseRoutes } from "../files/files-browse.js";
 import { mountTmuxRoutes } from "../infra/tmux-routes.js";
 import { mountSwitchTokenRoutes } from "../infra/switch-token-routes.js";
-import { clearSwitchedToken, pinSwitchedToken } from "../session/token-switch-pins.js";
-import { sessionToken } from "../session/token-sessions.js";
-import { noteMovedFrom, takeMovedFrom } from "../session/rotation-notice.js";
+import { clearSwitchedToken, pinSwitchedToken } from "../session/credentials/token-switch-pins.js";
+import { sessionToken } from "../session/credentials/token-sessions.js";
+import { noteMovedFrom, takeMovedFrom } from "../session/credentials/rotation-notice.js";
 import { rotationLoginLabel } from "../../common/tokenRotation.js";
-import { survivingSessions } from "../session/surviving-sessions.js";
-import { armedReapIntervalHours } from "../session/reap-schedule.js";
+import { survivingSessions } from "../session/reaping/surviving-sessions.js";
+import { armedReapIntervalHours } from "../session/reaping/reap-schedule.js";
 import { getSessionIdleReapDays, getQuestionPaneEnabled, getTokenRotation } from "../config/config-routes.js";
-import { sweepIdleSessions } from "../session/reap-idle-sessions.js";
+import { sweepIdleSessions } from "../session/reaping/reap-idle-sessions.js";
 import { mountHookRoute } from "../routes/hook-routes.js";
 import { mountPluginRoutes } from "../routes/plugin-routes.js";
 import { mountBlueprints } from "../blueprint/wiring.js";
@@ -36,7 +36,7 @@ import { mountRepoRoutes } from "../routes/repo-routes.js";
 import { mountAgentAvailabilityRoutes } from "../routes/agent-availability-routes.js";
 import type { AgentAvailability } from "../../common/agentAvailability.js";
 import { mountIssueWorkRoutes } from "../routes/issue-work-routes.js";
-import type { SpawnIssueSession } from "../session/issue-session-spawn.js";
+import type { SpawnIssueSession } from "../session/spawn/issue-session-spawn.js";
 import { mountDirRoutes } from "../routes/dir-routes.js";
 import { mountDirConfigWriteRoute } from "../routes/dir-config-write-route.js";
 import { mountDirConfigEntriesRoute } from "../routes/dir-config-entries-route.js";
@@ -48,7 +48,7 @@ import { mountOpenFileRoute } from "../files/open-file.js";
 import { mountGitRemoteRoute } from "../git/gitRemote.js";
 import { mountWorktreeRoutes } from "../git/worktree-routes.js";
 import { mountPickFileRoute } from "../files/pick-file.js";
-import { mountCommandSummaryRoute } from "../session/command-summary.js";
+import { mountCommandSummaryRoute } from "../session/transcript/command-summary.js";
 import { mountCostRoute } from "../session/cost.js";
 import { mountShutdownRoute } from "./shutdown-routes.js";
 import { mountCollectionRoutes } from "../backends/collections/collections.js";
@@ -97,19 +97,19 @@ import { FILE_WRITE_CHANNEL, type FileWriteEvent } from "../../common/fileWriteC
 import { PROMPT_SUBMITTED_CHANNEL, type PromptSubmittedEvent } from "../../common/promptChannel.js";
 import { ASK_QUESTION_CHANNEL, shouldPublishQuestion, type AskQuestionDone, type AskQuestionEvent } from "../../common/askQuestion.js";
 import type { createToolStores } from "../session/tool-store.js";
-import type { createClaudeSpawner } from "../session/spawn-claude.js";
-import type { createCodexSpawner } from "../session/spawn-codex.js";
-import type { createGrokSpawner } from "../session/spawn-grok.js";
-import type { createAntigravitySpawner } from "../session/spawn-antigravity.js";
-import type { createMuseSpawner } from "../session/spawn-muse.js";
-import type { createCopilotSpawner } from "../session/spawn-copilot.js";
-import type { createCursorSpawner } from "../session/spawn-cursor.js";
-import type { createTranslationWorker } from "../session/translation-worker.js";
-import type { createTitleManager } from "../session/session-title.js";
+import type { createClaudeSpawner } from "../session/spawn/agents/spawn-claude.js";
+import type { createCodexSpawner } from "../session/spawn/agents/spawn-codex.js";
+import type { createGrokSpawner } from "../session/spawn/agents/spawn-grok.js";
+import type { createAntigravitySpawner } from "../session/spawn/agents/spawn-antigravity.js";
+import type { createMuseSpawner } from "../session/spawn/agents/spawn-muse.js";
+import type { createCopilotSpawner } from "../session/spawn/agents/spawn-copilot.js";
+import type { createCursorSpawner } from "../session/spawn/agents/spawn-cursor.js";
+import type { createTranslationWorker } from "../session/scheduled/translation-worker.js";
+import type { createTitleManager } from "../session/list/session-title.js";
 import { tmuxHasSession, tmuxKillSession, tmuxPanePidsBySessionAsync } from "../infra/tmux.js";
 import { mountProcessRoutes } from "./process-routes.js";
 import { listProcessDetails } from "../infra/process-list.js";
-import type { SessionActivityDeps } from "../session/session-activity-deps.js";
+import type { SessionActivityDeps } from "../session/activity/session-activity-deps.js";
 import { mountSpaFallback } from "../infra/spa-fallback.js";
 import { mountRateLimitRoutes, type RateLimitRouteDeps } from "../agents/rate-limit/rate-limit-routes.js";
 import { mountLoadRoute } from "./load-routes.js";
@@ -315,7 +315,7 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
   // match MulmoClaude (so the <workspace>/data/translation cache is shared between the
   // apps), but the LLM step is MulmoTerminal's own: deps.translateViaHiddenChat spawns a
   // hidden background claude session (NEVER `claude -p`) and is filtered from the
-  // sidebar (see session/translation-worker.ts).
+  // sidebar (see session/scheduled/translation-worker.ts).
   mountTranslationRoutes(app, { workspace: CLAUDE_CWD, translateBatch: deps.translateViaHiddenChat });
 
   // The agent-facing MCP surface (routes/mcp-routes.ts): the in-process GUI MCP server over
@@ -502,7 +502,7 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
     killTmux: tmuxKillSession,
     sweep: () => sweepIdleSessions(Date.now(), getSessionIdleReapDays()),
     // `Date.now()` is read HERE rather than inside the builder, which stays pure and takes the
-    // moment as a number (session/surviving-sessions.ts).
+    // moment as a number (session/reaping/surviving-sessions.ts).
     survivingSessions: () => survivingSessions(Date.now(), getSessionIdleReapDays()),
     armedReapIntervalHours,
   });

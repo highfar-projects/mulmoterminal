@@ -4,12 +4,12 @@
 // prompt to name a piece of it rather than to keep appending.
 import type { WebSocket } from "ws";
 import { ptys } from "../session/registry.js";
-import type { EarlyFrames } from "../session/early-frames.js";
+import type { EarlyFrames } from "../session/pty/early-frames.js";
 import type { PtyEntry } from "../session/types.js";
 import type { TerminalWsKind } from "./terminal-ws-path.js";
-import { SpawnRefusedError } from "../session/pty-spawn.js";
+import { SpawnRefusedError } from "../session/pty/pty-spawn.js";
 import { closeWithError } from "../session/ws-frames.js";
-import { ProviderRefusedError } from "../session/provider-env.js";
+import { ProviderRefusedError } from "../session/spawn/setup/provider-env.js";
 import { messageOf } from "../errors.js";
 
 // A refused spawn already carries its own diagnosis — the missing CLI with the PATH that was

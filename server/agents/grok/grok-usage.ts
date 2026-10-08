@@ -18,7 +18,7 @@
 // exactly once, and a later poll pays only for the turns that arrived since.
 import { isRecord } from "../../../common/isRecord.js";
 import type { SessionContextInfo } from "../../../common/sessionContext.js";
-import type { SessionUsage } from "../../session/transcript.js";
+import type { SessionUsage } from "../../session/transcript/transcript.js";
 import { usageCount as num } from "../usage-count.js";
 
 export const emptyGrokUsage = (): SessionUsage => ({ inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 });

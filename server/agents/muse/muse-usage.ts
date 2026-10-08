@@ -18,7 +18,7 @@
 //   largest is a high-water mark that never comes down after a compaction, which on the session
 //   measured here read 397k against a real 266k — a badge saying `/compact` is due when it is not.
 import { isRecord } from "../../../common/isRecord.js";
-import type { SessionUsage } from "../../session/transcript.js";
+import type { SessionUsage } from "../../session/transcript/transcript.js";
 import { usageCount as num } from "../usage-count.js";
 
 /** Everything one fold of a session log answers. One value rather than three folds, because all

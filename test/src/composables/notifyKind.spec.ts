@@ -26,7 +26,7 @@ describe("notifyKindOf", () => {
   });
 
   it("raises ONE finished for a background Stop, which publishes twice", () => {
-    // server/session/activity-hook.ts: a Stop on a cell the user isn't looking at applies
+    // server/session/activity/activity-hook.ts: a Stop on a cell the user isn't looking at applies
     // { waiting: true } and then { working: false }, so two rows arrive for one finished turn.
     const prev = fresh();
     notifyKindOf(prev, msg("a", true, false, "UserPromptSubmit"));

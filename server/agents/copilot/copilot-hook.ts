@@ -6,7 +6,7 @@
 // Everything here is pure. The route's own fan-out does the work; this only renames.
 //
 // WHY A TRANSLATION AND NOT A SECOND ROUTE: the effect tables downstream key on CLAUDE's event
-// names (server/session/activity-hook.ts, tool-hook.ts). codex reaches them the same way, through
+// names (server/session/activity/activity-hook.ts, tool-hook.ts). codex reaches them the same way, through
 // HOOK_EVENT_FOR in codex-activity.ts. A third vocabulary would mean a third copy of the rules for
 // what a turn boundary does.
 //

@@ -10,7 +10,7 @@ import express from "express";
 import { routeCall, jsonPost } from "../../helpers/routeCall";
 import { mountHookRoute } from "../../../server/routes/hook-routes";
 import { lastPrompts, lastResponses } from "../../../server/session/registry";
-import { clearedTranscripts } from "../../../server/session/cleared-transcripts";
+import { clearedTranscripts } from "../../../server/session/transcript/cleared-transcripts";
 
 // The prompt seed reads the transcript for a session this process has no prompt for; the tests
 // stand in for that read so the seeding branch can be observed without a transcript on disk.
@@ -20,8 +20,8 @@ vi.mock("../../../server/session/session-reads.js", () => ({ latestUserPrompt: v
 // ~/.mulmoterminal. Stubbing the writer keeps the route's own behaviour — including WHICH cwd it
 // hands over, which is the wiring that decides whether the mark can survive a restart at all.
 const markCalls: Array<[string, string | undefined]> = [];
-vi.mock("../../../server/session/cleared-transcripts", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../../server/session/cleared-transcripts")>();
+vi.mock("../../../server/session/transcript/cleared-transcripts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../server/session/transcript/cleared-transcripts")>();
   return {
     ...actual,
     markTranscriptCleared: async (id: string, cwd: string | undefined) => {

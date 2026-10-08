@@ -18,7 +18,7 @@ import { initAccountingBackend } from "./plugins/accounting.js";
 import { initFeedsBackend } from "./feeds/feeds.js";
 import { createFeedsWorker, type FeedsWorkerDeps } from "./feeds/feeds-worker.js";
 import { initPluginRuntime } from "../infra/pluginRuntime.js";
-import { hydrateClearedTranscripts } from "../session/cleared-transcripts.js";
+import { hydrateClearedTranscripts } from "../session/transcript/cleared-transcripts.js";
 import { ptys } from "../session/registry.js";
 import { getCwdPresets } from "../config/config-routes.js";
 import { CLAUDE_CWD, MULMOTERMINAL_HOME } from "../config/env.js";

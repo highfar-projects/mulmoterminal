@@ -211,7 +211,7 @@ const dirListsLoading = computed(() => resumableLoading.value || scriptsLoading.
 // chips). The one-session rule has to hold on every way in, not just the nearest one.
 //
 // This is the EXPLANATION, not the guarantee — the server refuses the spawn whatever the client
-// believes (session/worktree-session-limit.ts), which is what covers a symlinked path and a chip
+// believes (session/credentials/worktree-session-limit.ts), which is what covers a symlinked path and a chip
 // pointing into a repo whose worktree list was never fetched. Here the job is only to grey the
 // control out before the click, so the comparison folds the spellings a person types.
 //
@@ -846,7 +846,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
          a per-launch choice — but it only takes effect when a session starts, so this is
          where it belongs: decided before the thing it configures exists.
          BOTH agents: claude reads that config itself, and a codex cell is handed the same
-         groups as resolved URLs at spawn (server/session/spawn-codex.ts), so one switch
+         groups as resolved URLs at spawn (server/session/spawn/agents/spawn-codex.ts), so one switch
          answers for both. It is still Claude Code's file — writing it needs the `claude`
          CLI on PATH, which is why a failure here says so rather than silently doing nothing.
          One row per group in TOOL_GROUPS, because one switch is one MCP server: render and

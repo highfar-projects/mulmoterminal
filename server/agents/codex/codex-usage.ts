@@ -21,7 +21,7 @@
 import { isRecord } from "../../../common/isRecord.js";
 import { codexEventPayload } from "./codex-events.js";
 import type { SessionContextInfo } from "../../../common/sessionContext.js";
-import type { SessionUsage } from "../../session/transcript.js";
+import type { SessionUsage } from "../../session/transcript/transcript.js";
 
 export interface CodexBadges {
   usage: SessionUsage;

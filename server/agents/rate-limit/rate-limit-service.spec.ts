@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const spawnPty = vi.hoisted(() => vi.fn());
 
-vi.mock("../../session/pty-spawn.js", () => ({ spawnPty }));
+vi.mock("../../session/pty/pty-spawn.js", () => ({ spawnPty }));
 vi.mock("../../infra/has-binary.js", () => ({ hasBinary: () => true }));
 vi.mock("./rate-limit-persist.js", () => ({
   rateLimitCacheFile: () => "/nonexistent/rate-limits.json",

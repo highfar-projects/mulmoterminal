@@ -1,7 +1,7 @@
 // The wire shape of GET /api/transcript/prompts — the prompts the user sent one session (#1748).
 //
 // In `common/` because both sides decide from it: the server builds the window (which log it reads
-// and how it caps is its own business, in server/session/prompt-history.ts), and the pane renders
+// and how it caps is its own business, in server/session/transcript/prompt-history.ts), and the pane renders
 // each field. A shape kept twice is the one that drifts.
 
 import { isRecord } from "./isRecord";

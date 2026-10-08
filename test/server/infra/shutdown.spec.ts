@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // vi.mock is hoisted above every const in the file, so the spy has to be hoisted with it.
 const { stopWhisperSidecar, drainPersistQueues } = vi.hoisted(() => ({ stopWhisperSidecar: vi.fn(), drainPersistQueues: vi.fn(async () => true) }));
 vi.mock("../../../server/backends/media/whisper.js", () => ({ stopWhisperSidecar }));
-vi.mock("../../../server/session/persist-drain.js", () => ({ drainPersistQueues }));
+vi.mock("../../../server/session/reaping/persist-drain.js", () => ({ drainPersistQueues }));
 
 import { installShutdownHandlers } from "../../../server/infra/shutdown.js";
 

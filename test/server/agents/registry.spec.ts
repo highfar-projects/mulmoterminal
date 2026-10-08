@@ -5,7 +5,7 @@ import { claudeAdapter } from "../../../server/agents/claude/claude.js";
 import { codexAdapter } from "../../../server/agents/codex/codex.js";
 import { antigravityAdapter } from "../../../server/agents/antigravity/antigravity.js";
 import { grokAdapter } from "../../../server/agents/grok/grok.js";
-import { squashForMarker } from "../../../server/session/pty-scan.js";
+import { squashForMarker } from "../../../server/session/pty/pty-scan.js";
 
 function restoreEnv(key: string, value: string | undefined): void {
   if (value === undefined) Reflect.deleteProperty(process.env, key);

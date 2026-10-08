@@ -80,7 +80,7 @@ vi.mock("../../../server/agents/codex/codex-sessions.js", async (importOriginal)
 // Whether every session reads as bound to a second login (#2215). Off unless a test says so, so the
 // rest of this file runs on the default login exactly as before.
 const account = { bound: false };
-vi.mock("../../../server/session/account-sessions.js", () => ({
+vi.mock("../../../server/session/accounts/account-sessions.js", () => ({
   accountSessions: new Map(),
   accountSessionsHydrated: Promise.resolve(),
   boundAccount: (agent: string, sessionId: string) => (account.bound ? { sessionId, agent, accountId: "work", home: "/srv/claude-work" } : undefined),
@@ -99,13 +99,13 @@ vi.mock("../../../server/config/worktree/worktree-env.js", () => ({
 }));
 
 // A real occupancy read runs git against the cwd; this spec is about the handlers' shape.
-vi.mock("../../../server/session/worktree-session-limit.js", () => ({
+vi.mock("../../../server/session/credentials/worktree-session-limit.js", () => ({
   claimLaunch: () => ({ release: vi.fn(), contended: false }),
   worktreeOccupancy: () => Promise.resolve({ isWorktree: false, session: null }),
 }));
 
 const settleCredential = vi.fn();
-vi.mock("../../../server/session/credential-announce.js", () => ({ settleCredential }));
+vi.mock("../../../server/session/credentials/credential-announce.js", () => ({ settleCredential }));
 
 const { handleClaudeConnection, handleCodexConnection } = await import("../../../server/routes/ws-routes.js");
 

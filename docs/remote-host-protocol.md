@@ -126,7 +126,7 @@ issue, so the Enter is the user's. That is right on the desktop and wrong on a p
 Enter key — the work simply stops there. **`run: true`** submits it instead.
 
 **Only the host can do this.** The seed is typed once the TUI's input box has painted
-(`server/session/draft-injection.ts`), so an Enter sent from the phone would race the injection,
+(`server/session/spawn/draft-injection.ts`), so an Enter sent from the phone would race the injection,
 and nothing outside this process knows when it landed. `sendTerminalInput` cannot send a bare Enter
 either (empty text is rejected), and a one-character workaround would be cleared by the
 before-paste Ctrl-C. So this is a parameter here rather than a sequence the phone performs.
@@ -455,7 +455,7 @@ that SPAWNS can mark its session unplaced and let a grid adopt it later, which i
 | Quick-command scoping | `server/backends/remoteHost/quickCommands.ts` |
 | Launch validation | `server/backends/remoteHost/launchTerminal.ts` |
 | Issue work (list, refuse, start) | `server/backends/remoteHost/handlers/issueWork.ts`, `server/git/issue-work.ts` |
-| Whether the seed is typed or typed-and-run | `server/session/issue-spawn-options.ts` |
+| Whether the seed is typed or typed-and-run | `server/session/spawn/issue-spawn-options.ts` |
 | Which clone a repo starts in | `server/git/repo-dirs.ts`, `common/issueStartPlan.ts` |
 | Reconnect + health | `server/backends/remoteHost/resilientRunner.ts`, `healthNotice.ts` |
 | Wiring (PTY table, pub/sub, config) | `server/index.ts` |

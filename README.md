@@ -1526,7 +1526,7 @@ one click: read the issue, cut an `issue/<number>-<slug>` worktree in your clone
 open Claude there as a grid cell with the issue **typed into its input box but not sent**. The
 **Start issues in** menu above the list picks another agent instead (and, for Claude or Codex, an
 account); every agent but Claude runs the issue text at once, which the view warns about. The
-prompt is seeded server-side as a *draft* (`server/session/draft-injection.ts`), which waits for
+prompt is seeded server-side as a *draft* (`server/session/spawn/draft-injection.ts`), which waits for
 claude's input box to be ready — text pushed in before that lands in the scrollback instead. A repo
 with several clones asks which one the first time and remembers the answer; a repo with no clone
 here disables the button and says why. Backed by `POST /api/issues/start`.
@@ -1674,7 +1674,7 @@ exactly as it was. Close the cell and open a new one (or `Stop` it in Settings �
 and it comes back with the tools its directory registered.
 
 Which route a session takes is decided by `carriesFullGuiMcp()` in
-`server/session/mcp-config.ts` — the single view, a cell-less chat, or anything whose cwd **is**
+`server/session/spawn/setup/mcp-config.ts` — the single view, a cell-less chat, or anything whose cwd **is**
 the workspace take the first; anything in a project directory takes the second.
 
 **The workspace is agent-agnostic for the agents that can RECEIVE a per-spawn config** — claude,

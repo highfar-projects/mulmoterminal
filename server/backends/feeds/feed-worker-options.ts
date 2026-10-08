@@ -10,7 +10,7 @@
 // That is not hypothetical: per-project feed refresh shipped once and was REVERTED for exactly
 // this (#1582), because the runner was handed no root to spawn in. core 3.2.0 forwards it, and
 // this is where it lands.
-import type { SpawnClaudeOptions } from "../../session/spawn-claude.js";
+import type { SpawnClaudeOptions } from "../../session/spawn/agents/spawn-claude.js";
 
 /** The spawn options for an agent-ingest worker refreshing `workspaceRoot`.
  *

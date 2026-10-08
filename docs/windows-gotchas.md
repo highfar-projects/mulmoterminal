@@ -32,7 +32,7 @@ a different one — which is how an extensionless shim "works" by accident.
 
 → `server/infra/resolve-bin.ts` resolves the name before node-pty sees it, and
 `server/infra/cmd-escape.ts` wraps a batch target in `cmd.exe /d /s /c`. Both are reached from
-the single `spawnPty()` in `server/session/pty-spawn.ts` (#794, #798).
+the single `spawnPty()` in `server/session/pty/pty-spawn.ts` (#794, #798).
 
 **cmd.exe re-parses the command line before the child's CRT does.** `\"` — the CRT's escape,
 and what node-pty's own `argsToCommandLine` emits — does not escape a quote for cmd; it *ends*

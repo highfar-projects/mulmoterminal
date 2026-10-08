@@ -4,14 +4,14 @@
 //
 // Codex has no hooks, so its rollout is the only place a prompt appears — and the repo's own reader
 // says codex "writes its rollout lazily" and skips an in-flight turn on that basis
-// (server/session/last-turn.ts, #254). If that is right, a pane refreshed only at turn START looks
+// (server/session/transcript/last-turn.ts, #254). If that is right, a pane refreshed only at turn START looks
 // for a `user_message` that is not on disk yet, and nothing refreshes it afterwards: an open pane
 // misses every codex prompt until some later turn begins (Codex, #1749).
 //
 // So both boundaries publish. Whichever way the flush timing actually goes, one of the two finds
 // the prompt and the other is a redundant read of a file the pane was going to read anyway.
 import { describe, it, expect, vi } from "vitest";
-import { applyBoundary } from "../../../server/session/codex-activity-track.js";
+import { applyBoundary } from "../../../server/session/activity/codex-activity-track.js";
 
 const SESSION = "11111111-2222-4333-8444-555555555555";
 

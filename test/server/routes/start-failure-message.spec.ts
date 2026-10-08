@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 
 import { startFailureMessageFor } from "../../../server/routes/ws-routes.js";
-import { SpawnBinaryError, SpawnCwdError } from "../../../server/session/pty-spawn.js";
+import { SpawnBinaryError, SpawnCwdError } from "../../../server/session/pty/pty-spawn.js";
 
 // The one decision this PR family turns on (#1063, #1078): a refusal that was written FOR the
 // reader must reach the terminal unchanged. Wrapping it is how the user ended up looking at

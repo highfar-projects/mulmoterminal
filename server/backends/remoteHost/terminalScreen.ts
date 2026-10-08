@@ -2,7 +2,7 @@
 //
 // Both entry points are dependency-injected and free of server/index.ts internals, so the
 // join rules and the capture fallback are unit-testable without a live PTY or tmux.
-import { parseStyledRows, rowsToScreen, suggestionFromRows, type ScreenRow } from "../../session/screen-rows.js";
+import { parseStyledRows, rowsToScreen, suggestionFromRows, type ScreenRow } from "../../session/pty/screen-rows.js";
 import { TERMINAL_AGENTS, type SessionAgent } from "../../../common/sessionAgent.js";
 import { workItemHeadline, type PrPhase, type WorkItem } from "../../../common/prPhase.js";
 import type { QuickCommandChip } from "./quickCommands.js";

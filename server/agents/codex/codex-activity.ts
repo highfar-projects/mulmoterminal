@@ -3,10 +3,10 @@
 // after the user approves them, and the one we register — codex-hook.ts — reports the
 // approval dialog alone, so declining it costs the blocked signal and nothing else.
 //
-// Everything here is pure: the tailing itself lives in session/codex-activity-watch.ts.
+// Everything here is pure: the tailing itself lives in session/activity/codex-activity-watch.ts.
 
 import { isRecord } from "../../../common/isRecord.js";
-import { activityHookEffects, pushKindFor, type ActivityEffect } from "../../session/activity-hook.js";
+import { activityHookEffects, pushKindFor, type ActivityEffect } from "../../session/activity/activity-hook.js";
 import type { PushKind } from "../../../common/pushKinds.js";
 
 export type CodexTurnBoundary = "started" | "completed";

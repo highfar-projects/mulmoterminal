@@ -467,7 +467,7 @@ export function unsupportedNodeMessage(version, execPath, upgrade) {
  * hands its own environment to every PTY it spawns, so a port set there reaches every terminal
  * in every cell — which is how a raw `PORT` made a dev server started in a cell try to take
  * MulmoTerminal's own port (#1857). Renaming it would only move that: `MULMOTERMINAL_PORT` is
- * deliberately given to PTYs (server/session/mcp-config.ts) for the MCP URLs, so a server
+ * deliberately given to PTYs (server/session/spawn/setup/mcp-config.ts) for the MCP URLs, so a server
  * reading it as its bind port would clash with itself the moment `yarn dev` ran inside a cell.
  *
  * `--agent` rides the same channel for the same reason (#2082): it is a preference, and a

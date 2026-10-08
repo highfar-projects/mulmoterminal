@@ -6,10 +6,10 @@
 // of them answers "every conversation in this directory": `cache/last_conversations.json` keeps
 // only the LAST conversation per cwd and is written at exit, `history.jsonl` has no conversation
 // id, and `conversation_summaries.db` has the columns but the CLI never writes a row. So the cwd
-// is read from OUR log (session/agent-conversations.ts) and agy's transcript is opened only
+// is read from OUR log (session/list/agent-conversations.ts) and agy's transcript is opened only
 // for a title and an mtime.
 import path from "node:path";
-import type { AgentConversation } from "../../session/agent-conversations.js";
+import type { AgentConversation } from "../../session/list/agent-conversations.js";
 import { antigravityConversationExists } from "./antigravity-session.js";
 import { cleanTitle, parseJsonRecord, readTranscriptHead } from "../transcript-head.js";
 

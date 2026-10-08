@@ -1,7 +1,7 @@
 // What a hosted agent's conversation looks like ON THE WIRE.
 //
 // In `common/` because both ends decide from it: the host folds an agent's JSONL (or copilot's
-// table) into these shapes in `server/session/transcript-view.ts`, and two clients render them —
+// table) into these shapes in `server/session/transcript/transcript-view.ts`, and two clients render them —
 // the phone's terminal detail page over the remoteHost socket, and the browser's transcript pane
 // over `/api/transcript/view`. Mirroring the shape into `src/` would let one side gain a status the
 // other silently renders as nothing.
