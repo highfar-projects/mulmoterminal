@@ -568,7 +568,7 @@ const accountMarkLabel = computed(() => (accountId.value ? accountLabel(props.ac
 const accountMarkDetail = computed(() => (accountId.value ? null : (cellCredential.value?.detail ?? null)));
 // Only a cell rotation placed can be moved, and only to what the config offers (#2950).
 const accountMarkChoices = computed(() =>
-  accountId.value ? [] : accountSwitchChoices(tokenRotation.value, cellCredential.value?.id ?? null, rateLimitSnapshot.value?.accounts ?? [], Date.now()),
+  accountId.value ? [] : accountSwitchChoices(tokenRotation.value, cellCredential.value?.id ?? null, rateLimitSnapshot.value, Date.now()),
 );
 
 // Start what the Agent Picker picked, in `dir`. EVERY launch in the form goes through here: the

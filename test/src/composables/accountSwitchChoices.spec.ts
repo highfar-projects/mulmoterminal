@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { accountSwitchChoices } from "../../../src/composables/accountSwitchChoices";
-import type { AccountReading } from "../../../src/composables/rateLimitGauge";
+import type { AccountReading, RateLimitSnapshot } from "../../../src/composables/rateLimitGauge";
 import { DEFAULT_LOGIN_ID, DEFAULT_LOGIN_LABEL, type TokenRotation } from "../../../common/tokenRotation";
 
 const NOW_MS = 1_000_000_000_000;
@@ -17,50 +17,75 @@ const rotation = (over: Partial<TokenRotation> = {}): TokenRotation => ({
 });
 
 const reading = (id: string, over: Partial<AccountReading> = {}): AccountReading => ({ id, label: id, agent: "claude", limits: null, rotation: true, ...over });
+const snap = (accounts: AccountReading[] = [], over: Partial<RateLimitSnapshot> = {}): RateLimitSnapshot => ({ claude: null, codex: null, accounts, ...over });
 const weekly = (usedPercentage: number, resetsAt_sec: number | null = NOW_SEC + 3600) => ({ fiveHour: null, sevenDay: { usedPercentage, resetsAt_sec } });
 
 describe("accountSwitchChoices (#2950)", () => {
   it("lists the tokens and marks the current one", () => {
-    expect(accountSwitchChoices(rotation(), "b", [], NOW_MS).map(({ id, label, detail, current }) => ({ id, label, detail, current }))).toEqual([
+    expect(accountSwitchChoices(rotation(), "b", snap(), NOW_MS).map(({ id, label, detail, current }) => ({ id, label, detail, current }))).toEqual([
       { id: "a", label: "A", detail: "a@example.com", current: false },
       { id: "b", label: "B", detail: null, current: true },
     ]);
   });
 
   it("adds the /login credential only when it takes part", () => {
-    const choices = accountSwitchChoices(rotation({ includeDefaultLogin: true }), DEFAULT_LOGIN_ID, [], NOW_MS);
+    const choices = accountSwitchChoices(rotation({ includeDefaultLogin: true }), DEFAULT_LOGIN_ID, snap(), NOW_MS);
     expect(choices.at(-1)).toMatchObject({ id: DEFAULT_LOGIN_ID, label: DEFAULT_LOGIN_LABEL, detail: null, current: true });
-    expect(accountSwitchChoices(rotation(), "a", [], NOW_MS).map((choice) => choice.id)).toEqual(["a", "b"]);
+    expect(accountSwitchChoices(rotation(), "a", snap(), NOW_MS).map((choice) => choice.id)).toEqual(["a", "b"]);
   });
 
   it("offers nothing with rotation off or for a cell not on a rotated token", () => {
-    expect(accountSwitchChoices(rotation({ enabled: false }), "a", [], NOW_MS)).toEqual([]);
-    expect(accountSwitchChoices(rotation(), null, [], NOW_MS)).toEqual([]);
+    expect(accountSwitchChoices(rotation({ enabled: false }), "a", snap(), NOW_MS)).toEqual([]);
+    expect(accountSwitchChoices(rotation(), null, snap(), NOW_MS)).toEqual([]);
   });
 
   describe("weekly room (#2954)", () => {
     it("carries what is left of the weekly window", () => {
-      const [a] = accountSwitchChoices(rotation(), "b", [reading("a", { limits: weekly(37.4) })], NOW_MS);
+      const [a] = accountSwitchChoices(rotation(), "b", snap([reading("a", { limits: weekly(37.4) })]), NOW_MS);
       expect(a).toMatchObject({ weekLeftPercent: 62, usage: "ok" });
     });
 
     it("says not measured, rather than zero, for a subscription with no reading", () => {
-      expect(accountSwitchChoices(rotation(), "b", [], NOW_MS)[0]).toMatchObject({ weekLeftPercent: null, usage: "measuring" });
+      expect(accountSwitchChoices(rotation(), "b", snap(), NOW_MS)[0]).toMatchObject({ weekLeftPercent: null, usage: "measuring" });
     });
 
     it("reports a subscription at its usage limit", () => {
       const at = reading("a", { probe: "no-report", probeStall: "usage-limit" });
-      expect(accountSwitchChoices(rotation(), "b", [at], NOW_MS)[0]).toMatchObject({ weekLeftPercent: null, usage: "at-limit" });
+      expect(accountSwitchChoices(rotation(), "b", snap([at]), NOW_MS)[0]).toMatchObject({ weekLeftPercent: null, usage: "at-limit" });
     });
 
     it("counts a window whose reset has passed as full", () => {
-      const [a] = accountSwitchChoices(rotation(), "b", [reading("a", { limits: weekly(90, NOW_SEC - 1) })], NOW_MS);
+      const [a] = accountSwitchChoices(rotation(), "b", snap([reading("a", { limits: weekly(90, NOW_SEC - 1) })]), NOW_MS);
       expect(a?.weekLeftPercent).toBe(100);
     });
 
     it("ignores readings that are accounts, not rotation tokens", () => {
       const account = reading("a", { rotation: false, limits: weekly(10) });
-      expect(accountSwitchChoices(rotation(), "b", [account], NOW_MS)[0]).toMatchObject({ weekLeftPercent: null, usage: "measuring" });
+      expect(accountSwitchChoices(rotation(), "b", snap([account]), NOW_MS)[0]).toMatchObject({ weekLeftPercent: null, usage: "measuring" });
+    });
+
+    describe("the /login credential", () => {
+      const withLogin = rotation({ includeDefaultLogin: true });
+      const loginOf = (snapshot: RateLimitSnapshot | null) =>
+        accountSwitchChoices(withLogin, "a", snapshot, NOW_MS).find((choice) => choice.id === DEFAULT_LOGIN_ID);
+
+      it("takes its figure from the gauge's own reading, not from the tokens", () => {
+        expect(loginOf(snap([], { claude: weekly(25) }))).toMatchObject({ weekLeftPercent: 75, usage: "ok" });
+      });
+
+      it("reports it at its limit when the gauge's probe says so", () => {
+        expect(loginOf(snap([], { claudeProbe: "no-report", claudeStall: "usage-limit" }))).toMatchObject({ weekLeftPercent: null, usage: "at-limit" });
+      });
+
+      it("reads as not measured with no reading, or no snapshot at all", () => {
+        expect(loginOf(snap())).toMatchObject({ weekLeftPercent: null, usage: "measuring" });
+        expect(loginOf(null)).toMatchObject({ weekLeftPercent: null, usage: "measuring" });
+      });
+
+      it("never lends its reading to a token", () => {
+        const [a] = accountSwitchChoices(withLogin, "b", snap([], { claude: weekly(5) }), NOW_MS);
+        expect(a).toMatchObject({ id: "a", weekLeftPercent: null, usage: "measuring" });
+      });
     });
   });
 });

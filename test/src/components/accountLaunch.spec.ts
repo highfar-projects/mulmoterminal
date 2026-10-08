@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import CellLaunchForm from "../../../src/components/CellLaunchForm.vue";
 import AccountMark from "../../../src/components/AccountMark.vue";
+import type { AccountSwitchChoice } from "../../../src/composables/accountSwitchChoices";
 import { buildAgentWsUrl, buildTerminalWsUrl, connWsUrl } from "../../../src/components/wsUrl";
 import { cellForPanelResume, cellForPanelStart } from "../../../src/components/launchCell";
 import { accountLabel, accountsForAgent, type AgentAccount } from "../../../common/agentAccounts";
@@ -131,9 +132,9 @@ describe("AccountMark", () => {
 
   // The mark is the way to move a rotated session to another subscription (#2950).
   describe("with subscriptions to move to", () => {
-    const choices = [
-      { id: "a", label: "A", detail: null, current: true, weekLeftPercent: 40, usage: "ok" as const },
-      { id: "b", label: "B", detail: "b@example.com", current: false, weekLeftPercent: null, usage: "measuring" as const },
+    const choices: AccountSwitchChoice[] = [
+      { id: "a", label: "A", detail: null, current: true, weekLeftPercent: 40, usage: "ok" },
+      { id: "b", label: "B", detail: "b@example.com", current: false, weekLeftPercent: null, usage: "measuring" },
     ];
     const open = async () => {
       const w = mount(AccountMark, { props: { label: "A", choices }, attachTo: document.body });
