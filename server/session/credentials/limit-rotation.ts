@@ -30,7 +30,7 @@ export interface LimitRotationDeps {
 }
 
 /** Why a session moved, for its notice line. */
-export type MoveReason = "limit-hit" | "near-limit";
+export type MoveReason = "limit-hit" | "near-limit" | "switched";
 
 export interface MovedFrom {
   fromLabel: string;

@@ -15,9 +15,14 @@ import { mountAllRoutes } from "../infra/plugins-registry.js";
 import { mountConfigRoutes } from "../config/config-routes.js";
 import { mountFilesBrowseRoutes } from "../files/files-browse.js";
 import { mountTmuxRoutes } from "../infra/tmux-routes.js";
+import { mountSwitchTokenRoutes } from "../infra/switch-token-routes.js";
+import { clearSwitchedToken, pinSwitchedToken } from "../session/credentials/token-switch-pins.js";
+import { sessionToken } from "../session/credentials/token-sessions.js";
+import { noteMovedFrom, takeMovedFrom } from "../session/credentials/rotation-notice.js";
+import { rotationLoginLabel } from "../../common/tokenRotation.js";
 import { survivingSessions } from "../session/reaping/surviving-sessions.js";
 import { armedReapIntervalHours } from "../session/reaping/reap-schedule.js";
-import { getSessionIdleReapDays, getQuestionPaneEnabled } from "../config/config-routes.js";
+import { getSessionIdleReapDays, getQuestionPaneEnabled, getTokenRotation } from "../config/config-routes.js";
 import { sweepIdleSessions } from "../session/reaping/reap-idle-sessions.js";
 import { mountHookRoute } from "../routes/hook-routes.js";
 import { mountPluginRoutes } from "../routes/plugin-routes.js";
@@ -336,6 +341,7 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
   // The agent hook endpoint (routes/hook-routes.ts). Session lifecycle, the title
   // bookkeeping and the tool stores stay here; the fan-out that reads them moves out.
   mountSessionFacingRoutes(app, deps);
+  mountSwitchToken(app, deps);
   mountProcessesPageRoutes(app, deps);
 }
 
@@ -499,6 +505,26 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
     // moment as a number (session/reaping/surviving-sessions.ts).
     survivingSessions: () => survivingSessions(Date.now(), getSessionIdleReapDays()),
     armedReapIntervalHours,
+  });
+}
+
+// Moving a rotated session to the subscription a user picked on its cell's mark (#2950).
+function mountSwitchToken(app: Express, deps: AppRouteDeps): void {
+  mountSwitchTokenRoutes(app, {
+    isAllowedOrigin: deps.isAllowedOrigin,
+    isValidSessionId: (id) => SESSION_ID_RE.test(id),
+    rotation: getTokenRotation,
+    sessionToken,
+    pin: pinSwitchedToken,
+    clearPin: clearSwitchedToken,
+    noteMovedFrom,
+    dropMovedFrom: (sessionId) => {
+      takeMovedFrom(sessionId);
+    },
+    labelOf: (tokenId) => rotationLoginLabel(getTokenRotation(), tokenId),
+    reapSession: deps.reap,
+    hasTmux: tmuxHasSession,
+    killTmux: tmuxKillSession,
   });
 }
 

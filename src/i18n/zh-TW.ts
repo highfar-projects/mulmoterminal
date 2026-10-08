@@ -484,6 +484,12 @@ export const zhTW: Messages = {
   // `AttentionStatus` / `WorkPhase` / `PrPhase` 增加取值時，必須在此處寫上名稱，否則無法通過
   // 編譯（#1894）。
   // A cell header's two view menus: what happened in the session, and the tools around it.
+  // The account mark on a rotated cell opens this menu (#2950).
+  accountSwitch: {
+    title: "將此工作階段移到另一個訂閱",
+    hint: "點擊可將此工作階段移到另一個訂閱",
+    explain: "工作階段會在你選擇的訂閱上重新啟動並繼續同一段對話。進行中的回合會被中斷。",
+  },
   cellMenu: {
     history: "歷史",
     tools: "工具",

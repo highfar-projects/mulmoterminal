@@ -117,6 +117,9 @@ too, the session stays where it is, with Claude Code's own limit message.
 ## What you will see
 
 - **The cell's header** names the subscription it runs on, with the same mark accounts use.
+  Click it to move that session to another subscription yourself: pick one from the list and the
+  session restarts on it, on the same conversation. A turn in progress is stopped. The list holds the
+  subscriptions in your config, plus the `/login` one when `includeDefaultLogin` is on.
 - **The toolbar's usage gauge** gets one entry per subscription; hover it for the name and address.
   A subscription that is out of its allowance says so instead of "no answer".
 - **"More features" → "Token usage"** lists every subscription with what is left of its 5-hour and

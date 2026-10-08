@@ -3,6 +3,8 @@ import { rotationLoginLabel, type TokenRotation } from "../../../common/tokenRot
 
 export interface CredentialFrame {
   type: "credential";
+  /** The token the mark names, so a menu can show which one is current. */
+  id: string | null;
   label: string | null;
   detail: string | null;
 }
@@ -11,8 +13,8 @@ export interface CredentialFrame {
  *  is off, so a cell without it sees no new frame at all. */
 export function credentialFrameFor(rotation: TokenRotation, tokenId: string | undefined): CredentialFrame | null {
   if (!rotation.enabled) return null;
-  if (tokenId === undefined) return { type: "credential", label: null, detail: null };
+  if (tokenId === undefined) return { type: "credential", id: null, label: null, detail: null };
   const token = rotation.tokens.find((candidate) => candidate.id === tokenId);
   const detail = rotationLoginLabel(rotation, tokenId);
-  return { type: "credential", label: token?.label ?? detail, detail };
+  return { type: "credential", id: tokenId, label: token?.label ?? detail, detail };
 }

@@ -40,7 +40,7 @@ describe("a cell's rotation credential", () => {
 
   it("is handed to the view when the server announces it", () => {
     openCell().onmessage?.({ data: CREDENTIAL });
-    expect(seen.at(-1)).toEqual({ label: "SS", detail: "SS (me@example.com)" });
+    expect(seen.at(-1)).toEqual({ id: null, label: "SS", detail: "SS (me@example.com)" });
   });
 
   it("is forgotten when the cell is pointed at another session, before any frame arrives", () => {

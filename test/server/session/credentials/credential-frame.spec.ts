@@ -19,19 +19,24 @@ describe("credentialFrameFor", () => {
   });
 
   it("clears the mark for a session that is not on a token", () => {
-    expect(credentialFrameFor(rotation(), undefined)).toEqual({ type: "credential", label: null, detail: null });
+    expect(credentialFrameFor(rotation(), undefined)).toEqual({ type: "credential", id: null, label: null, detail: null });
   });
 
   it("labels a token and names its address in the detail", () => {
-    expect(credentialFrameFor(rotation(), "b")).toEqual({ type: "credential", label: "Work", detail: "Work (w@example.com)" });
-    expect(credentialFrameFor(rotation(), "a")).toEqual({ type: "credential", label: "A", detail: "A" });
+    expect(credentialFrameFor(rotation(), "b")).toEqual({ type: "credential", id: "b", label: "Work", detail: "Work (w@example.com)" });
+    expect(credentialFrameFor(rotation(), "a")).toEqual({ type: "credential", id: "a", label: "A", detail: "A" });
   });
 
   it("falls back to the id for a token gone from the config", () => {
-    expect(credentialFrameFor(rotation(), "gone")).toEqual({ type: "credential", label: "gone", detail: "gone" });
+    expect(credentialFrameFor(rotation(), "gone")).toEqual({ type: "credential", id: "gone", label: "gone", detail: "gone" });
   });
 
   it("names the /login credential", () => {
-    expect(credentialFrameFor(rotation(), DEFAULT_LOGIN_ID)).toEqual({ type: "credential", label: DEFAULT_LOGIN_LABEL, detail: DEFAULT_LOGIN_LABEL });
+    expect(credentialFrameFor(rotation(), DEFAULT_LOGIN_ID)).toEqual({
+      type: "credential",
+      id: DEFAULT_LOGIN_ID,
+      label: DEFAULT_LOGIN_LABEL,
+      detail: DEFAULT_LOGIN_LABEL,
+    });
   });
 });
