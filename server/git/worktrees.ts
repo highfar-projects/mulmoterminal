@@ -4,7 +4,6 @@
 // managed root (~/.mulmoterminal/worktrees/<repo>-<hash>/<task>) so the repo dir
 // stays clean and we only ever remove paths WE created. The pure helpers (slug /
 // parse / paths) are split out for unit tests; the rest shell out to git.
-import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, realpathSync } from "node:fs";
 import path from "node:path";
@@ -13,6 +12,7 @@ import { mulmoterminalHome } from "../infra/mulmoterminal-home.js";
 import { canonicalPath } from "../infra/canonical-path.js";
 import { ensureWorktreeEnv } from "../config/worktree-env.js";
 import { splitLines } from "../infra/split-lines.js";
+import { runTool } from "./run-tool.js";
 import { DIR_CONFIG_FILE, DIR_LOCAL_CONFIG_FILE } from "../config/dir-config.js";
 import { writeInheritedDirConfig } from "../config/worktree-dir-config.js";
 import { ISSUE_BRANCH_PREFIX, issueFromAnchoredBranch } from "../../common/prPhase.js";
@@ -107,58 +107,29 @@ const GIT_TIMEOUT_MS = 120_000;
 // caller can tell the refusals apart at all — which is why the content search asks `rev-parse`
 // rather than reading 128. Null when the process never ran (git missing, spawn refused, an argument
 // execve will not take) or was killed by a signal or an abort.
-export function git(
+export async function git(
   args: string[],
   cwd?: string,
   timeoutMs: number = GIT_TIMEOUT_MS,
   /** Kills the child when it fires. For a caller whose own reason to wait has gone — a request the
    *  browser hung up on — where the timeout alone would leave the process running for its full
-   *  duration. Arrives here as the same `error` event a failed spawn gives, so it needs no new
-   *  branch: `ok: false, code: null`, the answer that already means "no result came back". */
+   *  duration. Answered as `ok: false, code: null`, the answer that already means "no result came
+   *  back", so it needs no new branch. */
   signal?: AbortSignal,
   /** Stops the child once its output passes this many bytes, for a caller that will not use an
    *  answer that large anyway; the result is then `ok: false` with `overflow: true`. Unset reads all. */
   maxStdoutBytes?: number,
 ): Promise<{ ok: boolean; stdout: string; code: number | null; overflow?: boolean }> {
-  return new Promise((resolve) => {
-    // `spawn` THROWS SYNCHRONOUSLY for an argument Node refuses to pass to execve — a NUL byte is
-    // the reachable one (`ERR_INVALID_ARG_VALUE`), and a throw here rejects the promise, which is
-    // exactly what the contract above says never happens. Every caller is written against that
-    // promise, so the rejection surfaces as a 500 rather than the `ok:false` fallback each of them
-    // already handles. Reachable as soon as any caller puts user text in argv, which the content
-    // search does (`?q=%00`).
-    let child;
-    try {
-      // eslint-disable-next-line sonarjs/no-os-command-from-path -- 'git' is a standard tool from PATH in this local dev server; all inputs go through argv (no shell)
-      child = spawn("git", cwd ? ["-C", cwd, ...args] : args, { stdio: ["ignore", "pipe", "pipe"], timeout: timeoutMs, ...(signal ? { signal } : {}) });
-    } catch {
-      resolve({ ok: false, stdout: "", code: null }); // the process never ran, which is what `code: null` means
-      return;
-    }
-    // Collect bytes and decode ONCE: a chunk can split a multibyte UTF-8 character, and
-    // per-chunk toString() would turn a non-ASCII path/message into replacement chars.
-    const chunks: Buffer[] = [];
-    let received = 0;
-    let overflow = false;
-    child.stdout.on("data", (c: Buffer) => {
-      if (overflow) return;
-      received += c.length;
-      if (maxStdoutBytes !== undefined && received > maxStdoutBytes) {
-        overflow = true;
-        child.kill();
-        return;
-      }
-      chunks.push(c);
-    });
-    // stderr is not returned, but it MUST still be drained: git blocks on a full stderr
-    // pipe (a repo that prints thousands of lfs/hook warnings easily exceeds the 64KB
-    // buffer), so an unread pipe deadlocks the whole call. Discard the bytes, keep reading.
-    child.stderr.on("data", () => {});
-    child.on("error", () => resolve({ ok: false, stdout: "", code: null }));
-    child.on("close", (code) =>
-      resolve(overflow ? { ok: false, stdout: "", code, overflow } : { ok: code === 0, stdout: Buffer.concat(chunks).toString("utf8"), code }),
-    );
-  });
+  // `runTool` settles by the deadline even when a grandchild (git-lfs `filter-process`) is still
+  // holding the pipes, and kills that grandchild with git (#2935). It also turns the synchronous
+  // throw `spawn` gives for an argument execve will not take — a NUL byte, reachable from the
+  // content search's `?q=%00` — into an ordinary result, so the promise above never rejects.
+  const run = await runTool("git", cwd ? ["-C", cwd, ...args] : args, { timeoutMs, signal, maxStdoutBytes });
+  if (run.end === "overflow") return { ok: false, stdout: "", code: null, overflow: true };
+  // A timeout keeps what git printed before it was stopped, as a signal-killed child always has.
+  if (run.end === "timeout") return { ok: false, stdout: run.stdout, code: null };
+  if (run.end !== "exit") return { ok: false, stdout: "", code: null }; // the process never ran, or was cancelled
+  return { ok: run.code === 0, stdout: run.stdout, code: run.code };
 }
 
 // The current working tree's root, or null if `dir` isn't inside a git work tree.
