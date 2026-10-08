@@ -23,6 +23,7 @@ const RESET = "\x1b[0m";
 const REASON_TEXT: Record<MovedFrom["reason"], string> = {
   "limit-hit": "reached its usage limit",
   "near-limit": "is close to its usage limit",
+  switched: "was switched off at your request",
 };
 
 export const movedNoticeLine = ({ fromLabel, reason }: MovedFrom, toLabel: string): string =>

@@ -479,6 +479,12 @@ export const zhCN: Messages = {
   // `AttentionStatus` / `WorkPhase` / `PrPhase` 增加取值时，必须在此处写上名称，否则无法通过
   // 编译（#1894）。
   // A cell header's two view menus: what happened in the session, and the tools around it.
+  // The account mark on a rotated cell opens this menu (#2950).
+  accountSwitch: {
+    title: "将此会话移到另一个订阅",
+    hint: "点击可将此会话移到另一个订阅",
+    explain: "会话将在你选择的订阅上重启并继续同一段对话。进行中的回合会被中断。",
+  },
   cellMenu: {
     history: "历史",
     tools: "工具",

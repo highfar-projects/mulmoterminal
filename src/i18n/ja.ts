@@ -494,6 +494,12 @@ export const ja: Messages = {
   // ない、というのがここの要点で、`AttentionStatus` / `WorkPhase` / `PrPhase` に値を足したとき
   // 「ここに名前を書くまでコンパイルが通らない」を保つため（#1894）。
   // A cell header's two view menus: what happened in the session, and the tools around it.
+  // The account mark on a rotated cell opens this menu (#2950).
+  accountSwitch: {
+    title: "このセッションを別の契約へ移す",
+    hint: "クリックすると、このセッションを別の契約へ移せます",
+    explain: "選んだ契約でセッションを再起動し、同じ会話を続けます。実行中のやり取りは止まります。",
+  },
   cellMenu: {
     history: "履歴",
     tools: "道具",
