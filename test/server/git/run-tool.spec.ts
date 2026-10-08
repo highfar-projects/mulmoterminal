@@ -8,10 +8,12 @@ import { runTool } from "../../../server/git/run-tool.js";
 
 const node = process.execPath;
 const GRANDCHILD_LIFETIME_MS = 30_000;
-const DEADLINE_MS = 500;
+// Long enough for the child to start node and print the grandchild's pid on a loaded runner; the
+// tests that read the pid have nothing to check if the deadline lands first.
+const DEADLINE_MS = 3_000;
 // Generous: the assertion is "settled near the deadline", not "settled in N ms" — a loaded runner
 // is slow, but nowhere near the grandchild's lifetime.
-const SETTLE_BOUND_MS = 10_000;
+const SETTLE_BOUND_MS = 15_000;
 const REAP_WAIT_MS = 5_000;
 
 // The child prints its grandchild's pid, so a test can check whether the grandchild survived.
@@ -38,6 +40,8 @@ const waitUntilGone = async (pid: number): Promise<boolean> => {
 };
 const grandchildPid = (stdout: string): number => {
   const pid = Number(stdout.trim().split("\n")[0]);
+  // 0 would be OUR process group to `process.kill`, so a missing pid must fail here, not reach afterEach.
+  if (!Number.isInteger(pid) || pid <= 0) throw new Error(`child did not report a grandchild pid: ${JSON.stringify(stdout)}`);
   leftovers.push(pid);
   return pid;
 };
