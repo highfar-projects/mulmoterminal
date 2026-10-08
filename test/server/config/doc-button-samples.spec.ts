@@ -3,9 +3,9 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { isRecord } from "../../../common/isRecord";
-import { isResolvedFolder, sanitizeButtons, sanitizeChips, type HeaderContext } from "../../../server/config/header-config";
+import { isResolvedFolder, sanitizeButtons, sanitizeChips, type HeaderContext } from "../../../server/config/header/header-config";
 import { dirSkillsField } from "../../../server/config/config-schema";
-import { resolveHeader } from "../../../server/config/header-resolve";
+import { resolveHeader } from "../../../server/config/header/header-resolve";
 
 const ctx = (o: Partial<HeaderContext> = {}): HeaderContext => ({
   dir: "/x/myrepo",

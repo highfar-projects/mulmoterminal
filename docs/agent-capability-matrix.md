@@ -458,7 +458,7 @@ a page: no entry means no link, which is better than a wrong one. A spec checks 
 `server/session/registry.ts`, `server/session/background-chat.ts`, `server/session/session-reads.ts`,
 `server/session/agent-badges.ts`, `server/session/survivor-agent-guard.ts` (what durable evidence
 proves a survivor is this agent), `server/backends/remoteHost/terminalScreen.ts`, and
-`server/config/header-config.ts` / `header-context.ts` where a header button can scope to an agent.
+`server/config/header/header-config.ts` / `header-context.ts` where a header button can scope to an agent.
 
 **The UI.** `src/components/agentPicker.ts` (the label), `wsUrl.ts`, `gridTabs.ts`, `GridView.vue`,
 `AgentMark.vue`, `modelBadge.ts`.

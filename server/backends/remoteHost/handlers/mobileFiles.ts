@@ -20,7 +20,7 @@ import {
   type MobileFileKind,
   type MobileFileListing,
 } from "../../../../common/mobileFiles.js";
-import { loadDirConfig, type MobileFilesConfig } from "../../../config/dir-config.js";
+import { loadDirConfig, type MobileFilesConfig } from "../../../config/dir/dir-config.js";
 import { listProjectRoots } from "../../../infra/project-root.js";
 import { clampLimit, clampOffset } from "../collectionPage.js";
 import { scopeFromCommand } from "../commandScope.js";

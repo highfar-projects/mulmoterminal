@@ -30,7 +30,7 @@ import { rotationLoginLabel } from "../../common/tokenRotation.js";
 import type { PtyEntry } from "./types.js";
 import type { SpawnDeps } from "./spawn-deps.js";
 import { handlePtyExit } from "./pty-exit.js";
-import { loadDirConfig } from "../config/dir-config.js";
+import { loadDirConfig } from "../config/dir/dir-config.js";
 import { repoRootSync } from "../git/repo-root-sync.js";
 import { workdirFooter } from "../git/pr-footer.js";
 import { getProviders } from "../config/config-routes.js";

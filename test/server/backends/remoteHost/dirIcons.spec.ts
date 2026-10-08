@@ -14,7 +14,7 @@ import {
   withDirIcons,
   type DirIconSources,
 } from "../../../../server/backends/remoteHost/dirIcons.js";
-import type { DirIcon } from "../../../../server/config/dir-icon.js";
+import type { DirIcon } from "../../../../server/config/dir/dir-icon.js";
 import type { TerminalSessionSummary } from "../../../../server/backends/remoteHost/terminalScreen.js";
 import { undefinedPaths } from "@mulmoclaude/core/remote-host/server";
 

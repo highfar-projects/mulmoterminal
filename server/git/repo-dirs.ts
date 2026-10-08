@@ -9,7 +9,7 @@
 // user registered in Settings IS the set of places they work, and a mapping they had to maintain
 // separately would drift the moment they added a clone.
 import { repoForDir } from "./forge-support.js";
-import { publicDirConfig } from "../config/dir-config.js";
+import { publicDirConfig } from "../config/dir/dir-config.js";
 import { createTtlCache } from "./ttl-cache.js";
 import { orderByDirPriority } from "../../common/dirPriorityOrder.js";
 import type { RepoDirCandidate, RepoDirs } from "../../common/repoDirs.js";

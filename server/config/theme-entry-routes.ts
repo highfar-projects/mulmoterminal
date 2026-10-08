@@ -3,7 +3,7 @@
 import type { Express } from "express";
 import { duplicateTheme, themeColorsFrom, themesWithColors } from "../../common/themeEntries.js";
 import type { AppConfig } from "./app-config.js";
-import type { MutateOnDisk } from "./agent-entry-routes.js";
+import type { MutateOnDisk } from "./agent/agent-entry-routes.js";
 import { requestBody } from "../routes/requestBody.js";
 import { refuseOnProblem } from "./on-disk-entry.js";
 

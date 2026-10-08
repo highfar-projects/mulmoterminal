@@ -53,7 +53,7 @@ vi.mock("../../../server/agents/muse/muse-session.js", () => ({ museSessionExist
 const registeredGuiMcpGroups = vi.fn(() => Promise.resolve(["render"]));
 vi.mock("../../../server/infra/gui-mcp-registration.js", () => ({ registeredGuiMcpGroups }));
 
-vi.mock("../../../server/config/worktree-env.js", () => ({
+vi.mock("../../../server/config/worktree/worktree-env.js", () => ({
   ensureWorktreeEnv: vi.fn(() => Promise.resolve({})),
   reservedWorktreeEnv: () => ({}),
 }));

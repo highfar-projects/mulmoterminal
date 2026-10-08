@@ -4,7 +4,7 @@ import { mkdirSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { makeTempDir } from "../../../support/tempDir.js";
 import { listDeclaredFiles, resolveRequestedFile } from "../../../../server/backends/remoteHost/mobileFileWalk";
-import type { MobileFilesConfig } from "../../../../server/config/dir-config";
+import type { MobileFilesConfig } from "../../../../server/config/dir/dir-config";
 
 function project(): { root: string; config: MobileFilesConfig; write: (rel: string, ageSeconds?: number) => void } {
   const root = makeTempDir("mt-mobile-");

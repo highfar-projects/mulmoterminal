@@ -6,7 +6,7 @@
 // and the running config is kept rather than half-adopting a file that cannot be read.
 import type { Express, Response } from "express";
 import { emptyConfig, loadAppConfigResult, type AppConfig, type AppConfigLoad } from "./app-config.js";
-import { checkKeymap } from "./keymap-check.js";
+import { checkKeymap } from "./keymap/keymap-check.js";
 import { withConfigLock } from "./config-lock.js";
 import { readTextFile } from "../infra/read-text-file.js";
 
