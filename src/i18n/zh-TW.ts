@@ -489,6 +489,8 @@ export const zhTW: Messages = {
     title: "將此工作階段移到另一個訂閱",
     hint: "點擊可將此工作階段移到另一個訂閱",
     explain: "工作階段會在你選擇的訂閱上重新啟動並繼續同一段對話。進行中的回合會被中斷。",
+    weekLeft: "本週剩餘 {percent}",
+    atLimit: "已達上限",
   },
   cellMenu: {
     history: "歷史",

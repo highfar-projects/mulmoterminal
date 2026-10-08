@@ -499,6 +499,8 @@ export const ja: Messages = {
     title: "このセッションを別の契約へ移す",
     hint: "クリックすると、このセッションを別の契約へ移せます",
     explain: "選んだ契約でセッションを再起動し、同じ会話を続けます。実行中のやり取りは止まります。",
+    weekLeft: "今週あと {percent}",
+    atLimit: "上限に達しています",
   },
   cellMenu: {
     history: "履歴",

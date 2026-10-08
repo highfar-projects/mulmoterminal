@@ -120,6 +120,8 @@ too, the session stays where it is, with Claude Code's own limit message.
   Click it to move that session to another subscription yourself: pick one from the list and the
   session restarts on it, on the same conversation. A turn in progress is stopped. The list holds the
   subscriptions in your config, plus the `/login` one when `includeDefaultLogin` is on.
+  Each shows how much of its weekly allowance is left, taken from the same readings as the toolbar gauge
+  (so it is blank until those have been measured, and "At its limit" when it is out).
 - **The toolbar's usage gauge** gets one entry per subscription; hover it for the name and address.
   A subscription that is out of its allowance says so instead of "no answer".
 - **"More features" → "Token usage"** lists every subscription with what is left of its 5-hour and

@@ -484,6 +484,8 @@ export const zhCN: Messages = {
     title: "将此会话移到另一个订阅",
     hint: "点击可将此会话移到另一个订阅",
     explain: "会话将在你选择的订阅上重启并继续同一段对话。进行中的回合会被中断。",
+    weekLeft: "本周剩余 {percent}",
+    atLimit: "已达上限",
   },
   cellMenu: {
     history: "历史",

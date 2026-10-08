@@ -496,6 +496,8 @@ export const ko: Messages = {
     title: "이 세션을 다른 구독으로 옮기기",
     hint: "클릭하여 이 세션을 다른 구독으로 옮깁니다",
     explain: "선택한 구독으로 세션을 다시 시작하고 같은 대화를 이어갑니다. 진행 중인 턴은 중단됩니다.",
+    weekLeft: "이번 주 {percent} 남음",
+    atLimit: "한도에 도달",
   },
   cellMenu: {
     history: "기록",

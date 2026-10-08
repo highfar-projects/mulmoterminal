@@ -509,6 +509,8 @@ export const en = {
     title: "Move this session to another subscription",
     hint: "Click to move this session to another subscription",
     explain: "The session restarts on the one you pick and continues the same conversation. A turn in progress is stopped.",
+    weekLeft: "{percent} left this week",
+    atLimit: "At its limit",
   },
   cellMenu: {
     history: "History",
