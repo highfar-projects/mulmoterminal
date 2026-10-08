@@ -47,6 +47,7 @@ import type { CellSelfAction } from "../../common/headerActions";
 import { reapSessionOnServer, restartSession, switchTokenOnServer } from "../composables/restartSession";
 import { accountSwitchChoices } from "../composables/accountSwitchChoices";
 import { useAppConfig } from "../composables/useAppConfig";
+import { useRateLimits } from "../composables/useRateLimits";
 import TimelineOverlay from "./TimelineOverlay.vue";
 import CopyCodeBlock from "./CopyCodeBlock.vue";
 import { pickFileInto, revealDir } from "../composables/useHeaderAction";
@@ -560,11 +561,15 @@ const accountId = ref<string | null>(props.initialAccount ?? null);
 // The rotation credential the server started this session's process on (#2919) — a different
 // subscription from the cell beside it, in the same home, so it wears the same mark an account does.
 const { tokenRotation } = useAppConfig();
+// Read, never started here: the toolbar gauge polls, and a cell must not add a probe per token (#2954).
+const { snapshot: rateLimitSnapshot } = useRateLimits();
 const cellCredential = ref<CellCredential | null>(null);
 const accountMarkLabel = computed(() => (accountId.value ? accountLabel(props.accounts ?? [], accountId.value) : (cellCredential.value?.label ?? null)));
 const accountMarkDetail = computed(() => (accountId.value ? null : (cellCredential.value?.detail ?? null)));
 // Only a cell rotation placed can be moved, and only to what the config offers (#2950).
-const accountMarkChoices = computed(() => (accountId.value ? [] : accountSwitchChoices(tokenRotation.value, cellCredential.value?.id ?? null)));
+const accountMarkChoices = computed(() =>
+  accountId.value ? [] : accountSwitchChoices(tokenRotation.value, cellCredential.value?.id ?? null, rateLimitSnapshot.value?.accounts ?? [], Date.now()),
+);
 
 // Start what the Agent Picker picked, in `dir`. EVERY launch in the form goes through here: the
 // picker decides for the dir field, for a preset chip, and for a worktree alike, and a rule

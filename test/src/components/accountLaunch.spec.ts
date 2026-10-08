@@ -132,8 +132,8 @@ describe("AccountMark", () => {
   // The mark is the way to move a rotated session to another subscription (#2950).
   describe("with subscriptions to move to", () => {
     const choices = [
-      { id: "a", label: "A", detail: null, current: true },
-      { id: "b", label: "B", detail: "b@example.com", current: false },
+      { id: "a", label: "A", detail: null, current: true, weekLeftPercent: 40, usage: "ok" as const },
+      { id: "b", label: "B", detail: "b@example.com", current: false, weekLeftPercent: null, usage: "measuring" as const },
     ];
     const open = async () => {
       const w = mount(AccountMark, { props: { label: "A", choices }, attachTo: document.body });
@@ -150,6 +150,14 @@ describe("AccountMark", () => {
       await document.body.querySelector<HTMLElement>('[data-testid="cell-account-choice-a"]')?.click();
       expect(again.emitted("switch")).toBeUndefined();
       again.unmount();
+    });
+
+    it("shows the weekly room beside a subscription, and nothing for one not measured", async () => {
+      const w = await open();
+      const weeks = [...document.body.querySelectorAll('[data-testid="cell-account-week"]')].map((node) => node.textContent);
+      expect(weeks).toHaveLength(1);
+      expect(weeks[0]).toContain("40%");
+      w.unmount();
     });
 
     it("stays a plain mark when there is nothing else to pick", () => {

@@ -29,6 +29,14 @@ const switchable = computed(() => (props.choices?.length ?? 0) > 1);
 const tip = computed(() => t("tips.cell.runsOnAccount", { account: props.detail ?? props.label }));
 const switchTip = computed(() => [tip.value, t("accountSwitch.hint")].join(" - "));
 
+const LOW_LEFT_PERCENT = 10;
+const isLow = (choice: AccountSwitchChoice): boolean => choice.usage === "at-limit" || (choice.weekLeftPercent ?? 100) <= LOW_LEFT_PERCENT;
+// Nothing at all for a subscription not measured yet: a figure we do not have is not zero.
+function weekText(choice: AccountSwitchChoice): string | null {
+  if (choice.usage === "at-limit") return t("accountSwitch.atLimit");
+  return choice.weekLeftPercent === null ? null : t("accountSwitch.weekLeft", { percent: `${choice.weekLeftPercent}%` });
+}
+
 function pick(choice: AccountSwitchChoice): void {
   menu.value?.leave();
   if (!choice.current) emit("switch", choice.id);
@@ -75,6 +83,13 @@ function pick(choice: AccountSwitchChoice): void {
         <span class="block text-[13px]">{{ choice.label }}</span>
         <span v-if="choice.detail" class="block truncate text-[11px] leading-snug text-dim">{{ choice.detail }}</span>
       </span>
+      <span
+        v-if="weekText(choice)"
+        data-testid="cell-account-week"
+        class="mt-px flex-none whitespace-nowrap text-[11px]"
+        :class="isLow(choice) ? 'text-amber' : 'text-secondary'"
+        >{{ weekText(choice) }}</span
+      >
       <span v-if="choice.current" class="material-symbols-outlined mt-px text-[16px] text-accent" aria-hidden="true">check</span>
     </button>
   </AnchoredMenu>
