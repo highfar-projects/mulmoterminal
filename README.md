@@ -2016,7 +2016,7 @@ Empty output returns a `{ summary }` note rather than calling the CLI. Errors:
 (see [Claude hook injection](#claude-hook-injection)); **Copilot's and Cursor's arrive from a
 machine-global hook file** and name their agent in an `x-mt-agent: copilot|cursor` header, with the
 event in `x-mt-hook` — the body is translated into the Claude shape below before anything reads it
-(`server/agents/{copilot,cursor}-hook.ts`), so everything downstream is written against one
+(`server/agents/{copilot/copilot,cursor/cursor}-hook.ts`), so everything downstream is written against one
 vocabulary. A request with no `x-mt-agent` is a Claude payload and is untouched.
 You normally don't call this yourself.
 
