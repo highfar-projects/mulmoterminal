@@ -15,8 +15,31 @@ answer is to switch with `/login` by hand. Token rotation does that for you: eac
 the subscription with the most room, and a session that is about to run out moves to another one and
 carries on with the same conversation.
 
+**The one thing to remember, if you use Claude Code hard:** when a session hits its usage limit, open the
+cell's **Tools** menu and choose **Restart the agent**. The session starts again on a subscription that
+still has room, on the **same conversation**. No `/login`, no signing out and in, no new conversation —
+and nothing to do at all until you actually hit a limit.
+
 1. TOC
 {:toc}
+
+## When a session hits its limit: restart the agent
+
+Most of the time you do nothing: a session moves by itself when its subscription reaches 98%
+(see [When a subscription runs low](#when-a-subscription-runs-low)). But the usage figures can be a few
+minutes old, so a session can hit the limit first and stop with Claude Code's own limit message. Then:
+
+1. In that cell's header, open **Tools**.
+2. Choose **Restart the agent**.
+
+![The Tools menu in a cell header, with Restart the agent at the bottom](../images/token-rotation-restart-agent.png)
+
+The agent ends and starts again on the same conversation. Because a subscription is picked every time a
+process starts, the new process lands on the one with the most room — the header names it. The message
+that hit the limit was not re-sent: send it again.
+
+If every subscription is out, the restart picks one anyway and you see Claude Code's limit message again;
+wait for the first reset shown in [Token usage](#token-usage).
 
 ## How it differs from accounts
 
@@ -98,6 +121,21 @@ too, the session stays where it is, with Claude Code's own limit message.
   A subscription that is out of its allowance says so instead of "no answer".
 - **"More features" → "Token usage"** lists every subscription with what is left of its 5-hour and
   weekly windows and when each resets. It is in the menu only while token rotation is on.
+
+## Token usage
+
+**More features → Token usage** shows every subscription at once: what is left of its 5-hour and weekly
+windows, and when each resets. Open it when you want to know *why* a session landed where it did, or
+which subscription comes back first after a limit.
+
+![More features menu with Token usage at the bottom](../images/token-rotation-more-features.png)
+
+![The Token usage screen: each subscription with what is left of its 5-hour and weekly windows (names replaced)](../images/token-rotation-usage.png)
+
+- A bar is what is **left**, not what is spent. A short bar is a subscription running dry.
+- The reset time is what the picker weighs: room about to reset is used first.
+- It is in the menu only while token rotation is on. The toolbar's usage gauge has the same figures in
+  small, one entry per subscription.
 
 ## When the subscription changes
 
