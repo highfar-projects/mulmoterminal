@@ -254,6 +254,7 @@ const TOOL_HINTS = new Map<string, string>([
 
   ["generateImage", "an image generated from a prompt"],
   ["presentMulmoScript", "a MulmoScript presentation, built and played here"],
+  ["manageJingleScript", "a short jingle with sound effects, played here with its waveform and cues"],
 
   ["useSharedApp", "shared apps other people published, from your side of them"],
   ["google", "your linked Google account: Calendar, Tasks, Drive"],

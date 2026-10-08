@@ -1286,6 +1286,11 @@
   resolved "https://registry.yarnpkg.com/@gui-chat-plugin/common/-/common-0.1.0.tgz#96d8a7a1cf1a2a806bbc2ee5ba296b69a59b0350"
   integrity sha512-OF+/XxKWBU50ijjygO+QrMsJjKn+2b1jtA7ouerBJThFT6sR1ZSwJDp+wj6FKBMXY8pPveJcXCBDQHl/qILmrg==
 
+"@gui-chat-plugin/jinglescript@^0.1.0":
+  version "0.1.0"
+  resolved "https://registry.yarnpkg.com/@gui-chat-plugin/jinglescript/-/jinglescript-0.1.0.tgz#bc2e0d5a352bfbe860d6b026c82cb6a9800b804c"
+  integrity sha512-qSDOv8KVyNkcarqj5aBZ0B1hZ3wsGQIWFfI1PZoAU+HbYv/ZeR4YQSyjCE09pdqjXibPLhhpBUP0JoaOHe42Sw==
+
 "@gui-chat-plugin/shapescript@^8.2.2":
   version "8.2.2"
   resolved "https://registry.yarnpkg.com/@gui-chat-plugin/shapescript/-/shapescript-8.2.2.tgz#8ea909c107f0e16f52c441f6908327af36911607"
@@ -5858,6 +5863,14 @@ jackspeak@^3.1.2:
     "@isaacs/cliui" "^8.0.2"
   optionalDependencies:
     "@pkgjs/parseargs" "^0.11.0"
+
+jinglescript@^0.1.0:
+  version "0.1.0"
+  resolved "https://registry.yarnpkg.com/jinglescript/-/jinglescript-0.1.0.tgz#4d4d88ae32868e567970b1f0279c6e178c7c2ba6"
+  integrity sha512-6O+bRq1JELyfsnfrVpy/j2wiLE5HTbK78p5BUxMYfO90Wk7JwRVg4ek0jvBO42/8OH6aj/Yr5Jd9p9YzYINAwg==
+  dependencies:
+    "@modelcontextprotocol/sdk" "^1.32.1"
+    zod "^4.6.5"
 
 jiti@^2.7.0:
   version "2.7.0"

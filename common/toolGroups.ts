@@ -115,6 +115,10 @@ const GROUP_BY_TOOL = new Map<string, ToolGroup>([
 
   ["generateImage", "media"],
   ["presentMulmoScript", "media"],
+  // manageJingleScript writes and renders short jingles and plays them in the Canvas: audio,
+  // so media. It renders locally (ffmpeg at most) and calls nothing external; whether it joins
+  // AUTO_ALLOWED_TOOLS is left to the maintainers, so for now it keeps the permission prompt.
+  ["manageJingleScript", "media"],
 
   // useSharedApp is the participant's half of the shared-app pair, and it is NOT beside
   // manageSharedApp in `data`. That group is the workspace's own structured data; this tool moves
