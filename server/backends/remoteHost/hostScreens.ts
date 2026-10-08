@@ -4,7 +4,7 @@
 import { buildScreenMeta, captureSessionScreen, SCREEN_HISTORY_ROWS, type SessionScreenMeta } from "./terminalScreen.js";
 import { dirIconSrc, readIconFile } from "./dirIcons.js";
 import { quickCommandsForAgent } from "./quickCommands.js";
-import { dirIconFor, loadDirConfig } from "../../config/dir-config.js";
+import { dirIconFor, loadDirConfig } from "../../config/dir/dir-config.js";
 import { listProjectRoots } from "../../infra/project-root.js";
 import { mobileFilesProjectFor } from "./mobileFileProject.js";
 import { getQuickCommands } from "../../config/config-routes.js";

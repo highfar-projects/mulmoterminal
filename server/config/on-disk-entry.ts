@@ -1,7 +1,7 @@
 // The halves of a one-entry change that every add route shares: refuse when the build against the
 // config on disk names a problem, otherwise append what it built to that list.
 import type { AppConfig } from "./app-config.js";
-import type { OnDiskChange } from "./agent-entry-routes.js";
+import type { OnDiskChange } from "./agent/agent-entry-routes.js";
 
 type Refusable = { problem: string } | { problem?: undefined; [field: string]: unknown };
 

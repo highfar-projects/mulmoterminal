@@ -6,7 +6,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { parsePort, portFromArgv } from "./port-from-argv.js";
-import { agentFromArgv, declaresAgent } from "./agent-from-argv.js";
+import { agentFromArgv, declaresAgent } from "./agent/agent-from-argv.js";
 
 // `--port` is the launcher's channel (see port-from-argv.ts for why it is not an env var).
 // `PORT` is the DEV channel and must stay: `yarn dev` runs server/index.ts directly, and

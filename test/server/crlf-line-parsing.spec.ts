@@ -15,7 +15,7 @@ import { lastGhUrl, parseNumstatLine } from "../../server/git/git-parse";
 import { splitLines } from "../../server/infra/split-lines";
 import { parseWorktreeList } from "../../server/git/worktrees";
 import { parseTmuxEnvironment } from "../../server/infra/tmux";
-import { extractCwdFromTranscript } from "../../server/config/cwd-presets";
+import { extractCwdFromTranscript } from "../../server/config/dir/cwd-presets";
 import { parseFaqEntries } from "../../server/skills/faqEntries";
 
 const crlf = (...lines: string[]) => lines.join("\r\n");

@@ -1,7 +1,7 @@
 // The session's AI-generated title: when it is due, generating it without letting two
 // triggers race, and voiding a result that a /clear made stale. Split from index.ts
 // (#548 step 3f) — the rules for WHETHER to (re)generate already live in
-// config/header-title.ts; this is the bookkeeping around them.
+// config/header/header-title.ts; this is the bookkeeping around them.
 //
 // Four guards do the real work and are easy to lose in a rewrite: an epoch that drops a
 // title generated across a /clear, the cleared-transcript mark that stops the NEXT turn
@@ -19,7 +19,7 @@ import {
   titleWindowOf,
   TITLE_REGEN_EVERY_TURNS,
   VIEW_TITLE_REGEN_TURNS,
-} from "../config/header-title.js";
+} from "../config/header/header-title.js";
 import { aiTitles, lastTitleAttemptMs, lastTitledUserTurns, titleEpoch, titleInFlight, titlePending, titleTurnCounts } from "./registry.js";
 import { clearedTranscripts } from "./cleared-transcripts.js";
 import { claudeTranscriptFile } from "./session-home.js";

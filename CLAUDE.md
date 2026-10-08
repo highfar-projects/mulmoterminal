@@ -51,7 +51,7 @@ GitHub destinations (repo, issues, pull requests, actions) are the one exception
 GitHub's own Octicons through `GithubIcon.vue` (path data in `githubIcons.ts`), and a configured
 `icon` can name one as `github:<name>`.
 
-- A header button in config (`server/config/header-config.ts`) takes **`icon`**, not `emoji`.
+- A header button in config (`server/config/header/header-config.ts`) takes **`icon`**, not `emoji`.
   The `emoji` field still exists for end-user configs and wins over `icon` when both are set —
   don't use it in anything this repo ships.
 - Three deliberate exceptions, all functional. Don't "fix" them:

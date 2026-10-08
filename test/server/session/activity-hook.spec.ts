@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import path from "node:path";
 import { activityHookEffects, buildPushText, pushKindFor, resolveHookCwd, resolveHookSessionId } from "../../../server/session/activity-hook.js";
-import { dirConfigWriteTarget } from "../../../server/config/dir-config.js";
+import { dirConfigWriteTarget } from "../../../server/config/dir/dir-config.js";
 
 describe("activityHookEffects", () => {
   it("UserPromptSubmit sets working regardless of active", () => {

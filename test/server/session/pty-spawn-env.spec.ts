@@ -27,7 +27,7 @@ vi.mock("../../../server/infra/tmux.js", async (importOriginal) => ({
 
 // What this directory holds per working tree (#1367). Mocked rather than reserved for real:
 // what is under test is that a spawn CARRIES it, not how it was decided.
-vi.mock("../../../server/config/worktree-env.js", () => ({ reservedWorktreeEnv: () => reserved }));
+vi.mock("../../../server/config/worktree/worktree-env.js", () => ({ reservedWorktreeEnv: () => reserved }));
 
 let tmuxOn = false;
 // What ptySpawn handed tmuxNewSessionArgs as the PANE's directory (the `-c` the real one builds).

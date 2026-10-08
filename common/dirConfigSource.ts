@@ -6,7 +6,7 @@
 // which of them survived validation, and which the app doesn't read at all.
 
 // Every key `loadDirConfig` reads. A key outside this list is a typo as far as the app is
-// concerned, however sensible it looks — `server/config/dir-config.spec.ts` pins the two
+// concerned, however sensible it looks — `server/config/dir/dir-config.spec.ts` pins the two
 // together so a field added to the loader can't quietly go missing here.
 export const DIR_CONFIG_KEYS = [
   "name",

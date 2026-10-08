@@ -4,7 +4,7 @@ import { buildSessionList, listableSessionIds, type ListableInput, type SessionW
 import { withDirIcons, readIconFile, type DirIconSources } from "./dirIcons.js";
 import { workByCwd } from "./workByCwd.js";
 import { diskTitle } from "./phoneRowText.js";
-import { dirIconFor } from "../../config/dir-config.js";
+import { dirIconFor } from "../../config/dir/dir-config.js";
 import { agentOfSession, cwdOfSession } from "../../session/session-lookup.js";
 import { resumableSessionPredicate } from "../../session/resumable-sessions.js";
 import { claudeTitleFields, type TitleFields } from "../../session/session-reads.js";
