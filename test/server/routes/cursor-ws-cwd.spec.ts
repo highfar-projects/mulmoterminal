@@ -49,7 +49,7 @@ vi.mock("../../../server/agents/cursor/cursor-sessions.js", () => ({
 }));
 
 const reserveWorktreeEnv = vi.fn(async () => ({}));
-vi.mock("../../../server/config/worktree-env.js", () => ({
+vi.mock("../../../server/config/worktree/worktree-env.js", () => ({
   ensureWorktreeEnv: (...args: unknown[]) => reserveWorktreeEnv(...(args as [])),
   reservedWorktreeEnv: () => ({}),
 }));

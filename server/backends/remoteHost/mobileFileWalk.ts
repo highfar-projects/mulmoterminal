@@ -9,7 +9,7 @@ import { readdir, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 
 import { isExcludedSegment, isServableMobilePath, mobileFileKind, type MobileFileEntry } from "../../../common/mobileFiles.js";
-import type { MobileFilesConfig } from "../../config/dir-config.js";
+import type { MobileFilesConfig } from "../../config/dir/dir-config.js";
 import { isWithin } from "../../infra/path-within.js";
 
 /** How deep under a declared directory the walk descends. */

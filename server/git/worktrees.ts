@@ -10,11 +10,11 @@ import path from "node:path";
 import { isStrictlyWithin } from "../infra/path-within.js";
 import { mulmoterminalHome } from "../infra/mulmoterminal-home.js";
 import { canonicalPath } from "../infra/canonical-path.js";
-import { ensureWorktreeEnv } from "../config/worktree-env.js";
+import { ensureWorktreeEnv } from "../config/worktree/worktree-env.js";
 import { splitLines } from "../infra/split-lines.js";
 import { runTool } from "./run-tool.js";
-import { DIR_CONFIG_FILE, DIR_LOCAL_CONFIG_FILE } from "../config/dir-config.js";
-import { writeInheritedDirConfig } from "../config/worktree-dir-config.js";
+import { DIR_CONFIG_FILE, DIR_LOCAL_CONFIG_FILE } from "../config/dir/dir-config.js";
+import { writeInheritedDirConfig } from "../config/worktree/worktree-dir-config.js";
 import { ISSUE_BRANCH_PREFIX, issueFromAnchoredBranch } from "../../common/prPhase.js";
 
 // realpathSync.native, not the JS one: on Windows only the native call expands an

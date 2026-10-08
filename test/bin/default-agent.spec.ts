@@ -7,7 +7,7 @@ import { describe, it, expect } from "vitest";
 import { AGENT_BIN_SPEC, agentBin, AGENT_INSTALL_HINT } from "../../bin/agent-bins.js";
 import { configuredDefaultAgent, gateFor, isKnownAgent, missingAgentMessage, parseAgentArg, resolveDeclaredAgent } from "../../bin/default-agent.js";
 import { agentInstallGuide } from "../../bin/agent-install-guides.js";
-import { AGENT_BINS } from "../../server/config/agent-bins.js";
+import { AGENT_BINS } from "../../server/config/agent/agent-bins.js";
 import { TERMINAL_AGENTS } from "../../common/sessionAgent.js";
 
 describe("the agent binary table", () => {

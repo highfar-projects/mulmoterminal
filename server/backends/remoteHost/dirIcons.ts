@@ -6,7 +6,7 @@
 // and keeping the pile of them small enough that the reply still lands.
 import { createHash } from "node:crypto";
 import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
-import type { DirIcon } from "../../config/dir-icon.js";
+import type { DirIcon } from "../../config/dir/dir-icon.js";
 import type { TerminalSessionSummary } from "./terminalScreen.js";
 
 // One image, before base64 inflates it by a third. Measured over the 22 repositories on the

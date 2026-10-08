@@ -22,7 +22,7 @@ import type { RateLimitRouteDeps, LoginRateLimits } from "./rate-limit-routes.js
 import type { ProbeOutcome } from "./rate-limit-probe.js";
 import { hasBinary } from "../../infra/has-binary.js";
 import { spawnPty } from "../../session/pty-spawn.js";
-import { AGENT_BINS } from "../../config/agent-bins.js";
+import { AGENT_BINS } from "../../config/agent/agent-bins.js";
 import { CLAUDE_CWD, MULMOTERMINAL_HOME, PORT } from "../../config/env.js";
 
 // Long enough for claude's own final write to land after the PTY is killed. Deleting into that

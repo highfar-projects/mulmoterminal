@@ -10,8 +10,8 @@ import { PALETTE_SEARCH_BOX_DEFAULT, sanitizePaletteSearchBox } from "../../comm
 import { REMOTE_SERVER_DEFAULT, sanitizeRemoteServer } from "../../common/remoteServer.js";
 import { CONFETTI_DEFAULT, sanitizeConfetti, type Confetti } from "../../common/confetti.js";
 import { PLAYFUL_EFFECTS_DEFAULT, sanitizePlayfulEffects, type PlayfulEffects } from "../../common/playfulEffects.js";
-import { sanitizePresets } from "./cwd-presets.js";
-import { sanitizeButtons, sanitizeChips } from "./header-config.js";
+import { sanitizePresets } from "./dir/cwd-presets.js";
+import { sanitizeButtons, sanitizeChips } from "./header/header-config.js";
 import {
   launcherSchema,
   customAgentSchema,

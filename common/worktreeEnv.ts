@@ -3,7 +3,7 @@
 // isolated by a worktree; these are not, so two trees running `yarn dev` race for one 3000.
 //
 // The pure half — what a slot is worth, what a slug looks like, and the shape the browser
-// receives. Reserving lives in server/config/worktree-env.ts, which needs the disk.
+// receives. Reserving lives in server/config/worktree/worktree-env.ts, which needs the disk.
 
 /** How far apart two consecutive slots sit.
  *

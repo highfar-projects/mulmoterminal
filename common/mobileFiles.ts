@@ -3,7 +3,7 @@
 // Declared, never discovered: a project lists the directories and extensions in its
 // `.mulmoterminal.json` under `mobileFiles`, and nothing is visible without that. These rules are
 // pure so the containment-adjacent decisions (which extension, which name) are testable without a
-// filesystem; the filesystem half lives in server/config/dir-file.ts and the remote-host backend.
+// filesystem; the filesystem half lives in server/config/dir/dir-file.ts and the remote-host backend.
 
 export const MOBILE_FILE_KINDS = ["markdown", "html", "pdf", "image"] as const;
 export type MobileFileKind = (typeof MOBILE_FILE_KINDS)[number];
