@@ -29,6 +29,16 @@ export const PROBE_TIMEOUT_MS = 90_000;
 // to leave it alone, not a reason to keep the two copies in sync.
 export const PROBE_PROMPT = "reply with the single character: .";
 
+// The probe is killed seconds after it answers, and Claude Code's fullscreen renderer counts a
+// launch killed before its first 10 seconds as a failed start; two of those on one version switch
+// fullscreen off for that login's cells (#2936). This variable makes Claude Code use the classic
+// renderer, which sets no such tripwire. The status line is the probe's only output, so the
+// renderer cannot change what it reports.
+export const PROBE_ENV: Readonly<Record<string, string>> = { CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN: "1" };
+
+/** The environment a probe is started with: the login's own variables, then the renderer pin. */
+export const probeSpawnEnv = (loginEnv: Readonly<Record<string, string>> = {}): Record<string, string> => ({ ...loginEnv, ...PROBE_ENV });
+
 export interface ProbePty {
   pid: number;
   kill(signal?: string): void;

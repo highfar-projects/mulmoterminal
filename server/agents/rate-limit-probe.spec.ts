@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { readFileSync, statSync } from "node:fs";
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { startRateLimitProbe, probeArgs, PROBE_PROMPT } from "./rate-limit-probe";
+import { startRateLimitProbe, probeArgs, probeSpawnEnv, PROBE_ENV, PROBE_PROMPT } from "./rate-limit-probe";
 import { createRateLimitStore } from "./rate-limit-store";
 import { killPty } from "../session/pty-kill";
 
@@ -274,5 +274,20 @@ describe("startRateLimitProbe's settings env", () => {
   it("writes no env block without any", () => {
     expect(settingsAtSpawn()?.json).not.toHaveProperty("env");
     expect(settingsAtSpawn({})?.json).not.toHaveProperty("env");
+  });
+});
+
+describe("probeSpawnEnv", () => {
+  it("pins the classic renderer so a killed probe is not counted as a failed fullscreen start", () => {
+    expect(PROBE_ENV).toEqual({ CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN: "1" });
+    expect(probeSpawnEnv()).toEqual({ CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN: "1" });
+  });
+
+  it("keeps the login's own variables", () => {
+    expect(probeSpawnEnv({ CLAUDE_CONFIG_DIR: "/acct" })).toEqual({ CLAUDE_CONFIG_DIR: "/acct", CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN: "1" });
+  });
+
+  it("wins over a login variable of the same name", () => {
+    expect(probeSpawnEnv({ CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN: "0" }).CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN).toBe("1");
   });
 });
