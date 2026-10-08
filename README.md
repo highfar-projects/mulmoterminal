@@ -1621,7 +1621,7 @@ one click: read the issue, cut an `issue/<number>-<slug>` worktree in your clone
 open Claude there as a grid cell with the issue **typed into its input box but not sent**. The
 **Start issues in** menu above the list picks another agent instead (and, for Claude or Codex, an
 account); every agent but Claude runs the issue text at once, which the view warns about. The
-prompt is seeded server-side as a *draft* (`server/session/draft-injection.ts`), which waits for
+prompt is seeded server-side as a *draft* (`server/session/spawn/draft-injection.ts`), which waits for
 claude's input box to be ready — text pushed in before that lands in the scrollback instead. A repo
 with several clones asks which one the first time and remembers the answer; a repo with no clone
 here disables the button and says why. Backed by `POST /api/issues/start`.
@@ -1682,7 +1682,7 @@ has been prompted once — a few seconds, not the rest of the session.
 Antigravity's numbers are the one case read from a store with **no published format**: agy keeps
 its per-generation accounting as protobuf in `~/.gemini/antigravity-cli/conversations/<id>.db`,
 with no schema on disk, so the fields are identified by measurement (see
-`server/agents/antigravity-usage.ts`). Every layer of that reader is built to answer *nothing*
+`server/agents/antigravity/antigravity-usage.ts`). Every layer of that reader is built to answer *nothing*
 rather than a number it is unsure of, so if a future agy release moves those fields, an
 Antigravity cell falls back to showing its model alone — it will not show a wrong percentage.
 
@@ -1728,7 +1728,7 @@ Copilot** can. **Antigravity, Grok and Cursor** cannot — they read a file in t
 **Muse** reads neither, which is the third route below.
 
 **Cursor is half of each**, and the half nobody would guess is the second: it reads a file in the
-directory as agy does (`.cursor/mcp.json`, written by `server/agents/cursor-mcp.ts`), but it starts
+directory as agy does (`.cursor/mcp.json`, written by `server/agents/cursor/cursor-mcp.ts`), but it starts
 that MCP server on a CURATED ENVIRONMENT rather than its own — so the group and the port travel as
 ARGV, as muse's do, and the SESSION is resolved through `/api/mcp-resolve`. An agy-shaped entry (group
 in `env`, port inherited) was tried first and reached the bridge with no port at all. Cursor also refuses to
@@ -1769,7 +1769,7 @@ exactly as it was. Close the cell and open a new one (or `Stop` it in Settings �
 and it comes back with the tools its directory registered.
 
 Which route a session takes is decided by `carriesFullGuiMcp()` in
-`server/session/mcp-config.ts` — the single view, a cell-less chat, or anything whose cwd **is**
+`server/session/spawn/setup/mcp-config.ts` — the single view, a cell-less chat, or anything whose cwd **is**
 the workspace take the first; anything in a project directory takes the second.
 
 **The workspace is agent-agnostic for the agents that can RECEIVE a per-spawn config** — claude,
@@ -2111,7 +2111,7 @@ Empty output returns a `{ summary }` note rather than calling the CLI. Errors:
 (see [Claude hook injection](#claude-hook-injection)); **Copilot's and Cursor's arrive from a
 machine-global hook file** and name their agent in an `x-mt-agent: copilot|cursor` header, with the
 event in `x-mt-hook` — the body is translated into the Claude shape below before anything reads it
-(`server/agents/{copilot,cursor}-hook.ts`), so everything downstream is written against one
+(`server/agents/{copilot/copilot,cursor/cursor}-hook.ts`), so everything downstream is written against one
 vocabulary. A request with no `x-mt-agent` is a Claude payload and is untouched.
 You normally don't call this yourself.
 

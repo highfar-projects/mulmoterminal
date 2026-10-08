@@ -6,7 +6,7 @@
 //
 // The subtraction is what `discoverCollections` answers FOR THIS ROOT, and since core 3.3.0 that
 // is scope-isolated: outside the managed workspace it excludes `~/.claude/skills` (see
-// backends/collections.ts). So a user-scope collection stays in this list when a project is
+// backends/collections/collections.ts). So a user-scope collection stays in this list when a project is
 // named — correctly, because the reason to subtract is that listCollections serves it, and for
 // that root it does not. It is a skill there, runnable by `claude` like any other under `~`.
 //
@@ -18,8 +18,8 @@ import { discoverCollections } from "@mulmoclaude/core/collection/server";
 import { toJsonObject, type CommandHandlers, type JsonObject } from "@mulmoclaude/core/remote-host";
 import type { SessionAgent } from "../../../../common/sessionAgent.js";
 import { SESSION_ID_RE } from "../../../config/env.js";
-import { agentOfSession, cwdOfSession } from "../../../session/session-lookup.js";
-import { userSkillsDir } from "../../collections.js";
+import { agentOfSession, cwdOfSession } from "../../../session/list/session-lookup.js";
+import { userSkillsDir } from "../../collections/collections.js";
 import { discoverPluginSkillIds } from "../pluginSkills.js";
 import { discoverSkillNames } from "../skills.js";
 import { scopeFromCommand } from "../commandScope.js";

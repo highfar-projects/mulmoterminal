@@ -28,7 +28,7 @@ vi.mock("../../../server/session/session-reads.js", async (importOriginal) => ({
   sessionPrompts: async () => (reads.push("prompts"), { prompts: [] }),
   sessionLastTurn: async () => (reads.push("last-turn"), { prompt: null, reply: null }),
 }));
-vi.mock("../../../server/session/transcript-view-read.js", async (importOriginal) => ({
+vi.mock("../../../server/session/transcript/transcript-view-read.js", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   sessionTranscriptPage: async () => (reads.push("view"), { turns: [] }),
 }));
@@ -45,11 +45,11 @@ const listSessions = async () => {
   if (listing.fails) throw new Error("index unreadable");
   return listing.rows;
 };
-vi.mock("../../../server/agents/copilot-sessions.js", async (importOriginal) => ({
+vi.mock("../../../server/agents/copilot/copilot-sessions.js", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   listCopilotSessionsForCwd: listSessions,
 }));
-vi.mock("../../../server/agents/cursor-sessions.js", async (importOriginal) => ({
+vi.mock("../../../server/agents/cursor/cursor-sessions.js", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   listCursorSessionsForCwd: listSessions,
 }));

@@ -8,6 +8,27 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@9.5.0 — 2026-10-08
+
+> **Setup guide:** [9.5.0 — A UFO joins the heat pictures, and two quiet fixes](https://receptron.github.io/mulmoterminal/guide/en/v9.5.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v9.5.0.html))
+
+### A UFO for the heat pictures (#2937)
+
+- [#2939](https://github.com/receptron/mulmoterminal/pull/2939) — `playfulEffects` has a ninth picture, `ufo`. It hovers and bobs at the low levels, beams down and rocks harder as the load climbs, runs its rim lights red at the top, and shoots off into the sky as the finale. It is a new `HEAT_PATTERNS` entry and one figure component, with no new setting: `"random"` can now pick it, and `"playfulEffects": "ufo"` uses it everywhere. Because `"random"` chooses by hash modulo the list length, some sessions get a different picture than before.
+
+### Usage probe no longer switches fullscreen off (#2936)
+
+- [#2940](https://github.com/receptron/mulmoterminal/pull/2940) — the hidden session that reads the usage gauge is killed seconds after it answers, which Claude Code's fullscreen renderer counts as a failed start; two of those on one Claude Code version write `fullscreenAutoDisabled` into that login's `.claude.json`, and every cell then falls back to the inline renderer even with `"tui": "fullscreen"`. Both probe starts (the default login, and accounts and rotation tokens) now set `CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1`, so they stay out of that count. A spec drives both starts and asserts what reaches the spawn. Cells are unchanged. A flag already written to `.claude.json` is not cleared by this. The hidden translation worker has the same early exit through the cell path and is left for a separate issue.
+
+### A hung git no longer holds every later read (#2935)
+
+- [#2942](https://github.com/receptron/mulmoterminal/pull/2942) — `git()` and `spawnCollect()` passed Node's `timeout` to `spawn`, which signals only the direct child, and waited for `close`, which waits for every holder of the output pipes. A grandchild that inherited them (git-lfs under a killed `git status`) kept the call pending, and with coalesced status reads every later read for that worktree joined it. Both now go through `server/git/runTool`: the child leads its own process group on POSIX and the whole group gets SIGTERM and then SIGKILL at the deadline (`taskkill /T /F` on Windows), and a short drain after exit bounds the wait for `close`. Intended differences: with the stdout cap `git()` returns `code: null`, and `spawnCollect()` given an argument `spawn` refuses resolves `ok: false` instead of rejecting. Partially addresses #2935; the other call sites of the same shape are tracked in #2941.
+
+### Docs
+
+- [#2934](https://github.com/receptron/mulmoterminal/pull/2934) — the token-rotation guide opens with restarting the agent at a usage limit and has a Token usage section; the v9.2.0 page points at it.
+- [#2938](https://github.com/receptron/mulmoterminal/pull/2938) — the Token usage screen is described as listing rotation tokens only, not the `/login` account.
+
 ## mulmoterminal@9.4.0 — 2026-10-08
 
 > **Setup guide:** [9.4.0 — Confetti, from a key, a merge or Settings](https://receptron.github.io/mulmoterminal/guide/en/v9.4.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v9.4.0.html))

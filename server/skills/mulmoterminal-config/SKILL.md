@@ -464,7 +464,7 @@ it. Settings → Theme has an on/off switch for it (no picture choice). Asked to
 ```
 
 `"random"` (the default) lets each session pick its own; one of `bomb`, `volcano`, `kettle`,
-`rocket`, `dynamite`, `balloon`, `skull` or `sumo` uses that one everywhere.
+`rocket`, `dynamite`, `balloon`, `skull`, `sumo` or `ufo` uses that one everywhere.
 
 ### `confetti` — a celebration over the whole page
 

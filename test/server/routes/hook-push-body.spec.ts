@@ -10,7 +10,7 @@ import express from "express";
 import { routeCall, jsonPost } from "../../helpers/routeCall";
 import { mountHookRoute } from "../../../server/routes/hook-routes";
 import { aiTitles, lastPrompts, lastResponses, ptys } from "../../../server/session/registry";
-import { clearedTranscripts } from "../../../server/session/cleared-transcripts";
+import { clearedTranscripts } from "../../../server/session/transcript/cleared-transcripts";
 
 const pushes: Array<{ title: string; body: string }> = [];
 vi.mock("../../../server/infra/web-push.js", () => ({

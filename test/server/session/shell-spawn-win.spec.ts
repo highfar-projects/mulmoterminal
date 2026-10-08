@@ -13,8 +13,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { IPty } from "node-pty";
-import { spawnPty } from "../../../server/session/pty-spawn";
-import { shellInvocation, defaultShellTarget, launchInvocation, type LaunchTarget, type ShellInvocation } from "../../../server/session/shell-command";
+import { spawnPty } from "../../../server/session/pty/pty-spawn";
+import { shellInvocation, defaultShellTarget, launchInvocation, type LaunchTarget, type ShellInvocation } from "../../../server/session/spawn/shell-command";
 
 const isWindows = process.platform === "win32";
 

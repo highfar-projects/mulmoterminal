@@ -4,16 +4,16 @@
 import { buildScreenMeta, captureSessionScreen, SCREEN_HISTORY_ROWS, type SessionScreenMeta } from "./terminalScreen.js";
 import { dirIconSrc, readIconFile } from "./dirIcons.js";
 import { quickCommandsForAgent } from "./quickCommands.js";
-import { dirIconFor, loadDirConfig } from "../../config/dir-config.js";
+import { dirIconFor, loadDirConfig } from "../../config/dir/dir-config.js";
 import { listProjectRoots } from "../../infra/project-root.js";
 import { mobileFilesProjectFor } from "./mobileFileProject.js";
 import { getQuickCommands } from "../../config/config-routes.js";
 import { currentBranch } from "../../git/git-status.js";
 import { resolveGithubUrl } from "../../git/gitRemote.js";
-import { agentOfSession } from "../../session/session-lookup.js";
+import { agentOfSession } from "../../session/list/session-lookup.js";
 import { aiTitles, lastPrompts, ptys, sessionMemos, sessionMemosHydrated } from "../../session/registry.js";
-import { boundedTail } from "../../session/terminal-replay.js";
-import { renderScreen } from "../../session/headlessScreen.js";
+import { boundedTail } from "../../session/pty/terminal-replay.js";
+import { renderScreen } from "../../session/pty/headlessScreen.js";
 import { tmuxCaptureStyledPane } from "../../infra/tmux.js";
 
 // Inlined rather than the /api/dir-icon URL the browser gets: the phone has no route to this host

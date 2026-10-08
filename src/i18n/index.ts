@@ -5,6 +5,7 @@ import { ja } from "./ja";
 import { zhCN } from "./zh-CN";
 import { zhTW } from "./zh-TW";
 import { ko } from "./ko";
+import { withForkMessages } from "./fork";
 import { resolveUiLocale, uiLanguage } from "../composables/uiLanguage";
 
 // `legacy: false` — the app is Composition API throughout, and the legacy mode installs a global
@@ -19,7 +20,8 @@ export const i18n = createI18n({
   legacy: false,
   locale: resolveUiLocale(uiLanguage.value),
   fallbackLocale: "en",
-  messages: { en, ja, "zh-CN": zhCN, "zh-TW": zhTW, ko },
+  // withForkMessages (fork-only) adds this fork's own messages on top of upstream's bundles.
+  messages: withForkMessages({ en, ja, "zh-CN": zhCN, "zh-TW": zhTW, ko }),
 });
 
 // The setting is the source of truth; this keeps the runtime following it. Watched here rather than

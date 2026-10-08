@@ -2,8 +2,8 @@
 // themselves.
 //
 // The history has one writer everywhere else: `/api/hook`, driven by the PreToolUse /
-// PostToolUse settings claude carries (session/hook-settings.ts). codex has no hook mechanism
-// and neither does agy — see the note at the top of agents/codex-activity.ts, and
+// PostToolUse settings claude carries (session/spawn/setup/hook-settings.ts). codex has no hook mechanism
+// and neither does agy — see the note at the top of agents/codex/codex-activity.ts, and
 // docs/codex-vs-claude.md — so for those two the pane sat empty however much they did.
 //
 // The broker is the one place their work is visible to us: every GUI tool they call arrives at
@@ -16,10 +16,10 @@
 // store could collapse — the broker mints its own uuid while the hook carries claude's
 // `tool_use_id`, so `recordToolCallStart`'s dedupe would never see them as the same call.
 import type { SessionAgent } from "../../common/sessionAgent.js";
-import type { ToolCallEnd, ToolCallStart } from "../session/tool-hook.js";
+import type { ToolCallEnd, ToolCallStart } from "../session/activity/tool-hook.js";
 import { messageOf } from "../errors.js";
 
-/** What the broker reports about one GUI tool call. Mirrors ToolCallStart/End in session/tool-hook.ts. */
+/** What the broker reports about one GUI tool call. Mirrors ToolCallStart/End in session/activity/tool-hook.ts. */
 export interface GuiCallRecorder {
   start(call: { toolUseId: string; toolName: string; toolInput: unknown }): void;
   end(call: { toolUseId: string; toolName: string; toolInput: unknown; toolOutput: unknown; durationMs: number; status: "completed" | "failed" }): void;

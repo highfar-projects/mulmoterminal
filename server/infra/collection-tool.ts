@@ -78,7 +78,7 @@ export function manageCollectionHandlerFor(workspaceRoot: string): typeof tool.h
         // It would drift, too, and silently. The flag is a factory dep, frozen when the instance
         // is built, while the host binding is re-read per operation — and the binding's answer
         // moves: a workspace gains its first staged collection the moment MulmoClaude writes one
-        // (server/backends/stagedSkills.ts). A frozen `false` beside a live staging path is
+        // (server/backends/collections/stagedSkills.ts). A frozen `false` beside a live staging path is
         // exactly the state this change exists to prevent: the agent authors into
         // `.claude/skills` while the read prefers staging, so its edit never appears.
       }).handler,

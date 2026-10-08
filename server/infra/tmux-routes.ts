@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { requestOriginAllowed } from "../routes/same-origin-guard.js";
 import type { SurvivingSession } from "../../common/survivingSessions.js";
-import type { ReapSweepResult } from "../session/reap-idle-sessions.js";
+import type { ReapSweepResult } from "../session/reaping/reap-idle-sessions.js";
 
 // Deps injected from index.ts so the origin guard, session-id validation, and the
 // orphan-selection boundary are unit-testable without booting the server (mirrors
@@ -15,7 +15,7 @@ export interface TmuxRouteDeps {
   killTmux: (id: string) => void;
   // Run the same sweep the server runs at boot, and say what it did. The route used to carry the
   // decision itself, against a predicate made of permanent records — which is why it reaped almost
-  // nothing (#1467). One rule now, in session/reap-idle-sessions.ts.
+  // nothing (#1467). One rule now, in session/reaping/reap-idle-sessions.ts.
   sweep: () => ReapSweepResult;
   // Every surviving tmux session, annotated for the Settings list (#1478). Injected like the rest,
   // so the route is testable without tmux, a registry or a clock.

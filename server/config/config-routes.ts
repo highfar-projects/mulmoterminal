@@ -23,7 +23,7 @@ import {
 } from "./app-config.js";
 import { ARGV_DEFAULT_AGENT } from "./env.js";
 import type { TerminalAgent } from "../../common/sessionAgent.js";
-import { type HeaderConfig } from "./header-config.js";
+import { type HeaderConfig } from "./header/header-config.js";
 import { type CwdPreset, type Launcher, type Provider, type UserMcpServer } from "./config-schema.js";
 import type { QuickCommand } from "../../common/quickCommands.js";
 import type { CustomAgent } from "../../common/customAgents.js";
@@ -33,13 +33,13 @@ import { systemTaskSettingsChanged } from "./system-task-settings.js";
 import { setAccountsProvider } from "../session/session-home.js";
 import type { TokenRotation } from "../../common/tokenRotation.js";
 import { installBundledSkills } from "../infra/install-bundled-skills.js";
-import type { SystemTaskSwitches } from "../backends/system-tasks.js";
+import type { SystemTaskSwitches } from "../backends/scheduler/system-tasks.js";
 import type { PushKind } from "../../common/pushKinds.js";
 import { type TerminalSubmitMode } from "../../common/terminalSubmit.js";
 import { launchOptions } from "./launch-options.js";
-import { worktreesRootDir } from "./worktree-task.js";
+import { worktreesRootDir } from "./worktree/worktree-task.js";
 import { canonicalPath } from "../infra/canonical-path.js";
-import { registeredStoriesRoots } from "../backends/mulmoscript.js";
+import { registeredStoriesRoots } from "../backends/plugins/mulmoscript.js";
 import { badArrayField, badNullableArrayField, badObjectField } from "./config-body.js";
 import { setDeclaredGitlabHosts } from "../git/forge-host.js";
 import { getUpdateStatus } from "./update-status.js";
@@ -47,13 +47,13 @@ import { readSoundPreset } from "./sound-presets.js";
 import { isNotifyKind } from "../../common/notifyKinds.js";
 import { parsePresetRef, soundPresetById } from "../../common/notifySounds.js";
 import { requestBody } from "../routes/requestBody.js";
-import { mountAgentEntryRoutes, type OnDiskChange } from "./agent-entry-routes.js";
+import { mountAgentEntryRoutes, type OnDiskChange } from "./agent/agent-entry-routes.js";
 import { mountThemeEntryRoutes } from "./theme-entry-routes.js";
-import { mountHeaderChipRoutes } from "./header-chip-routes.js";
-import { mountHeaderButtonRoutes } from "./header-button-routes.js";
+import { mountHeaderChipRoutes } from "./header/header-chip-routes.js";
+import { mountHeaderButtonRoutes } from "./header/header-button-routes.js";
 import { withConfigLock, ConfigLockTimeout } from "./config-lock.js";
 import { mountConfigReloadRoute } from "./config-reload.js";
-import { mountKeymapBindingRoute } from "./keymap-binding-route.js";
+import { mountKeymapBindingRoute } from "./keymap/keymap-binding-route.js";
 import { lastSegment } from "../../common/pathSegments.js";
 
 export const APP_CONFIG_FILE = path.join(os.homedir(), ".mulmoterminal", "config.json");
@@ -262,7 +262,7 @@ export function getSessionIdleReapDays(): number {
 
 // How often the sweep runs again while we are up (#2165). Read at the start that arms the timer, and
 // passed on when a save moves it (#2626), which re-arms counted from the last sweep. What this process
-// actually armed is reported by session/reap-schedule.ts rather than inferred from this number.
+// actually armed is reported by session/reaping/reap-schedule.ts rather than inferred from this number.
 export function getSessionReapIntervalHours(): number {
   return config.sessionReapIntervalHours;
 }

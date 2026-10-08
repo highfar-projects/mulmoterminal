@@ -22,7 +22,7 @@ const resetSessionToolGroups = vi.fn();
 let probed = () => {};
 let spawned = () => {};
 
-vi.mock("../../../server/session/pty-spawn.js", () => ({
+vi.mock("../../../server/session/pty/pty-spawn.js", () => ({
   ptySpawn: () => {
     spawned();
     return { term: fakeTerm(), tmux: true };
@@ -62,7 +62,7 @@ vi.mock("../../../server/config/config-routes.js", async (importOriginal) => ({
 
 const fakeTerm = () => ({ pid: 1, onData: vi.fn(), onExit: vi.fn(), write: vi.fn(), kill: vi.fn(), resize: vi.fn() });
 
-const { createClaudeSpawner } = await import("../../../server/session/spawn-claude.js");
+const { createClaudeSpawner } = await import("../../../server/session/spawn/agents/spawn-claude.js");
 
 const deps = {
   claudeBin: "claude",

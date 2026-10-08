@@ -5,7 +5,7 @@
 // with no tsx. The server imports from `bin/` already (bin/instances.js), so this direction is the
 // established one.
 //
-// The table is duplicated knowledge by construction — `server/config/agent-bins.ts` builds the same
+// The table is duplicated knowledge by construction — `server/config/agent/agent-bins.ts` builds the same
 // mapping out of the adapters — so a spec pins the two together rather than a comment asking the
 // next person to keep them in sync.
 //

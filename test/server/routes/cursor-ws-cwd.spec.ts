@@ -42,19 +42,19 @@ vi.mock("../../../server/infra/tmux.js", async (importOriginal) => ({
 
 // The session exists wherever it is asked about, so the probe's answer cannot be what makes this
 // pass or fail — only the DIRECTORY handed on does.
-vi.mock("../../../server/agents/cursor-sessions.js", () => ({
+vi.mock("../../../server/agents/cursor/cursor-sessions.js", () => ({
   cursorSessionExistsForCwd: () => true,
   cursorSessionExists: () => true,
   listCursorSessionsForCwd: () => [],
 }));
 
 const reserveWorktreeEnv = vi.fn(async () => ({}));
-vi.mock("../../../server/config/worktree-env.js", () => ({
+vi.mock("../../../server/config/worktree/worktree-env.js", () => ({
   ensureWorktreeEnv: (...args: unknown[]) => reserveWorktreeEnv(...(args as [])),
   reservedWorktreeEnv: () => ({}),
 }));
 
-vi.mock("../../../server/session/worktree-session-limit.js", () => ({
+vi.mock("../../../server/session/credentials/worktree-session-limit.js", () => ({
   claimLaunch: () => ({ release: vi.fn(), contended: false }),
   worktreeOccupancy: () => Promise.resolve({ isWorktree: false, session: null }),
 }));

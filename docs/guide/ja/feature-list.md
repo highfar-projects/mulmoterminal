@@ -4,7 +4,7 @@ nav_title: 全機能リスト
 layout: default
 parent: 日本語
 nav_order: 6.5
-as_of: 9.4.0
+as_of: 9.5.0
 description: MulmoTerminal のいまある機能を、入った版つきで領域ごとに一行ずつ並べた一覧（9.1.0 時点）。
 ---
 
@@ -225,7 +225,7 @@ description: MulmoTerminal のいまある機能を、入った版つきで領�
 
 - 「Directory settings」の「Change here」で .mulmoterminal.json の全キーをフォームで編集する (v8.0.0)
 - 設定からヘッダーに開くボタン（URL・フォルダ・シェル・画面・PR・ピッカー）と操作のボタンを足せる (v7.3.0)
-- 設定で既定のエージェント、ヘッダーの色の付け方、Playful effects を選ぶ (v7.2.0)
+- Playful effects に UFO の絵があり、`random` で選ばれるほか `"playfulEffects": "ufo"` で固定できる (v9.5.0)
 - 設定でヘッダーのチップとボタンを追加・削除・移動でき、開いているターミナルにすぐ反映する（7.3 で鉛筆から編集） (v7.2.0)
 - 「Reload config file」で再起動せずに config.json を読み直す（不正なら断る） (v7.2.0)
 - ヘッダーのボタンをフォルダにまとめてメニューにできる（7.3 で設定画面から編集） (v6.6.0)

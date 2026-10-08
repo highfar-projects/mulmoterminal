@@ -5,26 +5,26 @@
 import type { Express, Request, Response } from "express";
 import { SESSION_ID_RE } from "../config/env.js";
 import { isRecord } from "../../common/isRecord.js";
-import { copilotHookBody } from "../agents/copilot-hook.js";
-import { cursorHookBody } from "../agents/cursor-hook.js";
-import { codexHookBody } from "../agents/codex-hook.js";
-import { recordCursorStop } from "../agents/cursor-usage.js";
+import { copilotHookBody } from "../agents/copilot/copilot-hook.js";
+import { cursorHookBody } from "../agents/cursor/cursor-hook.js";
+import { codexHookBody } from "../agents/codex/codex-hook.js";
+import { recordCursorStop } from "../agents/cursor/cursor-usage.js";
 import { ASK_QUESTION_TOOL, parseAskQuestions, type AskQuestionDone, type AskQuestionEvent } from "../../common/askQuestion.js";
 import { watchOtherWrites } from "../session/write-to-session.js";
-import { dirConfigWriteTarget } from "../config/dir-config.js";
+import { dirConfigWriteTarget } from "../config/dir/dir-config.js";
 import { writtenFilePath } from "../files/tool-writes.js";
-import { activityHookEffects, claudeOwnSessionId, pushKindFor, resolveHookCwd, resolveHookSessionId } from "../session/activity-hook.js";
-import { runCompletionHook } from "../session/completion-hooks.js";
+import { activityHookEffects, claudeOwnSessionId, pushKindFor, resolveHookCwd, resolveHookSessionId } from "../session/activity/activity-hook.js";
+import { runCompletionHook } from "../session/activity/completion-hooks.js";
 import { messageOf } from "../errors.js";
-import { headerHookEffect } from "../session/header-hook.js";
+import { headerHookEffect } from "../session/activity/header-hook.js";
 import { claudeSessionIds, lastPrompts, lastResponses, ptys } from "../session/registry.js";
-import { clearedTranscripts, markTranscriptCleared } from "../session/cleared-transcripts.js";
+import { clearedTranscripts, markTranscriptCleared } from "../session/transcript/cleared-transcripts.js";
 import { latestUserPrompt } from "../session/session-reads.js";
-import { notifyTaskFinished } from "../session/task-push.js";
-import { preferredHeaderPrompt } from "../session/transcript.js";
-import { failPendingTranslation } from "../session/translation-worker.js";
-import type { SessionActivityDeps } from "../session/session-activity-deps.js";
-import { publishesDirConfig, toolHookRecord, type ToolCallEnd, type ToolCallStart, type ToolHookPayload } from "../session/tool-hook.js";
+import { notifyTaskFinished } from "../session/activity/task-push.js";
+import { preferredHeaderPrompt } from "../session/transcript/transcript.js";
+import { failPendingTranslation } from "../session/scheduled/translation-worker.js";
+import type { SessionActivityDeps } from "../session/activity/session-activity-deps.js";
+import { publishesDirConfig, toolHookRecord, type ToolCallEnd, type ToolCallStart, type ToolHookPayload } from "../session/activity/tool-hook.js";
 
 // The header shows one line, so a longer prompt is stored truncated rather than in full.
 
@@ -347,7 +347,7 @@ export function mountHookRoute(app: Express, deps: HookDeps) {
   // to its error middleware, and swallowing it here would turn a failed hook into an
   // unhandled rejection instead of a 500.
   app.post("/api/hook", (req, res) => handleHookRequest(deps, req, res));
-  // A pre-flight for the machine-global hook posters (server/agents/cursor-hooks-file.ts). Their
+  // A pre-flight for the machine-global hook posters (server/agents/cursor/cursor-hooks-file.ts). Their
   // command line outlives this server — a crash skips the exit handler, and a user who edits the
   // hook file makes it one we may no longer rewrite — so before sending a PROMPT and its tool
   // arguments to a bare local port, the poster asks whether the thing listening there is us. The

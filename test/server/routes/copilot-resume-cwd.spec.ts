@@ -13,7 +13,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const existsForCwd = vi.fn<(id: string, cwd: string) => Promise<boolean>>(async () => true);
-vi.mock("../../../server/agents/copilot-sessions.js", () => ({
+vi.mock("../../../server/agents/copilot/copilot-sessions.js", () => ({
   copilotSessionExistsForCwd: (id: string, cwd: string) => existsForCwd(id, cwd),
   copilotSessionExists: () => false,
   listCopilotSessionsForCwd: async () => [],

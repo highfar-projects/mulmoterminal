@@ -7,11 +7,11 @@
 // per-spawn `--mcp-config`, so a session in the workspace does not get every tool on one url — and
 // it does not read a per-directory config file either. Its servers come from an installed PLUGIN,
 // registered once per machine, narrowed back to the directory's groups by a record the bridge asks
-// for after it resolves which session it belongs to (server/agents/muse-mcp.ts,
+// for after it resolves which session it belongs to (server/agents/muse/muse-mcp.ts,
 // server/session/bridge-session.ts).
 import { describe, it, expect } from "vitest";
 import { agentCarriesFullGuiMcp, FULL_GUI_MCP_AGENTS } from "../../../common/guiMcpAgents.js";
-import { carriesFullGuiMcp } from "../../../server/session/mcp-config.js";
+import { carriesFullGuiMcp } from "../../../server/session/spawn/setup/mcp-config.js";
 import { entitledToolGroups, rememberEntitledToolGroups, forgetEntitledToolGroups } from "../../../server/session/bridge-session.js";
 
 describe("muse and the GUI MCP", () => {

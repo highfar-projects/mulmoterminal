@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { activityHookEffects } from "../../../server/session/activity-hook";
-import { nextActivity, sessionRow } from "../../../server/session/activity-transition";
+import { activityHookEffects } from "../../../server/session/activity/activity-hook";
+import { nextActivity, sessionRow } from "../../../server/session/activity/activity-transition";
 import type { Activity } from "../../../server/session/types";
 import { notifyKindOf, type ActivityState } from "../../../src/composables/notifyKind";
 import type { NotifyKind } from "../../../common/notifyKinds";

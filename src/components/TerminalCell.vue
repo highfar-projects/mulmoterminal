@@ -52,7 +52,10 @@ import { CELL_CHIP_IDS, isCellChipId } from "../../common/headerChips";
 import CellPathMenu from "./CellPathMenu.vue";
 import { registerCellAction } from "../composables/useCellAction";
 import type { CellSelfAction } from "../../common/headerActions";
-import { reapSessionOnServer, restartSession } from "../composables/restartSession";
+import { reapSessionOnServer, restartSession, switchTokenOnServer } from "../composables/restartSession";
+import { accountSwitchChoices } from "../composables/accountSwitchChoices";
+import { useAppConfig } from "../composables/useAppConfig";
+import { useRateLimits } from "../composables/useRateLimits";
 import TimelineOverlay from "./TimelineOverlay.vue";
 import CopyCodeBlock from "./CopyCodeBlock.vue";
 import { pickFileInto, revealDir } from "../composables/useHeaderAction";
@@ -749,9 +752,16 @@ const launchChoice = ref<LaunchChoice | null>(props.initialLaunchChoice ?? null)
 const accountId = ref<string | null>(props.initialAccount ?? null);
 // The rotation credential the server started this session's process on (#2919) — a different
 // subscription from the cell beside it, in the same home, so it wears the same mark an account does.
+const { tokenRotation } = useAppConfig();
+// Read, never started here: the toolbar gauge polls, and a cell must not add a probe per token (#2954).
+const { snapshot: rateLimitSnapshot } = useRateLimits();
 const cellCredential = ref<CellCredential | null>(null);
 const accountMarkLabel = computed(() => (accountId.value ? accountLabel(props.accounts ?? [], accountId.value) : (cellCredential.value?.label ?? null)));
 const accountMarkDetail = computed(() => (accountId.value ? null : (cellCredential.value?.detail ?? null)));
+// Only a cell rotation placed can be moved, and only to what the config offers (#2950).
+const accountMarkChoices = computed(() =>
+  accountId.value ? [] : accountSwitchChoices(tokenRotation.value, cellCredential.value?.id ?? null, rateLimitSnapshot.value, Date.now()),
+);
 
 // Start what the Agent Picker picked, in `dir`. EVERY launch in the form goes through here: the
 // picker decides for the dir field, for a preset chip, and for a worktree alike, and a rule
@@ -1002,6 +1012,18 @@ function teardown() {
 const restarting = ref(false);
 const RESTART_FAILED_EN = "Couldn't end the old session, so nothing was restarted — try again, or close the cell.";
 async function restart(): Promise<void> {
+  await restartWith(reapSessionOnServer);
+}
+
+// Move the session to the subscription picked on the account mark (#2950): the restart, with the
+// server told which credential the new process is to run on.
+async function switchSubscription(tokenId: string): Promise<void> {
+  const id = sessionId.value;
+  if (!id) return;
+  await restartWith((sessionToReap) => switchTokenOnServer(sessionToReap, tokenId));
+}
+
+async function restartWith(reap: (sessionId: string) => Promise<boolean>): Promise<void> {
   // A worktree removal is running or waiting to be confirmed — that flow owns the pty. A restart
   // never opens that dialog itself: it discards nothing, so there is nothing to confirm.
   if (restarting.value || closeConfirm.value || closeBusy.value !== null) return;
@@ -1015,7 +1037,7 @@ async function restart(): Promise<void> {
   const stale = (): boolean => !launched.value || sessionId.value !== id;
   try {
     const outcome = await restartSession(id, {
-      reap: reapSessionOnServer,
+      reap,
       reconnect: () => {
         if (stale()) return;
         // The turn that was in flight died with the process; the resumed session publishes its own.
@@ -1714,7 +1736,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                  on the filmstrip thumbnail too (the CockpitHeader above), unlike the info chips
                  below, because it is identity rather than status. -->
             <CollectionMark :collection="collection" />
-            <AccountMark v-if="launched" :label="accountMarkLabel" :detail="accountMarkDetail" />
+            <AccountMark v-if="launched" :label="accountMarkLabel" :detail="accountMarkDetail" :choices="accountMarkChoices" @switch="switchSubscription" />
             <!-- The path is NOT here any more — it is the lead item on row 2 (see the
                `header-lead` template below). It had `min-w-[16ch]`, a floor of roughly a third of
                this track, and once it hit that floor the only thing left that could shrink was the

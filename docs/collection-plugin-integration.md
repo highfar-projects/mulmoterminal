@@ -16,7 +16,7 @@
 > - [`mulmoclaude-parity.md`](mulmoclaude-parity.md) — what is shared with MulmoClaude today,
 >   the three deliberate API-path divergences, and the differences that remain (custom-view
 >   response bodies, `kind: "agent"` dispatch).
-> - `server/backends/collections.ts` — the mounted routes, one line each.
+> - `server/backends/collections/collections.ts` — the mounted routes, one line each.
 > - `src/composables/collectionUi.ts` — every host-capability binding, real ones and the
 >   handful still deliberately inert.
 >
@@ -188,7 +188,7 @@ read-only card over the shared workspace:
   > `itemId → severity`, which is what accents a Kanban card that has a pending completion bell.
   > Left as written because the rest of this section records how the increment was scoped.
 - **Asset URLs:** `imageSrc`/`fileAssetUrl` resolve to `GET /api/files/raw?path=<workspace-relative>`
-  (server/backends/files.ts), mirroring MulmoClaude's `resolveImageSrc`, so `image`/`file` fields and
+  (server/backends/files/files.ts), mirroring MulmoClaude's `resolveImageSrc`, so `image`/`file` fields and
   custom-view `<img>` thumbnails render. `fileRoutePath` stays null (no in-app File Explorer).
 
 ### Teleport + Shadow DOM
@@ -294,7 +294,7 @@ toolbar from the shared file; the overlay opens and the index renders. Still ope
 no-op (collection "create"/action buttons that seed a chat are inert), and Tier 1 write routes.
 
 Both of those have since shipped — `startChat` seeds a visible chat (`startCollectionChat`) and the
-Tier 1 write routes are mounted in `server/backends/collections.ts` — which is what the note under the
+Tier 1 write routes are mounted in `server/backends/collections/collections.ts` — which is what the note under the
 stub list above refers to. The sentence before this one is left as the record of where Tier 2 stopped.
 
 Bottom line: **the package is drop-in-ready and needs zero MulmoClaude changes.** The work is entirely

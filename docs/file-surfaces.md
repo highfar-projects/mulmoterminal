@@ -23,7 +23,7 @@ differ as a consequence of that, not as a design of their own.
 | **Right pane** (`TerminalGrid` → `FilesPane`, `canvas-target` set) | the expanded cell's directory | that directory's subtree | the user, by zooming a cell |
 | **Full screen** (`/files?cwd=`, `FilesOverlay` → `FilesPane`) | whatever `?cwd=` says | that base's subtree | a browser, through a query string |
 | **Watched documents** (`containForWatching`) | the workspace + every live session directory | those subtrees | a browser, checked against roots the server already serves |
-| **`presentDocument` / `presentHtml` / …** (`backends/openPath.ts`) | **none** | any file of the right extension, anywhere | an agent the user launched |
+| **`presentDocument` / `presentHtml` / …** (`backends/files/openPath.ts`) | **none** | any file of the right extension, anywhere | an agent the user launched |
 
 ### The right pane re-roots; it does not follow a prop
 
@@ -45,9 +45,9 @@ input.
 
 ### `presentDocument` has no containment root, on purpose
 
-`backends/openPath.ts` says so in its own header, and names the reason: a tool-call path came from
+`backends/files/openPath.ts` says so in its own header, and names the reason: a tool-call path came from
 an agent the user launched, while a channel name is a string a browser chose. It also points at
-its opposite — `backends/fileOps.ts` exists to **confine** a plugin to one directory. Two modules,
+its opposite — `backends/files/fileOps.ts` exists to **confine** a plugin to one directory. Two modules,
 opposite purposes; do not reach for one when you mean the other.
 
 The rules themselves live in `@mulmoclaude/core/files` (`byPath.ts`), shared with MulmoClaude so
@@ -83,7 +83,7 @@ which the raw route deliberately allows only under the workspace or a live sessi
 (`authorizedServingBase`). So a picture, a PDF, a video or a sound is fetched from `/api/files/raw` (a PDF there is
 the one type served without the CSP sandbox, since WebKit draws nothing in an opaque frame, and the
 pane's frame adds no `sandbox` attribute for the same reason), and an HTML page from
-`/api/files/page/<cwd>/<path>` (`server/backends/filesPage.ts`), which authorises its base the same
+`/api/files/page/<cwd>/<path>` (`server/backends/files/filesPage.ts`), which authorises its base the same
 way and hands anything but the page itself back to the raw route. Neither reaches a file the raw
 route would refuse. The page goes out under presentHtml's CSP — an opaque origin and no fetch/XHR,
 though images (any https origin, and `'self'`) and the curated CDN list still load — and it is

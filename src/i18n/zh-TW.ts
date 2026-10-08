@@ -2,8 +2,6 @@ import type { Messages } from "./messages";
 import { usageViewZhTW } from "./usageView/zh-TW";
 import { blueprintsZhTW } from "./blueprints/zh-TW";
 import { tipsZhTW } from "./tips/zh-TW";
-import { forkTipsZhTW } from "./forkTips/zh-TW";
-import { LAUNCH_COMMAND } from "../../common/launchCommand";
 import { commandPaletteZhTW } from "./commandPalette/zh-TW";
 import { focusModeZhTW } from "./focusMode/zh-TW";
 import { fileHistoryZhTW } from "./fileHistory/zh-TW";
@@ -454,10 +452,10 @@ export const zhTW: Messages = {
     quit: {
       description:
         "停止這台機器上執行的 MulmoTerminal 伺服器。關掉這個分頁並不會停掉它 —— 伺服器還在跑，而這裡就是不必回到當初啟動它的那個終端機也能停掉它的辦法。",
-      // Message-function form, which skips vue-i18n's message compiler: it fills in this fork's
-      // LAUNCH_COMMAND, and upstream's `mulmoterminal@latest` carried a literal `@` the compiler reads
-      // as a linked-message reference — it throws, and the whole section renders as nothing.
-      restartHint: () => `要再啟動一次，請在終端機裡執行 \`${LAUNCH_COMMAND}\`。`,
+      // Message-function form, which skips vue-i18n's message compiler: the literal `@` in
+      // `mulmoterminal@latest` would otherwise be read as a linked-message reference, the compiler
+      // throws, and the whole section renders as nothing.
+      restartHint: () => "要再啟動一次，請在終端機裡執行 `npx mulmoterminal@latest`。",
       button: "結束 MulmoTerminal",
       confirmBody: "伺服器會停止，這個頁面將無法運作。網格上的每一個終端機都會從畫面上消失。",
       sessionsNote:
@@ -486,6 +484,14 @@ export const zhTW: Messages = {
   // `AttentionStatus` / `WorkPhase` / `PrPhase` 增加取值時，必須在此處寫上名稱，否則無法通過
   // 編譯（#1894）。
   // A cell header's two view menus: what happened in the session, and the tools around it.
+  // The account mark on a rotated cell opens this menu (#2950).
+  accountSwitch: {
+    title: "將此工作階段移到另一個訂閱",
+    hint: "點擊可將此工作階段移到另一個訂閱",
+    explain: "工作階段會在你選擇的訂閱上重新啟動並繼續同一段對話。進行中的回合會被中斷。",
+    weekLeft: "本週剩餘 {percent}",
+    atLimit: "已達上限",
+  },
   cellMenu: {
     history: "歷史",
     tools: "工具",
@@ -639,6 +645,5 @@ export const zhTW: Messages = {
   ...skillsViewZhTW,
   ...processesViewZhTW,
   tips: tipsZhTW,
-  forkTips: forkTipsZhTW,
   blueprints: blueprintsZhTW,
 };

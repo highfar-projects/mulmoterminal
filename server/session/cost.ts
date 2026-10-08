@@ -5,8 +5,8 @@
 import path from "node:path";
 import fs from "node:fs/promises";
 import type { Express, Response } from "express";
-import { parseJsonl } from "./transcript.js";
-import { createTranscriptFold } from "./transcript-fold.js";
+import { parseJsonl } from "./transcript/transcript.js";
+import { createTranscriptFold } from "./transcript/transcript-fold.js";
 import type { FileStamp } from "./file-cache.js";
 import { isRecord } from "../../common/isRecord.js";
 import { claudeProjectDirs, claudeTranscriptFile } from "./session-home.js";

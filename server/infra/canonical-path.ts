@@ -17,7 +17,7 @@ const realpath = realpathSync.native;
 // exist) is resolved before containment checks.
 //
 // Sync on purpose — it is the KEY two concurrent launches must agree on to be recognised as
-// aiming at the same directory (session/worktree-session-limit.ts), and that check happens before
+// aiming at the same directory (session/credentials/worktree-session-limit.ts), and that check happens before
 // anything awaits.
 export function canonicalPath(p: string): string {
   const resolved = path.resolve(p);

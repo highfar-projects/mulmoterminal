@@ -21,8 +21,8 @@
 // `exit` cannot wait — the event loop is already over by then — so it stays synchronous and
 // drains nothing. That is why the signal path is the one that matters: it is the path Ctrl+C and
 // the browser's stop button both take.
-import { stopWhisperSidecar } from "../backends/whisper.js";
-import { drainPersistQueues } from "../session/persist-drain.js";
+import { stopWhisperSidecar } from "../backends/media/whisper.js";
+import { drainPersistQueues } from "../session/reaping/persist-drain.js";
 import { isRecord } from "../../common/isRecord.js";
 import { tmuxIsPsmux } from "./tmux.js";
 import { traceTmux } from "./tmux-trace.js";

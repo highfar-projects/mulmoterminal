@@ -22,10 +22,10 @@ import {
   type LatestTurnContext,
   type PromptTrail,
   type TimelineEvent,
-} from "./transcript.js";
-import { createTranscriptFold, type FoldedAt } from "./transcript-fold.js";
-import { classifyWorkPhase, type WorkPhase } from "./workPhase.js";
-import { sessionListTitle } from "./sessionListTitle.js";
+} from "./transcript/transcript.js";
+import { createTranscriptFold, type FoldedAt } from "./transcript/transcript-fold.js";
+import { classifyWorkPhase, type WorkPhase } from "./activity/workPhase.js";
+import { sessionListTitle } from "./list/sessionListTitle.js";
 import {
   activity,
   aiTitles,
@@ -49,17 +49,17 @@ import {
   promptWindow,
   transcriptPrompts,
   PROMPT_SCAN_LIMIT,
-} from "./prompt-history.js";
+} from "./transcript/prompt-history.js";
 import type { PromptWindow } from "../../common/promptHistory.js";
-import { anchorOf, memoKeyFor, resumePlan, ANCHOR_BYTES, EMPTY_ANCHOR, type HistoryMemo } from "./prompt-history-memo.js";
-import { clearedAtOf, clearedClaudeIdOf, clearedTranscripts } from "./cleared-transcripts.js";
-import { currentTurnReplyFromClaudeParsed, lastTurnFromClaudeParsed, lastTurnFromCodexRolloutDocs, EMPTY_TURN, type LastTurn } from "./last-turn.js";
+import { anchorOf, memoKeyFor, resumePlan, ANCHOR_BYTES, EMPTY_ANCHOR, type HistoryMemo } from "./transcript/prompt-history-memo.js";
+import { clearedAtOf, clearedClaudeIdOf, clearedTranscripts } from "./transcript/cleared-transcripts.js";
+import { currentTurnReplyFromClaudeParsed, lastTurnFromClaudeParsed, lastTurnFromCodexRolloutDocs, EMPTY_TURN, type LastTurn } from "./transcript/last-turn.js";
 import { forEachJsonlRecord, forEachJsonlRecordIn, readTailRecords } from "../infra/jsonl-file.js";
-import { copySummaryState, emptySummaryState, foldSummary, summaryPartsOf, type SummaryState } from "./summary-scan.js";
+import { copySummaryState, emptySummaryState, foldSummary, summaryPartsOf, type SummaryState } from "./transcript/summary-scan.js";
 import { partitionPending } from "./partitionPending.js";
-import { codexRolloutPath } from "../agents/codex-sessions.js";
-import { cursorTranscriptPath } from "../agents/cursor-sessions.js";
-import { cursorLastTurnFromRecords } from "../agents/cursor-last-turn.js";
+import { codexRolloutPath } from "../agents/codex/codex-sessions.js";
+import { cursorTranscriptPath } from "../agents/cursor/cursor-sessions.js";
+import { cursorLastTurnFromRecords } from "../agents/cursor/cursor-last-turn.js";
 import type { DiskStat, PendingSession, SessionMeta } from "./types.js";
 import { readString } from "../../common/readString.js";
 import type { TerminalAgent } from "../../common/sessionAgent.js";

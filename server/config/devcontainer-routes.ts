@@ -12,7 +12,7 @@ import {
   runningDevcontainerName,
   stopDevcontainer,
 } from "./devcontainer-flag.js";
-import { loadDirConfig } from "./dir-config.js";
+import { loadDirConfig } from "./dir/dir-config.js";
 import { requestOriginAllowed } from "../routes/same-origin-guard.js";
 import { requestBody } from "../routes/requestBody.js";
 import {

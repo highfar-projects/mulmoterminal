@@ -8,8 +8,8 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **9.4.0 is out.** Confetti has a box in Settings, and the guide explains how to throw it: a key, a merged PR, or the
-> Konami code. [Setup guide](v9.4.0.html)
+> **9.5.0 is out.** A UFO joins the playful-effect pictures, the usage gauge no longer switches Claude Code's fullscreen
+> off, and a stuck git helper can no longer hold a worktree's status. [Setup guide](v9.5.0.html)
 
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching

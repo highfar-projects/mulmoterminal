@@ -15,7 +15,7 @@
 // error is passed through untouched, and a failure of the check itself changes nothing. The agent
 // never has to handle a new failure mode to keep working.
 import { isRecord } from "../../common/isRecord.js";
-import { checkCollectionSelfContainment } from "../backends/collectionSelfContainment.js";
+import { checkCollectionSelfContainment } from "../backends/collections/collectionSelfContainment.js";
 
 /** `putSchema`'s success narration, parsed — or null for anything else, INCLUDING its refusals.
  *  Those are prose, and prose is what the agent is meant to read and act on: appending to it

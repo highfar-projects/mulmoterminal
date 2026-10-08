@@ -66,3 +66,14 @@ describe("git() and a caller that stopped waiting", () => {
     await expect(git(["rev-parse", "HEAD"], process.cwd(), 5000, already.signal)).resolves.toEqual({ ok: false, stdout: "", code: null });
   });
 });
+
+// #2935, through git itself: the alias runs under sh, so `sleep &` is git's grandchild and holds
+// the stdout pipe after the timeout has killed git. POSIX only — the alias needs a POSIX shell.
+describe.skipIf(process.platform === "win32")("git() and a grandchild that outlives it", () => {
+  it("settles at its timeout rather than when the grandchild exits", async () => {
+    const started = Date.now();
+    const result = await git(["-c", "alias.hang=!sleep 30 & sleep 30", "hang"], process.cwd(), 500);
+    expect(Date.now() - started).toBeLessThan(10_000);
+    expect(result).toEqual({ ok: false, stdout: "", code: null });
+  });
+});

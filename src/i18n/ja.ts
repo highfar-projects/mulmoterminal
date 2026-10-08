@@ -2,8 +2,6 @@ import type { Messages } from "./messages";
 import { usageViewJa } from "./usageView/ja";
 import { blueprintsJa } from "./blueprints/ja";
 import { tipsJa } from "./tips/ja";
-import { forkTipsJa } from "./forkTips/ja";
-import { LAUNCH_COMMAND } from "../../common/launchCommand";
 import { commandPaletteJa } from "./commandPalette/ja";
 import { focusModeJa } from "./focusMode/ja";
 import { fileHistoryJa } from "./fileHistory/ja";
@@ -463,10 +461,10 @@ export const ja: Messages = {
     quit: {
       description:
         "このマシンで動いている MulmoTerminal サーバを終了します。このタブを閉じてもサーバは止まりません。起動したターミナルに戻らずに止める手段がここです。",
-      // Message-function form, which skips vue-i18n's message compiler: it fills in this fork's
-      // LAUNCH_COMMAND, and upstream's `mulmoterminal@latest` carried a literal `@` the compiler reads
-      // as a linked-message reference — it throws, and the whole section renders as nothing.
-      restartHint: () => `もう一度起動するには、ターミナルで \`${LAUNCH_COMMAND}\` を実行してください。`,
+      // Message-function form, which skips vue-i18n's message compiler: the literal `@` in
+      // `mulmoterminal@latest` would otherwise be read as a linked-message reference, the compiler
+      // throws, and the whole section renders as nothing.
+      restartHint: () => "もう一度起動するには、ターミナルで `npx mulmoterminal@latest` を実行してください。",
       button: "MulmoTerminal を終了",
       confirmBody: "サーバが停止し、このページは動かなくなります。グリッド上のターミナルは画面から消えます。",
       sessionsNote:
@@ -496,6 +494,14 @@ export const ja: Messages = {
   // ない、というのがここの要点で、`AttentionStatus` / `WorkPhase` / `PrPhase` に値を足したとき
   // 「ここに名前を書くまでコンパイルが通らない」を保つため（#1894）。
   // A cell header's two view menus: what happened in the session, and the tools around it.
+  // The account mark on a rotated cell opens this menu (#2950).
+  accountSwitch: {
+    title: "このセッションを別の契約へ移す",
+    hint: "クリックすると、このセッションを別の契約へ移せます",
+    explain: "選んだ契約でセッションを再起動し、同じ会話を続けます。実行中のやり取りは止まります。",
+    weekLeft: "今週あと {percent}",
+    atLimit: "上限に達しています",
+  },
   cellMenu: {
     history: "履歴",
     tools: "道具",
@@ -651,6 +657,5 @@ export const ja: Messages = {
   ...skillsViewJa,
   ...processesViewJa,
   tips: tipsJa,
-  forkTips: forkTipsJa,
   blueprints: blueprintsJa,
 };

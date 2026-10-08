@@ -8,7 +8,7 @@
 // name the one thing to fix instead of describing the whole setup.
 import type { LaunchOptions, LaunchProviderOption } from "../../common/launchOptions.js";
 import { presetsForProvider } from "../../common/modelPresets.js";
-import { usableProvider, type ProviderConfig } from "../session/provider-env.js";
+import { usableProvider, type ProviderConfig } from "../session/spawn/setup/provider-env.js";
 
 export function launchOptions(providers: readonly ProviderConfig[], env: NodeJS.ProcessEnv): LaunchOptions {
   const options = providers.map((provider): LaunchProviderOption => {

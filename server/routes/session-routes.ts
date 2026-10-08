@@ -10,7 +10,7 @@ import { SESSION_ID_RE } from "../config/env.js";
 import { normalizeAgent, workspaceForRoute } from "./routeParams.js";
 import { cwdForSessionHydrated } from "../session/session-cwd.js";
 import { hasErrnoCode } from "../errors.js";
-import { isProbeSessionId } from "../agents/probe-session.js";
+import { isProbeSessionId } from "../agents/probe/probe-session.js";
 import {
   activity,
   activityStateHydrated,
@@ -45,34 +45,34 @@ import {
   sessionPrompts,
   sessionTimeline,
 } from "../session/session-reads.js";
-import { formatHandoff, type HandoffShape } from "../session/handoff-text.js";
+import { formatHandoff, type HandoffShape } from "../session/transcript/handoff-text.js";
 import { agentHomeChoices, claudeTranscriptFile, codexSessionsUnder } from "../session/session-home.js";
-import { accountSessionsHydrated } from "../session/account-sessions.js";
+import { accountSessionsHydrated } from "../session/accounts/account-sessions.js";
 import { runningKeyOf, runningSessionKeys, sessionAttached, survivorSnapshot } from "../session/dir-session.js";
 import type { SessionOccupancy } from "../../common/sessionOccupancy.js";
 import type { SessionRunning } from "../../common/sessionRunning.js";
 import { tmuxAttachedCounts, tmuxHeldSessionIdsAsync } from "../infra/tmux.js";
-import { listCodexSessions } from "../agents/codex-sessions.js";
-import { listCopilotSessionsForCwd } from "../agents/copilot-sessions.js";
-import { listCursorSessionsForCwd } from "../agents/cursor-sessions.js";
-import { antigravityBrainRoot } from "../agents/antigravity-session.js";
-import { listAntigravitySessions } from "../agents/antigravity-sessions.js";
-import { grokSessionsRoot } from "../agents/grok-session.js";
-import { listGrokSessions } from "../agents/grok-sessions.js";
-import { listMuseSessionsForCwd, museSessionLogPath } from "../agents/muse-session.js";
+import { listCodexSessions } from "../agents/codex/codex-sessions.js";
+import { listCopilotSessionsForCwd } from "../agents/copilot/copilot-sessions.js";
+import { listCursorSessionsForCwd } from "../agents/cursor/cursor-sessions.js";
+import { antigravityBrainRoot } from "../agents/antigravity/antigravity-session.js";
+import { listAntigravitySessions } from "../agents/antigravity/antigravity-sessions.js";
+import { grokSessionsRoot } from "../agents/grok/grok-session.js";
+import { listGrokSessions } from "../agents/grok/grok-sessions.js";
+import { listMuseSessionsForCwd, museSessionLogPath } from "../agents/muse/muse-session.js";
 import { museConversations, museConversationsHydrated } from "../session/registry.js";
-import { conversationSessionKeys, type AgentConversation } from "../session/agent-conversations.js";
+import { conversationSessionKeys, type AgentConversation } from "../session/list/agent-conversations.js";
 import { AGENT_SESSION_LIST_PATHS } from "../../common/agentSessionList.js";
 import { TERMINAL_AGENTS, type TerminalAgent } from "../../common/sessionAgent.js";
 import type { SessionMeta } from "../session/types.js";
-import { liveSessionAnswer } from "../session/live-sessions.js";
-import { parseActivityIds, selectSessionRows } from "../session/session-list.js";
-import { agentBadges } from "../session/agent-badges.js";
+import { liveSessionAnswer } from "../session/list/live-sessions.js";
+import { parseActivityIds, selectSessionRows } from "../session/list/session-list.js";
+import { agentBadges } from "../session/activity/agent-badges.js";
 import { agentSessionTitle } from "../agents/agent-session-title.js";
 import { agentTitleKind, type AgentTitleKind } from "../../common/agentTitle.js";
-import { sessionDetailView } from "../session/session-detail-view.js";
-import { clearedTranscripts } from "../session/cleared-transcripts.js";
-import { parseTranscriptCursor, sessionTranscriptPage } from "../session/transcript-view-read.js";
+import { sessionDetailView } from "../session/list/session-detail-view.js";
+import { clearedTranscripts } from "../session/transcript/cleared-transcripts.js";
+import { parseTranscriptCursor, sessionTranscriptPage } from "../session/transcript/transcript-view-read.js";
 import type { SessionAgent } from "../../common/sessionAgent.js";
 import { requestBody } from "./requestBody.js";
 
@@ -541,7 +541,7 @@ async function antigravitySessionList(req: Request, res: Response) {
 
 // grok's own conversations for a workspace (?cwd=, default CLAUDE_CWD). The cheapest of the three:
 // ~/.grok/sessions is partitioned by working directory, so there is no date tree to scan and no
-// log to consult — the cwd IS the directory name (server/agents/grok-sessions.ts).
+// log to consult — the cwd IS the directory name (server/agents/grok/grok-sessions.ts).
 async function grokSessionList(req: Request, res: Response) {
   try {
     const cwd = workspaceForRoute(req.query.cwd, res);

@@ -1,44 +1,33 @@
-import { spawn } from "node:child_process";
-import type { ChildProcess } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 
-// End a spawned dev tool AND everything it started.
-//
-// `git` and `gh` already had timeouts, but the timeout did not end the call it was meant to
-// end. Node's `timeout` option signals the DIRECT child only, and a `git status` in an lfs
-// repo is a whole tree — git spawns `sh`, which spawns `git-lfs filter-process`. Signalling
-// git leaves those descendants running, still holding the stdio pipes, so nothing is actually
-// reclaimed and (see run-tool.ts) `close` never fires either.
-//
-// Measured on an 86k-file lfs repo polled by the roster: ~1,200 orphaned git / sh / git-lfs
-// processes holding ~23GB of a 32GB machine, growing ~900/hour until sessions could not start.
-//
-// `taskkill /T` is the only thing on Windows that walks the tree. Elsewhere the child is spawned
-// `detached` (run-tool.ts), which makes it the leader of its own process group, so signalling the
-// NEGATIVE pid reaches every descendant in that group the same way `taskkill /T` does on Windows —
-// a bare `child.kill()` only ever reached the direct child and left `sh` / `git-lfs` behind.
-export interface KillTreeDeps {
-  /** Injected for tests: the real one runs taskkill, which must never be aimed at a made-up pid. */
-  spawnFn?: typeof spawn;
-}
+// SIGTERM first because git removes its lock files on SIGTERM and not on SIGKILL: a `git status`
+// killed outright can leave `.git/index.lock` behind and fail every git call after it.
+const KILL_ESCALATION_MS = 2_000;
 
-export function killTree(child: ChildProcess, platform: NodeJS.Platform = process.platform, deps: KillTreeDeps = {}): void {
-  const pid = child.pid;
-  // No pid means the spawn itself failed; there is nothing running to kill.
+/** Whether `killTree` can reach the grandchildren of a child spawned with these options. POSIX
+ *  needs the child to lead its own process group; Windows walks the tree with taskkill instead,
+ *  and a detached child there would open a console window of its own. */
+export const spawnsOwnGroup = process.platform !== "win32";
+
+const signalGroup = (pid: number, signal: NodeJS.Signals): void => {
+  try {
+    process.kill(-pid, signal);
+  } catch {
+    // ESRCH: every process in the group has already gone, which is the outcome this was for.
+  }
+};
+
+// Ends the child AND everything it started that is still in its process group — the git-lfs
+// `filter-process` a timed-out `git status` leaves holding the stdout pipe (#2935). A process
+// that put itself in a new session (git's own daemons do) is out of reach by design.
+export function killTree(child: ChildProcess): void {
+  const { pid } = child;
   if (pid === undefined) return;
-  if (platform !== "win32") {
-    // The group can already be gone (the child exited between the deadline firing and this
-    // running) — an ESRCH here is an ordinary outcome, not a bug.
-    try {
-      process.kill(-pid, "SIGKILL");
-    } catch {
-      // already gone
-    }
+  if (!spawnsOwnGroup) {
+    // eslint-disable-next-line sonarjs/no-os-command-from-path -- taskkill is a Windows system tool; the pid is a number we were given by spawn
+    spawn("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore", windowsHide: true }).on("error", () => child.kill());
     return;
   }
-  // stdio:"ignore" so the killer cannot inherit the very pipes we are trying to release, and
-  // unref so a slow taskkill never holds the server's event loop open. An error here is an
-  // ordinary outcome — by the time it runs the tree may already be gone.
-  const killer = (deps.spawnFn ?? spawn)("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore", windowsHide: true });
-  killer.on("error", () => {});
-  killer.unref();
+  signalGroup(pid, "SIGTERM");
+  setTimeout(() => signalGroup(pid, "SIGKILL"), KILL_ESCALATION_MS).unref();
 }

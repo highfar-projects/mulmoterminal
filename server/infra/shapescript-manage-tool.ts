@@ -52,8 +52,8 @@ import {
 } from "firebase/firestore";
 import { deleteObject, getBytes, ref as storageRef, uploadBytes, type FirebaseStorage } from "firebase/storage";
 import type { ToolDefinition } from "gui-chat-protocol";
-import { artifactsFileOps } from "../backends/artifacts.js";
-import { shapeScriptByPath } from "../backends/openPath.js";
+import { artifactsFileOps } from "../backends/plugins/artifacts.js";
+import { shapeScriptByPath } from "../backends/files/openPath.js";
 import { currentDisplayName, currentFirestore, currentStorage, currentUid } from "../backends/remoteHost/session.js";
 
 const SHAPES = "shapes";

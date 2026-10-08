@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { installOwnedSkill, SCHEMA_ASSET_FILE } from "../../../server/infra/install-bundled-skills";
 import { BUNDLED_SKILL_NAMES } from "../../../common/bundledSkills.js";
-import { loadDirConfig } from "../../../server/config/dir-config";
+import { loadDirConfig } from "../../../server/config/dir/dir-config";
 import { isRecord } from "../../../common/isRecord.js";
 
 const NAME = "mulmoterminal-config";

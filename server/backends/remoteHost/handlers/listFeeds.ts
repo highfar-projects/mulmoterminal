@@ -3,7 +3,7 @@
 // Feed registry with retrieval kind / schedule / last-fetch time (read-only).
 import { listFeeds, readFeedState } from "@mulmoclaude/core/feeds/server";
 import { toJsonObject, type CommandHandlers, type JsonObject } from "@mulmoclaude/core/remote-host";
-import { feedSummary } from "../../feed-summary.js";
+import { feedSummary } from "../../feeds/feed-summary.js";
 import { scopeFromCommand } from "../commandScope.js";
 
 export const createListFeeds =

@@ -1,5 +1,5 @@
 // Which directory a session is working in — the answer presentDocument / presentHtml's
-// relative `path` is resolved against (see backends/presentPathRoot.ts).
+// relative `path` is resolved against (see backends/files/presentPathRoot.ts).
 //
 // Three tiers, most-truthful first. `ptys` knows where the agent is ACTUALLY running, so
 // it wins over the persisted note even when the two disagree: a cell relaunched somewhere

@@ -11,8 +11,8 @@
 // (`<workspace>/data/…`, `<workspace>/config/…`, as used by the wiki and scheduler).
 import path from "path";
 import type { FileOps, PluginRuntime, PluginFetchOptions } from "gui-chat-protocol";
-import { createFileOps } from "../backends/fileOps.js";
-import { artifactsFileOps } from "../backends/artifacts.js";
+import { createFileOps } from "../backends/files/fileOps.js";
+import { artifactsFileOps } from "../backends/plugins/artifacts.js";
 
 // A plugin's fetch gets a bounded wait by default so a hung remote can't wedge the
 // tool call forever; a plugin may lower it, and may pin an allowlist of hosts.
@@ -33,7 +33,7 @@ export function initPluginRuntime(next: PluginRuntimeDeps): void {
 
 // An empty workspace would silently root every plugin dir at process.cwd() (the
 // server package dir), so it's rejected like a missing init — same guard as
-// backends/artifacts.ts.
+// backends/plugins/artifacts.ts.
 function requireWorkspace(): string {
   if (!deps?.workspace) throw new Error("plugin runtime not initialised (missing workspace)");
   return deps.workspace;

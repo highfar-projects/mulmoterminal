@@ -65,7 +65,7 @@ useCollectionTeleportTarget(probe);
 //
 // The project comes from the ROUTE, and null — the workspace — is what every way of opening this
 // overlay still produces. Only one thing puts a project in that URL: a completion bell whose
-// record lives in one (server/backends/collectionNotifierAdapter.ts). A GETTER because the stack
+// record lives in one (server/backends/collections/collectionNotifierAdapter.ts). A GETTER because the stack
 // is read imperatively at the moment a request is built, so the surface must answer for the page
 // on screen NOW rather than for the one it was pushed on.
 //

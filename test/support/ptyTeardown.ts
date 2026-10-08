@@ -4,7 +4,7 @@
 // means. A teardown that only ever runs on a loaded CI runner is otherwise a rule nobody can test.
 
 import { isRecord } from "../../common/isRecord.js";
-import type { PtyKillSignal } from "../../server/session/pty-kill-plan.js";
+import type { PtyKillSignal } from "../../server/session/pty/pty-kill-plan.js";
 
 /** `exited late`: outlived the grace, then went on its own before the next signal was sent — a
  *  slow shell, which is a different answer from one that needed the next signal. */

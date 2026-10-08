@@ -16,7 +16,7 @@
 //   mulmoScript      the card needs the parsed script rather than a path, so the card comes from
 //                    the plugin's own reopen. See storyWirePath / reopenStory. (Absolute paths
 //                    WERE refused outright, through plugin 4.5.2; 4.6.0 added the `byPath` form
-//                    and this host opts into it — server/backends/mulmoscript.ts. Reading the old
+//                    and this host opts into it — server/backends/plugins/mulmoscript.ts. Reading the old
 //                    sentence as still true is what kept a repository deck on the rooted wire
 //                    path, which is #1970.)
 import { TOOL_NAME as DOCUMENT_TOOL, isDocumentPath } from "@mulmoclaude/markdown-plugin/vue";
@@ -114,7 +114,7 @@ export function canvasCardForFile(path: string): CanvasCard | null {
     // makes the View derive `/artifacts/html/…`, which is right only for a page that lives there.
     // The Files pane is rooted at the CELL's cwd, so most html a user opens is somewhere else, and
     // the derived URL would point at nothing. `/htmlfile/…` is the mount that serves those
-    // (server/backends/html.ts), with the same guards and CSP.
+    // (server/backends/plugins/html.ts), with the same guards and CSP.
     const previewUrl = isHtmlArtifactPath(path) ? htmlArtifactPreviewUrl(path) : htmlFileUrl(path);
     return { toolName: HTML_TOOL, data: { filePath: path, ...(previewUrl ? { previewUrl } : {}) } };
   }
@@ -150,7 +150,7 @@ export function absoluteUnder(cwd: string | null, relative: string): string {
  *   1. under the workspace's own `artifacts/stories/` — `stories/<tail>`, no root. That IS the
  *      plugin's default root, so a dispatch carrying no root still resolves it.
  *   2. anywhere else — the file's own absolute path (the `byPath` form the plugin has taken since
- *      4.6.0, which this host opts into; see server/backends/mulmoscript.ts).
+ *      4.6.0, which this host opts into; see server/backends/plugins/mulmoscript.ts).
  *
  * A REGISTERED ROOT used to be its own case between those two, answering `stories/<tail>` plus the
  * root's id, and that was #1970. The reopen carries a root, so the deck OPENED — but the View's own
@@ -278,7 +278,7 @@ const REOPEN_FAILED_EN = "could not open this deck — the server did not say wh
  * A refusal can arrive under EITHER status, so the body is what has to be read: the realpath
  * mismatch is a 400, an unknown root or a missing file is a 200 carrying `{ok:false, error}`, and a
  * proxy in between can answer neither shape. Measured, and pinned in
- * `test/server/backends/mulmoscript-expect-path.spec.ts`. Do not simplify this to a status check —
+ * `test/server/backends/plugins/mulmoscript-expect-path.spec.ts`. Do not simplify this to a status check —
  * on a 200 that would drop the sentence, and on a 4xx it would drop the only sentence there is
  * (CodeRabbit on #1942; an older version of this comment described a `data` envelope that the
  * dispatch does not use at all).
@@ -298,7 +298,7 @@ async function reopenStory(ref: StoryRef, expectPath: string): Promise<CanvasCar
     // The sentence the server wrote, which is the whole reason to read the body rather than log a
     // status. The status does NOT tell the two kinds of refusal apart: the realpath mismatch is a
     // 400, an unknown root is a 200 carrying `{ok:false, error}` — both measured, and pinned in
-    // `test/server/backends/mulmoscript-expect-path.spec.ts`. Hence a refusal is read off the body
+    // `test/server/backends/plugins/mulmoscript-expect-path.spec.ts`. Hence a refusal is read off the body
     // on both branches below.
     //
     // Blank counts as ABSENT, not as a sentence: `??` only catches null, so an `error: ""` from any

@@ -11,7 +11,7 @@ import express from "express";
 import { routeCall, jsonPost } from "../../helpers/routeCall";
 import { mountHookRoute } from "../../../server/routes/hook-routes";
 import { lastPrompts, ptys } from "../../../server/session/registry";
-import { cursorBadges, forgetCursorBadges } from "../../../server/agents/cursor-usage";
+import { cursorBadges, forgetCursorBadges } from "../../../server/agents/cursor/cursor-usage";
 
 // `sessionLastTurn` is reached only once a test gives the session a LIVE pty (the finished-task
 // push asks the agent for its last reply), which the token-count tests below are the first to do.

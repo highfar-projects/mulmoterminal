@@ -72,7 +72,7 @@ function pathFor(kind: ShortcutKind, slug?: string): string {
  *  collections the page is listing, and a link that arrives without it lands on a different
  *  collection of the same name. That is exactly what a completion bell from a project sends —
  *  the deep link it carries is the only way this overlay is ever asked for a non-workspace
- *  project (server/backends/collectionNotifierAdapter.ts). An OPAQUE ID, never a path. */
+ *  project (server/backends/collections/collectionNotifierAdapter.ts). An OPAQUE ID, never a path. */
 export function browseRouteProjectId(): string | null {
   const project = router.currentRoute.value.query.project;
   return typeof project === "string" && project.length > 0 ? project : null;

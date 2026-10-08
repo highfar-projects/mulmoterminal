@@ -44,7 +44,7 @@ describe("room CLI arguments", () => {
 
   // Run INSIDE a cell, `room` has to reach the server that owns the cell. It used to find it
   // through the raw `PORT` the launcher gave every PTY — the leak #1857 is about, now gone — so
-  // the namespaced name every terminal gets (server/session/pty-spawn.ts) has to be preferred.
+  // the namespaced name every terminal gets (server/session/pty/pty-spawn.ts) has to be preferred.
   // Without this, `room` in a cell of a server on 34601 talks to whatever holds 34567.
   describe("which server it talks to", () => {
     const saved = { mt: process.env.MULMOTERMINAL_PORT, port: process.env.PORT };

@@ -4,7 +4,7 @@
 // postMessage bootstrap) — the phone renders the artifact verbatim.
 import { loadCollection } from "@mulmoclaude/core/collection/server";
 import { toJsonObject, type CommandHandlers, type JsonObject } from "@mulmoclaude/core/remote-host";
-import { buildRemoteViewFor, remoteViewFailureMessage } from "../../remoteView.js";
+import { buildRemoteViewFor, remoteViewFailureMessage } from "../../collections/remoteView.js";
 import { scopeFromCommand } from "../commandScope.js";
 import { readString } from "../../../../common/readString.js";
 

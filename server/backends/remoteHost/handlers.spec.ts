@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { createRemoteHostHandlers } from "./handlers/index.js";
 import type { SessionScreen } from "./terminalScreen.js";
 import type { TranscriptView } from "../../../common/transcriptView.js";
-import { initCollectionsBackend } from "../collections.js";
+import { initCollectionsBackend } from "../collections/collections.js";
 import type { AnswerFailure, AnswerResult } from "../../../common/askQuestion.js";
 
 const unusedTerminalDeps = {

@@ -49,7 +49,7 @@ function splitAtTerminator(args) {
 
 /** The port to talk to: `--port`, else MULMOTERMINAL_PORT, else PORT, else the default.
  *
- *  MULMOTERMINAL_PORT is what a terminal INSIDE MulmoTerminal is given (server/session/pty-spawn.ts),
+ *  MULMOTERMINAL_PORT is what a terminal INSIDE MulmoTerminal is given (server/session/pty/pty-spawn.ts),
  *  and it has to be preferred: `PORT` used to carry the same answer only because the launcher
  *  exported it to every PTY, which is the leak #1857 is about. Without this, `room` run in a cell
  *  of a server on 34601 would talk to whatever holds 34567 — or to another instance entirely.

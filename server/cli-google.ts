@@ -4,10 +4,10 @@
 // Consent is a loopback listener on THIS machine, so it can only be completed by a
 // browser that can reach 127.0.0.1 — a phone or a remote browser can't, which is why
 // linking is a CLI action rather than a button in the web UI. The token core writes is
-// shared with MulmoClaude (see backends/google.ts).
+// shared with MulmoClaude (see backends/calendar/google.ts).
 import { authorizeGoogle, clientSecretPresence, googleSecretsDir, googleTokenPath } from "@mulmoclaude/core/google";
 import type { ClientSecretPresence } from "@mulmoclaude/core/google";
-import { initGoogleBackend } from "./backends/google.js";
+import { initGoogleBackend } from "./backends/calendar/google.js";
 import { LAUNCH_COMMAND } from "../bin/launch-command.js";
 
 const log = (message: string) => console.log(`\x1b[36m[google]\x1b[0m ${message}`);

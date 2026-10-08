@@ -45,7 +45,7 @@ export function projectSessionsDir(cwd: string, home: string = agentHome("claude
 /** Claude's own log of what a PERSON typed at the prompt — one line per submission, carrying
  *  `display`, `timestamp`, `project` and `sessionId`. Also upstream's file and not ours, so it is
  *  read the same way the directory above is: tolerantly, and with a fallback for the day the
- *  format changes (server/session/prompt-history.ts). */
+ *  format changes (server/session/transcript/prompt-history.ts). */
 export function claudeHistoryFile(home: string = agentHome("claude")): string {
   return path.join(home, "history.jsonl");
 }

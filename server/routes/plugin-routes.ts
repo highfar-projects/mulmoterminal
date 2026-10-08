@@ -11,17 +11,17 @@ import { CLAUDE_CWD, PORT } from "../config/env.js";
 import { messageOf } from "../errors.js";
 import { isRecord } from "../../common/isRecord.js";
 import { backgroundMarkers, markFailedWorker, markUnplacedSession, rememberSessionCollection } from "../session/registry.js";
-import { runWithHiddenMarker } from "../session/hiddenMarker.js";
-import { registerCompletionHook } from "../session/completion-hooks.js";
+import { runWithHiddenMarker } from "../session/transcript/hiddenMarker.js";
+import { registerCompletionHook } from "../session/activity/completion-hooks.js";
 import { agentCarriesFullGuiMcp } from "../../common/guiMcpAgents.js";
-import { backgroundChatMessage, parseBackgroundChat, spawnModeFor, type SpawnMode } from "../session/background-chat.js";
+import { backgroundChatMessage, parseBackgroundChat, spawnModeFor, type SpawnMode } from "../session/scheduled/background-chat.js";
 import type { TerminalAgent } from "../../common/sessionAgent.js";
 import { registeredGuiMcpGroups } from "../infra/gui-mcp-registration.js";
-import { syncCursorDirectoryMcp } from "../agents/cursor-mcp.js";
-import { resolveSpawnCollection } from "../session/spawn-collection.js";
+import { syncCursorDirectoryMcp } from "../agents/cursor/cursor-mcp.js";
+import { resolveSpawnCollection } from "../session/spawn/spawn-collection.js";
 import { TOOL_GROUPS, type ToolGroup } from "../../common/toolGroups.js";
-import { codexifySkillSeed } from "../agents/codex-skills.js";
-import { SESSION_HEADER, sessionIdFromHeader } from "../backends/presentPathRoot.js";
+import { codexifySkillSeed } from "../agents/codex/codex-skills.js";
+import { SESSION_HEADER, sessionIdFromHeader } from "../backends/files/presentPathRoot.js";
 import { cwdForSession } from "../session/session-cwd.js";
 import { projectScopeForCwd, rootForProjectId } from "../infra/project-root.js";
 import { manageCollectionHandlerFor } from "../infra/collection-tool.js";
@@ -32,7 +32,15 @@ import { runManageShapeScript } from "../infra/shapescript-manage-tool.js";
 import { manageSharedApp } from "../infra/shared-app-tool.js";
 import { useSharedApp } from "../infra/use-shared-app-tool.js";
 import { upstreamFailureMessage } from "./plugin-narration.js";
-import type { SpawnClaudePty, SpawnCodexPty, SpawnAntigravityPty, SpawnGrokPty, SpawnMusePty, SpawnCopilotPty, SpawnCursorPty } from "../session/spawners.js";
+import type {
+  SpawnClaudePty,
+  SpawnCodexPty,
+  SpawnAntigravityPty,
+  SpawnGrokPty,
+  SpawnMusePty,
+  SpawnCopilotPty,
+  SpawnCursorPty,
+} from "../session/spawn/spawners.js";
 
 export interface PluginRouteDeps {
   spawnClaudePty: SpawnClaudePty;

@@ -10,7 +10,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { MANAGE_COLLECTION, manageCollectionHandler } from "../../../server/infra/collection-tool";
 import { HOST_TOOL_DEFINITIONS } from "../../../server/infra/host-tools";
-import { initCollectionsBackend } from "../../../server/backends/collections";
+import { initCollectionsBackend } from "../../../server/backends/collections/collections";
 import { makeTempDir } from "../../support/tempDir";
 
 const SCHEMA = {

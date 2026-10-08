@@ -15,10 +15,15 @@ import { mountAllRoutes } from "../infra/plugins-registry.js";
 import { mountConfigRoutes } from "../config/config-routes.js";
 import { mountFilesBrowseRoutes } from "../files/files-browse.js";
 import { mountTmuxRoutes } from "../infra/tmux-routes.js";
-import { survivingSessions } from "../session/surviving-sessions.js";
-import { armedReapIntervalHours } from "../session/reap-schedule.js";
-import { getSessionIdleReapDays, getQuestionPaneEnabled } from "../config/config-routes.js";
-import { sweepIdleSessions } from "../session/reap-idle-sessions.js";
+import { mountSwitchTokenRoutes } from "../infra/switch-token-routes.js";
+import { clearSwitchedToken, pinSwitchedToken } from "../session/credentials/token-switch-pins.js";
+import { sessionToken } from "../session/credentials/token-sessions.js";
+import { noteMovedFrom, takeMovedFrom } from "../session/credentials/rotation-notice.js";
+import { rotationLoginLabel } from "../../common/tokenRotation.js";
+import { survivingSessions } from "../session/reaping/surviving-sessions.js";
+import { armedReapIntervalHours } from "../session/reaping/reap-schedule.js";
+import { getSessionIdleReapDays, getQuestionPaneEnabled, getTokenRotation } from "../config/config-routes.js";
+import { sweepIdleSessions } from "../session/reaping/reap-idle-sessions.js";
 import { mountHookRoute } from "../routes/hook-routes.js";
 import { mountPluginRoutes } from "../routes/plugin-routes.js";
 import { mountBlueprints } from "../blueprint/wiring.js";
@@ -31,7 +36,7 @@ import { mountRepoRoutes } from "../routes/repo-routes.js";
 import { mountAgentAvailabilityRoutes } from "../routes/agent-availability-routes.js";
 import type { AgentAvailability } from "../../common/agentAvailability.js";
 import { mountIssueWorkRoutes } from "../routes/issue-work-routes.js";
-import type { SpawnIssueSession } from "../session/issue-session-spawn.js";
+import type { SpawnIssueSession } from "../session/spawn/issue-session-spawn.js";
 import { mountDirRoutes } from "../routes/dir-routes.js";
 import { mountDirConfigWriteRoute } from "../routes/dir-config-write-route.js";
 import { mountDirConfigEntriesRoute } from "../routes/dir-config-entries-route.js";
@@ -44,28 +49,28 @@ import { mountGitRemoteRoute } from "../git/gitRemote.js";
 import { mountWorktreeRoutes } from "../git/worktree-routes.js";
 import { mountDevcontainerRoutes } from "../config/devcontainer-routes.js";
 import { mountPickFileRoute } from "../files/pick-file.js";
-import { mountCommandSummaryRoute } from "../session/command-summary.js";
+import { mountCommandSummaryRoute } from "../session/transcript/command-summary.js";
 import { mountCostRoute } from "../session/cost.js";
 import { mountShutdownRoute } from "./shutdown-routes.js";
-import { mountCollectionRoutes } from "../backends/collections.js";
-import { mountCollectionActionIndex } from "../backends/collectionActionIndexRoute.js";
+import { mountCollectionRoutes } from "../backends/collections/collections.js";
+import { mountCollectionActionIndex } from "../backends/collections/collectionActionIndexRoute.js";
 // "Would this collection survive a clone?" — mounts itself beside the collection routes.
-import { mountSelfContainmentRoutes } from "../backends/collectionSelfContainment.js";
+import { mountSelfContainmentRoutes } from "../backends/collections/collectionSelfContainment.js";
 // "What would publishing this app put on screen?" — computed, never written.
-import { mountSharedAppPreviewRoutes } from "../backends/sharedAppPreviewRoutes.js";
-import { syncCollectionWatcherRoots } from "../backends/collectionWatchers.js";
-import { mountGoogleRoutes } from "../backends/google.js";
-import { mountWikiRoutes } from "../backends/wiki.js";
-import { mountAccountingRoutes } from "../backends/accounting.js";
-import { mountFeedsRoutes } from "../backends/feeds.js";
-import { mountCalendarPushRoutes } from "../backends/calendarPush.js";
+import { mountSharedAppPreviewRoutes } from "../backends/sharedApp/sharedAppPreviewRoutes.js";
+import { syncCollectionWatcherRoots } from "../backends/collections/collectionWatchers.js";
+import { mountGoogleRoutes } from "../backends/calendar/google.js";
+import { mountWikiRoutes } from "../backends/plugins/wiki.js";
+import { mountAccountingRoutes } from "../backends/plugins/accounting.js";
+import { mountFeedsRoutes } from "../backends/feeds/feeds.js";
+import { mountCalendarPushRoutes } from "../backends/calendar/calendarPush.js";
 import { listProjectRoots } from "../infra/project-root.js";
 import { mountRemoteHostRoutes } from "../backends/remoteHost/index.js";
 import { mountNotificationRoutes } from "../backends/notifier.js";
-import { mountWhisperRoutes } from "../backends/whisper.js";
-import { mountSchedulerRoutes } from "../backends/scheduler.js";
-import { mountFilesRoutes } from "../backends/files.js";
-import { mountFilesPageRoute } from "../backends/filesPage.js";
+import { mountWhisperRoutes } from "../backends/media/whisper.js";
+import { mountSchedulerRoutes } from "../backends/scheduler/scheduler.js";
+import { mountFilesRoutes } from "../backends/files/files.js";
+import { mountFilesPageRoute } from "../backends/files/filesPage.js";
 import {
   hookedSessions,
   ptys,
@@ -82,32 +87,32 @@ import { mountDecisionRoutes } from "./decision-routes.js";
 import { mountWhatsNewRoutes } from "../whatsNew/routes.js";
 import { mountRoomRoutes } from "./room-routes.js";
 import { mountSkillCatalogRoutes } from "./skill-catalog-routes.js";
-import { mountTranslationRoutes } from "../backends/translation.js";
-import { mountHtmlDispatchRoute, mountHtmlFileRoute, mountHtmlPreviewRoute } from "../backends/html.js";
-import { mountShapeScriptDispatchRoute } from "../backends/shapescript.js";
-import { mountPresentPathRoot } from "../backends/presentPathRoot.js";
+import { mountTranslationRoutes } from "../backends/media/translation.js";
+import { mountHtmlDispatchRoute, mountHtmlFileRoute, mountHtmlPreviewRoute } from "../backends/plugins/html.js";
+import { mountShapeScriptDispatchRoute } from "../backends/plugins/shapescript.js";
+import { mountPresentPathRoot } from "../backends/files/presentPathRoot.js";
 import { cwdForSession } from "../session/session-cwd.js";
-import { mountMulmoScriptDispatchRoute, mountMulmoScriptMediaRoute } from "../backends/mulmoscript.js";
+import { mountMulmoScriptDispatchRoute, mountMulmoScriptMediaRoute } from "../backends/plugins/mulmoscript.js";
 import { CLAUDE_CWD, MULMOTERMINAL_HOME, PORT, SESSION_ID_RE } from "../config/env.js";
 import { FILE_WRITE_CHANNEL, type FileWriteEvent } from "../../common/fileWriteChannel.js";
 import { PROMPT_SUBMITTED_CHANNEL, type PromptSubmittedEvent } from "../../common/promptChannel.js";
 import { ASK_QUESTION_CHANNEL, shouldPublishQuestion, type AskQuestionDone, type AskQuestionEvent } from "../../common/askQuestion.js";
 import type { createToolStores } from "../session/tool-store.js";
-import type { createClaudeSpawner } from "../session/spawn-claude.js";
-import type { createCodexSpawner } from "../session/spawn-codex.js";
-import type { createGrokSpawner } from "../session/spawn-grok.js";
-import type { createAntigravitySpawner } from "../session/spawn-antigravity.js";
-import type { createMuseSpawner } from "../session/spawn-muse.js";
-import type { createCopilotSpawner } from "../session/spawn-copilot.js";
-import type { createCursorSpawner } from "../session/spawn-cursor.js";
-import type { createTranslationWorker } from "../session/translation-worker.js";
-import type { createTitleManager } from "../session/session-title.js";
+import type { createClaudeSpawner } from "../session/spawn/agents/spawn-claude.js";
+import type { createCodexSpawner } from "../session/spawn/agents/spawn-codex.js";
+import type { createGrokSpawner } from "../session/spawn/agents/spawn-grok.js";
+import type { createAntigravitySpawner } from "../session/spawn/agents/spawn-antigravity.js";
+import type { createMuseSpawner } from "../session/spawn/agents/spawn-muse.js";
+import type { createCopilotSpawner } from "../session/spawn/agents/spawn-copilot.js";
+import type { createCursorSpawner } from "../session/spawn/agents/spawn-cursor.js";
+import type { createTranslationWorker } from "../session/scheduled/translation-worker.js";
+import type { createTitleManager } from "../session/list/session-title.js";
 import { tmuxHasSession, tmuxKillSession, tmuxPanePidsBySessionAsync } from "../infra/tmux.js";
 import { mountProcessRoutes } from "./process-routes.js";
 import { listProcessDetails } from "../infra/process-list.js";
-import type { SessionActivityDeps } from "../session/session-activity-deps.js";
+import type { SessionActivityDeps } from "../session/activity/session-activity-deps.js";
 import { mountSpaFallback } from "../infra/spa-fallback.js";
-import { mountRateLimitRoutes, type RateLimitRouteDeps } from "../agents/rate-limit-routes.js";
+import { mountRateLimitRoutes, type RateLimitRouteDeps } from "../agents/rate-limit/rate-limit-routes.js";
 import { mountLoadRoute } from "./load-routes.js";
 import { workspaceForRoute } from "./routeParams.js";
 
@@ -180,7 +185,7 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
 
   // Straight after the body parser and BEFORE every /api/plugin handler: rewrite
   // presentDocument / presentHtml's relative `path` to an absolute one under the calling
-  // session's own directory (backends/presentPathRoot.ts). Registered here rather than
+  // session's own directory (backends/files/presentPathRoot.ts). Registered here rather than
   // next to one of the dispatch routes because more than one of them can take that path,
   // and all of them must see the same, already-absolute value.
   mountPresentPathRoot(app, { cwdForSession, workspace: CLAUDE_CWD });
@@ -311,7 +316,7 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
   // match MulmoClaude (so the <workspace>/data/translation cache is shared between the
   // apps), but the LLM step is MulmoTerminal's own: deps.translateViaHiddenChat spawns a
   // hidden background claude session (NEVER `claude -p`) and is filtered from the
-  // sidebar (see session/translation-worker.ts).
+  // sidebar (see session/scheduled/translation-worker.ts).
   mountTranslationRoutes(app, { workspace: CLAUDE_CWD, translateBatch: deps.translateViaHiddenChat });
 
   // The agent-facing MCP surface (routes/mcp-routes.ts): the in-process GUI MCP server over
@@ -337,6 +342,7 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
   // The agent hook endpoint (routes/hook-routes.ts). Session lifecycle, the title
   // bookkeeping and the tool stores stay here; the fan-out that reads them moves out.
   mountSessionFacingRoutes(app, deps);
+  mountSwitchToken(app, deps);
   mountProcessesPageRoutes(app, deps);
 }
 
@@ -500,9 +506,29 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
     killTmux: tmuxKillSession,
     sweep: () => sweepIdleSessions(Date.now(), getSessionIdleReapDays()),
     // `Date.now()` is read HERE rather than inside the builder, which stays pure and takes the
-    // moment as a number (session/surviving-sessions.ts).
+    // moment as a number (session/reaping/surviving-sessions.ts).
     survivingSessions: () => survivingSessions(Date.now(), getSessionIdleReapDays()),
     armedReapIntervalHours,
+  });
+}
+
+// Moving a rotated session to the subscription a user picked on its cell's mark (#2950).
+function mountSwitchToken(app: Express, deps: AppRouteDeps): void {
+  mountSwitchTokenRoutes(app, {
+    isAllowedOrigin: deps.isAllowedOrigin,
+    isValidSessionId: (id) => SESSION_ID_RE.test(id),
+    rotation: getTokenRotation,
+    sessionToken,
+    pin: pinSwitchedToken,
+    clearPin: clearSwitchedToken,
+    noteMovedFrom,
+    dropMovedFrom: (sessionId) => {
+      takeMovedFrom(sessionId);
+    },
+    labelOf: (tokenId) => rotationLoginLabel(getTokenRotation(), tokenId),
+    reapSession: deps.reap,
+    hasTmux: tmuxHasSession,
+    killTmux: tmuxKillSession,
   });
 }
 

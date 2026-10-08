@@ -51,11 +51,11 @@ GitHub destinations (repo, issues, pull requests, actions) are the one exception
 GitHub's own Octicons through `GithubIcon.vue` (path data in `githubIcons.ts`), and a configured
 `icon` can name one as `github:<name>`.
 
-- A header button in config (`server/config/header-config.ts`) takes **`icon`**, not `emoji`.
+- A header button in config (`server/config/header/header-config.ts`) takes **`icon`**, not `emoji`.
   The `emoji` field still exists for end-user configs and wins over `icon` when both are set —
   don't use it in anything this repo ships.
 - Three deliberate exceptions, all functional. Don't "fix" them:
-  - `server/session/screen-rows.ts` — `/^\s*[❯›]\s/u` parses Claude Code's real terminal output.
+  - `server/session/pty/screen-rows.ts` — `/^\s*[❯›]\s/u` parses Claude Code's real terminal output.
   - `src/composables/useDynamicFavicon.ts` — the `❯` chevron drawn on canvas as the favicon mark.
   - `bin/mulmoterminal.js` — the CLI doctor's `✓ / ✗ / ○` (a terminal can't render an icon font).
 - Compact status **notation** stays text, not icons: `⎇ main ●3 ↑2`, `●` unsaved dots, `−12` diff
@@ -81,7 +81,7 @@ share a containment rule, and the difference is not about what each renders. **H
 may reach is set by WHO chose the path**: a directory the user zoomed into is a narrower claim
 than a path a browser put in a query string, which is narrower than a path an agent the user
 launched asked for by name. `presentDocument` has no containment root at all, on purpose, and
-says so in its own header; `backends/fileOps.ts` exists to do the opposite.
+says so in its own header; `backends/files/fileOps.ts` exists to do the opposite.
 
 This is why the same `.md` renders differently in the right pane and at `/files`: only the right
 pane can open it on the canvas, where the markdown plugin's view runs. The full-screen view falls
@@ -138,7 +138,7 @@ the specs, CI and the review bots all pass. Only a human comparing the two repos
 In #907 the push route shipped as `/calendar/push` against MulmoClaude's `/calendar-push`,
 green the whole way, and was caught only because someone pointed at `../mulmoclaude`.
 
-`server/backends/collections.ts` already requires this of the **on-disk** layout (so both
+`server/backends/collections/collections.ts` already requires this of the **on-disk** layout (so both
 apps discover the same collection skills). The API surface needs it for the same reason and
 had no rule until now.
 
@@ -163,13 +163,13 @@ decisions behind them are D1–D10 in `plans/feat-shareable-collections.md`; wha
 The same tool is called `mcp__mt__presentChart` in a workspace cell,
 `mcp__mulmoterminal-render__presentChart` in a project cell, and
 `mcp__plugin_mulmoterminal_render__presentChart` in a muse cell. All three are current. The branch is
-`carriesFullGuiMcp()` in `server/session/mcp-config.ts`: the workspace / single view / cell-less chat
+`carriesFullGuiMcp()` in `server/session/spawn/setup/mcp-config.ts`: the workspace / single view / cell-less chat
 gets a **generated** `--mcp-config` carrying every tool under `GUI_SERVER_ID`; a project cell is
 handed **no `--mcp-config` at all** and reaches the tools through the user's own `.mcp.json` under the
 per-group ids from `toolGroupServerId()`. Both constants live in `common/toolGroups.ts`. The one
 exception is a project cell on a second login (`accounts`): its own `.claude.json` has none of the
 launcher's switches, so it is handed the directory's groups as a generated `--mcp-config` under the
-SAME per-group ids (`server/session/account-mcp.ts`) — the tool names do not change.
+SAME per-group ids (`server/session/accounts/account-mcp.ts`) — the tool names do not change.
 
 **Ask that predicate from every new spawn path that starts an AGENT.** It is deliberately
 agent-agnostic: claude cells and codex cells both consult it, so two terminals in the workspace reach
@@ -203,7 +203,7 @@ that hole is known and accepted (a `codex` chip can occupy a worktree twice). A 
 tools asks for them in the flags the user writes. Agent behaviour belongs to the Agent Picker.
 
 **Muse is the third shape and the one that breaks the pattern.** It reads neither a flag nor a file
-in the directory: MCP servers are declared by an installed PLUGIN (`server/agents/muse-mcp.ts`), and
+in the directory: MCP servers are declared by an installed PLUGIN (`server/agents/muse/muse-mcp.ts`), and
 `muse plugins install` records one PER MACHINE — `--scope project` writes nothing into the project.
 So the registration cannot express "this directory gets render", and two things follow that nothing
 else here does:
@@ -221,7 +221,7 @@ both were tried, and both fail silently by serving zero tools.
 
 **Cursor is the fourth shape, and it is half of two others — which is the part to remember.** It
 reads `.cursor/mcp.json` in the working directory, as agy does, so the writer
-(`server/agents/cursor-mcp.ts`) looks like agy's. But cursor starts that MCP server on a **curated
+(`server/agents/cursor/cursor-mcp.ts`) looks like agy's. But cursor starts that MCP server on a **curated
 environment**, exactly as muse's plugin host does, so the mechanism agy's entry leans on — the bridge
 inheriting the agent's `guiMcpEnv` — does not happen: the group and the port go in the entry's
 **argv**, and the SESSION is resolved through `/api/mcp-resolve` by walking the process tree
@@ -267,7 +267,7 @@ muse drive neither — and for grok and muse that is a missing WIRE, not a missi
 record, since this repo already parses their own per-turn logs for the token badges (on a badge poll,
 though, not on a live tail: the tail is part of what a status wire would still have to add). Cursor
 inverts that pair: its status is wired and its counts come from the same hook, because it writes them
-to NO file — so its badge is folded in memory (`server/agents/cursor-usage.ts`) and a restart starts
+to NO file — so its badge is folded in memory (`server/agents/cursor/cursor-usage.ts`) and a restart starts
 the count again. Launching a CLI in a PTY is the cheap
 part; the notification, the resume, the GUI panel and the token badge are separate capabilities,
 each with its own precondition on what that CLI exposes.

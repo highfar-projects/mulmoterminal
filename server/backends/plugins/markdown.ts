@@ -1,0 +1,158 @@
+// MarkdownHostApp backend for the @mulmoclaude/markdown-plugin presentDocument
+// plugin (task #6 Phase 4). The package's View reaches these via
+// useRuntime().dispatch({ kind }) → POST /api/plugin/presentDocument →
+// execute({ app }, args) → context.app.<method> (plugins-registry.ts injects
+// this into APP_CONTEXT). The package's create path also calls fillImages +
+// saveNewDoc here.
+//
+// MulmoTerminal specifics vs MulmoClaude:
+//   - NEW docs are plain files under <workspace>/artifacts/documents/YYYY/MM/
+//     (saveNewDoc + docPath.ts). loadDoc/saveDoc are NOT limited to those: the
+//     tool's `path` argument takes any `.md` on disk, so the View also opens and
+//     writes back a repo's README — see backends/files/openPath.ts.
+//   - Images come back as base64 data URIs from Gemini (no image store / serving
+//     route), inlined straight into the markdown — so fillImages needs no storage
+//     and PDF export needs no image-resolution step.
+import fs from "fs";
+import path from "path";
+import { marked } from "marked";
+import { renderMarpDeck, fillImagePlaceholders } from "@mulmoclaude/markdown-plugin";
+import type { MarkdownHostApp, ExportPdfOptions } from "@mulmoclaude/markdown-plugin";
+import { publishFileChange } from "../files/fileChange.js";
+import { generateImage } from "../media/image-gen.js";
+import { buildDocPath, newDocId, DOCS_DIR } from "../files/docPath.js";
+import { hasErrnoCode } from "../../errors.js";
+import { markdownByPath } from "../files/openPath.js";
+
+// Set once at boot (server/index.ts) — workspace = CLAUDE_CWD. File-change
+// live-refresh is forwarded by the shared publisher (see fileChange.ts).
+let workspace: string | null = null;
+
+export function initMarkdownBackend(deps: { workspace: string }): void {
+  workspace = deps.workspace;
+}
+
+function absFor(rel: string): string {
+  if (!workspace) throw new Error("markdown backend not initialised (missing workspace)");
+  return path.join(workspace, rel);
+}
+
+const MARKDOWN_PDF_CSS = `
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 13px; line-height: 1.6; color: #1f2937; max-width: 800px; margin: 0 auto; padding: 32px 48px; }
+  h1 { font-size: 1.75rem; } h2 { font-size: 1.25rem; border-bottom: 1px solid #e5e7eb; padding-bottom: .25rem; } h3 { font-size: 1rem; }
+  pre { background: #f3f4f6; padding: .75rem; border-radius: .375rem; overflow-x: auto; } code { background: #f3f4f6; padding: .1rem .3rem; border-radius: .25rem; }
+  table { border-collapse: collapse; width: 100%; } th, td { border: 1px solid #e5e7eb; padding: .5rem .75rem; } a { color: #2563eb; } img { max-width: 100%; height: auto; }
+`;
+
+const DOC_CREATE_ATTEMPTS = 5;
+
+/** Write `markdown` to a document path nothing else holds, and return that path.
+ *  `wx` refuses an existing file, so a taken name re-rolls instead of replacing a
+ *  document nobody was told about — the create path used to overwrite silently and
+ *  report success (#1623). `nextId` is a parameter so a test can force the collision. */
+export async function createDoc(prefix: string, markdown: string, nextId: () => string = newDocId): Promise<string> {
+  for (let attempt = 0; attempt < DOC_CREATE_ATTEMPTS; attempt++) {
+    const rel = buildDocPath(prefix, new Date(), nextId());
+    const abs = absFor(rel);
+    await fs.promises.mkdir(path.dirname(abs), { recursive: true });
+    try {
+      await fs.promises.writeFile(abs, markdown, { flag: "wx" });
+      return rel;
+    } catch (err) {
+      if (!hasErrnoCode(err) || err.code !== "EEXIST") throw err;
+    }
+  }
+  throw new Error(`could not create a document under ${DOCS_DIR}: ${DOC_CREATE_ATTEMPTS} generated names were all taken`);
+}
+
+export const markdownHostApp: MarkdownHostApp = {
+  // Any `.md` the tool was pointed at — a repo's README, `docs/design.md`, an
+  // absolute path — not just this app's own `artifacts/documents/**.md`. The
+  // resolution rules and the overwrite-only write live in backends/files/openPath.ts
+  // (→ @mulmoclaude/core/files), shared with MulmoClaude's document-store.ts so the
+  // same `path` argument means the same thing in both apps.
+  async loadDoc(rel) {
+    return { content: await markdownByPath.read(rel) };
+  },
+
+  async saveDoc(rel, markdown) {
+    await markdownByPath.write(rel, markdown);
+    // Refresh any other View on this file. An ABSOLUTE path has no post-write mtime
+    // to stat (the shared publisher joins onto the workspace), so it falls back to
+    // Date.now() and logs one `[file-change] stat failed` line per save — cosmetic:
+    // the channel name still matches what the View subscribed to, which is what makes
+    // the refresh land, and mtimeMs only cache-busts. The real fix is teaching
+    // @mulmoclaude/core's publisher about absolute paths, which is MulmoClaude's call
+    // (its saveDoc publishes exactly the same way).
+    await publishFileChange(rel);
+    return { path: rel };
+  },
+
+  async saveNewDoc(prefix, markdown) {
+    const rel = await createDoc(prefix, markdown);
+    // Publish the create too (previously an unpublished gap) so a View already
+    // open on this path live-refreshes instead of going stale.
+    await publishFileChange(rel);
+    return { path: rel };
+  },
+
+  async marpThemes() {
+    // No workspace Marp themes in MulmoTerminal yet — decks use Marp's built-ins.
+    return { themes: [] };
+  },
+
+  async fillImages(markdown) {
+    const { markdown: filled } = await fillImagePlaceholders(markdown, {
+      // Gemini returns a base64 data URI in result.data.imageData; inline it
+      // directly (no image store). null → the package leaves a text marker.
+      resolveImage: async (prompt) => {
+        const result = await generateImage(prompt);
+        return "data" in result && result.data ? result.data.imageData : null;
+      },
+    });
+    return { markdown: filled };
+  },
+
+  async exportPdf(options: ExportPdfOptions) {
+    // Lazy-load puppeteer so the server still boots when it isn't installed
+    // (heavy Chromium dep). Images are already data URIs in the markdown, so no
+    // image-resolution step is needed before printing.
+    let puppeteerMod: typeof import("puppeteer");
+    try {
+      puppeteerMod = await import("puppeteer");
+    } catch {
+      throw new Error("PDF export requires puppeteer (not installed on this server)");
+    }
+    const browser = await puppeteerMod.default.launch({ headless: true });
+    try {
+      const page = await browser.newPage();
+      let pdf: Uint8Array;
+      if (options.marp) {
+        const { html, css, slideWidth, slideHeight } = await renderMarpDeck(options.markdown, { themes: [], inlineSVG: true });
+        const fullHtml = `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;background:white}${css}
+div.marpit > svg > foreignObject > section img:not([data-marp-twemoji]){max-width:100%;max-height:60cqh;object-fit:contain}
+</style></head><body>${html}</body></html>`;
+        await page.setViewport({ width: slideWidth, height: slideHeight });
+        await page.setContent(fullHtml, { waitUntil: "load" });
+        pdf = await page.pdf({
+          width: `${slideWidth}px`,
+          height: `${slideHeight}px`,
+          margin: { top: "0", bottom: "0", left: "0", right: "0" },
+          printBackground: true,
+        });
+      } else {
+        const body = await marked.parse(options.markdown);
+        const fullHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${MARKDOWN_PDF_CSS}</style></head><body>${body}</body></html>`;
+        await page.setContent(fullHtml, { waitUntil: "load" });
+        pdf = await page.pdf({
+          format: options.format === "A4" ? "A4" : "Letter",
+          margin: { top: "16mm", bottom: "16mm", left: "16mm", right: "16mm" },
+          printBackground: true,
+        });
+      }
+      return { pdfBase64: Buffer.from(pdf).toString("base64") };
+    } finally {
+      await browser.close();
+    }
+  },
+};

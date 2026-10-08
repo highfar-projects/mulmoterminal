@@ -440,7 +440,7 @@ export default [
       // The specs that were already over the limit when it stopped being a warning. Splitting one
       // moves assertions away from each other, so these are carried as debt rather than cut up —
       // but they are the WHOLE debt, and the rule holds every other spec at 600.
-      "test/server/backends/collections.spec.ts", //  875
+      "test/server/backends/collections/collections.spec.ts", //  875
       "test/server/config/app-config.spec.ts", //  648
       "test/src/components/CellLaunchForm.spec.ts", //  902
       "test/src/components/GridView.spec.ts", //  785

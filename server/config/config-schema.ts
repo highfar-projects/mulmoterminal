@@ -427,7 +427,7 @@ export function resolveAddDirs(input: unknown, base: string, exists: (p: string)
 
 // What a directory wants handed out uniquely per working tree (#1367): the port its dev server
 // binds, the database name its migrations touch. The DECLARATION only — which variables and what
-// kind of value each takes. What each tree actually gets is reserved in config/worktree-env.ts.
+// kind of value each takes. What each tree actually gets is reserved in config/worktree/worktree-env.ts.
 //
 // A port names its `base` rather than a range, because the number a project already uses is the
 // one its README, its proxy config and its bookmarks say. The trees spread upward from it.

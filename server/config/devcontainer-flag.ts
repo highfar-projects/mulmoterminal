@@ -9,7 +9,7 @@
 import { existsSync, writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import path from "node:path";
-import { DIR_LOCAL_CONFIG_FILE } from "./dir-config.js";
+import { DIR_LOCAL_CONFIG_FILE } from "./dir/dir-config.js";
 import { readJsonFile } from "../infra/read-text-file.js";
 import { isRecord } from "../../common/isRecord.js";
 import { worktreeRepoRootMount } from "../git/worktrees.js";

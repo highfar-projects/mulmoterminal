@@ -4,8 +4,8 @@ import { randomUUID } from "node:crypto";
 import { tmuxHasSession } from "../infra/tmux.js";
 import { ptys } from "./registry.js";
 import { sessionExistsOnDisk } from "./session-reads.js";
-import { clearedClaudeIdOf, clearedTranscripts } from "./cleared-transcripts.js";
-import { resolveSession, type SessionResolution } from "./session-resolve.js";
+import { clearedClaudeIdOf, clearedTranscripts } from "./transcript/cleared-transcripts.js";
+import { resolveSession, type SessionResolution } from "./list/session-resolve.js";
 
 // Reattach a same-process live pty, resume an on-disk transcript, attach a live tmux session,
 // else a fresh id. The flag decision lives in resolveSession (pure/tested); this only gathers the

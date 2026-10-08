@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { initPluginRuntime, createPluginRuntime } from "../../../server/infra/pluginRuntime";
-import { initArtifactsBackend, artifactsRoot } from "../../../server/backends/artifacts";
+import { initArtifactsBackend, artifactsRoot } from "../../../server/backends/plugins/artifacts";
 
 const PKG = "@scope/demo-plugin";
 

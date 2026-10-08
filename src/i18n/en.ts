@@ -15,8 +15,6 @@
 import { blueprintsEn } from "./blueprints/en";
 import { usageViewEn } from "./usageView/en";
 import { tipsEn } from "./tips/en";
-import { forkTipsEn } from "./forkTips/en";
-import { LAUNCH_COMMAND } from "../../common/launchCommand";
 import { commandPaletteEn } from "./commandPalette/en";
 import { focusModeEn } from "./focusMode/en";
 import { fileHistoryEn } from "./fileHistory/en";
@@ -471,10 +469,10 @@ export const en = {
     quit: {
       description:
         "Stop the MulmoTerminal server running on this machine. Closing this tab does not stop it — the server keeps running, and this is how to stop it without going back to the terminal you started it in.",
-      // Message-function form, which skips vue-i18n's message compiler: it fills in this fork's
-      // LAUNCH_COMMAND, and upstream's `mulmoterminal@latest` carried a literal `@` the compiler reads
-      // as a linked-message reference — it throws, and the whole section renders as nothing.
-      restartHint: () => `To start it again, run \`${LAUNCH_COMMAND}\` in a terminal.`,
+      // Message-function form, which skips vue-i18n's message compiler: the literal `@` in
+      // `mulmoterminal@latest` would otherwise be read as a linked-message reference, the compiler
+      // throws, and the whole section renders as nothing.
+      restartHint: () => "To start it again, run `npx mulmoterminal@latest` in a terminal.",
       button: "Quit MulmoTerminal",
       confirmBody: "The server stops and this page stops working. Every terminal on the grid disappears from the screen.",
       sessionsNote:
@@ -506,6 +504,14 @@ export const en = {
   // `WorkPhase` or `PrPhase` stays a COMPILE ERROR until somebody names it here, where a derived
   // `status.pr.${phase}.label` would have shipped the key path to the screen instead (#1894).
   // A cell header's two view menus: what happened in the session, and the tools around it.
+  // The account mark on a rotated cell opens this menu (#2950).
+  accountSwitch: {
+    title: "Move this session to another subscription",
+    hint: "Click to move this session to another subscription",
+    explain: "The session restarts on the one you pick and continues the same conversation. A turn in progress is stopped.",
+    weekLeft: "{percent} left this week",
+    atLimit: "At its limit",
+  },
   cellMenu: {
     history: "History",
     tools: "Tools",
@@ -671,6 +677,5 @@ export const en = {
   ...skillsViewEn,
   ...processesViewEn,
   tips: tipsEn,
-  forkTips: forkTipsEn,
   blueprints: blueprintsEn,
 } as const;

@@ -19,7 +19,7 @@ import {
 import { HOST_TOOL_DEFINITIONS } from "../../../server/infra/host-tools.js";
 import { groupOfTool } from "../../../common/toolGroups.js";
 import { setFirestoreAccessor, setSharedCollectionsSupport } from "@mulmoclaude/core/collection/server";
-import { initCollectionsBackend } from "../../../server/backends/collections.js";
+import { initCollectionsBackend } from "../../../server/backends/collections/collections.js";
 import { makeTempDir } from "../../support/tempDir";
 import path from "node:path";
 import { fakeServerTimestamp } from "../../support/serverTimestamp.js";

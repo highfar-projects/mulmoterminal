@@ -48,7 +48,7 @@ export default defineConfig({
     // `Access-Control-Allow-Origin` (it rejects the "null" origin) and the preflight
     // fails before reaching the backend. Disabling it lets the preflight (and the
     // request) flow through the proxy to Express, which sets the correct CORS headers
-    // (viewDataCors in server/backends/collections.ts). Production has no Vite proxy
+    // (viewDataCors in server/backends/collections/collections.ts). Production has no Vite proxy
     // — the iframe hits Express directly — so this is dev-only. Matches MulmoClaude.
     cors: false,
     proxy: {
@@ -73,7 +73,7 @@ export default defineConfig({
       },
       // The other half of the same iframe src: presentHtml can be POINTED at a page
       // outside `artifacts/`, and `htmlFileUrl()` sends those here instead
-      // (server/backends/html.ts mountHtmlFileRoute). The constant rather than a
+      // (server/backends/plugins/html.ts mountHtmlFileRoute). The constant rather than a
       // literal, because this mount arrived long after the entry above and nothing
       // brought it here: the failure is silent — index.html answers 200 and the iframe
       // renders blank (#1758).

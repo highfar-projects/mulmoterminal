@@ -5,20 +5,20 @@
 // mulmoScript), and one reads a Firebase session that must already be wired. index.ts keeps the
 // single call, at the point in the boot where it happens.
 import type { createPubSub } from "../infra/pubsub.js";
-import { initFileChangePublisher, startDocumentWatchers } from "./fileChange.js";
+import { initFileChangePublisher, startDocumentWatchers } from "./files/fileChange.js";
 import { initNotifier } from "./notifier.js";
-import { initMarkdownBackend } from "./markdown.js";
-import { initArtifactsBackend } from "./artifacts.js";
-import { initOpenPathBackend } from "./openPath.js";
-import { initMulmoScriptBackend } from "./mulmoscript.js";
-import { initCollectionsBackend } from "./collections.js";
-import { initSharedCollections } from "./sharedCollections.js";
-import { initGoogleBackend } from "./google.js";
-import { initAccountingBackend } from "./accounting.js";
-import { initFeedsBackend } from "./feeds.js";
-import { createFeedsWorker, type FeedsWorkerDeps } from "./feeds-worker.js";
+import { initMarkdownBackend } from "./plugins/markdown.js";
+import { initArtifactsBackend } from "./plugins/artifacts.js";
+import { initOpenPathBackend } from "./files/openPath.js";
+import { initMulmoScriptBackend } from "./plugins/mulmoscript.js";
+import { initCollectionsBackend } from "./collections/collections.js";
+import { initSharedCollections } from "./collections/sharedCollections.js";
+import { initGoogleBackend } from "./calendar/google.js";
+import { initAccountingBackend } from "./plugins/accounting.js";
+import { initFeedsBackend } from "./feeds/feeds.js";
+import { createFeedsWorker, type FeedsWorkerDeps } from "./feeds/feeds-worker.js";
 import { initPluginRuntime } from "../infra/pluginRuntime.js";
-import { hydrateClearedTranscripts } from "../session/cleared-transcripts.js";
+import { hydrateClearedTranscripts } from "../session/transcript/cleared-transcripts.js";
 import { ptys } from "../session/registry.js";
 import { getCwdPresets } from "../config/config-routes.js";
 import { CLAUDE_CWD, MULMOTERMINAL_HOME } from "../config/env.js";

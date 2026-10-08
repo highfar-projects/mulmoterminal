@@ -531,14 +531,14 @@ worktree は `.git` を共有するので軽いが、**作業ツリーだけが�
 |---|---|---|
 | `server/git/repo-dirs.ts`（#1172） | `owner/repo` → このマシン上の clone 候補リスト | clone プール |
 | `server/git/issue-work.ts`（#1173 / #1219） | タスクを読んで作業場所を作り、種プロンプト付きでセッションを起こす | Intake → Leased |
-| `server/session/worktree-session-limit.ts`（#1207 / #1208） | 1作業ツリー = 1セッション。launch の claim で競合も潰す | Leased（lease の原型） |
+| `server/session/credentials/worktree-session-limit.ts`（#1207 / #1208） | 1作業ツリー = 1セッション。launch の claim で競合も潰す | Leased（lease の原型） |
 | `server/git/prPhase.ts` | ブランチの PR フェーズと CI 状態 | Review / MergeQueue |
 | `server/git/work-comment.ts`（#979 / #1369） | issue に1つのコメントを置き、マイルストーンを編集で追記。二重投稿しない | 外形的な進捗ログ |
 | `server/session/activity-*.ts` / `completion-hooks.ts` | working / waiting の検出、hidden ワーカーの完了フック | 進行エンジン（stall 検出） |
-| `server/backends/scheduler.ts` / `scheduled-run.ts` | cron でチャットを spawn | 定期巡回（CI 待ち、bot 取り込み） |
-| `server/session/draft-injection.ts` / `issue-spawn-options.ts`（#1253） | 種プロンプトを draft で置く / 自動実行する の使い分け | Gate（自動進行と人間確認の切替） |
+| `server/backends/scheduler/scheduler.ts` / `scheduled-run.ts` | cron でチャットを spawn | 定期巡回（CI 待ち、bot 取り込み） |
+| `server/session/spawn/draft-injection.ts` / `issue-spawn-options.ts`（#1253） | 種プロンプトを draft で置く / 自動実行する の使い分け | Gate（自動進行と人間確認の切替） |
 | `server/agents/rate-limit-*.ts` | エージェントのレート制限の観測と永続化 | 並列度の制御 |
-| `server/session/decisions.ts` / `decision-digest.ts` | セッション中の決定の抽出とダイジェスト | Learn |
+| `server/session/decisions/decisions.ts` / `decision-digest.ts` | セッション中の決定の抽出とダイジェスト | Learn |
 | cockpit roster（`docs/grid-view-modes.md`） | 全セルの状態を一覧する既存ビュー | ダッシュボード |
 | `plans/chore-1682-lint-zero-warnings.md` | 減らせるものは減らし、減らせないものは明示リストで閉じて増やさない | ratchet の実証 |
 

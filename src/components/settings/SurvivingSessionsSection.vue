@@ -156,7 +156,7 @@ const sweepNote = computed(() => {
 
        NOTHING IN THIS SECTION NAMES A TIME THE NEXT SWEEP WILL RUN, and that is the rule rather
        than a property of these particular sentences. The timer is armed once, at boot
-       (server/session/reap-schedule.ts), so the saved number and the running one are different
+       (server/session/reaping/reap-schedule.ts), so the saved number and the running one are different
        things until a restart. Every clock-naming sentence is false in half the reachable states —
        "ends at next start" is wrong for a server that booted with a cadence, "from the next start"
        is wrong for that same server, and both are wrong again for someone who has just saved 0

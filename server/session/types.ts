@@ -5,9 +5,9 @@ import type { IPty } from "node-pty";
 import type { WebSocket } from "ws";
 import type { WorkerStatus } from "../../common/workerStatus.js";
 import type { SessionAgent } from "../../common/sessionAgent.js";
-import type { OutputRelay } from "./output-relay.js";
+import type { OutputRelay } from "./pty/output-relay.js";
 import type { HeadlessMirror } from "./headlessMirror.js";
-import type { TerminalModeTracker } from "./terminal-mode-tracker.js";
+import type { TerminalModeTracker } from "./pty/terminal-mode-tracker.js";
 
 export interface Activity {
   working?: boolean;

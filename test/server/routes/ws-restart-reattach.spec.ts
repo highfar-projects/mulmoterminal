@@ -13,7 +13,7 @@ import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
 import os, { tmpdir } from "node:os";
 import path from "node:path";
 import type { WebSocket } from "ws";
-import { forgetClearedTranscript, markTranscriptCleared } from "../../../server/session/cleared-transcripts.js";
+import { forgetClearedTranscript, markTranscriptCleared } from "../../../server/session/transcript/cleared-transcripts.js";
 import { projectSessionsDir } from "../../../server/session/project-dir.js";
 
 const mocks = vi.hoisted(() => ({
@@ -54,12 +54,12 @@ vi.mock("../../../server/session/session-reads.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../server/session/session-reads.js")>()),
   claudeOnDiskSessionIds: () => new Set(mocks.claudeOnDisk),
 }));
-vi.mock("../../../server/agents/antigravity-session.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../../server/agents/antigravity-session.js")>()),
+vi.mock("../../../server/agents/antigravity/antigravity-session.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../server/agents/antigravity/antigravity-session.js")>()),
   antigravityConversationExists: () => false,
 }));
-vi.mock("../../../server/agents/grok-session.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../../server/agents/grok-session.js")>()),
+vi.mock("../../../server/agents/grok/grok-session.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../server/agents/grok/grok-session.js")>()),
   grokConversationExistsInAnyCwd: () => mocks.grokHas,
 }));
 
@@ -76,15 +76,15 @@ vi.mock("../../../server/infra/tmux.js", async (importOriginal) => ({
 }));
 
 // The rollout probe walks codex's real sessions root on disk; the resolver must not.
-vi.mock("../../../server/agents/codex-sessions.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../../server/agents/codex-sessions.js")>()),
+vi.mock("../../../server/agents/codex/codex-sessions.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../server/agents/codex/codex-sessions.js")>()),
   codexRolloutExists: () => false,
 }));
 
 // Whether every session reads as bound to a second login (#2215). Off unless a test says so, so the
 // rest of this file runs on the default login exactly as before.
 const account = { bound: false };
-vi.mock("../../../server/session/account-sessions.js", () => ({
+vi.mock("../../../server/session/accounts/account-sessions.js", () => ({
   accountSessions: new Map(),
   accountSessionsHydrated: Promise.resolve(),
   boundAccount: (agent: string, sessionId: string) => (account.bound ? { sessionId, agent, accountId: "work", home: "/srv/claude-work" } : undefined),
@@ -94,7 +94,7 @@ vi.mock("../../../server/session/account-sessions.js", () => ({
 const registeredGuiMcpGroups = vi.fn(() => Promise.resolve(["render"]));
 vi.mock("../../../server/infra/gui-mcp-registration.js", () => ({ registeredGuiMcpGroups }));
 
-vi.mock("../../../server/config/worktree-env.js", () => ({
+vi.mock("../../../server/config/worktree/worktree-env.js", () => ({
   ensureWorktreeEnv: vi.fn(() => {
     mocks.onEnsureWorktreeEnv();
     return Promise.resolve({});
@@ -103,10 +103,13 @@ vi.mock("../../../server/config/worktree-env.js", () => ({
 }));
 
 // A real occupancy read runs git against the cwd; this spec is about the handlers' shape.
-vi.mock("../../../server/session/worktree-session-limit.js", () => ({
+vi.mock("../../../server/session/credentials/worktree-session-limit.js", () => ({
   claimLaunch: () => ({ release: vi.fn(), contended: false }),
   worktreeOccupancy: () => Promise.resolve({ isWorktree: false, session: null }),
 }));
+
+const settleCredential = vi.fn();
+vi.mock("../../../server/session/credentials/credential-announce.js", () => ({ settleCredential }));
 
 const { handleClaudeConnection, handleCodexConnection } = await import("../../../server/routes/ws-routes.js");
 
@@ -194,6 +197,25 @@ describe("/ws (claude) admission", () => {
   it("spawns for a client that stayed", async () => {
     await handleClaudeConnection(makeDeps(), fakeWs() as unknown as WebSocket, request());
     expect(spawnClaudePty).toHaveBeenCalledTimes(1);
+  });
+});
+
+// spawnClaudePty announces the rotation token for a process it starts. A same-process reattach
+// (a reloaded page, a remounted cell) starts nothing, so the handler has to announce it itself or
+// the cell's account mark stays blank until the next spawn (#2919).
+describe("/ws (claude) rotation credential on a same-process reattach", () => {
+  it("announces the credential to the reattaching socket and does not spawn", async () => {
+    mocks.ptys.set(SID, { term: fakeTerm(), agent: "claude", active: false });
+    const ws = fakeWs();
+    await handleClaudeConnection(makeDeps(), ws as unknown as WebSocket, request(`&session=${SID}`));
+    expect(spawnClaudePty).not.toHaveBeenCalled();
+    expect(settleCredential).toHaveBeenCalledWith(SID, SID, true, ws);
+  });
+
+  it("tells a spawn apart from a reattach, and hands it the id the connection asked for", async () => {
+    await handleClaudeConnection(makeDeps(), fakeWs() as unknown as WebSocket, request(`&session=${SID}`));
+    expect(spawnClaudePty).toHaveBeenCalledTimes(1);
+    expect(settleCredential).toHaveBeenCalledWith(SID, expect.any(String), false, expect.anything());
   });
 });
 

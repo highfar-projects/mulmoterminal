@@ -2,7 +2,7 @@
 import { describe, it, expect, vi } from "vitest";
 import type { WebSocket } from "ws";
 import { startAndWire } from "../../../server/routes/ws-routes.js";
-import { bufferEarlyFrames } from "../../../server/session/early-frames.js";
+import { bufferEarlyFrames } from "../../../server/session/pty/early-frames.js";
 import type { PtyEntry } from "../../../server/session/types.js";
 
 // #1074 pulled this out of the launch and codex paths, which had written the same steps twice —

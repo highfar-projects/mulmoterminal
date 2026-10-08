@@ -6,8 +6,8 @@
 import { describe, it, expect } from "vitest";
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { initArtifactsBackend } from "../../../server/backends/artifacts.js";
-import { initOpenPathBackend, resetOpenPathBackend } from "../../../server/backends/openPath.js";
+import { initArtifactsBackend } from "../../../server/backends/plugins/artifacts.js";
+import { initOpenPathBackend, resetOpenPathBackend } from "../../../server/backends/files/openPath.js";
 import { EXPORT_SHAPE_SCRIPT_USDZ, runExportShapeScriptUsdz } from "../../../server/infra/shapescript-usdz-tool.js";
 import { makeTempDir } from "../../support/tempDir";
 

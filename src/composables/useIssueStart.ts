@@ -3,7 +3,7 @@
 //
 // The seeding is deliberately NOT done here. A prompt pasted into a cell that has just connected
 // races claude's TUI boot and lands in the scrollback instead of the input box — see
-// server/session/draft-injection.ts, which waits for the readiness marker. So the server spawns
+// server/session/spawn/draft-injection.ts, which waits for the readiness marker. So the server spawns
 // the session with the issue as a `draft` and this side only places the result, exactly as
 // startCollectionChat does for the collection plugin.
 import { ref } from "vue";

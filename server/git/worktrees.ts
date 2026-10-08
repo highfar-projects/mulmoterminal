@@ -10,11 +10,11 @@ import path from "node:path";
 import { isStrictlyWithin } from "../infra/path-within.js";
 import { mulmoterminalHome } from "../infra/mulmoterminal-home.js";
 import { canonicalPath } from "../infra/canonical-path.js";
-import { ensureWorktreeEnv } from "../config/worktree-env.js";
+import { ensureWorktreeEnv } from "../config/worktree/worktree-env.js";
 import { splitLines } from "../infra/split-lines.js";
 import { runTool } from "./run-tool.js";
-import { DIR_CONFIG_FILE, DIR_LOCAL_CONFIG_FILE } from "../config/dir-config.js";
-import { writeInheritedDirConfig } from "../config/worktree-dir-config.js";
+import { DIR_CONFIG_FILE, DIR_LOCAL_CONFIG_FILE } from "../config/dir/dir-config.js";
+import { writeInheritedDirConfig } from "../config/worktree/worktree-dir-config.js";
 import { hasDevcontainerConfig } from "../config/devcontainer-flag.js";
 import { ISSUE_BRANCH_PREFIX, issueFromAnchoredBranch } from "../../common/prPhase.js";
 
@@ -101,12 +101,6 @@ const GIT_TIMEOUT_MS = 120_000;
 // Run git with argv (no shell) in `cwd`; resolve { ok, stdout, code } — never reject, so
 // a missing git / non-repo dir is just `ok:false` and the caller falls back.
 //
-// The deadline lives in runTool, which kills the whole tree and settles on time. This used
-// to spawn with Node's `timeout` option, which signals git alone: the `sh` + `git-lfs
-// filter-process` it started survived, kept the stdio pipes open so `close` never fired, and
-// the promise never settled at all. stderr is still read (an unread pipe deadlocks git) but
-// not kept.
-//
 // `code` is carried because `ok` alone cannot answer for every command. `git grep` exits 1 for
 // "nothing matched" — a complete, correct answer — and 128 for every refusal it makes, from "this
 // is not a repository" to a pattern it would not compile. Both are `ok:false` with empty stdout, so
@@ -120,14 +114,23 @@ export async function git(
   timeoutMs: number = GIT_TIMEOUT_MS,
   /** Kills the child when it fires. For a caller whose own reason to wait has gone — a request the
    *  browser hung up on — where the timeout alone would leave the process running for its full
-   *  duration. Settles as `ok: false, code: null`, the answer that already means "no result came back". */
+   *  duration. Answered as `ok: false, code: null`, the answer that already means "no result came
+   *  back", so it needs no new branch. */
   signal?: AbortSignal,
   /** Stops the child once its output passes this many bytes, for a caller that will not use an
    *  answer that large anyway; the result is then `ok: false` with `overflow: true`. Unset reads all. */
   maxStdoutBytes?: number,
 ): Promise<{ ok: boolean; stdout: string; code: number | null; overflow?: boolean }> {
-  const res = await runTool("git", cwd ? ["-C", cwd, ...args] : args, { timeoutMs, signal, maxStdoutBytes });
-  return res.overflow ? { ok: false, stdout: "", code: res.code, overflow: true } : { ok: res.ok, stdout: res.stdout, code: res.code };
+  // `runTool` settles by the deadline even when a grandchild (git-lfs `filter-process`) is still
+  // holding the pipes, and kills that grandchild with git (#2935). It also turns the synchronous
+  // throw `spawn` gives for an argument execve will not take — a NUL byte, reachable from the
+  // content search's `?q=%00` — into an ordinary result, so the promise above never rejects.
+  const run = await runTool("git", cwd ? ["-C", cwd, ...args] : args, { timeoutMs, signal, maxStdoutBytes });
+  if (run.end === "overflow") return { ok: false, stdout: "", code: null, overflow: true };
+  // A timeout keeps what git printed before it was stopped, as a signal-killed child always has.
+  if (run.end === "timeout") return { ok: false, stdout: run.stdout, code: null };
+  if (run.end !== "exit") return { ok: false, stdout: "", code: null }; // the process never ran, or was cancelled
+  return { ok: run.code === 0, stdout: run.stdout, code: run.code };
 }
 
 // The current working tree's root, or null if `dir` isn't inside a git work tree.

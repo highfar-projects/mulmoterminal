@@ -36,20 +36,20 @@
 import type { TerminalAgent } from "../../common/sessionAgent.js";
 import { AGENT_TITLE_MAX } from "../../common/agentTitle.js";
 import { codexRollouts, codexRolloutsHydrated } from "../session/registry.js";
-import { codexRolloutPath } from "./codex-sessions.js";
+import { codexRolloutPath } from "./codex/codex-sessions.js";
 import { rememberBounded } from "./bounded-cache.js";
 import { codexSessionRoot } from "../session/session-home.js";
-import { codexUserPrompt } from "./codex-user-turn.js";
+import { codexUserPrompt } from "./codex/codex-user-turn.js";
 import { parseJsonRecord, readTranscriptHead } from "./transcript-head.js";
-import { cursorSessionTitle } from "./cursor-sessions.js";
-import { antigravityPromptFromTranscriptHead, antigravityTranscriptPath } from "./antigravity-sessions.js";
-import { antigravityBrainRoot, antigravityHome } from "./antigravity-session.js";
+import { cursorSessionTitle } from "./cursor/cursor-sessions.js";
+import { antigravityPromptFromTranscriptHead, antigravityTranscriptPath } from "./antigravity/antigravity-sessions.js";
+import { antigravityBrainRoot, antigravityHome } from "./antigravity/antigravity-session.js";
 import { antigravityConversations, antigravityConversationsHydrated } from "../session/registry.js";
-import { grokPromptTitles } from "./grok-sessions.js";
-import { grokSessionsRoot } from "./grok-session.js";
-import { museSessionTitle } from "./muse-session.js";
-import { cursorHome } from "./cursor-hooks-file.js";
-import { copilotSessionTitle } from "./copilot-sessions.js";
+import { grokPromptTitles } from "./grok/grok-sessions.js";
+import { grokSessionsRoot } from "./grok/grok-session.js";
+import { museSessionTitle } from "./muse/muse-session.js";
+import { cursorHome } from "./cursor/cursor-hooks-file.js";
+import { copilotSessionTitle } from "./copilot/copilot-sessions.js";
 
 /** The same window the codex listing reads a title from, and for the reason recorded there: codex
  *  writes ~20 KB of session_meta and then a preamble before the first real prompt, so a smaller

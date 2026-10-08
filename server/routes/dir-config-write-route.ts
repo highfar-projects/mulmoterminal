@@ -5,9 +5,9 @@ import type { Express, Request, Response } from "express";
 import { existingWorkspaceFromQuery } from "../config/workspace.js";
 import { isRecord } from "../../common/isRecord.js";
 import { isWritableDirConfigValue } from "../config/config-schema.js";
-import { dirConfigDetail } from "../config/dir-config.js";
-import { parseDirConfigEdit } from "../config/dir-config-edit.js";
-import { moveDirConfigKey, writeDirConfigEdit, type DirConfigMoveResult } from "../config/dir-config-write.js";
+import { dirConfigDetail } from "../config/dir/dir-config.js";
+import { parseDirConfigEdit } from "../config/dir/dir-config-edit.js";
+import { moveDirConfigKey, writeDirConfigEdit, type DirConfigMoveResult } from "../config/dir/dir-config-write.js";
 import { isDirFormKey, type DirConfigEdit } from "../../common/dirConfigForm.js";
 
 export type DirConfigWriteDeps = {

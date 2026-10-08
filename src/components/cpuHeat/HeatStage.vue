@@ -13,6 +13,7 @@ import HeatDynamite from "./HeatDynamite.vue";
 import HeatBalloon from "./HeatBalloon.vue";
 import HeatSkull from "./HeatSkull.vue";
 import HeatSumo from "./HeatSumo.vue";
+import HeatUfo from "./HeatUfo.vue";
 
 defineProps<{ pattern: HeatPattern } & HeatFigureProps>();
 
@@ -25,6 +26,7 @@ const PICTURE: Record<HeatPattern, Component> = {
   balloon: HeatBalloon,
   skull: HeatSkull,
   sumo: HeatSumo,
+  ufo: HeatUfo,
 };
 const OPACITY: Record<StageLevel, number> = { 0: 0, 1: 0.35, 2: 0.5, 3: 0.6, 4: 0.7, 5: 1 };
 </script>

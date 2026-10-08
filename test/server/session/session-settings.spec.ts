@@ -14,8 +14,8 @@ import {
   appendedPromptArgument,
 } from "../../../server/session/session-settings.js";
 import { resolvePtyLaunch } from "../../../server/infra/resolve-bin.js";
-import { hookSettingsJson } from "../../../server/session/hook-settings.js";
-import { buildClaudeArgs } from "../../../server/agents/claude-args.js";
+import { hookSettingsJson } from "../../../server/session/spawn/setup/hook-settings.js";
+import { buildClaudeArgs } from "../../../server/agents/claude/claude-args.js";
 import { appendedSystemPrompt } from "../../../server/agents/appended-prompt.js";
 
 const SESSION = "settings-spec-session";

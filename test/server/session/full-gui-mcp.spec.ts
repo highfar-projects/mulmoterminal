@@ -22,8 +22,8 @@ mkdirSync(PROJECT, { recursive: true });
 const REAL_CLAUDE_CWD = process.env.CLAUDE_CWD;
 process.env.CLAUDE_CWD = WORKSPACE;
 
-const { carriesFullGuiMcp } = await import("../../../server/session/mcp-config.js");
-const { buildClaudeArgs } = await import("../../../server/agents/claude-args.js");
+const { carriesFullGuiMcp } = await import("../../../server/session/spawn/setup/mcp-config.js");
+const { buildClaudeArgs } = await import("../../../server/agents/claude/claude-args.js");
 
 afterAll(() => {
   if (REAL_CLAUDE_CWD === undefined) delete process.env.CLAUDE_CWD;

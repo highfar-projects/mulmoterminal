@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import path from "node:path";
 import { writtenFilePath } from "../../../server/files/tool-writes";
-import { dirConfigWriteTarget } from "../../../server/config/dir-config";
+import { dirConfigWriteTarget } from "../../../server/config/dir/dir-config";
 
 describe("writtenFilePath", () => {
   it("reports the file a write tool wrote", () => {

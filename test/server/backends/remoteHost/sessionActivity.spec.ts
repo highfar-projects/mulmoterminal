@@ -2,7 +2,7 @@
 import { describe, it, expect, vi } from "vitest";
 
 import { createSessionActivityPublisher, type SessionActivity, type SessionActivityStore } from "../../../../server/backends/remoteHost/sessionActivity.js";
-import type { WorkPhase } from "../../../../server/session/workPhase.js";
+import type { WorkPhase } from "../../../../server/session/activity/workPhase.js";
 
 const UID = "user-1";
 const HOST = "mulmoterminal";

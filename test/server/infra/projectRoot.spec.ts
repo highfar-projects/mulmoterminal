@@ -9,7 +9,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { getWorkspaceRoot } from "@mulmoclaude/core/collection/server";
 
-import { initCollectionsBackend } from "../../../server/backends/collections.js";
+import { initCollectionsBackend } from "../../../server/backends/collections/collections.js";
 import path from "node:path";
 
 import {

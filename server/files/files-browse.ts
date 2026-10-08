@@ -20,7 +20,7 @@ import { backupCurrentFile, backupHolds, listBackups, readBackup, storeBackup } 
 import { losslessText } from "./editableText.js";
 import { containedPath, expandTilde, namedBase, resolveBase, resolveContained, rewriteContainerPath } from "./pathContainment.js";
 import { servedImageSrc, type ServedDoc } from "./mdImageSrc.js";
-import { loadDirConfig } from "../config/dir-config.js";
+import { loadDirConfig } from "../config/dir/dir-config.js";
 import { listProjectFiles } from "./project-files.js";
 import { answered, modeFromProbe, parseSearchOutput, searchArgv, SEARCH_TIMEOUT_MS } from "./file-search.js";
 import { CONTEXT_RADIUS_LINES, isSearchable, lineWindow, type SearchRequest, type SearchResult } from "../../common/fileSearch.js";
@@ -37,7 +37,7 @@ import { requestBody } from "../routes/requestBody.js";
 import { mountFilesTreeRoutes } from "./files-tree-routes.js";
 import { splitFrontmatter } from "@mulmoclaude/markdown-utils/markdown/frontmatter";
 import { mountFilesGitStatusRoute } from "./files-git-status.js";
-import { dirConfigDetail, dirConfigDirOf } from "../config/dir-config.js";
+import { dirConfigDetail, dirConfigDirOf } from "../config/dir/dir-config.js";
 import { dirConfigSaveReport, type DirConfigSaveReport } from "../../common/dirConfigSaveReport.js";
 
 // Cap on the bytes served to the editor / accepted on write — a text editor, not a

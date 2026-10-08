@@ -432,7 +432,7 @@ const LABELS = `[...document.querySelectorAll(${JSON.stringify(CLICKABLE)})].map
 
 /** Puppeteer, or the reason there is none.
  *
- *  Lazily, and tolerantly, for the reason `server/backends/markdown.ts` gives: it is a heavy
+ *  Lazily, and tolerantly, for the reason `server/backends/plugins/markdown.ts` gives: it is a heavy
  *  optional dependency and this server has to boot without it. A run with no browser is an answer,
  *  not a crash. */
 export async function browserOrProblem(): Promise<{ ok: true; browser: Browser } | { ok: false; problems: string[] }> {
