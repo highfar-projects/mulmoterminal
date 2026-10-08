@@ -8,9 +8,10 @@ import HeatDynamite from "../../../src/components/cpuHeat/HeatDynamite.vue";
 import HeatKettle from "../../../src/components/cpuHeat/HeatKettle.vue";
 import HeatRocket from "../../../src/components/cpuHeat/HeatRocket.vue";
 import HeatSkull from "../../../src/components/cpuHeat/HeatSkull.vue";
+import HeatUfo from "../../../src/components/cpuHeat/HeatUfo.vue";
 import HeatVolcano from "../../../src/components/cpuHeat/HeatVolcano.vue";
 
-const FIGURES: Record<string, Component> = { HeatBalloon, HeatBomb, HeatDynamite, HeatKettle, HeatRocket, HeatSkull, HeatVolcano };
+const FIGURES: Record<string, Component> = { HeatBalloon, HeatBomb, HeatDynamite, HeatKettle, HeatRocket, HeatSkull, HeatUfo, HeatVolcano };
 
 const declaredProps = (figure: Component): unknown => ("props" in figure ? figure.props : undefined);
 
