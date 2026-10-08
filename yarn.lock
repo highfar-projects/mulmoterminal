@@ -1286,10 +1286,10 @@
   resolved "https://registry.yarnpkg.com/@gui-chat-plugin/common/-/common-0.1.0.tgz#96d8a7a1cf1a2a806bbc2ee5ba296b69a59b0350"
   integrity sha512-OF+/XxKWBU50ijjygO+QrMsJjKn+2b1jtA7ouerBJThFT6sR1ZSwJDp+wj6FKBMXY8pPveJcXCBDQHl/qILmrg==
 
-"@gui-chat-plugin/jinglescript@^0.1.0":
-  version "0.1.0"
-  resolved "https://registry.yarnpkg.com/@gui-chat-plugin/jinglescript/-/jinglescript-0.1.0.tgz#bc2e0d5a352bfbe860d6b026c82cb6a9800b804c"
-  integrity sha512-qSDOv8KVyNkcarqj5aBZ0B1hZ3wsGQIWFfI1PZoAU+HbYv/ZeR4YQSyjCE09pdqjXibPLhhpBUP0JoaOHe42Sw==
+"@gui-chat-plugin/jinglescript@^0.2.0":
+  version "0.2.0"
+  resolved "https://registry.yarnpkg.com/@gui-chat-plugin/jinglescript/-/jinglescript-0.2.0.tgz#9161b1f5e475c01f4a59252cc23e95d418e938d4"
+  integrity sha512-WF4xKoxrr/rItcMG9Abz0q3STFCKZcoOiN6NkWF6M8/PRpqXQcHQv7n1cPRNx9bIlNdQp8eUa7PV5Gb9NDXgHA==
 
 "@gui-chat-plugin/shapescript@^8.2.2":
   version "8.2.2"
@@ -5864,10 +5864,10 @@ jackspeak@^3.1.2:
   optionalDependencies:
     "@pkgjs/parseargs" "^0.11.0"
 
-jinglescript@^0.1.0:
-  version "0.1.0"
-  resolved "https://registry.yarnpkg.com/jinglescript/-/jinglescript-0.1.0.tgz#4d4d88ae32868e567970b1f0279c6e178c7c2ba6"
-  integrity sha512-6O+bRq1JELyfsnfrVpy/j2wiLE5HTbK78p5BUxMYfO90Wk7JwRVg4ek0jvBO42/8OH6aj/Yr5Jd9p9YzYINAwg==
+jinglescript@^0.2.0:
+  version "0.2.0"
+  resolved "https://registry.yarnpkg.com/jinglescript/-/jinglescript-0.2.0.tgz#bb41feca575814f0e4e4617e00dda4018eb655e5"
+  integrity sha512-FAH1oGmJczYJx60lPfhaFnYSgoidMf1q6SBExPIAAwA8IsUppzmJ7bfrqkwC6aKiA6V3RpstDZBRcBc8wtY1tw==
   dependencies:
     "@modelcontextprotocol/sdk" "^1.32.1"
     zod "^4.6.5"
