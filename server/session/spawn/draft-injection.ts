@@ -9,10 +9,11 @@ import { sanitizeDraftText } from "../pty/pty-text.js";
 import { squashForMarker, trustDialogIsUp } from "../pty/pty-scan.js";
 import { planDraftInjection } from "./draft-plan.js";
 import { submittableLineForAgent } from "../../../common/terminalSubmit.js";
+import { tmuxIsPsmux } from "../../infra/tmux.js";
 
 // All a session needs to be typed into: where the bytes go, and which agent reads them
 // (both the submit mapping and the completion-menu guard are Claude Code's behaviour).
-type DraftTarget = Pick<PtyEntry, "agent"> & { term: Pick<IPty, "write"> };
+type DraftTarget = Pick<PtyEntry, "agent"> & Partial<Pick<PtyEntry, "tmux">> & { term: Pick<IPty, "write"> };
 
 // Claude must have its input box + bracketed-paste mode up before it will capture a
 // typed `draft`; too early and the bytes are echoed into the scrollback instead. We
@@ -58,6 +59,16 @@ const TRUST_QUIET_MS = 60_000;
 // auto-run prompt typed-but-unsent. Send the submitting Enter as a SEPARATE chunk a
 // beat after the paste so it actually registers.
 const DRAFT_SUBMIT_MS = 150;
+// Fork-only. psmux (3.3.8) holds a bracketed paste back and hands it to the pane in one piece
+// about 350-400 ms later — and a CR written in the meantime comes out INSIDE it, before the
+// closing `\e[201~`, where Claude takes it as a pasted newline and the prompt is never sent.
+// Measured with a probe in a psmux pane: a CR 150 or 300 ms after the paste landed inside it every
+// time, 500 ms and more after it every time. This was every hidden translation worker timing out.
+const PSMUX_DRAFT_SUBMIT_MS = 1000;
+
+/** How long after the paste the submitting Enter goes out, for a session behind psmux or not. */
+export const draftSubmitDelayMs = (target: Partial<Pick<PtyEntry, "tmux">>, psmux: boolean = tmuxIsPsmux()): number =>
+  target.tmux && psmux ? PSMUX_DRAFT_SUBMIT_MS : DRAFT_SUBMIT_MS;
 
 // Deliver an auto-run prompt (initialPrompt) or an editable draft by TYPING it into
 // claude's input box once it's ready — NOT as a `claude` CLI arg, which a large prompt
@@ -108,7 +119,7 @@ export function attachDraftInjection(
           } catch {
             // pty already gone — nothing to submit
           }
-        }, DRAFT_SUBMIT_MS);
+        }, draftSubmitDelayMs(entry));
       }
     } catch {
       // pty already gone — nothing to draft into
@@ -179,7 +190,7 @@ export function attachCodexAutoRun(entry: PtyEntry, prompt: string): (data: stri
         } catch {
           // pty already gone — nothing to submit
         }
-      }, DRAFT_SUBMIT_MS);
+      }, draftSubmitDelayMs(entry));
     } catch {
       // pty already gone — nothing to type into
     }
