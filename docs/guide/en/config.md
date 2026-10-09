@@ -66,8 +66,8 @@ Settings live in three places: the **settings modal (Settings)**, the **global c
 > malformed binding stops the server from starting.
 >
 > You don't have to remember the names either: the Settings section for each of these ends in a
-> button that starts the skill that owns it, in a new session. The two without a Settings section of
-> their own — `-header` and `-model` — you run by name.
+> button that starts the skill that owns it, in a new session. The two skills that open a section from
+> a button inside it — `-header` (Header buttons and chips) and `-model` (Models and backends) — can also be run by name.
 
 ---
 
@@ -75,7 +75,7 @@ Settings live in three places: the **settings modal (Settings)**, the **global c
 
 Open it from **Settings** (the gear) in the toolbar.
 
-Under the title, a **Version** row says **which build you are running** — `4.7.0` on an npm
+Under the title, a **Version** row says **which build you are running** — `X.Y.Z` on an npm
 install, and on a git checkout a second `commit a1b2c3d` chip beside it, since there the version
 is only whatever was last released and the commit is what identifies the build. When something
 newer exists, the update notice from the header badge follows on the next line, command included.
@@ -90,8 +90,8 @@ key lives in the environment, so that one still needs a restart.
 ![The Settings modal — the sidebar scrolled to show Appearance down to Sessions, with Theme open and its Create a theme… button](../images/config-settings-modal.png)
 
 The **sidebar** groups the sections and shows one at a time; below `sm` (a phone) it becomes a picker
-above the section. Twenty-eight sections in nine groups — **Voice input** is there only on a machine
-that can transcribe, so most setups see twenty-seven.
+above the section. Twenty-nine sections in nine groups — **Voice input** is there only on a machine
+that can transcribe, so most setups see twenty-eight.
 
 A button that hands a section over to a skill — "Create a theme…", "Configure notifications…" —
 **asks first**. It starts an agent session in a new grid cell, so the dialog says what will happen
@@ -113,8 +113,8 @@ English, and the line under the picker says so.
 - **Models & servers** — Models and backends, MCP servers
 - **Notifications** — Notification sounds, Web Push notifications, Phone quick commands
 - **Integrations** — GitHub and GitLab, Pull request repos, Google account
-- **Sessions** — Sessions and background tasks, Sessions that survived a restart, Cost (estimated)
-- **Help** — Help & user guide
+- **Sessions** — Sessions and background tasks, Sessions that survived a restart, Cost (estimated), Quit MulmoTerminal
+- **Help** — Help & user guide, Release notes
 
 ![The Settings modal in Japanese — the sidebar's groups and the Notification sounds pane](../images/settings-japanese.png)
 
@@ -131,7 +131,7 @@ English, and the line under the picker says so.
 | **Directory appearance** | "Configure appearance…" — set a directory's name badge, colors, terminal palette, and grid position interactively, through the `mulmoterminal-dirs` skill |
 | **Directory settings** | What each directory's `.mulmoterminal.json` is **actually doing**. Expand a row for the values in force (colors with a swatch), **which file each came from**, **keys dropped in validation**, and **keys this app never reads**. **Change here** below it edits the name, colours, status colours, theme, palette, font, grid priority, model, closing summary, extra directories, icon, background, sounds and header buttons / chips / commands (→ [Per-project settings](#per-dir)). "Explain my settings…" starts the `mulmoterminal-config` skill to say why and fix it (→ [When a setting isn't working](#dir-settings-preview)) |
 | **Launch commands** | Commands you can launch besides the agents in a grid cell (`{ label, command }`). A plain shell needs no entry — the launcher's **Shell** toggle opens `$SHELL` unconfigured |
-| **Header buttons and chips** | How many buttons and chips your global config declares, read-only — "built-in" when you have configured none. "Set up header buttons…" starts the `mulmoterminal-header` skill (→ [Customizing the header](#header)) |
+| **Header buttons and chips** | Your global header buttons and chips, edited right here — add, edit, remove, and group buttons into folders — plus the colour per status and the status colour on the header. "Set up header buttons…" starts the `mulmoterminal-header` skill (→ [Customizing the header](#header)) |
 | **Terminal keys** | [Copy on select](#copy-on-select) (`copyOnSelect`, off), the [question pane](#question-pane) (`questionPaneEnabled`), and which bytes your Claude reads as **submit** ([Enter — submit vs. newline](#terminal-submit), `terminalSubmit`) |
 | **Keyboard shortcuts** | Every action and the `send` row, bound or not, read-only. **Everything starts as Not set** — **Recommended keys** adds a starter set for this platform in one click (only to unbound actions and unused keys), and "Set up shortcuts…" starts the `mulmoterminal-keys` skill to bind anything else in `keymap` (→ [Keyboard shortcuts](#keymap)) |
 | **Voice input** | The language you **dictate in** (your browser's, per-clip detection, or a fixed one). Shown only on a machine that can transcribe |
@@ -143,10 +143,12 @@ English, and the line under the picker says so.
 | **GitHub and GitLab** | What this app writes to a forge as you: whether a cell [says it has started on an issue](#issue-work-comments) (`issueWorkComments`, off by default) and whether a created PR [ends with the clone name](#pr-workdir-footer) (`prWorkdirFooter`, on). Below them, the [self-hosted GitLab hosts](github.html#a-gitlab-of-your-own-self-hosted) to read with `glab` (`gitlabHosts` — takes effect on the next start) |
 | **Pull request repos** | The repos aggregated by the cross-repo PR/Issue view (`owner/repo`) |
 | **Google account** | Google sign-in for the Calendar link (not the RemoteHost Connect) |
-| **Sessions and background tasks** | Whether replies [end with a closing summary](#append-system-prompt) (`appendSystemPrompt`, on — a directory's own setting wins), whether to [keep a digest of decisions](#decision-digest) (`decisionDigest`, off), and the [periodic dev-work log](#all-keys) with its interval in hours (`worklogEnabled`, off — each run costs tokens) |
+| **Sessions and background tasks** | Whether replies [end with a closing summary](#append-system-prompt) (`appendSystemPrompt`, on — a directory's own setting wins), whether to [keep a digest of decisions](#decision-digest) (`decisionDigest`, off), and the [periodic dev-work log](#all-keys) with its interval in hours (`worklogEnabled`, off — each run costs tokens), the two hourly built-in tasks (refresh collections and feeds, `feedRefreshEnabled`; sync Google Calendar, `calendarSyncEnabled` — both on), and the experimental `remoteServer` switch |
 | **Sessions that survived a restart** | Every terminal still running from an earlier server, **across all directories** — the one place a session in a project you no longer open, or a plain shell, can be seen and ended. Each row says where it runs, what it is (`shell or unknown` when no agent conversation is recorded under it), how long it has been idle, and whether ending it loses anything. **Stop** ends that session only; a conversation with a transcript can be resumed afterwards. A row a terminal is holding shows `● open` instead, and is closed from there. The section also carries the two numbers that end a session unasked: `sessionIdleReapDays`, the idle days after which the server ends one, and `sessionReapIntervalHours`, how often it looks again. Rows those numbers will take are marked **due to be ended** — the event, never a clock, because the repeat is armed at boot and the saved number is not necessarily what the running server is doing. The line under the cadence says what this server actually armed, and tells you when a saved change has not reached it yet (#2184) — a change saved there applies at once, counted from the last sweep |
 | **Cost (estimated)** | Estimated cost readouts for Session / Today / Month |
+| **Quit MulmoTerminal** | Stops the MulmoTerminal server on this machine. Closing the tab does not stop it, so this is how to stop it without going back to the terminal you started it from; start it again with `npx mulmoterminal@latest` |
 | **Help & user guide** | Links into this guide |
+| **Release notes** | What changed in each version, as the What's new window showed it after an upgrade; pick a version to read it again, with a link to the full changelog |
 
 ## When a setting isn't working — look here first {#dir-settings-preview}
 When a setting you wrote doesn't take, open **Settings → Directory settings**. Per directory, it shows
@@ -511,11 +513,11 @@ Now a new worktree is given its own copy, derived from the project's, written to
 repository committed and leaves the worktree's `git status` clean:
 
 - **The identity is copied as written** — `name`, `icon`, `theme`, `colors`, `fontSize`,
-  `fontFamily`, `provider`, `model`. Same project, same terminal, same model. `icon` is carried as
+  `fontFamily`, `provider`, `model`, `headerStatusTint`, `backgroundImage`. Same project, same terminal, same model. `icon` is carried as
   the path you typed rather than the file it resolved to, so a logo committed to the repository is
   found again inside the worktree; one that is gitignored simply doesn't appear there.
 - **The chrome colours are rotated a little around the colour wheel** — `badgeColor`,
-  `headerColor`, `headerTextColor`, `cellColor`, `cellBorderColor`, `dotColor`, `buttonColor`. Each
+  `headerColor`, `headerTextColor`, `cellColor`, `cellBorderColor`, `dotColor`, `buttonColor`, and each entry of `headerStatusColors` (its background and text). Each
   worktree of a project sits one 12-degree step further round than the one before it, so a row of
   them reads as a gradient: recognisably this project, and recognisably not each other.
   Saturation and lightness are untouched, which is why a `headerTextColor` of `#ffffff` stays
@@ -962,7 +964,7 @@ cut-outs. The accent is loud, so `--text` is a greenish black to steady it.
 | What you see | Why |
 |---|---|
 | **It isn't in the picker** | The `id` matches a built-in, a colour isn't valid, or there is no `extends` and colours are missing. None of those are read |
-| **Edits change nothing** | The server wasn't restarted. The global config is read once, at start |
+| **Edits change nothing** | The server wasn't restarted and the file wasn't reloaded. The global config is read at start, so after a hand-edit restart the server or press **Reload config file** in Settings |
 | **You picked it and got the default** | The definition isn't being found; the theme picker says so |
 | **Status colours are hard to read** | Light vs dark is derived from `--bg-base`. A mid-tone ground can land on the wrong side — commit to light or dark |
 | **Panels have vanished** | `--bg-panel` is too close to `--bg-base` |
@@ -1048,7 +1050,7 @@ An invalid value (a typo, or anything other than `"cr"` / `"esc-cr"`) is ignored
 
 ## Notification sounds (`soundKinds` / `sounds`) {#sounds}
 
-Six moments can beep, each with its own sound and its own switch. Running many agents at once
+Seven moments can beep, each with its own sound and its own switch. Running many agents at once
 is what turns notifications into noise, so **only the first two are on by default** — the rest
 are opt-in, from **Settings → NOTIFICATION SOUNDS** or the config file.
 
@@ -1058,8 +1060,8 @@ are opt-in, from **Settings → NOTIFICATION SOUNDS** or the config file.
 | `waiting` | it stopped to ask — a permission prompt or a question | **on** |
 | `command-done` | a Run cell's command exited 0 | off |
 | `command-failed` | a Run cell's command exited non-zero, or never started | off |
-
 | `session-exited` | a session's terminal ended — **including when you close the cell yourself** | off |
+| `worker-failed` | a hidden background worker ended without ever completing a turn | off |
 | `pr-ci-failed` | a directory's PR went red. Only seen **while the roster is on screen**, since that is what polls the phase | off |
 
 ```jsonc
@@ -1100,8 +1102,8 @@ font-family stack in `~/.mulmoterminal/config.json`:
 { "fontFamily": "'Cica', 'MS Gothic', monospace" }
 ```
 
-Then **restart `mulmoterminal`** and reload the browser tab. The global config is read once at
-server startup, so a hand-edit doesn't reach the browser until it restarts — the same caveat as
+Then **restart `mulmoterminal`** (or press **Reload config file** in Settings) and reload the browser tab. The global config is read at
+server startup, so a hand-edit doesn't reach the browser until it restarts or is reloaded — the same caveat as
 [`keymap`](#keymap) and [`terminalSubmit`](#terminal-submit), and the usual reason a new key looks
 like it "didn't work". The **per-directory** key ([below](#per-dir)) needs no restart, but it is not
 picked up by a file watcher either — see [below](#per-dir-font) for when it re-reads.
@@ -1125,8 +1127,8 @@ box-drawing frame — which is most of what an agent TUI draws. Fonts built for 
 
 ### If it doesn't take
 
-- **Nothing changed at all, for any font.** You probably haven't restarted the server. The global
-  config is only read at startup — see above. (A per-directory `fontFamily` needs no restart, but a
+- **Nothing changed at all, for any font.** You probably haven't restarted the server or pressed **Reload config file**. The global
+  config is only read at startup and on that reload — see above. (A per-directory `fontFamily` needs no restart, but a
   hand edit still needs a browser reload — see [Terminal font](#per-dir-font).)
 - **Nothing changed for one font.** It isn't installed under that exact name, so the browser skipped
   it and fell through to the next one. Check the spelling against your font book.
@@ -1907,8 +1909,8 @@ having saved the file. In order of likelihood:
 
 1. **No `agent: "claude"`.** It is required: nothing in your command line says which CLI is on the
    other side of the `--`, so MulmoTerminal will not guess.
-2. **The `id` is not a valid name** — an uppercase letter, a space, or one of the four built-in
-   names.
+2. **The `id` is not a valid name** — an uppercase letter, a space, or the name of a built-in agent
+   (`claude`, `codex`, `antigravity`, `grok`, `muse`, `copilot`, `cursor`, `shell`).
 3. **The server wasn't restarted**, or the tab wasn't reloaded.
 
 To check what was accepted, compare your file with what the app parsed:
@@ -2222,7 +2224,7 @@ What you write here appears in an empty cell's launcher under **OR RUN A SCRIPT*
 | `providers` | Anthropic-compatible backends (→ [Using another model via OpenRouter](providers.html)) |
 | `customAgents` | Your own commands for starting Claude Code, offered in the Agent Picker (→ [Custom agents](#custom-agents)) |
 | `soundFile` | The fallback notification sound for every kind (absolute path to an audio file; also settable from the modal) |
-| `soundKinds` | Which moments beep. Omit to keep `["finished","waiting"]`; the four added in 2.2 are opt-in, `[]` for silence (→ [Notification sounds](#sounds)) |
+| `soundKinds` | Which moments beep. Omit to keep `["finished","waiting"]`; the other kinds (`command-done`, `command-failed`, `session-exited`, `worker-failed`, `pr-ci-failed`) are opt-in, `[]` for silence (→ [Notification sounds](#sounds)) |
 | `sounds` | Per-kind sound, e.g. `{ "waiting": "preset:coin" }` — a `preset:<id>` or an absolute path. A kind with no entry uses `soundFile` (→ [Notification sounds](#sounds)) |
 | `pushEnabled` | The Web Push master switch (default `false` → [Mobile notifications](notifications.html)) |
 | `pushKinds` | Which moments push: `"finished"` (a turn ended) and/or `"waiting"` (the agent stopped to ask). Omit to keep both; `[]` for none (→ [Which moments push](notifications.html#kinds)) |

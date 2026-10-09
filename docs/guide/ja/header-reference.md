@@ -49,7 +49,7 @@ description: MulmoTerminal のヘッダー設定を書くときに引くペー�
 | `ahead` | upstream より**進んでいる**コミット数 | `2` | 空になりません（無ければ `0`） |
 | `behind` | upstream より**遅れている**コミット数 | `0` | 空になりません（無ければ `0`） |
 | `dirty` | `git status --porcelain` の行数 = **変更のあるパスの数**（ステージ済み・未ステージ・未追跡の合計） | `3` | 空になりません（無ければ `0`） |
-| `agent` | このセルのエージェント。`claude` / `codex` / `antigravity` / `grok` / `muse` のどれか | `claude` | 空になりません（分からないときは `claude`） |
+| `agent` | このセルのエージェント。`claude` / `codex` / `antigravity` / `grok` / `muse` / `copilot` / `cursor` のどれか | `claude` | 空になりません（分からないときは `claude`） |
 | `model` | そのエージェント**自身のログ**が最後のターンで名乗ったモデル ID | `claude-sonnet-4-5-20250929` | エージェントが**まだ 1 回も応答していない**とき（起動直後） |
 | `task` | [管理下の worktree](worktree.html) のタスク名（`~/.mulmoterminal/worktrees/<repo>-<hash>/<task>` の `<task>`） | `fix-1928` | 管理外のディレクトリ（＝普通のリポジトリで開いたセル） |
 | `session` | このセルのセッション ID（UUID） | `9f1c…-…` | セッションがまだ始まっていないとき |

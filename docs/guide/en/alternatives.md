@@ -117,7 +117,7 @@ one session at a time.
 
 Mine. A browser board of **several live terminals at once**, colour-coded by state, with a chime
 and a web push when one is waiting on you. Sessions run in tmux, so closing the tab or restarting
-the server doesn't end them. Claude Code, Codex and Antigravity.
+the server doesn't end them. Claude Code, Codex, Antigravity, Grok, Muse, GitHub Copilot CLI and Cursor CLI.
 
 The bet is that a one-line summary is good for triage and no help when you actually want to read
 a long reply while five others keep running.
@@ -139,7 +139,7 @@ Machine-readable facts: [`facts.json`](https://receptron.github.io/mulmoterminal
 | **Conductor** | Desktop (macOS) | Proprietary | Claude, Codex, Cursor | — | Worktrees |
 | **Claude Squad** | TUI | OSS | Claude, Codex, OpenCode, Amp | — | Worktrees |
 | **`claude agents`** | TUI | First-party | Claude | — | Worktrees |
-| **MulmoTerminal** | **Browser** | MIT | Claude, Codex, Antigravity | Web + push | Worktrees |
+| **MulmoTerminal** | **Browser** | MIT | Claude, Codex, Antigravity, Grok, Muse, Copilot, Cursor | Web + push | Worktrees |
 
 **Notice what's the same.** Nearly everything here is open source, worktree-based, and local. If
 someone tells you their differentiator is "MIT" or "runs locally," that's the floor, not a

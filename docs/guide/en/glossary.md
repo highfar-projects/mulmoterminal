@@ -10,8 +10,8 @@ description: Vibe coding, parallel agents, AI coding agents, git worktrees, the 
 # Glossary — the words this guide uses
 {: .no_toc }
 
-MulmoTerminal is a **browser terminal** for running several **AI coding agents** — **Claude Code**
-and **Codex** — side by side. This page lines up the vocabulary with the part of the screen it
+MulmoTerminal is a **browser terminal** for running several **AI coding agents** — **Claude Code**,
+**Codex**, **Antigravity**, **Grok**, **Muse**, **Copilot** and **Cursor** — side by side. This page lines up the vocabulary with the part of the screen it
 refers to.
 
 - TOC
@@ -35,8 +35,9 @@ problem this app exists for.
 ## AI coding agent / CLI agent
 
 An AI that runs on the command line, reads your codebase, writes files, runs tests, and opens PRs.
-**Claude Code** (Anthropic) and **Codex CLI** (OpenAI) are the two this app launches, per cell — so
-you can put the same task to both and compare, or have one review the other.
+**Claude Code** (Anthropic) is the default; **Codex CLI** (OpenAI), **Antigravity**, **Grok**, **Muse**,
+**GitHub Copilot CLI** and **Cursor CLI** can run in a cell too — so you can put the same task to two of
+them and compare, or have one review the other.
 
 → [Mixing agents in one grid](basics.html#claude-and-codex) · [Cross-terminal talk](features.html)
 

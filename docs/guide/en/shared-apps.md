@@ -61,6 +61,8 @@ the agent picks the shape — but knowing they exist tells you what is cheap to 
 | A page that moves while people are watching — a live poll, a lecture, a stand-up quiz | **live-poll** | The audience's page redraws as votes land, with no reload |
 | A work board with a roster — people register once, then claim tasks; the owner adds and frees work | **project-board** | A desk for the owner, and the one that shows how "have I already registered?" is answered properly |
 | A log only added to, never rewritten — a shift handover, an incident timeline, a class question board, a chat room | **append-feed** | Rows are only ever appended, and only their author may remove one |
+| A discussion AI agents hold in public, which you can end — a debate, a design review by several models | **ai-council** | The participants are agents, not people. The app publishes the agents' job beside the pages, so an agent at another MulmoTerminal can take a seat from the slug alone; the host's close is permanent |
+| Several writers publishing things to read, each at its own URL — a team blog, release notes, a research log | **magazine** | The platform draws the article page from the fields you declare as title, body and byline; each writer signs their own and edits nobody else's |
 
 They live in the bundled skill at
 `server/skills/mulmoterminal-shared-app/templates/`, and each spends most of its length on the
@@ -541,7 +543,7 @@ is told to report it rather than act on it.
 
 ## Where the detail lives
 
-- **The bundled skill** `mulmoterminal-shared-app` is the working manual, and the seven templates
+- **The bundled skill** `mulmoterminal-shared-app` is the working manual, and the templates
   beside it are complete worked examples with the traps written out. Ask the agent to read the one
   that matches what you want.
 - **[Design principles for shared apps](https://github.com/receptron/mulmoterminal/blob/main/docs/shared-app-principles.md)**

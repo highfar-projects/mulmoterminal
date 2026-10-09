@@ -32,7 +32,7 @@ Start with a local build (no Firebase). It stays entirely on your machine and ne
 
 > **Claude usage**: a build starts a Claude Code session for every step, so it uses noticeably more than an ordinary chat.
 
-> **Language**: every task shows its name, questions, steps and examples in English. The documents may be in either language, and the agent writes to you in the report language you pick. The screens themselves follow MulmoTerminal's language setting.
+> **Language**: every task shows its name, questions, steps and examples in English. The documents may be in either language, and the agent writes to you in the report language you pick. The screens themselves follow MulmoTerminal's language setting. Where a name below is given in Japanese, an English screen shows the English gloss beside it.
 
 ## Running it
 
@@ -62,7 +62,7 @@ If you skip this and **Start** is refused because the folder is not trusted, pre
 A small app that records the books in your house and who has borrowed which, built and run on your own machine.
 
 1. **More features** → **Blueprints** → **New build**.
-2. Under **Start from an example**, press **Use this example** on **おうち図書館**. It fills in the base (local), the kind of system (build anything) and the answers to the questions.
+2. Under **Start from an example**, press **Use this example** on **Home library** (**おうち図書館** on a Japanese screen). It fills in the base (local), the kind of system (build anything) and the answers to the questions.
 3. **Project folder** is filled in with a new folder for this example, in a place Claude Code already trusts, such as beside your recent builds. If it stays empty (the first time, for instance), enter something like `~/blueprint-trials/library`. Press **Start**: the folder is made and the build begins.
 4. Once the first step has written the specification, the build stops at the **specification screen**. This is the part that matters most.
    - Read the specification, and look at anything under **Not decided yet**.
@@ -72,7 +72,7 @@ A small app that records the books in your house and who has borrowed which, bui
    - **Has a question for you**: write an answer and press **Send**. When the agent offers choices, each is a button with what picking it costs; the one it would pick is marked **Recommended**. Pressing a button answers with it, and you can still write your own answer instead.
    - **Work list**: a build that works through a list of targets one at a time (such as tidying an existing repository) shows that list under the current step: each target's order, title and status — to do, in progress, needs your decision, done or left alone. The one waiting for your decision is tinted. Click a row to see why it was chosen, how it will be proved, its files, its pull request and any note.
    - A step whose check fails compares its earlier failures and repairs itself. A step waiting for another build's folder resumes by itself when that build stops. If a step still stops, read **What the check reported** and press **Try again**.
-   - Just before the end comes a **Security review** step. The agent reads what was built against OWASP Top 10:2025, fixes what can be exploited, adds tests, and writes `.blueprint/security-review.md`. The check starts the app and sends it the requests an attack would (a foreign `Host` as in DNS rebinding, a change from another site, a malformed JSON body) and requires each to be refused; it also audits the dependencies (`yarn audit`). On Firebase the review comes before publishing to production, and ends by redeploying dev and confirming the page still renders.
+   - Just before the end comes a **Security check** step. The agent reads what was built against OWASP Top 10:2025, fixes what can be exploited, adds tests, and writes `.blueprint/security-review.md`. The check starts the app and sends it the requests an attack would (a foreign `Host` as in DNS rebinding, a change from another site, a malformed JSON body) and requires each to be refused; it also audits the dependencies (`yarn audit`). On Firebase the review comes before publishing to production, and ends by redeploying dev and confirming the page still renders.
 6. **Every step is done.** means you are finished. Right under it is **how to start using the app** (`.blueprint/start-here.md`): how to start it (`yarn start`) and the address to open, a checklist that tries each must-have in turn, and where the data lives. Work down it. The folder's `README.md` has the details. On Firebase it gives the production URL and how to make the next change (try it on dev, then publish).
 
 ## What we would like you to try
@@ -93,7 +93,7 @@ As much as you have time for — and tell us which ones you did.
 
 ### From a collection to an app {#from-collection}
 
-Start from one of MulmoTerminal's collections and build an app you own as code, on the local base, on Firebase, on Cloudflare or on Supabase. The whole procedure has its own page: [From a collection to an app](from-collection.html). Choose **コレクションからアプリにする** (from a collection) as the kind, then pick a collection in the workspace under 元にするコレクション (the source collection).
+Start from one of MulmoTerminal's collections and build an app you own as code, on the local base, on Firebase, on Cloudflare or on Supabase. The whole procedure has its own page: [From a collection to an app](from-collection.html). Choose **Turn a collection into an app** (**コレクションからアプリにする** on a Japanese screen) as the kind, then pick a collection in the workspace under 元にするコレクション (the source collection).
 
 - Pressing Start copies the shape of that collection, and of every collection it links to through `ref` and the like (`schema.json`, `SKILL.md`, the declared views and templates), into `.blueprint/source/` in the new folder. The collection itself is not changed.
 - Answer **yes** to 記録（中のデータ）も写しますか (copy the records too) and the records, with the images and files they point at, are copied as well, then moved into the app's database and `data/files/` by the 記録を移す (move the records) step. The move is checked by machine: every record and every stored field has to be in the agreed table with its original value. Personal data in the records comes along too. When the source has fields that may hold it (email fields, and fields named for a person's name, phone, address and the like), pressing Start stops once and lists them; press **Checked: copy it and start** to go ahead. For a shared app the members' email addresses travel with `app.json`, so the same check appears even without the records. Answer **no** and only the shape is copied, giving an empty app.
@@ -185,4 +185,4 @@ Comment on [issue #2246](https://github.com/receptron/mulmoterminal/issues/2246)
 - The check after publishing catches a blank page, but can miss an app stuck on its loading screen.
 - The Marketplace (installing packs from elsewhere) is a prototype; there is no official list yet.
 - The Blueprints screen's own text (buttons, statuses, refusals) follows MulmoTerminal's display language (Japanese, English, Korean, Simplified and Traditional Chinese). The bundled packs' content — the names of what they make, their questions, step names and examples — is in English on any screen language but Japanese, and so are the step names in the build list and the run view. The documents themselves can be English: 「規約をつくる」 (make a style) offers 「英語」 (English) as the language, and chaff checks English text too; the example 「英語のブログ記事を整える」 polishes an English blog post.
-- What the agent writes to you — reports, questions, replies — is in the **report language** you pick on the new-build form. It starts as the screen's language, so you can, for example, polish an English document and read the report in Japanese. The documents keep their own language, and a task continued from "Next steps" keeps the same report language.
+- What the agent writes to you — reports, questions, replies — is in the **report language** you pick on the new-build form. It starts as the screen's language, so you can, for example, polish an English document and read the report in Japanese. The documents keep their own language, and a task continued from **What to do next** keeps the same report language.

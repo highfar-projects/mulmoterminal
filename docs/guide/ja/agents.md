@@ -27,14 +27,14 @@ GUI ツールへの到達方法が3通りに分かれていて、選ぶ前に読
 | **Grok** | Grok | `grok` | `gk` | ディレクトリのファイル | `GROK_MODEL` |
 | **Muse** | Muse | `muse` | `mu` | プラグイン（マシン単位） | `MUSE_MODEL` |
 | **GitHub Copilot CLI** | Copilot | `copilot` | `cp` | セッションごとの URL | `COPILOT_MODEL` |
-| **Cursor CLI** | Cursor | `cursor-agent` | `cu` | ディレクトリのファイル *（まだ自動では書きません）* | `CURSOR_MODEL` |
+| **Cursor CLI** | Cursor | `cursor-agent` | `cu` | ディレクトリのファイル（cursor のセルがそこで起動するときに書き込みます） | `CURSOR_MODEL` |
 
 どのコマンドも `CLAUDE_BIN` / `CODEX_BIN` / `ANTIGRAVITY_BIN` / `GROK_BIN` / `MUSE_BIN` /
 `COPILOT_BIN` / `CURSOR_BIN` で差し替えられます（バージョン固定、ラッパー、`PATH` の外にある
 パスなど）。
 
-**どれが「終わった」を教えてくれるか。** Claude と Cursor は処理中と完了の両方を出すので、見て
-いないセルでも注目マークが付き、音が鳴ります。Codex と Copilot は処理中のみ。Antigravity・Grok・
+**どれが「終わった」を教えてくれるか。** Claude・Codex・Cursor・Copilot は、見ていないセルでターンが
+終わると、注目マークが付き、音が鳴ります。Antigravity・Grok・
 Muse はどちらも出しません（セルは正常に動き、ただ静かなだけです）。**入力待ちを知らせられるのは
 Claude と、6.2.0 からの Codex**です。Codex は、最初の Codex セルで聞かれる hook の確認に答えて
 からになります（[6.2.0 のガイド](v6.2.0.html)）。他のエージェントでは承認プロンプトが無音のまま

@@ -50,7 +50,7 @@ itself never disappears).
 | `ahead` | commits **ahead** of the upstream | `2` | never (it is `0` when there is none) |
 | `behind` | commits **behind** the upstream | `0` | never (`0` when there is none) |
 | `dirty` | lines of `git status --porcelain` = **how many paths have changes** (staged + unstaged + untracked) | `3` | never (`0` when clean) |
-| `agent` | the cell's agent: one of `claude` / `codex` / `antigravity` / `grok` / `muse` | `claude` | never (`claude` when it cannot be told) |
+| `agent` | the cell's agent: one of `claude` / `codex` / `antigravity` / `grok` / `muse` / `copilot` / `cursor` | `claude` | never (`claude` when it cannot be told) |
 | `model` | the model id **the agent's own log** declared on its last turn | `claude-sonnet-4-5-20250929` | the agent **has not answered yet** (just launched) |
 | `task` | the task name of a [managed worktree](worktree.html) — the `<task>` in `~/.mulmoterminal/worktrees/<repo>-<hash>/<task>` | `fix-1928` | anywhere else (an ordinary repository checkout) |
 | `session` | this cell's session id (a UUID) | `9f1c…-…` | no session has started yet |

@@ -17,7 +17,7 @@ description: See every registered repository's open PRs and issues in one full-s
 something waiting for review, whether CI is red — all at a glance, without hopping between sessions.
 You choose which repos show up by **registering** them (just a list of `owner/repo`).
 
-- A **full-screen view** from the toolbar's **Pull requests** button (`call_merge`).
+- A **full-screen view** from the toolbar's **Pull requests** button (the GitHub mark).
 - Shows **both open PRs and Issues**, grouped **per repository**.
 - Data comes through the **GitHub CLI (`gh`)** — it **uses your `gh` login**, so no token is stored in the app.
 
@@ -71,13 +71,16 @@ host runs GitLab, Gitea or a wiki. So you say so once, in the same file:
 }
 ```
 
+You can also add the host without editing the file: **Settings → GitHub and GitLab → Self-hosted GitLab**,
+which takes effect at once, with no restart.
+
 A declared host then behaves **exactly like gitlab.com**: the list, starting work from an issue,
 work comments, and opening a merge request. Two things it needs:
 
 1. **`glab` logged in to that host** — `glab auth login --hostname gitlab.example.com`. This app
    stores no token of its own; it runs your `glab`, the same arrangement as `gh`.
 2. **A server restart** after editing `config.json` by hand — the same as `prRepos` written by
-   hand, since the file is read at start-up.
+   hand, since the file is read at start-up. (Adding the host in Settings needs none.)
 
 Until the host is declared, its row says so and names the key to add. Not covered yet: a port in
 the host name (`gitlab.example.com:8443`), an http-only instance, and GitHub Enterprise.
@@ -86,7 +89,7 @@ the host name (`gitlab.example.com:8443`), an http-only instance, and GitHub Ent
 
 ## 2. Open the view and read it
 
-Click **Pull requests** (`call_merge`) in the toolbar (among the grid's own controls, shown while
+Click **Pull requests** (the GitHub mark) in the toolbar (among the grid's own controls, shown while
 the grid is on screen). The button appears once Settings → **Pull request repos** lists at
 least one repository; with none, there is nothing for the view to show.
 

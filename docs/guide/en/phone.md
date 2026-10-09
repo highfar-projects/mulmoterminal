@@ -96,8 +96,8 @@ phone until then.
 **Tapping a chip fills the input box — it does not send.** You still press send, so a mistap
 costs nothing and you can edit before committing.
 
-You can also scope a chip to the kind of session it suits: tick **claude**, **codex**, or
-**shell**, and it only appears there. Leave every box unticked and it appears everywhere —
+You can also scope a chip to the kind of session it suits: tick the agents it suits
+(**claude**, **codex**, Antigravity, Grok, Muse, Copilot, Cursor) or **shell**, and it only appears there. Leave every box unticked and it appears everywhere —
 which is what you want for "マージして", while `git status` belongs to a shell alone.
 
 The same list lives in [`quickCommands`](config.html) in `~/.mulmoterminal/config.json` if you'd
@@ -106,7 +106,8 @@ rather edit the file.
 ## Starting a new terminal
 
 From a session you're viewing, you can start **another** terminal in the **same directory** —
-a plain **shell**, **claude**, or **codex**. It's the fastest way to act on something you just
+a plain **shell** or any agent MulmoTerminal launches (**claude**, **codex**, Antigravity, Grok, Muse,
+Copilot, Cursor), as far as the phone app offers them. It's the fastest way to act on something you just
 read on the screen without walking back to the Mac.
 
 You choose the program; you don't choose the directory. It's always the directory of the

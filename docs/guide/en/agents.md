@@ -28,18 +28,18 @@ reading before you pick one.
 | **Grok** | Grok | `grok` | `gk` | a file in the directory | `GROK_MODEL` |
 | **Muse** | Muse | `muse` | `mu` | a plugin, per machine | `MUSE_MODEL` |
 | **GitHub Copilot CLI** | Copilot | `copilot` | `cp` | a per-session URL | `COPILOT_MODEL` |
-| **Cursor CLI** | Cursor | `cursor-agent` | `cu` | a file in the directory *(not written for you yet)* | `CURSOR_MODEL` |
+| **Cursor CLI** | Cursor | `cursor-agent` | `cu` | a file in the directory, written when a cursor cell starts there | `CURSOR_MODEL` |
 
 Every command can be pointed elsewhere with `CLAUDE_BIN` / `CODEX_BIN` / `ANTIGRAVITY_BIN` /
 `GROK_BIN` / `MUSE_BIN` / `COPILOT_BIN` / `CURSOR_BIN` — a pinned version, a wrapper, a path
 outside `PATH`.
 
-**Which ones tell you when they finish.** Claude and Cursor drive both the working dot and the
-finished one, so a cell you are not looking at raises the attention mark and plays the sound.
-Codex and Copilot drive the working half only. Antigravity, Grok and Muse drive neither — their
-cells run fine and simply stay quiet. Claude, and Codex since 6.2.0, can also tell you they are
-**blocked waiting for you** — Codex once you trust its hook, the first time a Codex cell asks
-([6.2.0 guide](v6.2.0.html)). For every other agent an approval prompt sits in the cell without a sound.
+**Which ones tell you when they finish.** Claude, Codex, Cursor and Copilot all raise the
+attention mark and play the sound when a turn finishes in a cell you are not looking at. Antigravity,
+Grok and Muse drive neither — their cells run fine and simply stay quiet. Claude, and Codex since
+6.2.0, can also tell you they are **blocked waiting for you** — Codex once you trust its hook, the
+first time a Codex cell asks ([6.2.0 guide](v6.2.0.html)). For every other agent an approval prompt
+sits in the cell without a sound.
 
 Nothing has to be installed for an agent you do not use. **An agent whose command is missing is
 dimmed in the new-cell Agent Picker.** Pick it and the form says why it cannot start, links the
