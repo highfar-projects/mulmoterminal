@@ -11,6 +11,63 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 > **9.6.0 is out.** Click the subscription name on a cell to move that session to another subscription, with each one's
 > weekly room and time to reset beside it, and agents can write jingles with JingleScript. [Setup guide](v9.6.0.html)
 
+## What is MulmoTerminal? {#what-is}
+
+**MulmoTerminal is a control room for AI coding agents.** You run several agents at once — Claude Code by default,
+and also Codex, Antigravity, Grok, Muse, GitHub Copilot CLI and Cursor CLI — and it puts every one of them on a
+single browser screen, so you can see at a glance which one needs you.
+
+### Why it exists
+
+When you run one coding agent, the slowest thing in the room is the agent. You give it a task, wait, and read the
+answer.
+
+Then you start a second one, and a third, because each task takes minutes and your hands would otherwise sit idle.
+Now the slowest thing in the room is you, and the trouble has little to do with the agents themselves:
+
+- **One of them is always stopped** — on a permission prompt, or a question — and it does nothing at all until you
+  notice.
+- **Six terminal windows look the same.** You lose track of which folder each one is in, and of what you asked it.
+  Some people have typed a reply into the wrong agent.
+- **Close a tab, or lose the connection, and the session is gone.**
+- **You keep typing commands** just to check git, open a folder or start a pull request.
+
+The limit is no longer the computer. It is your attention. MulmoTerminal exists to protect it: not to make you
+watch your agents, but to let you **triage** them — go to whichever one is waiting, and leave the rest alone.
+
+### What it is
+
+A web app that runs on your own machine: start it with `npx mulmoterminal@latest` and open
+`http://localhost:34567`. Each agent runs as a real terminal in its own cell of a grid. It is not an editor or an
+IDE, so it works whichever editor you use, and your code and API keys stay on your machine.
+
+### What it does for you
+
+- **A grid, coloured by state.** Blue means working, amber means it is waiting on you, a green ring means it has
+  finished. A sound tells you when one needs you, so you go where the light is
+  ([Basics](basics.html)).
+- **A roster that remembers for you.** Zoom into one agent and a list still shows every session: what you last
+  asked it, what it answered, and where its pull request stands ([Basics](basics.html)).
+- **Your phone calls you back.** A push notification arrives when a turn finishes or waits for you, and you can
+  answer with one tap ([Mobile notifications](notifications.html)).
+- **Sessions do not die.** They survive a reload, a lost connection and a server restart, and the sessions you
+  already had come along ([FAQ](faq.html)).
+- **Git without the typing.** Agents work in separate git worktrees so they do not collide on one repository, and
+  you commit, push and open a pull request from the cell ([Worktrees](worktree.html)).
+- **A screen beside the terminal.** What an agent makes — diagrams, forms, images, documents, slides — appears next
+  to the terminal instead of as pasted text ([Feature reference](features.html)).
+- **Several subscriptions side by side.** Spread work over more than one Claude subscription, see how much of each
+  week's allowance is left, and move a session from one to another
+  ([Token rotation](token-rotation.html)).
+- **Yours to shape.** Buttons, launchers and per-project settings come from a small configuration language
+  ([Configuration](config.html)).
+
+### Who it is for
+
+Anyone who runs more than one agent and loses track of which one is waiting. People have said it was worth the
+switch at one to three sessions, not only at ten. You do not need to write code for a living to start: the
+[getting-started page](getting-started.html) goes from zero to a running grid.
+
 **New here?** Opening a terminal, installing Node.js / Claude Code / git / gh on macOS and
 Windows, the start command, and what to do when it doesn't work — **installing and launching
 is one page**, written so someone who doesn't write code for a living still ends up with a
