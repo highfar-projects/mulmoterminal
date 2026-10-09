@@ -3,7 +3,7 @@ title: 複数の Claude の契約を自動で使い分ける（ベータ）
 nav_title: トークンのローテーション（ベータ）
 layout: default
 parent: 日本語
-nav_order: 16.5
+nav_order: 17.5
 description: 複数の Claude の契約を一度登録しておけば、セッションを始めるたびにいちばん余裕のある契約を選び、上限が近づいたセッションは会話を保ったまま別の契約へ移します。
 ---
 
