@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { readMachineLoad } from "../infra/machine-load.js";
+import { readMachineLoad } from "../infra/process/machine-load.js";
 import type { MachineLoad } from "../../common/machineLoad.js";
 
 // A GET, unlike the rate-limit twin it sits beside on the header. That one is a POST because

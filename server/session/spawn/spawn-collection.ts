@@ -9,7 +9,7 @@
 // recorded.
 import { loadCollection, toSummary } from "@mulmoclaude/core/collection/server";
 import { isSafeSlug } from "@mulmoclaude/core/collection";
-import { projectScopeForCwd } from "../../infra/project-root.js";
+import { projectScopeForCwd } from "../../infra/fs/project-root.js";
 import type { SessionCollection } from "../../../common/sessionCollection.js";
 import { messageOf } from "../../errors.js";
 

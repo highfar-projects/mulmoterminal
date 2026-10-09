@@ -3,7 +3,7 @@
 // itself, and SIGKILL only for the SAME process still running after SIGTERM's grace.
 import { describe, it, expect } from "vitest";
 import type { Express } from "express";
-import type { ProcessDetail } from "../../../server/infra/process-list";
+import type { ProcessDetail } from "../../../server/infra/process/process-list";
 import { mountProcessRoutes, type ProcessRouteDeps } from "../../../server/routes/process-routes";
 
 interface FakeRes {

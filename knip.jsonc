@@ -15,7 +15,7 @@
     // TS/JS, not stylesheets, so it never sees these.
     "material-symbols",
     "tailwindcss",
-    // Loaded BY NAME at runtime from plugins/plugins.json (infra/plugins-registry.ts),
+    // Loaded BY NAME at runtime from plugins/plugins.json (infra/tools/plugins-registry.ts),
     // so there is no import statement anywhere for knip to follow.
     "@mulmoclaude/google-plugin",
     "@mulmoclaude/x-plugin",

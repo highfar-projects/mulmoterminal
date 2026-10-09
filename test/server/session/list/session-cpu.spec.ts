@@ -4,7 +4,7 @@
 // lifetime it did not spend here.
 import { describe, it, expect } from "vitest";
 import { processTree, sessionCpuPercent } from "../../../../server/session/list/session-cpu";
-import type { ProcessRow } from "../../../../server/infra/process-list";
+import type { ProcessRow } from "../../../../server/infra/process/process-list";
 
 const row = (pid: number, ppid: number, cpuSeconds: number): ProcessRow => ({ pid, ppid, cpuSeconds });
 

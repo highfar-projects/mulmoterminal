@@ -10,7 +10,7 @@ import path from "node:path";
 import { routeCall, jsonPost } from "../../../helpers/routeCall";
 
 const installs = vi.hoisted(() => ({ count: 0 }));
-vi.mock("../../../../server/infra/install-bundled-skills.js", () => ({
+vi.mock("../../../../server/infra/fs/install-bundled-skills.js", () => ({
   installBundledSkills: () => {
     installs.count += 1;
   },

@@ -51,7 +51,7 @@ import {
 import { normalizeFontFamily } from "../../common/terminalFontFamily.js";
 import { sanitizeDefaultAgent } from "../../common/defaultAgent.js";
 import type { TerminalAgent } from "../../common/sessionAgent.js";
-import { readTextFile } from "../infra/read-text-file.js";
+import { readTextFile } from "../infra/fs/read-text-file.js";
 import { writeFileAtomicSync } from "../files/atomic-write.js";
 import { isRepoEntry } from "../../common/repoEntry.js";
 import { sanitizeGitlabHosts } from "../../common/gitlabHosts.js";

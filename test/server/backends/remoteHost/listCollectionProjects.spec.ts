@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
 import { listCollectionProjects } from "../../../../server/backends/remoteHost/handlers/listCollectionProjects.js";
 import { scopeFromCommand } from "../../../../server/backends/remoteHost/commandScope.js";
-import { initProjectRoots, projectId, resetProjectRootsForTesting } from "../../../../server/infra/project-root.js";
+import { initProjectRoots, projectId, resetProjectRootsForTesting } from "../../../../server/infra/fs/project-root.js";
 
 const WORKSPACE = "/srv/ws";
 const PROJECT = "/srv/mag2";

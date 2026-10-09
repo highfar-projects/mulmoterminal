@@ -10,7 +10,7 @@
 // what each caller has to decide: what a fresh accumulator is, how to fold a record into it, how to
 // COPY it (a shared array would be mutated behind the value already handed out), and whether a
 // first read of a big file can be answered from less than the whole thing. #1377 / #1386.
-import { forEachJsonlRecordIn } from "../../infra/jsonl-file.js";
+import { forEachJsonlRecordIn } from "../../infra/fs/jsonl-file.js";
 import { createAppendFileCache, type AppendScan, type FileStamp } from "../file-cache.js";
 import { createTranscriptSidecar } from "./transcript-sidecar.js";
 

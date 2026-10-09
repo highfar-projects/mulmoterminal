@@ -49,8 +49,8 @@ import { TOOL_GROUPS } from "../../../common/toolGroups.js";
 import { isRecord } from "../../../common/isRecord.js";
 import { byCodeUnit } from "../../../common/byCodeUnit.js";
 import { PORT } from "../../config/env.js";
-import { mulmoterminalHome } from "../../infra/mulmoterminal-home.js";
-import { spawnCapture } from "../../infra/spawnCapture.js";
+import { mulmoterminalHome } from "../../infra/fs/mulmoterminal-home.js";
+import { spawnCapture } from "../../infra/process/spawnCapture.js";
 import { bridgeCommand } from "../mcp/gui-mcp-bridge.js";
 import { museAdapter } from "./muse.js";
 

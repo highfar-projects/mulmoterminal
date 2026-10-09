@@ -15,8 +15,8 @@ import {
   openNote,
   pageNote,
   recordsHeadline,
-} from "../../../server/infra/shared-app-tool.js";
-import { HOST_TOOL_DEFINITIONS } from "../../../server/infra/host-tools.js";
+} from "../../../server/infra/tools/shared-app-tool.js";
+import { HOST_TOOL_DEFINITIONS } from "../../../server/infra/tools/host-tools.js";
 import { groupOfTool } from "../../../common/toolGroups.js";
 import { setFirestoreAccessor, setSharedCollectionsSupport } from "@mulmoclaude/core/collection/server";
 import { initCollectionsBackend } from "../../../server/backends/collections/collections.js";
@@ -364,7 +364,7 @@ describe("manageSharedApp, the tool", () => {
   // own machine, which is not where the app is served, so a path alone is nothing they can paste
   // into an invitation.
   it("prints every entrance absolute, under the prefix the router actually serves", () => {
-    const source = readFileSync(new URL("../../../server/infra/shared-app-tool.ts", import.meta.url), "utf8");
+    const source = readFileSync(new URL("../../../server/infra/tools/shared-app-tool.ts", import.meta.url), "utf8");
     const before = (index: number): string => source.slice(0, index);
     // Every slug or aid written as a PATH SEGMENT is an entrance, whatever sentence it sits in.
     const entrances = [...source.matchAll(/\$\{(?:result\.)?(?:slug|name|aid)\}/g)].filter((hit) => before(hit.index).endsWith("/"));

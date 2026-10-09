@@ -1,6 +1,6 @@
 // Pure parsing rules that were trapped behind `gh` / `git` spawns, so no test reached them.
 
-import { splitLines } from "../infra/split-lines.js";
+import { splitLines } from "../infra/fs/split-lines.js";
 
 // The PR URL from `gh pr create` output: the LAST http(s) line. gh prints the PR URL last,
 // after any tips or notices — so a tip that happens to contain an http line must not win, and

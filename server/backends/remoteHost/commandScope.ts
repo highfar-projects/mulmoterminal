@@ -20,7 +20,7 @@
 //    `workspaceScope()` at each site, even though today the two are the same value.
 import { readCommandScope } from "@mulmoclaude/core/remote-host";
 import type { JsonObject } from "@mulmoclaude/core/remote-host";
-import { rootForProjectId, workspaceScope, type ProjectScope } from "../../infra/project-root.js";
+import { rootForProjectId, workspaceScope, type ProjectScope } from "../../infra/fs/project-root.js";
 
 /** The scope a command runs in: the project it named, or the host's workspace when it named none.
  *

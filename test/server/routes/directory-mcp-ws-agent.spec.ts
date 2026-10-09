@@ -39,8 +39,8 @@ vi.mock("../../../server/session/registry.js", () => ({
   markAttachedSessionPlaced: vi.fn(),
 }));
 
-vi.mock("../../../server/infra/tmux.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../../server/infra/tmux.js")>()),
+vi.mock("../../../server/infra/process/tmux.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../server/infra/process/tmux.js")>()),
   tmuxAvailable: () => false,
   tmuxHasSession: () => false,
 }));
@@ -51,7 +51,7 @@ vi.mock("../../../server/agents/muse/muse-session.js", () => ({ museSessionExist
 
 // The directory's registered tool groups, read off Claude Code's config files on the real path.
 const registeredGuiMcpGroups = vi.fn(() => Promise.resolve(["render"]));
-vi.mock("../../../server/infra/gui-mcp-registration.js", () => ({ registeredGuiMcpGroups }));
+vi.mock("../../../server/infra/process/gui-mcp-registration.js", () => ({ registeredGuiMcpGroups }));
 
 vi.mock("../../../server/config/worktree/worktree-env.js", () => ({
   ensureWorktreeEnv: vi.fn(() => Promise.resolve({})),

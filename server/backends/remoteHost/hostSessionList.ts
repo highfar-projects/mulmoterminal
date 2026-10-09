@@ -21,7 +21,7 @@ import {
   sessionMemosHydrated,
   unplacedSessionsHydrated,
 } from "../../session/registry.js";
-import { tmuxListSessionIds } from "../../infra/tmux.js";
+import { tmuxListSessionIds } from "../../infra/process/tmux.js";
 import { sessionDisplayName } from "../../../common/sessionMemo.js";
 import type { SessionAgent } from "../../../common/sessionAgent.js";
 

@@ -18,7 +18,7 @@ import { runCheck } from "./checkRunner.js";
 import { mountBlueprintRoutes } from "./routes.js";
 import { collectionSource } from "./collectionSnapshot.js";
 import { sharedAppsFromFolders } from "./sharedAppsProvider.js";
-import { listProjectRoots } from "../infra/project-root.js";
+import { listProjectRoots } from "../infra/fs/project-root.js";
 import { sharedCollections } from "../backends/sharedApp/context.js";
 import { currentEmail } from "../backends/remoteHost/session.js";
 import { discoverCollections, storeFor } from "@mulmoclaude/core/collection/server";
@@ -31,7 +31,7 @@ import { cloneRepo } from "./installer.js";
 import { claudeTrusts } from "./trust.js";
 import { registerCompletionHook } from "../session/activity/completion-hooks.js";
 import { markSessionPlaced } from "../session/registry.js";
-import { tmuxHasSession, tmuxKillSession } from "../infra/tmux.js";
+import { tmuxHasSession, tmuxKillSession } from "../infra/process/tmux.js";
 import { CLAUDE_CWD, MULMOTERMINAL_HOME, PORT } from "../config/env.js";
 import { getCwdPresets } from "../config/config-routes.js";
 

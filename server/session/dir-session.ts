@@ -6,9 +6,9 @@
 // single answer per directory rather than a list to choose from (#1207).
 
 import path from "node:path";
-import { canonicalPath } from "../infra/canonical-path.js";
+import { canonicalPath } from "../infra/fs/canonical-path.js";
 import { isSessionAttached, type SessionOccupancy } from "../../common/sessionOccupancy.js";
-import { tmuxListSessionIds } from "../infra/tmux.js";
+import { tmuxListSessionIds } from "../infra/process/tmux.js";
 import { isTerminalAgent, type TerminalAgent } from "../../common/sessionAgent.js";
 import { isProbeSessionId } from "../agents/probe/probe-session.js";
 import type { AgentConversation } from "./list/agent-conversations.js";

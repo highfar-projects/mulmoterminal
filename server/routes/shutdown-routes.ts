@@ -30,7 +30,7 @@ export interface ShutdownRouteDeps {
   delayMs: number;
 }
 
-// SIGTERM to ourselves rather than a second shutdown implementation: infra/shutdown.ts already
+// SIGTERM to ourselves rather than a second shutdown implementation: infra/process/shutdown.ts already
 // handles it — it stops the whisper sidecar and exits 0 — so the button provably does what Ctrl+C
 // does. Duplicating any of that here is how the two copies start to disagree.
 const defaultDeps: ShutdownRouteDeps = {

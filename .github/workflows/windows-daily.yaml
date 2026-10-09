@@ -13,8 +13,8 @@
 # a schedule and manual dispatch, so the code it executes is trusted; the PR gate executes code the
 # pull request supplied and therefore keeps the runner's protection on.
 #
-# What it actually guards: server/infra/pty-env.ts branches on PATH casing ("Path"),
-# the ";" delimiter and "\" separators; server/infra/resolve-bin.ts resolves a bare
+# What it actually guards: server/infra/process/pty-env.ts branches on PATH casing ("Path"),
+# the ";" delimiter and "\" separators; server/infra/process/resolve-bin.ts resolves a bare
 # command name to an .exe on PATH before node-pty sees it (#794), and its spec spawns a
 # real PTY here; server/index.ts spawns powershell.exe; and the postinstall
 # (server/fix-pty-perms.js) runs on every install. None of that had ever executed on

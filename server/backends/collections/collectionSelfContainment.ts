@@ -19,7 +19,7 @@ import { promisify } from "node:util";
 import { storageKindFor, type CollectionStorageKind } from "@mulmoclaude/core/collection";
 import { loadCollection } from "@mulmoclaude/core/collection/server";
 import type { Express, Request, Response } from "express";
-import { errorStatus, resolveProjectRoot, type ProjectScope } from "../../infra/project-root.js";
+import { errorStatus, resolveProjectRoot, type ProjectScope } from "../../infra/fs/project-root.js";
 import { isRecord } from "../../../common/isRecord.js";
 // The wire shape is shared: the Collections pane renders this report and colours by severity, so
 // a second copy of the union here is how the two would drift while both keep compiling.

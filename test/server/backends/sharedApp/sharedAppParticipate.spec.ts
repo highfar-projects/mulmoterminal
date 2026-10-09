@@ -21,7 +21,7 @@ import { setFirestoreAccessor, setSharedCollectionsSupport } from "@mulmoclaude/
 import { chmodSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { useSharedApp } from "../../../../server/infra/use-shared-app-tool.js";
+import { useSharedApp } from "../../../../server/infra/tools/use-shared-app-tool.js";
 import { AID, bookingsPath, DEFAULT_ROWS, freshBag, ME, publishApp, slotsPath, submitFor, type Bag } from "../../../support/participateHarness.js";
 import { makeTempDir } from "../../../support/tempDir";
 

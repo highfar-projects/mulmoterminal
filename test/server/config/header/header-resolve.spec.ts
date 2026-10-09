@@ -8,7 +8,7 @@ import {
   resolveButtonCommand,
   headerHasPrButton,
 } from "../../../../server/config/header/header-resolve.js";
-import { shellQuoteFor } from "../../../../server/infra/shell-quote.js";
+import { shellQuoteFor } from "../../../../server/infra/process/shell-quote.js";
 import type { HeaderButton } from "../../../../server/config/config-schema.js";
 import {
   isResolvedFolder,

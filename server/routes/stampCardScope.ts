@@ -17,7 +17,7 @@
 // reload would be the same bug arriving later.
 import { withCardScope, TOOL_DEFINITION as PRESENT_COLLECTION, type PresentCollectionData } from "@mulmoclaude/core/collection";
 import { isRecord } from "../../common/isRecord.js";
-import { projectIdForRoot, projectScopeForCwd } from "../infra/project-root.js";
+import { projectIdForRoot, projectScopeForCwd } from "../infra/fs/project-root.js";
 
 /** The card payload lives under `data` on a tool result; `jsonData` is the narration copy some
  *  plugins send instead. Only the rendered one is stamped — the other is text for the agent.

@@ -13,7 +13,7 @@
 // path to offer, never whether that path is allowed.
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { readJsonFile } from "../../infra/read-text-file.js";
+import { readJsonFile } from "../../infra/fs/read-text-file.js";
 import { isRecord } from "../../../common/isRecord.js";
 import { isUnknownArray } from "../../../common/isUnknownArray.js";
 import { resolveIconFile, type DirIcon } from "./dir-icon.js";

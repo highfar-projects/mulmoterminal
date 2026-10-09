@@ -546,7 +546,7 @@ function runServer({ port, probedAddress, localhostIsUnambiguous, noOpen, launch
     // The address to check is the one the CHILD REPORTS, not one derived from BIND_HOST — three
     // rounds of review found three different spellings BIND_HOST can take that a guess gets
     // wrong (`::` vs `::1`, `localhost` resolving per-platform, a printed `localhost` that a
-    // browser re-resolves). server/infra/loopback.ts already argued this for its own question:
+    // browser re-resolves). server/infra/http/loopback.ts already argued this for its own question:
     // "classifying the requested string cannot be made right … asking after the fact answers all
     // of them, because the kernel has already resolved whatever was typed" (#1876).
     //

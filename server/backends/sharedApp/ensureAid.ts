@@ -37,7 +37,7 @@ export type EnsureAidResult = EnsureAidSuccess | { ok: false; problems: string[]
  *
  *  Publish's question, and it is the opposite of `ensureAid`'s. Minting is right where a
  *  declaration is being WRITTEN (`init`, and the collection tool's first schema — see
- *  `server/infra/collectionToolAid.ts`): there is no app yet, so an id that is not there is a
+ *  `server/infra/tools/collectionToolAid.ts`): there is no app yet, so an id that is not there is a
  *  blank to fill.
  *
  *  At publish there IS an app — that is what is being published — so an id that is not there is a

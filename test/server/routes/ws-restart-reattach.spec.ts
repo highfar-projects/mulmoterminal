@@ -65,8 +65,8 @@ vi.mock("../../../server/agents/grok/grok-session.js", async (importOriginal) =>
 let nowMs = 0;
 vi.spyOn(Date, "now").mockImplementation(() => nowMs);
 
-vi.mock("../../../server/infra/tmux.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../../server/infra/tmux.js")>()),
+vi.mock("../../../server/infra/process/tmux.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../server/infra/process/tmux.js")>()),
   tmuxAvailable: () => true,
   tmuxHasSession: () => mocks.tmuxHas,
 }));
@@ -88,7 +88,7 @@ vi.mock("../../../server/session/accounts/account-sessions.js", () => ({
 }));
 
 const registeredGuiMcpGroups = vi.fn(() => Promise.resolve(["render"]));
-vi.mock("../../../server/infra/gui-mcp-registration.js", () => ({ registeredGuiMcpGroups }));
+vi.mock("../../../server/infra/process/gui-mcp-registration.js", () => ({ registeredGuiMcpGroups }));
 
 vi.mock("../../../server/config/worktree/worktree-env.js", () => ({
   ensureWorktreeEnv: vi.fn(() => {

@@ -6,10 +6,10 @@
 // 2 of 22 sessions while 15 sat idle for hours with nobody attached.
 //
 // So the rule is `reapableTmuxSession`: nothing about the past, only whether anything is USING it
-// now (infra/tmux.ts). What is lost when one is ended is the work in flight and the scrollback; the
+// now (infra/process/tmux.ts). What is lost when one is ended is the work in flight and the scrollback; the
 // conversation is on disk and resumes without the tmux session, which is what made "it has a
 // transcript" the wrong reason to keep it alive.
-import { reapableTmuxSession, tmuxAttachedCounts, tmuxKillSession, tmuxListSessionIds, tmuxSessionActivity } from "../../infra/tmux.js";
+import { reapableTmuxSession, tmuxAttachedCounts, tmuxKillSession, tmuxListSessionIds, tmuxSessionActivity } from "../../infra/process/tmux.js";
 import { reapIdleSeconds, reapSweepEnabled } from "../../../common/sessionReap.js";
 import { SESSION_ID_RE } from "../../config/env.js";
 import { ptys } from "../registry.js";

@@ -11,7 +11,7 @@ import { lstatSync, mkdirSync, readdirSync, renameSync, writeFileSync, type Stat
 import { randomUUID } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
-import { removeQuietly } from "../infra/fs-cleanup.js";
+import { removeQuietly } from "../infra/fs/fs-cleanup.js";
 import { hasErrnoCode, messageOf } from "../errors.js";
 import { SESSION_ID_RE } from "../config/env.js";
 import { extensionForMime } from "../backends/remoteHost/attachment-path.js";

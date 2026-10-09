@@ -13,7 +13,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { MULMOTERMINAL_HOME } from "../../config/env.js";
 import { isRecord } from "../../../common/isRecord.js";
-import { createKeySerializer } from "../../infra/serialize-per-key.js";
+import { createKeySerializer } from "../../infra/async/serialize-per-key.js";
 import type { AppendScan, FileStamp } from "../file-cache.js";
 
 const SIDECAR_ROOT = path.join(MULMOTERMINAL_HOME, "transcript-index");

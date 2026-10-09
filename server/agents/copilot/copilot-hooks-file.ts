@@ -30,7 +30,7 @@
 // evidence written to disk can be copied by whoever can write that directory, and evidence held in
 // memory dies with the process. A shared config file in the user's home has no OS-level owner.
 //
-// The same claim, in the same shape, is what `server/infra/install-bundled-skills.ts` makes for the
+// The same claim, in the same shape, is what `server/infra/fs/install-bundled-skills.ts` makes for the
 // skill directories it installs — a name plus a marker, refusing a same-named directory without
 // one. This file is stricter than that precedent (contents, marker, and for the one unlink, memory)
 // and the residual is identical: a user who writes our marker, or writes a hook file whose every
@@ -138,7 +138,7 @@ export const copilotHome = (): string => agentHome("copilot");
 export const copilotHooksFile = (home: string = copilotHome()): string => path.join(home, "hooks", "mulmoterminal.json");
 
 // Naming a file is not owning it. The same pattern as the bundled-skills installer
-// (server/infra/install-bundled-skills.ts): a marker beside the file says we wrote it, and a
+// (server/infra/fs/install-bundled-skills.ts): a marker beside the file says we wrote it, and a
 // same-named file WITHOUT one is someone else's — left alone rather than overwritten, because a
 // user's own hooks are not ours to drop (Codex review on #2063). A dotfile, so copilot's `*.json`
 // scan never reads it.

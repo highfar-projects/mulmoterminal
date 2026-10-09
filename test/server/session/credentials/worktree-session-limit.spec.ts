@@ -11,8 +11,8 @@ import { rmDirRetrying, GIT_TEST_TIMEOUT_MS } from "../../git/wtTestUtil.js";
 
 // The real tmux server must not be probed from a test: mocked to "nobody holds anything", which
 // leaves the in-process socket as the only signal — exactly the case being set up below.
-vi.mock("../../../../server/infra/tmux.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../../../server/infra/tmux.js")>()),
+vi.mock("../../../../server/infra/process/tmux.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../../server/infra/process/tmux.js")>()),
   tmuxAttachedCounts: () => new Map<string, number>(),
 }));
 

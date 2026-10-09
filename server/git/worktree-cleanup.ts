@@ -3,10 +3,10 @@
 // common/worktreeCleanup.ts; this only reads git, tmux and the session records.
 import { existsSync } from "node:fs";
 import { baseStartPoint, defaultBaseBranch, git, listWorktrees, repoRoot, type WorktreeInfo } from "./worktrees.js";
-import { mapConcurrent } from "../infra/mapConcurrent.js";
-import { isWithin } from "../infra/path-within.js";
-import { canonicalPath } from "../infra/canonical-path.js";
-import { tmuxAttachedCounts, tmuxAvailable, tmuxPaneCwdsAsync } from "../infra/tmux.js";
+import { mapConcurrent } from "../infra/async/mapConcurrent.js";
+import { isWithin } from "../infra/fs/path-within.js";
+import { canonicalPath } from "../infra/fs/canonical-path.js";
+import { tmuxAttachedCounts, tmuxAvailable, tmuxPaneCwdsAsync } from "../infra/process/tmux.js";
 import { dirSession, survivorSnapshot } from "../session/dir-session.js";
 import { ptys } from "../session/registry.js";
 import { IGNORED_LISTED_MAX, worktreeStatus, type WorktreeCleanupRow } from "../../common/worktreeCleanup.js";

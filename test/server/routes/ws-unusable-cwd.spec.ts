@@ -10,8 +10,8 @@ import path from "node:path";
 import type { WebSocket } from "ws";
 
 let tmuxSessions = new Set<string>();
-vi.mock("../../../server/infra/tmux.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../../server/infra/tmux.js")>()),
+vi.mock("../../../server/infra/process/tmux.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../server/infra/process/tmux.js")>()),
   tmuxHasSession: (id: string) => tmuxSessions.has(id),
 }));
 

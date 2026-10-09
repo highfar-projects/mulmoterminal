@@ -11,7 +11,7 @@ import { pushWorktree, createOrOpenPR } from "./worktree-pr.js";
 import { requestOriginAllowed } from "../routes/same-origin-guard.js";
 import { isIssueNumber } from "../../common/prPhase.js";
 import { dirSession, survivorSnapshot } from "../session/dir-session.js";
-import { tmuxAttachedCounts } from "../infra/tmux.js";
+import { tmuxAttachedCounts } from "../infra/process/tmux.js";
 import { requestBody } from "../routes/requestBody.js";
 import { expandTilde } from "../files/pathContainment.js";
 import { cleanupRowAt, deleteBranchIfAt, worktreeCleanupRows } from "./worktree-cleanup.js";

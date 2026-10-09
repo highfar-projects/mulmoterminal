@@ -82,7 +82,7 @@ describe("restartPlan", () => {
     });
 
     it("is the code server/index.ts actually exits with", () => {
-      // Kept in sync with PORT_IN_USE_EXIT_CODE in server/infra/server-exit.ts, which bin/ also
+      // Kept in sync with PORT_IN_USE_EXIT_CODE in server/infra/process/server-exit.ts, which bin/ also
       // reads. A drift here turns the rule above into a no-op that still passes its own tests.
       expect(PORT_IN_USE_EXIT_CODE).toBe(75);
     });

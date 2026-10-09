@@ -20,7 +20,7 @@ import { loadCollection, type LoadedCollection } from "@mulmoclaude/core/collect
 import type { FeedSummary } from "@mulmoclaude/core/collection";
 import { writeFileAtomic } from "../../files/atomic-write.js";
 import { feedSummary } from "./feed-summary.js";
-import { errorStatus, resolveProjectRoot } from "../../infra/project-root.js";
+import { errorStatus, resolveProjectRoot } from "../../infra/fs/project-root.js";
 import { syncCalendarCollection } from "../calendar/calendarRefresh.js";
 import type { CollectionRefreshResult } from "../../../common/collectionRefresh.js";
 

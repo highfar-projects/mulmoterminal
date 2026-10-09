@@ -5,7 +5,7 @@
 // what lets the conversation outlive the browser tab that started it.
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
-import { mulmoterminalHome } from "../infra/mulmoterminal-home.js";
+import { mulmoterminalHome } from "../infra/fs/mulmoterminal-home.js";
 import { messageLine, parseRoom } from "./room-log.js";
 import { clipMessage, isRoomId, type RoomMessage } from "../../common/roomMessage.js";
 

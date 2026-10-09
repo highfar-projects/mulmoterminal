@@ -5,7 +5,7 @@
 import { git, repoRoot, defaultBaseBranch, isManagedWorktree } from "./worktrees.js";
 import { dirtyCount } from "./dirty-count.js";
 import { capPatch, parseNumstatLine } from "./git-parse.js";
-import { splitLines } from "../infra/split-lines.js";
+import { splitLines } from "../infra/fs/split-lines.js";
 
 export interface WorktreeFile {
   path: string;

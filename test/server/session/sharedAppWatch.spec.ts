@@ -18,7 +18,7 @@
 // "the first snapshot is not a change" can be checked at all.
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from "vitest";
 import { setFirestoreAccessor, setSharedCollectionsSupport } from "@mulmoclaude/core/collection/server";
-import { useSharedApp } from "../../../server/infra/use-shared-app-tool.js";
+import { useSharedApp } from "../../../server/infra/tools/use-shared-app-tool.js";
 import { startWatch, stopWatchesFor } from "../../../server/session/shared-app-watches.js";
 import { joinApp } from "../../../server/backends/sharedApp/participate/app.js";
 import { AID, bookingsPath, freshBag, ME, publishApp, slotsPath, type Bag } from "../../support/participateHarness.js";

@@ -12,7 +12,7 @@
 // Read routes (list + detail), write routes (CRUD / actions / custom views), and
 // the registry Discover routes all live here. The manageCollection MCP tool (the
 // agent's data plane over the same engine) is a host tool — see
-// server/infra/collection-tool.ts + the dispatch route in server/index.ts.
+// server/infra/tools/collection-tool.ts + the dispatch route in server/index.ts.
 import path from "node:path";
 import type { Express, Request, Response, NextFunction, RequestHandler } from "express";
 import {
@@ -67,7 +67,7 @@ import { refuseReadOnlyCollection, resolveActionableRecord, resolveItemAction } 
 import { clampCapabilities, isCapability, mintViewToken, requireViewToken } from "./viewToken.js";
 // The shared manageCollection binding — the query route reuses its queryItems
 // action so a view can never do more than the agent's own data plane.
-import { manageCollectionHandlerFor } from "../../infra/collection-tool.js";
+import { manageCollectionHandlerFor } from "../../infra/tools/collection-tool.js";
 import { parseListParam, sendToolResult } from "./viewDataParams.js";
 import { hostLogger } from "../hostLogger.js";
 import { getCwdPresets } from "../../config/config-routes.js";
@@ -81,7 +81,7 @@ import {
   projectRootsConfigured,
   resolveProjectRoot,
   type ProjectScope,
-} from "../../infra/project-root.js";
+} from "../../infra/fs/project-root.js";
 import { isRecord } from "../../../common/isRecord.js";
 import { claudeUserSkillsDir } from "../../session/project-dir.js";
 import { requestBody } from "../../routes/requestBody.js";
@@ -153,7 +153,7 @@ export function initCollectionsBackend(deps: { workspace: string; knownProjects?
       // This is also the ONLY place the answer is given. Where the agent is told to AUTHOR follows
       // from it inside core (`authoringTarget`), because MulmoTerminal passes no
       // `stagedSkillAuthoring` — a root that read from staging while authoring directly would
-      // serve a stale view instead of the one it just wrote (server/infra/collection-tool.ts).
+      // serve a stale view instead of the one it just wrote (server/infra/tools/collection-tool.ts).
       skillsStagingDir: skillsStagingDirFor,
       // Workspace-relative archive dir (removed collections move here).
       archiveDir: "archive",

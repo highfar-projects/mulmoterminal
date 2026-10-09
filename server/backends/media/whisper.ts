@@ -13,7 +13,7 @@
 // the default model and treats "binaries present" as the opt-in (clicking the mic
 // downloads the model on demand).
 import path from "node:path";
-import { hasBinary as binaryOnPath } from "../../infra/has-binary.js";
+import { hasBinary as binaryOnPath } from "../../infra/process/has-binary.js";
 import type { Express, Request, Response } from "express";
 import { createWhisper, DEFAULT_WHISPER_MODEL, type WhisperLogger, type WhisperModelName } from "@mulmoclaude/core/whisper";
 import type { VoiceInputStatus } from "../../../common/voiceInputStatus.js";
@@ -35,7 +35,7 @@ function service(): ReturnType<typeof createWhisper> {
 
 // Probe a binary once (memoized) — no child process. Binaries don't appear mid-session, so
 // caching is safe and keeps GET /api/transcribe/model cheap. The lookup itself is shared with the
-// rate-limit probe (infra/has-binary.ts); only the memoization is local to this caller.
+// rate-limit probe (infra/process/has-binary.ts); only the memoization is local to this caller.
 const binaryCache = new Map<string, boolean>();
 function hasBinary(bin: string): boolean {
   const cached = binaryCache.get(bin);

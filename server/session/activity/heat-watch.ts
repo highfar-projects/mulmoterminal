@@ -4,7 +4,7 @@
 // is connected and the setting is not "off" — an unwatched server spawns nothing.
 import type { HeatLevel } from "../../../common/playfulEffects.js";
 import { emptyHeatTrack, nextHeat, type HeatTrack } from "./heat-track.js";
-import type { ProcessRow } from "../../infra/process-list.js";
+import type { ProcessRow } from "../../infra/process/process-list.js";
 import { sessionCpuPercent } from "../list/session-cpu.js";
 
 export interface HeatWatchDeps {

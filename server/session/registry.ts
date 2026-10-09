@@ -30,7 +30,7 @@ import { normalizeMemo } from "../../common/sessionMemo.js";
 import { applySessionCollection, sessionCollectionLine, sessionCollectionRecord } from "./session-collections.js";
 import type { SessionCollection } from "../../common/sessionCollection.js";
 import { isSafeSlug } from "@mulmoclaude/core/collection";
-import { forEachJsonlRecord } from "../infra/jsonl-file.js";
+import { forEachJsonlRecord } from "../infra/fs/jsonl-file.js";
 import { devTerminalCwdLine, hydrateCwdsInto } from "./dev-terminal-cwds.js";
 import { parseSessionToolGroups, sessionToolGroupLine, TOOL_GROUP_RESET, type SessionToolGroup } from "./session-tool-groups.js";
 import { allToolsLogLine, parseAllToolsLog } from "./all-tools-log.js";

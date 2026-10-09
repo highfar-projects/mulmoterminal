@@ -67,7 +67,7 @@ import { isRecord } from "../../../common/isRecord.js";
 import { readString } from "../../../common/readString.js";
 import path from "node:path";
 import { CURSOR_HOOK_EVENTS } from "./cursor-hook.js";
-import { mulmoterminalHome } from "../../infra/mulmoterminal-home.js";
+import { mulmoterminalHome } from "../../infra/fs/mulmoterminal-home.js";
 import { messageOf } from "../../errors.js";
 import { createPublishedFiles, writeAtomically } from "../owned-file.js";
 import { agentHome } from "../agent-homes.js";

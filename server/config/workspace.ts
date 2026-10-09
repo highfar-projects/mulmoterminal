@@ -2,8 +2,8 @@ import { statSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { CLAUDE_CWD } from "./env.js";
-import { canonicalDir } from "../infra/path-within.js";
-import { cwdProblemMessage, diagnoseSpawnCwd } from "../infra/spawn-cwd.js";
+import { canonicalDir } from "../infra/fs/path-within.js";
+import { cwdProblemMessage, diagnoseSpawnCwd } from "../infra/process/spawn-cwd.js";
 import { describeValue } from "../../common/readString.js";
 import { expandTilde } from "../files/pathContainment.js";
 

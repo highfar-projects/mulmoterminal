@@ -76,7 +76,7 @@ MulmoTerminal の検査（`records.ts` の移行ゲート、`scopedFields.ts` �
   そこは設計上いちばん安全な枝なので、`found: true` のときにだけ現れる振る舞い（回答を出し戻す、
   もう使った操作を隠す）は**一度も走らないまま緑になる**
 
-一次資料は `server/infra/shared-app-tool.ts` の `manageSharedApp` prompt（ここは要約である）。
+一次資料は `server/infra/tools/shared-app-tool.ts` の `manageSharedApp` prompt（ここは要約である）。
 
 **破れ方**: 「publish が拒否するから大丈夫」と書いたルールの穴。publish を通さずに
 Firestore へ直接書く経路は常にある（それが Functions を使わない設計の代償である）。

@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 
 import { TOOL_GROUPS, groupOfTool } from "../../../common/toolGroups.js";
-import { toolSummaries } from "../../../server/infra/plugins-registry.js";
+import { toolSummaries } from "../../../server/infra/tools/plugins-registry.js";
 
 // The map is hand-maintained against the registry, so it can silently fall behind. This is the
 // one check that notices — it does not force a classification (ungrouped is a legal answer),

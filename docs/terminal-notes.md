@@ -14,7 +14,7 @@ layers — each with its own quirks — and a change in any one can silently bre
 browser  ── @xterm/xterm (canvas renderer, addons)   src/composables/useTerminalConnections.ts
    │  WebSocket  { type:"input"|"output"|... }        src/components/Terminal.vue
 server   ── node-pty  ── tmux (persistence)  ── agent (claude / codex / $SHELL)
-              server/session/*.ts               server/infra/tmux.ts
+              server/session/*.ts               server/infra/process/tmux.ts
 ```
 
 - The **browser** runs xterm.js. Its durable runtime (socket + xterm instance) lives in the
@@ -137,7 +137,7 @@ change one and change the other (#834).
   every persistent session — the wheel report goes to *tmux*, not to the program: a pane with no
   mouse mode of its own (a plain shell) makes tmux enter copy-mode, whose default is `send -X
   -N 5 scroll-up`. Five lines per report is the "it jumps a paragraph at a time" complaint. So
-  `WHEEL_SCROLL_BINDINGS` (server/infra/tmux.ts) rebinds it to **one line**, and
+  `WHEEL_SCROLL_BINDINGS` (server/infra/process/tmux.ts) rebinds it to **one line**, and
   `TRACKPAD_GAIN = 1.5` (mouseReports.ts) raises the notch rate to keep the same overall speed
   — 1.5 lines per cell of finger travel. **Change one and the scroll SPEED changes**, not just
   its smoothness. A pane running a mouse program (Claude Code) never reaches copy-mode (tmux
@@ -370,7 +370,7 @@ line means a third mechanism.
 sequences to the outer terminal (our xterm) when told the outer terminal supports them. Two cases
 have already bitten us, with the **same shape**:
 
-| Feature | What breaks without it | Fix in `server/infra/tmux.ts` | Issue |
+| Feature | What breaks without it | Fix in `server/infra/process/tmux.ts` | Issue |
 |---|---|---|---|
 | OSC 52 clipboard | Claude's auto-copy never reaches the browser clipboard | `terminal-overrides` `Ms` capability | #206 |
 | OSC 8 hyperlinks | Claude statusline `PR #NNNN` (and any OSC 8 link) isn't clickable | `set -as terminal-features '*:hyperlinks'` | #783 |
@@ -431,5 +431,5 @@ looking) — flag them for QA on the release.
 
 `docs/spawn-architecture.md` (session lifecycle), `docs/gui-protocol-spike.md`,
 `docs/remote-host-protocol.md` (what the phone can ask of a session),
-`src/composables/useTerminalConnections.ts`, `server/infra/tmux.ts`, `server/session/*.ts`.
+`src/composables/useTerminalConnections.ts`, `server/infra/process/tmux.ts`, `server/session/*.ts`.
 Issues: #206, #263/#264/#293, #265/#266, #434, #445, #572, #729, #737, #772/#780, #776, #778, #782, #783/#785, #1073.

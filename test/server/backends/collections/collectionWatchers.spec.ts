@@ -18,7 +18,7 @@ import {
   watchedCollectionRootsForTesting,
 } from "../../../../server/backends/collections/collectionWatchers.js";
 import path from "node:path";
-import { initProjectRoots, resetProjectRootsForTesting } from "../../../../server/infra/project-root.js";
+import { initProjectRoots, resetProjectRootsForTesting } from "../../../../server/infra/fs/project-root.js";
 
 // Through `path.resolve`, never as POSIX literals: the code under test canonicalises roots
 // with the platform's own path, which drive-qualifies on Windows (`D:\srv\ws`), so a literal

@@ -17,7 +17,7 @@ Each of these runs the same engine as MulmoClaude, with host specifics injected:
 | Subsystem | Core entry | MulmoTerminal wiring |
 | --- | --- | --- |
 | Collection engine (discovery, CRUD, actions, views, registry) | `@mulmoclaude/core/collection(/server)` | `server/backends/collections/collections.ts` |
-| `manageCollection` MCP tool (agent data plane: getItems with computed fields, validated putItems, getOntology, schemaDocs, getSchema/putSchema) | `@mulmoclaude/core/collection/server` | `server/infra/collection-tool.ts` + host-tool dispatch in `server/index.ts` (#384) |
+| `manageCollection` MCP tool (agent data plane: getItems with computed fields, validated putItems, getOntology, schemaDocs, getSchema/putSchema) | `@mulmoclaude/core/collection/server` | `server/infra/tools/collection-tool.ts` + host-tool dispatch in `server/index.ts` (#384) |
 | Workspace setup (help docs + preset-skill seeding) | `@mulmoclaude/core/workspace-setup` | `server/backends/workspaceSetup.ts` (#122) |
 | File-change publisher | `@mulmoclaude/core/file-change` | `server/backends/files/fileChange.ts` (#123) |
 | Notifier + collection completion watchers (bell UI) | `@mulmoclaude/core/notifier`, `/collection-watchers` | `server/backends/notifier.ts`, `collectionWatchers.ts` (#124) |

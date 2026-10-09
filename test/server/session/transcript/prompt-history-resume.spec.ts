@@ -12,7 +12,7 @@ import os from "node:os";
 import path from "node:path";
 import { forgetHistoryMemo, sessionPrompts } from "../../../../server/session/session-reads.js";
 import { claudePromptScan, foldClaudePrompt, promptWindow, PROMPT_SCAN_LIMIT } from "../../../../server/session/transcript/prompt-history.js";
-import { forEachJsonlRecord } from "../../../../server/infra/jsonl-file.js";
+import { forEachJsonlRecord } from "../../../../server/infra/fs/jsonl-file.js";
 import type { PromptEntry } from "../../../../common/promptHistory.js";
 
 const SESSION = "11111111-2222-4333-8444-555555555555";

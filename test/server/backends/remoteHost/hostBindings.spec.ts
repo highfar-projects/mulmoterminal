@@ -25,8 +25,8 @@ const { initRemoteHostBackend, sessionCwd, markUnplacedSession, tmuxHeldSessionI
 vi.mock("../../../../server/backends/remoteHost/index.js", () => ({ initRemoteHostBackend }));
 // Only the session listing is stubbed; shelling out to the real tmux would make this spec depend
 // on whatever sessions happen to be running on the machine it is executed on.
-vi.mock("../../../../server/infra/tmux.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../../../server/infra/tmux.js")>()),
+vi.mock("../../../../server/infra/process/tmux.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../../server/infra/process/tmux.js")>()),
   tmuxHeldSessionIdsAsync,
 }));
 // `ptys` stays the REAL map — it is half of the lookup under test. Only the persisted side is

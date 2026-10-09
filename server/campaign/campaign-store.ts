@@ -8,7 +8,7 @@
 import { appendFileSync, closeSync, fsyncSync, mkdirSync, openSync, readFileSync, readdirSync } from "node:fs";
 import { isRecord } from "../../common/isRecord.js";
 import path from "node:path";
-import { mulmoterminalHome } from "../infra/mulmoterminal-home.js";
+import { mulmoterminalHome } from "../infra/fs/mulmoterminal-home.js";
 import { parseCampaignLog, recordLine, type CampaignRecord } from "./campaign-log.js";
 
 const CAMPAIGNS_DIR = "campaigns";

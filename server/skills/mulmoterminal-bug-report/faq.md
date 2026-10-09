@@ -39,7 +39,7 @@ take a plain CR. Suspect a bug only when the setting and the observed behaviour 
 
 ## My sessions are gone after a restart
 
-source: server/infra/tmux.ts
+source: server/infra/process/tmux.ts
 guide: docs/guide/en/basics.md
 
 Sessions survive a server restart **because of tmux**. Check whether it is installed (`tmux -V`).
@@ -71,7 +71,7 @@ bug.
 
 ## Can't select or copy text that scrolled off screen (or no scrollbar) in a Claude/Codex terminal
 
-source: server/infra/tmux.ts
+source: server/infra/process/tmux.ts
 source: src/composables/useTerminalConnections.ts
 source: docs/terminal-notes.md
 

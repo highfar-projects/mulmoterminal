@@ -22,7 +22,7 @@ import {
   resolveProjectRoot,
   resetProjectRootsForTesting,
   workspaceScope,
-} from "../../../server/infra/project-root.js";
+} from "../../../server/infra/fs/project-root.js";
 import { makeTempDir } from "../../support/tempDir";
 
 // Only `resolveProjectRoot`'s parameter type is exercised, so a bare object is the whole

@@ -30,8 +30,8 @@ exists via its own lookup, then calls `CreateProcessW(nullptr, cmdline, …)`, w
 own PATH search and appends `.exe`. A command can therefore pass the gate on one file and run
 a different one — which is how an extensionless shim "works" by accident.
 
-→ `server/infra/resolve-bin.ts` resolves the name before node-pty sees it, and
-`server/infra/cmd-escape.ts` wraps a batch target in `cmd.exe /d /s /c`. Both are reached from
+→ `server/infra/process/resolve-bin.ts` resolves the name before node-pty sees it, and
+`server/infra/process/cmd-escape.ts` wraps a batch target in `cmd.exe /d /s /c`. Both are reached from
 the single `spawnPty()` in `server/session/pty/pty-spawn.ts` (#794, #798).
 
 **cmd.exe re-parses the command line before the child's CRT does.** `\"` — the CRT's escape,
@@ -54,7 +54,7 @@ containment guard on a guess.
 **A prefix is not containment.** `…\project-old` starts with `…\project` as a string. The
 separator is what makes the check a boundary.
 
-→ `server/infra/path-within.ts` — `isWithin` / `isStrictlyWithin` / `isSamePath`. Use these
+→ `server/infra/fs/path-within.ts` — `isWithin` / `isStrictlyWithin` / `isSamePath`. Use these
 rather than hand-rolling `target.startsWith(base + path.sep)`; several callers are security
 boundaries, and the lexical answer still needs a realpath pass for symlinks.
 
@@ -159,7 +159,7 @@ back, which is how a spec that already called it still compared `RUNNER~1` again
 
 **`process.env` is case-insensitive, a copy of it is not.** Windows spells it `Path` and
 `ComSpec`; `Object.entries(process.env)` keeps that casing, so `copy.PATH` is `undefined`.
-→ `envValue()` in `server/infra/pty-env.ts`.
+→ `envValue()` in `server/infra/process/pty-env.ts`.
 
 ## Machine metrics
 

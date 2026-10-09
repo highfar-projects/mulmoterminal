@@ -10,7 +10,7 @@ import { captureTerminalScreen } from "./hostScreens.js";
 import { decideLaunchTerminal, NO_BROWSER_ERROR } from "./launchTerminal.js";
 import { canClearInputBox } from "./terminalInput.js";
 import { activity, markUnplacedSession, ptys } from "../../session/registry.js";
-import { tmuxHeldSessionIdsAsync } from "../../infra/tmux.js";
+import { tmuxHeldSessionIdsAsync } from "../../infra/process/tmux.js";
 import { agentOfSession, cwdOfSession } from "../../session/list/session-lookup.js";
 import type { SpawnIssueSession } from "../../session/spawn/issue-session-spawn.js";
 import type { SpawnedSession } from "../../git/issue-work.js";

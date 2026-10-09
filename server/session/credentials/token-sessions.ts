@@ -4,7 +4,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { MULMOTERMINAL_HOME, SESSION_ID_RE } from "../../config/env.js";
 import { hasErrnoCode, messageOf } from "../../errors.js";
-import { forEachJsonlRecord } from "../../infra/jsonl-file.js";
+import { forEachJsonlRecord } from "../../infra/fs/jsonl-file.js";
 import { trackPersistQueue } from "../reaping/persist-drain.js";
 import { applyTokenSession, tokenSessionLine, tokenSessionRecord } from "./token-session-log.js";
 

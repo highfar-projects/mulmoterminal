@@ -11,7 +11,7 @@
 // getting that right is a file that is a few hundred bytes on every machine measured.
 import { stat } from "node:fs/promises";
 import path from "node:path";
-import { forEachJsonlRecord } from "../../infra/jsonl-file.js";
+import { forEachJsonlRecord } from "../../infra/fs/jsonl-file.js";
 
 const SESSION_INDEX_FILE = "session_index.jsonl";
 

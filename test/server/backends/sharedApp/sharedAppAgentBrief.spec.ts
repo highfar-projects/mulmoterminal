@@ -21,7 +21,7 @@
 import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
 import { appViewTierPath, viewConfigDocId } from "@receptron/sharedapp";
 import { setFirestoreAccessor, setSharedCollectionsSupport } from "@mulmoclaude/core/collection/server";
-import { useSharedApp } from "../../../../server/infra/use-shared-app-tool.js";
+import { useSharedApp } from "../../../../server/infra/tools/use-shared-app-tool.js";
 import { AID, freshBag, ME, publishApp, type Bag } from "../../../support/participateHarness.js";
 import { makeTempDir } from "../../../support/tempDir";
 

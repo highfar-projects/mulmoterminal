@@ -8,7 +8,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { forEachJsonlRecord } from "../../../../server/infra/jsonl-file";
+import { forEachJsonlRecord } from "../../../../server/infra/fs/jsonl-file";
 import {
   agentConversationLine,
   agentConversationRecord,

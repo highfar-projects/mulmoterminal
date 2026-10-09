@@ -15,7 +15,7 @@ import path from "node:path";
 import { initArtifactsBackend } from "../../../server/backends/plugins/artifacts.js";
 import { initOpenPathBackend, resetOpenPathBackend } from "../../../server/backends/files/openPath.js";
 import { RENDER_BUDGET_MS } from "@gui-chat-plugin/shapescript/render";
-import { RENDER_SHAPE_SCRIPT, runRenderShapeScript } from "../../../server/infra/shapescript-render-tool.js";
+import { RENDER_SHAPE_SCRIPT, runRenderShapeScript } from "../../../server/infra/tools/shapescript-render-tool.js";
 import { makeTempDir } from "../../support/tempDir";
 
 // Module scope, not `beforeAll`: `it.runIf` is evaluated when the file is COLLECTED,

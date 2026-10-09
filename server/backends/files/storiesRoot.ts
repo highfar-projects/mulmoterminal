@@ -5,7 +5,7 @@
 // the notes" needs (receptron/mulmoclaude#3014). The launcher puts the directory the user ran the
 // command in into CLAUDE_CWD (bin/cli-args.js, chooseCwd), so the workspace IS that directory.
 import { createHash } from "node:crypto";
-import { canonicalPath } from "../../infra/canonical-path.js";
+import { canonicalPath } from "../../infra/fs/canonical-path.js";
 
 /** Enough of the digest to be collision-free among the handful of directories one machine ever
  *  serves, short enough to read in a card payload. */

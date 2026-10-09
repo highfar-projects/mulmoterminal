@@ -17,8 +17,8 @@ import { translationWorkerIds, markSessionToolGroup, sessionToolGroups, markAllT
 import { isToolGroup, TOOL_GROUPS, type ToolGroup } from "../../common/toolGroups.js";
 import { isRecord } from "../../common/isRecord.js";
 import { entitledToolGroups, bridgeResolvableSessions, resolveBridgeSession } from "../session/bridge-session.js";
-import { ancestorPids } from "../infra/process-tree.js";
-import { tmuxPanePids } from "../infra/tmux.js";
+import { ancestorPids } from "../infra/process/process-tree.js";
+import { tmuxPanePids } from "../infra/process/tmux.js";
 import { submitTranslation } from "../session/scheduled/translation-worker.js";
 import { translationSubmitOutcome } from "../session/scheduled/translation-submit.js";
 

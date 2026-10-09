@@ -15,7 +15,7 @@ import path from "node:path";
 import { isRecord } from "../../../common/isRecord.js";
 import { byCodeUnit } from "../../../common/byCodeUnit.js";
 import { cleanTitle, parseJsonRecord } from "../transcript-head.js";
-import { readTailLines } from "../../infra/jsonl-file.js";
+import { readTailLines } from "../../infra/fs/jsonl-file.js";
 import { encodeGrokCwd, isGrokConversationId } from "./grok-session.js";
 
 const DEFAULT_TITLE = "Grok session";

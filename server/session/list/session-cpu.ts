@@ -5,7 +5,7 @@
 // CPU TIME, not `pcpu`: on Linux `pcpu` is the average over the process's whole life, so a dev
 // server that was quiet for an hour reads as quiet while it spins now. The change in cumulative
 // CPU time between two listings is the same on both platforms.
-import type { ProcessRow } from "../../infra/process-list.js";
+import type { ProcessRow } from "../../infra/process/process-list.js";
 
 const childrenByParent = (rows: readonly ProcessRow[]): Map<number, number[]> => {
   const children = new Map<number, number[]>();
