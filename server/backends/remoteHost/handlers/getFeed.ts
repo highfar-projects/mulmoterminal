@@ -17,7 +17,7 @@ import type { CommandHandlers, JsonObject } from "@mulmoclaude/core/remote-host"
 import { clampLimit, clampOffset, deriveItems, pageResult } from "../collectionPage.js";
 import { readString } from "../../../../common/readString.js";
 import { scopeFromCommand } from "../commandScope.js";
-import type { ProjectScope } from "../../../infra/project-root.js";
+import type { ProjectScope } from "../../../infra/fs/project-root.js";
 
 export interface GetFeedDeps {
   listFeeds: typeof listFeeds;

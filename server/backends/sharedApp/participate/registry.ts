@@ -13,7 +13,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { isRecord } from "../../../../common/isRecord.js";
-import { mulmoterminalHome } from "../../../infra/mulmoterminal-home.js";
+import { mulmoterminalHome } from "../../../infra/fs/mulmoterminal-home.js";
 import { serializeBy } from "../serialize.js";
 
 /** One remembered app. The slug is the key: it is what a person is given and what they say. */

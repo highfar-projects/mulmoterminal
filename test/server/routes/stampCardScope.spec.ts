@@ -7,7 +7,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
 import { stampCardScope, priorCardOf } from "../../../server/routes/stampCardScope.js";
-import { initProjectRoots, projectId, resetProjectRootsForTesting } from "../../../server/infra/project-root.js";
+import { initProjectRoots, projectId, resetProjectRootsForTesting } from "../../../server/infra/fs/project-root.js";
 
 const WORKSPACE = "/srv/ws";
 const PROJECT = "/srv/mag2";

@@ -13,7 +13,7 @@ import { readFile, stat } from "node:fs/promises";
 import { realpathSync } from "node:fs";
 
 import { getWorkspaceRoot } from "@mulmoclaude/core/collection/server";
-import type { ProjectScope } from "../../infra/project-root.js";
+import type { ProjectScope } from "../../infra/fs/project-root.js";
 
 import { containedPath, realContainedWithin } from "../../files/pathContainment.js";
 

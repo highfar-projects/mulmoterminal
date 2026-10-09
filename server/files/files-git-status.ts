@@ -7,7 +7,7 @@ import type { Express } from "express";
 import { MAX_GIT_STATUS_ENTRIES, type FileGitStatus } from "../../common/fileGitStatus.js";
 import { git } from "../git/worktrees.js";
 import { parseStatusEntries } from "../git/statusEntries.js";
-import { coalesceByKey } from "../infra/coalesce-by-key.js";
+import { coalesceByKey } from "../infra/async/coalesce-by-key.js";
 import { resolveContained } from "./pathContainment.js";
 
 const NOT_A_REPO: FileGitStatus = { repo: false, files: {} };

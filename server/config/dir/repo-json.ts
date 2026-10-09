@@ -10,7 +10,7 @@
 // or a path is allowed; those rules stay written once, where they already are.
 import path from "node:path";
 import { existsSync } from "node:fs";
-import { readJsonFile } from "../../infra/read-text-file.js";
+import { readJsonFile } from "../../infra/fs/read-text-file.js";
 import { parseRepoJson, type RepoIcon } from "../../../common/repoJson.js";
 import { chromeFromColor } from "../../../common/chromeFromColor.js";
 import { isRemoteDirIconUrl } from "../../../common/dirIcon.js";

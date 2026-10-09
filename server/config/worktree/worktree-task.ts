@@ -4,8 +4,8 @@
 // per-tree environment reservation (#1367) — and the second cannot import the first without a
 // cycle through git/worktrees.ts. A path rule, no disk, no git.
 import path from "node:path";
-import { isStrictlyWithin } from "../../infra/path-within.js";
-import { mulmoterminalHome } from "../../infra/mulmoterminal-home.js";
+import { isStrictlyWithin } from "../../infra/fs/path-within.js";
+import { mulmoterminalHome } from "../../infra/fs/mulmoterminal-home.js";
 
 /** The managed worktree root. */
 export const worktreesRootDir = (): string => path.join(mulmoterminalHome(), "worktrees");

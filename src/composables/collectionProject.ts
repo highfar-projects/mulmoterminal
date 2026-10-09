@@ -6,7 +6,7 @@
 // how a cwd becomes the opaque id the API takes.
 //
 // The id, not the path, is what goes back to the server: it resolves ids against its own list of
-// known directories and never accepts a root from the client (server/infra/project-root.ts). The
+// known directories and never accepts a root from the client (server/infra/fs/project-root.ts). The
 // listing returns the cwd so the client can MATCH a project to the cell it is already showing —
 // the browser has those paths regardless.
 //

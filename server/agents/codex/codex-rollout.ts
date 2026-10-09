@@ -7,7 +7,7 @@
 // its end would be the most expensive way to get the cheapest data source we have.
 import { readdirSync, statSync, existsSync } from "node:fs";
 import path from "node:path";
-import { readTailLines } from "../../infra/jsonl-file.js";
+import { readTailLines } from "../../infra/fs/jsonl-file.js";
 
 // Enough to hold several events even when one carries a large payload. A rollout whose last
 // rate_limits sits further back than this simply reports nothing, which the gauge already handles.

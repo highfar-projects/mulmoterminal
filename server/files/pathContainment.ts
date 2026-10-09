@@ -4,7 +4,7 @@
 // symlink escape.
 import path from "node:path";
 import fs from "node:fs";
-import { isSamePath, isWithin } from "../infra/path-within.js";
+import { isSamePath, isWithin } from "../infra/fs/path-within.js";
 
 // Resolve a client-supplied project dir: absolute + existing dir, else the default
 // workspace (mirrors index.ts resolveWorkspace). A leading `~` is expanded first — the browser

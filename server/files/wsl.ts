@@ -3,7 +3,7 @@
 // anything that opens a GUI — WSL ships no Linux desktop, so the OS dialog a user has is the
 // Windows one (#1447).
 import os from "node:os";
-import { spawnCaptureAsync } from "../infra/spawnCapture.js";
+import { spawnCaptureAsync } from "../infra/process/spawnCapture.js";
 
 // WSL's own kernel names itself: `6.6.x-microsoft-standard-WSL2`, and `…-Microsoft` on WSL1. The
 // two are NOT told apart on purpose — both have interop and `wslpath`, so a WSL1 user wants

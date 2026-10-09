@@ -11,7 +11,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { containedPath, namesAWindowsDevice, realContainedWithin } from "./pathContainment.js";
-import { isSamePath } from "../infra/path-within.js";
+import { isSamePath } from "../infra/fs/path-within.js";
 
 /** The longest name a new entry may have: what the common filesystems allow, in bytes. */
 const MAX_NAME_BYTES = 255;

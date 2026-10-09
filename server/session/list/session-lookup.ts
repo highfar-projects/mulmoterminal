@@ -3,7 +3,7 @@
 // one of them. ONE definition each, because two copies drift and the phone then reads another
 // cell's conversation under this row's title (CodeRabbit, PR #1776).
 import { ptys, sessionCwd } from "../registry.js";
-import { tmuxPaneCommand } from "../../infra/tmux.js";
+import { tmuxPaneCommand } from "../../infra/process/tmux.js";
 import { agentFromPaneCommand } from "../../backends/remoteHost/terminalScreen.js";
 import type { SessionAgent } from "../../../common/sessionAgent.js";
 

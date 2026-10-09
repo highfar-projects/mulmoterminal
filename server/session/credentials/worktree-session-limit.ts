@@ -10,8 +10,8 @@
 // wants — that is what the grid is for.
 
 import { isManagedWorktree, repoRoot } from "../../git/worktrees.js";
-import { canonicalPath } from "../../infra/canonical-path.js";
-import { tmuxAttachedCounts } from "../../infra/tmux.js";
+import { canonicalPath } from "../../infra/fs/canonical-path.js";
+import { tmuxAttachedCounts } from "../../infra/process/tmux.js";
 import { dirSession, survivorSnapshot, type DirSession } from "../dir-session.js";
 
 export interface WorktreeOccupancy {

@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, mkdirSync, cpSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { removeQuietly } from "../../infra/fs-cleanup.js";
+import { removeQuietly } from "../../infra/fs/fs-cleanup.js";
 import { agentHome } from "../agent-homes.js";
 
 // Marks a codex skill dir mulmoterminal owns, so a re-sync overwrites OURS but never clobbers
@@ -64,7 +64,7 @@ export function syncCodexSkills(sourceDir: string, destDir: string): { mirrored:
     // Copying ON TOP of a mirror we failed to remove would leave whatever the source has
     // since deleted in place — a stale skill codex keeps auto-loading — while the sync
     // reported success. Skip it instead, and say so. (Windows: a mirror another process
-    // holds open cannot be removed; see infra/fs-cleanup.ts.)
+    // holds open cannot be removed; see infra/fs/fs-cleanup.ts.)
     if (!removeQuietly(dst)) {
       console.warn(`[codex-skills] could not replace the mirror for ${name} — leaving the existing one alone`);
       skipped.push(name);

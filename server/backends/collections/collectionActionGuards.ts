@@ -10,7 +10,7 @@
 import type { Response } from "express";
 import { collectionWritable, readOnlyRefusal, storeFor, type LoadedCollection } from "@mulmoclaude/core/collection/server";
 import { actionVisible, type ActionWithWhen, type CollectionAction, type CollectionItem } from "@mulmoclaude/core/collection";
-import type { ProjectScope } from "../../infra/project-root.js";
+import type { ProjectScope } from "../../infra/fs/project-root.js";
 
 // The action's state gate, rebuilt so core's exact-optional parameter accepts it: the schema
 // parse yields a `when: undefined` / `require: undefined` KEY, which that type rejects.

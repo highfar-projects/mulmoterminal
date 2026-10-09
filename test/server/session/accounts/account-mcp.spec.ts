@@ -10,7 +10,7 @@ vi.mock("../../../../server/session/accounts/account-sessions.js", () => ({
   boundAccount: (_agent: string, id: string) => (bound.has(id) ? { sessionId: id, agent: "claude", accountId: "work", home: "/h" } : undefined),
 }));
 vi.mock("../../../../server/session/registry.js", () => ({ devTerminalCwdsHydrated: Promise.resolve(), sessionCwd: (id: string) => cwds.get(id) }));
-vi.mock("../../../../server/infra/gui-mcp-registration.js", () => ({
+vi.mock("../../../../server/infra/process/gui-mcp-registration.js", () => ({
   registeredGuiMcpGroups: async (cwd: string) => {
     asked.push(cwd);
     return ["render"];

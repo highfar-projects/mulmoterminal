@@ -4,7 +4,7 @@
 // the current state, and a session tmux no longer lists takes its history with it.
 import { describe, it, expect, vi } from "vitest";
 import { createHeatWatch, type HeatWatchDeps } from "../../../../server/session/activity/heat-watch";
-import type { ProcessRow } from "../../../../server/infra/process-list";
+import type { ProcessRow } from "../../../../server/infra/process/process-list";
 
 const STEP_MS = 5000;
 const STEP_SECONDS = 5;

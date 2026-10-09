@@ -4,7 +4,7 @@
 // reach the same notification, or the phone stays silent for half the grid.
 
 import { getPushEnabled, getPushKinds } from "../../config/config-routes.js";
-import { sendWebPush } from "../../infra/web-push.js";
+import { sendWebPush } from "../../infra/http/web-push.js";
 import { HOST_ID as REMOTE_HOST_ID } from "../../backends/remoteHost/index.js";
 import { buildPushText } from "./activity-hook.js";
 import type { PushKind } from "../../../common/pushKinds.js";

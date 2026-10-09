@@ -93,7 +93,7 @@ const DOM_DELTA_PAGE = 2;
 const TRACKPAD_PIXEL_DELTA = 50;
 // How many notches a swipe is worth per cell of finger travel. Above 1 because a notch is not a
 // line: what receives these reports is tmux's copy-mode, bound to ONE line per report (#978, see
-// WHEEL_SCROLL_BINDINGS in server/infra/tmux.ts), and a swipe should move the text a little
+// WHEEL_SCROLL_BINDINGS in server/infra/process/tmux.ts), and a swipe should move the text a little
 // further than the finger — 1.5 lines per cell is what the previous five-lines-per-notch rate
 // worked out to, which is the speed this is calibrated to keep.
 //

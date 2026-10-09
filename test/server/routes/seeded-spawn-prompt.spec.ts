@@ -117,7 +117,7 @@ describe("the seed each agent is handed", () => {
 
 // The directory's registered groups, so the decision below is observable. Mocked because the real
 // lookup reads Claude Code's config files off the host.
-vi.mock("../../../server/infra/gui-mcp-registration.js", () => ({ registeredGuiMcpGroups: vi.fn(async () => ["render"]) }));
+vi.mock("../../../server/infra/process/gui-mcp-registration.js", () => ({ registeredGuiMcpGroups: vi.fn(async () => ["render"]) }));
 
 describe("which agents are asked for the directory's tool groups", () => {
   // Pins the mapping THROUGH THE REAL ROUTE, per agent — which nothing did before.

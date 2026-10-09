@@ -13,7 +13,7 @@ import {
   pruneOrphanSettings,
   appendedPromptArgument,
 } from "../../../server/session/session-settings.js";
-import { resolvePtyLaunch } from "../../../server/infra/resolve-bin.js";
+import { resolvePtyLaunch } from "../../../server/infra/process/resolve-bin.js";
 import { hookSettingsJson } from "../../../server/session/spawn/setup/hook-settings.js";
 import { buildClaudeArgs } from "../../../server/agents/claude/claude-args.js";
 import { appendedSystemPrompt } from "../../../server/agents/appended-prompt.js";

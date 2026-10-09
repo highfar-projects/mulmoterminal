@@ -22,7 +22,7 @@
 // designs and the only one that cannot corrupt a file someone hand-wrote.
 //
 // Claude Code's own config remains the registry of WHICH groups a directory has (see
-// infra/gui-mcp-registration.ts) — one switch in the launcher, every agent. This file is derived
+// infra/process/gui-mcp-registration.ts) — one switch in the launcher, every agent. This file is derived
 // from it; it is never read back to answer what is registered, only to answer what we already
 // wrote here.
 import { execFileSync } from "node:child_process";

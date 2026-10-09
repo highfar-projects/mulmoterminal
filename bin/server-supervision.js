@@ -16,7 +16,7 @@
 // otherwise. Nothing here reads a clock, a socket or a process.
 
 /** The exit code `server/index.ts` leaves with when the port was already taken at bind time.
- *  Kept in sync with `PORT_IN_USE_EXIT_CODE` in server/infra/server-exit.ts, which a spec pins. */
+ *  Kept in sync with `PORT_IN_USE_EXIT_CODE` in server/infra/process/server-exit.ts, which a spec pins. */
 export const PORT_IN_USE_EXIT_CODE = 75;
 
 /** How long the launcher waits before the first restart, and the ceiling the doubling stops at.
@@ -87,7 +87,7 @@ export function planAfterServerExit({ code, signal, everServed, consecutiveFailu
   // A port that is taken will still be taken next time; the caller names who has it and stops.
   if (code === PORT_IN_USE_EXIT_CODE) return { action: "port-in-use", delayMs: 0, reason: null };
   // `mulmoterminal stop` and the browser's Stop button both SIGTERM the server, whose handler
-  // exits 0 (server/infra/shutdown.ts). Restarting that is the product's stop button not stopping.
+  // exits 0 (server/infra/process/shutdown.ts). Restarting that is the product's stop button not stopping.
   if (code === 0) return { action: "stop", delayMs: 0, reason: null };
   // Nothing below can be decided on a platform where a stop and a crash arrive identically, so it
   // is not guessed at: the launcher leaves with its server, exactly as it did before (see above).

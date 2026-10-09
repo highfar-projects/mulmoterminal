@@ -5,7 +5,7 @@
 // — so the file is the allowlist of what can run.
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
-import { readJsonFile } from "../infra/read-text-file.js";
+import { readJsonFile } from "../infra/fs/read-text-file.js";
 import { isRecord } from "../../common/isRecord.js";
 
 export interface ScriptDef {

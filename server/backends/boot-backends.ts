@@ -4,7 +4,7 @@
 // exports: several of these hand a capability to the next (openPath -> mulmoScript, artifacts ->
 // mulmoScript), and one reads a Firebase session that must already be wired. index.ts keeps the
 // single call, at the point in the boot where it happens.
-import type { createPubSub } from "../infra/pubsub.js";
+import type { createPubSub } from "../infra/async/pubsub.js";
 import { initFileChangePublisher, startDocumentWatchers } from "./files/fileChange.js";
 import { initNotifier } from "./notifier.js";
 import { initMarkdownBackend } from "./plugins/markdown.js";
@@ -17,7 +17,7 @@ import { initGoogleBackend } from "./calendar/google.js";
 import { initAccountingBackend } from "./plugins/accounting.js";
 import { initFeedsBackend } from "./feeds/feeds.js";
 import { createFeedsWorker, type FeedsWorkerDeps } from "./feeds/feeds-worker.js";
-import { initPluginRuntime } from "../infra/pluginRuntime.js";
+import { initPluginRuntime } from "../infra/tools/pluginRuntime.js";
 import { hydrateClearedTranscripts } from "../session/transcript/cleared-transcripts.js";
 import { ptys } from "../session/registry.js";
 import { getCwdPresets } from "../config/config-routes.js";
@@ -94,7 +94,7 @@ export async function initBackends(deps: BootBackendsDeps): Promise<void> {
   initDocumentBackends(pubsub);
   initCollections();
   // Give factory-style gui-chat-protocol plugins their scoped runtime (per-package data/config
-  // under <workspace>, namespaced pub/sub, prefixed log) — see infra/pluginRuntime.ts. This
+  // under <workspace>, namespaced pub/sub, prefixed log) — see infra/tools/pluginRuntime.ts. This
   // necessarily lands AFTER the plugin registry built those runtimes (it calls the factories from a
   // top-level await, so it finishes while this module's imports evaluate); the runtime tolerates
   // that by resolving the workspace per operation rather than capturing it at construction.

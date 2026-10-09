@@ -8,7 +8,7 @@ import { createScheduledSessionRegistry, scheduledSessionInUse, scheduledSession
 import { spawnScheduledWorker } from "./scheduled-chat.js";
 import { ptys } from "../registry.js";
 import type { SpawnClaudePty } from "../spawn/agents/spawn-claude.js";
-import { tmuxAttachedClientCount, tmuxHasSession, tmuxKillSession } from "../../infra/tmux.js";
+import { tmuxAttachedClientCount, tmuxHasSession, tmuxKillSession } from "../../infra/process/tmux.js";
 import { CLAUDE_CWD, MULMOTERMINAL_HOME, SESSION_ID_RE } from "../../config/env.js";
 import type { ScheduledChatSpawn } from "../../backends/scheduler/scheduled-run.js";
 

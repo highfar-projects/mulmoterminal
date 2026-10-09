@@ -44,7 +44,7 @@ import { cleanupSessionSettings } from "./session-settings.js";
 import { cleanupSessionDrops } from "./session-drops.js";
 import { runCompletionHook } from "./activity/completion-hooks.js";
 import { messageOf } from "../errors.js";
-import { tmuxKillSession } from "../infra/tmux.js";
+import { tmuxKillSession } from "../infra/process/tmux.js";
 import { forgetAnsweredQuestion } from "./answerQuestion.js";
 import { forgetUserInputClock, stopWatchingOtherWrites } from "./write-to-session.js";
 import { stopWatchesFor } from "./shared-app-watches.js";

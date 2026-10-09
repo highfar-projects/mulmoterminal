@@ -6,11 +6,11 @@
 // actually has and explains each one instead of filtering it away.
 import { byClearability, type SurvivingSession } from "../../../common/survivingSessions.js";
 import { isTerminalAgent, type TerminalAgent } from "../../../common/sessionAgent.js";
-import { tmuxAttachedCounts, tmuxListSessionIds, tmuxSessionActivity } from "../../infra/tmux.js";
+import { tmuxAttachedCounts, tmuxListSessionIds, tmuxSessionActivity } from "../../infra/process/tmux.js";
 import { ptys, sessionCwd, devTerminalCwdsHydrated } from "../registry.js";
 import { sessionAttached } from "../dir-session.js";
 import { resumableSessionFacts } from "../list/resumable-sessions.js";
-import { isRestorableSession, reapableTmuxSession } from "../../infra/tmux.js";
+import { isRestorableSession, reapableTmuxSession } from "../../infra/process/tmux.js";
 import { reapIdleSeconds } from "../../../common/sessionReap.js";
 import { SESSION_ID_RE } from "../../config/env.js";
 

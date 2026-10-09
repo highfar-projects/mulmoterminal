@@ -9,7 +9,7 @@ import {
   type ViewCapability,
 } from "../../../../server/backends/collections/viewToken.js";
 import type { Request, Response, NextFunction } from "express";
-import { initProjectRoots, projectId, resetProjectRootsForTesting } from "../../../../server/infra/project-root.js";
+import { initProjectRoots, projectId, resetProjectRootsForTesting } from "../../../../server/infra/fs/project-root.js";
 
 // The middleware checks the token's root against the one the REQUEST resolves, so these tests
 // need a bound workspace. `/ws` is the root every token below is minted for.

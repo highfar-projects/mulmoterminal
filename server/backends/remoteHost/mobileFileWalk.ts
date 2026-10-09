@@ -10,7 +10,7 @@ import path from "node:path";
 
 import { isExcludedSegment, isServableMobilePath, mobileFileKind, type MobileFileEntry } from "../../../common/mobileFiles.js";
 import type { MobileFilesConfig } from "../../config/dir/dir-config.js";
-import { isWithin } from "../../infra/path-within.js";
+import { isWithin } from "../../infra/fs/path-within.js";
 
 /** How deep under a declared directory the walk descends. */
 export const MAX_WALK_DEPTH = 6;

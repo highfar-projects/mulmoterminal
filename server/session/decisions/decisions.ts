@@ -11,7 +11,7 @@
 // that has to start over is paying for bytes it already read.
 import type { DecisionAnswerKind, DecisionOption, DecisionQuestion, DecisionRecord } from "../../../common/decisionLog.js";
 import { isRecord } from "../../../common/isRecord.js";
-import { splitLines } from "../../infra/split-lines.js";
+import { splitLines } from "../../infra/fs/split-lines.js";
 
 const ASK_TOOL = "AskUserQuestion";
 

@@ -4,7 +4,7 @@
 import type { GitStatus } from "../../common/gitStatus.js";
 import { git, gitTopLevel } from "./worktrees.js";
 import { dirtyCount } from "./dirty-count.js";
-import { coalesceByKey, type CoalesceOptions } from "../infra/coalesce-by-key.js";
+import { coalesceByKey, type CoalesceOptions } from "../infra/async/coalesce-by-key.js";
 
 const NOT_REPO: GitStatus = { repo: false, branch: null, detached: false, dirty: 0, ahead: 0, behind: 0, upstream: false };
 

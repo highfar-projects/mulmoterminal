@@ -7,7 +7,7 @@
 import { claudeOnDiskSessionIds } from "../session-reads.js";
 import { codexRolloutExistsAnywhere } from "../session-home.js";
 import { devTerminalSessions, devTerminalSessionsHydrated, ptys } from "../registry.js";
-import { isResumableTmuxSession } from "../../infra/tmux.js";
+import { isResumableTmuxSession } from "../../infra/process/tmux.js";
 /**
  * The snapshots one pass takes, for a caller that needs the same facts to answer its OWN question.
  *

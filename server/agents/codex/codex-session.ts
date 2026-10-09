@@ -1,8 +1,8 @@
 import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { isRecord } from "../../../common/isRecord.js";
-import { readFirstJsonlRecord } from "../../infra/jsonl-file.js";
-import { canonicalPath } from "../../infra/canonical-path.js";
+import { readFirstJsonlRecord } from "../../infra/fs/jsonl-file.js";
+import { canonicalPath } from "../../infra/fs/canonical-path.js";
 import { agentHome } from "../agent-homes.js";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;

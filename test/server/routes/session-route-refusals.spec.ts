@@ -36,7 +36,7 @@ vi.mock("../../../server/session/dir-session.js", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   survivorSnapshot: async () => (reads.push("snapshot"), new Set(["copilot-running"])),
 }));
-vi.mock("../../../server/infra/tmux.js", async (importOriginal) => ({
+vi.mock("../../../server/infra/process/tmux.js", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   tmuxAttachedCounts: () => null,
 }));

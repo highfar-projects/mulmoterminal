@@ -50,7 +50,7 @@ import { agentHomeChoices, codexSessionsUnder } from "../session/session-home.js
 import { runningKeyOf, runningSessionKeys, sessionAttached, survivorSnapshot } from "../session/dir-session.js";
 import type { SessionOccupancy } from "../../common/sessionOccupancy.js";
 import type { SessionRunning } from "../../common/sessionRunning.js";
-import { tmuxAttachedCounts, tmuxHeldSessionIdsAsync } from "../infra/tmux.js";
+import { tmuxAttachedCounts, tmuxHeldSessionIdsAsync } from "../infra/process/tmux.js";
 import { listCodexSessions } from "../agents/codex/codex-sessions.js";
 import { listCopilotSessionsForCwd } from "../agents/copilot/copilot-sessions.js";
 import { listCursorSessionsForCwd } from "../agents/cursor/cursor-sessions.js";

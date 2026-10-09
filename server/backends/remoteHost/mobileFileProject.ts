@@ -4,7 +4,7 @@
 // declares `mobileFiles`: a session in a registered sub-project that shares nothing must not open
 // the enclosing workspace's files under its own name. The answer is the opaque project id the
 // file commands already take — never a path (commandScope.ts).
-import { isWithin } from "../../infra/path-within.js";
+import { isWithin } from "../../infra/fs/path-within.js";
 
 export interface ProjectRow {
   id: string;

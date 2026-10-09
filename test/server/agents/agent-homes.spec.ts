@@ -5,7 +5,7 @@ import { TERMINAL_AGENTS, type TerminalAgent } from "../../../common/sessionAgen
 import { agentDefaultHome, agentHome } from "../../../server/agents/agent-homes.js";
 import { codexSessionsRoot } from "../../../server/agents/codex/codex-session.js";
 import { codexSkillsRoot } from "../../../server/agents/codex/codex-skills.js";
-import { bundledSkillsRoots } from "../../../server/infra/install-bundled-skills.js";
+import { bundledSkillsRoots } from "../../../server/infra/fs/install-bundled-skills.js";
 import { setAccountsProvider } from "../../../server/session/session-home.js";
 import {
   claudeHistoryFile,

@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { grokSurvivorCandidates, pickDirSession, survivorCandidates, type DirSessionCandidate, type SurvivorLog } from "../../../server/session/dir-session";
-import { canonicalPath } from "../../../server/infra/canonical-path";
+import { canonicalPath } from "../../../server/infra/fs/canonical-path";
 import type { AgentConversation } from "../../../server/session/list/agent-conversations";
 
 const candidate = (over: Partial<DirSessionCandidate> & { id: string }): DirSessionCandidate => ({

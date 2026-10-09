@@ -4,7 +4,7 @@
 // (`skillsStagingDir`) and where the agent is told to AUTHOR them (`schemaDocs` / `putSchema`).
 // The second is not a second binding — core's `authoringTarget` falls through to this same path
 // unless the host hands it a `stagedSkillAuthoring: false`, so MulmoTerminal hands it nothing and
-// there is only ever one thing to keep right (server/infra/collection-tool.ts says why).
+// there is only ever one thing to keep right (server/infra/tools/collection-tool.ts says why).
 //
 // Core spells the consequence of getting it wrong out: a root told "author directly" while still
 // handed a staging path reads a stale staged view instead of the one it just wrote, silently.
@@ -15,7 +15,7 @@
 // `data/skills/<slug>/`, which is why a root that skips this base 404s every custom view (#1925).
 import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
-import { isWorkspaceRoot } from "../../infra/project-root.js";
+import { isWorkspaceRoot } from "../../infra/fs/project-root.js";
 import { isManagedWorkspace } from "../workspaceSetup.js";
 
 const STAGING_DIR = ["data", "skills"];

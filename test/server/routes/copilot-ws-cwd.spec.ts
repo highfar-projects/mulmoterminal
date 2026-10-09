@@ -33,8 +33,8 @@ vi.mock("../../../server/session/registry.js", () => ({
   markAttachedSessionPlaced: vi.fn(),
 }));
 
-vi.mock("../../../server/infra/tmux.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../../server/infra/tmux.js")>()),
+vi.mock("../../../server/infra/process/tmux.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../server/infra/process/tmux.js")>()),
   tmuxAvailable: () => false,
   tmuxHasSession: () => false,
 }));
@@ -59,7 +59,7 @@ vi.mock("../../../server/session/credentials/worktree-session-limit.js", () => (
   worktreeOccupancy: () => Promise.resolve({ isWorktree: false, session: null }),
 }));
 
-vi.mock("../../../server/infra/gui-mcp-registration.js", () => ({ registeredGuiMcpGroups: vi.fn(async () => []) }));
+vi.mock("../../../server/infra/process/gui-mcp-registration.js", () => ({ registeredGuiMcpGroups: vi.fn(async () => []) }));
 
 const { handleCopilotConnection } = await import("../../../server/routes/ws-routes.js");
 

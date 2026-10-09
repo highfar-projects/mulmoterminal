@@ -97,7 +97,7 @@ describe("hasCommand — Windows, which no developer here runs", () => {
 
 describe("hasCommand — the gate must never refuse on a question it cannot answer", () => {
   // This probe REFUSES START-UP, so a "not found" it cannot justify is worse than a miss. The rule
-  // is the server's (server/infra/has-binary.ts): a preflight that cannot answer must not say no.
+  // is the server's (server/infra/process/has-binary.ts): a preflight that cannot answer must not say no.
   const missing = { isFile: () => false, isExecutable: () => false };
   const posix = (PATH: string | undefined) => hasCommand("nope", { platform: "linux", env: PATH === undefined ? {} : { PATH }, probe: missing });
 

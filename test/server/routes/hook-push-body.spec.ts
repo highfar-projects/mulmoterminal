@@ -13,7 +13,7 @@ import { aiTitles, lastPrompts, lastResponses, ptys } from "../../../server/sess
 import { clearedTranscripts } from "../../../server/session/transcript/cleared-transcripts";
 
 const pushes: Array<{ title: string; body: string }> = [];
-vi.mock("../../../server/infra/web-push.js", () => ({
+vi.mock("../../../server/infra/http/web-push.js", () => ({
   sendWebPush: async (title: string, body: string) => {
     pushes.push({ title, body });
     return null;

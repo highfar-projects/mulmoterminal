@@ -19,7 +19,7 @@ import os from "node:os";
 import path from "node:path";
 import { sessionPrompts } from "../../../../server/session/session-reads.js";
 import { codexPromptScan, foldCodexPrompt, PROMPT_SCAN_LIMIT } from "../../../../server/session/transcript/prompt-history.js";
-import { forEachJsonlRecord } from "../../../../server/infra/jsonl-file.js";
+import { forEachJsonlRecord } from "../../../../server/infra/fs/jsonl-file.js";
 
 const SESSION = "11111111-2222-4333-8444-555555555555";
 const OTHER = "99999999-8888-4777-8666-555555555555";

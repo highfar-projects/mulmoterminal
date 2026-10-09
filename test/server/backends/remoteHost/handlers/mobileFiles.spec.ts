@@ -6,7 +6,7 @@ import { REMOTE_VIEW_MAX_BYTES } from "@mulmoclaude/core/remote-view";
 import { makeTempDir } from "../../../../support/tempDir.js";
 import { createMobileFileHandlers } from "../../../../../server/backends/remoteHost/handlers/mobileFiles";
 import type { MobileFileStager } from "../../../../../server/backends/remoteHost/mobileFileStaging";
-import { initProjectRoots, projectId, resetProjectRootsForTesting } from "../../../../../server/infra/project-root";
+import { initProjectRoots, projectId, resetProjectRootsForTesting } from "../../../../../server/infra/fs/project-root";
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
 

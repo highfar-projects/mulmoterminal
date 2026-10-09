@@ -26,7 +26,7 @@ import {
 import { glabIssueIsOpen, glabNotes } from "./glab-items.js";
 import { forgeFromRepoEntry, projectPath, GITHUB_HOST } from "./forge-host.js";
 import { classifyForgeFailure } from "./forge-failure.js";
-import { createKeySerializer } from "../infra/serialize-per-key.js";
+import { createKeySerializer } from "../infra/async/serialize-per-key.js";
 import { isRecord } from "../../common/isRecord.js";
 import type { WorkCommentFailure } from "../../common/workCommentFailure.js";
 import {

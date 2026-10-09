@@ -34,7 +34,7 @@ import { mulmoScriptByPath } from "../files/openPath.js";
 import { createFileOps } from "../files/fileOps.js";
 import { storiesRootId } from "../files/storiesRoot.js";
 import { uniqueRootPaths } from "../files/storiesRootSet.js";
-import { canonicalPath } from "../../infra/canonical-path.js";
+import { canonicalPath } from "../../infra/fs/canonical-path.js";
 import { isRecord } from "../../../common/isRecord.js";
 
 /** Pubsub channel the extracted View subscribes to for generation progress —

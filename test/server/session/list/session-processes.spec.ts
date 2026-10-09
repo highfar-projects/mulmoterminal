@@ -2,7 +2,7 @@
 // The Processes page's model: which processes belong to which session, how busy each is, and which
 // one a kill request may reach.
 import { describe, it, expect } from "vitest";
-import type { ProcessDetail } from "../../../../server/infra/process-list";
+import type { ProcessDetail } from "../../../../server/infra/process/process-list";
 import { buildSessionProcesses, cpuBaselineOf, killVerdict } from "../../../../server/session/list/session-processes";
 
 const row = (pid: number, ppid: number, extra: Partial<ProcessDetail> = {}): ProcessDetail => ({

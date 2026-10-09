@@ -12,8 +12,8 @@
 import { writeFileSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { escapeBatchArgument } from "../infra/cmd-escape.js";
-import { removeQuietly } from "../infra/fs-cleanup.js";
+import { escapeBatchArgument } from "../infra/process/cmd-escape.js";
+import { removeQuietly } from "../infra/fs/fs-cleanup.js";
 import { SESSION_ID_RE } from "../config/env.js";
 
 const SETTINGS_DIR = path.join(os.homedir(), ".mulmoterminal", "settings");

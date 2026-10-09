@@ -15,7 +15,7 @@ import {
   initUserTaskScheduler,
   resetLiveSchedulerForTesting,
 } from "../../../../server/backends/scheduler/scheduler.js";
-import { hostStateRoot } from "../../../../server/infra/host-state-root.js";
+import { hostStateRoot } from "../../../../server/infra/fs/host-state-root.js";
 
 // Mock the shared scheduler package so registration, the tick loop and the persistence adapter
 // are observable without real timers or a real catch-up run. The SEED is deliberately left

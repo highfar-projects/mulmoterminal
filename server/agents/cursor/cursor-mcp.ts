@@ -41,7 +41,7 @@
 // approved"), and skipped entirely for a directory with no registered groups.
 //
 // Claude Code's own config remains the registry of WHICH groups a directory has (see
-// infra/gui-mcp-registration.ts) — one switch in the launcher, every agent. This file is derived
+// infra/process/gui-mcp-registration.ts) — one switch in the launcher, every agent. This file is derived
 // from it and rewritten when a switch flips or a cursor session starts; it is never read back to
 // answer what is registered.
 import { execFile } from "node:child_process";
@@ -49,7 +49,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { promisify } from "node:util";
 import { toolGroupServerId, type ToolGroup } from "../../../common/toolGroups.js";
-import { symlinkFreeWriteTarget } from "../../infra/symlink-guard.js";
+import { symlinkFreeWriteTarget } from "../../infra/fs/symlink-guard.js";
 import { bridgeCommand } from "../mcp/gui-mcp-bridge.js";
 import { excludeFromGit } from "../git-exclude.js";
 import { mergeOurMcpServers, readMcpServers } from "../mcp/mcp-config-file.js";

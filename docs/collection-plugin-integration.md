@@ -126,7 +126,7 @@ wire the engine against the shared `workspaceRoot` using the **same path layout*
 | `isPresetSlug(slug)` | `slug.startsWith("mc-") && slug.length > 3` |
 
 Two of those are **conditional here and unconditional in MulmoClaude**, because MulmoClaude serves one
-root and this app serves several (`server/infra/project-root.ts`). Both answer `null` for a saved
+root and this app serves several (`server/infra/fs/project-root.ts`). Both answer `null` for a saved
 project, which is what keeps `~`-scoped collections unreachable from a project and stops a stray
 `data/skills` file shadowing the skill a repo commits:
 

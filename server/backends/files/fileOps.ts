@@ -1,6 +1,6 @@
 // A rooted gui-chat-protocol `FileOps` over one directory, with the containment
 // guard in a single place. Used for the shared artifacts area (backends/plugins/artifacts.ts)
-// and for each plugin's private data/config areas (infra/pluginRuntime.ts) — every
+// and for each plugin's private data/config areas (infra/tools/pluginRuntime.ts) — every
 // caller-supplied `rel` is resolved against the root and rejected if it escapes, so
 // a plugin can never read or write outside the area it was handed.
 //
@@ -17,7 +17,7 @@ import fs from "fs/promises";
 import { realpathSync } from "node:fs";
 import path from "path";
 import type { FileOps } from "gui-chat-protocol";
-import { isWithin } from "../../infra/path-within.js";
+import { isWithin } from "../../infra/fs/path-within.js";
 
 const MAX_SYMLINK_DEPTH = 40;
 

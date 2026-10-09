@@ -13,7 +13,7 @@
 // MulmoClaude's server/remoteHost/handlers/getCollection.ts.
 import { loadCollection, storeFor, toDetail, type LoadedCollection } from "@mulmoclaude/core/collection/server";
 import { scopeFromCommand } from "../commandScope.js";
-import type { ProjectScope } from "../../../infra/project-root.js";
+import type { ProjectScope } from "../../../infra/fs/project-root.js";
 import type { CollectionItem } from "@mulmoclaude/core/collection";
 import type { CommandHandlers, JsonObject } from "@mulmoclaude/core/remote-host";
 import { clampLimit, clampOffset, deriveItems, pageResult } from "../collectionPage.js";

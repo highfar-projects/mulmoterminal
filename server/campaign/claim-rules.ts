@@ -5,7 +5,7 @@
 // check by reading. The filesystem side — the compare-and-set that makes acquisition atomic — is a
 // different kind of problem and gets its own review.
 //
-// Every path here is expected to be CANONICAL and ABSOLUTE already — `server/infra/canonical-path.ts`
+// Every path here is expected to be CANONICAL and ABSOLUTE already — `server/infra/fs/canonical-path.ts`
 // resolves symlinks and returns the spelling the disk has. Normalising is not repeated here: a
 // second normaliser is a second answer, and two answers to "is this the same path" is what
 // exclusion cannot survive.
@@ -18,7 +18,7 @@
 // the registry has to key missing components against the volume's actual case behaviour. Named
 // here rather than left to be discovered (raised by CodeRabbit on #1845).
 import { byCodeUnit } from "../../common/byCodeUnit.js";
-import { isWithin } from "../infra/path-within.js";
+import { isWithin } from "../infra/fs/path-within.js";
 
 /** Who holds a claim, and which generation of it. A holder presents both to act. */
 export interface ClaimToken {

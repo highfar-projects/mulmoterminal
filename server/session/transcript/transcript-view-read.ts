@@ -13,7 +13,7 @@ import path from "node:path";
 import { SESSION_ID_RE } from "../../config/env.js";
 import { isRecord } from "../../../common/isRecord.js";
 import { hasErrnoCode, messageOf } from "../../errors.js";
-import { forEachJsonlRecordIn } from "../../infra/jsonl-file.js";
+import { forEachJsonlRecordIn } from "../../infra/fs/jsonl-file.js";
 import { clearedTranscripts } from "./cleared-transcripts.js";
 import { emptyTranscriptScan, foldTranscriptView, trackTurnStarts, transcriptViewOf, type TranscriptScan } from "./transcript-view.js";
 import type { TranscriptPage, TranscriptView } from "../../../common/transcriptView.js";

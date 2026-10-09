@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 
 import { mcpConfigJson, guiMcpEnv, codexGuiMcpServers } from "../../../../../server/session/spawn/setup/mcp-config.js";
-import { guiMcpUrlTemplate } from "../../../../../server/infra/gui-mcp-registration.js";
+import { guiMcpUrlTemplate } from "../../../../../server/infra/process/gui-mcp-registration.js";
 import { TOOL_GROUPS, toolsInGroup, toolGroupServerId, AUTO_ALLOWED_TOOLS, type ToolGroup } from "../../../../../common/toolGroups.js";
 
 const SESSION = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";

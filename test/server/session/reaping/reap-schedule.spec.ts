@@ -72,7 +72,7 @@ describe("startReapSchedule", () => {
   });
 
   // A session settings file holds a provider's API token. The boot sweep is followed by the orphan
-  // prune in infra/on-listening.ts; a tick has no follower, so without this the token outlives the
+  // prune in infra/http/on-listening.ts; a tick has no follower, so without this the token outlives the
   // session until the next restart — and a timer is enabled precisely when that is far away.
   it("drops the files of every session a tick ended", () => {
     sweepIdleSessions.mockReturnValue({ reaped: [ID_A, ID_B], heldBack: 0, recent: 0, unclear: 0 });

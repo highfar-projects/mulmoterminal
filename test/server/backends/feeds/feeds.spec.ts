@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { appRequest } from "../../../helpers/appRequest.js";
 import { initFeedsBackend, mountFeedsRoutes } from "../../../../server/backends/feeds/feeds.js";
-import { initProjectRoots, projectId } from "../../../../server/infra/project-root.js";
+import { initProjectRoots, projectId } from "../../../../server/infra/fs/project-root.js";
 import { makeTempDir } from "../../../support/tempDir";
 import { listFeeds, readFeedState, removeFeed, refreshOne } from "@mulmoclaude/core/feeds/server";
 import { loadCollection } from "@mulmoclaude/core/collection/server";

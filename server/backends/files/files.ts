@@ -29,7 +29,7 @@ import { rawServingPlan } from "./rawServingPlan.js";
 import { servedFileName } from "./servedFileName.js";
 import { streamFileToResponse } from "./streamFile.js";
 import { authorizedServingBase, resolveContained } from "../../files/pathContainment.js";
-import { rootForProjectId } from "../../infra/project-root.js";
+import { rootForProjectId } from "../../infra/fs/project-root.js";
 
 /** Which directory this request may be served from, or the refusal to answer with.
  *

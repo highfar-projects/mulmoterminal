@@ -5,7 +5,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { agentAvailability } from "../../../server/agents/agent-availability.js";
 import { TERMINAL_AGENTS, type TerminalAgent } from "../../../common/sessionAgent.js";
-import type { BinaryDiagnosis } from "../../../server/infra/has-binary.js";
+import type { BinaryDiagnosis } from "../../../server/infra/process/has-binary.js";
 
 const BINS: Record<TerminalAgent, string> = {
   claude: "claude",

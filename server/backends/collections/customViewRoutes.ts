@@ -19,7 +19,7 @@ import { refuseReadOnlyCollection, resolveActionableRecord, resolveItemAction } 
 import { thumbnailResolverFor } from "./thumbnailStore.js";
 import { makeViewActionRateLimiter, ONE_MINUTE_MS, VIEW_ACTION_RATE_LIMIT_PER_MINUTE, VIEW_IMAGE_RATE_LIMIT_PER_MINUTE } from "./viewRateLimit.js";
 import { requireViewToken } from "./viewToken.js";
-import { resolveProjectRoot, type ProjectScope } from "../../infra/project-root.js";
+import { resolveProjectRoot, type ProjectScope } from "../../infra/fs/project-root.js";
 import { hostLogger } from "../hostLogger.js";
 import { isRecord } from "../../../common/isRecord.js";
 
