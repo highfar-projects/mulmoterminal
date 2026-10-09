@@ -295,14 +295,24 @@ npx mulmoterminal@latest    # → http://localhost:34567 が開く
 4. [応用編 — シナリオ別の使い方](scenarios.html)
 5. [機能一覧](features.html)（4 本柱で整理）
    - [全機能リスト](feature-list.html)（いまある機能をすべて、入った版つきで一行ずつ）
-6. [セル同士を会話させる](conversation.html)（1往復の受け渡し・円卓・部屋）
-7. [設定方法](config.html)（設定モーダル・`config.json`・`.mulmoterminal.json`・**DSL 拡張**）
-8. [スマホ通知（Web Push）](notifications.html)（iPhone / Android の設定）
-9. [スマホから使う](phone.html)（閲覧・自分のチップで返信・ターミナル起動）
-10. [GitHub — PR / Issue 横断ビュー](github.html)（登録リポの未マージ PR と Issue を 1 画面で）
-11. [OpenRouter で別のモデルを使う](providers.html)（Kimi / DeepSeek / Gemini などを実測データつきで選ぶ）
-12. [複数の契約を並べて使う](accounts.html)（ベータ: 一部のセルを 2 つ目の Claude Code / Codex のログインで動かし、その使用枠もツールバーに出す）
-13. [claude-ollama でローカルモデルを動かす](claude-ollama.html)（Ollama で完全ローカル・オフライン）
-14. [用語集](glossary.html)
+6. [どの coding agent を使うか](agents.html)（Claude Code・Codex・Antigravity・Grok・Muse・Copilot・Cursor。何が要るか、どう会話を再開するか）
+7. [git worktree で作業を分ける](worktree.html)（1 つのリポジトリを、ぶつからずに複数のエージェントで）
+8. [セル同士を会話させる](conversation.html)（1往復の受け渡し・円卓・部屋）
+9. [設定方法](config.html)（設定モーダル・`config.json`・`.mulmoterminal.json`・**DSL 拡張**）
+   - [ヘッダーをカスタマイズする](header.html)（自分のボタンとチップを最初から）と、[ヘッダーのリファレンス](header-reference.html)（変数・`when`・マージ）
+10. [スマホ通知（Web Push）](notifications.html)（iPhone / Android の設定）
+11. [スマホから使う](phone.html)（閲覧・自分のチップで返信・ターミナル起動）
+12. [サーバーを別のマシンで動かす](remote.html)（Linux のマシン・VPS・Docker を SSH トンネルで使う）
+13. [共有アプリ](shared-apps.html)（他の人が使うフォーム・出欠表・予約ページ。他の人のアプリへの参加も）
+    - [コレクションからアプリにする](from-collection.html)（コレクションや共有アプリを、設計図で自分のアプリにする）
+    - [設計図（試験中）](blueprints.html)（試してくれる人向けの案内）
+    - [MulmoCast の動画](mulmocast.html)（Remotion の場面）
+14. [GitHub — PR / Issue 横断ビュー](github.html)（登録リポの未マージ PR と Issue を 1 画面で）
+15. [OpenRouter で別のモデルを使う](providers.html)（Kimi / DeepSeek / Gemini などを実測データつきで選ぶ）
+16. [複数の契約を並べて使う](accounts.html)（ベータ: 一部のセルを 2 つ目の Claude Code / Codex のログインで動かし、その使用枠もツールバーに出す）
+    - [トークンのローテーション](token-rotation.html)（ベータ: 複数の Claude の契約を登録し、新しいセッションをいちばん余裕のある契約で始め、動いているセッションも自分で移せる）
+17. [claude-ollama でローカルモデルを動かす](claude-ollama.html)（Ollama で完全ローカル・オフライン）
+18. [オープンソースの代替](alternatives.html)（並列でエージェントを動かす、ほかのツールの正直な地図）
+19. [用語集](glossary.html)
 
 > 英語版は [English guide](../en/) にあります。

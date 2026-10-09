@@ -194,7 +194,7 @@ More: [Worktrees](worktree.html)
 
 More: [Configuration](config.html)
 
-- A confetti action, bound to a key or picked in the palette, throws a mixed show of crackers, fireworks, cherry petals, paper rain and balloons over the page; chosen styles and events such as a merged PR are set in config (v9.3.0)
+- A confetti action, bound to a key or picked in the palette, throws a mixed show of crackers, fireworks, cherry petals, paper rain and balloons over the page; the styles and the events that set one off by themselves, such as a merged PR, are ticked in a Confetti box under Settings → Theme, which also has a Try it button (v9.4.0), or set in config (v9.3.0)
 - The Skills viewer opens from the command palette, and from a key or header button through the `screen-skills` action (v8.4.0)
 - The palette's > scope lists the acting terminal's Run-menu scripts and Skill-menu skills (v7.3.0)
 - Set shortcuts in Settings by pressing the key, with Change, Clear and clash refusal, plus recommended keys in one click (v7.2.0)
