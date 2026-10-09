@@ -8,6 +8,29 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@9.6.0 — 2026-10-09
+
+> **Setup guide:** [9.6.0 — Move a session to another subscription from its header, and JingleScript](https://receptron.github.io/mulmoterminal/guide/en/v9.6.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v9.6.0.html))
+
+### Switch a rotated cell's subscription from its account mark (#2950)
+
+- [#2951](https://github.com/receptron/mulmoterminal/pull/2951) — with token rotation on, the cell header's account mark opens a list of the `tokenRotation` tokens (plus `/login` when `includeDefaultLogin` is on); picking one restarts the session on it, on the same conversation. `POST /api/session/:id/switch-token` validates the pick (`server/session/switch-token.ts`), pins it for the session's next spawn (`token-switch-pins.ts`, single-use, 60 s expiry, moved to the new id when a transcript-less session is handed one on reconnect), then ends the session as the close button does and answers `ended`; the client reconnects only when it is true. Only sessions rotation placed can be moved, the route refuses the rest before pinning or killing, and `credential` frames now carry the token id. The terminal's "moved off" line is not printed when the id changes.
+- [#2955](https://github.com/receptron/mulmoterminal/pull/2955) — each entry shows what is left of the weekly window (amber at or under a tenth, "At its limit" when out, nothing when not measured). The figures are `tokenUsageRows`' over the toolbar gauge's readings; the `/login` entry joins the gauge's own default-login reading locally. The cell only reads `useRateLimits().snapshot` and starts no probe.
+- [#2960](https://github.com/receptron/mulmoterminal/pull/2960) — under it, the time until that window resets, from the same row and the existing `resetsIn` wording.
+- [#2964](https://github.com/receptron/mulmoterminal/pull/2964) — `resetsIn` reads days, hours and minutes from a day up (`2d 4h 10m`), with a `resetsInDays` key in the five tip dictionaries. The one function feeds the toolbar gauge hover, the Token usage screen and the menu, so all three change together.
+
+### The account mark survives a reload (#2948)
+
+- [#2949](https://github.com/receptron/mulmoterminal/pull/2949) — the `credential` frame that fills the mark was only sent from `spawnClaudePty`; a same-process reattach (a reload, a remounted cell) went through `reattachPty` and never sent it, so the name stayed blank. The frame is now a pure function of the rotation config and the session's token (`credential-frame.ts`), sent by `credential-announce.ts` on both paths. Behaviour of the spawn path is unchanged, checked by running the old inline code against the new function over generated inputs. The claude start-failure message moved into `ws-endpoint-guard.ts` to make room under `ws-routes.ts`'s file-size limit.
+
+### JingleScript GUI plugin
+
+- [#2957](https://github.com/receptron/mulmoterminal/pull/2957) — registers `@gui-chat-plugin/jinglescript` (and the `jinglescript` library it needs): one tool, `manageJingleScript`, with `getGuide`, `getSchema`, `listInstruments`, `getInstrument`, `checkScore` and `renderScore`. A successful `renderScore` opens a player in the Canvas with the waveform, beat grid, labelled cues, a lane of notes per track and a download link; the other actions answer in text.
+
+### Server folders grouped
+
+- [#2945](https://github.com/receptron/mulmoterminal/pull/2945), [#2947](https://github.com/receptron/mulmoterminal/pull/2947), [#2953](https://github.com/receptron/mulmoterminal/pull/2953), [#2958](https://github.com/receptron/mulmoterminal/pull/2958), [#2962](https://github.com/receptron/mulmoterminal/pull/2962) — `server/agents`, `server/config`, `server/backends`, `server/session` and `server/infra` each went from one flat directory to per-agent or per-concern subdirectories, one PR per directory, with the specs under `test/server/` mirroring the split. Files moved with `git mv` and were not renamed or edited; only import specifiers and path mentions (comments, README, CLAUDE.md, docs, the eslint exemption list) changed. No behaviour change intended.
+
 ## mulmoterminal@9.5.0 — 2026-10-08
 
 > **Setup guide:** [9.5.0 — A UFO joins the heat pictures, and two quiet fixes](https://receptron.github.io/mulmoterminal/guide/en/v9.5.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v9.5.0.html))
