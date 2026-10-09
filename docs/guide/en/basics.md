@@ -44,7 +44,7 @@ it**:
 | **Switch view** (left of the rule) | **Grid** and **Collections** — the two places to be |
 | Pinned collections and feeds (left of the rule, its own group) | The favourites you promoted to the toolbar — one press each, from either view. Nothing shows until you promote one (→ [A favourite you open all day](config.html#toolbar-pins)) |
 | Inside Collections | **Feeds**, **Wiki**, **Files** appear once you are in the content section. **Accounting** is the first button on the Collections screen's own top row, ahead of the pinned favourites |
-| Inside the grid | **New terminal**, cell ordering, the status tally, and the **More features** menu (`widgets`) holding **Blueprints**, **Skills** and **Processes** — plus **Rooms** in it once a room exists and **Worklog** once it is turned on. **Pull requests** gets its own button once Settings lists a repository |
+| Inside the grid | **New terminal**, cell ordering, the status tally, and the **More features** menu (`widgets`) holding **Blueprints**, **Skills** and **Processes** — plus **Rooms** in it once a room exists, **Worklog** once it is turned on, and **Token usage** once [token rotation](token-rotation.html) has a token. **Pull requests** gets its own button once Settings lists a repository |
 | Always | sound, **Settings** (and, on the grid while a cell is enlarged, the roster / filmstrip switch) |
 
 A full-screen surface (Collections, Wiki, PRs, Accounting, Files) **returns to the view you opened

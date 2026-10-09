@@ -50,7 +50,7 @@ Google account**.
 ## Starting
 
 1. Open **Blueprints** from the "More features" menu in the top bar (the `widgets` icon), and press **New build**.
-2. Pick the base under **Built on**, and under **What to make** pick **コレクションからアプリにする** (from a collection).
+2. Pick the base under **Built on**, and under **What to make** pick **Turn a collection into an app** (**コレクションからアプリにする** on a Japanese screen).
 3. For the **Project folder**, give a folder inside a trusted parent (a name that does not exist yet is fine).
 4. Answer the questions and press **Start**.
 
@@ -58,7 +58,7 @@ Google account**.
 
 ### What the questions are for
 
-The questions are in Japanese, as the pack writes them.
+The questions follow MulmoTerminal's display language: English on every language but Japanese, where the pack's own Japanese shows. The Japanese wording is given in each row for matching.
 
 | Question | What it decides |
 |---|---|
@@ -144,8 +144,8 @@ change it by talking to it before you approve.
 
 ## The steps
 
-Each base runs these steps in order. A step marked (approve) waits for you to approve it on screen. On screen the
-step titles are in Japanese, as the packs write them; they are translated here.
+Each base runs these steps in order. A step marked (approve) waits for you to approve it on screen. On a Japanese
+screen the step titles are in Japanese, as the packs write them; every other language shows the English titles used here.
 
 | | Local | Firebase | Cloudflare | Supabase |
 |---|---|---|---|---|

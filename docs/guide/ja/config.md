@@ -66,8 +66,8 @@ description: MulmoTerminal の設定方法。設定モーダル、プロジェ�
 > サーバが起動しなくなるためです。
 >
 > 名前を覚える必要もありません。上記のスキルに対応する Settings のセクションには、それを新しいセッションで
-> 起動するボタンが末尾に付いています。Settings に対応セクションが無い `-header` と `-model` だけ、
-> 名前で呼んでください。
+> 起動するボタンが末尾に付いています。`-header`（Header buttons and chips）と `-model`（Models and backends）も、
+> それぞれのセクションのボタンから起動できますし、名前で呼ぶこともできます。
 
 ---
 
@@ -75,7 +75,7 @@ description: MulmoTerminal の設定方法。設定モーダル、プロジェ�
 
 ツールバーの **Settings**（歯車）から開きます。
 
-タイトルのすぐ下に **Version** の行があり、**いま動いているビルド**が出ます。npm で入れたなら `4.7.0`、
+タイトルのすぐ下に **Version** の行があり、**いま動いているビルド**が出ます。npm で入れたなら `X.Y.Z`（版番号）、
 git チェックアウトならその横に `commit a1b2c3d` のチップが並びます（チェックアウトの場合、バージョン番号は
 最後のリリース時点のものなので、ビルドを特定するのはコミットのほうです）。新しいものがあるときは、ヘッダーの
 バッジと同じ更新通知（実行するコマンド込み）が次の行に続きます。バグ報告に貼るのはこの行です。
@@ -88,8 +88,8 @@ git チェックアウトならその横に `commit a1b2c3d` のチップが並�
 ![設定モーダル — 左サイドバーの Appearance から Sessions までのグループと、開いている Theme（Create a theme… ボタン付き）](../images/config-settings-modal.png)
 
 **左のサイドバー**がセクションをグループ分けし、一度に 1 つだけ表示します（`sm` 未満、つまりスマホでは
-セクションの上のセレクタになります）。9 グループ・28 セクション（**Voice input** は文字起こしできる
-マシンでのみ出るので、多くの環境では 27）。
+セクションの上のセレクタになります）。9 グループ・29 セクション（**Voice input** は文字起こしできる
+マシンでのみ出るので、多くの環境では 28）。
 
 セクションをスキルに引き渡すボタン（「Create a theme…」「Configure notifications…」など）は、押すと
 **確認を出します**。新しいグリッドセルでエージェントのセッションが始まるので、何が起きるか・やめ方
@@ -110,8 +110,8 @@ git チェックアウトならその横に `commit a1b2c3d` のチップが並�
 - **Models & servers** — Models and backends, MCP servers
 - **Notifications** — Notification sounds, Web Push notifications, Phone quick commands
 - **Integrations** — GitHub and GitLab, Pull request repos, Google account
-- **Sessions** — Sessions and background tasks, Sessions that survived a restart, Cost (estimated)
-- **Help** — Help & user guide
+- **Sessions** — Sessions and background tasks, Sessions that survived a restart, Cost (estimated), Quit MulmoTerminal
+- **Help** — Help & user guide, Release notes
 
 ![日本語表示の設定モーダル — サイドバーのグループと通知音のペイン](../images/settings-japanese.png)
 
@@ -128,7 +128,7 @@ git チェックアウトならその横に `commit a1b2c3d` のチップが並�
 | **Directory appearance** | 「Configure appearance…」— ディレクトリの名前バッジ・色・ターミナルのパレット・グリッド上の位置を、`mulmoterminal-dirs` スキルで対話的に設定 |
 | **Directory settings** | 各ディレクトリの `.mulmoterminal.json` が**実際に何をしているか**。行を開くと、効いている値（色は見本付き）・**どのファイル由来か**・**検証で落ちたキー**・**このアプリが読まないキー**が出ます。下の **ここで変える** で名前・色・状態の色・テーマ・配色・フォント・優先順・モデル・終わりの要約・追加のディレクトリ・アイコン・背景・音・ヘッダーのボタン・チップ・コマンドを変えられます（→ [プロジェクトごとの設定](#per-dir)）。「Explain my settings…」で `mulmoterminal-config` スキルが同じものを読み、理由を説明して直します（→ [設定が効かないとき](#dir-settings-preview)） |
 | **Launch commands** | グリッドセルでエージェント以外に起動できるコマンド（`{ label, command }`）。素のシェルは登録不要 — ランチャの **Shell** トグルが無設定で `$SHELL` を開く |
-| **Header buttons and chips** | グローバル設定で宣言しているボタンとチップの数（読み取り専用）。未設定なら「built-in」。「Set up header buttons…」で `mulmoterminal-header` スキルを起動（→ [ヘッダーのカスタマイズ](#header)） |
+| **Header buttons and chips** | グローバル設定のヘッダーのボタンとチップを、ここで編集します — 追加・編集・削除、ボタンをフォルダにまとめる操作、状態ごとの色、ヘッダーの状態の色づけも。「Set up header buttons…」で `mulmoterminal-header` スキルを起動（→ [ヘッダーのカスタマイズ](#header)） |
 | **Terminal keys** | [選ぶだけでコピー](#copy-on-select)（`copyOnSelect`、既定 OFF）、[質問ペイン](#question-pane)（`questionPaneEnabled`）、あなたの Claude が**送信**として読むバイト（[Enter — 送信と改行](#terminal-submit)、`terminalSubmit`） |
 | **Keyboard shortcuts** | 全アクションと `send` の行を、割り当ての有無にかかわらず並べる一覧（読み取り専用）。**既定は全部 Not set** — **おすすめのキー** を押すと、このプラットフォーム向けの入門セットが一度に入ります（まだ割り当てのない動作と、使われていないキーにだけ）。それ以外は「Set up shortcuts…」で `mulmoterminal-keys` スキルが `keymap` に書きます（→ [キーボードショートカット](#keymap)） |
 | **Voice input** | 音声入力で**話す言語**（ブラウザの言語 / 発話ごとの自動検出 / 固定）。文字起こしできるマシンでだけ表示されます |
@@ -140,10 +140,12 @@ git チェックアウトならその横に `commit a1b2c3d` のチップが並�
 | **GitHub and GitLab** | このアプリが**あなたの名前で** forge に書き込むもの。セルが [issue に着手を知らせるか](#issue-work-comments)（`issueWorkComments`、既定 OFF）と、作った PR の末尾に[クローン名を書くか](#pr-workdir-footer)（`prWorkdirFooter`、既定 ON）。その下は `glab` で読む[セルフホスト GitLab のホスト](github.html#自前ホスティングの-gitlab)（`gitlabHosts` — 反映は次回起動時） |
 | **Pull request repos** | 横断 PR/Issue ビューが集約するリポ（`owner/repo`） |
 | **Google account** | Calendar 連携用の Google サインイン（RemoteHost の Connect とは別物） |
-| **Sessions and background tasks** | 返信を[まとめで終わらせるか](#append-system-prompt)（`appendSystemPrompt`、既定 ON — ディレクトリ側の設定が優先）、[決めたことの記録を残すか](#decision-digest)（`decisionDigest`、既定 OFF）、[定期の開発ログ](#all-keys)とその間隔（`worklogEnabled`、既定 OFF — 実行のたびにトークンを消費します） |
+| **Sessions and background tasks** | 返信を[まとめで終わらせるか](#append-system-prompt)（`appendSystemPrompt`、既定 ON — ディレクトリ側の設定が優先）、[決めたことの記録を残すか](#decision-digest)（`decisionDigest`、既定 OFF）、[定期の開発ログ](#all-keys)とその間隔（`worklogEnabled`、既定 OFF — 実行のたびにトークンを消費します）、1 時間ごとの組み込みの 2 つのタスク（コレクションとフィードの更新 `feedRefreshEnabled`、Google カレンダーの同期 `calendarSyncEnabled` — どちらも既定 ON）、実験機能の `remoteServer` のスイッチ |
 | **Sessions that survived a restart** | 以前のサーバから動き続けているターミナルを、**全ディレクトリ横断**で一覧。もう開かないプロジェクトのセッションや、素のシェルを見て終了できる唯一の場所です。各行に「どこで動いているか・何なのか（キーに紐づく会話が無ければ `shell or unknown`）・どれだけ放置されているか・終了して失うものがあるか」が出ます。**stop** はそのセッションだけを終了し、transcript のある会話はあとで再開できます。ターミナルが掴んでいる行は代わりに `● open` と出て、そちらで閉じます。この節では、セッションを勝手に終了させる2つの値 — `sessionIdleReapDays`（何日放置したら終了するか）と `sessionReapIntervalHours`（どれくらいの間隔で見直すか）— を変更できます。対象になる行には **自動終了の対象** と出ます。時刻ではなくイベントを名乗るのは、繰り返しが起動時に仕掛けられ、保存された値が稼働中のサーバの実際の挙動とは限らないためです。間隔の下の行には、このサーバが実際に仕掛けている間隔と、保存した変更がまだサーバーに届いていないかが出ます（#2184）。ここで保存した変更はすぐ反映され、前回のスイープから数えます |
 | **Cost (estimated)** | Session / Today / Month の推定コスト表示 |
+| **Quit MulmoTerminal** | このマシンで動いている MulmoTerminal のサーバを止めます。タブを閉じてもサーバは止まらないので、起動したターミナルに戻らずに止める方法です。もう一度起動するには `npx mulmoterminal@latest` を実行します |
 | **Help & user guide** | このガイドへのリンク集 |
+| **Release notes** | アップグレードのあとに「新しいこと」の窓が見せた、各バージョンの変更点。バージョンを選んで読み直せ、全変更の変更履歴へのリンクもある |
 
 ## 設定が効かないとき — まずここを見る {#dir-settings-preview}
 書いたはずの設定が反映されないとき、**Settings → Directory settings** を開いてください。ディレクトリごとに、
@@ -495,11 +497,11 @@ auto（注目度順）と manual（移動ボタンで手動）と並びます。
 worktree の `git status` を汚しません。
 
 - **同一性はそのままコピー** — `name` / `icon` / `theme` / `colors` / `fontSize` / `fontFamily` /
-  `provider` / `model`。同じプロジェクト、同じターミナル、同じモデルです。`icon` は解決後のファイルでは
+  `provider` / `model` / `headerStatusTint` / `backgroundImage`。同じプロジェクト、同じターミナル、同じモデルです。`icon` は解決後のファイルでは
   なく**書いたままのパス**で渡るので、リポジトリにコミットされたロゴなら worktree 側でも見つかります
   （gitignore されている画像なら、worktree には出ないだけです）
 - **セルの色は色相を少しずつ回す** — `badgeColor` / `headerColor` / `headerTextColor` /
-  `cellColor` / `cellBorderColor` / `dotColor` / `buttonColor`。1本ごとに 12 度ずつ進むので、
+  `cellColor` / `cellBorderColor` / `dotColor` / `buttonColor`、それに `headerStatusColors` の各項目（背景と文字）。1本ごとに 12 度ずつ進むので、
   並べるとグラデーションになります。「このプロジェクトだ」と分かり、かつ「どの worktree か」も分かる状態です。
   彩度と明度は触らないので、`headerTextColor` の `#ffffff` は白のままです（無彩色には回す色相がありません）
 - **`orderPriority` はプロジェクトの順位 +1**。末尾に落ちるのではなく、切り出し元のすぐ後ろに並びます。
@@ -917,7 +919,7 @@ ANSI 16 色のうち 1 色だけ差し替えたい、という場合は `colors`
 | 症状 | 原因 |
 |---|---|
 | **ピッカーに出てこない** | `id` が組み込みと同じ / `colors` に不正な値 / `extends` 無しで色が足りない。いずれも読まれません |
-| **書き換えたのに変わらない** | サーバを再起動していない。グローバル設定は起動時に一度だけ読まれます |
+| **書き換えたのに変わらない** | サーバを再起動していない、またはファイルを読み直していない。グローバル設定は起動時に読まれるので、手で書き換えたら、サーバを再起動するか、Settings の **設定ファイルを読み直す** を押します |
 | **選択したのに既定の色になる** | 定義が見つかっていません。Settings のテーマ選択に理由が出ます |
 | **ステータスの色が読みにくい** | `--bg-base` の明るさで自動判定しています。地を中間色にすると判定が意図とずれることがあるので、明るくするか暗くするか寄せてください |
 | **パネルが見えない** | `--bg-panel` と `--bg-base` の差が小さすぎます |
@@ -999,7 +1001,7 @@ Shift+Enter が改行ではなく*送信*になってしまう場合だけ**で�
 
 ## 通知音（`soundKinds` / `sounds`） {#sounds}
 
-鳴る瞬間は6種類あり、それぞれ別の音・別の ON/OFF を持ちます。並列数を上げたときに通知が
+鳴る瞬間は7種類あり、それぞれ別の音・別の ON/OFF を持ちます。並列数を上げたときに通知が
 うるさくなるのが本題なので、**既定で ON なのは最初の2つだけ**。残りは
 **Settings → Notification sounds** か設定ファイルから opt-in します。
 
@@ -1010,6 +1012,7 @@ Shift+Enter が改行ではなく*送信*になってしまう場合だけ**で�
 | `command-done` | Run セルのコマンドが正常終了（exit 0） | OFF |
 | `command-failed` | Run セルのコマンドが異常終了、または起動に失敗 | OFF |
 | `session-exited` | セッションの端末が終了。**自分でセルを閉じた場合も含む** | OFF |
+| `worker-failed` | 裏で動く補助の処理が、ターンを終えないまま終了した | OFF |
 | `pr-ci-failed` | そのディレクトリの PR が赤くなった。フェーズを取りに行くのはロスターなので、**ロスターが画面に出ている間だけ**拾えます | OFF |
 
 ```jsonc
@@ -1051,8 +1054,8 @@ Shift+Enter が改行ではなく*送信*になってしまう場合だけ**で�
 ```
 
 設定モーダルから変えた場合は開いているターミナルにすぐ反映されます。**手で書いた**場合は
-**`mulmoterminal` を再起動**し、ブラウザのタブを再読み込みしてください。グローバル設定は
-サーバ起動時に一度だけ読まれるため、手編集は再起動するまでブラウザに届きません——[`keymap`](#keymap) や
+**`mulmoterminal` を再起動**（または Settings の **設定ファイルを読み直す** を押す）し、ブラウザのタブを再読み込みしてください。グローバル設定は
+サーバ起動時に読まれるため、手編集は再起動か読み直しをするまでブラウザに届きません——[`keymap`](#keymap) や
 [`terminalSubmit`](#terminal-submit) と同じ注意点で、「設定したのに効かない」の典型的な原因です。
 **ディレクトリごと**の指定（[後述](#per-dir)）はサーバ再起動こそ不要ですが、ファイル監視で拾われる
 わけでもありません。再読み込みの条件は[後述](#per-dir-font)を参照してください。
@@ -1076,8 +1079,8 @@ Fira Code → Menlo → Consolas**、続いて日本語・韓国語・中国語�
 
 ### 反映されないとき
 
-- **どのフォントを指定しても何も変わらない。** サーバを再起動していない可能性が高いです。グローバル
-  設定は起動時にしか読まれません（上記参照）。ディレクトリごとの `fontFamily` は再起動こそ不要ですが、
+- **どのフォントを指定しても何も変わらない。** サーバを再起動していない、または設定ファイルを読み直していない可能性が高いです。グローバル
+  設定は起動時とその読み直しでしか読まれません（上記参照）。ディレクトリごとの `fontFamily` は再起動こそ不要ですが、
   手編集の場合はブラウザの再読み込みが必要です（→[ターミナルのフォント](#per-dir-font)）。
 - **特定のフォントだけ効かない。** その名前のフォントが入っていないため、ブラウザがスキップして次の
   候補にフォールバックしています。フォント一覧の表記と綴りを見比べてください。
@@ -1816,7 +1819,7 @@ ollama launch claude --model nemotron-3-ultra:cloud -- \
 
 1. **`agent: "claude"` が無い。** 必須です。コマンドラインのどこにも「`--` の向こう側が
    どの CLI か」は書かれていないので、MulmoTerminal は推測しません。
-2. **`id` が名前として無効**（大文字・空白が入っている、組み込みの 4 つと同じ、など）。
+2. **`id` が名前として無効**（大文字・空白が入っている、組み込みのエージェント名 — `claude`・`codex`・`antigravity`・`grok`・`muse`・`copilot`・`cursor`・`shell` — と同じ、など）。
 3. **サーバを再起動していない**／タブをリロードしていない。
 
 何が受け付けられたかは、ファイルとアプリが解釈した結果を比べれば分かります。
@@ -2100,7 +2103,7 @@ posted by MulmoTerminal
 | `providers` | Anthropic 互換の接続先（→ [OpenRouter で別のモデルを使う](providers.html)） |
 | `customAgents` | Claude Code を起動する自分のコマンド。Agent Picker に並びます（→ [カスタムエージェント](#custom-agents)） |
 | `soundFile` | 全種類共通のフォールバック通知音（音声ファイルの絶対パス。設定モーダルからも変更可） |
-| `soundKinds` | どの瞬間に鳴らすか。**書かなければ** `["finished","waiting"]`、2.2 で増えた4種は opt-in、`[]` で無音（→ [通知音](#sounds)） |
+| `soundKinds` | どの瞬間に鳴らすか。**書かなければ** `["finished","waiting"]`、そのほかの種類（`command-done`・`command-failed`・`session-exited`・`worker-failed`・`pr-ci-failed`）は opt-in、`[]` で無音（→ [通知音](#sounds)） |
 | `sounds` | 種類ごとの音。例 `{ "waiting": "preset:coin" }` — `preset:<id>` か絶対パス。未指定の種類は `soundFile` を使う（→ [通知音](#sounds)） |
 | `pushEnabled` | Web Push の master スイッチ（既定 `false` → [スマホ通知](notifications.html)） |
 | `pushKinds` | どの瞬間に飛ばすか：`"finished"`（ターン完了）と `"waiting"`（質問して停止）。**書かなければ両方**、`[]` でどれも飛ばさない（→ [どの瞬間に飛ぶか](notifications.html#kinds)） |
