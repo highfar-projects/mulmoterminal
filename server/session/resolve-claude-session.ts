@@ -1,7 +1,7 @@
 // Pick the effective session id for a claude /ws connection. Its own module rather than
 // ws-routes.ts's because it is the one place that gathers the LIVE facts the decision needs.
 import { randomUUID } from "node:crypto";
-import { tmuxHasSession } from "../infra/tmux.js";
+import { tmuxHasSession } from "../infra/process/tmux.js";
 import { ptys } from "./registry.js";
 import { sessionExistsOnDisk } from "./session-reads.js";
 import { clearedClaudeIdOf, clearedTranscripts } from "./transcript/cleared-transcripts.js";

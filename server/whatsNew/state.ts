@@ -6,7 +6,7 @@ import { isRecord } from "../../common/isRecord.js";
 import { compareVersions } from "../../common/whatsNew.js";
 import { withConfigLock } from "../config/config-lock.js";
 import { writeFileAtomic } from "../files/atomic-write.js";
-import { mulmoterminalHome } from "../infra/mulmoterminal-home.js";
+import { mulmoterminalHome } from "../infra/fs/mulmoterminal-home.js";
 
 const stateFile = (): string => path.join(mulmoterminalHome(), "whats-new.json");
 

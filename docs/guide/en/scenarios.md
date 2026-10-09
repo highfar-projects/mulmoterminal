@@ -22,7 +22,7 @@ Parallel agents, git worktrees, Claude and Codex side by side: the vocabulary is
 
 The grid's core and headline use case. This is the center of the **command post**.
 
-1. Add cells with **New terminal** and launch Claude / Codex on a different task in each.
+1. Add cells with **New terminal** and launch Claude, Codex or another agent on a different task in each.
 2. While one is thinking, move ahead with review or edits in another cell.
 3. Pick up only the cells that call you — **amber (awaiting input)** or the **green-ringed "done, review it"** ones — you don't have to watch them all.
 
@@ -80,8 +80,8 @@ Grid cells aren't just for Claude — they can run your project's **scripts**, s
 
 ## 5. Use Claude and Codex together
 
-You can send the same task to both Claude and Codex to compare, or use each for what it does best — all on a per-cell basis.
-Just pick one with the toggle at launch; collection actions and mulmoclaude skills work with both.
+You can send the same task to two agents — Claude and Codex, say — to compare, or use each for what it does best — all on a per-cell basis.
+Just pick one in the **Agent Picker** at launch; collection actions and mulmoclaude skills work with both Claude and Codex.
 
 ## 6. Tell projects apart by color
 

@@ -17,7 +17,7 @@ import { join } from "node:path";
 import { NODE_DOWNLOAD_URL } from "./node-install.js";
 
 // The v4 loopback every local client of this server dials by literal — `guiMcpUrlTemplate` in
-// server/infra/gui-mcp-registration.ts builds `http://127.0.0.1:<port>/api/mcp/...`. Duplicated
+// server/infra/process/gui-mcp-registration.ts builds `http://127.0.0.1:<port>/api/mcp/...`. Duplicated
 // here because bin/ is plain JS and cannot import the server's TypeScript, and pinned by a spec
 // the same way PORT_IN_USE_EXIT_CODE is.
 const V4_LOOPBACK_CLIENTS_DIAL = "127.0.0.1";
@@ -123,7 +123,7 @@ export function probeFailureIsPortInUse(err) {
  * `localhost`, `127.1` — and a host string has no last case. The kernel has none of that problem:
  * measured, `listen(0,"0:0:0:0:0:0:0:0")` reports `::` and `listen(0,"localhost")` reports `::1`.
  * The comparisons below are exact because the kernel's OUTPUT vocabulary is finite even though
- * its input vocabulary is not. server/infra/loopback.ts made the same argument for its own
+ * its input vocabulary is not. server/infra/http/loopback.ts made the same argument for its own
  * question: "asking after the fact answers all of them".
  *
  * The probe/bind race the launcher already lives with is unchanged: this narrows the window, it
@@ -152,7 +152,7 @@ export function companionHostsFor(boundAddress) {
  *
  * The authority for a name is the kernel, not this function, and the launcher asks it the only
  * way that is exact — the child reports what `server.address()` says it bound. See
- * server/infra/loopback.ts, which had already written the argument down for its own question.
+ * server/infra/http/loopback.ts, which had already written the argument down for its own question.
  */
 export function launcherReachHost(bindHost) {
   if (bindHost === "0.0.0.0") return "127.0.0.1";
@@ -209,7 +209,7 @@ export function launcherUrl(reachHost, port) {
  * feature nothing in `bin/` mentions. Changing the URL means adding the new loopback address to
  * that authorized-domain list first.
  *
- * Reachability is not the reason it is safe; #1834 is. `server/infra/loopback-listener.ts` makes
+ * Reachability is not the reason it is safe; #1834 is. `server/infra/http/loopback-listener.ts` makes
  * this server serve `127.0.0.1` in EVERY configuration — as the primary bind, or as a second
  * listener when the operator widens it — because eight local callers write that address as a
  * literal. So `localhost` arrives here whatever `MULMOTERMINAL_HOST` says, falling back to v4

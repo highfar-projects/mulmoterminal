@@ -20,10 +20,10 @@ import type { Express, Request, Response } from "express";
 import { SCHEDULE_TYPES, TASK_ORIGINS, TASK_TRIGGERS, type TaskLogEntry } from "@receptron/task-scheduler";
 import { createTaskManager, getSchedulerLogs, getSchedulerTasks, getSchedulerTaskState } from "@mulmoclaude/core/scheduler";
 import type { ITaskManager, SystemTaskDef, TaskDefinition, TaskSchedule } from "@mulmoclaude/core/scheduler";
-import { readTextFile } from "../../infra/read-text-file.js";
+import { readTextFile } from "../../infra/fs/read-text-file.js";
 import { isRecord } from "../../../common/isRecord.js";
 import { configureSchedulerAdapter, startSystemTaskScheduler } from "./scheduler-adapter.js";
-import { hostStateRoot } from "../../infra/host-state-root.js";
+import { hostStateRoot } from "../../infra/fs/host-state-root.js";
 import { fireScheduledChat, type ScheduledChatSpawn } from "./scheduled-run.js";
 
 const log = {

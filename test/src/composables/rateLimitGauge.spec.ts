@@ -101,9 +101,16 @@ describe("rateLimitReadout gauges", () => {
 describe("resetsIn", () => {
   const inMinutes = (m: number) => Math.floor(NOW / 1000) + m * 60;
 
-  it("reads as hours and minutes, or minutes alone", () => {
+  it("reads as days, hours and minutes, dropping the larger units that are zero", () => {
+    expect(resetsIn(inMinutes(3 * 1440 + 4 * 60 + 10), NOW, t)).toBe("resets in 3d 4h 10m");
     expect(resetsIn(inMinutes(135), NOW, t)).toBe("resets in 2h 15m");
     expect(resetsIn(inMinutes(20), NOW, t)).toBe("resets in 20m");
+  });
+
+  it("switches to days exactly at a day, and keeps the smaller units", () => {
+    expect(resetsIn(inMinutes(1439), NOW, t)).toBe("resets in 23h 59m");
+    expect(resetsIn(inMinutes(1440), NOW, t)).toBe("resets in 1d 0h 0m");
+    expect(resetsIn(inMinutes(1441), NOW, t)).toBe("resets in 1d 0h 1m");
   });
 
   // A stale reading whose reset has passed should say nothing rather than count backwards.

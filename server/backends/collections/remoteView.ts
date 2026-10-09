@@ -37,7 +37,7 @@ import {
 import type { CollectionCustomView, CollectionItem, CollectionSchema } from "@mulmoclaude/core/collection";
 
 import { thumbnailResolverFor } from "./thumbnailStore.js";
-import type { ProjectScope } from "../../infra/project-root.js";
+import type { ProjectScope } from "../../infra/fs/project-root.js";
 
 // Resolves a workspace image path to a downscaled JPEG `data:` URL, or null when
 // it can't (path escapes the workspace, missing, or undecodable).

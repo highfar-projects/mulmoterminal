@@ -7,7 +7,7 @@
 // the second-instance guard (#611, #653) stopped firing for every default install.
 //
 // So this pins the agreement rather than either half of it. Same reasoning as the
-// PORT_IN_USE_EXIT_CODE contract in test/server/infra/server-exit.spec.ts: a value duplicated
+// PORT_IN_USE_EXIT_CODE contract in test/server/infra/process/server-exit.spec.ts: a value duplicated
 // across `bin/` (plain JS, cannot import the server's TypeScript) and `server/` needs a test
 // standing between the two copies, or the next person to move one leaves the other behind.
 import { describe, it, expect } from "vitest";
@@ -16,7 +16,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { bindHostFor, browserUrl, companionHostsFor, launchTarget, launcherReachHost, launcherUrl, probeFailureIsPortInUse } from "../../bin/cli-args.js";
-import { boundAddress } from "../../server/infra/loopback.js";
+import { boundAddress } from "../../server/infra/http/loopback.js";
 import { BIND_HOST } from "../../server/config/env.js";
 
 const REPO_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -307,7 +307,7 @@ describe("the companions a bound address implies", () => {
   // The literal is duplicated into bin/ because that is plain JS and cannot import the server's
   // TypeScript. Pinned against its source the way PORT_IN_USE_EXIT_CODE is.
   it("agrees with gui-mcp-registration.ts about the address those clients dial", () => {
-    const registration = readFileSync(path.join(REPO_ROOT, "server", "infra", "gui-mcp-registration.ts"), "utf8");
+    const registration = readFileSync(path.join(REPO_ROOT, "server", "infra", "process", "gui-mcp-registration.ts"), "utf8");
     expect(registration, "guiMcpUrlTemplate no longer dials 127.0.0.1 by literal — companionHostsFor's reason moved").toMatch(/http:\/\/127\.0\.0\.1:/);
   });
 
@@ -341,7 +341,7 @@ describe("the companions a bound address implies", () => {
 // THE INVERSION. Three review rounds each found a different spelling of BIND_HOST that a guess
 // gets wrong — `::` vs `::1`, `localhost` resolving per platform, a printed `localhost` a browser
 // re-resolves. A host string has no last case, so the launcher stopped classifying the REQUESTED
-// string and now asks the child what it actually bound. server/infra/loopback.ts had already
+// string and now asks the child what it actually bound. server/infra/http/loopback.ts had already
 // argued exactly this for its own question: "classifying the requested string cannot be made
 // right … asking after the fact answers all of them, because the kernel has already resolved
 // whatever was typed."

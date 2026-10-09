@@ -23,7 +23,7 @@ import { isPresentableHtmlPath } from "@mulmoclaude/html-plugin";
 import { SHAPE_EXTENSIONS } from "@gui-chat-plugin/shapescript";
 import { isRecord } from "../../../common/isRecord.js";
 import { SESSION_ID_RE } from "../../config/env.js";
-import { isSamePath } from "../../infra/path-within.js";
+import { isSamePath } from "../../infra/fs/path-within.js";
 
 /** Request header carrying the chat session a tool call belongs to. Set by the MCP
  *  broker (server/mcp/broker.ts), which is the only caller that knows it. */

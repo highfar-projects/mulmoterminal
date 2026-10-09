@@ -9,7 +9,7 @@
 // view do not both summarize, and a retry floor so a viewed-but-failing session is not
 // re-summarized on every poll.
 import { aiTitleFromParsed, conversationTurnsFromParsed, isTrivialPrompt, type ConversationTurn } from "../transcript/transcript.js";
-import { forEachJsonlRecord } from "../../infra/jsonl-file.js";
+import { forEachJsonlRecord } from "../../infra/fs/jsonl-file.js";
 import {
   emptyTitleWindow,
   foldTitleWindow,

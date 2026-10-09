@@ -26,7 +26,7 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { randomUUID } from "node:crypto";
-import { toolDefinitions } from "../infra/plugins-registry.js";
+import { toolDefinitions } from "../infra/tools/plugins-registry.js";
 import { offeredTools, routeToolCall, SUBMIT_TRANSLATION_TOOL_NAME } from "./tool-gate.js";
 import { toolGroupServerId, GUI_SERVER_ID, type ToolGroup } from "../../common/toolGroups.js";
 import { interpretToolEnvelope } from "./tool-envelope.js";

@@ -335,6 +335,7 @@ export const tipsJa: Messages["tips"] = {
     accountTrustPrompt:
       "Claude の利用状況を表示できません — 利用状況の確認が Claude Code の信頼の確認で止まっています。ワークスペースのフォルダでこのアカウントのセルを一度起動して承認してください。",
     accountNote: "{account}: {note}",
+    resetsInDays: "あと {days}日{hours}時間{minutes}分でリセット",
     resetsInHours: "あと {hours}時間{minutes}分でリセット",
     resetsInMinutes: "あと {minutes}分でリセット",
     windowUsed: "{window} {percent}% 使用",

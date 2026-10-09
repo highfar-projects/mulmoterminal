@@ -8,7 +8,7 @@
 import { describe, it, expect, vi } from "vitest";
 
 import { reapIdleSessions, reapSweepLines, survivingAfterSweep, type ReapSweepInput } from "../../../../server/session/reaping/reap-idle-sessions.js";
-import { reapableTmuxSession, isRestorableSession } from "../../../../server/infra/tmux.js";
+import { reapableTmuxSession, isRestorableSession } from "../../../../server/infra/process/tmux.js";
 import { DEFAULT_REAP_IDLE_DAYS, reapIdleSeconds } from "../../../../common/sessionReap.js";
 
 const NOW = 2_000_000;

@@ -3,7 +3,7 @@
 // carries every record, too much to fetch per collection each time the palette opens.
 import type { Express } from "express";
 import { discoverCollections } from "@mulmoclaude/core/collection/server";
-import { resolveProjectRoot } from "../../infra/project-root.js";
+import { resolveProjectRoot } from "../../infra/fs/project-root.js";
 import { collectionActionIndex } from "./collectionActionIndex.js";
 import { guarded } from "./collections.js";
 

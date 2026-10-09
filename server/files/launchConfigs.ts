@@ -6,10 +6,10 @@
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 import { parse as parseJsonc } from "jsonc-parser";
-import { readTextFile } from "../infra/read-text-file.js";
+import { readTextFile } from "../infra/fs/read-text-file.js";
 import { isRecord } from "../../common/isRecord.js";
 import { isUnknownArray } from "../../common/isUnknownArray.js";
-import { shellQuoteFor } from "../infra/shell-quote.js";
+import { shellQuoteFor } from "../infra/process/shell-quote.js";
 
 export interface LaunchConfigDef {
   label: string;

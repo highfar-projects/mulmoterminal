@@ -12,7 +12,7 @@ import { decideReload } from "../../../server/config/config-reload";
 import { emptyConfig } from "../../../server/config/app-config";
 
 const installs = vi.hoisted(() => ({ count: 0 }));
-vi.mock("../../../server/infra/install-bundled-skills.js", () => ({
+vi.mock("../../../server/infra/fs/install-bundled-skills.js", () => ({
   installBundledSkills: () => {
     installs.count += 1;
   },

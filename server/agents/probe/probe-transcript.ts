@@ -22,7 +22,7 @@
 
 import { mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { forEachJsonlLine } from "../../infra/jsonl-file.js";
+import { forEachJsonlLine } from "../../infra/fs/jsonl-file.js";
 import { encodeProjectDirName, projectSessionsDir } from "../../session/project-dir.js";
 import { isProbeSessionId } from "./probe-session.js";
 import { PROBE_PROMPT } from "../rate-limit/rate-limit-probe.js";

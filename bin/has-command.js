@@ -14,7 +14,7 @@
 //
 // A file lookup has neither problem: nothing is interpreted, it is just candidate names on disk.
 // WHICH candidates is the whole remaining question, and it is not this file's to invent — it is
-// `server/infra/has-binary.ts`'s, because "can we launch it" and "what would we launch" must not
+// `server/infra/process/has-binary.ts`'s, because "can we launch it" and "what would we launch" must not
 // answer differently. `test/bin/gate-agrees-with-spawn.spec.ts` compares the two over generated
 // machines rather than trusting these comments.
 //
@@ -64,7 +64,7 @@ export const extensionsFor = (platform) => (platform === "win32" ? WINDOWS_LAUNC
 
 // A Windows PATH entry may be QUOTED — `"C:\Program Files\tools"` — which the shells strip and a
 // plain join would not, leaving a path that matches nothing. Same rule as the server's
-// `windowsSearchDirectories` (server/infra/resolve-bin.ts); `C:\Program Files` is the canonical
+// `windowsSearchDirectories` (server/infra/process/resolve-bin.ts); `C:\Program Files` is the canonical
 // path that needs the quotes, so this is the common case rather than an exotic one.
 // The current directory is on neither platform's list. cmd.exe searches it and POSIX shells do
 // not, but what launches an agent is node-pty on both — and the directory THIS process sits in is
@@ -81,7 +81,7 @@ export const searchDirectories = (platform, env) => {
 };
 
 // Can this process enumerate everything execvp would search? Two cases where it cannot, both taken
-// from server/infra/has-binary.ts, which reasoned them out first:
+// from server/infra/process/has-binary.ts, which reasoned them out first:
 //
 //   - an UNSET PATH is not an empty one. execvp falls back to its own built-in default
 //     (confstr _CS_PATH), which is not readable from here.

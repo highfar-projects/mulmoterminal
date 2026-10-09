@@ -3,8 +3,8 @@
 // configured launcher an index refers to. All pure and all load-bearing — the invocation differs
 // per platform (and only Windows CI would catch a mistake), and the index guard is what stops a
 // browser-supplied number from reaching outside the configured allowlist.
-import { envValue } from "../../infra/pty-env.js";
-import { runExecutableCommand } from "../../infra/shell-quote.js";
+import { envValue } from "../../infra/process/pty-env.js";
+import { runExecutableCommand } from "../../infra/process/shell-quote.js";
 
 export interface ShellInvocation {
   shell: string;

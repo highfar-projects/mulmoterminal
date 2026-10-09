@@ -3,7 +3,7 @@ title: Claude Code / Codex の契約を複数並べて使う（ベータ）
 nav_title: 複数の契約（ベータ）
 layout: default
 parent: 日本語
-nav_order: 16
+nav_order: 17
 description: 一部のセルを 2 つ目の Claude Code / Codex の契約で動かし、契約ごとの 5h / 7d の使用枠をツールバーに出します。ベータ版の機能です。設定、最初のログイン、ゲージが n/a になったときの対処をまとめています。
 ---
 

@@ -7,7 +7,7 @@ import path from "node:path";
 import { appRequest } from "../../helpers/appRequest.js";
 import { publish, resetNotifier } from "@mulmoclaude/core/notifier";
 import { initNotifier, mountNotificationRoutes, NOTIFIER_CHANNEL } from "../../../server/backends/notifier.js";
-import { hostStateRoot } from "../../../server/infra/host-state-root.js";
+import { hostStateRoot } from "../../../server/infra/fs/host-state-root.js";
 
 interface Published {
   channel: string;

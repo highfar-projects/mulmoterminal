@@ -3,13 +3,13 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { type CwdPreset } from "../config-schema.js";
-import { readJsonFile } from "../../infra/read-text-file.js";
+import { readJsonFile } from "../../infra/fs/read-text-file.js";
 import { writeFileAtomicSync } from "../../files/atomic-write.js";
 import { isRecord } from "../../../common/isRecord.js";
 import { isManagedWorktreePath } from "../../../common/worktreePath.js";
 import { worktreesRootDir } from "../worktree/worktree-task.js";
-import { canonicalPath } from "../../infra/canonical-path.js";
-import { canonicalDir } from "../../infra/path-within.js";
+import { canonicalPath } from "../../infra/fs/canonical-path.js";
+import { canonicalDir } from "../../infra/fs/path-within.js";
 const isPreset = (v: unknown): v is CwdPreset => isRecord(v) && typeof v.label === "string" && typeof v.path === "string";
 
 // A preset's path in the one spelling the rest of the app uses. Trailing separators are what a

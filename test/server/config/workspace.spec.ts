@@ -5,7 +5,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { workspaceRequest, existingWorkspace, existingWorkspaceFromQuery } from "../../../server/config/workspace.js";
 import { CLAUDE_CWD } from "../../../server/config/env.js";
-import { cwdProblemMessage } from "../../../server/infra/spawn-cwd.js";
+import { cwdProblemMessage } from "../../../server/infra/process/spawn-cwd.js";
 
 // workspaceRequest guards what becomes a PTY's cwd, so every rejection matters: anything it lets
 // through unchecked is a path the client chose. It also decides what a rejection MEANS — #1151:

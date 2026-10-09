@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { gitStatus, dirtyCount, resetGitStatusCache, GIT_STATUS_TTL_MS } from "./git-status";
 import { parsePorcelainV2 } from "./git-parse";
-import { splitLines } from "../infra/split-lines";
+import { splitLines } from "../infra/fs/split-lines";
 
 const NOW = 1_700_000_000_000;
 

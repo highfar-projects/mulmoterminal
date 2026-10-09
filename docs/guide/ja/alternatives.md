@@ -3,7 +3,7 @@ title: Claude Code を並列で動かすツールの比較（他の選択肢も�
 nav_title: 他の選択肢との比較
 layout: default
 parent: 日本語
-nav_order: 17
+nav_order: 18
 description: Claude Code / Codex を複数同時に走らせるツール — Vibe Kanban、Nimbalyst、Parallel Code、Conductor、Claude Squad、そして Claude Code 本体の claude agents。どれがどの困りごとに向くかを、作っている側から正直に書きます。
 ---
 
@@ -100,7 +100,7 @@ worktree 隔離と、作り込まれた diff レビュー。**Windows と Linux 
 
 こちらです。**複数のライブ端末を同時に**並べ、状態を色で示し、待っているセッションがあれば
 音とスマホ通知で呼びます。セッションは tmux の中で動くので、タブを閉じてもサーバを再起動しても
-消えません。Claude Code / Codex / Antigravity 対応。
+消えません。Claude Code / Codex / Antigravity / Grok / Muse / GitHub Copilot CLI / Cursor CLI 対応。
 
 **賭けているのは「要約しない」ほう**です。1行の要約は分類には効きますが、
 **5体が走っている横で長い返答を読む**役には立ちません。
@@ -122,7 +122,7 @@ worktree 隔離と、作り込まれた diff レビュー。**Windows と Linux 
 | **Conductor** | デスクトップ（Mac） | プロプライエタリ | Claude / Codex / Cursor | — |
 | **Claude Squad** | TUI | OSS | Claude / Codex / OpenCode / Amp | — |
 | **`claude agents`** | TUI | 本体 | Claude | — |
-| **MulmoTerminal** | **ブラウザ** | MIT | Claude / Codex / Antigravity | Web + push |
+| **MulmoTerminal** | **ブラウザ** | MIT | Claude / Codex / Antigravity / Grok / Muse / Copilot / Cursor | Web + push |
 
 **同じところに注目してください。** ほぼ全部が OSS で、worktree ベースで、ローカルで動きます。
 **「MIT だから」「ローカルだから」は差別化ではなく、この分野の最低ラインです。**

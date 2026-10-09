@@ -11,7 +11,7 @@
 // process under memory pressure, in the reported case. Reaping there kills a tmux session with a
 // live agent in it, and forgets the title, which is what drops the row from the phone's list.
 import { ptys } from "../registry.js";
-import { tmuxHasSession, tmuxIsPsmux } from "../../infra/tmux.js";
+import { tmuxHasSession, tmuxIsPsmux } from "../../infra/process/tmux.js";
 import { traceTmux } from "../../infra/tmux-trace.js";
 
 /** What the pty's death is evidence of. */

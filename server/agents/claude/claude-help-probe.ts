@@ -5,9 +5,9 @@
 import { statSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import type { Captured } from "../../infra/spawnCapture.js";
-import { resolvePtyLaunchForEnv, type PtyLaunch } from "../../infra/resolve-bin.js";
-import { diagnoseBinary } from "../../infra/has-binary.js";
+import type { Captured } from "../../infra/process/spawnCapture.js";
+import { resolvePtyLaunchForEnv, type PtyLaunch } from "../../infra/process/resolve-bin.js";
+import { diagnoseBinary } from "../../infra/process/has-binary.js";
 import { SpawnPermissionModeError } from "../../session/pty/pty-spawn.js";
 import { permissionModeChoices, permissionModeRefusal } from "./claude-permission-modes.js";
 

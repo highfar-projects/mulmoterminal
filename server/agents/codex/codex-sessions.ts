@@ -6,7 +6,7 @@ import { cleanTitle, parseJsonRecord, readFirstLine, readTranscriptHead } from "
 import { codexHomeOf, readThreadNames } from "./codex-thread-names.js";
 import { codexUserPrompt } from "./codex-user-turn.js";
 import { byCodeUnit } from "../../../common/byCodeUnit.js";
-import { mapConcurrent } from "../../infra/mapConcurrent.js";
+import { mapConcurrent } from "../../infra/async/mapConcurrent.js";
 import { rememberBounded } from "../bounded-cache.js";
 
 const ROLLOUT_RE = /^rollout-.*\.jsonl$/;

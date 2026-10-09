@@ -5,7 +5,7 @@
 // means every terminal's WebSocket (and every /api poll) hits a dead port 34567, the Vite
 // dev proxy floods the console with `ECONNREFUSED`, and to the user "all terminals
 // disconnected at once" — permanently, with no obvious way back. The in-process
-// uncaughtException/unhandledRejection guards (server/infra/process-guards.ts) catch RUNTIME
+// uncaughtException/unhandledRejection guards (server/infra/process/process-guards.ts) catch RUNTIME
 // errors, but a crash at module-import time or an explicit process.exit (e.g. an EADDRINUSE
 // bind failure racing a not-yet-dead previous instance on a restart) escapes them — and
 // `node --watch` then leaves the backend down for good.

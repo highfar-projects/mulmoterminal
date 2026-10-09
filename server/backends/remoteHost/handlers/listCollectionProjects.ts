@@ -14,7 +14,7 @@
 // wants "the host's own collections" names it like any other project rather than by omitting the
 // parameter and hoping.
 import { toJsonObject, type CommandHandlers } from "@mulmoclaude/core/remote-host";
-import { listProjectRoots, type ProjectSummary } from "../../../infra/project-root.js";
+import { listProjectRoots, type ProjectSummary } from "../../../infra/fs/project-root.js";
 import { lastSegment, pathSegments } from "../../../../common/pathSegments.js";
 
 export const listCollectionProjects: CommandHandlers["listCollectionProjects"] = async () => toJsonObject({ projects: projectChoices(listProjectRoots()) });

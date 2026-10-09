@@ -18,8 +18,8 @@ import { buildHeaderContext, loadHeaderConfig } from "../config/header/header-co
 import { resolveButtonCommand } from "../config/header/header-resolve.js";
 import { resolveScript } from "../files/scripts.js";
 import { resolveLaunchConfig } from "../files/launchConfigs.js";
-import { shellQuoteFor } from "../infra/shell-quote.js";
-import { tmuxHasSession } from "../infra/tmux.js";
+import { shellQuoteFor } from "../infra/process/shell-quote.js";
+import { tmuxHasSession } from "../infra/process/tmux.js";
 import { defaultShellTarget, type LaunchTarget } from "../session/spawn/shell-command.js";
 import { launchChoiceFromParams } from "../session/spawn/launch-choice.js";
 import { antigravityBrainRoot, antigravityConversationExists } from "../agents/antigravity/antigravity-session.js";
@@ -48,7 +48,7 @@ import { bufferEarlyFrames, type EarlyFrames } from "../session/pty/early-frames
 // looking for it where it has always been).
 export { settledEntry, startFailureMessageFor, wrongEndpointReason } from "./ws-endpoint-guard.js";
 import { claudeStartFailureMessage, settledEntry, startFailureMessageFor } from "./ws-endpoint-guard.js";
-import { registeredGuiMcpGroups } from "../infra/gui-mcp-registration.js";
+import { registeredGuiMcpGroups } from "../infra/process/gui-mcp-registration.js";
 import { TOOL_GROUPS, type ToolGroup } from "../../common/toolGroups.js";
 import { parseTerminalSize, type TerminalSize } from "../../common/terminalSize.js";
 import { handleCommandFrame } from "../session/pty/pty-connection.js";
@@ -81,7 +81,7 @@ import { ensureWorktreeEnv } from "../config/worktree/worktree-env.js";
 import { isCustomAgentId } from "../../common/customAgents.js";
 import { codexSessionRoot, resolveClaudeWithAccount, resolveCodexWithAccount } from "../session/session-home.js";
 import { accountDirectoryMcpGroups } from "../session/accounts/account-mcp.js";
-import { createKeySerializer } from "../infra/serialize-per-key.js";
+import { createKeySerializer } from "../infra/async/serialize-per-key.js";
 import { killPty } from "../session/pty/pty-kill.js";
 
 const sessionConnects = createKeySerializer();

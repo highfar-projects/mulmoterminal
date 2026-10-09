@@ -82,9 +82,9 @@ The limit is on the **directory**, not the row. Pasting the same worktree path i
 DIRECTORY**, or opening it from a recent-directory chip, will not start one either. The server is
 what refuses, so no client and no way of spelling the path gets around it.
 
-**The limit applies to agents** — every entry in the Agent Picker. An **OR LAUNCH** command is refused
-too when what it runs is an agent. **Shell**, and launchers that run anything else (`yarn dev`,
-`lazygit`), are exempt — the worktree an agent is working in is exactly where you want to run those.
+**The limit applies to agents** — every entry in the Agent Picker. A command you launch yourself — an
+**OR LAUNCH** command or a launcher chip — runs verbatim and is not held to it, whatever it runs, and neither
+is **Shell**: the worktree an agent is working in is exactly where you want to run `yarn dev` or `lazygit`.
 
 And two of those `yarn dev`s no longer fight over port 3000 — if the project asks for it. Each
 variable a project declares in [`worktreeEnv`](config.html#worktree-env) (a port, a database name,
@@ -149,8 +149,8 @@ the two cases where nothing is written) are in
 [Configuration → a worktree inherits this file](config.html#worktree-inherit).
 
 > **Put `.mulmoterminal.json` in your `.gitignore`.** Without it the file shows up as an untracked
-> change in the worktree's `git status` — which is not just untidy: MulmoTerminal **refuses to remove
-> a worktree that has uncommitted changes**, so it becomes one you cannot clean up.
+> change in the worktree's `git status` — which is not just untidy: the worktree then always has something
+> uncommitted, so every close asks you to **Discard & remove** a worktree that holds nothing you wrote.
 
 ---
 

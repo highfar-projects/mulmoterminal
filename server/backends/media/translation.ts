@@ -21,7 +21,7 @@ import path from "node:path";
 import { promises as fs } from "node:fs";
 import { randomUUID } from "node:crypto";
 import type { Express, Request, Response } from "express";
-import { stripBom } from "../../infra/read-text-file.js";
+import { stripBom } from "../../infra/fs/read-text-file.js";
 import { isRecord } from "../../../common/isRecord.js";
 
 // ── On-disk cache schema (SHARED with MulmoClaude — do not diverge) ───────────

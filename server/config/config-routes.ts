@@ -32,13 +32,13 @@ import type { PlayfulEffects } from "../../common/playfulEffects.js";
 import { systemTaskSettingsChanged } from "./system-task-settings.js";
 import { setAccountsProvider } from "../session/session-home.js";
 import type { TokenRotation } from "../../common/tokenRotation.js";
-import { installBundledSkills } from "../infra/install-bundled-skills.js";
+import { installBundledSkills } from "../infra/fs/install-bundled-skills.js";
 import type { SystemTaskSwitches } from "../backends/scheduler/system-tasks.js";
 import type { PushKind } from "../../common/pushKinds.js";
 import { type TerminalSubmitMode } from "../../common/terminalSubmit.js";
 import { launchOptions } from "./launch-options.js";
 import { worktreesRootDir } from "./worktree/worktree-task.js";
-import { canonicalPath } from "../infra/canonical-path.js";
+import { canonicalPath } from "../infra/fs/canonical-path.js";
 import { registeredStoriesRoots } from "../backends/plugins/mulmoscript.js";
 import { badArrayField, badNullableArrayField, badObjectField } from "./config-body.js";
 import { setDeclaredGitlabHosts } from "../git/forge-host.js";
@@ -361,7 +361,7 @@ function mountCwdPresetRoutes(app: Express, onCwdPresetsChanged?: CwdPresetsChan
   //
   // `cwdPresets` is a REPLACE-ALL field, and it is global — every mulmoterminal on this machine
   // shares the file, and the list decides which projects the server serves collections for
-  // (server/infra/project-root.ts). A client that sends the whole list sends ITS OWN VIEW of it,
+  // (server/infra/fs/project-root.ts). A client that sends the whole list sends ITS OWN VIEW of it,
   // and any way that view is short, the difference is deleted from disk: the initial GET has not
   // landed yet, the GET failed, another instance added a directory this tab never saw.
   //

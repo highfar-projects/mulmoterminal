@@ -15,7 +15,7 @@ import path from "node:path";
 import { configureCollectionWatchers, startCollectionWatchers, stopCollectionWatchers } from "@mulmoclaude/core/collection-watchers";
 import type { CollectionNotificationAdapter } from "@mulmoclaude/core/collection-watchers";
 import { buildNavigateTarget, buildPluginData, priorityToSeverity, readEntry } from "./collectionNotifierAdapter.js";
-import { listProjectRoots, projectIdForRoot } from "../../infra/project-root.js";
+import { listProjectRoots, projectIdForRoot } from "../../infra/fs/project-root.js";
 import { isRecord } from "../../../common/isRecord.js";
 
 const log = {

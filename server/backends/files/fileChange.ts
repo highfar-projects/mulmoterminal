@@ -11,7 +11,7 @@ import path from "node:path";
 import os from "node:os";
 import { stat } from "node:fs/promises";
 import { configureFileChangePublisher, publishFileChange } from "@mulmoclaude/core/file-change";
-import type { Publisher } from "../../infra/pubsub.js";
+import type { Publisher } from "../../infra/async/pubsub.js";
 import { MARKDOWN_FILE_SCOPE } from "../../../common/fileChannel.js";
 import { createDocumentWatchers, resolveWatchableDocument, type FileStamp, type WatchableScope } from "../../files/documentWatch.js";
 import { containForWatching } from "../../files/pathContainment.js";

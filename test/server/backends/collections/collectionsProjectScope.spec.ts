@@ -13,8 +13,8 @@ import { appRequest } from "../../../helpers/appRequest.js";
 import { initCollectionsBackend, mountCollectionRoutes } from "../../../../server/backends/collections/collections.js";
 // Mounted separately in app-routes.ts, so a spec that exercises it mounts it separately too.
 import { mountSelfContainmentRoutes } from "../../../../server/backends/collections/collectionSelfContainment.js";
-import { projectId } from "../../../../server/infra/project-root.js";
-import { manageCollectionHandlerFor } from "../../../../server/infra/collection-tool.js";
+import { projectId } from "../../../../server/infra/fs/project-root.js";
+import { manageCollectionHandlerFor } from "../../../../server/infra/tools/collection-tool.js";
 import { makeTempDir } from "../../../support/tempDir";
 
 const schemaFor = (title: string) => ({

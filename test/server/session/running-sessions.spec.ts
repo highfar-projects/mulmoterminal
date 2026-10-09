@@ -8,7 +8,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const listSessionIds = vi.fn<() => string[]>(() => []);
-vi.mock("../../../server/infra/tmux.js", () => ({ tmuxListSessionIds: () => listSessionIds() }));
+vi.mock("../../../server/infra/process/tmux.js", () => ({ tmuxListSessionIds: () => listSessionIds() }));
 
 const { runningKeyOf, runningSessionKeys } = await import("../../../server/session/dir-session.js");
 const { ptys } = await import("../../../server/session/registry.js");

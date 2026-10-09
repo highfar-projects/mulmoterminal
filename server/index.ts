@@ -4,9 +4,9 @@ import path from "path";
 import fs from "fs/promises";
 import { fileURLToPath } from "url";
 import { readFileSync } from "node:fs";
-import { createPubSub } from "./infra/pubsub.js";
-import { hideErrorStacks } from "./infra/hide-error-stacks.js";
-import { allowedToolNames, autoAllowedToolNames, toolSummaries } from "./infra/plugins-registry.js";
+import { createPubSub } from "./infra/async/pubsub.js";
+import { hideErrorStacks } from "./infra/http/hide-error-stacks.js";
+import { allowedToolNames, autoAllowedToolNames, toolSummaries } from "./infra/tools/plugins-registry.js";
 import { getPlayfulEffects, getUserMcpServers, getTokenRotation, APP_CONFIG_FILE } from "./config/config-routes.js";
 import { rotateNearLimit, rotateOnLimit, type LimitRotationDeps, type LimitRotationOutcome } from "./session/credentials/limit-rotation.js";
 import { noteMovedFrom } from "./session/credentials/rotation-notice.js";
@@ -14,16 +14,16 @@ import { sessionToken } from "./session/credentials/token-sessions.js";
 import { rotationLoginLabel } from "../common/tokenRotation.js";
 import { countLiveSessions } from "./agents/token/token-assignment.js";
 import { enforceKeymap } from "./config/keymap/keymap-check.js";
-import { tmuxCancelCopyMode, tmuxPaneInMode, tmuxPanePidsBySessionAsync, tmuxRedrawClient, tmuxTerminalModes, tmuxWindowSize } from "./infra/tmux.js";
-import { browserOriginHostnames, createIsAllowedOrigin } from "./infra/allowed-origin.js";
-import { serverErrorExit } from "./infra/server-exit.js";
+import { tmuxCancelCopyMode, tmuxPaneInMode, tmuxPanePidsBySessionAsync, tmuxRedrawClient, tmuxTerminalModes, tmuxWindowSize } from "./infra/process/tmux.js";
+import { browserOriginHostnames, createIsAllowedOrigin } from "./infra/http/allowed-origin.js";
+import { serverErrorExit } from "./infra/process/server-exit.js";
 import { PORT, BIND_HOST, CLAUDE_CWD } from "./config/env.js";
 import { messageOf } from "./errors.js";
 import { hookSettingsJson } from "./session/spawn/setup/hook-settings.js";
 import { mcpConfigJson } from "./session/spawn/setup/mcp-config.js";
 import { createClaudeSpawner } from "./session/spawn/agents/spawn-claude.js";
 import { createRateLimitService } from "./agents/rate-limit/rate-limit-service.js";
-import { runLegacyCleanupsOnce } from "./infra/legacy-cleanup.js";
+import { runLegacyCleanupsOnce } from "./infra/fs/legacy-cleanup.js";
 import { createCodexSpawner } from "./session/spawn/agents/spawn-codex.js";
 import { createShellSpawners } from "./session/spawn/spawn-shell.js";
 import { createTranslationWorker } from "./session/scheduled/translation-worker.js";
@@ -34,14 +34,14 @@ import { createConnectionHandlers } from "./session/pty/pty-connection.js";
 import { createTmuxSizeSync } from "./session/pty/tmux-size-sync.js";
 import { createIssueSessionSpawner } from "./session/spawn/issue-session-spawn.js";
 import { bindSessionAccount } from "./session/session-home.js";
-import { registeredGuiMcpGroups } from "./infra/gui-mcp-registration.js";
+import { registeredGuiMcpGroups } from "./infra/process/gui-mcp-registration.js";
 import { syncCursorDirectoryMcp } from "./agents/cursor/cursor-mcp.js";
 import { ensureWorktreeEnv } from "./config/worktree/worktree-env.js";
 import { TOOL_GROUPS } from "../common/toolGroups.js";
 import { createPaneModeWatch } from "./session/pty/pane-mode-watch.js";
 import { createHeatWatch } from "./session/activity/heat-watch.js";
 import type { HeatFrame } from "../common/playfulEffects.js";
-import { listProcessRows } from "./infra/process-list.js";
+import { listProcessRows } from "./infra/process/process-list.js";
 import { sendFrame } from "./session/ws-frames.js";
 import type { SpawnDeps } from "./session/spawn/spawn-deps.js";
 import { ptys } from "./session/registry.js";
@@ -52,7 +52,7 @@ import { startDecisionDigestSchedule } from "./session/decisions/decision-digest
 import { AGENT_BINS, AGENT_MODELS } from "./config/agent/agent-bins.js";
 import { agentAvailability } from "./agents/agent-availability.js";
 import { agentInstallGuide } from "../bin/agent-install-guides.js";
-import { diagnoseBinary } from "./infra/has-binary.js";
+import { diagnoseBinary } from "./infra/process/has-binary.js";
 import { ptyEnv } from "./session/pty/pty-spawn.js";
 import { createAntigravitySpawner } from "./session/spawn/agents/spawn-antigravity.js";
 import { createGrokSpawner } from "./session/spawn/agents/spawn-grok.js";
@@ -65,26 +65,26 @@ import { createSessionActivityPublisher, firestoreSessionActivityStore } from ".
 import { createWorkPhaseTracker } from "./session/activity/work-phase-tracker.js";
 import { currentFirestore, currentUid } from "./backends/remoteHost/session.js";
 import { initWorkspaceSetup } from "./backends/workspaceSetup.js";
-import { installBundledSkills } from "./infra/install-bundled-skills.js";
+import { installBundledSkills } from "./infra/fs/install-bundled-skills.js";
 import { initBackends } from "./backends/boot-backends.js";
-import { installShutdownHandlers } from "./infra/shutdown.js";
+import { installShutdownHandlers } from "./infra/process/shutdown.js";
 import { startCollectionCompletionWatchers } from "./backends/collections/collectionWatchers.js";
 import { initScheduling } from "./backends/scheduler/scheduler-boot.js";
 // The projects a request may name — and, at boot, the roots whose feeds refresh on schedule.
-import { listProjectRoots } from "./infra/project-root.js";
+import { listProjectRoots } from "./infra/fs/project-root.js";
 import { createSessionLifecycle, SESSIONS_CHANNEL } from "./session/lifecycle.js";
 import { PROMPT_SUBMITTED_CHANNEL, type PromptSubmittedEvent } from "../common/promptChannel.js";
 import { mountAppRoutes } from "./routes/app-routes.js";
 import { GUI_SERVER_ID } from "../common/toolGroups.js";
-import { onListening } from "./infra/on-listening.js";
+import { onListening } from "./infra/http/on-listening.js";
 import { startHookSocketListener } from "./infra/hook-socket.js";
-import { installProcessGuards } from "./infra/process-guards.js";
+import { installProcessGuards } from "./infra/process/process-guards.js";
 import { setProcessTitle } from "../bin/process-title.js";
-import { enableShapeScriptManifold } from "./infra/shapescript-csg.js";
+import { enableShapeScriptManifold } from "./infra/tools/shapescript-csg.js";
 
 // Register the top-level uncaughtException/unhandledRejection guards before any async boot
 // work runs, so a single unhandled error can't silently kill the backend and disconnect
-// every terminal at once (see infra/process-guards.ts).
+// every terminal at once (see infra/process/process-guards.ts).
 installProcessGuards();
 
 // Before the boot rather than after it: a server that is slow to start, or that dies during it, is
@@ -390,7 +390,7 @@ enforceKeymap(APP_CONFIG_FILE, {
 const browserHostnames = browserOriginHostnames(BIND_HOST, process.env.MULMOTERMINAL_ALLOWED_ORIGINS);
 const isAllowedOrigin = createIsAllowedOrigin(browserHostnames);
 
-// What a removed feature left on disk (infra/legacy-cleanup.ts). Fire-and-forget.
+// What a removed feature left on disk (infra/fs/legacy-cleanup.ts). Fire-and-forget.
 runLegacyCleanupsOnce();
 
 // Codex costs nothing to read, so it is current before the first browser arrives.
@@ -479,7 +479,7 @@ pubsub = createPubSub(listeners, isAllowedOrigin);
 // before the scheduler that triggers it is registered.
 await initBackends({ pubsub, spawnClaudePty, retain: (sessionId) => scheduledSessions.register(sessionId) });
 
-// ShapeScript CSG through manifold before the first request (infra/shapescript-csg.ts).
+// ShapeScript CSG through manifold before the first request (infra/tools/shapescript-csg.ts).
 await enableShapeScriptManifold();
 
 // Let a phone drive MulmoTerminal over the Firestore command channel
@@ -537,7 +537,7 @@ mountTerminalWebSockets({
 
 // A bind failure (most often the port already in use) must not surface as an unhandled
 // 'error' event / stack trace — exit with a clear message and the code the launcher reads
-// (infra/server-exit.ts).
+// (infra/process/server-exit.ts).
 server.on("error", (err) => {
   const { message, code } = serverErrorExit(err, PORT);
   console.error(message);

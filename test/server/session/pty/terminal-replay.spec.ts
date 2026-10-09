@@ -118,7 +118,7 @@ describe("appendBoundedOutput", () => {
   });
 
   // OSC 52 carries the clipboard as base64 and this host enables it deliberately
-  // (infra/tmux.ts forwards Claude Code's auto-copy), so payloads run to kilobytes.
+  // (infra/process/tmux.ts forwards Claude Code's auto-copy), so payloads run to kilobytes.
   // Any fixed look-behind window loses the introducer and leaks base64 onto the screen.
   it("finds the introducer of an OSC payload far longer than any fixed window", () => {
     const payload = "QUJDRA".repeat(500);

@@ -9,7 +9,7 @@ import { mountFilesRoutes } from "../../../../server/backends/files/files.js";
 import { makeTempDir } from "../../../support/tempDir";
 import { canSymlink } from "../../../support/canSymlink";
 import { canNameFile } from "../../../support/canNameFile";
-import { initProjectRoots, projectId } from "../../../../server/infra/project-root.js";
+import { initProjectRoots, projectId } from "../../../../server/infra/fs/project-root.js";
 
 let request: ReturnType<typeof appRequest>;
 // A session project dir OUTSIDE the workspace root (a sibling repo), reachable only via

@@ -16,7 +16,7 @@
 import type { Express, Request, Response } from "express";
 import { pushCalendarForCollection } from "@mulmoclaude/core/google";
 import { loadCollection } from "@mulmoclaude/core/collection/server";
-import { errorStatus, resolveProjectRoot, type ProjectScope } from "../../infra/project-root.js";
+import { errorStatus, resolveProjectRoot, type ProjectScope } from "../../infra/fs/project-root.js";
 import { toCollectionPushResult } from "./calendarPushResult.js";
 import { hostLogger } from "../hostLogger.js";
 

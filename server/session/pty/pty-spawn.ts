@@ -6,10 +6,10 @@ import pty from "node-pty";
 import type { IPty } from "node-pty";
 import os from "node:os";
 import path from "node:path";
-import { sanitizePtyEnv, withFallbackLocale } from "../../infra/pty-env.js";
-import { resolvePtyLaunchForEnv } from "../../infra/resolve-bin.js";
-import { binaryProblemMessage, diagnoseBinary, type BinaryDiagnosis } from "../../infra/has-binary.js";
-import { cwdProblemMessage, diagnoseSpawnCwd, type CwdDiagnosis } from "../../infra/spawn-cwd.js";
+import { sanitizePtyEnv, withFallbackLocale } from "../../infra/process/pty-env.js";
+import { resolvePtyLaunchForEnv } from "../../infra/process/resolve-bin.js";
+import { binaryProblemMessage, diagnoseBinary, type BinaryDiagnosis } from "../../infra/process/has-binary.js";
+import { cwdProblemMessage, diagnoseSpawnCwd, type CwdDiagnosis } from "../../infra/process/spawn-cwd.js";
 import { withoutUnset } from "../spawn/setup/provider-env.js";
 import { trackPtyExit } from "./pty-kill.js";
 import { traceTmux } from "../../infra/tmux-trace.js";
@@ -24,7 +24,7 @@ import {
   tmuxIsPsmux,
   tmuxNewSessionArgs,
   tmuxScrubEnvNames,
-} from "../../infra/tmux.js";
+} from "../../infra/process/tmux.js";
 
 const PTY_COLS = 120;
 const PTY_ROWS = 30;
@@ -37,7 +37,7 @@ export const TMUX_CLIENT_CWD = os.homedir();
 // has to be answered against exactly this and not process.env — the PATH they disagree on is the
 // whole point of the check below (#1063).
 // The env is sanitized: package-manager launcher vars (yarn's PREFIX kills nvm
-// in spawned shells — see infra/pty-env.ts) must not leak into PTYs.
+// in spawned shells — see infra/process/pty-env.ts) must not leak into PTYs.
 // `unset` drops variables the session must NOT inherit — ANTHROPIC_API_KEY for a provider
 // session, which would silently outrank its auth token (#579). It cannot be expressed in
 // the settings `env` block, which can set a variable but not remove one.
@@ -81,7 +81,7 @@ export function spawnPty(bin: string, args: string[], cwd: string, unset: readon
   const env = ptyEnv(unset, spawnEnvFor(cwd, extra));
   // On Windows neither the name nor the arguments reach node-pty as they are: its PATH
   // lookup ignores executable extensions (so `claude` misses claude.exe, #794), and a batch
-  // shim has to be run through cmd.exe (#798). See infra/resolve-bin.ts.
+  // shim has to be run through cmd.exe (#798). See infra/process/resolve-bin.ts.
   const launch = resolvePtyLaunchForEnv(bin, args, env);
   const term = pty.spawn(launch.file, launch.args, { name: "xterm-256color", cols: PTY_COLS, rows: PTY_ROWS, cwd, env });
   trackPtyExit(term);

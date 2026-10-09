@@ -11,7 +11,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { isRecord } from "../../../common/isRecord.js";
 import { toolGroupServerId, type ToolGroup } from "../../../common/toolGroups.js";
-import { assignOwn } from "../../infra/own-assign.js";
+import { assignOwn } from "../../infra/fs/own-assign.js";
 import { OUR_GUI_SERVER_IDS } from "./gui-mcp-bridge.js";
 
 /** The file's `mcpServers` map — `{}` when there is no file, `null` when there is one we must not

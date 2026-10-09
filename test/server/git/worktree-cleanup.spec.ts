@@ -9,7 +9,7 @@ import { rmDirRetrying, GIT_TEST_TIMEOUT_MS } from "./wtTestUtil.js";
 import type { Express } from "express";
 
 const paneCwds = vi.hoisted(() => ({ value: [] as string[] | null, tmuxInstalled: true }));
-vi.mock("../../../server/infra/tmux.js", async (importOriginal) => ({
+vi.mock("../../../server/infra/process/tmux.js", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   tmuxAttachedCounts: () => null,
   tmuxPaneCwdsAsync: async () => paneCwds.value,
@@ -22,7 +22,7 @@ vi.mock("../../../server/session/dir-session.js", () => ({
 vi.mock("../../../server/session/registry.js", () => ({ ptys: new Map([["p", { cwd: "/nowhere" }]]) }));
 
 const { git, repoRoot, worktreesRoot } = await import("../../../server/git/worktrees");
-const { canonicalPath } = await import("../../../server/infra/canonical-path");
+const { canonicalPath } = await import("../../../server/infra/fs/canonical-path");
 // git spells a path its own way (forward slashes, long names on Windows), so rows are matched as
 // the server matches them: canonically.
 const samePath = (a: string, b: string): boolean => canonicalPath(a) === canonicalPath(b);

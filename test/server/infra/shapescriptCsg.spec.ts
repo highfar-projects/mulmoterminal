@@ -1,10 +1,10 @@
 // @vitest-environment node
 //
-// The server's switch to manifold for ShapeScript CSG (infra/shapescript-csg.ts):
+// The server's switch to manifold for ShapeScript CSG (infra/tools/shapescript-csg.ts):
 // after it, a conversion that names no engine uses manifold.
 import { describe, it, expect, afterEach } from "vitest";
 import { csgEngineFor, setDefaultCsgEngine } from "@gui-chat-plugin/shapescript";
-import { enableShapeScriptManifold } from "../../../server/infra/shapescript-csg.js";
+import { enableShapeScriptManifold } from "../../../server/infra/tools/shapescript-csg.js";
 
 describe("enableShapeScriptManifold", () => {
   afterEach(() => setDefaultCsgEngine("three-bvh-csg"));

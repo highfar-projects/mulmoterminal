@@ -1,7 +1,7 @@
 // @vitest-environment node
 //
 // ONE invariant, in both directions: the CLI start-up gate (`bin/has-command.js`) and the server's
-// pre-spawn check (`server/infra/has-binary.ts`) must answer the SAME question about the SAME
+// pre-spawn check (`server/infra/process/has-binary.ts`) must answer the SAME question about the SAME
 // machine. The gate refuses start-up; the server decides what is launched. When they disagree the
 // user gets one of exactly two bad days, and this PR's review produced one of each:
 //
@@ -17,7 +17,7 @@
 // has-command.js checkable rather than merely commented.
 import { describe, it, expect } from "vitest";
 import { hasCommand } from "../../bin/has-command.js";
-import { hasBinary, type BinaryProbe } from "../../server/infra/has-binary";
+import { hasBinary, type BinaryProbe } from "../../server/infra/process/has-binary";
 
 /** A fake disk holding exactly these paths. Case-insensitive on Windows, where the two sides build
  *  `codex.cmd` while npm wrote `codex.CMD` and the volume calls those one file — a case-sensitive

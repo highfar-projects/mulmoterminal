@@ -229,6 +229,7 @@ choice rows):
 | `"pane-tools"` / `"pane-canvas"` / `"pane-collections"` | The **tools used** / **Canvas** / **Collections** pane |
 | `"screen-wiki"`, `"screen-collections"`, … (every `screen-*`) | **Go to that screen** — the toolbar's doors |
 | `"settings-open"` / `"sound-toggle"` / `"view-toggle"` | Open Settings / notification sound on-off / enlarged view roster-strip |
+| `"confetti"` | Throw confetti over the app (the styles are ticked in Settings → Theme) |
 | `"order-auto"` / `"order-manual"` / `"order-priority"` | Set the cell order |
 | `"page-next"` / `"page-prev"` | Next / previous page of the grid |
 | `"terminal-reopen"` | Reopen the terminal closed most recently |

@@ -331,6 +331,7 @@ export const tipsZhCN: Messages["tips"] = {
     usageLimit: "无法显示 Claude 用量 — 该订阅已达到用量上限，检查未能得到回应。",
     accountTrustPrompt: "无法显示 Claude 用量 — 用量检查正在等待 Claude Code 的信任确认。请在工作区文件夹中用此账号启动一次单元格并接受。",
     accountNote: "{account}：{note}",
+    resetsInDays: "{days}天{hours}小时{minutes}分钟后重置",
     resetsInHours: "{hours}小时{minutes}分钟后重置",
     resetsInMinutes: "{minutes}分钟后重置",
     windowUsed: "{window} 已用 {percent}%",

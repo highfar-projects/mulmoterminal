@@ -12,8 +12,8 @@ const scrub = vi.fn();
 // `importOriginal` keeps the module's PURE parts real — the PORT rule the spawn asks for
 // (tmuxClientUnsetNames/ownPortFacts) is the thing under test below, and a hand-written stand-in
 // would pin the stand-in. Only what shells out to tmux is replaced.
-vi.mock("../../../../server/infra/tmux.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../../../server/infra/tmux.js")>()),
+vi.mock("../../../../server/infra/process/tmux.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../../server/infra/process/tmux.js")>()),
   tmuxAvailable: () => tmuxOn,
   tmuxHasSession: (id: string) => liveTmuxSessions.has(id),
   // The real one turns `env` into `-e KEY=VALUE` pairs, which is the only way a variable

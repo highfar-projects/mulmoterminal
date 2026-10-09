@@ -32,7 +32,7 @@ const usableLoad = (avg1: number, avg5: number, avg15: number, cores: number): M
 };
 
 /** The reading, or null where there is nothing to report. Pure — `node:os` is touched by the one
- *  caller in `server/infra/machine-load.ts`, so every rule here stays testable without waiting for
+ *  caller in `server/infra/process/machine-load.ts`, so every rule here stays testable without waiting for
  *  a machine that happens to be busy. */
 export function machineLoadFrom(averages: readonly number[], cores: number, platform: string): MachineLoad | null {
   if (!keepsLoadAverage(platform)) return null;

@@ -19,7 +19,7 @@ import os from "node:os";
 import { mkdirSync } from "node:fs";
 import { seedHelps, syncPresetSkills, syncActivePresetSkills, presetSkillsAssetDir } from "@mulmoclaude/core/workspace-setup";
 import { syncCodexSkills, codexSkillsRoot } from "../agents/codex/codex-skills.js";
-import { isSameRealPath } from "../infra/canonical-path.js";
+import { isSameRealPath } from "../infra/fs/canonical-path.js";
 
 // Console-backed logger, matching the prefix style other backends use.
 const log = {

@@ -47,7 +47,7 @@ import { museSessionLogPath, museSessionModel } from "../../agents/muse/muse-ses
 import { copyMuseBadgeFold, emptyMuseBadgeFold, foldMuseBadges, isMuseBadgeFold, type MuseBadgeFold } from "../../agents/muse/muse-usage.js";
 import { cursorBadges } from "../../agents/cursor/cursor-usage.js";
 import { museConversations, museConversationsHydrated } from "../registry.js";
-import { readTailRecords } from "../../infra/jsonl-file.js";
+import { readTailRecords } from "../../infra/fs/jsonl-file.js";
 import { createTranscriptFold } from "../transcript/transcript-fold.js";
 import { antigravityConversations, antigravityConversationsHydrated, codexRollouts, codexRolloutsHydrated } from "../registry.js";
 import type { SessionUsage } from "../transcript/transcript.js";

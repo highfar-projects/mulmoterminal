@@ -54,7 +54,7 @@ import type { PromptWindow } from "../../common/promptHistory.js";
 import { anchorOf, memoKeyFor, resumePlan, ANCHOR_BYTES, EMPTY_ANCHOR, type HistoryMemo } from "./transcript/prompt-history-memo.js";
 import { clearedAtOf, clearedClaudeIdOf, clearedTranscripts } from "./transcript/cleared-transcripts.js";
 import { currentTurnReplyFromClaudeParsed, lastTurnFromClaudeParsed, lastTurnFromCodexRolloutDocs, EMPTY_TURN, type LastTurn } from "./transcript/last-turn.js";
-import { forEachJsonlRecord, forEachJsonlRecordIn, readTailRecords } from "../infra/jsonl-file.js";
+import { forEachJsonlRecord, forEachJsonlRecordIn, readTailRecords } from "../infra/fs/jsonl-file.js";
 import { copySummaryState, emptySummaryState, foldSummary, summaryPartsOf, type SummaryState } from "./transcript/summary-scan.js";
 import { partitionPending } from "./partitionPending.js";
 import { codexRolloutPath } from "../agents/codex/codex-sessions.js";

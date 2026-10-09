@@ -13,7 +13,7 @@
 // is the one to prefer — it is the one a user can see and report.
 import { describe, it, expect } from "vitest";
 import { resolveBridgeSession } from "../../../server/session/bridge-session.js";
-import { ancestorPids } from "../../../server/infra/process-tree.js";
+import { ancestorPids } from "../../../server/infra/process/process-tree.js";
 
 const A = "aaaaaaaa-1111-4111-8111-111111111111";
 const B = "bbbbbbbb-2222-4222-8222-222222222222";

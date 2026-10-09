@@ -10,12 +10,12 @@
 // same question reattachPty asks of tmux.
 //
 // Handles a CSI sequence split across two consecutive chunks by carrying the partial tail
-// forward — the concern infra/tmux.ts avoided by querying tmux instead of the byte stream.
+// forward — the concern infra/process/tmux.ts avoided by querying tmux instead of the byte stream.
 
 const ESC = "\x1b";
 
 // The modes to track. Includes the six modes tmux reports via TERMINAL_MODE_FLAGS
-// (infra/tmux.ts), the two legacy alternate-screen modes (47, 1047) that tmux has no
+// (infra/process/tmux.ts), the two legacy alternate-screen modes (47, 1047) that tmux has no
 // flag for but a non-tmux application may still use, and bracketed paste (2004) which
 // an app enables once at startup and expects to survive a reattach.
 const TRACKED_MODES = new Set([47, 1047, 1049, 1000, 1002, 1003, 1005, 1006, 2004]);

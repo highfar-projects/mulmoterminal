@@ -21,7 +21,7 @@ import {
   postUpdateOf,
   runManageShapeScript,
   shapeObjectPath,
-} from "../../../server/infra/shapescript-manage-tool.js";
+} from "../../../server/infra/tools/shapescript-manage-tool.js";
 
 const post = shapePostFrom({ uid: "u-alice", authorName: "Alice" }, { title: "Lamp", scriptId: "script-1", keywords: ["lamp"] });
 const licensed: ShapePostDoc = { ...post, license: SHAPE_LICENSE };

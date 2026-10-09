@@ -10,7 +10,7 @@ import { TerminalModeTracker } from "./terminal-mode-tracker.js";
 import { sendFrame } from "../ws-frames.js";
 import { createHeadlessMirror } from "../headlessMirror.js";
 import type { PtyEntry } from "../types.js";
-import { tmuxIsPsmux } from "../../infra/tmux.js";
+import { tmuxIsPsmux } from "../../infra/process/tmux.js";
 
 // Below one 60fps frame, so a batch can never be seen as lag; large enough that a flood
 // collapses into a handful of frames a second instead of thousands.

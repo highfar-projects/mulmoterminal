@@ -14,7 +14,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type { Request, Response, NextFunction } from "express";
 import { isRecord } from "../../../common/isRecord.js";
-import { attachProjectScope, rootForProjectId } from "../../infra/project-root.js";
+import { attachProjectScope, rootForProjectId } from "../../infra/fs/project-root.js";
 
 export type ViewCapability = "read" | "write";
 

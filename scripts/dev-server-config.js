@@ -73,7 +73,7 @@ export function createContentChangeFilter() {
 }
 
 /** The exit code `server/index.ts` leaves with when the port was already taken. Kept in sync
- *  with `PORT_IN_USE_EXIT_CODE` in server/infra/server-exit.ts, which a spec pins. */
+ *  with `PORT_IN_USE_EXIT_CODE` in server/infra/process/server-exit.ts, which a spec pins. */
 export const PORT_IN_USE_EXIT_CODE = 75;
 
 /**

@@ -15,9 +15,9 @@ import { buildAntigravityArgs } from "../../../server/agents/antigravity/antigra
 import { buildMuseArgs } from "../../../server/agents/muse/muse-args.js";
 import { codexifySkillSeed } from "../../../server/agents/codex/codex-skills.js";
 import { seedPromptArgument, cleanupSessionSettings, SEED_ARGV_MAX_BYTES } from "../../../server/session/session-settings.js";
-import { resolvePtyLaunch } from "../../../server/infra/resolve-bin.js";
-import { escapeBatchArgument } from "../../../server/infra/cmd-escape.js";
-import { tmuxNewSessionArgs } from "../../../server/infra/tmux.js";
+import { resolvePtyLaunch } from "../../../server/infra/process/resolve-bin.js";
+import { escapeBatchArgument } from "../../../server/infra/process/cmd-escape.js";
+import { tmuxNewSessionArgs } from "../../../server/infra/process/tmux.js";
 
 const SESSION = "seed-argv-spec-session";
 const CWD = "C:\\work\\project";

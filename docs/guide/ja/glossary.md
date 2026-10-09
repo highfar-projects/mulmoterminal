@@ -3,7 +3,7 @@ title: 用語集 — 並列エージェント・worktree・バイブコーディ
 nav_title: 用語集
 layout: default
 parent: 日本語
-nav_order: 19
+nav_order: 20
 description: バイブコーディング（vibe coding）、並列エージェント、AI コーディングエージェント、git worktree、コックピットなど、MulmoTerminal のドキュメントに出てくる言葉を、実際の画面と結びつけて説明します。
 ---
 
@@ -34,8 +34,8 @@ MulmoTerminal はこのやり方を**ターミナルで**やるための画面�
 ## AI コーディングエージェント / CLI エージェント
 
 コマンドラインで動き、コードベースを読み、ファイルを書き、テストを走らせ、PR まで出す AI。
-**Claude Code**（Anthropic）と **Codex CLI**（OpenAI）が代表で、MulmoTerminal はこの
-**両方**をセル単位で起動できます。同じタスクを両方に投げて見比べる、片方にレビューさせる、
+**Claude Code**（Anthropic）が標準で、**Codex CLI**（OpenAI）・Antigravity・Grok・Muse・GitHub Copilot CLI・
+Cursor CLI もセル単位で起動できます。同じタスクを 2 つに投げて見比べる、片方にレビューさせる、
 といった使い分けができます。
 
 → [複数のエージェントを混在させる](basics.html#claude-and-codex) ・ [ターミナル間のやり取り](features.html)

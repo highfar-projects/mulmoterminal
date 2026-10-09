@@ -11,11 +11,11 @@
 import path from "node:path";
 import { sameOriginGuard } from "./same-origin-guard.js";
 import express, { type Express } from "express";
-import { mountAllRoutes } from "../infra/plugins-registry.js";
+import { mountAllRoutes } from "../infra/tools/plugins-registry.js";
 import { mountConfigRoutes } from "../config/config-routes.js";
 import { mountFilesBrowseRoutes } from "../files/files-browse.js";
-import { mountTmuxRoutes } from "../infra/tmux-routes.js";
-import { mountSwitchTokenRoutes } from "../infra/switch-token-routes.js";
+import { mountTmuxRoutes } from "../infra/process/tmux-routes.js";
+import { mountSwitchTokenRoutes } from "../infra/http/switch-token-routes.js";
 import { clearSwitchedToken, pinSwitchedToken } from "../session/credentials/token-switch-pins.js";
 import { sessionToken } from "../session/credentials/token-sessions.js";
 import { noteMovedFrom, takeMovedFrom } from "../session/credentials/rotation-notice.js";
@@ -64,7 +64,7 @@ import { mountWikiRoutes } from "../backends/plugins/wiki.js";
 import { mountAccountingRoutes } from "../backends/plugins/accounting.js";
 import { mountFeedsRoutes } from "../backends/feeds/feeds.js";
 import { mountCalendarPushRoutes } from "../backends/calendar/calendarPush.js";
-import { listProjectRoots } from "../infra/project-root.js";
+import { listProjectRoots } from "../infra/fs/project-root.js";
 import { mountRemoteHostRoutes } from "../backends/remoteHost/index.js";
 import { mountNotificationRoutes } from "../backends/notifier.js";
 import { mountWhisperRoutes } from "../backends/media/whisper.js";
@@ -107,11 +107,11 @@ import type { createCopilotSpawner } from "../session/spawn/agents/spawn-copilot
 import type { createCursorSpawner } from "../session/spawn/agents/spawn-cursor.js";
 import type { createTranslationWorker } from "../session/scheduled/translation-worker.js";
 import type { createTitleManager } from "../session/list/session-title.js";
-import { tmuxHasSession, tmuxKillSession, tmuxPanePidsBySessionAsync } from "../infra/tmux.js";
+import { tmuxHasSession, tmuxKillSession, tmuxPanePidsBySessionAsync } from "../infra/process/tmux.js";
 import { mountProcessRoutes } from "./process-routes.js";
-import { listProcessDetails } from "../infra/process-list.js";
+import { listProcessDetails } from "../infra/process/process-list.js";
 import type { SessionActivityDeps } from "../session/activity/session-activity-deps.js";
-import { mountSpaFallback } from "../infra/spa-fallback.js";
+import { mountSpaFallback } from "../infra/http/spa-fallback.js";
 import { mountRateLimitRoutes, type RateLimitRouteDeps } from "../agents/rate-limit/rate-limit-routes.js";
 import { mountLoadRoute } from "./load-routes.js";
 import { workspaceForRoute } from "./routeParams.js";
@@ -261,7 +261,7 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
   mountCalendarPushRoutes(app);
 
   // The projects a request may name, for a picker: ids and labels only — the paths they stand
-  // for stay server-side (server/infra/project-root.ts).
+  // for stay server-side (server/infra/fs/project-root.ts).
   //
   // Deliberately OUTSIDE `/api/collections/*`. MulmoClaude's `src/config/apiRoutes.ts` is the
   // naming authority in that namespace and has no project concept at all — it is a

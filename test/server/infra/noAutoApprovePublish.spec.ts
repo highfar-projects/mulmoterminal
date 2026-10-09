@@ -5,7 +5,7 @@
 // files, collection notes, survey copy somebody pasted. So it keeps the permission prompt on
 // every session, and these tests are what keep it there.
 import { describe, it, expect } from "vitest";
-import { allowedToolNames, autoAllowedToolNames } from "../../../server/infra/plugins-registry.js";
+import { allowedToolNames, autoAllowedToolNames } from "../../../server/infra/tools/plugins-registry.js";
 import { AUTO_ALLOWED_TOOLS, NEVER_AUTO_APPROVED_TOOLS, groupOfTool } from "../../../common/toolGroups.js";
 
 describe("auto-approval never covers manageSharedApp", () => {

@@ -24,7 +24,7 @@ import { DIR_BACKGROUND_ROUTE, type PublicDirBackground } from "../../../common/
 import { detectDirIcon } from "./dir-icon-detect.js";
 import { getAutoDirIcon } from "../config-routes.js";
 import { DIR_ICON_ROUTE } from "../../../common/dirIcon.js";
-import { readJsonFile } from "../../infra/read-text-file.js";
+import { readJsonFile } from "../../infra/fs/read-text-file.js";
 import { repoJsonConfig, repoJsonPath } from "./repo-json.js";
 import { isRecord } from "../../../common/isRecord.js";
 import { DIR_FORM_KEYS } from "../../../common/dirConfigForm.js";

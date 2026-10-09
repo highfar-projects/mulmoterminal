@@ -4,7 +4,7 @@ nav_title: Feature list
 layout: default
 parent: English
 nav_order: 6.5
-as_of: 9.5.0
+as_of: 9.6.0
 description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 9.1.0)."
 ---
 
@@ -71,6 +71,7 @@ More: [Agents](agents.html)
 - Beta: token rotation starts each new Claude session on whichever of several subscriptions has the most weekly room per hour until its reset, and conversations carry across them (v9.2.0)
 - A rotated session moves to another subscription at 98%, or when it hits its limit, and carries on with the same conversation (v9.2.0)
 - A cell's header names the subscription it runs on, and More features → Token usage lists each subscription's 5h / weekly room (v9.2.0)
+- Clicking that name lists the other subscriptions with their weekly room and the time until it resets, and picking one restarts the session on it with the same conversation (v9.6.0)
 - Unavailable agents are dimmed in the Agent Picker, with the reason and an install guide link (v5.8.0)
 - Declare the default agent with --agent or defaultAgent, so the app starts without Claude Code installed (v4.25.0)
 - GitHub Copilot CLI runs in a cell, with an Agent Picker entry, GUI tools and working status (v4.22.0)
@@ -193,7 +194,7 @@ More: [Worktrees](worktree.html)
 
 More: [Configuration](config.html)
 
-- A confetti action, bound to a key or picked in the palette, throws a mixed show of crackers, fireworks, cherry petals, paper rain and balloons over the page; chosen styles and events such as a merged PR are set in config (v9.3.0)
+- A confetti action, bound to a key or picked in the palette, throws a mixed show of crackers, fireworks, cherry petals, paper rain and balloons over the page; the styles and the events that set one off by themselves, such as a merged PR, are ticked in a Confetti box under Settings → Theme, which also has a Try it button (v9.4.0), or set in config (v9.3.0)
 - The Skills viewer opens from the command palette, and from a key or header button through the `screen-skills` action (v8.4.0)
 - The palette's > scope lists the acting terminal's Run-menu scripts and Skill-menu skills (v7.3.0)
 - Set shortcuts in Settings by pressing the key, with Change, Clear and clash refusal, plus recommended keys in one click (v7.2.0)
@@ -260,6 +261,7 @@ More: [Configuration](config.html)
 
 More: [From a collection](from-collection.html) · [MulmoCast videos](mulmocast.html)
 
+- The agent can write a short jingle or sound effect as a JingleScript score, and the Canvas plays it with a waveform, beat grid and cues (manageJingleScript) (v9.6.0)
 - The agent in a cell can write a MulmoCast Remotion scene itself (`code`) and refine it with you (v9.1.0)
 - MulmoCast `remotion` scenes: Claude Code writes a beat as a Remotion animation, or you pass one you wrote (`code`); the optional packages are yours to install and `init` checks them (v9.0.0)
 - A shared app can let a visitor make their own empty copy from its public page (forkable); the question box, tally and survey-results templates ship with it (v8.8.0)

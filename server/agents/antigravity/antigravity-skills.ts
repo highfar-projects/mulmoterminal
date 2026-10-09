@@ -19,7 +19,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { isRecord } from "../../../common/isRecord.js";
-import { symlinkFreeWriteTarget } from "../../infra/symlink-guard.js";
+import { symlinkFreeWriteTarget } from "../../infra/fs/symlink-guard.js";
 import { excludeFromGit } from "../git-exclude.js";
 
 /** agy's workspace customization dir — the same one its MCP config lives in. */

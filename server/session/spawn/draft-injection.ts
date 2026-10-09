@@ -9,7 +9,7 @@ import { sanitizeDraftText } from "../pty/pty-text.js";
 import { squashForMarker, trustDialogIsUp } from "../pty/pty-scan.js";
 import { planDraftInjection } from "./draft-plan.js";
 import { submittableLineForAgent } from "../../../common/terminalSubmit.js";
-import { tmuxIsPsmux } from "../../infra/tmux.js";
+import { tmuxIsPsmux } from "../../infra/process/tmux.js";
 
 // All a session needs to be typed into: where the bytes go, and which agent reads them
 // (both the submit mapping and the completion-menu guard are Claude Code's behaviour).

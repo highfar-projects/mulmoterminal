@@ -364,7 +364,7 @@ function createPresetManager(presets: Ref<CwdPreset[]>, saving: Ref<boolean>, er
   //
   // That happened on 2026-08-09: a terminal launched while the initial GET was still in flight
   // reduced five saved directories to one, and the collections of the other four stopped being
-  // served (they are the project list — server/infra/project-root.ts). The same guard exists in
+  // served (they are the project list — server/infra/fs/project-root.ts). The same guard exists in
   // useShortcuts for the same reason, on the same kind of file.
   let loaded = false;
 

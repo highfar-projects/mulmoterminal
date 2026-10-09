@@ -1,7 +1,7 @@
 // The Processes page's model (#2219): each session's process tree, from one `ps` listing and the
 // tmux pane pids. Pure, so the tree walk, the CPU delta and the kill rule are tested without a
 // machine running anything in particular.
-import type { ProcessDetail } from "../../infra/process-list.js";
+import type { ProcessDetail } from "../../infra/process/process-list.js";
 import { isPaneRoot, type SessionProcess, type SessionProcesses } from "../../../common/sessionProcesses.js";
 
 /** The previous read, which CPU is measured against. Keyed by pid AND start time: a reused pid is

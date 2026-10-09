@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { attachDraftInjection, draftSubmitDelayMs } from "../../../../server/session/spawn/draft-injection.js";
-import * as tmux from "../../../../server/infra/tmux.js";
+import * as tmux from "../../../../server/infra/process/tmux.js";
 
 // Fork-only: behind psmux the submitting Enter has to wait until psmux has handed the bracketed
 // paste to the pane, or it lands inside the paste and the auto-run prompt is never sent.

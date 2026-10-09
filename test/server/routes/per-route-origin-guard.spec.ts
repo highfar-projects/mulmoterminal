@@ -26,7 +26,7 @@ const SERVER_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "../.
 //   ws-routes.ts          a WebSocket upgrade is a raw IncomingMessage — no route, no method to
 //                         exempt, and a browser always sends Origin on a handshake
 //   pubsub.ts             socket.io's own handshake/CORS hooks, one of which is handed no request
-const ORIGIN_READERS = new Set(["routes/same-origin-guard.ts", "routes/ws-routes.ts", "infra/pubsub.ts"]);
+const ORIGIN_READERS = new Set(["routes/same-origin-guard.ts", "routes/ws-routes.ts", "infra/async/pubsub.ts"]);
 
 // Every spelling of "read this request's Origin" Express offers.
 const READS_ORIGIN = /headers\.origin\b|headers\[["']origin["']\]|\.get\(["']origin["']\)/i;

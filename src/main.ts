@@ -36,7 +36,7 @@ installPageZoomGuard();
 // hidden Claude session. router.isReady() guarantees the initial URL is honored first.
 //
 // ShapeScript's CSG runs through manifold here as on the server
-// (server/infra/shapescript-csg.ts), so a model is built by one engine wherever it
+// (server/infra/tools/shapescript-csg.ts), so a model is built by one engine wherever it
 // is shown. Its WebAssembly is loaded before mount, because the View converts
 // synchronously the moment a card renders; a failed load leaves three-bvh-csg in
 // place and never holds the app back.

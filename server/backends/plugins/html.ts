@@ -24,7 +24,7 @@ import { htmlByPath, resolveHtmlRequest } from "../files/openPath.js";
 import { mountSourceEditorDispatchRoute } from "../files/sourceEditorDispatchRoute.js";
 import { statFileOr404 } from "../files/statFileOr404.js";
 import { streamFileToResponse } from "../files/streamFile.js";
-import { isWithin } from "../../infra/path-within.js";
+import { isWithin } from "../../infra/fs/path-within.js";
 
 // Curated CDN allowlist for an LLM-authored page that may pull a charting/util lib or font
 // from a CDN. Core owns the list so this policy and the remote-view CSP can't drift — widen

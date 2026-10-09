@@ -8,8 +8,8 @@ vi.mock("../../../server/config/worktree/worktree-env.js", () => ({ ensureWorktr
 // tmux is what tells a SURVIVED session apart from a fresh one, and it is a real process on the
 // host — stubbed so this asks the question rather than the machine.
 let tmuxSessions = new Set<string>();
-vi.mock("../../../server/infra/tmux.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../../server/infra/tmux.js")>()),
+vi.mock("../../../server/infra/process/tmux.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../server/infra/process/tmux.js")>()),
   tmuxAvailable: () => true,
   tmuxHasSession: (id: string) => tmuxSessions.has(id),
 }));

@@ -2,7 +2,7 @@
 // path — save a new `.shape` under artifacts/shapes, or present one that already
 // exists — runs through the generic package loader (plugins.json `packages` →
 // /api/plugin/presentShapeScript with the FileOps context from
-// infra/plugins-registry.ts). This module adds the one host-specific piece:
+// infra/tools/plugins-registry.ts). This module adds the one host-specific piece:
 //
 //   The View's source-editor DISPATCH. `useRuntime().dispatch({kind})` POSTs to the
 //   SAME /api/plugin/presentShapeScript route with `kind: "loadShape"|"saveShape"`,

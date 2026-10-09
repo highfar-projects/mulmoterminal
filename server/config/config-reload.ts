@@ -8,7 +8,7 @@ import type { Express, Response } from "express";
 import { emptyConfig, loadAppConfigResult, type AppConfig, type AppConfigLoad } from "./app-config.js";
 import { checkKeymap } from "./keymap/keymap-check.js";
 import { withConfigLock } from "./config-lock.js";
-import { readTextFile } from "../infra/read-text-file.js";
+import { readTextFile } from "../infra/fs/read-text-file.js";
 
 export type ReloadDecision = { adopt: true; config: AppConfig } | { adopt: false; error: string; problems: string[] };
 

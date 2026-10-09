@@ -334,6 +334,7 @@ export const tipsKo: Messages["tips"] = {
     accountTrustPrompt:
       "Claude 사용량을 표시할 수 없습니다 — 사용량 확인이 Claude Code의 신뢰 확인에서 멈춰 있습니다. 작업 공간 폴더에서 이 계정으로 셀을 한 번 시작해 승인하세요.",
     accountNote: "{account}: {note}",
+    resetsInDays: "{days}일 {hours}시간 {minutes}분 후 초기화",
     resetsInHours: "{hours}시간 {minutes}분 후 초기화",
     resetsInMinutes: "{minutes}분 후 초기화",
     windowUsed: "{window} {percent}% 사용",

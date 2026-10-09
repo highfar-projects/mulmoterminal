@@ -8,7 +8,7 @@
 // containment rule that is fixed on one side and not the other is not a containment rule.
 import { existsSync, statSync, realpathSync, type Stats } from "node:fs";
 import path from "node:path";
-import { isWithin } from "../../infra/path-within.js";
+import { isWithin } from "../../infra/fs/path-within.js";
 
 /** The absolute path `ref` names under `cwd`, or null when it is not a real file inside it.
  *

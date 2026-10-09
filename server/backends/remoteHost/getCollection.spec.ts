@@ -11,7 +11,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
 import { createGetCollection, type GetCollectionDeps } from "./handlers/getCollection.js";
-import { initProjectRoots, resetProjectRootsForTesting } from "../../infra/project-root.js";
+import { initProjectRoots, resetProjectRootsForTesting } from "../../infra/fs/project-root.js";
 
 // The handler RESOLVES its scope per call now (commandScope.ts) instead of capturing the
 // workspace in its deps, so the roots binding has to exist — the same binding boot installs. A

@@ -23,7 +23,7 @@ import path from "node:path";
 import { readCustomViewHtml, loadCollection } from "@mulmoclaude/core/collection/server";
 
 import { initCollectionsBackend } from "../../../../server/backends/collections/collections.js";
-import { manageCollectionHandlerFor } from "../../../../server/infra/collection-tool.js";
+import { manageCollectionHandlerFor } from "../../../../server/infra/tools/collection-tool.js";
 import { makeTempDir } from "../../../support/tempDir";
 
 const schemaFor = (slug: string) => ({

@@ -5,7 +5,7 @@ import type { Express } from "express";
 import { existingWorkspace, existingWorkspaceFromQuery } from "../config/workspace.js";
 import { claudeAdapter } from "../agents/claude/claude.js";
 import { TOOL_GROUPS, isToolGroup } from "../../common/toolGroups.js";
-import { registerGuiMcpGroup, unregisterGuiMcpGroup, registeredGuiMcpGroups } from "../infra/gui-mcp-registration.js";
+import { registerGuiMcpGroup, unregisterGuiMcpGroup, registeredGuiMcpGroups } from "../infra/process/gui-mcp-registration.js";
 import { syncAntigravityMcpConfig } from "../agents/antigravity/antigravity-mcp.js";
 import { requestBody } from "./requestBody.js";
 

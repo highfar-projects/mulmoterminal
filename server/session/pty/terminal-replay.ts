@@ -65,7 +65,7 @@ const firstMatchEnd = (text: string, terminator: RegExp): number => {
 //
 // The search for the opening escape spans the WHOLE discarded prefix rather than a fixed
 // window. A bounded look-behind misses OSC strings whose payload is longer than the
-// window — and this host enables OSC 52 deliberately (see infra/tmux.ts), so kilobyte
+// window — and this host enables OSC 52 deliberately (see infra/process/tmux.ts), so kilobyte
 // base64 clipboard payloads are a designed-for case, not a hypothetical.
 const splitSequenceLength = (combined: string, cutAt: number, cut: string): number => {
   const escapeAt = combined.lastIndexOf(ESC, cutAt - 1);

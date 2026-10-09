@@ -5,7 +5,7 @@
 // be refused for its binary, and the reverse. Nothing is executed — the check is a lookup.
 import { TERMINAL_AGENTS, type TerminalAgent } from "../../common/sessionAgent.js";
 import type { AgentAvailability } from "../../common/agentAvailability.js";
-import type { BinaryDiagnosis } from "../infra/has-binary.js";
+import type { BinaryDiagnosis } from "../infra/process/has-binary.js";
 
 /** One entry per hosted agent, in TERMINAL_AGENTS order. `bins` is keyed by every agent, so a new
  *  one is a type error at the caller rather than an agent this report silently leaves out. Only the

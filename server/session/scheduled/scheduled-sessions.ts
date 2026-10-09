@@ -17,7 +17,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { writeFileAtomic } from "../../files/atomic-write.js";
-import { workspaceKey } from "../../infra/workspace-key.js";
+import { workspaceKey } from "../../infra/fs/workspace-key.js";
 import { isRecord } from "../../../common/isRecord.js";
 
 export interface ScheduledSessionRecord {

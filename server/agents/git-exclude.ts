@@ -1,7 +1,7 @@
 // Keep a file WE write out of the user's `git status`, through `.git/info/exclude` rather than
 // their `.gitignore`: these are local switches on a local machine, so they must not turn up in a
 // diff or be pushed to their team — the same reason claude's MCP registration uses `-s local`
-// scope (infra/gui-mcp-registration.ts).
+// scope (infra/process/gui-mcp-registration.ts).
 //
 // Shared by the agents whose GUI MCP registration lands INSIDE the project: agy's
 // `.agents/mcp_config.json` and `.agents/skills.json`, and grok's `.grok/config.toml`.

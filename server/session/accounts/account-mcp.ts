@@ -7,7 +7,7 @@
 // in ONE place and the account cell is given the directory's groups directly (see
 // directoryGroupsMcpConfigJson) — the same thing a codex cell has always been given.
 import { TOOL_GROUPS, type ToolGroup } from "../../../common/toolGroups.js";
-import { registeredGuiMcpGroups } from "../../infra/gui-mcp-registration.js";
+import { registeredGuiMcpGroups } from "../../infra/process/gui-mcp-registration.js";
 import { boundAccount } from "./account-sessions.js";
 import { devTerminalCwdsHydrated, sessionCwd } from "../registry.js";
 

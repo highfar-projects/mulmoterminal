@@ -2,14 +2,14 @@
 // Windows-only: the real node-pty spawns that #794 and #798 are about. Skipped everywhere
 // else, so this runs in .github/workflows/windows-daily.yaml (which already runs `yarn test`)
 // rather than in the PR matrix — the rules themselves are covered by the pure tests in
-// infra/resolve-bin.spec and infra/cmd-escape.spec.
+// infra/process/resolve-bin.spec and infra/process/cmd-escape.spec.
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import pty from "node-pty";
 import { spawnPty } from "../../../../server/session/pty/pty-spawn";
-import { resolvePtyLaunchForEnv } from "../../../../server/infra/resolve-bin";
+import { resolvePtyLaunchForEnv } from "../../../../server/infra/process/resolve-bin";
 import { hookSettingsJson } from "../../../../server/session/spawn/setup/hook-settings";
 import { buildCodexArgs } from "../../../../server/agents/codex/codex-args";
 
@@ -102,7 +102,7 @@ describe.skipIf(!isWindows)("spawnPty on Windows", () => {
       return;
     }
     term.kill();
-    expect.fail("node-pty resolved a bare name on its own — re-check whether infra/resolve-bin.ts is still needed");
+    expect.fail("node-pty resolved a bare name on its own — re-check whether infra/process/resolve-bin.ts is still needed");
   });
 
   it("resolves a .cmd-only command to cmd.exe with a raw command line", () => {

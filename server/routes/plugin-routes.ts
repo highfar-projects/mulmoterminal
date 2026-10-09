@@ -16,21 +16,21 @@ import { registerCompletionHook } from "../session/activity/completion-hooks.js"
 import { agentCarriesFullGuiMcp } from "../../common/guiMcpAgents.js";
 import { backgroundChatMessage, parseBackgroundChat, spawnModeFor, type SpawnMode } from "../session/scheduled/background-chat.js";
 import type { TerminalAgent } from "../../common/sessionAgent.js";
-import { registeredGuiMcpGroups } from "../infra/gui-mcp-registration.js";
+import { registeredGuiMcpGroups } from "../infra/process/gui-mcp-registration.js";
 import { syncCursorDirectoryMcp } from "../agents/cursor/cursor-mcp.js";
 import { resolveSpawnCollection } from "../session/spawn/spawn-collection.js";
 import { TOOL_GROUPS, type ToolGroup } from "../../common/toolGroups.js";
 import { codexifySkillSeed } from "../agents/codex/codex-skills.js";
 import { SESSION_HEADER, sessionIdFromHeader } from "../backends/files/presentPathRoot.js";
 import { cwdForSession } from "../session/session-cwd.js";
-import { projectScopeForCwd, rootForProjectId } from "../infra/project-root.js";
-import { manageCollectionHandlerFor } from "../infra/collection-tool.js";
-import { runRenderShapeScript } from "../infra/shapescript-render-tool.js";
-import { runExportShapeScriptUsdz } from "../infra/shapescript-usdz-tool.js";
-import { runExportShapeScriptStl } from "../infra/shapescript-stl-tool.js";
-import { runManageShapeScript } from "../infra/shapescript-manage-tool.js";
-import { manageSharedApp } from "../infra/shared-app-tool.js";
-import { useSharedApp } from "../infra/use-shared-app-tool.js";
+import { projectScopeForCwd, rootForProjectId } from "../infra/fs/project-root.js";
+import { manageCollectionHandlerFor } from "../infra/tools/collection-tool.js";
+import { runRenderShapeScript } from "../infra/tools/shapescript-render-tool.js";
+import { runExportShapeScriptUsdz } from "../infra/tools/shapescript-usdz-tool.js";
+import { runExportShapeScriptStl } from "../infra/tools/shapescript-stl-tool.js";
+import { runManageShapeScript } from "../infra/tools/shapescript-manage-tool.js";
+import { manageSharedApp } from "../infra/tools/shared-app-tool.js";
+import { useSharedApp } from "../infra/tools/use-shared-app-tool.js";
 import { upstreamFailureMessage } from "./plugin-narration.js";
 import type {
   SpawnClaudePty,
@@ -264,7 +264,7 @@ export function mountPluginRoutes(app: Express, deps: PluginRouteDeps): void {
  *  routes and belong beside each other; only the enclosing function's size moved them out. */
 function mountCollectionRoute(app: Express): void {
   // Host tool: manageCollection — the shared collection data plane
-  // (@mulmoclaude/core/collection/server, bound in server/infra/collection-tool.ts).
+  // (@mulmoclaude/core/collection/server, bound in server/infra/tools/collection-tool.ts).
   // The engine runs in-process against the configured workspace, so the route calls the
   // handler directly. The result string (JSON for the read/write actions) narrates to claude
   // via the envelope `message`; no `data`, so nothing publishes to the GUI — same as
@@ -369,7 +369,7 @@ function mountManageShapeScriptRoute(app: Express): void {
 
 function mountSharedAppRoute(app: Express): void {
   // Host tool: manageSharedApp — deploy / publish / unpublish for the shared app declared by the
-  // repository's app.json (server/infra/shared-app-tool.ts). MulmoTerminal's own; there is no
+  // repository's app.json (server/infra/tools/shared-app-tool.ts). MulmoTerminal's own; there is no
   // counterpart in MulmoClaude to match, which is the point of the tool existing here.
   //
   // Scoped to the SESSION's directory for the same reason manageCollection is: an app is a
@@ -390,7 +390,7 @@ function mountSharedAppRoute(app: Express): void {
 
 function mountUseSharedAppRoute(app: Express): void {
   // Host tool: useSharedApp — taking part in an app somebody ELSE published
-  // (server/infra/use-shared-app-tool.ts).
+  // (server/infra/tools/use-shared-app-tool.ts).
   //
   // NOT scoped to the session's directory, and that is the difference from the route above rather
   // than an omission. `manageSharedApp` operates on the repository the cell is open in, because an
@@ -416,7 +416,7 @@ function mountUseSharedAppRoute(app: Express): void {
       // WHAT THIS IS NOT is authorization, and it is worth being exact about what remains. A caller
       // that knows ANOTHER live session's id can still aim a watch at that terminal. Three things
       // bound what that is worth: this server is reachable only from this machine (loopback — see
-      // infra/loopback-listener.ts, and `isAllowedOrigin` trusts an Origin-less request only from a
+      // infra/http/loopback-listener.ts, and `isAllowedOrigin` trusts an Origin-less request only from a
       // loopback peer), every session on it belongs to the SAME local user, and the line a watch
       // types is a fixed string naming itself as mulmoterminal's, carrying none of the app's data.
       // So the actor is a local process already running as that user, and the effect is a

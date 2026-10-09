@@ -3,7 +3,7 @@
 import type { Express } from "express";
 import { requestOriginAllowed } from "./same-origin-guard.js";
 import { requestBody } from "./requestBody.js";
-import type { ProcessDetail } from "../infra/process-list.js";
+import type { ProcessDetail } from "../infra/process/process-list.js";
 import { buildSessionProcesses, cpuBaselineOf, killVerdict, type CpuBaseline } from "../session/list/session-processes.js";
 import type { SessionProcesses } from "../../common/sessionProcesses.js";
 

@@ -332,6 +332,7 @@ export const tipsEn = {
     accountTrustPrompt:
       "Claude usage unavailable — the usage check is waiting on Claude Code's trust prompt. Start a cell on this account in the workspace folder once and accept it.",
     accountNote: "{account}: {note}",
+    resetsInDays: "resets in {days}d {hours}h {minutes}m",
     resetsInHours: "resets in {hours}h {minutes}m",
     resetsInMinutes: "resets in {minutes}m",
     windowUsed: "{window} {percent}% used",

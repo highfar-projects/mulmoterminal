@@ -17,7 +17,7 @@
 import type { GitStatus } from "../../common/gitStatus.js";
 import { git } from "./worktrees.js";
 import { parsePorcelainV2 } from "./git-parse.js";
-import { splitLines } from "../infra/split-lines.js";
+import { splitLines } from "../infra/fs/split-lines.js";
 import { createTtlCache } from "./ttl-cache.js";
 
 const NOT_REPO: GitStatus = { repo: false, branch: null, detached: false, dirty: 0, ahead: 0, behind: 0, upstream: false };

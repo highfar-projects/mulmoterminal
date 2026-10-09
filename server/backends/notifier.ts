@@ -11,8 +11,8 @@ import fs from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import type { Express, Request, Response } from "express";
 import { configureNotifier, setNotifierFilePaths, listAll, listHistory, clear } from "@mulmoclaude/core/notifier";
-import type { Publisher } from "../infra/pubsub.js";
-import { hostStateRoot } from "../infra/host-state-root.js";
+import type { Publisher } from "../infra/async/pubsub.js";
+import { hostStateRoot } from "../infra/fs/host-state-root.js";
 
 type PubSub = Publisher;
 

@@ -331,6 +331,7 @@ export const tipsZhTW: Messages["tips"] = {
     usageLimit: "無法顯示 Claude 用量 — 此訂閱已達用量上限，檢查未能得到回應。",
     accountTrustPrompt: "無法顯示 Claude 用量 — 用量檢查正在等待 Claude Code 的信任確認。請在工作區資料夾中用此帳號啟動一次儲存格並接受。",
     accountNote: "{account}：{note}",
+    resetsInDays: "{days}天{hours}小時{minutes}分鐘後重置",
     resetsInHours: "{hours}小時{minutes}分鐘後重置",
     resetsInMinutes: "{minutes}分鐘後重置",
     windowUsed: "{window} 已用 {percent}%",
