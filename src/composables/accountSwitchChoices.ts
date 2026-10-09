@@ -12,6 +12,8 @@ export interface AccountSwitchChoice {
   current: boolean;
   /** What is left of the weekly window, 0-100, or null when there is no figure to show. */
   weekLeftPercent: number | null;
+  /** When the weekly window resets, Unix seconds; null when unknown or already past. */
+  weekResetsAt_sec: number | null;
   /** Why there is no figure, or "ok" when there is one. */
   usage: TokenUsageState;
 }
@@ -41,7 +43,15 @@ export function accountSwitchChoices(
   const rows = new Map(tokenUsageRows(readings, now_ms).map((row) => [row.id, row]));
   const choice = (id: string, label: string, detail: string | null): AccountSwitchChoice => {
     const row = rows.get(id);
-    return { id, label, detail, current: id === currentId, weekLeftPercent: row?.sevenDay.leftPercent ?? null, usage: row?.state ?? "measuring" };
+    return {
+      id,
+      label,
+      detail,
+      current: id === currentId,
+      weekLeftPercent: row?.sevenDay.leftPercent ?? null,
+      weekResetsAt_sec: row?.sevenDay.resetsAt_sec ?? null,
+      usage: row?.state ?? "measuring",
+    };
   };
   const tokens = rotation.tokens.map((token) => choice(token.id, token.label, token.email ?? null));
   return rotation.includeDefaultLogin ? [...tokens, choice(DEFAULT_LOGIN_ID, DEFAULT_LOGIN_LABEL, null)] : tokens;

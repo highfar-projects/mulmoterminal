@@ -13,6 +13,7 @@ import AnchoredMenu from "./AnchoredMenu.vue";
 import { ANCHORED_MENU_ITEM_CLASS, ANCHORED_MENU_PANEL_CLASS } from "./anchoredMenuClasses";
 import type { AnchoredMenuInitialFocus } from "./anchoredMenuFocus";
 import type { AccountSwitchChoice } from "../composables/accountSwitchChoices";
+import { resetsIn } from "../composables/rateLimitGauge";
 
 const { t } = useI18n();
 // `detail` is the longer name the hover gives — a rotation token's label with its address (#2919).
@@ -36,6 +37,9 @@ function weekText(choice: AccountSwitchChoice): string | null {
   if (choice.usage === "at-limit") return t("accountSwitch.atLimit");
   return choice.weekLeftPercent === null ? null : t("accountSwitch.weekLeft", { percent: `${choice.weekLeftPercent}%` });
 }
+
+// Read when the menu draws, so it is as fresh as the click that opened it.
+const resetText = (choice: AccountSwitchChoice): string => resetsIn(choice.weekResetsAt_sec, Date.now(), t);
 
 function pick(choice: AccountSwitchChoice): void {
   menu.value?.leave();
@@ -83,14 +87,13 @@ function pick(choice: AccountSwitchChoice): void {
         <span class="block text-[13px]">{{ choice.label }}</span>
         <span v-if="choice.detail" class="block truncate text-[11px] leading-snug text-dim">{{ choice.detail }}</span>
       </span>
-      <span
-        v-if="weekText(choice)"
-        data-testid="cell-account-week"
-        class="mt-px flex-none whitespace-nowrap text-[11px]"
-        :class="isLow(choice) ? 'text-amber' : 'text-secondary'"
-        >{{ weekText(choice) }}</span
+      <span v-if="weekText(choice)" class="mt-px flex flex-none flex-col items-end whitespace-nowrap text-[11px] leading-snug">
+        <span data-testid="cell-account-week" :class="isLow(choice) ? 'text-amber' : 'text-secondary'">{{ weekText(choice) }}</span>
+        <span v-if="resetText(choice)" data-testid="cell-account-reset" class="text-dim">{{ resetText(choice) }}</span>
+      </span>
+      <span v-if="choice.current" data-testid="cell-account-current" class="material-symbols-outlined mt-px text-[16px] text-accent" aria-hidden="true"
+        >check</span
       >
-      <span v-if="choice.current" class="material-symbols-outlined mt-px text-[16px] text-accent" aria-hidden="true">check</span>
     </button>
   </AnchoredMenu>
   <span v-else-if="label" data-testid="cell-account-mark" :class="MARK_CLASS" :data-tip="tip"
