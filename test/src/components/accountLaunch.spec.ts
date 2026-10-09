@@ -172,6 +172,14 @@ describe("AccountMark", () => {
       w.unmount();
     });
 
+    it("marks the subscription the cell is on, and only that one", async () => {
+      const w = await open();
+      const current = [...document.body.querySelectorAll('[data-testid="cell-account-current"]')];
+      expect(current).toHaveLength(1);
+      expect(current[0]?.closest('[data-testid="cell-account-choice-a"]')).not.toBeNull();
+      w.unmount();
+    });
+
     it("stays a plain mark when there is nothing else to pick", () => {
       const w = mount(AccountMark, { props: { label: "A", choices: choices.slice(0, 1) } });
       expect(w.find("button").exists()).toBe(false);

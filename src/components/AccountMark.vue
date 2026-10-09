@@ -91,6 +91,9 @@ function pick(choice: AccountSwitchChoice): void {
         <span data-testid="cell-account-week" :class="isLow(choice) ? 'text-amber' : 'text-secondary'">{{ weekText(choice) }}</span>
         <span v-if="resetText(choice)" data-testid="cell-account-reset" class="text-dim">{{ resetText(choice) }}</span>
       </span>
+      <span v-if="choice.current" data-testid="cell-account-current" class="material-symbols-outlined mt-px text-[16px] text-accent" aria-hidden="true"
+        >check</span
+      >
     </button>
   </AnchoredMenu>
   <span v-else-if="label" data-testid="cell-account-mark" :class="MARK_CLASS" :data-tip="tip"
