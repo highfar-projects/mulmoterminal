@@ -120,6 +120,7 @@ export const WARN_PERCENT = 75;
 const MS_PER_SEC = 1000;
 const SEC_PER_MIN = 60;
 const MIN_PER_HOUR = 60;
+const MIN_PER_DAY = 24 * MIN_PER_HOUR;
 
 // A window whose reset time has PASSED says nothing about now: the budget it describes has already
 // rolled over, so the percentage belongs to a window that no longer exists. Dropping it is the same
@@ -226,8 +227,10 @@ export function resetsIn(resetsAt_sec: number | null, now_ms: number, translate:
   if (resetsAt_sec === null) return "";
   const remaining_min = Math.round((resetsAt_sec * MS_PER_SEC - now_ms) / MS_PER_SEC / SEC_PER_MIN);
   if (remaining_min <= 0) return "";
-  const hours = Math.floor(remaining_min / MIN_PER_HOUR);
+  const days = Math.floor(remaining_min / MIN_PER_DAY);
+  const hours = Math.floor((remaining_min % MIN_PER_DAY) / MIN_PER_HOUR);
   const minutes = remaining_min % MIN_PER_HOUR;
+  if (days) return translate("tips.rateLimit.resetsInDays", { days, hours, minutes });
   return hours ? translate("tips.rateLimit.resetsInHours", { hours, minutes }) : translate("tips.rateLimit.resetsInMinutes", { minutes });
 }
 
