@@ -15,6 +15,7 @@ import { isRecord } from "../../common/isRecord.js";
 import { worktreeRepoRootMount } from "../git/worktrees.js";
 import { hookSocketDir } from "../infra/hook-socket.js";
 import { DROPS_ROOT, usableRoot as usableDropsRoot } from "../session/session-drops.js";
+import { usableSettingsDir } from "../session/session-settings.js";
 
 /** Whether `dir` has a devcontainer config, checked the same way the `devcontainer` CLI itself
  *  resolves one (`.devcontainer/devcontainer.json`, else `.devcontainer.json`). */
@@ -84,6 +85,12 @@ export async function runDevcontainerUp(
   // existsSync) because the root is normally created lazily on a session's first drop — the very
   // first devcontainer session to receive one would otherwise come up before it exists.
   const dropsMount = usableDropsRoot() ? `type=bind,source=${DROPS_ROOT},target=${DROPS_ROOT}` : null;
+  // And for `--settings`: a session whose settings carry a token (a provider's, or the one token
+  // rotation assigned it) is handed them as a PATH in the settings directory (session-settings.ts),
+  // and a claude inside the container exits with "Settings file not found" before it starts unless
+  // that path resolves there too. Writable only because the CLI's --mount has no readonly option.
+  const settingsDir = usableSettingsDir();
+  const settingsMount = settingsDir ? `type=bind,source=${settingsDir},target=${settingsDir}` : null;
   const args = [
     "up",
     "--workspace-folder",
@@ -92,6 +99,7 @@ export async function runDevcontainerUp(
     ...(mount ? ["--mount", mount] : []),
     ...(socketMount ? ["--mount", socketMount] : []),
     ...(dropsMount ? ["--mount", dropsMount] : []),
+    ...(settingsMount ? ["--mount", settingsMount] : []),
   ];
   return new Promise((resolve) => {
     // eslint-disable-next-line sonarjs/no-os-command-from-path -- 'devcontainer' is a standard tool from PATH, same convention as git() in worktrees.ts; all inputs go through argv (no shell)

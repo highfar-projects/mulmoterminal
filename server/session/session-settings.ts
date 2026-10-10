@@ -15,6 +15,7 @@ import os from "node:os";
 import { escapeBatchArgument } from "../infra/process/cmd-escape.js";
 import { removeQuietly } from "../infra/fs/fs-cleanup.js";
 import { SESSION_ID_RE } from "../config/env.js";
+import { messageOf } from "../errors.js";
 
 const SETTINGS_DIR = path.join(os.homedir(), ".mulmoterminal", "settings");
 
@@ -28,6 +29,23 @@ const seedPromptFile = (sessionId: string): string => path.join(SETTINGS_DIR, `$
 // child's CRT, and the two disagree about quoting. A path has no quotes and no
 // metacharacters, which removes that layer rather than escaping through it (#813).
 const mustUseFile = (secret: boolean, platform: NodeJS.Platform): boolean => secret || platform === "win32";
+
+/** The directory every file above is written to, created if it does not exist yet — for a
+ *  devcontainer to bind-mount at the same path (config/devcontainer-flag.ts). A settings payload
+ *  that carries a token reaches the session as a PATH in here, and a claude running inside a
+ *  container exits with "Settings file not found" unless that path resolves there too. Created up
+ *  front because the files themselves are written per spawn, after the container already exists.
+ *  Null when it cannot be created: the container still comes up, only a file-borne `--settings`
+ *  fails in it. */
+export function usableSettingsDir(): string | null {
+  try {
+    mkdirSync(SETTINGS_DIR, { recursive: true, mode: 0o700 });
+    return SETTINGS_DIR;
+  } catch (err) {
+    console.warn(`[settings] could not create ${SETTINGS_DIR}: ${messageOf(err)}`);
+    return null;
+  }
+}
 
 function writePrivate(file: string, json: string): string {
   mkdirSync(SETTINGS_DIR, { recursive: true, mode: 0o700 });
