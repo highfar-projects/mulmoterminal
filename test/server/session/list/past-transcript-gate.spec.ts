@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { gatedPastTranscriptPage, type PastTranscriptStores } from "../../../../server/session/list/past-transcript-gate";
 import type { PastSessionRow } from "../../../../server/session/list/past-session-rows";
