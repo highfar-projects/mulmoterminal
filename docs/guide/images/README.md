@@ -46,6 +46,7 @@ Referenced from the README and the living guide, so these go stale when the UI m
 | `worktree-close-discard.png` | The same dialog when the worktree has unpushed commits + uncommitted changes — the button becomes `Discard & remove` |
 | `push-lock-screen.jpg` | Push notifications on a phone's lock screen — finished tasks and "Claude is waiting for your input" |
 | `remote-phone-terminal.jpg` | The terminal viewed from a phone — live screen plus yes / no / ok / continue / stop quick replies |
+| `v10.0.0-phone-past-sessions.jpg` | The phone listing the past sessions of a terminal's directory (10.0.0) |
 
 ## Configuration
 
