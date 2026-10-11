@@ -18,19 +18,19 @@ const { useFilesCanvasMode } = await import("../../../src/composables/useFilesCa
 
 const cardFor = (docPath: string): CanvasCardResult => ({ kind: "card", card: { toolName: "presentDocument", data: { markdown: "", docPath } } });
 
-function setup(flushResult = true, declineSwitch = false) {
+function setup(saveResult = true, declineSwitch = false) {
   const openPath = ref<string | null>("a.md");
   const fileError = ref<string | null>(null);
-  const flush = vi.fn(async () => flushResult);
+  const savedInPlace = vi.fn(async () => saveResult);
   // A front-tab switch that lands, unless the test says the pane declined it.
   const open = vi.fn(async (path: string) => {
     if (!declineSwitch) openPath.value = path;
   });
   const scope = effectScope();
-  const deps = { cwd: () => "/proj", storiesRoots: () => ({ workspaces: [], roots: [] }), file: { openPath, flush, fileError }, tabs: { open } };
+  const deps = { cwd: () => "/proj", storiesRoots: () => ({ workspaces: [], roots: [] }), file: { openPath, savedInPlace, fileError }, tabs: { open } };
   const mode = scope.run(() => useFilesCanvasMode(deps));
   if (!mode) throw new Error("no composable");
-  return { mode, openPath, fileError, flush };
+  return { mode, openPath, fileError, savedInPlace };
 }
 
 describe("useFilesCanvasMode", () => {
@@ -39,10 +39,10 @@ describe("useFilesCanvasMode", () => {
   });
 
   it("builds the open file's card, joined under the cwd, after saving the buffer", async () => {
-    const { mode, flush } = setup();
+    const { mode, savedInPlace } = setup();
     await mode.show("a.md");
     await nextTick();
-    expect(flush).toHaveBeenCalled();
+    expect(savedInPlace).toHaveBeenCalled();
     expect(pending.calls.map((call) => call.path)).toEqual(["/proj/a.md"]);
     pending.calls[0].answer(cardFor("/proj/a.md"));
     await flushPromises();
@@ -153,11 +153,11 @@ describe("useFilesCanvasMode", () => {
   });
 
   it("does not switch the Canvas on when the pane declined to bring the file forward", async () => {
-    const { mode, openPath, flush } = setup(true, true);
+    const { mode, openPath, savedInPlace } = setup(true, true);
     await mode.open("b.md");
     await nextTick();
     expect(openPath.value).toBe("a.md");
-    expect(flush).not.toHaveBeenCalled();
+    expect(savedInPlace).not.toHaveBeenCalled();
     expect(mode.active.value).toBe(false);
   });
 
@@ -175,10 +175,10 @@ describe("useFilesCanvasMode", () => {
   });
 
   it("does nothing on a toggle with no file open", async () => {
-    const { mode, openPath, flush } = setup();
+    const { mode, openPath, savedInPlace } = setup();
     openPath.value = null;
     await mode.toggle();
-    expect(flush).not.toHaveBeenCalled();
+    expect(savedInPlace).not.toHaveBeenCalled();
     expect(mode.active.value).toBe(false);
   });
 });

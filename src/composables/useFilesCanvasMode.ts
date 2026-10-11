@@ -9,9 +9,10 @@ import type { FilesTabs } from "./useFilesTabs";
 export interface FilesCanvasModeDeps {
   cwd: () => string | null;
   storiesRoots: () => StoriesRoots;
-  /** `flush` saves the buffer first, since a view reads the file from disk; a refusal to build the
-   *  card is the server's sentence, shown on the pane's error line. */
-  file: Pick<OpenFile, "openPath" | "flush" | "fileError">;
+  /** `savedInPlace` saves the buffer first, since a view reads the file from disk — the same-file
+   *  save Preview uses, so a lost race keeps the conflict banner rather than banking the buffer the
+   *  way leaving a file does. A refusal to build the card is the server's sentence, on the error line. */
+  file: Pick<OpenFile, "openPath" | "savedInPlace" | "fileError">;
   /** `open` may decline to bring a file forward, over unsaved edits it could not save. */
   tabs: Pick<FilesTabs, "open">;
 }
@@ -75,7 +76,7 @@ export function useFilesCanvasMode(deps: FilesCanvasModeDeps) {
 
   /** Turn Canvas mode on for `path`, saving the buffer first; false when the save failed. */
   async function show(path: string): Promise<boolean> {
-    if (!(await deps.file.flush())) return false;
+    if (!(await deps.file.savedInPlace())) return false;
     setMode(path, true);
     return true;
   }

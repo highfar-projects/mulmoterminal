@@ -16,8 +16,10 @@ editor and the Canvas view of the same file.
   the only source of truth and an `update-result` only updates the local copy.
 - **Right pane only.** Gated on `canvasTarget`, as the button is today. The full-screen `/files`
   view keeps the preview — see `docs/file-surfaces.md` for why that is a containment decision.
-- **The buffer is flushed first**, as `openCanvasFor` did: a view reads the file from disk, so an
-  unsaved edit would otherwise be missing from what it draws.
+- **The buffer is saved first, in place** (`savedInPlace`, as Preview does): a view reads the file
+  from disk, so an unsaved edit would otherwise be missing from what it draws. Not `flush`, which
+  is for leaving a file and banks the buffer on a lost race; here the pane stays, so a conflict keeps
+  its banner and the switch does not happen.
 - **Per path, not persisted.** Which open files are in Canvas mode is held while the pane is up.
   Remembering it across a reload is out of scope.
 - **The swap is removed.** The `open-in-canvas` emit and `TerminalGrid.openFileInCanvas` go; the

@@ -101,6 +101,29 @@ describe("the Canvas button", () => {
     expect(btn(w).attributes("aria-pressed")).toBe("false");
   });
 
+  // Switching stays on the same file, so a save that loses the version race must not be banked and
+  // marked clean the way leaving a file is: the conflict banner stays up over the editor instead.
+  it("stays on the editor with the conflict banner when the save loses to another writer", async () => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/list")) return { ok: true, json: async () => ({ entries: [{ name: "design.md", dir: false, size: 10 }] }) };
+      if (init?.method === "PUT" && url.includes("/write")) return { ok: false, status: 409, json: async () => ({ version: "theirs" }) };
+      if (init?.method === "PUT") return { ok: true, json: async () => ({ stored: true }) };
+      return { ok: true, json: async () => ({ text: "x", version: "v1" }) };
+    }) as unknown as typeof fetch;
+    const w = mount(FilesPane, { props: { cwd: "/work/proj", canvasTarget: true, storiesRoots: { workspaces: [], roots: [] } }, global: CANVAS_STUB });
+    await flushPromises();
+    await w.findAll('[data-testid="files-row"]')[0].trigger("click");
+    await flushPromises();
+    onChange();
+    await flushPromises();
+    await btn(w).trigger("click");
+    await flushPromises();
+    expect(w.find('[data-testid="files-conflict"]').exists()).toBe(true);
+    expect(w.findComponent({ name: "FilesCanvasView" }).exists()).toBe(false);
+    expect(btn(w).attributes("aria-pressed")).toBe("false");
+  });
+
   // A story is built by the server, which can refuse with a sentence of its own (#1941).
   it("shows the server's refusal and stays on the editor", async () => {
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
