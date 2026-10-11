@@ -10,8 +10,9 @@ import type { OpenFile } from "./useOpenFile";
 export function useRequestedOpen(
   tabs: FilesTabs,
   file: OpenFile,
-  /** Takes `pathRel` out of any view that is not its text (the Canvas view, #3010) — asked BEFORE the
-   *  open, so a file in that view does not start drawing only to be put away again. */
+  /** Takes `pathRel` out of any view that is not its text (the Canvas view, #3010). The REQUEST, not the
+   *  landing, does it: asked before the open, so a file in that view does not start drawing only to be
+   *  put away, and a declined or superseded open still leaves it on its editor for the next visit. */
   showText: (pathRel: string) => void = () => {},
 ): {
   openAt: (pathRel: string, location: FileLocation, focus: boolean, newTab?: boolean) => Promise<void>;

@@ -142,6 +142,53 @@ describe("the Canvas button", () => {
     expect(fakeEditor.goTo).toHaveBeenCalledWith({ line: 2, col: 0 });
   });
 
+  // The contract is the REQUEST, not the landing (#3010): a located open the pane declines — the front
+  // buffer could be neither saved nor backed up — still takes the target out of the Canvas view.
+  it("takes the target out of the Canvas view even when the located open is declined", async () => {
+    let writesFail = false;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/list"))
+        return {
+          ok: true,
+          json: async () => ({
+            entries: [
+              { name: "a.md", dir: false, size: 1 },
+              { name: "b.md", dir: false, size: 1 },
+            ],
+          }),
+        };
+      if (init?.method === "PUT")
+        return writesFail
+          ? { ok: false, status: 500, json: async () => ({ error: "disk full" }) }
+          : { ok: true, json: async () => ({ ok: true, version: "v2" }) };
+      return { ok: true, json: async () => ({ text: "x", version: "v1" }) };
+    }) as unknown as typeof fetch;
+    const w = mount(FilesPane, { props: { cwd: "/work/proj", canvasTarget: true, storiesRoots: { workspaces: [], roots: [] } }, global: CANVAS_STUB });
+    await flushPromises();
+    const row = (name: string) => w.get(`[data-testid="files-row"][data-path="${name}"]`);
+    await row("b.md").trigger("click");
+    await flushPromises();
+    await btn(w).trigger("click");
+    await flushPromises();
+    await row("a.md").trigger("click", { metaKey: true });
+    await flushPromises();
+    onChange();
+    await flushPromises();
+
+    writesFail = true;
+    await w.vm.openFile("b.md", { line: 42, col: null }, false);
+    await flushPromises();
+    expect(w.findComponent({ name: "FilesCanvasView" }).exists()).toBe(false);
+    expect(w.find('[data-testid="files-error"]').exists()).toBe(true); // declined: a.md is still in front
+
+    writesFail = false;
+    await row("b.md").trigger("click");
+    await flushPromises();
+    expect(w.findComponent({ name: "FilesCanvasView" }).exists()).toBe(false);
+    expect(btn(w).attributes("aria-pressed")).toBe("false");
+  });
+
   // A story is built by the server, which can refuse with a sentence of its own (#1941).
   it("shows the server's refusal and stays on the editor", async () => {
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
