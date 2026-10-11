@@ -7,6 +7,9 @@ import type { OpenFile } from "./useOpenFile";
 import type { FilesTabs } from "./useFilesTabs";
 
 export interface FilesCanvasModeDeps {
+  /** Whether this surface may show the Canvas view at all. Checked on every read, so a path held
+   *  here — restored from storage, say — never draws on a surface that has no Canvas view. */
+  enabled: () => boolean;
   cwd: () => string | null;
   storiesRoots: () => StoriesRoots;
   /** `savedInPlace` saves the buffer first, since a view reads the file from disk — the same-file
@@ -35,7 +38,7 @@ export function useFilesCanvasMode(deps: FilesCanvasModeDeps) {
   // Per path, so a tab switched away from and back to comes back as it was left.
   const canvasPaths = ref(new Set<string>());
   const card = shallowRef<FilesCanvasResult | null>(null);
-  const active = computed(() => openPath.value !== null && canvasPaths.value.has(openPath.value));
+  const active = computed(() => deps.enabled() && openPath.value !== null && canvasPaths.value.has(openPath.value));
   // Whether a plugin has a view for the open file — its own gates decide, on the path the CARD will
   // carry: under a directory with a dot segment `p.html` passes alone and fails joined, which would
   // be a button that does nothing when pressed.
@@ -98,9 +101,10 @@ export function useFilesCanvasMode(deps: FilesCanvasModeDeps) {
     else await show(path);
   }
 
-  /** The root is changing: the paths held here are relative to the old one. */
-  function reset(): void {
-    canvasPaths.value = new Set();
+  /** Start over with `paths` in the Canvas view — none on a re-root, since the paths held here are
+   *  relative to the old root; a remembered pane's own when it is put back. */
+  function reset(paths: readonly string[] = []): void {
+    canvasPaths.value = new Set(paths);
     generation++;
     card.value = null;
   }
@@ -110,5 +114,6 @@ export function useFilesCanvasMode(deps: FilesCanvasModeDeps) {
     if (card.value) card.value = { ...card.value, ...update };
   }
 
-  return { active, openable, card, show, open, hide, toggle, reset, onUpdateResult };
+  const has = (path: string): boolean => canvasPaths.value.has(path);
+  return { active, openable, card, show, open, hide, toggle, has, reset, onUpdateResult };
 }

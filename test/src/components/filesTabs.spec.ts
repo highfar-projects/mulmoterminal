@@ -8,6 +8,7 @@ import {
   steppedPath,
   tabLabels,
   withTab,
+  withCanvasView,
   type TabStrip,
   isUnder,
   movedPath,
@@ -212,5 +213,19 @@ describe("tabs after a rename or a Trash", () => {
     expect(withoutEntry(strip, "docs")).toEqual(strip);
     expect(isUnder("srcs/z.ts", "src")).toBe(false);
     expect(isUnder("src", "src")).toBe(true);
+  });
+});
+
+describe("withCanvasView (#3011)", () => {
+  const strip: TabStrip = { tabs: [{ path: "a.md", showCanvas: true }, { path: "b.md" }, { path: "c.md", showPreview: true }], activePath: "b.md" };
+
+  it("records each tab as the pane holds it now, clearing a Canvas view since switched back", () => {
+    const now = withCanvasView(strip, (path) => path === "b.md");
+    expect(now.tabs).toEqual([{ path: "a.md" }, { path: "b.md", showCanvas: true }, { path: "c.md", showPreview: true }]);
+    expect(now.activePath).toBe("b.md");
+  });
+
+  it("leaves an empty strip empty", () => {
+    expect(withCanvasView(EMPTY_STRIP, () => true)).toEqual(EMPTY_STRIP);
   });
 });

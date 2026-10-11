@@ -124,6 +124,71 @@ describe("the Canvas button", () => {
     expect(btn(w).attributes("aria-pressed")).toBe("false");
   });
 
+  // #3011: what the pane hands its host to remember, and what it does with it handed back.
+  it("puts the Canvas view in its snapshot, and comes back to it from one", async () => {
+    const w = await openRow("design.md", "/work/proj");
+    await btn(w).trigger("click");
+    await flushPromises();
+    const snapshot = w.vm.snapshot();
+    expect(snapshot.tabs).toEqual([expect.objectContaining({ path: "design.md", showCanvas: true })]);
+
+    withEntry("design.md");
+    const back = mount(FilesPane, { props: { cwd: "/work/proj", canvasTarget: true, initialState: snapshot }, global: CANVAS_STUB });
+    await flushPromises();
+    expect(back.findComponent({ name: "FilesCanvasView" }).exists()).toBe(true);
+    expect(btn(back).attributes("aria-pressed")).toBe("true");
+  });
+
+  // An open that gets in before the remembered tabs are put back (#1979) comes up as text, as it would
+  // with Preview — whether it has landed by then or is still in flight, so no remembered Canvas view is
+  // put back that time.
+  it.each([
+    ["landed", false],
+    ["still in flight", true],
+  ])("puts no remembered Canvas view back when an open won the restore race (%s)", async (_case, holdOpen) => {
+    let releaseSrc!: () => void;
+    const srcGate = new Promise<void>((resolve) => (releaseSrc = resolve));
+    let releaseText!: () => void;
+    const textGate = new Promise<void>((resolve) => (releaseText = resolve));
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), "https://x");
+      if (url.pathname.includes("/list")) {
+        if (url.searchParams.get("path") === "src") {
+          await srcGate;
+          return { ok: true, json: async () => ({ entries: [] }) };
+        }
+        const entries = [
+          { name: "src", dir: true, size: 0 },
+          { name: "a.md", dir: false, size: 1 },
+          { name: "b.md", dir: false, size: 1 },
+        ];
+        return { ok: true, json: async () => ({ entries }) };
+      }
+      if (holdOpen && url.searchParams.get("path") === "a.md") await textGate;
+      return { ok: true, json: async () => ({ text: "x", version: "v1" }) };
+    }) as unknown as typeof fetch;
+    const initialState = {
+      tabs: [
+        { path: "a.md", showCanvas: true },
+        { path: "b.md", showCanvas: true },
+      ],
+      activePath: "b.md",
+      expanded: ["src"],
+    };
+    const w = mount(FilesPane, { props: { cwd: "/work/proj", canvasTarget: true, initialState }, global: CANVAS_STUB });
+    await flushPromises(); // restore is held on `src`
+
+    const opening = w.vm.openFile("a.md", undefined, false);
+    await flushPromises();
+    releaseSrc();
+    await flushPromises();
+    releaseText();
+    await opening;
+    await flushPromises();
+    expect(w.findComponent({ name: "FilesCanvasView" }).exists()).toBe(false);
+    expect(btn(w).attributes("aria-pressed")).toBe("false");
+  });
+
   // A line lives in the text (#3010): a terminal path naming one brings the editor back, at that line,
   // the way it already brings a Preview back to Edit. A click with no line keeps the Canvas view.
   it("leaves the Canvas view for a terminal path that names a line, and keeps it for one that does not", async () => {
@@ -187,6 +252,15 @@ describe("the Canvas button", () => {
     await flushPromises();
     expect(w.findComponent({ name: "FilesCanvasView" }).exists()).toBe(false);
     expect(btn(w).attributes("aria-pressed")).toBe("false");
+  });
+
+  // The store is per directory, and nothing ties a remembered state to the surface that wrote it.
+  it("ignores a remembered Canvas view where there is no Canvas view to show", async () => {
+    withEntry("design.md");
+    const initialState = { tabs: [{ path: "design.md", showCanvas: true }], activePath: "design.md", expanded: [] };
+    const w = mount(FilesPane, { props: { cwd: "/work/proj", canvasTarget: false, initialState }, global: CANVAS_STUB });
+    await flushPromises();
+    expect(w.findComponent({ name: "FilesCanvasView" }).exists()).toBe(false);
   });
 
   // A story is built by the server, which can refuse with a sentence of its own (#1941).
