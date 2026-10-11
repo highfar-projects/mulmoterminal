@@ -8,8 +8,8 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **9.9.0 is out.** A ` ```mermaid ` fence in a Markdown file is drawn as a diagram in the Files pane's Preview, with
-> its code folded underneath, and bracketed paste survives a reload. [Setup guide](v9.9.0.html)
+> **10.0.0 is out.** The phone lists the past sessions of an open terminal's directory and reads them as a
+> conversation, and every code block in rendered markdown gets a copy button. [Setup guide](v10.0.0.html)
 
 ## What is MulmoTerminal? {#what-is}
 

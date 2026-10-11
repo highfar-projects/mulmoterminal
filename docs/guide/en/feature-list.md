@@ -4,7 +4,7 @@ nav_title: Feature list
 layout: default
 parent: English
 nav_order: 6.5
-as_of: 9.9.0
+as_of: 10.0.0
 description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 9.1.0)."
 ---
 
@@ -92,6 +92,7 @@ More: [Agents](agents.html)
 
 More: [Conversations](conversation.html)
 
+- Every code block in rendered markdown (conversation pane, wiki, skills, What's new, release notes, blueprints, canvas) has a copy button that copies it as written (v10.0.0)
 - A conversation pane shows the session transcript as rendered markdown, back to the first turn (v5.0.0)
 - A prompts pane lists the prompts you sent this session, newest first (v4.9.0)
 - An optional Question pane shows Claude's AskUserQuestion choices as buttons beside the enlarged terminal (v4.8.3)
@@ -108,6 +109,7 @@ More: [Conversations](conversation.html)
 
 More: [Phone](phone.html)
 
+- From a terminal on the phone, list every earlier session of its directory (every agent) and read one as a conversation, paged back on request; the phone screen comes with a MulmoServer update (v10.0.0)
 - A terminal on the phone opens its project's shared files with one button, and comes back from them (v9.1.0)
 - A project chooses which of its files (md / html / pdf / pictures) the phone may list and open, under `mobileFiles` in `.mulmoterminal.json`; the phone screen comes with a MulmoServer update (v9.0.0)
 - Phone terminal rows are named from the conversation instead of a bare UUID (v5.7.0)
@@ -133,6 +135,7 @@ More: [Phone](phone.html)
 
 More: [Feature reference](features.html)
 
+- A Preview code block copies in one press and shows a notice; the dialog opens only when the block cannot be copied as it is (v10.0.0)
 - A mermaid fence in a Markdown file's Preview is drawn as a diagram, in the app's theme, with its code folded under it (v9.9.0)
 - The Files pane shows PDF, video and audio; a text file too large to edit offers Open in OS (v7.3.0)
 - Saving .mulmoterminal.json in the Files pane applies it at once, with key completion and rejected values marked (v7.2.0)

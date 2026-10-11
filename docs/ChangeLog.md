@@ -8,7 +8,37 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
-### JingleScript scores carry an author and a copyright
+## mulmoterminal@10.0.0 — 2026-10-11
+
+> **Setup guide:** [10.0.0 — Read a directory's past sessions from the phone](https://receptron.github.io/mulmoterminal/guide/en/v10.0.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.0.0.html))
+
+### The phone lists a directory's past sessions and reads their conversation (#3001)
+
+- Two remote-host commands. `listPastSessions` (`sessionId`) answers every hosted agent's past sessions for the directory of an open session, merged newest first and capped: `{ cwd, sessions: { id, title, mtime, agent, readable, account? }[] }`. `getPastTranscript` (`sessionId`, `pastSessionId`, `before?`) answers one `TranscriptPage` through the existing `sessionTranscriptPage`, so a long conversation is read newest first and walked back with the opaque cursor (#2999).
+- Containment: the phone names an open session, never a path; that session must exist here (a live pty or an exact tmux name), and its directory comes from the host. A page is read only for an id that directory's own list holds (`server/session/list/past-transcript-gate.ts`), because codex locates a rollout by id alone. Agents with no transcript reader (antigravity, grok, muse) are listed with `readable: false` and answered `not-supported` without opening anything.
+- One agent's broken store does not empty the list; antigravity rows fold in conversations another process added since hydration. Wire shapes are in `docs/remote-host-protocol.md`; the phone screen is receptron/mulmoserver#353.
+
+### A copy button on every code block in rendered markdown (#3000)
+
+- The conversation pane, the wiki browser, skills, What's new, release notes and blueprints put a copy button on each code block, copying the block's source exactly as written (#2998). `src/appMarked.ts` is an app-owned `Marked` carrying `@mulmoclaude/markdown-utils`' `rawHtmlPolicyExtension` and `codeCopyExtension` — the same button, wording and nonce check as MulmoClaude. The permitted-markup list admits the button's markers; `[[link]]` spans in the wiki keep their class. Labels in five locales.
+
+### A Preview code block copies in one press, with a notice (#3004)
+
+- The Files pane Preview's copy button copies at once and shows a short notice with the line count and first line (#3003). The text still comes from the file (`/api/files/browse/code-block`). The dialog from #2615 opens only when a one-press copy is not possible: invisible characters (written out as `<U+…>`), no Clipboard API, a refused write, or a block that is gone. `writeClipboardLater` starts the write before the fetch as a `ClipboardItem` holding the pending text, falling back to `writeText`.
+
+### Canvas copy buttons copy (#3002)
+
+- `@mulmoclaude/markdown-utils` 3.0.1 -> 3.0.2. The canvas mounts plugin views in a shadow root, where 3.0.1's document-level handler saw the retargeted host and copied nothing; 3.0.2 reads `event.composedPath()`. Deduplicated so the markdown plugin and core do not keep nested 3.0.1 copies.
+
+### An at-limit subscription says so; the `/login` gauge is named (#2997)
+
+- An account or rotation token whose probe stalled at the usage limit read `n/a`, like "not measured"; it now reads `at limit` in the warning colour, and the hover adds when its windows were last due to reset (from `lastLimits`). The default login is labelled `/login` when named logins of the same agent share the row (#2995). Guides updated.
+
+### Audio and video opened by path play (#2993)
+
+- `/api/files/raw` served media under the same sandbox CSP as other files, which stopped playback. Audio and video are now served without it, like PDFs; every other type stays sandboxed.
+
+### JingleScript scores carry an author and a copyright (#2996)
 
 - `@gui-chat-plugin/jinglescript` and `jinglescript` ^0.6.0 -> ^0.7.0. 0.7.0 adds optional `author` and `copyright` to a score, next to `title`; all three are written into the rendered audio's tags (WAV, MP3, OGG — including the player's embedded audio) and, for the copyright, the MIDI file. The tool tells the model to fill them only with what the user gives. No host changes: the tool and its player view come from the plugin.
 
