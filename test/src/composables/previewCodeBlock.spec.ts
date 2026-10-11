@@ -271,6 +271,60 @@ describe("a Preview code block's copy button — copying at once (#3003)", () =>
     expect(host.shown()).toEqual({ status: "missing" });
   });
 
+  it("copies only the latest press when an earlier read answers last", async () => {
+    const answers: ((res: Response) => void)[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Promise<Response>((resolve) => answers.push(resolve))),
+    );
+    const clipboard = stubClipboard();
+    const host = mountHost();
+    host.press(0);
+    host.press(1);
+    answers[1]?.(new Response(JSON.stringify({ lang: "sh", text: "echo second" }), { status: 200 }));
+    await flushPromises();
+    answers[0]?.(new Response(JSON.stringify({ lang: "ts", text: "const first = 1;" }), { status: 200 }));
+    await flushPromises();
+    expect(clipboard.written).toEqual(["echo second"]);
+    expect(host.copied()).toEqual({ lines: 1, firstLine: "echo second" });
+  });
+
+  it("copies nothing for a press whose file was switched away before the read answered", async () => {
+    const answers: ((res: Response) => void)[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Promise<Response>((resolve) => answers.push(resolve))),
+    );
+    const clipboard = stubClipboard();
+    const host = mountHost();
+    host.press(0);
+    host.openPath.value = "b.md";
+    answers[0]?.(new Response(JSON.stringify({ lang: "ts", text: "const first = 1;" }), { status: 200 }));
+    await flushPromises();
+    expect(clipboard.written).toEqual([]);
+    expect(host.copied()).toBeNull();
+  });
+
+  it("clears the notice when the next press opens the dialog, and when the file changes", async () => {
+    serveFile("```sh\necho ok\n```\n\n```sh\necho\u202e\n```\n");
+    stubClipboard();
+    const host = mountHost();
+    host.press(0);
+    await flushPromises();
+    expect(host.copied()).not.toBeNull();
+    host.press(1);
+    await flushPromises();
+    expect(host.copied()).toBeNull();
+    expect(host.shown()?.status).toBe("found");
+    host.close();
+    host.press(0);
+    await flushPromises();
+    expect(host.copied()).not.toBeNull();
+    host.openPath.value = "b.md";
+    await flushPromises();
+    expect(host.copied()).toBeNull();
+  });
+
   it("drops the notice after a moment", async () => {
     vi.useFakeTimers();
     try {

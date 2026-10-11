@@ -36,8 +36,12 @@ export function usePreviewCodeBlock(deps: PreviewCodeBlockDeps): PreviewCodeBloc
   const copied = ref<CopiedNotice | null>(null);
   let latest = 0;
   let noticeTimer: ReturnType<typeof setTimeout> | undefined;
-  const showCopied = (notice: CopiedNotice): void => {
+  const clearCopied = (): void => {
     clearTimeout(noticeTimer);
+    copied.value = null;
+  };
+  const showCopied = (notice: CopiedNotice): void => {
+    clearCopied();
     copied.value = notice;
     noticeTimer = setTimeout(() => (copied.value = null), COPIED_NOTICE_MS);
   };
@@ -45,9 +49,13 @@ export function usePreviewCodeBlock(deps: PreviewCodeBlockDeps): PreviewCodeBloc
     const path = deps.openPath();
     if (!path) return;
     const request = ++latest;
+    clearCopied();
     const lookup = previewCodeBlockAt(deps.cwd(), path, index);
     // Started before the read finishes, so the write still counts as the press's (see writeClipboardLater).
-    const written = clipboardAvailable() ? writeClipboardLater(lookup.then(directCopyText)) : Promise.resolve(false);
+    // The text is withheld if a newer press, or another file, came first: the browser does not order two
+    // pending writes, so an older block would otherwise land on the clipboard after a newer one.
+    const current = lookup.then((answer) => (request === latest ? directCopyText(answer) : null));
+    const written = clipboardAvailable() ? writeClipboardLater(current) : Promise.resolve(false);
     const [answer, copiedNow] = await Promise.all([lookup, written]);
     if (request !== latest) return;
     if (copiedNow && answer.status === "found") showCopied(copiedNoticeFor(answer.block.text));
@@ -57,6 +65,7 @@ export function usePreviewCodeBlock(deps: PreviewCodeBlockDeps): PreviewCodeBloc
   watch([deps.cwd, deps.openPath], () => {
     latest += 1;
     shown.value = null;
+    clearCopied();
   });
   // Closing retires a read still out, as a change of file does: its answer must not reopen the dialog.
   const close = (): void => {
