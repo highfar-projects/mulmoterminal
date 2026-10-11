@@ -69,7 +69,7 @@ import { parsePaneStore, rememberPane, recallPane } from "./filesPaneStore";
 import { isRecord } from "../../common/isRecord";
 import { asTerminalAgent, type SessionAgent } from "../../common/sessionAgent";
 import type { AgentReport } from "./gridCell";
-import { buildCanvasCard, seedCanvasCard, hasStoredCard, absoluteUnder, storiesRootsFrom, type StoriesRoots } from "../composables/canvasOpenFile";
+import { hasStoredCard, storiesRootsFrom, type StoriesRoots } from "../composables/canvasOpenFile";
 import { jsonBody } from "../jsonBody";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
@@ -493,66 +493,6 @@ function moveCell(uid: number, dir: -1 | 1): boolean {
 }
 
 onBeforeUnmount(registerGridCellRunner((uid, action) => runCellAction(action, uid)));
-
-/** What a refusal has to come back to for it to be worth showing. */
-type PaneIdentity = { uid: number | null; cwd: string | null; pane: FilesPaneInstance | null };
-
-/** Put a refusal in the pane that ASKED for it, or nowhere.
- *
- *  Nowhere is the right answer when that pane is gone: the user closed it or walked to another
- *  cell, and a message about a file they are no longer looking at is worse than none. What must
- *  not happen is the middle case — a pane is still open and takes a sentence it did not ask for.
- *
- *  The INSTANCE, not just where it sits. `v-if` unmounts the pane on close, so closing and
- *  reopening on the same cell gives a fresh pane at an identical uid and cwd — which a check on
- *  those two alone reads as the original still being there (Codex on #1942). Comparing the
- *  instance costs nothing and cannot be fooled by a location that repeats. */
-function showPaneError(askedFrom: PaneIdentity, reason: string): void {
-  if (paneUid.value !== askedFrom.uid || paneCwd.value !== askedFrom.cwd || !filesOpen.value) return;
-  if (filesPane.value !== askedFrom.pane) return;
-  filesPane.value?.showError(reason);
-}
-
-// Show a file the user picked in the Canvas, without the agent having presented it (#1374). The
-// card is written the way the agent's own results arrive, so it is stored, replayed on reload, and
-// collapsed against the agent's card for the same file — see canvasOpenFile.ts.
-//
-// Revealed only if the write landed: enlarging a cell to show nothing is worse than not enlarging.
-async function openFileInCanvas(path: string): Promise<void> {
-  const uid = props.expandedUid;
-  const sessionId = expandedSessionId.value;
-  if (uid === null || !sessionId) return;
-  // Which pane asked. The reopen below is a network round trip (up to 10s), and the user can walk
-  // to another cell while it is in flight — the re-root watcher then points `filesPane` at a
-  // different tree, and a refusal written there names a file that pane is not showing (Codex on
-  // #1942). Held as values, compared after, the way the seed's own `sessionId` check already is.
-  const askedFrom: PaneIdentity = { uid: paneUid.value, cwd: paneCwd.value, pane: filesPane.value };
-  // The pane's rows are relative to the CELL's cwd; the plugins resolve against the workspace.
-  const result = await buildCanvasCard(absoluteUnder(paneCwd.value, path), storiesRoots.value);
-  // A refusal is the server's sentence about what went wrong — an unregistered root from a card
-  // made under a different launch directory, a workspace that moved since boot. Saying nothing
-  // here is what made those look like a dead button (#1941). `none` stays silent: nothing offers
-  // the action for a file no plugin renders, so it cannot be clicked.
-  if (result.kind === "refused") {
-    showPaneError(askedFrom, result.reason);
-    return;
-  }
-  if (result.kind === "none") return;
-  if (!(await seedCanvasCard(sessionId, result.card))) return;
-  // Re-asked after the await, like every other late reply here. openCanvasFor already refuses to
-  // reveal the pane on a cell it was not asked for, but `canvasHasCard` is one flag for whichever
-  // cell is enlarged: walking the zoom while the write was in flight would otherwise leave the
-  // NEW cell's Canvas button enabled on the strength of a card that is not its.
-  if (sessionId !== expandedSessionId.value) return;
-  // The pane this came from is about to be replaced by the Canvas, so its buffer has to flush —
-  // openCanvasFor does that. Already enlarged, hence `false`.
-  //
-  // Said rather than asked: this route just wrote the card and the write came back, so it needs no
-  // round trip — and `adoptStoredCard`'s probe answers "no" when it cannot reach the server, which
-  // over a card that IS there would put the pane's "not enabled" message back.
-  canvasHasCard.value = true;
-  await openCanvasFor(uid, false);
-}
 
 // GridView drives this one from OUTSIDE a user gesture (placing a spawned chat whose Canvas is
 // already seeded). The pane is TerminalGrid's own state — GridView owns the cells, not what sits
@@ -1723,7 +1663,6 @@ function onRosterDragLeave(event: DragEvent) {
           :style="{ flex: `0 0 ${paneWidth}px` }"
           class="border-l border-border bg-deep"
           @close="setFilesOpen(false)"
-          @open-in-canvas="openFileInCanvas"
           @insert-text="insertIntoExpandedCell"
         >
           <!-- Which directory the tree is actually rooted at. It normally follows the enlarged

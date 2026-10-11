@@ -175,7 +175,7 @@ export const tipsZhTW: Messages["tips"] = {
     unsaved: "未儲存",
     markdownPreview: "Markdown 預覽",
     filePreview: "檔案預覽",
-    openInCanvas: "在畫布中開啟此檔案",
+    openInCanvas: "將此檔案切換到畫布檢視",
     showChanges: "不只在行旁標記，也在原處顯示刪除的行",
     sideBySide: "編輯器與 Preview 並排顯示（Preview 跟隨正在編輯的標題）",
     insertSelection: "把選取的行以 {'@'}檔案#L10-20 的形式放到終端機的輸入處（先儲存未儲存的編輯；未選取時只放檔案）",

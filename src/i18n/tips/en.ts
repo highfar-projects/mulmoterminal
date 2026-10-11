@@ -175,7 +175,7 @@ export const tipsEn = {
     unsaved: "Unsaved",
     markdownPreview: "Markdown preview",
     filePreview: "File preview",
-    openInCanvas: "Open this file in the Canvas",
+    openInCanvas: "Switch this file to the Canvas view",
     showChanges: "Show the removed lines in place, not only the marks beside the lines",
     sideBySide: "Editor and Preview side by side; the Preview follows the heading you are editing",
     insertSelection: "Put {'@'}file#L10-20 for the selected lines at the terminal's prompt (saves unsaved edits first; the file alone with nothing selected)",

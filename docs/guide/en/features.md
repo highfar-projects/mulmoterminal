@@ -186,6 +186,8 @@ opens it here, drawn, when the pane is up.
 
 **Hand the selected lines to the agent.** The **@** button in the header (or the `files-insert-selection` key) puts the selected lines at the prompt of the terminal beside the pane as `@src/a.ts#L10-20` — the form Claude Code's IDE integration uses. Nothing is sent, so you can go on to say what to do with them. With nothing selected — or in Preview — it inserts the file alone. Unsaved edits are saved first, so the line numbers match the file the agent reads. It is Claude Code's form; another agent sees it as plain text.
 
+**Canvas shows the open file inside the pane.** For a Markdown, HTML or MulmoScript file, **Canvas** in the pane's header (or **Open in the Canvas** on a row) switches the file to the view the Canvas draws it with, with the tree still beside it; press **Canvas** again to go back to the editor. Unsaved edits are saved first. Nothing is added to the cell's own Canvas. Only in the pane beside a cell — the full-screen file view keeps Preview.
+
 **A Markdown file can be read in Preview.** Relative images are shown, a YAML front matter block
 is left out, and external links open in a new browser tab. A link to another file (`./b.md`,
 `../README.md`) opens it in a new tab of the pane — in Preview when it is Markdown; a link that

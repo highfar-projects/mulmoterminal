@@ -302,7 +302,7 @@ async function reopenStory(ref: StoryRef, expectPath: string): Promise<CanvasCar
     // on both branches below.
     //
     // Blank counts as ABSENT, not as a sentence: `??` only catches null, so an `error: ""` from any
-    // layer between us and the plugin would survive to `showError`, where the pane renders it under
+    // layer between us and the plugin would survive to the Files pane's error line, rendered under
     // `v-if="fileError"` — i.e. nothing at all, which is the dead button this whole change removes
     // (CodeRabbit on #1942).
     const refusal = isRecord(body) && typeof body.error === "string" && body.error.trim() !== "" ? body.error : null;

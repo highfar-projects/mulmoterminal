@@ -49,7 +49,7 @@ vi.mock("../../../src/components/FilesPane.vue", () => ({
   default: {
     name: "FilesPane",
     props: ["cwd", "requestedPath", "initialState", "canvasTarget", "workspace"],
-    emits: ["close", "dirty", "open-in-canvas"],
+    emits: ["close", "dirty"],
     setup: (_p: unknown, { expose, slots }: { expose: (e: Record<string, unknown>) => void; slots: { title?: () => VNode[] } }) => {
       expose({ flush, reload: () => {}, snapshot: () => ({ openPath: null, expanded: [] }), openFinder, closeFrontTab, stepTab, insertSelection });
       return () => h("div", { class: "stub-files-pane" }, slots.title?.());
