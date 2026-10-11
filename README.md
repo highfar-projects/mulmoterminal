@@ -1354,7 +1354,8 @@ fails shows the error rather than a tree it can no longer vouch for.
 **Several files open as tabs, when you ask for them.** A plain click in the tree replaces the file
 in front, as it always has — so someone who never wants a tab never sees one. **Cmd+click** (Ctrl+click
 off macOS) or the row menu's **Open in a new tab** adds a tab, and a strip of tabs appears under the
-header once there are two. Opening a file that already has a tab goes to that tab, from the tree, the
+header once there are two. A path clicked in terminal output follows the same rule: a plain click
+replaces the front tab, Cmd+click (Ctrl+click off macOS) opens it in a tab of its own. Opening a file that already has a tab goes to that tab, from the tree, the
 finder, the search or a clicked terminal path alike. Switching tabs saves the one you leave, exactly as
 opening another file does, so only the front tab can hold unsaved edits; each tab keeps its own place
 (Preview or editor, caret, scroll) and the whole strip is remembered with the rest of the pane. Close a

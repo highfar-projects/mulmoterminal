@@ -23,6 +23,7 @@ import type { FileLocation } from "./filePathLocation";
 import { pathWithinCwd, rebaseOutsideCwd } from "./pathWithinCwd";
 import { fileMediaKind, filePreviewKind } from "../components/filePreviewKind";
 import { HTML_FILE_NAME, filesPageUrl } from "../../common/filesPage";
+import { wantsNewTab } from "./newTabModifier";
 
 export interface TerminalCell {
   chars: string;
@@ -176,8 +177,8 @@ export function createFilePathLinkProvider(
   openInFiles: (filePath: string, cwd: string, location?: FileLocation) => void,
   // First chance at the click, ahead of the extension table: the Files pane beside an enlarged
   // cell, which can show most of these WITHOUT leaving the grid (#910). Returns whether it took
-  // it; false falls through to the routing below, unchanged.
-  openInPane: (filePath: string, cwd: string, location?: FileLocation) => boolean,
+  // it; false falls through to the routing below, unchanged. `newTab` is Cmd/Ctrl on the click (#3005).
+  openInPane: (filePath: string, cwd: string, location: FileLocation | undefined, newTab: boolean) => boolean,
 ): ILinkProvider {
   return {
     provideLinks(bufferLineNumber: number, callback: (links: ILink[] | undefined) => void): void {
@@ -188,8 +189,8 @@ export function createFilePathLinkProvider(
         text: link.text,
         range: { start: { x: link.startX, y: bufferLineNumber }, end: { x: link.endX, y: bufferLineNumber } },
         decorations: { pointerCursor: true, underline: true },
-        activate: () => {
-          if (openInPane(link.text, cwd, link.location)) return;
+        activate: (event: MouseEvent) => {
+          if (openInPane(link.text, cwd, link.location, wantsNewTab(event))) return;
           // A path outside the cell is served relative to its own directory: the routes contain
           // `path` within `cwd`, so handing them the cell's cwd refused it as an escape (#2260).
           const rebased = rebaseOutsideCwd(link.text, cwd);

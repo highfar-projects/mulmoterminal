@@ -434,7 +434,7 @@ function registerFilePathLinks(term: Terminal, c: Conn): void {
       () => c.knownCwd,
       (url) => window.open(url, "_blank", "noopener,noreferrer"),
       (filePath, cwd, location) => filesGotoFile(cwd, filePath, location),
-      (filePath, cwd, location) => tryOpenInPane(filePath, cwd, location),
+      (filePath, cwd, location, newTab) => tryOpenInPane(filePath, cwd, location, newTab),
     ),
   );
 }
