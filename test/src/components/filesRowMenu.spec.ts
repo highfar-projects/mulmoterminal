@@ -36,6 +36,7 @@ const mountPane = async (props: PaneProps = {}) => {
   const w = mount(FilesPane, {
     props: { cwd: "/proj", insertTarget: true, insertTargetCwd: "/proj", ...props },
     attachTo: document.body,
+    global: { stubs: { FilesCanvasView: true } },
   });
   await flushPromises();
   return w;
@@ -87,10 +88,9 @@ describe("the files tree's row menu", () => {
     expect(w.emitted("insert-text")).toEqual([["/proj/src "]]);
   });
 
-  // #1923: the row is where "show me this file" starts, so the entry that opens it in the Canvas
-  // rides the same emit as the pane's own Canvas button — and carries the RELATIVE path, which is
-  // what that button sends and what the receiver resolves against the pane's cwd.
-  it("opens a renderable file in the Canvas from the row, without opening it first", async () => {
+  // #1923: the row is where "show me this file" starts. Since #3008 the Canvas is a view of the
+  // pane's own, so the entry brings the file to the front and switches it to that view.
+  it("opens a renderable file in the pane's Canvas view from the row, without opening it first", async () => {
     const w = await mountPane({ canvasTarget: true, workspace: "/ws" });
     rightClick(w.findAll('[data-testid="files-row"]')[0].element); // README.md
     await flushPromises();
@@ -98,7 +98,7 @@ describe("the files tree's row menu", () => {
     expect(labels()).toEqual(["Open in a new tab", "Open in the Canvas", "Show in folder", "Insert relative path", "Insert absolute path"]);
     item("open-canvas")?.click();
     await flushPromises();
-    expect(w.emitted("open-in-canvas")).toEqual([["README.md"]]);
+    expect(w.findComponent({ name: "FilesCanvasView" }).props("card")).toMatchObject({ toolName: "presentDocument", data: { docPath: "/proj/README.md" } });
     expect(w.emitted("insert-text")).toBeUndefined();
     expect(menu()).toBeNull();
   });
