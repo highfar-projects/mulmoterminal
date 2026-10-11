@@ -103,6 +103,19 @@ describe.each(RENDERERS)("%s — code block copy", (_name, render) => {
   });
 });
 
+describe("code block copy inside a shadow root", () => {
+  it("copies from a button in a shadow root, as the canvas mounts plugin views (PluginFrame.vue)", () => {
+    const host = document.createElement("div");
+    document.body.replaceChildren(host);
+    const shadow = host.attachShadow({ mode: "open" });
+    shadow.innerHTML = renderMarkdownProse(REPLY);
+    writeText.mockReset();
+    writeText.mockResolvedValue(undefined);
+    shadow.querySelector("[data-code-copy]")?.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true }));
+    expect(writeText.mock.calls[0]?.[0]).toBe(MARKDOWN_BLOCK);
+  });
+});
+
 describe("renderWikiHtml — wiki links survive the raw-HTML rule", () => {
   it("keeps a [[link]] a clickable wiki-link", () => {
     const link = mount(renderWikiHtml("See [[beta]].")).querySelector(".wiki-link");
