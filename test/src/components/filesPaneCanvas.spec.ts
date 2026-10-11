@@ -85,6 +85,22 @@ describe("the Canvas button", () => {
     expect(w.findComponent({ name: "FilesCanvasView" }).exists()).toBe(true);
   });
 
+  // Canvas mode is held per RELATIVE path, so a re-root must drop it: the same name under the new
+  // root is a different file the user never switched.
+  it("forgets which files were in Canvas view when the pane is re-rooted", async () => {
+    const w = await openRow("design.md", "/work/proj");
+    await btn(w).trigger("click");
+    await flushPromises();
+    expect(w.findComponent({ name: "FilesCanvasView" }).exists()).toBe(true);
+    await w.setProps({ cwd: "/work/other" });
+    await w.vm.reload();
+    await flushPromises();
+    await w.findAll('[data-testid="files-row"]')[0].trigger("click");
+    await flushPromises();
+    expect(w.findComponent({ name: "FilesCanvasView" }).exists()).toBe(false);
+    expect(btn(w).attributes("aria-pressed")).toBe("false");
+  });
+
   // A story is built by the server, which can refuse with a sentence of its own (#1941).
   it("shows the server's refusal and stays on the editor", async () => {
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {

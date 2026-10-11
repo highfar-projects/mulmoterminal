@@ -128,4 +128,28 @@ describe("the Files pane's @ button (#2575)", () => {
     fakeEditor.selectedLines.mockReturnValue(null);
     expect(w.emitted("insert-text")?.[0]).toEqual(["@notes.md "]);
   });
+
+  // The Canvas view hides the editor the same way (#3008), and the key still reaches the pane there.
+  it("inserts the file alone in the Canvas view, whatever the hidden editor still has selected", async () => {
+    const w = mount(FilesPane, {
+      props: {
+        cwd: "/proj",
+        insertTarget: true,
+        insertTargetCwd: "/proj",
+        canvasTarget: true,
+        initialState: { tabs: [{ path: "notes.md" }], activePath: "notes.md", expanded: [] },
+      },
+      attachTo: document.body,
+      global: { stubs: { FilesCanvasView: true } },
+    });
+    await flushPromises();
+    fakeEditor.selectedLines.mockReturnValue({ from: 3, to: 5 });
+    await w.get('[data-testid="files-canvas-btn"]').trigger("click");
+    await flushPromises();
+    expect(w.find('[data-testid="files-insert-selection"]').exists()).toBe(false);
+    await w.vm.insertSelection();
+    await flushPromises();
+    fakeEditor.selectedLines.mockReturnValue(null);
+    expect(w.emitted("insert-text")?.[0]).toEqual(["@notes.md "]);
+  });
 });

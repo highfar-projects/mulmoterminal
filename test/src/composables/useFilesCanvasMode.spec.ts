@@ -20,18 +20,17 @@ const cardFor = (docPath: string): CanvasCardResult => ({ kind: "card", card: { 
 
 function setup(flushResult = true, declineSwitch = false) {
   const openPath = ref<string | null>("a.md");
-  const refused = vi.fn();
+  const fileError = ref<string | null>(null);
   const flush = vi.fn(async () => flushResult);
-  const scope = effectScope();
   // A front-tab switch that lands, unless the test says the pane declined it.
-  const bringToFront = vi.fn(async (path: string) => {
+  const open = vi.fn(async (path: string) => {
     if (!declineSwitch) openPath.value = path;
   });
-  const mode = scope.run(() =>
-    useFilesCanvasMode({ cwd: () => "/proj", openPath, storiesRoots: () => ({ workspaces: [], roots: [] }), flush, bringToFront, refused }),
-  );
+  const scope = effectScope();
+  const deps = { cwd: () => "/proj", storiesRoots: () => ({ workspaces: [], roots: [] }), file: { openPath, flush, fileError }, tabs: { open } };
+  const mode = scope.run(() => useFilesCanvasMode(deps));
   if (!mode) throw new Error("no composable");
-  return { mode, openPath, refused, flush };
+  return { mode, openPath, fileError, flush };
 }
 
 describe("useFilesCanvasMode", () => {
@@ -61,12 +60,12 @@ describe("useFilesCanvasMode", () => {
   });
 
   it("hands on the server's refusal and turns the mode back off", async () => {
-    const { mode, refused } = setup();
+    const { mode, fileError } = setup();
     await mode.show("a.md");
     await nextTick();
     pending.calls[0].answer({ kind: "refused", reason: "File not found" });
     await flushPromises();
-    expect(refused).toHaveBeenCalledWith("File not found");
+    expect(fileError.value).toBe("File not found");
     expect(mode.active.value).toBe(false);
     expect(mode.card.value).toBeNull();
   });
@@ -160,6 +159,19 @@ describe("useFilesCanvasMode", () => {
     expect(openPath.value).toBe("a.md");
     expect(flush).not.toHaveBeenCalled();
     expect(mode.active.value).toBe(false);
+  });
+
+  // The paths are relative to the root, so a re-root must not carry them over.
+  it("drops every path and any build in flight on reset", async () => {
+    const { mode } = setup();
+    await mode.show("a.md");
+    await nextTick();
+    mode.reset();
+    await nextTick();
+    pending.calls[0].answer(cardFor("/proj/a.md"));
+    await flushPromises();
+    expect(mode.active.value).toBe(false);
+    expect(mode.card.value).toBeNull();
   });
 
   it("does nothing on a toggle with no file open", async () => {

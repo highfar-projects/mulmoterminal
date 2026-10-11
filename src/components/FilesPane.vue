@@ -103,14 +103,7 @@ const labels = computed(() => tabLabels(strip.value.tabs.map((tab) => tab.path))
 const NO_ROOTS: StoriesRoots = { workspaces: [], roots: [] };
 const storiesRoots = computed<StoriesRoots>(() => props.storiesRoots ?? NO_ROOTS);
 // The open file drawn by the Canvas's plugin view, in place of the editor (#3008).
-const canvasMode = useFilesCanvasMode({
-  cwd: () => props.cwd,
-  openPath,
-  storiesRoots: () => storiesRoots.value,
-  flush,
-  bringToFront: (pathRel) => tabs.open(pathRel),
-  refused: (reason) => (fileError.value = reason),
-});
+const canvasMode = useFilesCanvasMode({ cwd: () => props.cwd, storiesRoots: () => storiesRoots.value, file, tabs });
 const { active: showCanvas, card: canvasCard, openable: canvasOpenable } = canvasMode;
 
 const editorHost = ref<HTMLDivElement>();
@@ -164,7 +157,13 @@ const rowActionsFor = (node: TreeNode): FilesRowAction[] =>
 
 /** The @ button and key (#2575): the reference for the selection, at the terminal's prompt, not sent. */
 async function insertSelection(): Promise<boolean> {
-  const deps = { file, hasTarget: () => !!props.insertTarget, cwd: () => props.cwd, terminalCwd: () => props.insertTargetCwd ?? null };
+  const deps = {
+    file,
+    hasTarget: () => !!props.insertTarget,
+    cwd: () => props.cwd,
+    terminalCwd: () => props.insertTargetCwd ?? null,
+    editorHidden: () => showCanvas.value,
+  };
   const text = await selectionReferenceText(deps);
   if (text !== null) emit("insert-text", text);
   return text !== null;
@@ -340,6 +339,7 @@ function teardown(): void {
   gitStatus.reset();
   file.teardown();
   tabs.reset();
+  canvasMode.reset();
   // And the search, for the finder's reason: the root is changing, and a panel left open goes on
   // showing the OLD project's matches. Clicking one then reveals that relative path under the NEW
   // root — opening a different file where the same path exists, and nothing where it does not.
