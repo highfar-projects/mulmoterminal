@@ -124,6 +124,24 @@ describe("the Canvas button", () => {
     expect(btn(w).attributes("aria-pressed")).toBe("false");
   });
 
+  // A line lives in the text (#3010): a terminal path naming one brings the editor back, at that line,
+  // the way it already brings a Preview back to Edit. A click with no line keeps the Canvas view.
+  it("leaves the Canvas view for a terminal path that names a line, and keeps it for one that does not", async () => {
+    const w = await openRow("design.md", "/work/proj");
+    await btn(w).trigger("click");
+    await flushPromises();
+    await w.vm.openFile("design.md", undefined, false);
+    await flushPromises();
+    expect(w.findComponent({ name: "FilesCanvasView" }).exists()).toBe(true);
+
+    fakeEditor.goTo.mockClear();
+    await w.vm.openFile("design.md", { line: 2, col: null }, false);
+    await flushPromises();
+    expect(w.findComponent({ name: "FilesCanvasView" }).exists()).toBe(false);
+    expect(btn(w).attributes("aria-pressed")).toBe("false");
+    expect(fakeEditor.goTo).toHaveBeenCalledWith({ line: 2, col: 0 });
+  });
+
   // A story is built by the server, which can refuse with a sentence of its own (#1941).
   it("shows the server's refusal and stays on the editor", async () => {
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {

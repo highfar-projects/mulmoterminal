@@ -88,6 +88,9 @@ export function useFilesCanvasMode(deps: FilesCanvasModeDeps) {
     if (openPath.value === path) await show(path);
   }
 
+  /** Put `path` back on its editor, whether or not it is the file in front. */
+  const hide = (path: string): void => setMode(path, false);
+
   async function toggle(): Promise<void> {
     const path = openPath.value;
     if (!path) return;
@@ -107,5 +110,5 @@ export function useFilesCanvasMode(deps: FilesCanvasModeDeps) {
     if (card.value) card.value = { ...card.value, ...update };
   }
 
-  return { active, openable, card, show, open, toggle, reset, onUpdateResult };
+  return { active, openable, card, show, open, hide, toggle, reset, onUpdateResult };
 }
