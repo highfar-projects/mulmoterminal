@@ -58,6 +58,7 @@ const cappedTab = (tab: Record<string, unknown> & { path: string }): FilesTabSta
   return {
     path: tab.path,
     showPreview: tab.showPreview === true,
+    ...(tab.showCanvas === true ? { showCanvas: true } : {}),
     // Spread rather than assigned: `exactOptionalPropertyTypes` makes an explicit `undefined`
     // different from an absent key, and absent is what "nothing was remembered" means here.
     ...(caret ? { caret } : {}),

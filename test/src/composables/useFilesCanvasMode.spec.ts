@@ -18,7 +18,7 @@ const { useFilesCanvasMode } = await import("../../../src/composables/useFilesCa
 
 const cardFor = (docPath: string): CanvasCardResult => ({ kind: "card", card: { toolName: "presentDocument", data: { markdown: "", docPath } } });
 
-function setup(saveResult = true, declineSwitch = false) {
+function setup(saveResult = true, declineSwitch = false, enabled = true) {
   const openPath = ref<string | null>("a.md");
   const fileError = ref<string | null>(null);
   const savedInPlace = vi.fn(async () => saveResult);
@@ -27,7 +27,13 @@ function setup(saveResult = true, declineSwitch = false) {
     if (!declineSwitch) openPath.value = path;
   });
   const scope = effectScope();
-  const deps = { cwd: () => "/proj", storiesRoots: () => ({ workspaces: [], roots: [] }), file: { openPath, savedInPlace, fileError }, tabs: { open } };
+  const deps = {
+    enabled: () => enabled,
+    cwd: () => "/proj",
+    storiesRoots: () => ({ workspaces: [], roots: [] }),
+    file: { openPath, savedInPlace, fileError },
+    tabs: { open },
+  };
   const mode = scope.run(() => useFilesCanvasMode(deps));
   if (!mode) throw new Error("no composable");
   return { mode, openPath, fileError, savedInPlace };
@@ -172,6 +178,24 @@ describe("useFilesCanvasMode", () => {
     await flushPromises();
     expect(mode.active.value).toBe(false);
     expect(mode.card.value).toBeNull();
+  });
+
+  // #3011: paths come back from storage, and a surface with no Canvas view must never act on them.
+  it("is never active on a surface without a Canvas view, whatever paths it holds", async () => {
+    const { mode } = setup(true, false, false);
+    mode.reset(["a.md"]);
+    await nextTick();
+    expect(mode.has("a.md")).toBe(true);
+    expect(mode.active.value).toBe(false);
+    expect(pending.calls).toHaveLength(0);
+  });
+
+  it("restores the paths a remembered pane had in the Canvas view", async () => {
+    const { mode } = setup();
+    mode.reset(["a.md"]);
+    await nextTick();
+    expect(mode.active.value).toBe(true);
+    expect(pending.calls.map((call) => call.path)).toEqual(["/proj/a.md"]);
   });
 
   it("does nothing on a toggle with no file open", async () => {

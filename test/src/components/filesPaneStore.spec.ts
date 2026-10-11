@@ -61,6 +61,15 @@ describe("parsePaneStore", () => {
     expect(frontTab(entry.state)?.showPreview).toBe(false);
   });
 
+  // #3011. A whitelist field: dropped on the way in unless named, so the round trip is the test.
+  it("carries the Canvas view back with the file, and reads anything but true as no", () => {
+    const tabs = [{ path: "a.md", showCanvas: true }, { path: "b.md", showCanvas: false }, { path: "c.md" }];
+    const store = rememberPane([], "/proj", { tabs, activePath: "a.md", expanded: [] });
+    expect(parsePaneStore(JSON.stringify(store))[0].state.tabs.map((tab) => tab.showCanvas)).toEqual([true, undefined, undefined]);
+    const raw = '[{"cwd":"/proj","state":{"tabs":[{"path":"a.md","showCanvas":"yes"}],"activePath":"a.md","expanded":[]}}]';
+    expect(parsePaneStore(raw)[0].state.tabs[0].showCanvas).toBeUndefined();
+  });
+
   it("keeps the good entries and drops only the bad one", () => {
     const raw = JSON.stringify([{ cwd: "/a", state: state("x.ts") }, { nonsense: true }, { cwd: "/b", state: state(null) }]);
     expect(parsePaneStore(raw).map((e) => e.cwd)).toEqual(["/a", "/b"]);

@@ -18,7 +18,7 @@ import PreviewCodeBlockDialog from "./PreviewCodeBlockDialog.vue";
 import PreviewCopiedNotice from "./PreviewCopiedNotice.vue";
 import type { FilesPaneState } from "./filesPaneState";
 import { useFilesTabs } from "../composables/useFilesTabs";
-import { tabLabels } from "./filesTabs";
+import { tabLabels, withCanvasView } from "./filesTabs";
 import { nextTabIndex } from "./tabKeys";
 import { previewLinkTarget } from "./previewLinkTarget";
 import { fileMediaKind, previewFollowsAppTheme } from "./filePreviewKind";
@@ -103,7 +103,7 @@ const labels = computed(() => tabLabels(strip.value.tabs.map((tab) => tab.path))
 const NO_ROOTS: StoriesRoots = { workspaces: [], roots: [] };
 const storiesRoots = computed<StoriesRoots>(() => props.storiesRoots ?? NO_ROOTS);
 // The open file drawn by the Canvas's plugin view, in place of the editor (#3008).
-const canvasMode = useFilesCanvasMode({ cwd: () => props.cwd, storiesRoots: () => storiesRoots.value, file, tabs });
+const canvasMode = useFilesCanvasMode({ enabled: () => !!props.canvasTarget, cwd: () => props.cwd, storiesRoots: () => storiesRoots.value, file, tabs });
 const { active: showCanvas, card: canvasCard, openable: canvasOpenable } = canvasMode;
 
 const editorHost = ref<HTMLDivElement>();
@@ -410,6 +410,7 @@ async function restore(state: FilesPaneState | null, reqIdAtStart: number): Prom
       }),
     );
   }
+  canvasMode.reset(state.tabs.filter((tab) => tab.showCanvas === true).map((tab) => tab.path));
   await tabs.restore({ tabs: state.tabs, activePath: state.activePath }, () => file.generation() === reqIdAtStart);
   // Last, and only after a tick: the rows have to exist before there is anything to scroll past,
   // and the expansions above are what create them.
@@ -441,7 +442,7 @@ onBeforeUnmount(teardown);
 defineExpose({
   /** What this pane looks like right now, for a host that will bring the user back here. */
   snapshot: (): FilesPaneState => ({
-    ...tabs.current(),
+    ...withCanvasView(tabs.current(), canvasMode.has),
     expanded: expandedPaths(tree.roots.value ?? []),
     treeScrollTop: treeEl.value?.scrollTop ?? 0,
   }),

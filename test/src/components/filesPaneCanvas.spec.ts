@@ -124,6 +124,30 @@ describe("the Canvas button", () => {
     expect(btn(w).attributes("aria-pressed")).toBe("false");
   });
 
+  // #3011: what the pane hands its host to remember, and what it does with it handed back.
+  it("puts the Canvas view in its snapshot, and comes back to it from one", async () => {
+    const w = await openRow("design.md", "/work/proj");
+    await btn(w).trigger("click");
+    await flushPromises();
+    const snapshot = w.vm.snapshot();
+    expect(snapshot.tabs).toEqual([expect.objectContaining({ path: "design.md", showCanvas: true })]);
+
+    withEntry("design.md");
+    const back = mount(FilesPane, { props: { cwd: "/work/proj", canvasTarget: true, initialState: snapshot }, global: CANVAS_STUB });
+    await flushPromises();
+    expect(back.findComponent({ name: "FilesCanvasView" }).exists()).toBe(true);
+    expect(btn(back).attributes("aria-pressed")).toBe("true");
+  });
+
+  // The store is per directory, and nothing ties a remembered state to the surface that wrote it.
+  it("ignores a remembered Canvas view where there is no Canvas view to show", async () => {
+    withEntry("design.md");
+    const initialState = { tabs: [{ path: "design.md", showCanvas: true }], activePath: "design.md", expanded: [] };
+    const w = mount(FilesPane, { props: { cwd: "/work/proj", canvasTarget: false, initialState }, global: CANVAS_STUB });
+    await flushPromises();
+    expect(w.findComponent({ name: "FilesCanvasView" }).exists()).toBe(false);
+  });
+
   // A story is built by the server, which can refuse with a sentence of its own (#1941).
   it("shows the server's refusal and stays on the editor", async () => {
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {

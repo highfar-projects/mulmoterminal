@@ -17,6 +17,18 @@ export const withTab = (strip: TabStrip, tab: FilesTabState): TabStrip => ({
   tabs: strip.tabs.map((entry) => (entry.path === tab.path ? tab : entry)),
 });
 
+/** The strip with each tab's Canvas view (#3011) as the pane holds it NOW: `true` on the tabs in it and
+ *  the key gone from the rest — absent is "no", and a tab restored in it and since switched back must
+ *  not keep saying yes. */
+export const withCanvasView = (strip: TabStrip, inCanvasView: (path: string) => boolean): TabStrip => ({
+  ...strip,
+  tabs: strip.tabs.map((tab) => {
+    const rest = { ...tab };
+    delete rest.showCanvas;
+    return inCanvasView(tab.path) ? { ...rest, showCanvas: true } : rest;
+  }),
+});
+
 /** A plain open: the file takes the front tab's place, as it took the one open file's place before
  *  tabs existed. A path that already has a tab is brought to the front instead of opened twice. */
 export function openedInFront(strip: TabStrip, path: string): TabStrip {
