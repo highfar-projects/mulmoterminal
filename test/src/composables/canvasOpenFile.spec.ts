@@ -514,7 +514,7 @@ describe("buildCanvasCard", () => {
   });
 
   // A blank `error` is the same nothing as a missing one, and `??` does not catch it: it would
-  // reach `showError`, which the pane renders under `v-if` — so the click would look ignored, the
+  // reach the Files pane's error line, which renders under `v-if` — so the click would look ignored, the
   // exact failure this change removes (CodeRabbit on #1942).
   it("says something when the reason is blank", async () => {
     mockReopen({ ok: false, code: "bad_request", error: "   " }, false);
