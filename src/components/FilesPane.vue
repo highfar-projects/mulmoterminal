@@ -410,9 +410,9 @@ async function restore(state: FilesPaneState | null, reqIdAtStart: number): Prom
       }),
     );
   }
-  // An open that won the race (#1979) came up as itself, so its remembered Canvas view is not put back.
-  const won = file.generation() !== reqIdAtStart ? file.openPath.value : null;
-  canvasMode.reset(state.tabs.filter((tab) => tab.showCanvas === true && tab.path !== won).map((tab) => tab.path));
+  // A pane opened FOR a file (#1979) starts on it as text, as it would with Preview: when an open got here
+  // first — landed or still in flight, so its path cannot be asked — no remembered Canvas view comes back.
+  if (file.generation() === reqIdAtStart) canvasMode.reset(state.tabs.filter((tab) => tab.showCanvas === true).map((tab) => tab.path));
   await tabs.restore({ tabs: state.tabs, activePath: state.activePath }, () => file.generation() === reqIdAtStart);
   // Last, and only after a tick: the rows have to exist before there is anything to scroll past,
   // and the expansions above are what create them.

@@ -139,17 +139,21 @@ describe("the Canvas button", () => {
     expect(btn(back).attributes("aria-pressed")).toBe("true");
   });
 
-  // An open that wins the restore race (#1979) comes up as itself, as it would with no remembered strip
-  // and as Preview already does — not in the Canvas view remembered for that path. The other
-  // remembered tabs keep theirs.
-  it("does not put an open that won the restore race into its remembered Canvas view", async () => {
+  // An open that gets in before the remembered tabs are put back (#1979) comes up as text, as it would
+  // with Preview — whether it has landed by then or is still in flight, so no remembered Canvas view is
+  // put back that time.
+  it.each([
+    ["landed", false],
+    ["still in flight", true],
+  ])("puts no remembered Canvas view back when an open won the restore race (%s)", async (_case, holdOpen) => {
     let releaseSrc!: () => void;
     const srcGate = new Promise<void>((resolve) => (releaseSrc = resolve));
+    let releaseText!: () => void;
+    const textGate = new Promise<void>((resolve) => (releaseText = resolve));
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.includes("/list")) {
-        const dir = new URL(url, "https://x").searchParams.get("path");
-        if (dir === "src") {
+      const url = new URL(String(input), "https://x");
+      if (url.pathname.includes("/list")) {
+        if (url.searchParams.get("path") === "src") {
           await srcGate;
           return { ok: true, json: async () => ({ entries: [] }) };
         }
@@ -160,6 +164,7 @@ describe("the Canvas button", () => {
         ];
         return { ok: true, json: async () => ({ entries }) };
       }
+      if (holdOpen && url.searchParams.get("path") === "a.md") await textGate;
       return { ok: true, json: async () => ({ text: "x", version: "v1" }) };
     }) as unknown as typeof fetch;
     const initialState = {
@@ -173,15 +178,15 @@ describe("the Canvas button", () => {
     const w = mount(FilesPane, { props: { cwd: "/work/proj", canvasTarget: true, initialState }, global: CANVAS_STUB });
     await flushPromises(); // restore is held on `src`
 
-    await w.vm.openFile("a.md", undefined, false);
+    const opening = w.vm.openFile("a.md", undefined, false);
+    await flushPromises();
     releaseSrc();
+    await flushPromises();
+    releaseText();
+    await opening;
     await flushPromises();
     expect(w.findComponent({ name: "FilesCanvasView" }).exists()).toBe(false);
     expect(btn(w).attributes("aria-pressed")).toBe("false");
-
-    await w.get('[data-testid="files-row"][data-path="b.md"]').trigger("click");
-    await flushPromises();
-    expect(w.findComponent({ name: "FilesCanvasView" }).exists()).toBe(true);
   });
 
   // The store is per directory, and nothing ties a remembered state to the surface that wrote it.

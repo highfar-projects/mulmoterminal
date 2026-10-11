@@ -17,5 +17,10 @@ reopening the pane, or reloading the page, put every file back on its editor.
   `active` requires it, so a remembered Canvas view never draws on a surface with no Canvas view
   (`docs/file-surfaces.md`). The full-screen view does not read this store today; the gate holds if
   it ever does.
+- **An open that beats the restore wins outright.** A pane opened FOR a file (a terminal click racing
+  the restore, #1979) starts on that file as text, as it would with Preview, whose remembered mode is
+  only read once the strip is back. Its path cannot be asked while it is still in flight, so when any
+  open got in first, no remembered Canvas view is put back that time. The other tabs lose theirs for
+  that one start; that is the cost of not guessing.
 - **Restore is `reset(paths)`.** A re-root resets to none; putting a remembered pane back resets to
   its own paths. One function, because both mean "start over with these".
