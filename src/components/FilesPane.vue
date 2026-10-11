@@ -54,6 +54,7 @@ import { useFilesCanvasMode } from "../composables/useFilesCanvasMode";
 import { useSideBySide } from "../composables/useSideBySide";
 import { useFileHistory } from "../composables/useFileHistory";
 import { useRequestedOpen } from "../composables/useRequestedOpen";
+import { wantsNewTab } from "../composables/newTabModifier";
 import FilesHistoryMenu from "./FilesHistoryMenu.vue";
 import FilesComparingBanner from "./FilesComparingBanner.vue";
 
@@ -90,7 +91,7 @@ const { flush, save, overwrite, discardAndReload, openInOs } = file;
 // Which files are open as tabs, and which is in front (#2267). Every open below goes through it, so
 // a path that already has a tab is brought forward rather than opened twice.
 const tabs = useFilesTabs(file);
-const { openAt, openRequested, openClicked } = useRequestedOpen(tabs, file);
+const { openRequested, openFromTerminal } = useRequestedOpen(tabs, file);
 const strip = tabs.strip;
 // One tab is the pane as it always was — the header names the file. The strip is for two or more,
 // and for a lone tab that is not on screen, which would otherwise have no control at all.
@@ -200,10 +201,7 @@ function tipIfClipped(name: string, event: Event): void {
   else row.setAttribute("data-tip", tip);
 }
 
-async function openFile(node: TreeNode, event: MouseEvent): Promise<void> {
-  if (node.dir) return tree.toggleDir(node);
-  await tabs.open(node.path, event.metaKey || event.ctrlKey);
-}
+const openFile = (node: TreeNode, event: MouseEvent): Promise<void> => (node.dir ? tree.toggleDir(node) : tabs.open(node.path, wantsNewTab(event)));
 
 const stripEl = useTemplateRef<HTMLElement>("stripEl");
 
@@ -469,7 +467,7 @@ defineExpose({
   // A page, an SVG or a table comes up drawn: a path clicked in terminal output to a chart is asking
   // to see the chart, and a CSV opened from there as a table before the pane took the click (#2559).
   // Markdown opens as it always has.
-  openFile: (pathRel: string, location?: FileLocation) => (location ? openAt(pathRel, location, false) : openClicked(pathRel)),
+  openFile: openFromTerminal,
   /** The `files-insert-selection` key (#2575), reached from the grid like the tab keys. */
   insertSelection,
   /** The `files-tab-*` keys (#2267), reached from the grid like the finder's. */

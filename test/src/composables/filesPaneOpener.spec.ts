@@ -13,16 +13,28 @@ describe("tryOpenInPane", () => {
   it("hands a source path to the pane, relative to the cwd", () => {
     const opener = vi.fn(() => true);
     setFilesPaneOpener(opener);
-    expect(tryOpenInPane("/Users/me/proj/src/main.ts", CWD)).toBe(true);
-    expect(opener).toHaveBeenCalledWith(CWD, "src/main.ts", undefined);
+    expect(tryOpenInPane("/Users/me/proj/src/main.ts", CWD, undefined, false)).toBe(true);
+    expect(opener).toHaveBeenCalledWith(CWD, "src/main.ts", undefined, false);
   });
 
   // #2573. The line an agent named after the path rides along to the pane.
   it("hands the pane the location named after the path", () => {
     const opener = vi.fn(() => true);
     setFilesPaneOpener(opener);
-    expect(tryOpenInPane("src/main.ts", CWD, { line: 42, col: 7 })).toBe(true);
-    expect(opener).toHaveBeenCalledWith(CWD, "src/main.ts", { line: 42, col: 7 });
+    expect(tryOpenInPane("src/main.ts", CWD, { line: 42, col: 7 }, false)).toBe(true);
+    expect(opener).toHaveBeenCalledWith(CWD, "src/main.ts", { line: 42, col: 7 }, false);
+  });
+
+  // #3005. Cmd/Ctrl on the terminal click reaches the pane as "open in a new tab".
+  it("hands the pane the new-tab request, with or without a location", () => {
+    const opener = vi.fn(() => true);
+    setFilesPaneOpener(opener);
+    expect(tryOpenInPane("src/main.ts", CWD, undefined, true)).toBe(true);
+    expect(tryOpenInPane("src/main.ts", CWD, { line: 42, col: null }, true)).toBe(true);
+    expect(opener.mock.calls).toEqual([
+      [CWD, "src/main.ts", undefined, true],
+      [CWD, "src/main.ts", { line: 42, col: null }, true],
+    ]);
   });
 
   // The pane is CodeMirror plus a Markdown preview, so the rendered routes belong to it too —
@@ -30,28 +42,28 @@ describe("tryOpenInPane", () => {
   it.each(["notes.md", "data.json", "rows.csv", "rows.tsv", "src/main.ts", "log.txt"])("takes %s", (name) => {
     const opener = vi.fn(() => true);
     setFilesPaneOpener(opener);
-    expect(tryOpenInPane(name, CWD)).toBe(true);
+    expect(tryOpenInPane(name, CWD, undefined, false)).toBe(true);
   });
 
   // #2269: what an agent draws — a chart as a PNG, an SVG, an HTML report — stays in the grid.
   it.each(["shot.png", "chart.svg", "report.html", "page.htm"])("takes %s into the pane", (name) => {
     const opener = vi.fn(() => true);
     setFilesPaneOpener(opener);
-    expect(tryOpenInPane(name, CWD)).toBe(true);
-    expect(opener).toHaveBeenCalledWith(CWD, name, undefined);
+    expect(tryOpenInPane(name, CWD, undefined, false)).toBe(true);
+    expect(opener).toHaveBeenCalledWith(CWD, name, undefined, false);
   });
 
   // #2674: a PDF, a video and a sound are drawn in the pane too, from the same raw route a tab used.
   it.each(["paper.pdf", "clip.mp4", "memo.m4a"])("takes %s into the pane", (name) => {
     const opener = vi.fn(() => true);
     setFilesPaneOpener(opener);
-    expect(tryOpenInPane(name, CWD)).toBe(true);
-    expect(opener).toHaveBeenCalledWith(CWD, name, undefined);
+    expect(tryOpenInPane(name, CWD, undefined, false)).toBe(true);
+    expect(opener).toHaveBeenCalledWith(CWD, name, undefined, false);
   });
 
   it("leaves a PDF to its tab when no pane is open", () => {
     setFilesPaneOpener(null);
-    expect(tryOpenInPane("paper.pdf", CWD)).toBe(false);
+    expect(tryOpenInPane("paper.pdf", CWD, undefined, false)).toBe(false);
   });
 
   // But a tab is NOT a view for a type the browser cannot display — it is a download that starts
@@ -61,13 +73,13 @@ describe("tryOpenInPane", () => {
   it.each(["archive.zip", "book.xlsx", "report.docx"])("takes %s, which a tab would only download", (name) => {
     const opener = vi.fn(() => true);
     setFilesPaneOpener(opener);
-    expect(tryOpenInPane(name, CWD)).toBe(true);
+    expect(tryOpenInPane(name, CWD, undefined, false)).toBe(true);
   });
 
   it("declines a path outside the cell's directory — the pane cannot walk above its root", () => {
     const opener = vi.fn(() => true);
     setFilesPaneOpener(opener);
-    expect(tryOpenInPane("/etc/hosts.ts", CWD)).toBe(false);
+    expect(tryOpenInPane("/etc/hosts.ts", CWD, undefined, false)).toBe(false);
     expect(opener).not.toHaveBeenCalled();
   });
 
@@ -75,20 +87,20 @@ describe("tryOpenInPane", () => {
   // has to reach the caller intact, or the click opens nowhere at all.
   it("passes the grid's own refusal through", () => {
     setFilesPaneOpener(() => false);
-    expect(tryOpenInPane("src/main.ts", CWD)).toBe(false);
+    expect(tryOpenInPane("src/main.ts", CWD, undefined, false)).toBe(false);
   });
 
   it("declines when no pane is registered at all (the single view)", () => {
-    expect(tryOpenInPane("src/main.ts", CWD)).toBe(false);
-    expect(openInFilesPane(CWD, "src/main.ts")).toBe(false);
+    expect(tryOpenInPane("src/main.ts", CWD, undefined, false)).toBe(false);
+    expect(openInFilesPane(CWD, "src/main.ts", undefined, false)).toBe(false);
   });
 
   // TerminalGrid clears the opener on unmount. Leaving a stale one registered would report
   // success for a click that reaches a pane no longer on screen.
   it("stops taking clicks once the opener is cleared", () => {
     setFilesPaneOpener(() => true);
-    expect(tryOpenInPane("src/main.ts", CWD)).toBe(true);
+    expect(tryOpenInPane("src/main.ts", CWD, undefined, false)).toBe(true);
     setFilesPaneOpener(null);
-    expect(tryOpenInPane("src/main.ts", CWD)).toBe(false);
+    expect(tryOpenInPane("src/main.ts", CWD, undefined, false)).toBe(false);
   });
 });
