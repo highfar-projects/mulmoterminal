@@ -15,6 +15,7 @@ import { useOpenFile } from "../composables/useOpenFile";
 import { useFilesReveal } from "../composables/useFilesReveal";
 import { useFilesPreviewWire } from "../composables/useFilesPreviewWire";
 import PreviewCodeBlockDialog from "./PreviewCodeBlockDialog.vue";
+import PreviewCopiedNotice from "./PreviewCopiedNotice.vue";
 import type { FilesPaneState } from "./filesPaneState";
 import { useFilesTabs } from "../composables/useFilesTabs";
 import { tabLabels } from "./filesTabs";
@@ -781,5 +782,6 @@ defineExpose({
       </div>
     </Teleport>
     <PreviewCodeBlockDialog v-if="previewScroll.codeBlock?.shown.value" :lookup="previewScroll.codeBlock.shown.value" @close="previewScroll.codeBlock.close" />
+    <PreviewCopiedNotice v-if="previewScroll.codeBlock?.copied.value" :notice="previewScroll.codeBlock.copied.value" />
   </div>
 </template>

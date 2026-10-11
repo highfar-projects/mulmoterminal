@@ -35,7 +35,15 @@ function mountHost(openPath = ref<string | null>("a.md"), cwd = ref("/proj"), la
     Object.defineProperty(event, "source", { value: frame.contentWindow });
     window.dispatchEvent(event);
   };
-  return { frame, press, shown: () => api?.codeBlock?.shown.value ?? null, close: () => api?.codeBlock?.close(), openPath, cwd };
+  return {
+    frame,
+    press,
+    shown: () => api?.codeBlock?.shown.value ?? null,
+    copied: () => api?.codeBlock?.copied.value ?? null,
+    close: () => api?.codeBlock?.close(),
+    openPath,
+    cwd,
+  };
 }
 
 /** The server's `/code-block` route over one file: the block at `?index=`, or its 404 for none. */
@@ -48,6 +56,30 @@ const serveFile = (text: string | null) =>
       return block ? new Response(JSON.stringify(block), { status: 200 }) : new Response(JSON.stringify({ kind: "no-block" }), { status: 404 });
     }),
   );
+
+/** A Clipboard API whose `write` reads the item it is handed, as a browser does; `refuse` rejects instead. */
+function stubClipboard({ refuse = false, withItem = true } = {}) {
+  const written: string[] = [];
+  class FakeClipboardItem {
+    readonly items: Record<string, Promise<Blob>>;
+    constructor(items: Record<string, Promise<Blob>>) {
+      this.items = items;
+    }
+  }
+  const write = vi.fn(async (items: FakeClipboardItem[]) => {
+    if (refuse) throw new Error("NotAllowedError");
+    const blob = await items[0]?.items["text/plain"];
+    if (blob) written.push(await blob.text());
+  });
+  const writeText = vi.fn(async (text: string) => {
+    if (refuse) throw new Error("NotAllowedError");
+    written.push(text);
+  });
+  vi.stubGlobal("navigator", { ...navigator, clipboard: withItem ? { write, writeText } : { writeText } });
+  if (withItem) vi.stubGlobal("ClipboardItem", FakeClipboardItem);
+  else vi.stubGlobal("ClipboardItem", undefined);
+  return { written, write, writeText };
+}
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -178,5 +210,81 @@ describe("a Preview code block's copy button", () => {
     Object.defineProperty(event, "source", { value: host.frame.contentWindow });
     window.dispatchEvent(event);
     expect(sent).toHaveBeenCalledWith(expect.objectContaining({ codeCopyLabel: "Copy this code block", diagramSourceLabel: "Diagram source" }), "*");
+  });
+});
+
+describe("a Preview code block's copy button — copying at once (#3003)", () => {
+  const MULTI = "# Doc\n\n```sh\nyarn install\nyarn dev\n```\n";
+
+  it("copies the file's block straight away and says so, without opening the dialog", async () => {
+    serveFile(MULTI);
+    const clipboard = stubClipboard();
+    const host = mountHost();
+    host.press(0);
+    await flushPromises();
+    expect(clipboard.written).toEqual(["yarn install\nyarn dev"]);
+    // Through a ClipboardItem started at the press, the shape Safari accepts for text that arrives later.
+    expect(clipboard.write).toHaveBeenCalledTimes(1);
+    expect(clipboard.writeText).not.toHaveBeenCalled();
+    expect(host.copied()).toEqual({ lines: 2, firstLine: "yarn install" });
+    expect(host.shown()).toBeNull();
+  });
+
+  it("falls back to writeText where there is no ClipboardItem", async () => {
+    serveFile(MULTI);
+    const clipboard = stubClipboard({ withItem: false });
+    const host = mountHost();
+    host.press(0);
+    await flushPromises();
+    expect(clipboard.written).toEqual(["yarn install\nyarn dev"]);
+    expect(host.copied()).not.toBeNull();
+  });
+
+  it("shows the dialog instead, copying nothing, when the block has characters a reader cannot see", async () => {
+    serveFile("```sh\necho safe\u202e;rm -rf ~\n```\n");
+    const clipboard = stubClipboard();
+    const host = mountHost();
+    host.press(0);
+    await flushPromises();
+    expect(clipboard.written).toEqual([]);
+    expect(host.copied()).toBeNull();
+    expect(host.shown()?.status).toBe("found");
+  });
+
+  it("shows the dialog when the browser refuses the write", async () => {
+    serveFile(MULTI);
+    stubClipboard({ refuse: true });
+    const host = mountHost();
+    host.press(0);
+    await flushPromises();
+    expect(host.copied()).toBeNull();
+    expect(host.shown()).toEqual({ status: "found", block: { lang: "sh", text: "yarn install\nyarn dev" } });
+  });
+
+  it("shows the dialog's explanation when the block is gone, copying nothing", async () => {
+    serveFile("no code now\n");
+    const clipboard = stubClipboard();
+    const host = mountHost();
+    host.press(0);
+    await flushPromises();
+    expect(clipboard.written).toEqual([]);
+    expect(host.shown()).toEqual({ status: "missing" });
+  });
+
+  it("drops the notice after a moment", async () => {
+    vi.useFakeTimers();
+    try {
+      serveFile(MULTI);
+      stubClipboard();
+      const host = mountHost();
+      host.press(0);
+      await vi.runAllTicks();
+      await flushPromises();
+      expect(host.copied()).not.toBeNull();
+      vi.advanceTimersByTime(3000);
+      expect(host.copied()).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
