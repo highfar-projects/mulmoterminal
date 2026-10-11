@@ -52,8 +52,10 @@ export function usePreviewCodeBlock(deps: PreviewCodeBlockDeps): PreviewCodeBloc
     clearCopied();
     const lookup = previewCodeBlockAt(deps.cwd(), path, index);
     // Started before the read finishes, so the write still counts as the press's (see writeClipboardLater).
-    // The text is withheld if a newer press, or another file, came first: the browser does not order two
-    // pending writes, so an older block would otherwise land on the clipboard after a newer one.
+    // The text is withheld from a press that a newer press, or another file, has superseded by the time its
+    // read answers: the browser does not order two pending writes. Once handed over, the write commits almost
+    // at once and an overlapping newer write still wins (measured in Chromium); queuing writes instead would
+    // lose Safari's press activation.
     const current = lookup.then((answer) => (request === latest ? directCopyText(answer) : null));
     const written = clipboardAvailable() ? writeClipboardLater(current) : Promise.resolve(false);
     const [answer, copiedNow] = await Promise.all([lookup, written]);
