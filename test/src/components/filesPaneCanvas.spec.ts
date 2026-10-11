@@ -139,6 +139,51 @@ describe("the Canvas button", () => {
     expect(btn(back).attributes("aria-pressed")).toBe("true");
   });
 
+  // An open that wins the restore race (#1979) comes up as itself, as it would with no remembered strip
+  // and as Preview already does — not in the Canvas view remembered for that path. The other
+  // remembered tabs keep theirs.
+  it("does not put an open that won the restore race into its remembered Canvas view", async () => {
+    let releaseSrc!: () => void;
+    const srcGate = new Promise<void>((resolve) => (releaseSrc = resolve));
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/list")) {
+        const dir = new URL(url, "https://x").searchParams.get("path");
+        if (dir === "src") {
+          await srcGate;
+          return { ok: true, json: async () => ({ entries: [] }) };
+        }
+        const entries = [
+          { name: "src", dir: true, size: 0 },
+          { name: "a.md", dir: false, size: 1 },
+          { name: "b.md", dir: false, size: 1 },
+        ];
+        return { ok: true, json: async () => ({ entries }) };
+      }
+      return { ok: true, json: async () => ({ text: "x", version: "v1" }) };
+    }) as unknown as typeof fetch;
+    const initialState = {
+      tabs: [
+        { path: "a.md", showCanvas: true },
+        { path: "b.md", showCanvas: true },
+      ],
+      activePath: "b.md",
+      expanded: ["src"],
+    };
+    const w = mount(FilesPane, { props: { cwd: "/work/proj", canvasTarget: true, initialState }, global: CANVAS_STUB });
+    await flushPromises(); // restore is held on `src`
+
+    await w.vm.openFile("a.md", undefined, false);
+    releaseSrc();
+    await flushPromises();
+    expect(w.findComponent({ name: "FilesCanvasView" }).exists()).toBe(false);
+    expect(btn(w).attributes("aria-pressed")).toBe("false");
+
+    await w.get('[data-testid="files-row"][data-path="b.md"]').trigger("click");
+    await flushPromises();
+    expect(w.findComponent({ name: "FilesCanvasView" }).exists()).toBe(true);
+  });
+
   // The store is per directory, and nothing ties a remembered state to the surface that wrote it.
   it("ignores a remembered Canvas view where there is no Canvas view to show", async () => {
     withEntry("design.md");

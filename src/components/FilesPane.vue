@@ -410,7 +410,9 @@ async function restore(state: FilesPaneState | null, reqIdAtStart: number): Prom
       }),
     );
   }
-  canvasMode.reset(state.tabs.filter((tab) => tab.showCanvas === true).map((tab) => tab.path));
+  // An open that won the race (#1979) came up as itself, so its remembered Canvas view is not put back.
+  const won = file.generation() !== reqIdAtStart ? file.openPath.value : null;
+  canvasMode.reset(state.tabs.filter((tab) => tab.showCanvas === true && tab.path !== won).map((tab) => tab.path));
   await tabs.restore({ tabs: state.tabs, activePath: state.activePath }, () => file.generation() === reqIdAtStart);
   // Last, and only after a tick: the rows have to exist before there is anything to scroll past,
   // and the expansions above are what create them.
