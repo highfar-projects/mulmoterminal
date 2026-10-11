@@ -63,17 +63,14 @@ export function usePreviewCodeBlock(deps: PreviewCodeBlockDeps): PreviewCodeBloc
     if (copiedNow && answer.status === "found") showCopied(copiedNoticeFor(answer.block.text));
     else shown.value = answer;
   };
-  // Another file, or the same name under another root: a block read for the old one is not this one's.
-  watch([deps.cwd, deps.openPath], () => {
+  // Every way a press stops being current goes through here — another file, the same name under another
+  // root, the dialog closed, the pane gone — so a read still out can neither copy nor show anything.
+  const retire = (): void => {
     latest += 1;
     shown.value = null;
     clearCopied();
-  });
-  // Closing retires a read still out, as a change of file does: its answer must not reopen the dialog.
-  const close = (): void => {
-    latest += 1;
-    shown.value = null;
   };
-  onScopeDispose(() => clearTimeout(noticeTimer));
-  return { host: { open: (index) => void open(index), label: deps.label, diagramSourceLabel: deps.diagramSourceLabel }, shown, copied, close };
+  watch([deps.cwd, deps.openPath], retire);
+  onScopeDispose(retire);
+  return { host: { open: (index) => void open(index), label: deps.label, diagramSourceLabel: deps.diagramSourceLabel }, shown, copied, close: retire };
 }

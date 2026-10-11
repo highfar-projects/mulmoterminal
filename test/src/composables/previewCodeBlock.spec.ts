@@ -15,7 +15,7 @@ function mountHost(openPath = ref<string | null>("a.md"), cwd = ref("/proj"), la
   const frame = document.createElement("iframe");
   document.body.append(frame);
   let api: MdPreviewScroll | null = null;
-  mount(
+  const wrapper = mount(
     defineComponent({
       setup() {
         api = useMdPreviewScroll(
@@ -41,6 +41,7 @@ function mountHost(openPath = ref<string | null>("a.md"), cwd = ref("/proj"), la
     shown: () => api?.codeBlock?.shown.value ?? null,
     copied: () => api?.codeBlock?.copied.value ?? null,
     close: () => api?.codeBlock?.close(),
+    unmount: () => wrapper.unmount(),
     openPath,
     cwd,
   };
@@ -303,6 +304,21 @@ describe("a Preview code block's copy button — copying at once (#3003)", () =>
     await flushPromises();
     expect(clipboard.written).toEqual([]);
     expect(host.copied()).toBeNull();
+  });
+
+  it("copies nothing once the pane is gone before the read answers", async () => {
+    const answers: ((res: Response) => void)[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Promise<Response>((resolve) => answers.push(resolve))),
+    );
+    const clipboard = stubClipboard();
+    const host = mountHost();
+    host.press(0);
+    host.unmount();
+    answers[0]?.(new Response(JSON.stringify({ lang: "ts", text: "const first = 1;" }), { status: 200 }));
+    await flushPromises();
+    expect(clipboard.written).toEqual([]);
   });
 
   it("clears the notice when the next press opens the dialog, and when the file changes", async () => {
