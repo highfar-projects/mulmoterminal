@@ -91,7 +91,7 @@ const { flush, save, overwrite, discardAndReload, openInOs } = file;
 // Which files are open as tabs, and which is in front (#2267). Every open below goes through it, so
 // a path that already has a tab is brought forward rather than opened twice.
 const tabs = useFilesTabs(file);
-const { openRequested, openFromTerminal } = useRequestedOpen(tabs, file);
+const { openRequested, openFromTerminal } = useRequestedOpen(tabs, file, (pathRel) => canvasMode.hide(pathRel));
 const strip = tabs.strip;
 // One tab is the pane as it always was — the header names the file. The strip is for two or more,
 // and for a lone tab that is not on screen, which would otherwise have no control at all.

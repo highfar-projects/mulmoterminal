@@ -189,6 +189,71 @@ describe("the Canvas button", () => {
     expect(btn(w).attributes("aria-pressed")).toBe("false");
   });
 
+  // A line lives in the text (#3010): a terminal path naming one brings the editor back, at that line,
+  // the way it already brings a Preview back to Edit. A click with no line keeps the Canvas view.
+  it("leaves the Canvas view for a terminal path that names a line, and keeps it for one that does not", async () => {
+    const w = await openRow("design.md", "/work/proj");
+    await btn(w).trigger("click");
+    await flushPromises();
+    await w.vm.openFile("design.md", undefined, false);
+    await flushPromises();
+    expect(w.findComponent({ name: "FilesCanvasView" }).exists()).toBe(true);
+
+    fakeEditor.goTo.mockClear();
+    await w.vm.openFile("design.md", { line: 2, col: null }, false);
+    await flushPromises();
+    expect(w.findComponent({ name: "FilesCanvasView" }).exists()).toBe(false);
+    expect(btn(w).attributes("aria-pressed")).toBe("false");
+    expect(fakeEditor.goTo).toHaveBeenCalledWith({ line: 2, col: 0 });
+  });
+
+  // The contract is the REQUEST, not the landing (#3010): a located open the pane declines — the front
+  // buffer could be neither saved nor backed up — still takes the target out of the Canvas view.
+  it("takes the target out of the Canvas view even when the located open is declined", async () => {
+    let writesFail = false;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/list"))
+        return {
+          ok: true,
+          json: async () => ({
+            entries: [
+              { name: "a.md", dir: false, size: 1 },
+              { name: "b.md", dir: false, size: 1 },
+            ],
+          }),
+        };
+      if (init?.method === "PUT")
+        return writesFail
+          ? { ok: false, status: 500, json: async () => ({ error: "disk full" }) }
+          : { ok: true, json: async () => ({ ok: true, version: "v2" }) };
+      return { ok: true, json: async () => ({ text: "x", version: "v1" }) };
+    }) as unknown as typeof fetch;
+    const w = mount(FilesPane, { props: { cwd: "/work/proj", canvasTarget: true, storiesRoots: { workspaces: [], roots: [] } }, global: CANVAS_STUB });
+    await flushPromises();
+    const row = (name: string) => w.get(`[data-testid="files-row"][data-path="${name}"]`);
+    await row("b.md").trigger("click");
+    await flushPromises();
+    await btn(w).trigger("click");
+    await flushPromises();
+    await row("a.md").trigger("click", { metaKey: true });
+    await flushPromises();
+    onChange();
+    await flushPromises();
+
+    writesFail = true;
+    await w.vm.openFile("b.md", { line: 42, col: null }, false);
+    await flushPromises();
+    expect(w.findComponent({ name: "FilesCanvasView" }).exists()).toBe(false);
+    expect(w.find('[data-testid="files-error"]').exists()).toBe(true); // declined: a.md is still in front
+
+    writesFail = false;
+    await row("b.md").trigger("click");
+    await flushPromises();
+    expect(w.findComponent({ name: "FilesCanvasView" }).exists()).toBe(false);
+    expect(btn(w).attributes("aria-pressed")).toBe("false");
+  });
+
   // The store is per directory, and nothing ties a remembered state to the surface that wrote it.
   it("ignores a remembered Canvas view where there is no Canvas view to show", async () => {
     withEntry("design.md");
