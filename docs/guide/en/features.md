@@ -192,10 +192,12 @@ climbs above the pane's folder says so instead. A ` ```mermaid ` fence is drawn 
 with its code folded under it (open **Diagram source** to see or copy it); maths stays as code
 there, and **Canvas** in the pane's header renders both. A code block is coloured for its language (the
 editor's languages — JavaScript/TypeScript, Python, JSON, CSS, HTML, YAML, XML, Rust, Go, Java,
-C/C++, PHP, SQL, Markdown; others stay plain). The small copy button at a block's top right opens
-the block in a dialog of the app's own, read from the file, with **Copy** there: a Markdown file
-controls how its Preview looks, so what you check before copying is shown where the file cannot
-restyle it.
+C/C++, PHP, SQL, Markdown; others stay plain). The small copy button at a block's top right copies
+the block as the file has it — read from the file, not from the page — and a notice at the bottom
+shows its first line and line count. A Markdown file controls how its Preview looks, so check that
+first line before pasting. A block holding characters you cannot see (invisible, control or
+direction-changing ones) opens in a dialog of the app's own instead, with each written out as
+`<U+…>`, and so does every block where the browser will not let the app write to the clipboard.
 
 **Editing is safe against the agent working in the same directory.**
 

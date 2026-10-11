@@ -1,7 +1,7 @@
 // The Preview's code-block copy (#2615), out of the locale file, which is at its line cap.
 export const previewCodeCopyJa = {
   previewCodeCopy: {
-    button: "このコードブロックをコピー…",
+    button: "コードをコピー",
     diagramSource: "図のソース",
     title: "コードブロック",
     hint: "ファイルから読んだ文字です。確かめてからコピーしてください。ここに見えているものが、そのままコピーされます。",

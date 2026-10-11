@@ -5,6 +5,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { clipboardAvailable } from "./codeBlockCopy";
+import { lineCountOf } from "./previewCodeCopy";
 import { MODAL_FOCUSABLE } from "../utils/focusTrap";
 import { modalKeydownHandler } from "../composables/useModalKeyboard";
 import type { CodeBlockLookup } from "./previewCodeBlockApi";
@@ -27,7 +28,7 @@ const revealed = computed(() => revealHidden(block.value?.text ?? ""));
 // Blanks or newlines can put part of the block below the fold; say so until the reader has seen the end.
 const continuesBelow = useContinuesBelow(box, () => revealed.value.shown);
 // The lines a paste makes: a CR alone is Enter there, as it is shown as a marker here.
-const lineCount = computed(() => (block.value ? block.value.text.split(/\r\n|\r|\n/).length : 0));
+const lineCount = computed(() => (block.value ? lineCountOf(block.value.text) : 0));
 
 // Selecting by hand copies the box — with its `<U+XXXX>` markers, not the characters they stand for.
 const noteText = computed(() => {

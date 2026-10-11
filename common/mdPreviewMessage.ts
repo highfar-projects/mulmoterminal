@@ -121,8 +121,9 @@ const frameMessageBody = (data: Record<string, unknown>): MdPreviewFrameBody | n
   // Passed on as written: which file it names depends on where the document is, which only the
   // host knows (src/components/previewLinkTarget.ts).
   if (data.kind === "open") return typeof data.href === "string" && data.href !== "" ? { kind: "open", href: data.href } : null;
-  // `code-block` is a button on a block the server numbered (#2615) — or one the document forged, which
-  // can only name another block: the pane shows the block from the file before anything is copied.
+  // `code-block` is a button on a block the server numbered (#2615). It names a block by number only: the
+  // pane reads that block from the FILE and copies it (#3003), so the document chooses which block, never
+  // its text. A block with hidden characters is shown in the pane's dialog instead of copied.
   if (data.kind === "code-block") return Number.isSafeInteger(data.index) && Number(data.index) >= 0 ? { kind: "code-block", index: Number(data.index) } : null;
   if (data.kind !== "scroll") return null;
   const scrollY = finiteNumber(data.scrollY);
