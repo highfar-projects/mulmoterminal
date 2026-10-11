@@ -4,7 +4,7 @@ nav_title: 全機能リスト
 layout: default
 parent: 日本語
 nav_order: 6.5
-as_of: 10.0.0
+as_of: 10.1.0
 description: MulmoTerminal のいまある機能を、入った版つきで領域ごとに一行ずつ並べた一覧（9.1.0 時点）。
 ---
 
@@ -135,6 +135,9 @@ description: MulmoTerminal のいまある機能を、入った版つきで領�
 
 詳しく: [機能リファレンス](features.html)
 
+- Files ペインで、開いている Markdown・HTML・MulmoScript のファイルを、ツリーを横に残したままその場で Canvas 表示に切り替える (v10.1.0)
+- Files ペインは、どのファイルを Canvas 表示にしていたかを、ペインの開き直しやリロード後も覚える (v10.1.0)
+- 端末に出たパスを Cmd/Ctrl+クリックすると Files の新しいタブで開く (v10.1.0)
 - プレビューのコードブロックを一押しでコピーし、通知を出す。そのままコピーできないときだけダイアログを開く (v10.0.0)
 - Markdown のプレビューで mermaid のフェンスをアプリのテーマの色で図として描き、コードはその下に畳む (v9.9.0)
 - ファイルペインで PDF・動画・音声を表示し、大きすぎるテキストは「Open in OS」を出す (v7.3.0)

@@ -8,8 +8,8 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **10.0.0 is out.** The phone lists the past sessions of an open terminal's directory and reads them as a
-> conversation, and every code block in rendered markdown gets a copy button. [Setup guide](v10.0.0.html)
+> **10.1.0 is out.** The Files pane switches the open file between the editor and the Canvas view with the
+> tree still beside it, and remembers it across a reload. [Setup guide](v10.1.0.html)
 
 ## What is MulmoTerminal? {#what-is}
 

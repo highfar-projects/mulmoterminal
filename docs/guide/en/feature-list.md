@@ -4,7 +4,7 @@ nav_title: Feature list
 layout: default
 parent: English
 nav_order: 6.5
-as_of: 10.0.0
+as_of: 10.1.0
 description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 9.1.0)."
 ---
 
@@ -135,6 +135,9 @@ More: [Phone](phone.html)
 
 More: [Feature reference](features.html)
 
+- The Files pane switches the open Markdown, HTML or MulmoScript file to the Canvas view in place, the tree kept beside it (v10.1.0)
+- The Files pane remembers which files were in the Canvas view across reopening the pane and a reload (v10.1.0)
+- Cmd/Ctrl+click on a path in terminal output opens it in a new Files tab (v10.1.0)
 - A Preview code block copies in one press and shows a notice; the dialog opens only when the block cannot be copied as it is (v10.0.0)
 - A mermaid fence in a Markdown file's Preview is drawn as a diagram, in the app's theme, with its code folded under it (v9.9.0)
 - The Files pane shows PDF, video and audio; a text file too large to edit offers Open in OS (v7.3.0)

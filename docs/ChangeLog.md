@@ -8,6 +8,36 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@10.1.0 — 2026-10-12
+
+> **Setup guide:** [10.1.0 — Switch a file to the Canvas view inside the Files pane](https://receptron.github.io/mulmoterminal/guide/en/v10.1.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.1.0.html))
+
+### The Files pane shows the open file in the Canvas view, with the tree kept beside it (#3009)
+
+- The Files pane's **Canvas** button and the row menu's **Open in the Canvas** used to swap the right pane from Files to the session's Canvas, so closing the Canvas closed the tree too (#3008). They now switch the open file to the Canvas's plugin view inside the pane; pressing **Canvas** again goes back to the editor.
+- One file's card is built in memory (`buildCanvasCard`) and drawn with the same plugin view the Canvas uses (`FilesCanvasView.vue`); nothing is written to the session's Canvas. Markdown, HTML and MulmoScript files can be shown this way.
+- The buffer is saved in place first (`savedInPlace`, as Preview does): a save that loses to another writer keeps the conflict banner up and the switch does not happen.
+- Right pane only (`canvasTarget`): the full-screen `/files` view keeps Preview, for the containment reasons in `docs/file-surfaces.md`.
+- While the Canvas view is up, the editor-only controls are hidden and the insert-selection key inserts the file alone, as in Preview. A re-root forgets which files were in the Canvas view.
+- Removed: the swap path (`open-in-canvas`, `TerminalGrid.openFileInCanvas`). The session Canvas still opens from agent drawings, the cell's Canvas button and the Mulmo menu.
+
+### A terminal path with a line leaves the Canvas view for the editor (#3012)
+
+- `design.md:42` on a file that is in the Canvas view now opens it on the editor at that line, as a located open already turns a Preview back to Edit (#3010). A click with no line keeps the Canvas view. The request, not the landing, exits the Canvas view: a located open that is declined or superseded still leaves the file on its editor next time.
+
+### The Canvas view is remembered across reopening the pane and a reload (#3013)
+
+- `FilesTabState.showCanvas` is written by the pane's snapshot and read back on restore, the way `showPreview` is (#3011). The store whitelists it (anything but `true` reads as absent), so earlier entries read as the editor.
+- Only a surface with a Canvas view acts on it, checked on every read. An open that gets in before the remembered tabs are put back (#1979) comes up as text, and no remembered Canvas view is restored that time.
+
+### Cmd/Ctrl+click on a terminal path opens a new Files tab (#3007)
+
+- With **Cmd** (macOS) or **Ctrl** (Windows / Linux) held, a path clicked in terminal output opens in a new tab of the Files pane instead of replacing the front tab (#3005). A plain click is unchanged. `newTab` is a required parameter along the whole chain, so dropping it is a type error.
+
+### Docs
+
+- The 10.0.0 setup guide gained a screenshot of the phone listing a directory's past sessions (#3006).
+
 ## mulmoterminal@10.0.0 — 2026-10-11
 
 > **Setup guide:** [10.0.0 — Read a directory's past sessions from the phone](https://receptron.github.io/mulmoterminal/guide/en/v10.0.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.0.0.html))
