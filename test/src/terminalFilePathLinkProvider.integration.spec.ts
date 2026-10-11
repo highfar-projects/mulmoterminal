@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeAll } from "vitest";
 import { Terminal } from "@xterm/xterm";
 import { createFilePathLinkProvider } from "../../src/composables/terminalFilePathLinkProvider";
 import type { ILink } from "@xterm/xterm";
+import type { FileLocation } from "../../src/composables/filePathLocation";
 
 // xterm's Terminal.open() reaches for browser APIs jsdom omits; stub the few it needs.
 beforeAll(() => {
@@ -42,7 +43,7 @@ function provideLinks(
   openInFiles: (filePath: string, cwd: string) => void = () => {},
   // Nothing enlarged is the default for these cases, so the pane declines and the routing
   // below it is what gets exercised.
-  openInPane: (filePath: string, cwd: string) => boolean = () => false,
+  openInPane: (filePath: string, cwd: string, location: FileLocation | undefined, newTab: boolean) => boolean = () => false,
 ): ILink[] | undefined {
   const provider = createFilePathLinkProvider(term, () => cwd, open, openInFiles, openInPane);
   let result: ILink[] | undefined;
@@ -112,12 +113,29 @@ describe("createFilePathLinkProvider against real xterm", () => {
 
     links.forEach((link) => link.activate(new MouseEvent("click"), link.text));
     expect(openInPane.mock.calls).toEqual([
-      ["src/main.ts", "/Users/me/proj", undefined],
-      ["docs/a.md", "/Users/me/proj", undefined],
-      ["dir/a.gif", "/Users/me/proj", undefined],
+      ["src/main.ts", "/Users/me/proj", undefined, false],
+      ["docs/a.md", "/Users/me/proj", undefined, false],
+      ["dir/a.gif", "/Users/me/proj", undefined, false],
     ]);
     expect(open).not.toHaveBeenCalled();
     expect(openInFiles).not.toHaveBeenCalled();
+
+    term.dispose();
+  });
+
+  // #3005. Cmd (macOS) or Ctrl (elsewhere) on the click asks the pane for a new tab, as the tree does;
+  // a plain click and one with only Shift or Alt do not.
+  it("asks the pane for a new tab only on Cmd or Ctrl", async () => {
+    const term = new Terminal({ cols: 120, rows: 10, allowProposedApi: true });
+    term.open(document.createElement("div"));
+    await writeLine(term, "see src/main.ts");
+
+    const openInPane = vi.fn<(filePath: string, cwd: string, location: FileLocation | undefined, newTab: boolean) => boolean>(() => true);
+    const [link] = provideLinks(term, "/Users/me/proj", vi.fn(), vi.fn(), openInPane) ?? [];
+    if (!link) throw new Error("expected a link");
+    const clicks: MouseEventInit[] = [{ metaKey: true }, { ctrlKey: true }, {}, { shiftKey: true }, { altKey: true }];
+    clicks.forEach((init) => link.activate(new MouseEvent("click", init), link.text));
+    expect(openInPane.mock.calls.map((call) => call[3])).toEqual([true, true, false, false, false]);
 
     term.dispose();
   });
@@ -139,7 +157,7 @@ describe("createFilePathLinkProvider against real xterm", () => {
     ]);
 
     links.forEach((link) => link.activate(new MouseEvent("click"), link.text));
-    expect(openInPane).toHaveBeenCalledWith("src/main.ts", "/Users/me/proj", { line: 42, col: 7 });
+    expect(openInPane).toHaveBeenCalledWith("src/main.ts", "/Users/me/proj", { line: 42, col: 7 }, false);
     expect(openInFiles).toHaveBeenCalledWith("lib/b.ts", "/Users/me/proj", { line: 12, col: 5 });
 
     term.dispose();
