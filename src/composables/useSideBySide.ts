@@ -28,6 +28,8 @@ export interface SideBySide {
   /** The editor's classes — on the left, in equal halves with the Preview, while side by side. */
   editorClass: ComputedRef<string>;
   previewClass: ComputedRef<string>;
+  /** Whether side by side is offered for the open file at all (a Markdown file that reads as text). */
+  offered: ComputedRef<boolean>;
   /** What is on screen — the one place "is the editor showing" is decided (`filesViewLayout.ts`). */
   layout: ComputedRef<FilesViewLayout>;
 }
@@ -109,5 +111,5 @@ export function useSideBySide(deps: SideBySideDeps): SideBySide {
   // squeeze in a narrow pane out of the editor alone.
   const previewClass = computed(() => (active.value ? "min-w-0 basis-0 border-l border-border" : ""));
   const layout = computed(() => viewLayout({ showPreview: file.showPreview.value, showCanvas: deps.showCanvas.value, split: active.value }));
-  return { active, toggle, editorClass, previewClass, layout };
+  return { active, toggle, editorClass, previewClass, layout, offered: computed(available) };
 }

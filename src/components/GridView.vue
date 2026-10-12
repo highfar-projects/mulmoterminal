@@ -78,6 +78,7 @@ import { fetchDirConfig, invalidateDirConfig, useDirPriorities } from "../compos
 import { asTerminalAgent, type TerminalAgent } from "../../common/sessionAgent";
 import { router } from "../router";
 import { usePubSub } from "../composables/usePubSub";
+import { useRevealOnPaneCommand } from "../composables/useRevealOnPaneCommand";
 import type { AgentReport } from "./gridCell";
 import type { LaunchPick } from "./launchers";
 import { isRecord } from "../../common/isRecord";
@@ -408,6 +409,7 @@ const onClose = (uid: number) => {
 // enlarged — including when the user got there by clicking a roster row or filmstrip thumbnail,
 // which changes what is zoomed without touching the page.
 const onToggleExpand = (uid: number) => (state.value = toggleExpand(state.value, uid, orderUids.value));
+useRevealOnPaneCommand({ expandedUid, uidOfSession: (id) => state.value.cells.find((c) => c.session === id)?.uid, onTerminalsRoute, enlarge: onToggleExpand });
 const onRun = (uid: number, command: RunCommand) => (state.value = runCommand(state.value, uid, command));
 // A running cell's header Run menu: launch in a spare cell (next to it) so the session survives.
 const onRunSpare = (uid: number, command: RunCommand) => (state.value = runScriptInNewCell(state.value, uid, command));

@@ -149,6 +149,18 @@ export const tipsZhCN: Messages["tips"] = {
       restoreAria: "恢复问题窗格宽度",
       close: "关闭问题窗格",
     },
+    check: {
+      collapse: "将检查清单折叠为标题",
+      expand: "展开检查清单",
+      close: "不发送并收起检查清单",
+    },
+    checkItems: {
+      open: "在 Files 面板中打开 {path}",
+      ok: "将此项标记为 OK",
+      ng: "将此项标记为 NG",
+      note: "给智能体的备注（可选）",
+      send: "将结果作为下一条消息发送给智能体",
+    },
     canvas: {
       expand: "将画布展开覆盖终端",
       restore: "恢复终端，与画布并排",

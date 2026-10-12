@@ -150,6 +150,18 @@ export const tipsKo: Messages["tips"] = {
       restoreAria: "질문 창 너비 되돌리기",
       close: "질문 창 닫기",
     },
+    check: {
+      collapse: "확인 목록을 제목만 남기고 접기",
+      expand: "확인 목록 펼치기",
+      close: "보내지 않고 확인 목록 치우기",
+    },
+    checkItems: {
+      open: "{path}을(를) Files 패널에서 열기",
+      ok: "이 항목을 OK로 표시",
+      ng: "이 항목을 NG로 표시",
+      note: "에이전트에게 남길 메모(선택)",
+      send: "결과를 다음 메시지로 에이전트에게 보내기",
+    },
     canvas: {
       expand: "캔버스를 터미널 위로 펼치기",
       restore: "터미널을 캔버스 옆으로 되돌리기",

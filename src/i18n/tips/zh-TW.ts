@@ -149,6 +149,18 @@ export const tipsZhTW: Messages["tips"] = {
       restoreAria: "還原問題窗格寬度",
       close: "關閉問題窗格",
     },
+    check: {
+      collapse: "將檢查清單摺疊為標題",
+      expand: "展開檢查清單",
+      close: "不傳送並收起檢查清單",
+    },
+    checkItems: {
+      open: "在 Files 面板中開啟 {path}",
+      ok: "將此項標記為 OK",
+      ng: "將此項標記為 NG",
+      note: "給代理的備註（選填）",
+      send: "將結果作為下一則訊息傳送給代理",
+    },
     canvas: {
       expand: "將畫布展開覆蓋終端機",
       restore: "還原終端機，與畫布並排",

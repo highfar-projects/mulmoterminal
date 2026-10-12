@@ -151,6 +151,18 @@ export const tipsJa: Messages["tips"] = {
       restoreAria: "質問ペインの幅を戻す",
       close: "質問ペインを閉じる",
     },
+    check: {
+      collapse: "確認項目を見出しだけに畳む",
+      expand: "確認項目を広げる",
+      close: "送らずに確認項目をしまう",
+    },
+    checkItems: {
+      open: "{path} を Files ペインで開く",
+      ok: "この項目を OK にする",
+      ng: "この項目を NG にする",
+      note: "エージェントへのメモ（任意）",
+      send: "結果を次のメッセージとしてエージェントに送る",
+    },
     canvas: {
       expand: "キャンバスをターミナルの上に広げる",
       restore: "ターミナルをキャンバスの横に戻す",

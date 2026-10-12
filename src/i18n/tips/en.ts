@@ -149,6 +149,18 @@ export const tipsEn = {
       restoreAria: "Restore question pane width",
       close: "Close question pane",
     },
+    check: {
+      collapse: "Fold the checklist to its title",
+      expand: "Unfold the checklist",
+      close: "Put the checklist away without sending",
+    },
+    checkItems: {
+      open: "Open {path} in the Files pane",
+      ok: "Mark this item OK",
+      ng: "Mark this item NG",
+      note: "Note for the agent (optional)",
+      send: "Send the results to the agent as your next message",
+    },
     canvas: {
       expand: "Expand the canvas over the terminal",
       restore: "Restore the terminal beside the canvas",

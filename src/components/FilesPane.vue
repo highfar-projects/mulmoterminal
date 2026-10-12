@@ -51,6 +51,7 @@ import FilesViewModeButtons from "./FilesViewModeButtons.vue";
 import FilesCanvasView from "./FilesCanvasView.vue";
 import FilesCanvasButton from "./FilesCanvasButton.vue";
 import { useFilesCanvasMode } from "../composables/useFilesCanvasMode";
+import { showFileWith } from "../composables/useShowFile";
 import { useSideBySide } from "../composables/useSideBySide";
 import { useFileHistory } from "../composables/useFileHistory";
 import { useRequestedOpen } from "../composables/useRequestedOpen";
@@ -100,8 +101,7 @@ const showStrip = computed(() => strip.value.tabs.length > 1 || strip.value.tabs
 // tabs are all -1 cannot be reached from the keyboard.
 const focusablePath = computed(() => strip.value.activePath ?? strip.value.tabs[0]?.path ?? null);
 const labels = computed(() => tabLabels(strip.value.tabs.map((tab) => tab.path)));
-const NO_ROOTS: StoriesRoots = { workspaces: [], roots: [] };
-const storiesRoots = computed<StoriesRoots>(() => props.storiesRoots ?? NO_ROOTS);
+const storiesRoots = computed<StoriesRoots>(() => props.storiesRoots ?? { workspaces: [], roots: [] });
 // The open file drawn by the Canvas's plugin view, in place of the editor (#3008).
 const canvasMode = useFilesCanvasMode({ enabled: () => !!props.canvasTarget, cwd: () => props.cwd, storiesRoots: () => storiesRoots.value, file, tabs });
 const { active: showCanvas, card: canvasCard, openable: canvasOpenable } = canvasMode;
@@ -115,7 +115,6 @@ const previewScroll = useFilesPreviewWire(file, openPreviewLink, () => props.cwd
 // A Markdown file's headings, to go to one in the editor or the Preview (#2576).
 const outline = useFileOutline({ editor: file.editor, showPreview, goToPreviewHeading: previewScroll.goToHeading });
 const { layout, ...sideBySide } = useSideBySide({ file, editorHost, preview: previewScroll, showCanvas });
-const markdownEditable = computed(() => previewKind.value === "markdown" && !unpreviewable.value);
 
 // A link clicked in the Preview (#2268), resolved against the document being read. It opens in a
 // tab of its own, keeping the one it was clicked in; a Markdown file comes up in Preview, since
@@ -472,6 +471,8 @@ defineExpose({
   // to see the chart, and a CSV opened from there as a table before the pane took the click (#2559).
   // Markdown opens as it always has.
   openFile: openFromTerminal,
+  /** A file in a given view and at a given line, for an agent's `showInPane` or a check item (#3022). */
+  showFile: showFileWith({ tabs, file, canvasMode, sideBySide, openAt: openFromTerminal }),
   /** The `files-insert-selection` key (#2575), reached from the grid like the tab keys. */
   insertSelection,
   /** The `files-tab-*` keys (#2267), reached from the grid like the finder's. */
@@ -490,8 +491,8 @@ defineExpose({
         >{{ openName }}<span v-if="dirty" class="ml-1 text-amber" :data-tip="t('tips.panes.unsaved')">●</span></span
       >
       <FilesViewModeButtons
-        v-if="openPath && previewKind && previewSrc && (!showCanvas || markdownEditable)"
-        v-bind="{ showPreview, canPreview: !showCanvas, saving, canSideBySide: markdownEditable, sideBySide: sideBySide.active.value }"
+        v-if="openPath && previewKind && previewSrc && (!showCanvas || sideBySide.offered.value)"
+        v-bind="{ showPreview, canPreview: !showCanvas, saving, canSideBySide: sideBySide.offered.value, sideBySide: sideBySide.active.value }"
         @toggle-preview="file.togglePreview()"
         @toggle-side-by-side="sideBySide.toggle()"
       />

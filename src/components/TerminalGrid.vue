@@ -35,6 +35,7 @@ import { formatCwd } from "./cwdDisplay";
 import FilesPane from "./FilesPane.vue";
 import type { FilesPaneState } from "./filesPaneState";
 import GuiPanel from "./GuiPanel.vue";
+import CheckCard from "./CheckCard.vue";
 import CollectionsPane from "./CollectionsPane.vue";
 import ToolsPane from "./ToolsPane.vue";
 import PromptsPane from "./PromptsPane.vue";
@@ -62,6 +63,10 @@ import { hasCanvasGroup, hasCollectionsGroup } from "../../common/toolGroups";
 import { isRightPane, type RightPane } from "./gridCell";
 import QuestionPane from "./QuestionPane.vue";
 import { ASK_QUESTION_CHANNEL, isAskQuestionDone, isAskQuestionEvent } from "../../common/askQuestion";
+import { PANE_COMMAND_CHANNEL, checkSummary, isPaneCommand, type CheckAnswer, type PaneTarget } from "../../common/paneCommand";
+import { dirPathKey } from "../../common/dirPathKey";
+import { createPaneCommandBox } from "../composables/paneCommandBox";
+import { fetchOpenCheck, postCheckClosed } from "../composables/openCheck";
 import { fetchOpenQuestion, postAnswer, postWords } from "../composables/openQuestion";
 import type { AnswerFailure } from "../../common/askQuestion";
 import { createQuestionBox } from "../composables/questionBox";
@@ -700,6 +705,64 @@ onBeforeUnmount(() => unsubscribeQuestionReconnect());
 function dismissQuestionPane(): void {
   if (expandedSessionId.value) questionBox.dismiss(expandedSessionId.value);
   setRightPane(null, paneUid.value);
+}
+
+// What an agent asked of its own cell's right pane (#3022): a file to show, or a checklist. Acted on
+// at once for the enlarged cell, and kept for the others until they are enlarged — a background cell
+// must not take the screen. When NOTHING is enlarged, GridView enlarges the asking cell, as it does for
+// a drawing; that enlargement is what then shows it here.
+const paneCommands = createPaneCommandBox(fetchOpenCheck);
+const expandedCheck = computed(() => (expandedSessionId.value ? (paneCommands.checks.value.get(expandedSessionId.value) ?? null) : null));
+
+/** A file in the Files pane of the enlarged cell, in the view the agent asked for. Through
+ *  openPaneFor, so a buffer open there is saved first and a save that fails keeps the pane put. A pane
+ *  rooted somewhere else than the agent's directory is left alone: the path is relative to that. */
+async function showInFilesPane(target: PaneTarget, cwd: string): Promise<void> {
+  const uid = props.expandedUid;
+  if (uid === null) return;
+  await openPaneFor(uid, "files");
+  await nextTick();
+  if (!filesOpen.value || dirPathKey(paneCwd.value ?? "") !== dirPathKey(cwd)) return;
+  await filesPane.value?.showFile(target);
+}
+
+const showPendingFile = (sessionId: string): void => {
+  const show = sessionId === expandedSessionId.value ? paneCommands.takeShow(sessionId) : undefined;
+  if (show) void showInFilesPane(show, show.cwd);
+};
+
+const unsubscribePaneCommands = subscribeSession(PANE_COMMAND_CHANNEL, (data) => {
+  if (!isPaneCommand(data)) return;
+  paneCommands.offer(data);
+  showPendingFile(data.sessionId);
+});
+onBeforeUnmount(() => unsubscribePaneCommands());
+
+watch(
+  expandedSessionId,
+  async (sessionId) => {
+    if (!sessionId) return;
+    showPendingFile(sessionId);
+    await paneCommands.hydrate(sessionId);
+  },
+  { immediate: true },
+);
+const unsubscribeCheckReconnect = onPubSubReconnect(() => {
+  if (expandedSessionId.value) void paneCommands.hydrate(expandedSessionId.value);
+});
+onBeforeUnmount(() => unsubscribeCheckReconnect());
+
+function closeExpandedCheck(): void {
+  const sessionId = expandedSessionId.value;
+  const id = sessionId ? paneCommands.close(sessionId) : null;
+  if (sessionId && id) void postCheckClosed(sessionId, id);
+}
+
+/** The results typed into the terminal as the user's next message. Kept on screen if the terminal
+ *  cannot be typed into, so the answers are not lost. */
+function sendCheck(answers: CheckAnswer[]): void {
+  const check = expandedCheck.value;
+  if (check && sendToExpandedCell(checkSummary(check, answers))) closeExpandedCheck();
 }
 
 // None of the options fits, so the user says it in their own words (#1693). The dialog's own
@@ -1627,7 +1690,7 @@ function onRosterDragLeave(event: DragEvent) {
          siblings of the stage: the stage is a ROW in list mode (roster | terminal) and a COLUMN
          in strip mode (terminal / filmstrip), so only nesting puts the pane beside the terminal
          in both. Hidden outright when nothing is zoomed, like .zoom-main itself. -->
-    <div ref="zoomRow" :class="[zoomed ? 'zoom-row flex min-h-0 min-w-0 flex-auto' : 'hidden', paneFull ? 'pane-full' : '']">
+    <div ref="zoomRow" :class="[zoomed ? 'zoom-row relative flex min-h-0 min-w-0 flex-auto' : 'hidden', paneFull ? 'pane-full' : '']">
       <!-- Off-screen but still MOUNTED is what keeps xterm measurable (#1125) — and a terminal has
            plenty to focus: its header buttons and xterm's own textarea. Without `inert`, Shift+Tab
            from the pane's first control walks into controls nobody can see. Reported by Codex on
@@ -1751,6 +1814,16 @@ function onRosterDragLeave(event: DragEvent) {
           @close="dismissQuestionPane"
         />
       </template>
+      <!-- Over the cell, not in the right pane's one slot: opening an item's file puts the Files pane
+           there, and the checklist has to stay beside it to be marked (#3022). -->
+      <CheckCard
+        v-if="zoomed && expandedCheck"
+        class="absolute right-3 bottom-3 z-30 max-h-[70%]"
+        :check="expandedCheck"
+        @open="(item) => item.target && expandedCheck && showInFilesPane(item.target, expandedCheck.cwd)"
+        @send="sendCheck"
+        @close="closeExpandedCheck"
+      />
     </div>
     <!-- Enlarged cell / thumbnail strip. The stage is a COLUMN in strip mode, so this separator
          is the horizontal one — dragged up and down, and driven by Up/Down rather than Left/Right. -->

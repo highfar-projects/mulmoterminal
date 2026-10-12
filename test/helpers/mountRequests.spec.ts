@@ -28,9 +28,10 @@ describe("mountRequests, open mode", () => {
   const requests = mountRequests(["s1", "s2"]);
   beforeEach(() => requests.install());
 
-  it("answers every listed session's three routes, in the shape their callers read", async () => {
+  it("answers every listed session's routes, in the shape their callers read", async () => {
     for (const session of ["s1", "s2"]) {
       expect(await (await get(`/api/question/${session}`)).json()).toEqual({ question: null });
+      expect(await (await get(`/api/pane/check/${session}`)).json()).toEqual({ check: null });
       expect(await (await get(`/api/agent/toolResults/${session}`)).json()).toEqual({ toolResults: [] });
       expect(await (await get(`/api/tools?sessionId=${session}`)).json()).toEqual({ groups: [] });
     }
@@ -72,6 +73,7 @@ describe("mountRequests, strict mode", () => {
 
   const askAll = async (session: string) => {
     await get(`/api/question/${session}`);
+    await get(`/api/pane/check/${session}`);
     await get(`/api/agent/toolResults/${session}`);
     await get(`/api/tools?sessionId=${session}`);
   };
