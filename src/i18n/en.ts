@@ -515,7 +515,6 @@ export const en = {
   cellMenu: {
     history: "History",
     tools: "Tools",
-    enlargeFirst: "Enlarge the cell to open this beside it",
     canvasUnavailable: "No render MCP for this directory — turn on Canvas in the launcher, then restart this cell",
     items: {
       prompts: { label: "Prompts you sent", detail: "Everything you typed in this session" },

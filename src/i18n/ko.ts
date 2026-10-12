@@ -502,7 +502,6 @@ export const ko: Messages = {
   cellMenu: {
     history: "기록",
     tools: "도구",
-    enlargeFirst: "셀을 확대하면 옆에 열 수 있습니다",
     canvasUnavailable: "이 디렉터리에서는 렌더링 MCP가 꺼져 있습니다. 런처에서 Canvas를 켜고 이 셀을 다시 시작하세요",
     items: {
       prompts: { label: "보낸 프롬프트", detail: "이 세션에서 직접 입력한 지시" },

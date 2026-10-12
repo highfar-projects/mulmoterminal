@@ -72,9 +72,9 @@ describe("gridShortcutFor", () => {
     expect(gridShortcutFor(both, key({ key: "F8" }), view(false))).toBeNull();
   });
 
-  // The Files pane exists only in the ENLARGED row (docs/grid-view-modes.md), so a tiled grid has
-  // nowhere to put the finder and the key declines rather than guessing which cell was meant.
-  it("gates the file finder on a zoom too, because the pane it opens lives in the zoomed row", () => {
+  // The key names no cell, so un-zoomed it declines rather than guessing which tile's pane was meant
+  // — a pane beside the tiled grid is opened from a tile's menu instead (docs/grid-view-modes.md).
+  it("gates the file finder on a zoom too, because the key names no cell", () => {
     const map: Keymap = { "files-find": "F5" };
     expect(gridShortcutFor(map, key({ key: "F5" }), view(true))).toBe("files-find");
     expect(gridShortcutFor(map, key({ key: "F5" }), view(false))).toBeNull();

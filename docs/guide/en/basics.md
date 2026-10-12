@@ -110,7 +110,7 @@ cell it opens is a persistent terminal (running / exited), not an agent session.
 The reference point is the **workspace** — the server's default working directory (`CLAUDE_CWD`).
 It is settled in this order: `--cwd`, then the `CLAUDE_CWD` environment variable, then the directory you ran `npx mulmoterminal` in.
 When you lose track of which one it is, the `Workspace: …` line printed at startup is the answer.
-Collections, Wiki and Accounting read and write there whichever cell you are in (only the Files pane beside an enlarged cell follows that cell's directory).
+Collections, Wiki and Accounting read and write there whichever cell you are in (only the Files pane follows the directory of the cell it belongs to).
 
 **The directory decides WHICH tools a cell gets; the agent decides whether the workspace rule
 applies to it at all.** How an agent can be handed tools is a property of its CLI, not a setting —
@@ -206,12 +206,13 @@ The header of a running cell has two rows. Together they capture that agent's **
   **History** / **Tools** / set aside / expand / close. **History** is a menu of the prompts you
   sent, the whole conversation, and the **Activity timeline** (what the agent ran — Claude); **Tools**
   lists the tools the agent used, the **Canvas** and this folder's **Collections**, and below them
-  **Restart the agent** (same conversation, new process). The panes open beside the enlarged cell,
-  so on a tile only the timeline and the restart can be picked.
+  **Restart the agent** (same conversation, new process). A pane opens beside the enlarged cell, or —
+  picked from a tile — to the right of the tiled grid, where it stays on that cell until another
+  cell's menu opens one.
 - **Row 2 (what to read and do):** the **directory path** — click it for a menu with *Insert a file
   path* (pick a file in the OS dialog and type its path at the prompt), *Reveal in the file manager*,
-  *Browse files in the app* (the file tree beside this terminal — it enlarges the
-  cell first if it is tiled), *New terminal here*, and the repository's pages under a heading naming where it lives —
+  *Browse files in the app* (the file tree beside this terminal — to the right of the grid if the
+  cell is tiled), *New terminal here*, and the repository's pages under a heading naming where it lives —
   **GitHub** (*Repository / Issues / Pull requests / Actions*) or **GitLab** (*Repository / Issues /
   Merge requests / Pipelines*) — then **Run**, **Skills** and your own buttons
   ([configured in config](config.html#header)). The

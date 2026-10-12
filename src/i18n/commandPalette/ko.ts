@@ -93,7 +93,7 @@ export const commandPaletteKo = {
     terminalVoice: "현재 터미널에서 음성 입력을 시작 / 중지합니다(마이크를 쓸 수 있을 때).",
     terminalDiff: "현재 worktree 터미널의 변경 패널을 엽니다(변경이 있을 때).",
     terminalNote: "현재 터미널의 메모 입력란을 엽니다.",
-    paneFiles: "현재 터미널 옆의 파일 패널을 열고 닫습니다. 타일 상태면 먼저 확대합니다.",
+    paneFiles: "현재 터미널 옆의 파일 패널을 열고 닫습니다. 타일 상태면 그리드 오른쪽에 엽니다.",
     panePrompts: "현재 터미널에서 보낸 프롬프트 패널을 열고 닫습니다.",
     paneTranscript: "현재 터미널의 대화 패널을 열고 닫습니다.",
     paneTools: "현재 터미널에서 에이전트가 사용한 도구 패널을 열고 닫습니다.",

@@ -5,8 +5,8 @@
 // terminal — the tools the agent used, the Canvas, and this folder's collections — and, below
 // them, talking to another terminal and restarting the agent.
 //
-// Panes only exist beside an ENLARGED cell, so on a tile they are listed disabled with the reason;
-// the timeline is an overlay and works from a tile. A menu with nothing to choose is not shown.
+// Every pane opens from a tile as well as from the enlarged cell — beside the tiles, then (#3027).
+// A menu with nothing to choose is not shown.
 import type { RightPane } from "./gridCell";
 
 export type CellPaneMenuId = "prompts" | "transcript" | "timeline" | "tools" | "canvas" | "collections" | "talk" | "restart";
@@ -24,7 +24,6 @@ export interface CellPaneMenuEntry {
 }
 
 export interface CellPaneMenuState {
-  expanded: boolean;
   rightPane: RightPane | null;
   canvasAvailable: boolean;
   collectionsAvailable: boolean;
@@ -52,8 +51,8 @@ function paneEntry(id: CellPaneMenuId, state: CellPaneMenuState, t: Translate): 
     id,
     icon: ICONS[id],
     label: t(`cellMenu.items.${id}.label`),
-    detail: state.expanded ? t(`cellMenu.items.${id}.detail`) : t("cellMenu.enlargeFirst"),
-    disabled: !state.expanded,
+    detail: t(`cellMenu.items.${id}.detail`),
+    disabled: false,
     checked: state.rightPane === id,
   };
 }
@@ -76,13 +75,12 @@ export function toolEntries(state: CellPaneMenuState, t: Translate): CellPaneMen
   const entries = [paneEntry("tools", state, t)];
   // Disabled rather than missing when this session has no render MCP: the reason is the fix.
   const canvas = paneEntry("canvas", state, t);
-  if (state.expanded && !state.canvasAvailable) entries.push({ ...canvas, disabled: true, detail: t("cellMenu.canvasUnavailable") });
+  if (!state.canvasAvailable) entries.push({ ...canvas, disabled: true, detail: t("cellMenu.canvasUnavailable") });
   else entries.push(canvas);
   // Missing rather than disabled without the collection tools — unless its pane is open, because
   // this entry is that pane's only close.
   if (state.collectionsAvailable || state.rightPane === "collections") entries.push(paneEntry("collections", state, t));
-  // Actions, not views: they need no room beside the cell, so they work from a tile too. The first
-  // one opens the group below the divider.
+  // Actions, not views: drawn below a divider, the first one opening the group.
   const actions = [state.talkAvailable && actionEntry("talk", t), state.restartAvailable && actionEntry("restart", t)].filter((entry) => entry !== false);
   return [...entries, ...actions.map((entry, index) => ({ ...entry, separated: index === 0 }))];
 }

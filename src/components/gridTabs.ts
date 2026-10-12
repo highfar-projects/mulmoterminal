@@ -433,8 +433,9 @@ function nextCandidate(state: GridState, order: readonly number[], statusByUid: 
 // right, and that is exactly why it is worth writing down why it is nevertheless gone — the issue
 // still reads as sound, and re-deriving it from the issue alone lands straight back on the guard.
 //
-// What the reading missed: the zoomed row is ALSO the only place the right-hand panes exist
-// (Canvas, Tools, Files — see TerminalGrid.vue's .zoom-row). Nothing sits beside a tiled cell. So on
+// What the reading missed: the zoomed row was ALSO the only place the right-hand panes existed
+// (Canvas, Tools, Files — see TerminalGrid.vue's .zoom-row). Nothing sat beside a tiled cell then
+// (a pane can now, #3027, but an agent's drawing still reveals itself through the zoom). So on
 // a one-terminal grid the refusal did not merely decline a layout, it locked those panes away
 // entirely: the unread-canvas chip did nothing when clicked, and an agent drawing to the Canvas had
 // nowhere to be shown. That is how it was found — the owner ran the new auto-reveal (an agent's

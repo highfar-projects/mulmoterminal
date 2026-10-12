@@ -234,8 +234,9 @@ choice rows):
 | `"page-next"` / `"page-prev"` | Next / previous page of the grid |
 | `"terminal-reopen"` | Reopen the terminal closed most recently |
 
-A pane button toggles its pane on the enlarged cell. On a tiled cell it enlarges the cell and opens
-the pane, as *Browse files in the app* does. When the cell cannot do it — `terminal-timeline` on a
+A pane button toggles its pane on the cell the pane is on (the enlarged cell, or on the tiled grid the
+tile that opened it). On any other cell it opens the pane there — beside the enlarged cell, or to the
+right of the tiled grid without enlarging anything — as *Browse files in the app* does. When the cell cannot do it — `terminal-timeline` on a
 non-Claude session, `terminal-talk` with no other terminal, a move outside manual order — the cell
 says so instead of doing nothing. `"restart"`, the name before the shortcut names were shared, still
 works.

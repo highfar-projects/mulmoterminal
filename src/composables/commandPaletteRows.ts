@@ -294,7 +294,7 @@ export interface PaletteState {
   /** Whether the grid is in front and taking keys; false over another view or the launch panel. */
   available: boolean;
   manualOrder: boolean;
-  /** Whether the Files pane is up beside the enlarged terminal, which its tab actions act on. */
+  /** Whether the grid's Files pane is up, which its tab actions act on. */
   filesOpen: boolean;
   /** Whether the full-screen Files view is up, which takes the Files actions itself (#2655). */
   filesScreen?: boolean;

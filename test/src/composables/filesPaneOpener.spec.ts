@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { setFilesPaneOpener, openInFilesPane, tryOpenInPane } from "../../../src/composables/filesPaneOpener";
 
-// #910. The seam between a clicked terminal path and the pane beside an enlarged cell.
+// #910. The seam between a clicked terminal path and the grid's right pane.
 // What matters is the FALLBACK: every "no" here has to leave the click for the route it had
 // before, so the two decisions this module owns (can the pane render it, is it under this
 // cell's directory) are asserted alongside the grid's own veto.
@@ -83,7 +83,7 @@ describe("tryOpenInPane", () => {
     expect(opener).not.toHaveBeenCalled();
   });
 
-  // The grid declines when nothing is enlarged, or when the pane trails the zoom. Its "no"
+  // The grid declines when there is no room for the pane, or when the pane trails the zoom. Its "no"
   // has to reach the caller intact, or the click opens nowhere at all.
   it("passes the grid's own refusal through", () => {
     setFilesPaneOpener(() => false);

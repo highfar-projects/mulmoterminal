@@ -20,7 +20,7 @@ differ as a consequence of that, not as a design of their own.
 
 | surface | root | what it may reach | who chose the path |
 |---|---|---|---|
-| **Right pane** (`TerminalGrid` → `FilesPane`, `canvas-target` set) | the expanded cell's directory | that directory's subtree | the user, by zooming a cell |
+| **Right pane** (`TerminalGrid` → `FilesPane`, `canvas-target` set) | the directory of the cell it is on (the enlarged one, or the tile that opened it) | that directory's subtree | the user, by zooming a cell or opening the pane from its menu |
 | **Full screen** (`/files?cwd=`, `FilesOverlay` → `FilesPane`) | whatever `?cwd=` says | that base's subtree | a browser, through a query string |
 | **Watched documents** (`containForWatching`) | the workspace + every live session directory | those subtrees | a browser, checked against roots the server already serves |
 | **`presentDocument` / `presentHtml` / …** (`backends/files/openPath.ts`) | **none** | any file of the right extension, anywhere | an agent the user launched |
@@ -30,8 +30,9 @@ differ as a consequence of that, not as a design of their own.
 `FilesPane` **never watches its `cwd` prop** (`defineExpose`'s contract, FilesPane.vue): reacting
 to it would discard a buffer the host may still be asking the user about. The host calls `reload`
 when the root changes and it has already cleared that with the user. `TerminalGrid` re-roots the
-pane to the cell being zoomed, which is why the right pane is bound to a directory the user
-picked by looking at it.
+pane to the cell it is on — the one being zoomed, or on the tiled grid the tile whose menu opened
+it — which is why the right pane is bound to a directory the user picked by zooming a cell or
+opening the pane from it.
 
 ### The full screen takes its base from the URL
 

@@ -505,7 +505,6 @@ export const ja: Messages = {
   cellMenu: {
     history: "履歴",
     tools: "道具",
-    enlargeFirst: "セルを拡大すると横に開けます",
     canvasUnavailable: "このディレクトリでは描画用の MCP が無効です。ランチャーで Canvas を有効にして、このセルを再起動してください",
     items: {
       prompts: { label: "送ったプロンプト", detail: "このセッションで自分が打ち込んだ指示" },

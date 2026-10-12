@@ -90,7 +90,8 @@ export function cellShellEvents(emit: {
   return {
     ...toggleForwards(emit),
     close: () => emit("close"),
-    // The path menu's Browse files: the grid enlarges this cell and opens the pane beside it.
+    // The path menu's Browse files: the grid opens this cell's pane — beside it if it is enlarged,
+    // to the right of the grid if it is tiled.
     "open-files": () => emit("open-files"),
     move: (dir: -1 | 1) => emit("move", dir),
   };

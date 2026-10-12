@@ -2317,11 +2317,12 @@ describe("TerminalCell", () => {
     document.body.querySelector<HTMLButtonElement>('[data-testid="cell-pane-menu-timeline"]')?.click();
     await flushPromises();
     expect(w.findComponent({ name: "TimelineOverlay" }).props("open")).toBe(true);
+    w.unmount();
 
     const codex = mountCell("11111111-1111-1111-1111-111111111111", { initialCwd: "/home/me/proj", initialAgent: "codex" });
     await flushPromises();
-    // No timeline, and on a tile nothing else in the menu can open, so there is no menu at all.
-    expect(codex.find('[data-testid="cell-history-btn"]').exists()).toBe(false);
+    await codex.find('[data-testid="cell-history-btn"]').trigger("click");
+    expect(document.body.querySelector('[data-testid="cell-pane-menu-timeline"]')).toBeNull();
   });
 
   it("puts reorder first and expand beside close", async () => {
