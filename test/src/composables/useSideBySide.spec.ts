@@ -40,7 +40,7 @@ function setup(opts: { kind?: FilePreviewKind | null; preview?: boolean; top?: n
     defineComponent({
       setup() {
         const editorHost = ref<HTMLElement>();
-        holder.side = useSideBySide({ file, editorHost, preview });
+        holder.side = useSideBySide({ file, editorHost, preview, showCanvas: ref(false) });
         return () => h("div", { ref: editorHost }, [h("div", { class: "scroller" })]);
       },
     }),

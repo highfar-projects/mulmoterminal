@@ -1,8 +1,9 @@
 <script setup lang="ts">
 // The Files pane's Edit / Preview switch, and the side-by-side toggle beside it for Markdown (#2577).
+// In the Canvas view only the side-by-side toggle is offered: it puts the editor beside it (#3015).
 import { useI18n } from "vue-i18n";
 
-defineProps<{ showPreview: boolean; saving: boolean; canSideBySide: boolean; sideBySide: boolean }>();
+withDefaults(defineProps<{ showPreview: boolean; canPreview?: boolean; saving: boolean; canSideBySide: boolean; sideBySide: boolean }>(), { canPreview: true });
 const emit = defineEmits<{ togglePreview: []; toggleSideBySide: [] }>();
 const { t } = useI18n();
 const BUTTON =
@@ -10,7 +11,7 @@ const BUTTON =
 </script>
 
 <template>
-  <button type="button" :class="[BUTTON, 'bg-base text-secondary']" :disabled="saving" @click="emit('togglePreview')">
+  <button v-if="canPreview" type="button" :class="[BUTTON, 'bg-base text-secondary']" :disabled="saving" @click="emit('togglePreview')">
     {{ showPreview ? "Edit" : "Preview" }}
   </button>
   <button

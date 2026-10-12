@@ -57,7 +57,8 @@ describe("the Canvas button", () => {
     expect(btn(w).attributes("aria-pressed")).toBe("true");
     // The tree stays, and the editor-only controls go while the editor is not what is showing.
     expect(w.findAll('[data-testid="files-row"]')).toHaveLength(1);
-    expect(w.find('[data-testid="files-side-by-side"]').exists()).toBe(false);
+    // Edit/Preview step aside; side by side stays, since it puts the editor beside the view (#3015).
+    expect(w.findAll("button").some((b) => b.text() === "Preview")).toBe(false);
 
     await btn(w).trigger("click");
     await flushPromises();
@@ -261,6 +262,26 @@ describe("the Canvas button", () => {
     const w = mount(FilesPane, { props: { cwd: "/work/proj", canvasTarget: false, initialState }, global: CANVAS_STUB });
     await flushPromises();
     expect(w.findComponent({ name: "FilesCanvasView" }).exists()).toBe(false);
+  });
+
+  // #3015: side by side puts the editor on the left of whatever the right half is — Preview, or the
+  // Canvas view when it is on. Turning side by side off leaves the Canvas view alone.
+  it("puts the editor beside the Canvas view when side by side is on", async () => {
+    const w = await openRow("design.md", "/work/proj");
+    const editorShown = () => !(w.get(".files-editor").attributes("style") ?? "").includes("display: none");
+    const sideBySide = () => w.find('[data-testid="files-side-by-side"]');
+    await sideBySide().trigger("click");
+    await btn(w).trigger("click");
+    await flushPromises();
+    expect(w.findComponent({ name: "FilesCanvasView" }).exists()).toBe(true);
+    expect(editorShown()).toBe(true);
+    expect(sideBySide().attributes("aria-pressed")).toBe("true");
+    expect(w.findAll("button").some((b) => b.text() === "Preview" || b.text() === "Edit")).toBe(false);
+
+    await sideBySide().trigger("click");
+    await flushPromises();
+    expect(w.findComponent({ name: "FilesCanvasView" }).exists()).toBe(true);
+    expect(editorShown()).toBe(false);
   });
 
   // A story is built by the server, which can refuse with a sentence of its own (#1941).
