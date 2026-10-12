@@ -1115,16 +1115,23 @@ describe("file pane beside the enlarged cell", () => {
     });
 
     // The tiled grid is handed one page; a pane whose cell is on another has nothing to sit beside.
-    it("hides, still mounted, while its cell is off the page", async () => {
+    // ...and is not re-rooted while it is away: a missing cell has no directory, and reading the
+    // grid's default in its place would save the buffer and walk the tree off to the workspace.
+    it("hides, still mounted and still rooted, while its cell is off the page", async () => {
       const w = mountCockpit(tiles(), null, []);
       await press(w, 1, "open-files");
       const before = paneOf(w).element;
+      paneStub.flush.mockClear();
       await w.setProps({ cells: [cell(1, "s1", "/one")] });
       await flushPromises();
       expect(w.find(".zoom-main").element.parentElement?.className).toContain("hidden");
+      expect(paneOf(w).props("cwd")).toBe("/two");
       await w.setProps({ cells: tiles() });
       await flushPromises();
       expect(paneOf(w).element).toBe(before);
+      expect(paneOf(w).props("cwd")).toBe("/two");
+      expect(paneStub.flush).not.toHaveBeenCalled();
+      expect(paneStub.reload).not.toHaveBeenCalled();
     });
   });
 

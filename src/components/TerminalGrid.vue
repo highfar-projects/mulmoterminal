@@ -1113,7 +1113,9 @@ const paneCwd = ref<string | null>(null);
 watch(
   [paneTargetUid, () => cwdOf(paneTargetUid.value), rightPane],
   async ([uid, targetCwd]) => {
-    if (uid === null) return;
+    // A target that is not among the cells this grid was handed — a tiled pane's cell on another
+    // page — has no directory of its own, and `cwdOf` would answer the grid's default for it.
+    if (uid === null || cellOf(uid) === undefined) return;
     const sameCell = paneUid.value === uid;
     // Nothing moved: same cell, and it still reports the same directory.
     if (sameCell && paneCwd.value === targetCwd) return;
