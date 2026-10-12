@@ -160,6 +160,8 @@ export const tipsZhTW: Messages["tips"] = {
       ng: "將此項標記為 NG",
       note: "給代理的備註（選填）",
       send: "將結果作為下一則訊息傳送給代理",
+      sendLabel: "傳送",
+      footer: "結果會作為下一則訊息傳送給代理。",
     },
     canvas: {
       expand: "將畫布展開覆蓋終端機",

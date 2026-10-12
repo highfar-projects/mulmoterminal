@@ -160,6 +160,8 @@ export const tipsEn = {
       ng: "Mark this item NG",
       note: "Note for the agent (optional)",
       send: "Send the results to the agent as your next message",
+      sendLabel: "Send",
+      footer: "Results go to the agent as your next message.",
     },
     canvas: {
       expand: "Expand the canvas over the terminal",

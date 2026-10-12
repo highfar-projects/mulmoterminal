@@ -161,6 +161,8 @@ export const tipsKo: Messages["tips"] = {
       ng: "이 항목을 NG로 표시",
       note: "에이전트에게 남길 메모(선택)",
       send: "결과를 다음 메시지로 에이전트에게 보내기",
+      sendLabel: "보내기",
+      footer: "결과는 다음 메시지로 에이전트에게 전달됩니다.",
     },
     canvas: {
       expand: "캔버스를 터미널 위로 펼치기",

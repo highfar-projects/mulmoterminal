@@ -40,4 +40,26 @@ describe("createPaneCommandBox", () => {
     await box.hydrate("s2");
     expect(box.checks.value.get("s2")?.id).toBe("c9");
   });
+
+  // The read-back was asked for before the live check arrived; its older answer must not replace it.
+  it("keeps a live check that arrived while the read-back was in flight", async () => {
+    const pending: { resolve: (value: PaneCheck | null) => void }[] = [];
+    const box = createPaneCommandBox(() => new Promise((resolve) => pending.push({ resolve })));
+    const hydrating = box.hydrate("s1");
+    box.offer(check("s1", "c2"));
+    pending[0].resolve(check("s1", "c1"));
+    await hydrating;
+    expect(box.checks.value.get("s1")?.id).toBe("c2");
+  });
+
+  it("does not bring back a check closed while the read-back was in flight", async () => {
+    const pending: { resolve: (value: PaneCheck | null) => void }[] = [];
+    const box = createPaneCommandBox(() => new Promise((resolve) => pending.push({ resolve })));
+    box.offer(check("s1", "c1"));
+    const hydrating = box.hydrate("s1");
+    box.close("s1");
+    pending[0].resolve(check("s1", "c0"));
+    await hydrating;
+    expect(box.checks.value.has("s1")).toBe(false);
+  });
 });

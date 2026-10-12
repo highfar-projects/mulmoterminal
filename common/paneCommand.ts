@@ -107,8 +107,13 @@ export interface CheckAnswer {
 }
 
 /** What is typed into the terminal when the human has answered every item, read by the agent as the
- *  user's next message. ONE line: a newline typed into a TUI is Enter, and would send it half-written. */
-const oneLine = (value: string): string => value.replace(/\s+/g, " ").trim();
+ *  user's next message. ONE line: a newline typed into a TUI is Enter, and would send it half-written;
+ *  and no control bytes, since an ESC sequence typed into the PTY is a keystroke, not text. */
+const oneLine = (value: string): string =>
+  value
+    .replace(/[\p{Cc}\p{Cf}]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
 export function checkSummary(check: Pick<PaneCheck, "title" | "items">, answers: readonly CheckAnswer[]): string {
   const lines = check.items.map((item, index) => {

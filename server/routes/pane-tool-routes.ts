@@ -9,6 +9,7 @@ import { SESSION_HEADER, sessionIdFromHeader } from "../backends/files/presentPa
 import { cwdForSessionHydrated } from "../session/session-cwd.js";
 import { realpathOr, resolveContained } from "../files/pathContainment.js";
 import { isRecord } from "../../common/isRecord.js";
+import { SESSION_ID_RE } from "../config/env.js";
 import { PANE_COMMAND_CHANNEL, parseCheckRequest, parseTarget, type PaneCheck, type PaneTarget } from "../../common/paneCommand.js";
 
 export interface PaneToolRouteDeps {
@@ -73,14 +74,16 @@ function mountRequestCheck(app: Express, deps: PaneToolRouteDeps): void {
 
 function mountOpenCheck(app: Express): void {
   app.get("/api/pane/check/:sessionId", (req, res) => {
-    res.json({ check: openChecks.get(req.params.sessionId) ?? null });
+    if (!SESSION_ID_RE.test(req.params.sessionId)) return res.status(400).json({ error: "invalid sessionId" });
+    return res.json({ check: openChecks.get(req.params.sessionId) ?? null });
   });
   // Answered or put away in the browser. Only the check that was asked about is dropped: a newer one
   // published meanwhile stays open.
   app.post("/api/pane/check/:sessionId/close", (req, res) => {
+    if (!SESSION_ID_RE.test(req.params.sessionId)) return res.status(400).json({ error: "invalid sessionId" });
     const id = isRecord(req.body) && typeof req.body.id === "string" ? req.body.id : null;
     if (id !== null && openChecks.get(req.params.sessionId)?.id === id) openChecks.delete(req.params.sessionId);
-    res.json({ ok: true });
+    return res.json({ ok: true });
   });
 }
 

@@ -133,7 +133,7 @@ const ICON_BUTTON = "cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 
     </div>
 
     <div v-show="!folded" class="flex items-center justify-between gap-2 border-t border-border bg-panel px-4 py-2 font-sans text-[12px] text-dim">
-      <span>Results go to the agent as your next message.</span>
+      <span>{{ t("tips.panes.checkItems.footer") }}</span>
       <button
         type="button"
         data-testid="check-send"
@@ -142,7 +142,7 @@ const ICON_BUTTON = "cursor-pointer rounded border-0 bg-transparent px-1 py-0.5 
         :data-tip="t('tips.panes.checkItems.send')"
         @click="send"
       >
-        Send
+        {{ t("tips.panes.checkItems.sendLabel") }}
       </button>
     </div>
   </section>

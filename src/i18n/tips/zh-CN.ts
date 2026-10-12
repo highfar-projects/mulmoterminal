@@ -160,6 +160,8 @@ export const tipsZhCN: Messages["tips"] = {
       ng: "将此项标记为 NG",
       note: "给智能体的备注（可选）",
       send: "将结果作为下一条消息发送给智能体",
+      sendLabel: "发送",
+      footer: "结果将作为下一条消息发送给智能体。",
     },
     canvas: {
       expand: "将画布展开覆盖终端",

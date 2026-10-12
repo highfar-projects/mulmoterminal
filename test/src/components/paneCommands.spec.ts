@@ -119,6 +119,17 @@ describe("an agent's commands to its cell's right pane", () => {
     expect(files.showFile).toHaveBeenCalledTimes(1);
   });
 
+  // Two shows in a row: the pane ends on the second, not on whichever finished its await last.
+  it("shows only the newest of two files sent back to back", async () => {
+    mountGrid([cell(1, "s1")], 1);
+    await flushPromises();
+    publish(show("s1"));
+    publish({ ...show("s1"), path: "docs/b.md" });
+    await flushPromises();
+    expect(files.showFile).toHaveBeenCalledTimes(1);
+    expect(files.showFile).toHaveBeenCalledWith(expect.objectContaining({ path: "docs/b.md" }));
+  });
+
   // The path is relative to the agent's directory: a pane rooted elsewhere must not open a file of the
   // same name there.
   it("does not open the file in a pane rooted in another directory", async () => {

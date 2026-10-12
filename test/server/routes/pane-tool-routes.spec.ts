@@ -90,6 +90,11 @@ describe("pane tool routes", () => {
     expect((await call("/api/pane/check/11111111-2222-4333-8444-555555555555")).body.check).toBeNull();
   });
 
+  it("answers 400 for a session id that is not one", async () => {
+    expect((await call("/api/pane/check/not-a-session")).status).toBe(400);
+    expect((await call("/api/pane/check/not-a-session/close", jsonPost({ id: "x" }))).status).toBe(400);
+  });
+
   it("refuses a whole check when one item points outside the directory", async () => {
     const res = await call("/api/plugin/requestCheck", jsonPost({ title: "T", items: [{ label: "ok" }, { label: "bad", path: "../secret.txt" }] }, HEADER));
     expect(res.body.message).toMatch(/is not inside your working directory/);

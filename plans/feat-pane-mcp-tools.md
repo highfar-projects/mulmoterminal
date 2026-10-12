@@ -25,8 +25,10 @@
   `POST /api/pane/check/:sessionId/close`.
 - Browser: `TerminalGrid` listens and applies a command to the enlarged cell or keeps it for when that
   cell is enlarged; `GridView` enlarges the cell when nothing is enlarged. `FilesPane.showFile(path,
-  { view, line })` (logic in `useShowFile`) opens a file as editor / preview / canvas / split. A new right
-  pane `check` (`CheckPane.vue`) lists the items with Open, OK / NG and a note; Send types the summary.
+  { view, line })` (logic in `useShowFile`) opens a file as editor / preview / canvas / split. A floating
+  card over the enlarged cell (`CheckCard.vue`, not a right pane, so opening an item's file does not
+  replace it) lists the items with Open, OK / NG and a note; Send types the summary as one line with
+  control bytes removed.
 
 ## Out of scope
 

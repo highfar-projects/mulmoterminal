@@ -460,9 +460,12 @@ async function adoptStoredCard(): Promise<void> {
 // The flush condition is narrower than openCanvasFor's only for `files`, which re-roots a files pane
 // on ANOTHER cell and leaves one on this cell alone. Any other pane replaces it outright — on this
 // cell too, since a collapsed zoom leaves the files pane mounted, hidden, on the cell it was on.
-async function openPaneFor(uid: number, pane: RightPane): Promise<void> {
+// `stillWanted` is asked again after the save, which awaits: a caller that did not come from a click
+// (an agent's showInPane) must not take the zoom back from a cell the user moved to meanwhile.
+async function openPaneFor(uid: number, pane: RightPane, stillWanted: () => boolean = () => true): Promise<void> {
   const filesUnmounts = filesOpen.value && (paneUid.value !== uid || pane !== "files");
   if (filesUnmounts && (await filesPane.value?.flush()) === false) return;
+  if (!stillWanted()) return;
   if (props.expandedUid !== uid) emit("toggle-expand", uid);
   setRightPane(pane, uid);
 }
@@ -717,12 +720,15 @@ const expandedCheck = computed(() => (expandedSessionId.value ? (paneCommands.ch
 /** A file in the Files pane of the enlarged cell, in the view the agent asked for. Through
  *  openPaneFor, so a buffer open there is saved first and a save that fails keeps the pane put. A pane
  *  rooted somewhere else than the agent's directory is left alone: the path is relative to that. */
+let latestShow = 0;
 async function showInFilesPane(target: PaneTarget, cwd: string): Promise<void> {
   const uid = props.expandedUid;
   if (uid === null) return;
-  await openPaneFor(uid, "files");
+  const show = ++latestShow;
+  const stillWanted = (): boolean => show === latestShow && props.expandedUid === uid;
+  await openPaneFor(uid, "files", stillWanted);
   await nextTick();
-  if (!filesOpen.value || dirPathKey(paneCwd.value ?? "") !== dirPathKey(cwd)) return;
+  if (!stillWanted() || !filesOpen.value || dirPathKey(paneCwd.value ?? "") !== dirPathKey(cwd)) return;
   await filesPane.value?.showFile(target);
 }
 

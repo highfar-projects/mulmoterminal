@@ -162,6 +162,8 @@ export const tipsJa: Messages["tips"] = {
       ng: "この項目を NG にする",
       note: "エージェントへのメモ（任意）",
       send: "結果を次のメッセージとしてエージェントに送る",
+      sendLabel: "送る",
+      footer: "結果は次のメッセージとしてエージェントに届きます。",
     },
     canvas: {
       expand: "キャンバスをターミナルの上に広げる",
