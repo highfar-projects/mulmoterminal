@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { checkSummary, isPaneCommand, parseCheckRequest, parseTarget, MAX_CHECK_ITEMS } from "../../common/paneCommand";
+import { checkClosedNotice, checkSummary, isPaneCommand, parseCheckRequest, parseTarget, MAX_CHECK_ITEMS } from "../../common/paneCommand";
 
 describe("parseTarget", () => {
   it("defaults the view to the editor and keeps a positive whole line", () => {
@@ -92,5 +92,12 @@ describe("checkSummary", () => {
     const summary = checkSummary(hostile, [{ ok: false, note: "x\u0007\u001b]0;y\u0007" }]);
     expect(summary).not.toMatch(/\p{Cc}/u);
     expect(summary).toBe('Check results for "T [2J" (1 NG): 1. NG: a 31mb — x ]0;y');
+  });
+});
+
+describe("checkClosedNotice", () => {
+  it("names the check on one line, without control bytes", () => {
+    expect(checkClosedNotice({ title: "Maths" })).toBe('Check "Maths" was closed without answers.');
+    expect(checkClosedNotice({ title: "a\nb\u001b[2J" })).toBe('Check "a b [2J" was closed without answers.');
   });
 });

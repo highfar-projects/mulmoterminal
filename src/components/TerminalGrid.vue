@@ -63,7 +63,7 @@ import { hasCanvasGroup, hasCollectionsGroup } from "../../common/toolGroups";
 import { isRightPane, type RightPane } from "./gridCell";
 import QuestionPane from "./QuestionPane.vue";
 import { ASK_QUESTION_CHANNEL, isAskQuestionDone, isAskQuestionEvent } from "../../common/askQuestion";
-import { PANE_COMMAND_CHANNEL, checkSummary, isPaneCommand, type CheckAnswer, type PaneTarget } from "../../common/paneCommand";
+import { PANE_COMMAND_CHANNEL, checkClosedNotice, checkSummary, isPaneCommand, type CheckAnswer, type PaneTarget } from "../../common/paneCommand";
 import { dirPathKey } from "../../common/dirPathKey";
 import { createPaneCommandBox } from "../composables/paneCommandBox";
 import { fetchOpenCheck, postCheckClosed } from "../composables/openCheck";
@@ -757,6 +757,14 @@ const unsubscribeCheckReconnect = onPubSubReconnect(() => {
   if (expandedSessionId.value) void paneCommands.hydrate(expandedSessionId.value);
 });
 onBeforeUnmount(() => unsubscribeCheckReconnect());
+
+/** The card's close button: the agent is told, since it was asked to wait for the results. Closed even
+ *  when the terminal cannot be typed into — putting it away is what the user asked for. */
+function dismissExpandedCheck(): void {
+  const check = expandedCheck.value;
+  if (check) sendToExpandedCell(checkClosedNotice(check));
+  closeExpandedCheck();
+}
 
 function closeExpandedCheck(): void {
   const sessionId = expandedSessionId.value;
@@ -1828,7 +1836,7 @@ function onRosterDragLeave(event: DragEvent) {
         :check="expandedCheck"
         @open="(item) => item.target && expandedCheck && showInFilesPane(item.target, expandedCheck.cwd)"
         @send="sendCheck"
-        @close="closeExpandedCheck"
+        @close="dismissExpandedCheck"
       />
     </div>
     <!-- Enlarged cell / thumbnail strip. The stage is a COLUMN in strip mode, so this separator

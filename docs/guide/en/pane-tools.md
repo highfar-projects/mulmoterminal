@@ -90,8 +90,9 @@ Check results for "Design notes" (1 NG): 1. OK: The diagram is drawn 2. NG: The 
 Other things you can do with the card:
 
 - **Fold** it (the chevron) to see the terminal underneath. Your answers stay.
-- **Close** it (the cross) to put it away without sending. The agent gets nothing, so tell it yourself
-  if you want it to stop waiting.
+- **Close** it (the cross) to put it away without answering. The agent is told in one line,
+  `Check "<title>" was closed without answers.`, so it does not keep waiting, and it is told not to post
+  the checklist again unless you ask.
 - A newer checklist from the same agent replaces the old one.
 - Reload the page, or lose the connection, and the card comes back with the same items.
 

@@ -1,7 +1,7 @@
 // The tools that drive the right pane of the cell that calls them (#3022). Host tools, because they
 // need the session the broker names and the pub/sub the grid listens on (routes/pane-tool-routes.ts).
 import type { ToolDefinition } from "gui-chat-protocol";
-import { MAX_CHECK_ITEMS, PANE_VIEWS } from "../../../common/paneCommand.js";
+import { MAX_CHECK_ITEMS, PANE_VIEWS, checkClosedNotice } from "../../../common/paneCommand.js";
 
 const VIEW_DESCRIPTION =
   "How to show it: `editor` (the source, default), `preview` (rendered Markdown / HTML / CSV), `canvas` (the plugin view the Canvas uses — Markdown, HTML, MulmoScript, ShapeScript), `split` (a Markdown file's editor beside its Canvas view).";
@@ -37,7 +37,8 @@ export const REQUEST_CHECK: ToolDefinition = {
     "Use `requestCheck` when something you built needs a HUMAN to confirm it works — a UI change, a rendered output, behaviour you could not observe yourself. " +
     "Write each item as one concrete thing to look at and what 'right' means (e.g. 'The formula is drawn, not shown as $…$'), and give it the file to open (`path`, `view`, `line`) so the user gets there in one click. " +
     `At most ${MAX_CHECK_ITEMS} items. ` +
-    "Do NOT wait, poll or ask again after calling it: finish your turn. When the user has answered every item, their results are typed in as their next message — one entry per item, `OK` or `NG` with their note. Fix each NG, then call `requestCheck` again for what you changed.",
+    "Do NOT wait, poll or ask again after calling it: finish your turn. When the user has answered every item, their results are typed in as their next message — one entry per item, `OK` or `NG` with their note. Fix each NG, then call `requestCheck` again for what you changed. " +
+    `If the user closes the checklist instead, the message is \`${checkClosedNotice({ title: "<title>" })}\`: they chose not to answer, so do not post it again unless they ask.`,
   parameters: {
     type: "object",
     properties: {
