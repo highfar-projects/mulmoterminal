@@ -898,7 +898,7 @@ function insertIntoPaneCell(text: string): void {
   conn.insertText(`cell-${uid}`, text);
 }
 
-// Does the enlarged cell's session have the drawing tools? Only the server knows: a grid cell
+// Does the pane cell's session have the drawing tools? Only the server knows: a grid cell
 // reaches them through the user's own per-folder MCP config, and the server learns which groups
 // a session has from the URLs it connects to.
 //
@@ -1800,7 +1800,7 @@ function onRosterDragLeave(event: DragEvent) {
             <span class="truncate font-mono text-[11px] text-muted" :data-tip="paneCwd ?? ''">{{ formatCwd(paneCwd, home) }}</span>
           </template>
         </FilesPane>
-        <!-- Canvas and Tools follow the enlarged cell's SESSION, not its directory, and neither
+        <!-- Canvas and Tools follow the pane cell's SESSION, not its directory, and neither
              holds an unsaved buffer — so unlike the files pane they re-root unconditionally and
              need none of its decline-a-re-root machinery. -->
         <GuiPanel
@@ -1824,7 +1824,7 @@ function onRosterDragLeave(event: DragEvent) {
           @close="setRightPane(null, paneUid)"
         />
         <!-- What this session was ASKED for, against the tools pane's what it then ran. Follows
-             the enlarged cell's session like those two, and needs its AGENT as well: the prompts
+             the pane cell's session like those two, and needs its AGENT as well: the prompts
              live in claude's own history file or in codex's rollout, and only the cell knows
              which (#1748). -->
         <PromptsPane
@@ -1839,7 +1839,7 @@ function onRosterDragLeave(event: DragEvent) {
           @close="setRightPane(null, paneUid)"
         />
         <!-- The conversation itself — what the prompts and tools panes each show one half of.
-             Follows the enlarged cell's session like they do, and needs no AGENT: the reader asks
+             Follows the pane cell's session like they do, and needs no AGENT: the reader asks
              each agent's log whether it HAS a file for this session rather than being told which to
              open, because a restarted claude cell reports its agent as `shell`
              (server/session/transcript/transcript-view-read.ts). -->

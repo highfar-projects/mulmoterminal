@@ -1399,8 +1399,8 @@ goes to the tab that file already has. A link that climbs above the pane's folde
 the pane says so; an external link opens in a new browser tab, and a `#heading` link scrolls the
 document.
 
-The toggle is not the only way in: while a cell is enlarged, **clicking a file path the agent
-printed** opens it here too, rather than in a new tab or full-screen — see
+The toggle is not the only way in: while a cell is enlarged, or this pane is open beside the tiled
+grid, **clicking a file path the agent printed** opens it here too, rather than in a new tab or full-screen — see
 [Clicking a file path](#clicking-a-file-path).
 
 **Open a file by name instead of walking the tree.** The pane's header has a **search** button

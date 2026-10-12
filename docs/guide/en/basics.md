@@ -110,7 +110,7 @@ cell it opens is a persistent terminal (running / exited), not an agent session.
 The reference point is the **workspace** — the server's default working directory (`CLAUDE_CWD`).
 It is settled in this order: `--cwd`, then the `CLAUDE_CWD` environment variable, then the directory you ran `npx mulmoterminal` in.
 When you lose track of which one it is, the `Workspace: …` line printed at startup is the answer.
-Collections, Wiki and Accounting read and write there whichever cell you are in (only the Files pane beside an enlarged cell follows that cell's directory).
+Collections, Wiki and Accounting read and write there whichever cell you are in (only the Files pane follows the directory of the cell it belongs to).
 
 **The directory decides WHICH tools a cell gets; the agent decides whether the workspace rule
 applies to it at all.** How an agent can be handed tools is a property of its CLI, not a setting —

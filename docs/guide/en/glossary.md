@@ -79,7 +79,7 @@ where all the others stand.
 
 ## GUI panel (Canvas)
 
-The pane beside a **zoomed cell**, where that agent's tool calls render as diagrams, forms, images,
+The pane beside a **zoomed cell** (or to the right of the tiled grid, opened from a tile's menu), where that agent's tool calls render as diagrams, forms, images,
 documents, HTML and slides rather than printed text.
 
 Until 3.x it belonged to a separate *single view* at `/chat`. That view was removed in 4.0.0 and the
