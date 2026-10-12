@@ -1432,6 +1432,23 @@ describe("file pane width restored from storage", () => {
     await flushPromises();
     expect(w.findComponent({ name: "FilesPane" }).attributes("style")).toContain("400px");
   });
+  // The width is shared by every pane, so the clamp is too — not the files pane's alone.
+  it("clamps any pane, not only the files pane", async () => {
+    localStorage.setItem("pane_open_by_session", JSON.stringify({ s1: "prompts" }));
+    localStorage.setItem("files_pane_width", "900");
+    const w = mountCockpit([cell(1, "s1", "/proj"), cell(2)], 1, []);
+    await flushPromises();
+    expect(w.findComponent({ name: "PromptsPane" }).attributes("style")).toContain(`${PANE_ROOM - 320}px`);
+  });
+
+  // Beside the tiles (#3027) the pane divides the whole stage with them.
+  it("clamps a pane opened beside the tiled grid against the stage", async () => {
+    localStorage.setItem("files_pane_width", "2000");
+    const w = mountCockpit([cell(1, "s1", "/proj"), cell(2)], null, []);
+    await w.findAllComponents({ name: "TerminalCell" })[0].vm.$emit("toggle-prompts");
+    await flushPromises();
+    expect(w.findComponent({ name: "PromptsPane" }).attributes("style")).toContain(`${STAGE - (SEPARATOR + 1) - 320}px`);
+  });
 });
 
 // A card seeded into the Canvas of the cell that is already enlarged (#1965).

@@ -1206,14 +1206,16 @@ function onSplitterKey(e: KeyboardEvent): void {
   remember(PANE_WIDTH_KEY, String(paneWidth.value));
 }
 // A window that shrank below the two floors would otherwise leave the pane wider than the row.
-const reclampPane = () => filesOpen.value && setPaneWidth(paneWidth.value);
+// Every pane shares the one width, so the clamp is not the files pane's alone.
+const paneOpen = computed(() => rightPane.value !== null);
+const reclampPane = () => paneOpen.value && setPaneWidth(paneWidth.value);
 onMounted(() => window.addEventListener("resize", reclampPane));
 onBeforeUnmount(() => window.removeEventListener("resize", reclampPane));
 
 // A width restored from storage was clamped against WHATEVER row existed when it was stored —
 // a wider window, or the other zoom mode. Re-clamp once the row is actually on screen, or a
 // remembered 900px opens against a 1000px row and leaves the terminal 100px wide.
-watch([filesOpen, zoomed, tiledPane, () => props.listMode], async ([open, isZoomed, isTiled]) => {
+watch([paneOpen, zoomed, tiledPane, () => props.listMode], async ([open, isZoomed, isTiled]) => {
   if (!open || !(isZoomed || isTiled)) return;
   await nextTick();
   setPaneWidth(paneWidth.value);
