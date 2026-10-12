@@ -178,7 +178,8 @@ describe("an agent's commands to its cell's right pane", () => {
     expect(posts).toEqual([]);
   });
 
-  it("puts a checklist away without sending, and does not bring it back", async () => {
+  // The agent was told to wait for the results, so closing the card tells it there will be none.
+  it("puts a checklist away, tells the agent, and does not bring it back", async () => {
     const w = mountGrid([cell(1, "s1")], 1);
     await flushPromises();
     publish(check("s1"));
@@ -186,9 +187,33 @@ describe("an agent's commands to its cell's right pane", () => {
     await w.find('[data-testid="check-close-btn"]').trigger("click");
     await flushPromises();
     expect(w.find('[data-testid="check-card"]').exists()).toBe(false);
-    expect(typed.submitText).not.toHaveBeenCalled();
+    expect(typed.submitText).toHaveBeenCalledTimes(1);
+    expect(typed.submitText).toHaveBeenCalledWith("cell-1", 'Check "Maths" was closed without answers.');
+    expect(posts).toContain('/api/pane/check/s1/close {"id":"c-s1"}');
     publish(check("s1"));
     await flushPromises();
     expect(w.find('[data-testid="check-card"]').exists()).toBe(false);
+  });
+
+  it("closes the checklist even when the terminal cannot be typed into", async () => {
+    typed.submitText.mockReturnValueOnce(false);
+    const w = mountGrid([cell(1, "s1")], 1);
+    await flushPromises();
+    publish(check("s1"));
+    await flushPromises();
+    await w.find('[data-testid="check-close-btn"]').trigger("click");
+    await flushPromises();
+    expect(w.find('[data-testid="check-card"]').exists()).toBe(false);
+    expect(posts).toContain('/api/pane/check/s1/close {"id":"c-s1"}');
+  });
+
+  // Only the close button speaks: a check replaced by a newer one types nothing.
+  it("types nothing when a newer checklist replaces the open one", async () => {
+    mountGrid([cell(1, "s1")], 1);
+    await flushPromises();
+    publish(check("s1"));
+    publish({ ...check("s1"), id: "c-newer" });
+    await flushPromises();
+    expect(typed.submitText).not.toHaveBeenCalled();
   });
 });

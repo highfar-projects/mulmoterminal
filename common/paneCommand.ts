@@ -127,3 +127,7 @@ export function checkSummary(check: Pick<PaneCheck, "title" | "items">, answers:
   const head = `Check results for "${oneLine(check.title)}" (${tally}):`;
   return [head, ...lines].join(" ");
 }
+
+/** Typed in when the user puts the card away unanswered, so an agent told to wait for the results is
+ *  not left waiting for a message that will never come. */
+export const checkClosedNotice = (check: Pick<PaneCheck, "title">): string => `Check "${oneLine(check.title)}" was closed without answers.`;
