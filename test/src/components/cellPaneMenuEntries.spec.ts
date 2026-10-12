@@ -3,7 +3,6 @@ import { hasChoice, historyEntries, toolEntries, type CellPaneMenuState } from "
 
 const t = (key: string) => key;
 const state = (over: Partial<CellPaneMenuState> = {}): CellPaneMenuState => ({
-  expanded: true,
   rightPane: null,
   canvasAvailable: true,
   collectionsAvailable: false,
@@ -20,15 +19,16 @@ describe("historyEntries", () => {
     expect(ids(historyEntries(state({ timelineAvailable: true }), t))).toEqual(["prompts", "transcript", "timeline"]);
   });
 
-  // Panes need the enlarged cell's room; the timeline is an overlay and opens from a tile.
-  it("disables the panes on a tile, saying why, and keeps the timeline", () => {
-    const entries = historyEntries(state({ expanded: false, timelineAvailable: true }), t);
+  // #3027: a pane opens beside the tiles too, so a tile's panes are as pickable as the enlarged
+  // cell's, each with its own line.
+  it("never disables a pane", () => {
+    const entries = historyEntries(state({ timelineAvailable: true }), t);
     expect(entries.map((entry) => [entry.id, entry.disabled])).toEqual([
-      ["prompts", true],
-      ["transcript", true],
+      ["prompts", false],
+      ["transcript", false],
       ["timeline", false],
     ]);
-    expect(entries[0].detail).toBe("cellMenu.enlargeFirst");
+    expect(entries[0].detail).toBe("cellMenu.items.prompts.detail");
   });
 
   it("checks the pane that is open, and never the timeline", () => {
@@ -71,14 +71,6 @@ describe("the restart entry", () => {
     expect(entries[2].checked).toBeUndefined();
   });
 
-  // An action, not a view: a tile has no room for the panes but can still restart.
-  it("stays pickable on a tile, where it is the only choice", () => {
-    const entries = toolEntries(state({ expanded: false, restartAvailable: true }), t);
-    expect(entries.filter((entry) => !entry.disabled).map((entry) => entry.id)).toEqual(["restart"]);
-    expect(hasChoice(entries)).toBe(true);
-    expect(hasChoice(toolEntries(state({ expanded: false }), t))).toBe(false);
-  });
-
   it("is absent without an agent to restart", () => {
     expect(ids(toolEntries(state(), t))).not.toContain("restart");
   });
@@ -100,11 +92,6 @@ describe("the talk entry", () => {
     expect(entries[2].separated).toBe(true);
   });
 
-  it("stays pickable on a tile", () => {
-    const entries = toolEntries(state({ expanded: false, talkAvailable: true }), t);
-    expect(entries.filter((entry) => !entry.disabled).map((entry) => entry.id)).toEqual(["talk"]);
-  });
-
   it("is absent with no other terminal", () => {
     expect(ids(toolEntries(state({ restartAvailable: true }), t))).not.toContain("talk");
   });
@@ -112,8 +99,9 @@ describe("the talk entry", () => {
 
 describe("hasChoice", () => {
   it("is false only when every entry is disabled", () => {
-    expect(hasChoice(historyEntries(state({ expanded: false }), t))).toBe(false);
-    expect(hasChoice(historyEntries(state({ expanded: false, timelineAvailable: true }), t))).toBe(true);
+    const canvasOnly = toolEntries(state({ canvasAvailable: false }), t).filter((entry) => entry.id === "canvas");
+    expect(hasChoice(canvasOnly)).toBe(false);
+    expect(hasChoice(historyEntries(state(), t))).toBe(true);
     expect(hasChoice([])).toBe(false);
   });
 });

@@ -489,7 +489,6 @@ export const zhCN: Messages = {
   cellMenu: {
     history: "历史",
     tools: "工具",
-    enlargeFirst: "放大单元格后可在旁边打开",
     canvasUnavailable: "此目录未启用渲染 MCP。请在启动器中打开 Canvas，然后重启此单元格",
     items: {
       prompts: { label: "发送的提示", detail: "本会话中你输入的指令" },

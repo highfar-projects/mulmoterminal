@@ -94,11 +94,10 @@ describe("the history and tools menus", () => {
   });
 
   // On a tile the panes have no room; only the timeline (an overlay) can open there.
-  it("offers each menu on a tile only when it holds something a tile can do", () => {
-    expect(mountAt({ expanded: false }).find('[data-testid="cell-history-btn"]').exists()).toBe(false);
-    expect(mountAt({ expanded: false, timelineAvailable: true }).find('[data-testid="cell-history-btn"]').exists()).toBe(true);
-    expect(mountAt({ expanded: false }).find('[data-testid="cell-tools-btn"]').exists()).toBe(false);
-    expect(mountAt({ expanded: false, restartAvailable: true }).find('[data-testid="cell-tools-btn"]').exists()).toBe(true);
+  // #3027: a pane opens beside the tiles too, so a tile has both menus with nothing else in them.
+  it("offers both menus on a tile", () => {
+    expect(mountAt({ expanded: false }).find('[data-testid="cell-history-btn"]').exists()).toBe(true);
+    expect(mountAt({ expanded: false }).find('[data-testid="cell-tools-btn"]').exists()).toBe(true);
   });
 
   it("maps each pick to the event its old button raised", async () => {

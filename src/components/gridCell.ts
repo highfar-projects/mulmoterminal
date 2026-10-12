@@ -39,12 +39,15 @@ export interface GridCellProps {
   // Which side pane is showing, so each toggle can read as pressed without one boolean per pane
   // that could disagree. Grid state, not the cell's: only the expanded cell renders the toggles.
   rightPane?: RightPane | null;
-  // Whether the ENLARGED cell's session has the drawing tools at all — i.e. whether its
-  // directory registered the `render` MCP group. False leaves the Canvas button in place but
-  // DISABLED: the pane would open empty, and a button that explains why beats one that isn't
-  // there to ask about.
+  // Whether THIS cell's pane is the one on screen — beside the enlarged cell, or beside the tiles
+  // (#3027). What it draws there has been seen.
+  paneShown?: boolean;
+  // Whether this cell's session has the drawing tools at all — i.e. whether its directory
+  // registered the `render` MCP group. Known only for the cell the pane answers for; true on any
+  // other. False leaves the Canvas button in place but DISABLED: the pane would open empty, and a
+  // button that explains why beats one that isn't there to ask about.
   canvasAvailable?: boolean;
-  // Whether the ENLARGED cell's directory registered the `data` MCP group — the one
+  // Whether this cell's directory registered the `data` MCP group — the one
   // manageCollection belongs to. False HIDES the Collections button rather than disabling it:
   // a directory with no collection tools is not a place where collections are a thing, so there
   // is nothing for a disabled button to explain. See TerminalGrid's `collectionsOpenable` for

@@ -1040,8 +1040,9 @@ describe("file pane beside the enlarged cell", () => {
     expect(paneOf(w).exists()).toBe(false);
   });
 
-  // Collapsing the zoom only HIDES the row; the pane stays mounted, so an unsaved buffer is
-  // still there when the cell is enlarged again. (Codex read this as an unguarded discard.)
+  // Collapsing the zoom moves the row beside the tiles (#3027); the pane stays mounted, so an
+  // unsaved buffer is still there when the cell is enlarged again. (Codex read the older hide as an
+  // unguarded discard.)
   it("keeps the pane and its buffer mounted while the zoom is collapsed", async () => {
     const w = mountCockpit([cell(1, "s1", "/proj"), cell(2)], 1, []);
     await openPane(w);
@@ -1050,11 +1051,81 @@ describe("file pane beside the enlarged cell", () => {
     await w.setProps({ expandedUid: null });
     await flushPromises();
     expect(paneOf(w).exists()).toBe(true);
-    expect(w.find(".zoom-main").element.parentElement?.className).toContain("hidden");
+    expect(paneOf(w).element).toBe(before);
+    expect(paneStub.flush).not.toHaveBeenCalled();
+    expect(w.find(".zoom-main").element.parentElement?.className).toContain("order-last");
 
     await w.setProps({ expandedUid: 1 });
     await flushPromises();
     expect(paneOf(w).element).toBe(before); // same instance, never torn down
+  });
+
+  describe("beside the tiled grid (#3027)", () => {
+    const tiles = () => [cell(1, "s1", "/one"), cell(2, "s2", "/two")];
+    const press = async (w: ReturnType<typeof mount>, index: number, event: string) => {
+      await w.findAllComponents({ name: "TerminalCell" })[index].vm.$emit(event);
+      await flushPromises();
+    };
+
+    it("opens on the cell whose menu asked, enlarging nothing", async () => {
+      const w = mountCockpit(tiles(), null, []);
+      await press(w, 1, "toggle-prompts");
+      expect(w.emitted("toggle-expand")).toBeUndefined();
+      expect(w.findComponent({ name: "PromptsPane" }).props("sessionId")).toBe("s2");
+      expect(w.find(".stage").classes()).toContain("flex-row!");
+    });
+
+    it("closes from the same cell's menu, and the row hides with it", async () => {
+      const w = mountCockpit(tiles(), null, []);
+      await press(w, 0, "toggle-prompts");
+      await press(w, 0, "toggle-prompts");
+      expect(w.findComponent({ name: "PromptsPane" }).exists()).toBe(false);
+      expect(w.find(".zoom-main").element.parentElement?.className).toContain("hidden");
+      expect(w.find(".stage").classes()).not.toContain("flex-row!");
+    });
+
+    // Fixed to the cell that opened it: focus moving across the tiles is not a request to move it.
+    it("stays on its cell when another tile takes focus", async () => {
+      const w = mountCockpit(tiles(), null, []);
+      await press(w, 0, "toggle-prompts");
+      w.findAll(".stub-cell")[1].element.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+      await flushPromises();
+      expect(w.findComponent({ name: "PromptsPane" }).props("sessionId")).toBe("s1");
+    });
+
+    it("moves to another cell when that cell's menu asks", async () => {
+      const w = mountCockpit(tiles(), null, []);
+      await press(w, 0, "toggle-prompts");
+      await press(w, 1, "toggle-prompts");
+      expect(w.findComponent({ name: "PromptsPane" }).props("sessionId")).toBe("s2");
+    });
+
+    it("roots a files pane opened from a tile at that tile's directory", async () => {
+      const w = mountCockpit(tiles(), null, []);
+      await press(w, 1, "open-files");
+      expect(w.emitted("toggle-expand")).toBeUndefined();
+      expect(paneOf(w).props("cwd")).toBe("/two");
+    });
+
+    // Only beside an enlarged terminal: covering every tile is not a view of the grid any more.
+    it("never takes the full width, even for the conversation", async () => {
+      const w = mountCockpit(tiles(), null, []);
+      await press(w, 0, "toggle-transcript");
+      expect(w.find(".zoom-main").element.parentElement?.className).not.toContain("pane-full");
+    });
+
+    // The tiled grid is handed one page; a pane whose cell is on another has nothing to sit beside.
+    it("hides, still mounted, while its cell is off the page", async () => {
+      const w = mountCockpit(tiles(), null, []);
+      await press(w, 1, "open-files");
+      const before = paneOf(w).element;
+      await w.setProps({ cells: [cell(1, "s1", "/one")] });
+      await flushPromises();
+      expect(w.find(".zoom-main").element.parentElement?.className).toContain("hidden");
+      await w.setProps({ cells: tiles() });
+      await flushPromises();
+      expect(paneOf(w).element).toBe(before);
+    });
   });
 
   // Coming back to a terminal should not mean opening the same three directories again. Only
@@ -1260,9 +1331,9 @@ describe("file pane beside the enlarged cell", () => {
       expect(w.findComponent({ name: "GuiPanel" }).exists()).toBe(false);
     });
 
-    // A pane asked for while the grid is tiled is that cell's answer for when it IS enlarged —
-    // which is the case the issue opens with (#1378): the canvas cannot open with nothing zoomed.
-    it("opens on enlarging a cell whose pane was asked for while tiled", async () => {
+    // A pane asked for while the grid is tiled opens beside the tiles at once (#3027), saving the
+    // files pane it replaces, and is still that cell's answer once it IS enlarged (#1378).
+    it("opens beside the tiles, and stays on enlarging, a cell whose pane was asked for while tiled", async () => {
       const w = mountCockpit([cell(1, "s1", "/one"), cell(2, "s2", "/two")], 1, []);
       await openPane(w);
       await w.setProps({ expandedUid: null });
@@ -1270,7 +1341,9 @@ describe("file pane beside the enlarged cell", () => {
 
       await w.findAllComponents({ name: "TerminalCell" })[1].vm.$emit("toggle-canvas");
       await flushPromises();
-      expect(paneOf(w).exists()).toBe(true); // the tiled press moved nothing: cell 1's pane stays
+      expect(paneStub.flush).toHaveBeenCalled();
+      expect(w.emitted("toggle-expand")).toBeUndefined();
+      expect(w.findComponent({ name: "GuiPanel" }).props("sessionId")).toBe("s2");
 
       await w.setProps({ expandedUid: 2 });
       await flushPromises();

@@ -7,7 +7,7 @@ import { paneCanShowClick, type PaneClickState } from "../../../src/components/p
 // the ones where two directories are in play at once.
 describe("paneCanShowClick", () => {
   const CWD = "/Users/me/proj";
-  const state = (over: Partial<PaneClickState> = {}): PaneClickState => ({ zoomed: true, expandedCwd: CWD, paneCwd: CWD, ...over });
+  const state = (over: Partial<PaneClickState> = {}): PaneClickState => ({ roomForPane: true, paneCellCwd: CWD, paneCwd: CWD, ...over });
 
   it("takes a click from the enlarged cell", () => {
     expect(paneCanShowClick(state(), CWD)).toBe(true);
@@ -20,9 +20,10 @@ describe("paneCanShowClick", () => {
     expect(paneCanShowClick(state({ paneCwd: null }), CWD)).toBe(true);
   });
 
-  it("declines when nothing is enlarged — there is no pane on screen", () => {
-    expect(paneCanShowClick(state({ zoomed: false }), CWD)).toBe(false);
-    expect(paneCanShowClick(state({ zoomed: false, paneCwd: null }), CWD)).toBe(false);
+  // Nothing enlarged and no pane beside the tiles: a click must not open one there (#3027).
+  it("declines when there is no room for the pane on screen", () => {
+    expect(paneCanShowClick(state({ roomForPane: false }), CWD)).toBe(false);
+    expect(paneCanShowClick(state({ roomForPane: false, paneCwd: null }), CWD)).toBe(false);
   });
 
   // Every cell stays mounted while one is enlarged (the filmstrip), so a thumbnail can be
@@ -37,7 +38,7 @@ describe("paneCanShowClick", () => {
     expect(paneCanShowClick(state({ paneCwd: "/Users/me/other" }), CWD)).toBe(false);
   });
 
-  it("declines when the enlarged cell has not reported a directory yet", () => {
-    expect(paneCanShowClick(state({ expandedCwd: null }), CWD)).toBe(false);
+  it("declines when the pane's cell has not reported a directory yet", () => {
+    expect(paneCanShowClick(state({ paneCellCwd: null }), CWD)).toBe(false);
   });
 });

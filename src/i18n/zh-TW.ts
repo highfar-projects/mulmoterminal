@@ -494,7 +494,6 @@ export const zhTW: Messages = {
   cellMenu: {
     history: "歷史",
     tools: "工具",
-    enlargeFirst: "放大儲存格後可在旁邊開啟",
     canvasUnavailable: "此目錄未啟用繪製用的 MCP。請在啟動器中開啟 Canvas，然後重新啟動此儲存格",
     items: {
       prompts: { label: "送出的提示", detail: "本工作階段中你輸入的指令" },

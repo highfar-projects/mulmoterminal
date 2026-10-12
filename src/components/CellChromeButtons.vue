@@ -84,7 +84,6 @@ const emit = defineEmits<{
 // when an entry is disabled, is cellPaneMenuEntries'; this only maps a pick back to its event.
 const { t } = useI18n();
 const menuState = computed<CellPaneMenuState>(() => ({
-  expanded: props.expanded,
   rightPane: props.rightPane ?? null,
   canvasAvailable: !!props.canvasAvailable,
   collectionsAvailable: !!props.collectionsAvailable,
