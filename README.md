@@ -192,17 +192,17 @@ stack traces) and `src/a.ts(12,5)` (tsc) are one link. In the pane, and in the F
 opens as text with the caret on that line and column — an HTML page, an SVG or a table included, and a
 tab reading in Preview switches to Edit. An image, a PDF, a video or an audio file has no line to go
 to and simply opens as itself. A route that renders the file in a new tab (`.md`, `.json`,
-`.csv`, `.html` with no cell enlarged) ignores the line. When the pane beside an enlarged cell takes
-the click, the keyboard stays in the terminal; the full-screen Files view, with no terminal beside it,
+`.csv`, `.html` with no pane to take it) ignores the line. When the pane takes the click, the
+keyboard stays in the terminal; the full-screen Files view, with no terminal beside it,
 puts it in the editor. (ESLint's default output puts the path on a line of its own, with no line number to follow.)
 
-**While a grid cell is enlarged, the [Files pane](#files-view-browse--edit) takes the click first** — every
+**While a grid cell is enlarged, or a pane is open beside the tiled grid, the [Files pane](#files-view-browse--edit) takes the click first** — every
 row above, since the pane is the same editor with a Preview for Markdown, HTML and SVG, shows an
 image as a picture and a PDF in a frame, and plays a video or an audio file with the browser's own
 controls (seeking included, whatever the file's size). The file opens *beside* the terminal
 that printed it, and the pane opens itself if it was closed. It declines, leaving the routing
-above untouched, when nothing is enlarged, or when the path is not under that cell's own directory
-(the pane cannot walk above its root). A file too large to edit as text still offers **Open in OS**.
+above untouched, when nothing is enlarged and no pane is beside the tiles, or when the path is not
+under the directory of the cell the pane belongs to (the pane cannot walk above its root). A file too large to edit as text still offers **Open in OS**.
 
 Highlighting in the Files view covers the JS/TS family, JSON and Markdown (the modes
 `cmEditor.ts` bundles); other languages open as plain text.
@@ -1333,7 +1333,10 @@ the same explorer + editor on the right, rooted at that cell's directory. Drag t
 (or focus it and use ←/→, Home, End) to resize — the terminal keeps a floor, so a squeeze
 shrinks the pane rather than reflowing xterm into garbage. It works in both zoomed layouts
 (cockpit roster and thumbnail filmstrip), the pane re-roots as you walk the zoom between
-terminals, and whether it's open plus how wide it is are remembered per browser.
+terminals, and whether it's open plus how wide it is are remembered per browser. Without
+enlarging anything, a tile's **History** / **Tools** menu (or *Browse files in the app*) opens
+the same pane to the right of the tiled grid; it stays on that tile until another tile's menu
+asks for it, and only an enlarged cell's pane can take the full width.
 
 **Coming back looks the way you left it.** The pane remembers the open file, the directories
 you had expanded, and — for a file with a Preview — whether you were reading it in **Preview** or
@@ -1841,7 +1844,7 @@ narrow and tall for one record you are discussing — and each position keeps it
   isn't available yet (Codex writes its rollout only once the turn ends).
 - **Tools pane** (the cell header's **Tools** menu, beside the Canvas, Collections and **Restart the agent**) — the available GUI tools plus a live tool-call history for the active
   session.
-- **Prompts pane** — the prompts *you* sent the enlarged cell's session, newest first, from
+- **Prompts pane** — the prompts *you* sent that cell's session, newest first, from
   `GET /api/transcript/prompts`. The mirror of the Timeline above: that one is what the agent
   ran, this one is what you asked it for — for when several cells are running and you can no
   longer remember which one you told what. Read-only; click a long prompt to open it in place.
@@ -1849,7 +1852,7 @@ narrow and tall for one record you are discussing — and each position keeps it
   prompt history, codex's rollout), so a prompt sent mid-turn is there and text a skill
   injected is not. A `/clear` draws a line: the pane shows what you have asked *since*, the
   same way the header, the title and the last reply all stop describing the ended conversation.
-- **Conversation pane** — the enlarged cell's conversation, read as TURNS rather than as the
+- **Conversation pane** — that cell's conversation, read as TURNS rather than as the
   screen, from `GET /api/transcript/view`. A Claude cell runs on the alternate screen, so the
   terminal keeps no scrollback worth scrolling; this reads the agent's own transcript instead,
   and **scrolling up walks the session back to its first turn**, a page at a time.
