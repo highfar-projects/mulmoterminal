@@ -30,8 +30,9 @@ differ as a consequence of that, not as a design of their own.
 `FilesPane` **never watches its `cwd` prop** (`defineExpose`'s contract, FilesPane.vue): reacting
 to it would discard a buffer the host may still be asking the user about. The host calls `reload`
 when the root changes and it has already cleared that with the user. `TerminalGrid` re-roots the
-pane to the cell being zoomed, which is why the right pane is bound to a directory the user
-picked by looking at it.
+pane to the cell it is on — the one being zoomed, or on the tiled grid the tile whose menu opened
+it — which is why the right pane is bound to a directory the user picked by zooming a cell or
+opening the pane from it.
 
 ### The full screen takes its base from the URL
 

@@ -98,9 +98,9 @@ export const TERMINAL_SCOPED_ACTIONS: readonly KeymapAction[] = ["copy", "paste"
 // Here rather than beside gridShortcutFor because BOTH sides decide from it: the grid dispatches on
 // it, and validateKeymap has to know that these decline the key — the handler returns WITHOUT
 // stopping the event, so a `send` on the same keystroke fires instead (codex on #1906).
-// `files-find` and `files-search` are here because the pane they open exists only in the ENLARGED
-// row (see docs/grid-view-modes.md) — a tiled grid has nowhere to put it, so the key declines
-// rather than guessing which of nine terminals was meant.
+// `files-find` and `files-search` are here because the key names no cell: a pane CAN sit beside the
+// tiled grid (docs/grid-view-modes.md), but only one a tile's menu opened, so un-zoomed the key
+// declines rather than guessing which of nine terminals was meant.
 export const NEEDS_A_CURRENT_TERMINAL: readonly KeymapAction[] = [
   "zoom-next",
   "zoom-prev",
