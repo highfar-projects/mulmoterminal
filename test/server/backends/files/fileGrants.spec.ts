@@ -1,13 +1,15 @@
 // @vitest-environment node
 import { describe, it, expect, beforeAll, vi } from "vitest";
 import express from "express";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, renameSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { appRequest } from "../../../helpers/appRequest.js";
 import { mountFileGrantRoutes } from "../../../../server/backends/files/fileGrants.js";
 import { mountFilesRoutes } from "../../../../server/backends/files/files.js";
 import { makeTempDir } from "../../../support/tempDir";
+import { canSymlink } from "../../../support/canSymlink";
+import { sameOriginGuard } from "../../../../server/routes/same-origin-guard.js";
 import { initProjectRoots } from "../../../../server/infra/fs/project-root.js";
 
 let request: ReturnType<typeof appRequest>;
@@ -28,7 +30,10 @@ beforeAll(() => {
   mkdirSync(path.join(home, "Movies"));
   writeFileSync(path.join(home, "Movies", "home.mp4"), clip);
   initProjectRoots({ workspace: ws, knownProjects: () => [] });
+  writeFileSync(path.join(outside, "swapped.png"), Buffer.from([7, 7, 7]));
   const app = express();
+  // In the app's own order: the guard ahead of the body parser and every route.
+  app.use(sameOriginGuard((origin) => origin === undefined || origin === "http://localhost:6901"));
   app.use(express.json());
   mountFileGrantRoutes(app);
   mountFilesRoutes(app, { workspace: ws, sessionCwds: () => [outside] });
@@ -109,5 +114,24 @@ describe("one-file grants for a file outside the served directories", () => {
     expect((await grant("")).status).toBe(400);
     expect((await grant(path.join(outside, "dir.mp4"))).status).toBe(400);
     expect((await grant(path.join(outside, "notes.txt"))).status).toBe(415);
+  });
+
+  // A grant names the file it was minted for. A symlink put in its place afterwards would serve the
+  // file it points at — a second file through one grant.
+  it.runIf(canSymlink)("stops serving a grant whose file was replaced by a symlink", async () => {
+    const { body } = await grant(path.join(outside, "swapped.png"));
+    expect((await request(body.url ?? "")).status).toBe(200);
+    renameSync(path.join(outside, "swapped.png"), path.join(outside, "swapped-old.png"));
+    symlinkSync(path.join(outside, "secret.png"), path.join(outside, "swapped.png"));
+    expect((await request(body.url ?? "")).status).toBe(404);
+  });
+
+  it("refuses to mint for another site's page", async () => {
+    const res = await request("/api/files/grant", {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: "http://evil.example" },
+      body: JSON.stringify({ path: path.join(outside, "clip.mp4") }),
+    });
+    expect(res.status).toBe(403);
   });
 });

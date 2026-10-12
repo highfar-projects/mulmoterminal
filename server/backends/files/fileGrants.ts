@@ -3,7 +3,8 @@
 // The raw route refuses a directory that is not the workspace or a live session's, because a GET
 // carries no Origin a cross-site `<img>` or `<video>` could be told apart by. A grant is minted by a
 // POST instead, which `sameOriginGuard` already limits to the app's own pages, and names exactly one
-// file: the token is unguessable, held only in memory (so a restart ends it), and a request for any
+// file: the token is unguessable, held only in memory (so a restart ends it, as does being the oldest
+// of a full map), and a request for any
 // other name under it — the image a granted page links beside itself — is not served.
 //
 // Same-origin code could already read any file through the browse routes, whose base is an input;
@@ -80,6 +81,9 @@ function mountGranted(app: Express): void {
     // The name must be the granted one: a page's relative link resolves to another name under the
     // same token, and serving it would open the page's directory, not the page.
     if (!grant || name !== grant.name) return res.status(404).json({ error: "not found" });
+    // `abs` was a real path when granted. A symlink put in its place since would serve whatever it
+    // points at, so a path that no longer resolves to itself is not the file that was granted.
+    if (realpathOr(grant.abs) !== grant.abs) return res.status(404).json({ error: "not found" });
     if (grant.kind === "page") return sendHtmlDocument(res, grant.abs);
     return sendRawFile(req, res, grant.abs, grant.name);
   });

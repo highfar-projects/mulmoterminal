@@ -146,7 +146,8 @@ that comes back (`server/backends/files/fileGrants.ts`).
 
 - **Who may mint:** a POST, so `sameOriginGuard` already limits it to the app's own pages. Same-origin
   code could already read any file through the browse routes; this adds a URL a tab can load, not reach.
-- **What it opens:** one file. The token is unguessable and kept in memory until the server restarts,
+- **What it opens:** one file. The token is unguessable and kept in memory until the server restarts
+  (or until it is the oldest of a full map),
   and any other name under it — the image an HTML page links beside itself — is a 404.
 - **How it is served:** exactly as the raw route serves the same file (`sendRawFile`, Range included),
   or an HTML page under the preview CSP (`sendHtmlDocument`). A spec pins the raw half against the raw

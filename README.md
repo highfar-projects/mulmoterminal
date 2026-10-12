@@ -184,7 +184,7 @@ than as bytes:
 Markdown, JSON, tables and source open against the file's own directory. An HTML page, an image, a PDF,
 an SVG, a video or an audio file opens in a new tab through a **one-file link**: the app asks the server
 for it with a same-origin POST, and only that file is served under it — not its directory, and not the
-image an HTML page links beside itself. The link lasts until the server restarts; seeking a video works.
+image an HTML page links beside itself. The link lasts until the server restarts (or until many newer links push it out); seeking a video works.
 A file that is not there says so in the tab.
 
 **A line after the path is followed.** `src/a.ts:42`, `src/a.ts:42:7` (gcc, clang, `eslint -f unix`,

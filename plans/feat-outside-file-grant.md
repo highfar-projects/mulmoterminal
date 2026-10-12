@@ -10,7 +10,8 @@ the tab shows `{"error":"cwd is not an active session directory"}` (403).
 ## Decisions (with the user)
 
 - Types: video, images (SVG included), PDF, audio, **and HTML pages**.
-- A grant lives until the server restarts (memory only; a cap of 1000 bounds memory, not time).
+- A grant lives until the server restarts (memory only). A cap bounds the map, so the oldest grants
+  can also be dropped before then.
 
 ## Change
 
