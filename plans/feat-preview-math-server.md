@@ -17,7 +17,12 @@ The full-screen `/files` Markdown preview showed `$…$` / `$$…$$` as code, a 
 
 ## Safety
 
-The plugin sanitises its SVG with DOMPurify, which needs a DOM. The server narrows the input
-instead: the TeX `html` package (`\href`, `\class`, `\style`, `\cssId`) is left out, and `require`
-/ `autoload` are not among the packages, so it cannot be loaded back. Tests pin every one; putting
-the package back turns them red. The sandbox and CSP are unchanged.
+The plugin sanitises its SVG with DOMPurify, which needs a DOM. Leaving packages out was the first
+attempt and review showed it is not enough (`\mmlToken` is in `base`; `\color`, `\bbox`, `\enclose`,
+`\unicode`, `\tag` and error titles all carry author text into attributes). So the output is
+filtered by what is PERMITTED: `keepMathAttribute` (`server/files/mathAttributes.ts`) keeps an
+attribute only when its name is one MathJax writes and its value has the shape MathJax gives it;
+`href`, `id`, `title`, `fontfamily` and handlers have no entry. `html` and `action` are still left out
+(`action` throws without DOM events). A fuzz test of the attribute-writing commands, in both modes,
+checks no `url(`, `javascript` or `position:fixed` survives; disabling the filter turns 28 cases red.
+The sandbox and CSP are unchanged.

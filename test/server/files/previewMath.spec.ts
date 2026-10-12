@@ -48,6 +48,69 @@ describe("previewMath", () => {
     expect(await render(markdown)).not.toMatch(forbidden);
   });
 
+  // The property the filter exists for (#3017, raised in review): whatever command an author uses and
+  // whichever argument they put it in, their text never lands in an attribute. Leaving packages out
+  // was not enough — `\mmlToken` is in `base` — so this throws the commands that write attributes at
+  // the whole renderer, in both modes.
+  const M = "evil;url(javascript:alert(1));position:fixed";
+  const ATTACKS = [
+    `\\href{${M}}{x}`,
+    `\\style{${M}}{x}`,
+    `\\class{${M}}{x}`,
+    `\\cssId{${M}}{x}`,
+    `\\require{html}\\href{${M}}{x}`,
+    `\\bbox[${M}]{x}`,
+    `\\color{${M}}{x}`,
+    `\\textcolor{${M}}{x}`,
+    `\\colorbox{${M}}{x}`,
+    `\\fcolorbox{${M}}{${M}}{x}`,
+    `\\enclose{${M}}[${M}]{x}`,
+    `\\cancel[${M}]{x}`,
+    `\\cancelto{${M}}{x}`,
+    `\\mmlToken{mi}[mathcolor="${M}"]{x}`,
+    `\\mmlToken{mi}[style="${M}"]{x}`,
+    `\\mmlToken{mi}[mathbackground="${M}"]{x}`,
+    `\\mmlToken{mi}[href="${M}"]{x}`,
+    `\\mmlToken{mspace}[width="${M}"]{}`,
+    `\\unicode[${M}]{x41}`,
+    `\\texttip{x}{${M}}`,
+    `\\mathtip{x}{${M}}`,
+    `\\tag{${M}}x`,
+    `\\label{${M}}x\\eqref{${M}}`,
+    `\\verb|${M}|`,
+    `\\text{${M}<script>alert(1)</script>}`,
+    `\\operatorname{${M}}x`,
+    `\\newcommand{\\z}{\\mmlToken{mi}[style="${M}"]{x}}\\z`,
+    `\\begin{array}{${M}}x\\end{array}`,
+    `\\cellcolor{${M}}x`,
+    `\\fbox{${M}}`,
+    `\\undefinedmacro{${M}}`,
+  ];
+  const attributeValues = (html: string): string[] => [...html.matchAll(/\s[\w:-]+="([^"]*)"/g)].map((m) => m[1]);
+  it.each(
+    ATTACKS.flatMap((tex) => [
+      [tex, false],
+      [tex, true],
+    ]),
+  )("keeps author text out of every attribute: %s (display %s)", async (tex, display) => {
+    const html = await render(display ? `$$${tex}$$` : `$${tex}$`);
+    expect(html).toContain("<mjx-container");
+    attributeValues(html).forEach((value) => {
+      // A bare word may stay (an unknown colour name is harmless); what makes it an attack may not.
+      expect(value).not.toMatch(/javascript|url\(|position:\s*fixed/i);
+    });
+    expect(html).not.toMatch(/<script/i);
+  });
+
+  // The filter is a list of what is permitted, so it is pinned the other way too: ordinary formulas
+  // keep their colours, their alignment and their glyphs.
+  it("keeps what an ordinary formula needs", async () => {
+    const html = await render("$\\color{red}{x}+\\frac{a}{b}$");
+    expect(html).toContain('fill="red"');
+    expect(html).toMatch(/style="vertical-align: -?[\d.]+ex;"/);
+    expect(html).toMatch(/<path [^>]*d="M/);
+  });
+
   it("renders TeX it cannot parse as an error inside the formula, not as a failed page", async () => {
     const html = await render("bad $\\frac{1}$ formula");
     expect(html).toContain("<mjx-container");

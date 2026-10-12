@@ -2,14 +2,17 @@
 // preview document stays the script-free page it is. The delimiter rules are the markdown plugin's own
 // (`mathExtension`), so a formula is found where the Canvas finds it; only the renderer differs.
 //
-// The plugin sanitises its SVG with DOMPurify, which needs a DOM the server does not have. The input
-// side is narrowed instead: the TeX `html` package is the one that puts markup under the author's
-// control (`\href`, `\class`, `\style`, `\cssId`), so it is left out. The preview's CSP (no
-// `javascript:`, nonce'd scripts only) still stands behind that.
+// The plugin sanitises its SVG with DOMPurify, which needs a DOM the server does not have. Here every
+// attribute of MathJax's own tree is checked against what MathJax writes (`mathAttributes.ts`) before
+// it is serialised; the TeX `html` package is also left out. The preview's CSP (nonce'd scripts only)
+// stands behind both.
 import type { MarkedExtension, TokenizerExtension, Tokens } from "marked";
 import { mathExtension } from "@mulmoclaude/markdown-utils/markdown/mathExtension";
+import { keepMathAttribute } from "./mathAttributes.js";
 
-const AUTHOR_MARKUP_PACKAGE = "html";
+// `html` writes author markup (`\href`, `\style`, …); `action` (`\mathtip`, `\toggle`) wants DOM
+// events a static SVG has none of, and MathJax throws on it without them.
+const LEFT_OUT = new Set(["html", "action"]);
 
 export type Typeset = (tex: string, display: boolean) => string;
 
@@ -32,14 +35,25 @@ async function buildTypesetter(): Promise<Typeset> {
   const adaptor = liteAdaptor();
   AssistiveMmlHandler(RegisterHTMLHandler(adaptor));
   const doc = mathjax.document("", {
-    InputJax: new TeX({ packages: AllPackages.filter((name) => name !== AUTHOR_MARKUP_PACKAGE) }),
+    InputJax: new TeX({ packages: AllPackages.filter((name) => !LEFT_OUT.has(name)) }),
     // Each glyph inlined as its own path: no `<defs>`/`<use>` to depend on.
     OutputJax: new SVG({ fontCache: "none" }),
   });
+  // Every attribute in the formula's tree, children first, through the permitted list.
+  const scrub = (node: InstanceType<typeof LiteElement>): void => {
+    adaptor
+      .allAttributes(node)
+      .filter(({ name, value }) => !keepMathAttribute(name, value))
+      .forEach(({ name }) => adaptor.removeAttribute(node, name));
+    node.children.forEach((child) => {
+      if (child instanceof LiteElement) scrub(child);
+    });
+  };
   // `convert` is declared `any`; the lite adaptor's own element class is what it really returns.
   return (tex, display) => {
     const node: unknown = doc.convert(tex, { display });
     if (!(node instanceof LiteElement)) throw new Error("MathJax returned an unexpected node");
+    scrub(node);
     return adaptor.outerHTML(node);
   };
 }

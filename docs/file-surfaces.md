@@ -81,9 +81,13 @@ Maths takes the other road (#3017), because it can: MathJax runs in Node, so `$�
 typeset to SVG while the server builds the document (`server/files/previewMath.ts`), in both the
 embedded and the plain document, and nothing in the sandbox changes. The delimiter rules are the
 plugin's own `mathExtension`, so a formula is found where the Canvas finds it. What the plugin does
-that this cannot is sanitise the SVG — DOMPurify needs a DOM — so the input is narrowed instead: the
-TeX `html` package (`\href`, `\class`, `\style`, `\cssId`) is left out, and neither `require` nor
-`autoload` is loaded to bring it back. The tests pin all of them.
+that this cannot is run DOMPurify — it needs a DOM — and leaving TeX packages out is not a
+substitute: `\mmlToken` is in `base` and writes `href`, `style` and colours, and `\color`,
+`\unicode`, `\tag` and error titles carry author text into attributes too. So every attribute of
+MathJax's tree passes `keepMathAttribute` (`server/files/mathAttributes.ts`) before it is
+serialised: a list of the names MathJax writes, each with the shape of value it gives them, and
+everything else dropped. A test throws the attribute-writing commands at the renderer and checks no
+`url(`, `javascript` or `position:fixed` survives in any attribute.
 
 **So "make both surfaces render the same" is a containment decision before it is a rendering
 one.** Moving the plugin's renderer to the full-screen view would render a file chosen through a
