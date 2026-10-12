@@ -114,7 +114,8 @@ const previewScroll = useFilesPreviewWire(file, openPreviewLink, () => props.cwd
 
 // A Markdown file's headings, to go to one in the editor or the Preview (#2576).
 const outline = useFileOutline({ editor: file.editor, showPreview, goToPreviewHeading: previewScroll.goToHeading });
-const sideBySide = useSideBySide({ file, editorHost, preview: previewScroll });
+const { layout, ...sideBySide } = useSideBySide({ file, editorHost, preview: previewScroll, showCanvas });
+const markdownEditable = computed(() => previewKind.value === "markdown" && !unpreviewable.value);
 
 // A link clicked in the Preview (#2268), resolved against the document being read. It opens in a
 // tab of its own, keeping the one it was clicked in; a Markdown file comes up in Preview, since
@@ -162,7 +163,7 @@ async function insertSelection(): Promise<boolean> {
     hasTarget: () => !!props.insertTarget,
     cwd: () => props.cwd,
     terminalCwd: () => props.insertTargetCwd ?? null,
-    editorHidden: () => showCanvas.value,
+    editorHidden: () => !layout.value.editor,
   };
   const text = await selectionReferenceText(deps);
   if (text !== null) emit("insert-text", text);
@@ -226,7 +227,7 @@ async function onTabKey(e: KeyboardEvent, index: number): Promise<void> {
 function focusAfterTabMove(): void {
   const front = strip.value.tabs.findIndex((entry) => entry.path === strip.value.activePath);
   const tab = stripEl.value?.querySelectorAll<HTMLElement>('[role="tab"]')[front];
-  const editor = showPreview.value || showCanvas.value ? null : editorHost.value?.querySelector<HTMLElement>('[contenteditable="true"]');
+  const editor = layout.value.editor ? editorHost.value?.querySelector<HTMLElement>('[contenteditable="true"]') : null;
   (tab ?? editor ?? treeEl.value?.querySelector<HTMLElement>("button"))?.focus();
 }
 
@@ -489,13 +490,13 @@ defineExpose({
         >{{ openName }}<span v-if="dirty" class="ml-1 text-amber" :data-tip="t('tips.panes.unsaved')">●</span></span
       >
       <FilesViewModeButtons
-        v-if="openPath && previewKind && previewSrc && !showCanvas"
-        v-bind="{ showPreview, saving, canSideBySide: previewKind === 'markdown' && !unpreviewable, sideBySide: sideBySide.active.value }"
+        v-if="openPath && previewKind && previewSrc && (!showCanvas || markdownEditable)"
+        v-bind="{ showPreview, canPreview: !showCanvas, saving, canSideBySide: markdownEditable, sideBySide: sideBySide.active.value }"
         @toggle-preview="file.togglePreview()"
         @toggle-side-by-side="sideBySide.toggle()"
       />
       <button
-        v-if="openPath && head.hasOriginal.value && !showPreview && !showCanvas && !unpreviewable"
+        v-if="openPath && head.hasOriginal.value && layout.editor && !unpreviewable"
         type="button"
         data-testid="files-changes-btn"
         class="h-[26px] cursor-pointer rounded-md border border-border px-2.5 py-1 text-[12px] hover:bg-hover hover:text-fg"
@@ -507,14 +508,14 @@ defineExpose({
         Changes
       </button>
       <FilesOutlineMenu
-        v-if="openPath && previewKind === 'markdown' && !unpreviewable && !showCanvas"
+        v-if="openPath && previewKind === 'markdown' && !unpreviewable && (layout.editor || layout.preview)"
         :key="`${openPath}:${showPreview}`"
         v-bind="outline.menu.value"
         @opened="outline.refresh()"
         @pick="outline.pick"
       />
       <FilesHistoryMenu
-        v-if="openPath && !showPreview && !showCanvas && !unpreviewable && !conflict"
+        v-if="openPath && layout.editor && !unpreviewable && !conflict"
         v-bind="history.menu.value"
         @toggle="history.toggle()"
         @close="history.close()"
@@ -539,7 +540,7 @@ defineExpose({
       <FilesToolbarButton icon="search" :label="t('tips.panes.findByName')" test-id="files-find-btn" opens-a-panel @click="openFinder()" />
       <FilesToolbarButton icon="manage_search" :label="t('tips.panes.searchInFiles')" test-id="files-search-btn" opens-a-panel @click="openSearch()" />
       <FilesToolbarButton
-        v-if="insertTarget && openPath && !unpreviewable && !showCanvas"
+        v-if="insertTarget && openPath && !unpreviewable && (!showCanvas || layout.editor)"
         icon="alternate_email"
         :label="t('tips.panes.insertSelection')"
         test-id="files-insert-selection"
@@ -601,7 +602,7 @@ defineExpose({
     <!-- In the flow, not over the editor: it stays up for the whole comparison, and a bar laid over
          the text would hide line 1 — often the very change being compared. -->
     <FilesComparingBanner
-      v-if="!conflict && history.comparing.value && !showPreview && !showCanvas && !unpreviewable"
+      v-if="!conflict && history.comparing.value && layout.editor && !unpreviewable"
       :at="history.comparing.value.entry.at"
       :failed="history.restoreFailed.value"
       @restore="history.comparing.value && history.restore(history.comparing.value.entry)"
@@ -735,7 +736,7 @@ defineExpose({
              page is loaded only while it is being looked at — it runs its own scripts, which the
              Markdown document (the reporter is its only script) does not. -->
         <iframe
-          v-show="openPath && !unpreviewable && !showCanvas && (showPreview || sideBySide.active.value)"
+          v-show="openPath && !unpreviewable && layout.preview"
           ref="previewFrame"
           :key="previewKind === 'markdown' ? 'markdown' : 'page'"
           class="flex-auto border-0"
@@ -744,8 +745,8 @@ defineExpose({
           sandbox="allow-scripts"
           :title="previewKind === 'markdown' ? t('tips.panes.markdownPreview') : t('tips.panes.filePreview')"
         />
-        <div v-show="openPath && !unpreviewable && !showPreview && !showCanvas" ref="editorHost" :class="sideBySide.editorClass.value" />
-        <FilesCanvasView v-if="openPath && showCanvas" :card="canvasCard" @update-result="canvasMode.onUpdateResult" />
+        <div v-show="openPath && !unpreviewable && layout.editor" ref="editorHost" :class="sideBySide.editorClass.value" />
+        <FilesCanvasView v-if="openPath && showCanvas" :class="sideBySide.previewClass.value" :card="canvasCard" @update-result="canvasMode.onUpdateResult" />
       </section>
     </div>
     <FileFinder v-if="finderOpen" :cwd="cwd" :seed="finderSeed" @pick="onFinderPick" @close="closeFinder" />
