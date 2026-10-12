@@ -34,6 +34,7 @@ import { isPreviewToken, MD_PREVIEW_EMBED_PARAM, MD_PREVIEW_TOKEN_PARAM } from "
 import { requestBody } from "../routes/requestBody.js";
 import { mountFilesTreeRoutes } from "./files-tree-routes.js";
 import { splitFrontmatter } from "@mulmoclaude/markdown-utils/markdown/frontmatter";
+import { MATH_STYLE, previewMath } from "./previewMath.js";
 import { mountFilesGitStatusRoute } from "./files-git-status.js";
 import { dirConfigDetail, dirConfigDirOf } from "../config/dir/dir-config.js";
 import { dirConfigSaveReport, type DirConfigSaveReport } from "../../common/dirConfigSaveReport.js";
@@ -388,6 +389,8 @@ interface MdRender {
   html: string;
   /** How many mermaid fences were drawn with a placeholder — none in the plain document. */
   diagrams: number;
+  /** The maths style the document needs, or "" when it has no maths renderer (#3017). */
+  style: string;
 }
 
 /** Markdown to HTML with each relative image pointed at the raw route, beside the document
@@ -399,7 +402,9 @@ interface MdRender {
 const mdRender = async (text: string, doc: ServedDoc, withDiagrams: boolean): Promise<MdRender> => {
   const numbered = numberedCodeRenderer(fenceColourer());
   const fences = diagramFenceRenderer(numbered);
-  const html = await new Marked({
+  const { body } = splitFrontmatter(text);
+  const math = await previewMath(body);
+  const marked = new Marked({
     walkTokens(token) {
       if (!isImageToken(token)) return;
       token.href = servedImageSrc(token.href, doc) ?? token.href;
@@ -407,12 +412,18 @@ const mdRender = async (text: string, doc: ServedDoc, withDiagrams: boolean): Pr
     // A fence in a language with a grammar is coloured here (#2579); every block is numbered for the
     // Preview's copy button (#2615).
     renderer: { code: withDiagrams ? fences.code : numbered },
-  }).parse(splitFrontmatter(text).body);
-  return { html, diagrams: fences.drawn() };
+  });
+  // Maths is typeset in BOTH documents: it is SVG, so the plain one needs no script to show it.
+  if (math) marked.use(math);
+  const html = await marked.parse(body);
+  return { html, diagrams: fences.drawn(), style: math ? MATH_STYLE : "" };
 };
 
 /** The Markdown document every caller has always had. */
-const renderMd = async (text: string, title: string, doc: ServedDoc): Promise<string> => htmlDoc((await mdRender(text, doc, false)).html, title);
+const renderMd = async (text: string, title: string, doc: ServedDoc): Promise<string> => {
+  const { html, style } = await mdRender(text, doc, false);
+  return htmlDoc(html, title, style);
+};
 
 /** The same document with the scroll reporter as its last body element (#2157) — followed by the
  *  script drawing the diagrams, for a document that has any (#2991). Composed here rather than
@@ -421,9 +432,9 @@ const renderMd = async (text: string, title: string, doc: ServedDoc): Promise<st
 const embedMdWith =
   (mermaidEntryUrl: string): EmbedDoc =>
   async (text, title, nonce, doc, theme, token) => {
-    const { html, diagrams } = await mdRender(text, doc, true);
+    const { html, diagrams, style: mathStyle } = await mdRender(text, doc, true);
     const diagramsScript = diagrams ? mermaidBootstrapTag(nonce, mermaidEntryUrl, mermaidThemeFor(theme)) : "";
-    const style = (theme ? themeStyle(theme) : "") + (diagrams ? MERMAID_STYLE : "");
+    const style = (theme ? themeStyle(theme) : "") + (diagrams ? MERMAID_STYLE : "") + mathStyle;
     return htmlDoc(html + mdPreviewReporterTag(nonce, token) + diagramsScript, title, style);
   };
 

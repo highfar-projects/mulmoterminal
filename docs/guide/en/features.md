@@ -192,8 +192,8 @@ opens it here, drawn, when the pane is up.
 is left out, and external links open in a new browser tab. A link to another file (`./b.md`,
 `../README.md`) opens it in a new tab of the pane — in Preview when it is Markdown; a link that
 climbs above the pane's folder says so instead. A ` ```mermaid ` fence is drawn as a diagram,
-with its code folded under it (open **Diagram source** to see or copy it); maths stays as code
-there, and **Canvas** in the pane's header renders both. A code block is coloured for its language (the
+with its code folded under it (open **Diagram source** to see or copy it), and `$…$` / `$$…$$`
+maths is typeset, in the full-screen view too. A code block is coloured for its language (the
 editor's languages — JavaScript/TypeScript, Python, JSON, CSS, HTML, YAML, XML, Rust, Go, Java,
 C/C++, PHP, SQL, Markdown; others stay plain). The small copy button at a block's top right copies
 the block as the file has it — read from the file, not from the page — and a notice at the bottom
