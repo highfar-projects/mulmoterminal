@@ -168,7 +168,7 @@ copying from a web page usually does, so that pasting text keeps working.
 
 **Clicking a file path** — the other direction. A path an agent *prints* becomes a link, and
 **what it opens is chosen by its extension**, so each kind arrives as the thing it is rather
-than as bytes (files within the session's working directory only):
+than as bytes:
 
 | A clicked … | opens as |
 |---|---|
@@ -179,6 +179,13 @@ than as bytes (files within the session's working directory only):
 | `.html` `.htm` | the **rendered page** in a new tab, under the same sandboxed policy as the Files pane's Preview: its scripts run at an opaque origin with no fetch or XHR (so they cannot reach the app or its API), and an image beside it loads by its relative path (a relative stylesheet or script does not). The raw route answers `.html` as plain text, so opening one there showed its source |
 | images, PDF, SVG, video, audio | raw bytes in a new tab, which the browser renders better than an editor would |
 | everything else — `.xlsx`, `.docx`, `.zip`, a `Makefile` | the app's own **Files** view. A tab cannot display these, so opening one there is not a view — it is a download starting with no warning. The pane names the file and offers **Open in OS**, which hands it to the application that owns it (Excel for an `.xlsx`) |
+
+**A path outside the session's working directory opens too** — absolute, `~/…`, or `../` climbing out.
+Markdown, JSON, tables and source open against the file's own directory. An HTML page, an image, a PDF,
+an SVG, a video or an audio file opens in a new tab through a **one-file link**: the app asks the server
+for it with a same-origin POST, and only that file is served under it — not its directory, and not the
+image an HTML page links beside itself. The link lasts until the server restarts (or until many newer links push it out); seeking a video works.
+A file that is not there says so in the tab.
 
 **A line after the path is followed.** `src/a.ts:42`, `src/a.ts:42:7` (gcc, clang, `eslint -f unix`,
 stack traces) and `src/a.ts(12,5)` (tsc) are one link. In the pane, and in the Files view, the file

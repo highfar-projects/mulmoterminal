@@ -44,8 +44,9 @@ function provideLinks(
   // Nothing enlarged is the default for these cases, so the pane declines and the routing
   // below it is what gets exercised.
   openInPane: (filePath: string, cwd: string, location: FileLocation | undefined, newTab: boolean) => boolean = () => false,
+  openOutside: (absPath: string) => void = () => {},
 ): ILink[] | undefined {
-  const provider = createFilePathLinkProvider(term, () => cwd, open, openInFiles, openInPane);
+  const provider = createFilePathLinkProvider(term, () => cwd, open, openInFiles, openInPane, openOutside);
   let result: ILink[] | undefined;
   provider.provideLinks(1, (links) => {
     result = links;
@@ -197,6 +198,60 @@ describe("createFilePathLinkProvider against real xterm", () => {
     if (!link) throw new Error("expected a link");
     link.activate(new MouseEvent("click"), link.text);
     expect(openInFiles).toHaveBeenCalledWith("notes.ts", "/Users/me/other", undefined);
+    term.dispose();
+  });
+
+  // #3024. The raw route refuses a directory that is not served, so a file a tab SHOWS goes for a
+  // one-file URL instead, with its whole path; one the Files view or a browse route handles does not.
+  it.each([
+    ["a video", "/tmp/out/clip.mp4", "/tmp/out/clip.mp4"],
+    ["a home-relative image", "~/Pictures/a.png", "~/Pictures/a.png"],
+    ["a PDF reached by climbing", "../shared/r.pdf", "/Users/me/shared/r.pdf"],
+    ["an HTML page", "/tmp/site/index.html", "/tmp/site/index.html"],
+    ["a file at the root", "/a.mp3", "/a.mp3"],
+  ])("asks for a one-file URL for %s outside the cell", async (_case, token, absPath) => {
+    const term = new Terminal({ cols: 120, rows: 10, allowProposedApi: true });
+    term.open(document.createElement("div"));
+    await writeLine(term, `wrote ${token}`);
+    const open = vi.fn();
+    const openOutside = vi.fn();
+    const [link] =
+      provideLinks(
+        term,
+        "/Users/me/proj",
+        open,
+        () => {},
+        () => false,
+        openOutside,
+      ) ?? [];
+    if (!link) throw new Error("expected a link");
+    link.activate(new MouseEvent("click"), link.text);
+    expect(openOutside).toHaveBeenCalledWith(absPath);
+    expect(open).not.toHaveBeenCalled();
+    term.dispose();
+  });
+
+  it.each([
+    ["inside the cell", "out/clip.mp4"],
+    ["a Markdown file outside", "/tmp/report.md"],
+    ["source outside", "../other/notes.ts"],
+  ])("does not ask for a one-file URL for %s", async (_case, token) => {
+    const term = new Terminal({ cols: 120, rows: 10, allowProposedApi: true });
+    term.open(document.createElement("div"));
+    await writeLine(term, `wrote ${token}`);
+    const openOutside = vi.fn();
+    const [link] =
+      provideLinks(
+        term,
+        "/Users/me/proj",
+        vi.fn(),
+        () => {},
+        () => false,
+        openOutside,
+      ) ?? [];
+    if (!link) throw new Error("expected a link");
+    link.activate(new MouseEvent("click"), link.text);
+    expect(openOutside).not.toHaveBeenCalled();
     term.dispose();
   });
 });

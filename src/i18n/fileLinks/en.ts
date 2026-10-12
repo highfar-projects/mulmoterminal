@@ -1,0 +1,15 @@
+// A path clicked in the terminal: its menu, and what a tab says when a file outside the cell
+// cannot be shown (#3024). Out of the locale file, which is at its line cap.
+export const fileLinksEn = {
+  pathMenu: {
+    insertFilePath: "Insert a file path",
+    reveal: "Reveal in the file manager",
+    browseFiles: "Browse files in the app",
+    dirSettings: "This directory's settings",
+    newTerminal: "New terminal here",
+  },
+  outsideFile: {
+    missing: "{path} is not there anymore.",
+    refused: "{path} could not be opened in a tab.",
+  },
+};

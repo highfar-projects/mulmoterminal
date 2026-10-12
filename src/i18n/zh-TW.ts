@@ -17,6 +17,7 @@ import { settingsHelpZhTW } from "./settingsHelp/zh-TW";
 import { shortcutsZhTW } from "./shortcuts/zh-TW";
 import { filesTreeZhTW } from "./filesTree/zh-TW";
 import { previewCodeCopyZhTW } from "./previewCodeCopy/zh-TW";
+import { fileLinksZhTW } from "./fileLinks/zh-TW";
 import { skillsViewZhTW } from "./skillsView/zh-TW";
 import { processesViewZhTW } from "./processesView/zh-TW";
 
@@ -562,13 +563,6 @@ export const zhTW: Messages = {
   // 雙鍵快捷鍵等待第二個鍵時顯示的提示（#2265）。
   commandPalette: commandPaletteZhTW,
   // The path menu's file items. Its repository section stays in the forge's own words.
-  pathMenu: {
-    insertFilePath: "插入檔案路徑",
-    reveal: "在檔案管理員中顯示",
-    browseFiles: "在應用程式中瀏覽檔案",
-    dirSettings: "此目錄的設定",
-    newTerminal: "在此處新增終端機",
-  },
   prefixKeys: {
     waiting: "{key} 之後按：",
     cancel: "按 Esc 取消",
@@ -640,6 +634,7 @@ export const zhTW: Messages = {
   settingsControls: settingsControlsZhTW,
   ...filesTreeZhTW,
   ...previewCodeCopyZhTW,
+  ...fileLinksZhTW,
   ...skillsViewZhTW,
   ...processesViewZhTW,
   tips: tipsZhTW,

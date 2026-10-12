@@ -21,6 +21,8 @@ import { browserDisplays } from "../../common/rawContentType";
 import { findFilePathLinks } from "./terminalFilePathLinks";
 import type { FileLocation } from "./filePathLocation";
 import { pathWithinCwd, rebaseOutsideCwd } from "./pathWithinCwd";
+import { joinedPath } from "./grantedTab";
+import { grantKind } from "../../common/fileGrant";
 import { fileMediaKind, filePreviewKind } from "../components/filePreviewKind";
 import { HTML_FILE_NAME, filesPageUrl } from "../../common/filesPage";
 import { wantsNewTab } from "./newTabModifier";
@@ -179,6 +181,9 @@ export function createFilePathLinkProvider(
   // cell, which can show most of these WITHOUT leaving the grid (#910). Returns whether it took
   // it; false falls through to the routing below, unchanged. `newTab` is Cmd/Ctrl on the click (#3005).
   openInPane: (filePath: string, cwd: string, location: FileLocation | undefined, newTab: boolean) => boolean,
+  // A file outside the cell that a tab shows — a video, an image, a PDF, a sound, an HTML page —
+  // gets a one-file URL from the server first (#3024): the raw route refuses its directory.
+  openOutside: (absPath: string) => void,
 ): ILinkProvider {
   return {
     provideLinks(bufferLineNumber: number, callback: (links: ILink[] | undefined) => void): void {
@@ -194,6 +199,10 @@ export function createFilePathLinkProvider(
           // A path outside the cell is served relative to its own directory: the routes contain
           // `path` within `cwd`, so handing them the cell's cwd refused it as an escape (#2260).
           const rebased = rebaseOutsideCwd(link.text, cwd);
+          if (rebased && grantKind(rebased.rel) !== null) {
+            openOutside(joinedPath(rebased.base, rebased.rel));
+            return;
+          }
           const base = rebased?.base ?? cwd;
           const filePath = rebased?.rel ?? link.text;
           const target = fileLinkTarget(filePath, base);

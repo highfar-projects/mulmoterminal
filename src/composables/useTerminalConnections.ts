@@ -56,9 +56,7 @@ import { clipboardActionFor, selectionToCopy } from "../../common/terminalClipbo
 import { isImeConfirming } from "./imeComposition";
 import { getActiveKeymap } from "./activeKeymap";
 import { isCopyOnSelectEnabled } from "./copyOnSelect";
-import { createFilePathLinkProvider } from "./terminalFilePathLinkProvider";
-import { tryOpenInPane } from "./filesPaneOpener";
-import { filesGotoFile } from "./useFilesView";
+import { registerFilePathLinks } from "./terminalFileLinks";
 import { writeTerminalSelection } from "../utils/terminalSelectionClipboard";
 
 export type ConnStatus = "connecting" | "connected" | "disconnected";
@@ -423,22 +421,6 @@ function wireTerminalInput(term: Terminal, c: Conn): void {
   });
 }
 
-// Linkify file paths in the output, scoped to the session's live cwd (read lazily, since
-// it's learned after connect). The pane beside an enlarged cell gets first refusal, so a
-// click can land NEXT to the terminal it came from; failing that, a document or an image
-// opens in a new tab through the file routes, and source opens in the app's own Files view.
-function registerFilePathLinks(term: Terminal, c: Conn): void {
-  term.registerLinkProvider(
-    createFilePathLinkProvider(
-      term,
-      () => c.knownCwd,
-      (url) => window.open(url, "_blank", "noopener,noreferrer"),
-      (filePath, cwd, location) => filesGotoFile(cwd, filePath, location),
-      (filePath, cwd, location, newTab) => tryOpenInPane(filePath, cwd, location, newTab),
-    ),
-  );
-}
-
 interface TerminalRuntime {
   term: Terminal;
   fitAddon: FitAddon;
@@ -498,7 +480,7 @@ function buildTerminal(swallowedMouseModes: Set<number>, font: TerminalFont): Te
 
 // The wiring that needs the connection itself, so it is re-applied to every terminal a slot owns.
 function wireTerminalToConn(term: Terminal, c: Conn): void {
-  registerFilePathLinks(term, c);
+  registerFilePathLinks(term, () => c.knownCwd);
   wireTerminalInput(term, c);
   if (c.theme) term.options.theme = c.theme;
 }
