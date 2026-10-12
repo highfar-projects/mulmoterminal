@@ -8,6 +8,17 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@10.3.0 — 2026-10-12
+
+> **Setup guide:** [10.3.0 — The agent shows you files and asks you to check its work](https://receptron.github.io/mulmoterminal/guide/en/v10.3.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.3.0.html))
+
+### MCP tools that drive the right pane: showInPane and requestCheck (#3023)
+
+- Two host tools in the `render` group act on the right pane of the calling session's cell (#3022). `showInPane` opens a file in the Files pane as editor / preview / canvas / split, or at a line. `requestCheck` puts a checklist card over the enlarged cell; each item can open a file, the human marks it OK / NG with a note, and Send types a one-line summary into the terminal as the next user message. The tools' own `prompt` text tells agents when to use them and not to wait for the answer.
+- Server: `server/routes/pane-tool-routes.ts` takes the session from the MCP broker's header, contains every path in the session's directory, and publishes on a new `pane-command` channel. The open check is kept per session (`GET /api/pane/check/:sessionId`, `POST …/close`) so a reload or reconnect brings the card back.
+- Browser: a command for a cell that is not enlarged waits until it is; with nothing enlarged, the cell is enlarged. A show that waits on a save does not take the zoom back from a cell the user moved to, and a newer show wins. The summary is one line with control characters removed.
+- New living guide page: [The agent drives your right pane](https://receptron.github.io/mulmoterminal/guide/en/pane-tools.html).
+
 ## mulmoterminal@10.2.0 — 2026-10-12
 
 > **Setup guide:** [10.2.0 — Maths in the full-screen preview, ShapeScript and the editor beside the Canvas view](https://receptron.github.io/mulmoterminal/guide/en/v10.2.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.2.0.html))

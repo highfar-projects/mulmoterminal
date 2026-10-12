@@ -4,7 +4,7 @@ nav_title: Feature list
 layout: default
 parent: English
 nav_order: 6.5
-as_of: 10.2.0
+as_of: 10.3.0
 description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 9.1.0)."
 ---
 
@@ -135,6 +135,8 @@ More: [Phone](phone.html)
 
 More: [Feature reference](features.html)
 
+- The agent opens a file in the Files pane beside its terminal, in a chosen view and at a line (showInPane) (v10.3.0)
+- The agent puts a checklist over the terminal; your OK / NG answers and notes come back as your next message (requestCheck) (v10.3.0)
 - Maths ($…$ and $$…$$) is drawn in the full-screen Markdown preview, typeset on the server (v10.2.0)
 - A Markdown file's editor sits beside the Canvas view with the side-by-side button (v10.2.0)
 - ShapeScript (.shape) files open in the Files pane's Canvas view (v10.2.0)

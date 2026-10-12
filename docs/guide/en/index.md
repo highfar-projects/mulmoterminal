@@ -8,8 +8,8 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **10.2.0 is out.** Maths is drawn in the full-screen preview, ShapeScript files open in the Canvas view,
-> and the editor can sit beside the Canvas view. [Setup guide](v10.2.0.html)
+> **10.3.0 is out.** The agent can open a file in the pane beside its terminal, and ask you to check its
+> work with a checklist whose answers come back to it. [Setup guide](v10.3.0.html)
 
 ## What is MulmoTerminal? {#what-is}
 

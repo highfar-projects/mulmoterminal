@@ -4,7 +4,7 @@ nav_title: 全機能リスト
 layout: default
 parent: 日本語
 nav_order: 6.5
-as_of: 10.2.0
+as_of: 10.3.0
 description: MulmoTerminal のいまある機能を、入った版つきで領域ごとに一行ずつ並べた一覧（9.1.0 時点）。
 ---
 
@@ -135,6 +135,8 @@ description: MulmoTerminal のいまある機能を、入った版つきで領�
 
 詳しく: [機能リファレンス](features.html)
 
+- エージェントが端末の横の Files ペインで、見せ方と行を決めてファイルを開く（showInPane） (v10.3.0)
+- エージェントが端末の上に確認項目を出し、OK / NG とメモが次のメッセージとして返る（requestCheck） (v10.3.0)
 - 全画面の Markdown プレビューで数式（$…$ と $$…$$）を描く。サーバー側で SVG にする (v10.2.0)
 - Markdown のエディタと Canvas 表示を、横並びのボタンで左右に並べる (v10.2.0)
 - ShapeScript（.shape）のファイルを Files ペインの Canvas 表示で開く (v10.2.0)
