@@ -24,7 +24,8 @@ filtered by what is PERMITTED: `keepMathAttribute` (`server/files/mathAttributes
 attribute only when its name is one MathJax writes and its value has the shape MathJax gives it;
 `href`, `id`, `title`, `fontfamily` and handlers have no entry. Elements are permitted the same way
 (`keepMathElement`): SVG `<title>`, which MathJax fills with unescaped error text, is dropped with
-its contents (review round 3). A jsdom test parses the output and checks what the parser builds. `html` and `action` are still left out
+its contents (review round 3). A parse5 test (`previewMathParsed.spec.ts`) parses the output and
+checks what the parser builds. `html` and `action` are still left out
 (`action` throws without DOM events). A fuzz test of the attribute-writing commands, in both modes,
 checks no `url(`, `javascript` or `position:fixed` survives; disabling the filter turns 28 cases red.
 The sandbox and CSP are unchanged.
