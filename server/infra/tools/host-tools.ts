@@ -13,6 +13,7 @@ import { RENDER_SHAPE_SCRIPT } from "./shapescript-render-tool.js";
 import { EXPORT_SHAPE_SCRIPT_USDZ } from "./shapescript-usdz-tool.js";
 import { EXPORT_SHAPE_SCRIPT_STL } from "./shapescript-stl-tool.js";
 import { MANAGE_SHAPE_SCRIPT } from "./shapescript-manage-tool.js";
+import { REQUEST_CHECK, SHOW_IN_PANE } from "./pane-tools.js";
 
 // Mirrors MulmoClaude's spawnBackgroundChat signature (message/role/hidden) so the
 // tool is a drop-in from the model's point of view — but the implementation is
@@ -82,4 +83,6 @@ export const HOST_TOOL_DEFINITIONS: ToolDefinition[] = [
   EXPORT_SHAPE_SCRIPT_USDZ,
   EXPORT_SHAPE_SCRIPT_STL,
   MANAGE_SHAPE_SCRIPT,
+  SHOW_IN_PANE,
+  REQUEST_CHECK,
 ];

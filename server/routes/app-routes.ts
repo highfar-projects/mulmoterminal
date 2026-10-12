@@ -26,6 +26,7 @@ import { getSessionIdleReapDays, getQuestionPaneEnabled, getTokenRotation } from
 import { sweepIdleSessions } from "../session/reaping/reap-idle-sessions.js";
 import { mountHookRoute } from "../routes/hook-routes.js";
 import { mountPluginRoutes } from "../routes/plugin-routes.js";
+import { mountPaneToolRoutes } from "./pane-tool-routes.js";
 import { mountBlueprints } from "../blueprint/wiring.js";
 import { mountMcpRoutes } from "../routes/mcp-routes.js";
 import { guiCallRecorderFor, historyIsGuiOnly } from "../mcp/gui-call-history.js";
@@ -203,6 +204,9 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
     spawnCursorPty: deps.spawnCursorPty,
     registerBackgroundSession: deps.registerBackgroundSession,
   });
+
+  // showInPane / requestCheck (#3022): host tools too, so before the catch-all like the ones above.
+  mountPaneToolRoutes(app, { publish: (channel, data) => deps.publish(channel, data) });
 
   mountBlueprints(app, deps.spawnClaudePty, deps.reap);
 

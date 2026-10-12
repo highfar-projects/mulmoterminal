@@ -188,6 +188,8 @@ opens it here, drawn, when the pane is up.
 
 **Canvas shows the open file inside the pane.** For a Markdown, HTML, MulmoScript or ShapeScript (`.shape`) file, **Canvas** in the pane's header (or **Open in the Canvas** on a row) switches the file to the view the Canvas draws it with, with the tree still beside it; press **Canvas** again to go back to the editor. Unsaved edits are saved first. Nothing is added to the cell's own Canvas. Only in the pane beside a cell — the full-screen file view keeps Preview.
 
+**The agent can show you a file, or ask you to check its work.** With the Canvas tools on (the `render` group), an agent has two tools for your terminal's right pane. `showInPane` opens a file in the Files pane in a given view (editor, Preview, Canvas view, or the editor beside the Canvas view) and at a given line. `requestCheck` puts a checklist over the terminal: each item can open its file in one click, you mark it **OK** or **NG** with a note, and **Send** types the results into the terminal as your next message, so the agent can fix what was NG. A cell that is not on screen keeps the request until you enlarge it; with nothing enlarged, the cell is enlarged for you. Paths stay inside the terminal's directory.
+
 **A Markdown file can be read in Preview.** Relative images are shown, a YAML front matter block
 is left out, and external links open in a new browser tab. A link to another file (`./b.md`,
 `../README.md`) opens it in a new tab of the pane — in Preview when it is Markdown; a link that

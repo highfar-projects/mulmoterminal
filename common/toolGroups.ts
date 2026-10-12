@@ -99,6 +99,10 @@ const GROUP_BY_TOOL = new Map<string, ToolGroup>([
   ["exportShapeScriptUsdz", "render"],
   // And the printable STL beside it: the same model handed out as a file a slicer takes.
   ["exportShapeScriptStl", "render"],
+  // The cell's own right pane (#3022): show a file, or a checklist for the human. Render because
+  // they only put something in front of the user — what they send back is typed by the user's Send.
+  ["showInPane", "render"],
+  ["requestCheck", "render"],
 
   // presentCollection RENDERS, but it renders collection data and only makes sense next to
   // manageCollection — a cell offered the view without the store gets a tool it cannot fill.
@@ -245,6 +249,8 @@ export const AUTO_ALLOWED_TOOLS: readonly string[] = [
   "renderShapeScript",
   "exportShapeScriptUsdz",
   "exportShapeScriptStl",
+  "showInPane",
+  "requestCheck",
 ];
 
 /** Tools that must keep the agent's permission prompt on EVERY claude session, including the
