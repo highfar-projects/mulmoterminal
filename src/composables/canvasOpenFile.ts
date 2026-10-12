@@ -22,6 +22,7 @@
 import { TOOL_NAME as DOCUMENT_TOOL, isDocumentPath } from "@mulmoclaude/markdown-plugin/vue";
 import { TOOL_NAME as HTML_TOOL, isPresentableHtmlPath, isHtmlArtifactPath, htmlArtifactPreviewUrl, htmlFileUrl } from "@mulmoclaude/html-plugin";
 import { TOOL_NAME as STORY_TOOL } from "@mulmoclaude/mulmoscript-plugin";
+import { TOOL_NAME as SHAPE_TOOL, isPresentableShapePath } from "@gui-chat-plugin/shapescript";
 import { dirPathKey, isRootedPath } from "../../common/dirPathKey";
 // The wire spelling is minted here and parsed back into a path there — one pair of constants, so a
 // card's identity cannot come to disagree with the ref that opened it.
@@ -118,6 +119,9 @@ export function canvasCardForFile(path: string): CanvasCard | null {
     const previewUrl = isHtmlArtifactPath(path) ? htmlArtifactPreviewUrl(path) : htmlFileUrl(path);
     return { toolName: HTML_TOOL, data: { filePath: path, ...(previewUrl ? { previewUrl } : {}) } };
   }
+  // The View reads the model itself (`loadShape` on `filePath`), as html does; `script: ""` is the
+  // placeholder it replaces once that load lands (#3016).
+  if (isPresentableShapePath(path)) return { toolName: SHAPE_TOOL, data: { script: "", filePath: path } };
   return null;
 }
 

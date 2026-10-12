@@ -26,6 +26,15 @@ describe("canvasCardForFile", () => {
     });
   });
 
+  // #3016: the ShapeScript View loads the model from `filePath` itself, so the card names the file only.
+  it("renders a ShapeScript model through presentShapeScript, from anywhere it lives", () => {
+    expect(canvasCardForFile("/work/proj/models/lamp.shape")).toEqual({
+      toolName: "presentShapeScript",
+      data: { script: "", filePath: "/work/proj/models/lamp.shape" },
+    });
+    expect(canvasCardForFile("/work/proj/models/lamp.shape.bak")).toBeNull();
+  });
+
   it("takes a markdown file from anywhere in the workspace, not only the artifacts area", () => {
     expect(canvasCardForFile("README.md")?.toolName).toBe("presentDocument");
   });
@@ -66,6 +75,7 @@ describe("canOpenInCanvas", () => {
   it("answers for the button's sake, and says no when nothing is open", () => {
     expect(canOpenInCanvas("docs/design.md")).toBe(true);
     expect(canOpenInCanvas("site/index.html")).toBe(true);
+    expect(canOpenInCanvas("models/lamp.shape")).toBe(true);
     expect(canOpenInCanvas("notes.txt")).toBe(false);
     expect(canOpenInCanvas(null)).toBe(false);
   });
