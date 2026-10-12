@@ -135,6 +135,25 @@ the server renders from the file's text — `/api/files/browse/table`, escaped c
 `sandbox` CSP, no script — so it takes the browse routes' base and previews wherever the text opens,
 the full-screen view included.
 
+## A clicked file outside every served directory gets a one-file grant
+
+The raw route and the page route serve bytes only under the workspace or a live session's directory,
+because a GET carries no Origin a cross-site `<img>` or `<video>` could be told apart by. A path an agent
+printed and the user clicked can be anywhere, though — a video rendered to `~/Movies`, a report in
+another repo (#3024). For those, and only for a type a tab shows (`grantKind`, `common/fileGrant.ts`),
+the link provider opens a blank tab, POSTs the path to `/api/files/grant`, and sends the tab to the URL
+that comes back (`server/backends/files/fileGrants.ts`).
+
+- **Who may mint:** a POST, so `sameOriginGuard` already limits it to the app's own pages. Same-origin
+  code could already read any file through the browse routes; this adds a URL a tab can load, not reach.
+- **What it opens:** one file. The token is unguessable and kept in memory until the server restarts,
+  and any other name under it — the image an HTML page links beside itself — is a 404.
+- **How it is served:** exactly as the raw route serves the same file (`sendRawFile`, Range included),
+  or an HTML page under the preview CSP (`sendHtmlDocument`). A spec pins the raw half against the raw
+  route itself.
+
+So do not widen `authorizedServingBase` to reach such a file: that would let any site embed it.
+
 ## What to check before changing any of this
 
 - **Which surface are you in?** `canvas-target` distinguishes the two `FilesPane` mounts and is the

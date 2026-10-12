@@ -17,6 +17,7 @@ import { settingsHelpKo } from "./settingsHelp/ko";
 import { shortcutsKo } from "./shortcuts/ko";
 import { filesTreeKo } from "./filesTree/ko";
 import { previewCodeCopyKo } from "./previewCodeCopy/ko";
+import { fileLinksKo } from "./fileLinks/ko";
 import { skillsViewKo } from "./skillsView/ko";
 import { processesViewKo } from "./processesView/ko";
 
@@ -572,13 +573,6 @@ export const ko: Messages = {
   // 2타 단축키가 두 번째 키를 기다리는 동안 보이는 안내 (#2265).
   commandPalette: commandPaletteKo,
   // The path menu's file items. Its repository section stays in the forge's own words.
-  pathMenu: {
-    insertFilePath: "파일 경로 삽입",
-    reveal: "파일 관리자에서 열기",
-    browseFiles: "앱에서 파일 보기",
-    dirSettings: "이 디렉터리의 설정",
-    newTerminal: "여기서 새 터미널",
-  },
   prefixKeys: {
     waiting: "{key} 다음에 누를 키:",
     cancel: "Esc로 취소",
@@ -650,6 +644,7 @@ export const ko: Messages = {
   settingsControls: settingsControlsKo,
   ...filesTreeKo,
   ...previewCodeCopyKo,
+  ...fileLinksKo,
   ...skillsViewKo,
   ...processesViewKo,
   tips: tipsKo,
