@@ -8,8 +8,8 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **10.1.0 is out.** The Files pane switches the open file between the editor and the Canvas view with the
-> tree still beside it, and remembers it across a reload. [Setup guide](v10.1.0.html)
+> **10.2.0 is out.** Maths is drawn in the full-screen preview, ShapeScript files open in the Canvas view,
+> and the editor can sit beside the Canvas view. [Setup guide](v10.2.0.html)
 
 ## What is MulmoTerminal? {#what-is}
 

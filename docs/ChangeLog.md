@@ -8,6 +8,24 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@10.2.0 — 2026-10-12
+
+> **Setup guide:** [10.2.0 — Maths in the full-screen preview, ShapeScript and the editor beside the Canvas view](https://receptron.github.io/mulmoterminal/guide/en/v10.2.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.2.0.html))
+
+### Maths in the full-screen preview, typeset on the server (#3021)
+
+- The full-screen `/files` Markdown preview now draws `$…$` and `$$…$$` (#3017); it used to leave them as code. `server/files/previewMath.ts` uses the markdown plugin's own `mathExtension` tokenizers (the same delimiter rules as the Canvas) and typesets to SVG with `mathjax-full`, loaded on the first document with a `$`. Both the embedded and the plain (new-tab) document get it; the sandbox and CSP are unchanged.
+- No DOMPurify on the server, so MathJax's tree is filtered by permitted lists before serialisation (`server/files/mathAttributes.ts`): only the elements MathJax builds formulas from (SVG `<title>`, which holds unescaped error text, is dropped) and only the attributes it writes, each in the value shape it gives them. The TeX `html` and `action` packages are left out. A parse5 test checks what an HTML parser builds from attack inputs.
+- `mathjax-full` is now a direct dependency; `parse5` a dev dependency. `docs/file-surfaces.md` updated.
+
+### The editor beside the Canvas view (#3020)
+
+- For a Markdown file, the side-by-side button puts the editor beside the Files pane's Canvas view as well as beside Preview (#3015); the Canvas button chooses the right half. What is on screen is decided by one pure `viewLayout()` (`src/components/filesViewLayout.ts`) that every "is the editor showing" condition reads; the old conditions were run against it over all eight switch combinations.
+
+### ShapeScript files open in the Canvas view (#3019)
+
+- `.shape` files now open in the Files pane's Canvas view (#3016); the View loads the model itself through its existing dispatch.
+
 ## mulmoterminal@10.1.0 — 2026-10-12
 
 > **Setup guide:** [10.1.0 — Switch a file to the Canvas view inside the Files pane](https://receptron.github.io/mulmoterminal/guide/en/v10.1.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.1.0.html))

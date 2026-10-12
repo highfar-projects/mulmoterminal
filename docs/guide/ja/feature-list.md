@@ -4,7 +4,7 @@ nav_title: 全機能リスト
 layout: default
 parent: 日本語
 nav_order: 6.5
-as_of: 10.1.0
+as_of: 10.2.0
 description: MulmoTerminal のいまある機能を、入った版つきで領域ごとに一行ずつ並べた一覧（9.1.0 時点）。
 ---
 
@@ -135,6 +135,9 @@ description: MulmoTerminal のいまある機能を、入った版つきで領�
 
 詳しく: [機能リファレンス](features.html)
 
+- 全画面の Markdown プレビューで数式（$…$ と $$…$$）を描く。サーバー側で SVG にする (v10.2.0)
+- Markdown のエディタと Canvas 表示を、横並びのボタンで左右に並べる (v10.2.0)
+- ShapeScript（.shape）のファイルを Files ペインの Canvas 表示で開く (v10.2.0)
 - Files ペインで、開いている Markdown・HTML・MulmoScript のファイルを、ツリーを横に残したままその場で Canvas 表示に切り替える (v10.1.0)
 - Files ペインは、どのファイルを Canvas 表示にしていたかを、ペインの開き直しやリロード後も覚える (v10.1.0)
 - 端末に出たパスを Cmd/Ctrl+クリックすると Files の新しいタブで開く (v10.1.0)
