@@ -22,7 +22,9 @@ attempt and review showed it is not enough (`\mmlToken` is in `base`; `\color`, 
 `\unicode`, `\tag` and error titles all carry author text into attributes). So the output is
 filtered by what is PERMITTED: `keepMathAttribute` (`server/files/mathAttributes.ts`) keeps an
 attribute only when its name is one MathJax writes and its value has the shape MathJax gives it;
-`href`, `id`, `title`, `fontfamily` and handlers have no entry. `html` and `action` are still left out
+`href`, `id`, `title`, `fontfamily` and handlers have no entry. Elements are permitted the same way
+(`keepMathElement`): SVG `<title>`, which MathJax fills with unescaped error text, is dropped with
+its contents (review round 3). A jsdom test parses the output and checks what the parser builds. `html` and `action` are still left out
 (`action` throws without DOM events). A fuzz test of the attribute-writing commands, in both modes,
 checks no `url(`, `javascript` or `position:fixed` survives; disabling the filter turns 28 cases red.
 The sandbox and CSP are unchanged.

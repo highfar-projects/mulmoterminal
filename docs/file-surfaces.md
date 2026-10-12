@@ -83,11 +83,14 @@ embedded and the plain document, and nothing in the sandbox changes. The delimit
 plugin's own `mathExtension`, so a formula is found where the Canvas finds it. What the plugin does
 that this cannot is run DOMPurify — it needs a DOM — and leaving TeX packages out is not a
 substitute: `\mmlToken` is in `base` and writes `href`, `style` and colours, and `\color`,
-`\unicode`, `\tag` and error titles carry author text into attributes too. So every attribute of
-MathJax's tree passes `keepMathAttribute` (`server/files/mathAttributes.ts`) before it is
-serialised: a list of the names MathJax writes, each with the shape of value it gives them, and
-everything else dropped. A test throws the attribute-writing commands at the renderer and checks no
-`url(`, `javascript` or `position:fixed` survives in any attribute.
+`\unicode`, `\tag` and error titles carry author text into attributes too, and MathJax's SVG
+`<title>` holds error text unescaped, which an HTML parser reads as markup inside an `<svg>`. So
+MathJax's tree is filtered by what is PERMITTED before it is serialised
+(`server/files/mathAttributes.ts`): an element MathJax builds formulas from (`keepMathElement`;
+anything else, `<title>` first, goes with its contents), and on it only the attributes MathJax
+writes, each in the shape of value it gives them (`keepMathAttribute`). The tests throw markup and
+attribute-writing commands at the renderer and check what a real HTML parser BUILDS from the
+output — no foreign element, no `on…` handler, no `url(` or `javascript`.
 
 **So "make both surfaces render the same" is a containment decision before it is a rendering
 one.** Moving the plugin's renderer to the full-screen view would render a file chosen through a

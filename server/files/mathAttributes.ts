@@ -161,6 +161,57 @@ const PLAIN_NAMES = new Set([
   "texclass",
 ]);
 
+// The elements MathJax's SVG output and its MathML copy are built from. Not listed means the element
+// is dropped with everything inside it: SVG `<title>` above all, which MathJax fills with error text
+// (the author's TeX) without escaping `<` — inside an `<svg>` an HTML parser reads that as markup.
+const ELEMENTS = new Set([
+  "mjx-container",
+  "mjx-assistive-mml",
+  "svg",
+  "g",
+  "path",
+  "rect",
+  "line",
+  "ellipse",
+  "polygon",
+  "text",
+  "math",
+  "mrow",
+  "mi",
+  "mo",
+  "mn",
+  "ms",
+  "mtext",
+  "mspace",
+  "mstyle",
+  "merror",
+  "mpadded",
+  "mphantom",
+  "menclose",
+  "mfrac",
+  "msqrt",
+  "mroot",
+  "msub",
+  "msup",
+  "msubsup",
+  "munder",
+  "mover",
+  "munderover",
+  "mmultiscripts",
+  "mprescripts",
+  "none",
+  "mtable",
+  "mtr",
+  "mlabeledtr",
+  "mtd",
+  "maligngroup",
+  "malignmark",
+  "mfenced",
+]);
+
+/** Whether an element MathJax produced may reach the preview document at all. */
+export const keepMathElement = (kind: string): boolean => ELEMENTS.has(kind);
+
 /** Whether MathJax's attribute `name="value"` may reach the preview document. */
 export function keepMathAttribute(name: string, value: string): boolean {
   const shaped = SHAPED[name];

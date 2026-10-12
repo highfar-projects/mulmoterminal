@@ -8,7 +8,7 @@
 // stands behind both.
 import type { MarkedExtension, TokenizerExtension, Tokens } from "marked";
 import { mathExtension } from "@mulmoclaude/markdown-utils/markdown/mathExtension";
-import { keepMathAttribute } from "./mathAttributes.js";
+import { keepMathAttribute, keepMathElement } from "./mathAttributes.js";
 
 // `html` writes author markup (`\href`, `\style`, …); `action` (`\mathtip`, `\toggle`) wants DOM
 // events a static SVG has none of, and MathJax throws on it without them.
@@ -39,20 +39,23 @@ async function buildTypesetter(): Promise<Typeset> {
     // Each glyph inlined as its own path: no `<defs>`/`<use>` to depend on.
     OutputJax: new SVG({ fontCache: "none" }),
   });
-  // Every attribute in the formula's tree, children first, through the permitted list.
+  // The formula's whole tree through the permitted lists (`mathAttributes.ts`): an element that is not
+  // on its list goes with everything inside it, and every attribute left is checked.
   const scrub = (node: InstanceType<typeof LiteElement>): void => {
     adaptor
       .allAttributes(node)
       .filter(({ name, value }) => !keepMathAttribute(name, value))
       .forEach(({ name }) => adaptor.removeAttribute(node, name));
-    node.children.forEach((child) => {
-      if (child instanceof LiteElement) scrub(child);
+    [...node.children].forEach((child) => {
+      if (!(child instanceof LiteElement)) return;
+      if (keepMathElement(child.kind)) scrub(child);
+      else adaptor.remove(child);
     });
   };
   // `convert` is declared `any`; the lite adaptor's own element class is what it really returns.
   return (tex, display) => {
     const node: unknown = doc.convert(tex, { display });
-    if (!(node instanceof LiteElement)) throw new Error("MathJax returned an unexpected node");
+    if (!(node instanceof LiteElement) || !keepMathElement(node.kind)) throw new Error("MathJax returned an unexpected node");
     scrub(node);
     return adaptor.outerHTML(node);
   };
