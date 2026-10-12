@@ -17,6 +17,7 @@ import { settingsHelpJa } from "./settingsHelp/ja";
 import { shortcutsJa } from "./shortcuts/ja";
 import { filesTreeJa } from "./filesTree/ja";
 import { previewCodeCopyJa } from "./previewCodeCopy/ja";
+import { fileLinksJa } from "./fileLinks/ja";
 import { skillsViewJa } from "./skillsView/ja";
 import { processesViewJa } from "./processesView/ja";
 
@@ -575,13 +576,6 @@ export const ja: Messages = {
   // 2打のショートカットが2打目を待っている間に出す案内（#2265）。
   commandPalette: commandPaletteJa,
   // The path menu's file items. Its repository section stays in the forge's own words.
-  pathMenu: {
-    insertFilePath: "ファイルのパスを挿入",
-    reveal: "ファイルマネージャで開く",
-    browseFiles: "アプリでファイルを見る",
-    dirSettings: "このディレクトリの設定",
-    newTerminal: "ここで新しいターミナル",
-  },
   prefixKeys: {
     waiting: "{key} のあとに押すキー:",
     cancel: "Esc で取り消し",
@@ -653,6 +647,7 @@ export const ja: Messages = {
   settingsControls: settingsControlsJa,
   ...filesTreeJa,
   ...previewCodeCopyJa,
+  ...fileLinksJa,
   ...skillsViewJa,
   ...processesViewJa,
   tips: tipsJa,

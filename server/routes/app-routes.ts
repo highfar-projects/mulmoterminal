@@ -71,6 +71,7 @@ import { mountWhisperRoutes } from "../backends/media/whisper.js";
 import { mountSchedulerRoutes } from "../backends/scheduler/scheduler.js";
 import { mountFilesRoutes } from "../backends/files/files.js";
 import { mountFilesPageRoute } from "../backends/files/filesPage.js";
+import { mountFileGrantRoutes } from "../backends/files/fileGrants.js";
 import {
   hookedSessions,
   ptys,
@@ -289,6 +290,7 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
   // workspace; a `?cwd=` is honoured only for a live session's own directory.
   mountFilesRoutes(app, { workspace: CLAUDE_CWD, sessionCwds: () => [...ptys.values()].map((entry) => entry.cwd) });
   mountFilesPageRoute(app, { workspace: CLAUDE_CWD, sessionCwds: () => [...ptys.values()].map((entry) => entry.cwd) });
+  mountFileGrantRoutes(app);
 
   // Serve presentHtml pages for the View's iframe (GET /artifacts/html/<rest>) with an
   // HTML preview CSP. The View navigates the iframe to this URL (htmlArtifactPreviewUrl).

@@ -30,6 +30,7 @@ import { settingsHelpEn } from "./settingsHelp/en";
 import { shortcutsEn } from "./shortcuts/en";
 import { filesTreeEn } from "./filesTree/en";
 import { previewCodeCopyEn } from "./previewCodeCopy/en";
+import { fileLinksEn } from "./fileLinks/en";
 import { skillsViewEn } from "./skillsView/en";
 import { processesViewEn } from "./processesView/en";
 export const en = {
@@ -594,13 +595,6 @@ export const en = {
   // The hint shown while a two-key shortcut waits for its second key (#2265).
   commandPalette: commandPaletteEn,
   // The path menu's file items. Its repository section stays in the forge's own words.
-  pathMenu: {
-    insertFilePath: "Insert a file path",
-    reveal: "Reveal in the file manager",
-    browseFiles: "Browse files in the app",
-    dirSettings: "This directory's settings",
-    newTerminal: "New terminal here",
-  },
   prefixKeys: {
     waiting: "After {key}, press:",
     cancel: "Esc cancels",
@@ -673,6 +667,7 @@ export const en = {
   settingsControls: settingsControlsEn,
   ...filesTreeEn,
   ...previewCodeCopyEn,
+  ...fileLinksEn,
   ...skillsViewEn,
   ...processesViewEn,
   tips: tipsEn,

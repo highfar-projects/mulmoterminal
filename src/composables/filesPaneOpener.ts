@@ -11,6 +11,8 @@
 import { isPaneViewable } from "./terminalFilePathLinkProvider";
 import { pathWithinCwd } from "./pathWithinCwd";
 import type { FileLocation } from "./filePathLocation";
+import { openGrantedTab, requestFileGrant } from "./grantedTab";
+import { i18n } from "../i18n";
 
 /** Show `pathRel` (relative to `cwd`) in the pane, at `location` when one was named, in a new tab when
  *  `newTab`. False = not handled, use the old route. */
@@ -36,4 +38,14 @@ export function tryOpenInPane(filePath: string, cwd: string, location: FileLocat
   const pathRel = pathWithinCwd(filePath, cwd);
   if (pathRel === null) return false;
   return openInFilesPane(cwd, pathRel, location, newTab);
+}
+
+/** A clicked file outside the cell that a tab shows: opened in one, through a one-file URL. */
+export function openOutsideFile(absPath: string): void {
+  void openGrantedTab(absPath, {
+    openBlank: () => window.open("", "_blank"),
+    requestGrant: requestFileGrant,
+    problemText: (reason, path) => i18n.global.t(`outsideFile.${reason}`, { path }),
+    origin: window.location.origin,
+  });
 }

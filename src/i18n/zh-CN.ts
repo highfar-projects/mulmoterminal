@@ -17,6 +17,7 @@ import { settingsHelpZhCN } from "./settingsHelp/zh-CN";
 import { shortcutsZhCN } from "./shortcuts/zh-CN";
 import { filesTreeZhCN } from "./filesTree/zh-CN";
 import { previewCodeCopyZhCN } from "./previewCodeCopy/zh-CN";
+import { fileLinksZhCN } from "./fileLinks/zh-CN";
 import { skillsViewZhCN } from "./skillsView/zh-CN";
 import { processesViewZhCN } from "./processesView/zh-CN";
 
@@ -558,13 +559,6 @@ export const zhCN: Messages = {
   // 双键快捷键等待第二个键时显示的提示（#2265）。
   commandPalette: commandPaletteZhCN,
   // The path menu's file items. Its repository section stays in the forge's own words.
-  pathMenu: {
-    insertFilePath: "插入文件路径",
-    reveal: "在文件管理器中显示",
-    browseFiles: "在应用中浏览文件",
-    dirSettings: "此目录的设置",
-    newTerminal: "在此处新建终端",
-  },
   prefixKeys: {
     waiting: "{key} 之后按：",
     cancel: "按 Esc 取消",
@@ -636,6 +630,7 @@ export const zhCN: Messages = {
   settingsControls: settingsControlsZhCN,
   ...filesTreeZhCN,
   ...previewCodeCopyZhCN,
+  ...fileLinksZhCN,
   ...skillsViewZhCN,
   ...processesViewZhCN,
   tips: tipsZhCN,
