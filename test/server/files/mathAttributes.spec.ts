@@ -32,6 +32,17 @@ describe("keepMathAttribute", () => {
     ["mpadded", "width", "+0.833em"],
     ["menclose", "notation", "updiagonalstrike"],
     ["mjx-assistive-mml", "unselectable", "on"],
+    ["ellipse", "rx", "1380.7"],
+    ["ellipse", "cy", "292"],
+    ["rect", "rx", "267"],
+    ["polygon", "points", "-115.5,822.8 1196,822.8 1085.5,712.2"],
+    ["path", "stroke-linejoin", "round"],
+    ["path", "style", "stroke-width: 67;"],
+    ["svg", "style", "vertical-align: 0;"],
+    ["g", "style", "border: 2px solid red;"],
+    ["g", "style", "font-family: serif;"],
+    ["text", "font-size", "884px"],
+    ["text", "data-variant", "-explicitFont"],
   ])("keeps <%s %s=%j>", (_tag, name, value) => {
     expect(keepMathAttribute(name, value)).toBe(true);
   });
@@ -47,7 +58,6 @@ describe("keepMathAttribute", () => {
     ["onload", "alert(1)"],
     ["style", "position:fixed;inset:0"],
     ["style", "border: 2px solid url(javascript:alert(1));"],
-    ["style", "font-family: x;"],
     ["style", "vertical-align: -1ex; background: red;"],
     ["fill", "url(javascript:alert(1))"],
     ["stroke", "url(#a)"],
@@ -58,6 +68,11 @@ describe("keepMathAttribute", () => {
     ["d", "M0 0 url(x)"],
     ["xmlns", "http://evil.example/"],
     ["class", "x;y"],
+    ["style", "border: 2px solid url(x);"],
+    ["style", "font-family: serif; background: url(x);"],
+    ["style", "font-family: evil, url(x)"],
+    ["points", "1,2 url(x)"],
+    ["semantics", "bspr_axiom:true"],
   ])("drops %s=%j", (name, value) => {
     expect(keepMathAttribute(name, value)).toBe(false);
   });

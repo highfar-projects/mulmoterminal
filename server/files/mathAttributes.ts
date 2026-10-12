@@ -9,6 +9,8 @@
 // `url(…)`, no `javascript:`, no second declaration.
 const PLAIN = /^[\w.\-+#% ,]*$/;
 const NUMBERS = /^[-\d. ]+$/;
+// Polygon corners: number pairs.
+const POINTS = /^[-\d., ]+$/;
 // `translate(…)`, `scale(…)`, `matrix(…)`, `rotate(…)` with numbers only, as MathJax composes them —
 // checked one function at a time, so no pattern repeats a group (no catastrophic backtracking).
 const TRANSFORM_PART = /^(?:translate|scale|matrix|rotate)\([-\d., ]*$/;
@@ -18,11 +20,28 @@ const isTransform = (value: string): boolean => {
 };
 // The declarations MathJax itself writes on an `<svg>` and its container, with numeric values, one
 // declaration at a time.
-const STYLE_PROPERTIES = new Set(["vertical-align", "min-width", "max-width", "width", "height", "position", "margin-left", "margin-right"]);
-const STYLE_VALUE = /^(?:-?[\d.]+(?:ex|em|px|%)|relative|absolute|auto)$/;
+const STYLE_VALUE = /^(?:-?[\d.]+(?:ex|em|px|pt|%)?|relative|absolute|auto)$/;
+// `\fbox`-like frames (`2px solid red`) and the fallback font a character not in MathJax's font is
+// drawn in (`serif`): words and lengths only, never a function or a second declaration.
+const BORDER_VALUE = /^[\d.]+(?:px|pt|em|ex) (?:solid|dashed|dotted) (?:#[\da-fA-F]{3,8}|[a-zA-Z]+)$/;
+const FONT_FAMILY_VALUE = /^[a-zA-Z][a-zA-Z -]*$/;
+const STYLE_CHECKS: Record<string, (value: string) => boolean> = {
+  "vertical-align": (value) => STYLE_VALUE.test(value),
+  "min-width": (value) => STYLE_VALUE.test(value),
+  "max-width": (value) => STYLE_VALUE.test(value),
+  width: (value) => STYLE_VALUE.test(value),
+  height: (value) => STYLE_VALUE.test(value),
+  position: (value) => STYLE_VALUE.test(value),
+  "margin-left": (value) => STYLE_VALUE.test(value),
+  "margin-right": (value) => STYLE_VALUE.test(value),
+  "stroke-width": (value) => STYLE_VALUE.test(value),
+  border: (value) => BORDER_VALUE.test(value),
+  "font-family": (value) => FONT_FAMILY_VALUE.test(value),
+};
 const isDeclaration = (declaration: string): boolean => {
   const colon = declaration.indexOf(":");
-  return colon > 0 && STYLE_PROPERTIES.has(declaration.slice(0, colon).trim()) && STYLE_VALUE.test(declaration.slice(colon + 1).trim());
+  const check = colon > 0 ? STYLE_CHECKS[declaration.slice(0, colon).trim()] : undefined;
+  return check !== undefined && check(declaration.slice(colon + 1).trim());
 };
 const isStyle = (value: string): boolean =>
   value
@@ -41,6 +60,7 @@ const SHAPED: Record<string, (value: string) => boolean> = {
   style: isStyle,
   d: (value) => PATH.test(value),
   viewBox: (value) => NUMBERS.test(value),
+  points: (value) => POINTS.test(value),
   xmlns: (value) => XMLNS.has(value),
 };
 
@@ -51,6 +71,14 @@ const PLAIN_NAMES = new Set([
   "height",
   "x",
   "y",
+  "cx",
+  "cy",
+  "rx",
+  "ry",
+  "stroke-linejoin",
+  "pointer-events",
+  "font-family",
+  "font-size",
   "x1",
   "x2",
   "y1",
@@ -73,6 +101,13 @@ const PLAIN_NAMES = new Set([
   "data-table",
   "data-frame",
   "data-line",
+  "data-background",
+  "data-bgcolor",
+  "data-hitbox",
+  "data-idbox",
+  "data-id-align",
+  "data-variant",
+  "data-mjx-script-align",
   // container
   "jax",
   "display",

@@ -111,6 +111,17 @@ describe("previewMath", () => {
     expect(html).toMatch(/<path [^>]*d="M/);
   });
 
+  // Round 2 of the review found the circle missing: the list had no `rx`. The shapes MathJax draws
+  // for enclosures and frames, pinned through the whole renderer.
+  it.each([
+    ["\\enclose{circle}{z}", /<ellipse [^>]*rx="[\d.]+"/],
+    ["\\enclose{roundedbox}{z}", /<rect [^>]*rx="[\d.]+"/],
+    ["\\enclose{phasorangle}{z}", /<path style="stroke-width: 67;" d="M [\d.]+/],
+    ["\\fcolorbox{red}{yellow}{z}", /fill="yellow"/],
+  ])("keeps the geometry of %s", async (tex, shape) => {
+    expect(await render(`$${tex}$`)).toMatch(shape);
+  });
+
   it("renders TeX it cannot parse as an error inside the formula, not as a failed page", async () => {
     const html = await render("bad $\\frac{1}$ formula");
     expect(html).toContain("<mjx-container");
