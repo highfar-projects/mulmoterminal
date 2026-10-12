@@ -11,8 +11,8 @@ import { requestGridCellAction } from "../../../src/composables/useGridCellActio
 const runsFilesActions = (vm: unknown): vm is { runFilesAction: (action: string) => Promise<void> } => isRecord(vm) && typeof vm.runFilesAction === "function";
 
 // "Browse files in the app" in a cell's path menu (#1910). It reaches the grid as `open-files`,
-// and the grid answers it the way it answers the unread-canvas chip: the pane lives beside an
-// ENLARGED cell, so a tiled cell asking for it is asking to be enlarged too.
+// With a cell enlarged, another cell asking for it is asking to be enlarged too (the pane on the
+// tiled grid is pinned in TerminalGrid.spec, "beside the tiled grid").
 //
 // The enlargement itself belongs to the parent — this component only asks — so what is pinned
 // here is the ask, plus what the grid does with the files buffer on the way.
@@ -238,7 +238,7 @@ describe("open-files from a cell's path menu", () => {
     w.unmount();
   });
 
-  it("asks for the enlargement first when the cell is tiled, and lands the pane on THAT cell", async () => {
+  it("asks for the enlargement first when another cell is enlarged, and lands the pane on THAT cell", async () => {
     const w = mountGrid();
     cells(w)[1].vm.$emit("open-files");
     await applyExpand(w, 2);
@@ -295,8 +295,9 @@ describe("open-files from a cell's path menu", () => {
 });
 
 // A header button, a shortcut or a palette pick, through the runner the grid registers. On the
-// enlarged cell a pane toggles the way the History / Tools menu does; on a tile it enlarges first,
-// like `open-files`, because a toggle there would only record a wish and look dead.
+// enlarged cell a pane toggles the way the History / Tools menu does; on another cell while one is
+// enlarged it moves the zoom there first, like `open-files`, because a toggle there would only
+// record a wish and look dead.
 describe("cell actions asked for by name (#2611, #2635)", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -323,7 +324,7 @@ describe("cell actions asked for by name (#2611, #2635)", () => {
     w.unmount();
   });
 
-  it("enlarges a tiled cell and opens the pane on THAT cell", async () => {
+  it("enlarges a non-enlarged cell and opens the pane on THAT cell", async () => {
     const w = mountGrid();
     requestGridCellAction("cell-2", "pane-files");
     await applyExpand(w, 2);
@@ -333,7 +334,7 @@ describe("cell actions asked for by name (#2611, #2635)", () => {
     w.unmount();
   });
 
-  it("opens a non-files pane on a tiled cell too, replacing none on the way", async () => {
+  it("opens a non-files pane on a non-enlarged cell too, replacing none on the way", async () => {
     const w = mountGrid();
     requestGridCellAction("cell-2", "pane-prompts");
     await applyExpand(w, 2);
@@ -343,7 +344,7 @@ describe("cell actions asked for by name (#2611, #2635)", () => {
     w.unmount();
   });
 
-  // A collapsed zoom leaves the files pane mounted, hidden, on the cell it was on, so another pane
+  // A collapsed zoom leaves the files pane mounted on the cell it was on, so another pane
   // pressed on that same (now tiled) cell unmounts it: its buffer has to be saved first.
   it("flushes a files pane that another pane replaces on the same cell, and stays put when that fails", async () => {
     const w = mountGrid();

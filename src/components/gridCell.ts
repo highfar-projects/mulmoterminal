@@ -83,9 +83,9 @@ export interface AgentReport {
 
 export interface GridCellEmits {
   // `open-canvas` and `open-files` come from a control on a cell that may be TILED — the
-  // unread-canvas chip, the path menu — and mean: enlarge me AND open that pane, in one gesture.
-  // Their `toggle-` siblings act on the cell as it is, so pressed on a tile they only record what
-  // that cell should show once it IS enlarged (#1378), which is a different thing to ask for.
+  // unread-canvas chip, the path menu — and mean "show me that pane", never a toggle. The chip
+  // enlarges the cell to do it; Browse files opens the pane beside the tiled grid (#3027). Their
+  // `toggle-` siblings open or close the pane on the cell it is on, and open it on any other.
   (
     e:
       | "toggle-expand"

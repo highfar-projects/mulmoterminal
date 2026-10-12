@@ -95,7 +95,7 @@ export const commandPaletteEn = {
     terminalVoice: "Starts or stops voice input in the current terminal, where the mic is available.",
     terminalDiff: "Opens the changes panel of the current worktree terminal, when it has changes.",
     terminalNote: "Opens the current terminal's note for writing or editing.",
-    paneFiles: "Opens or closes the Files pane beside the current terminal, enlarging it first if it is tiled.",
+    paneFiles: "Opens or closes the Files pane beside the current terminal, or to the right of the grid if it is tiled.",
     panePrompts: "Opens or closes the pane listing the prompts sent in the current terminal.",
     paneTranscript: "Opens or closes the conversation pane of the current terminal.",
     paneTools: "Opens or closes the pane of tools the agent used in the current terminal.",

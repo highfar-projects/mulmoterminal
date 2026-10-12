@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { pathWithinCwd, rebaseOutsideCwd } from "../../../src/composables/pathWithinCwd";
 
-// #910. This is the gate that decides whether a clicked path can open in the pane beside an
-// enlarged cell — the pane is rooted at that cell's directory and cannot walk above it. A
+// #910. This is the gate that decides whether a clicked path can open in the grid's right pane —
+// the pane is rooted at its cell's directory and cannot walk above it. A
 // wrong `null` costs the user nothing (the click keeps its old route); a wrong path opens
 // somebody else's file, so the interesting cases are the ones that LOOK contained.
 describe("pathWithinCwd", () => {

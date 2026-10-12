@@ -133,7 +133,7 @@ export function fileLinkTarget(filePath: string, cwd: string): FileLinkTarget {
   return { kind: "url", url: rawFileUrl(filePath, cwd) };
 }
 
-/** Whether the Files pane beside a zoomed cell can show this path: anything the app renders
+/** Whether the grid's Files pane can show this path: anything the app renders
  *  as text or as Markdown, an HTML page, an image, a PDF, a video or a sound. Derived from the
  *  tables above rather than being another one, so a new extension row reaches the pane without a
  *  second edit. With no pane open the click still goes to a tab. */
@@ -177,8 +177,7 @@ export function createFilePathLinkProvider(
   // `location` is the line an agent named after the path (`a.ts:42`). The pane and the Files view
   // open the text at it; a route that renders the file in a new tab has no line to go to.
   openInFiles: (filePath: string, cwd: string, location?: FileLocation) => void,
-  // First chance at the click, ahead of the extension table: the Files pane beside an enlarged
-  // cell, which can show most of these WITHOUT leaving the grid (#910). Returns whether it took
+  // First chance at the click, ahead of the extension table: the grid's Files pane, which can show most of these WITHOUT leaving the grid (#910). Returns whether it took
   // it; false falls through to the routing below, unchanged. `newTab` is Cmd/Ctrl on the click (#3005).
   openInPane: (filePath: string, cwd: string, location: FileLocation | undefined, newTab: boolean) => boolean,
   // A file outside the cell that a tab shows — a video, an image, a PDF, a sound, an HTML page —

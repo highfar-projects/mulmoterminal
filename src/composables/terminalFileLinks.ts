@@ -1,5 +1,5 @@
 // Linkify file paths in the output, scoped to the session's live cwd (read lazily, since
-// it's learned after connect). The pane beside an enlarged cell gets first refusal, so a
+// it's learned after connect). The grid's right pane gets first refusal, so a
 // click can land NEXT to the terminal it came from; failing that, a document or an image
 // opens in a new tab through the file routes, and source opens in the app's own Files view.
 import type { Terminal } from "@xterm/xterm";

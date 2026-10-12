@@ -208,8 +208,8 @@ const mounted = ref(false);
 onMounted(() => (mounted.value = true));
 const zoomed = computed(() => props.expandedUid !== null && mounted.value);
 
-// The file pane beside the enlarged cell. ONE pane, not one per cell: it re-roots to whichever
-// cell is enlarged, so walking the zoom doesn't accumulate editors. WHICH pane a cell has open is
+// The file pane beside the enlarged cell, or beside the tiled grid (#3027). ONE pane, not one per
+// cell: it re-roots to whichever cell it is on, so walking the zoom doesn't accumulate editors. WHICH pane a cell has open is
 // that cell's own (#1378, see paneByCell); the width is per-browser (localStorage), like the
 // single view's splitter and the terminal font size.
 //
@@ -236,7 +236,7 @@ const remember = (key: string, value: string): void => {
     // storage blocked: the pane still works this session, it just isn't remembered
   }
 };
-// Which pane holds the one slot beside the enlarged terminal (see gridCell.ts):
+// Which pane holds the one right-pane slot (see gridCell.ts):
 //   files   — the file tree/editor (the original occupant).
 //   canvas  — what the agent DREW: the GUI plugin views for this cell's session.
 //   tools   — which GUI tools this session actually has, read-only.
@@ -407,8 +407,8 @@ function setRightPane(pane: RightPane | null, uid: number | null): void {
   // the user is looking at, and collapsing THAT pane out of full width would be a second cell's
   // button rearranging the one in front of them.
   if (paneUid.value === uid) paneExpanded.value = pane === "transcript";
-  // Leaving files drops the directory it was on, so coming back re-roots to whichever cell is
-  // enlarged THEN rather than resuming a directory the user has since walked away from.
+  // Leaving files drops the directory it was on, so coming back re-roots to whichever cell the pane
+  // is on THEN rather than resuming a directory the user has since walked away from.
   if (leavingFiles) paneCwd.value = null;
 }
 

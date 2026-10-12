@@ -30,8 +30,8 @@ export function openInFilesPane(cwd: string, pathRel: string, location: FileLoca
   return opener?.(cwd, pathRel, location, newTab) ?? false;
 }
 
-/** First chance at a path clicked in terminal output: the pane beside the enlarged cell,
- *  when it can show that kind of file and the file is under that cell's own directory.
+/** First chance at a path clicked in terminal output: the grid's right pane, when it can show
+ *  that kind of file and the file is under the directory of the cell the pane belongs to.
  *  False sends the click down the route it had before — a new tab, or the full-screen view. */
 export function tryOpenInPane(filePath: string, cwd: string, location: FileLocation | undefined, newTab: boolean): boolean {
   if (!isPaneViewable(filePath)) return false;

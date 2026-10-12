@@ -20,7 +20,7 @@ differ as a consequence of that, not as a design of their own.
 
 | surface | root | what it may reach | who chose the path |
 |---|---|---|---|
-| **Right pane** (`TerminalGrid` → `FilesPane`, `canvas-target` set) | the expanded cell's directory | that directory's subtree | the user, by zooming a cell |
+| **Right pane** (`TerminalGrid` → `FilesPane`, `canvas-target` set) | the directory of the cell it is on (the enlarged one, or the tile that opened it) | that directory's subtree | the user, by zooming a cell or opening the pane from its menu |
 | **Full screen** (`/files?cwd=`, `FilesOverlay` → `FilesPane`) | whatever `?cwd=` says | that base's subtree | a browser, through a query string |
 | **Watched documents** (`containForWatching`) | the workspace + every live session directory | those subtrees | a browser, checked against roots the server already serves |
 | **`presentDocument` / `presentHtml` / …** (`backends/files/openPath.ts`) | **none** | any file of the right extension, anywhere | an agent the user launched |
