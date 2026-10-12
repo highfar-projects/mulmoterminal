@@ -86,7 +86,8 @@ says so in its own header; `backends/files/fileOps.ts` exists to do the opposite
 This is why the same `.md` renders differently in the right pane and at `/files`: only the right
 pane can open it on the canvas, where the markdown plugin's view runs. The full-screen view falls
 to the preview iframe, which is a `marked` of the server's own with none of the plugin's
-extensions, so maths stays as code there. A mermaid fence IS drawn there (#2991), but by the
+renderers. Maths IS typeset there (#3017), as SVG by the server while it builds the document
+(`server/files/previewMath.ts`, with the TeX `html` package left out). A mermaid fence IS drawn there (#2991), but by the
 preview's own nonce'd module script importing mermaid from this server
 (`server/files/previewMermaid.ts`, `server/files/mermaidAssets.ts`) — the plugin's renderer is
 never brought to that surface. Do not "fix" the sandbox to get there: the CSP does NOT block an

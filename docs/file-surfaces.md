@@ -59,9 +59,9 @@ The right pane can open a document **on the canvas**, which mounts the markdown 
 in-app Shadow DOM component that registers marked extensions and renders mermaid, maths and the
 rest. The full-screen view has no canvas to open into, so a `.md` goes to the **preview**, which is
 an iframe served from `/api/files/browse/md` and built by a **`marked` of the server's own, with
-none of the plugin's extensions** — it drops a YAML front matter block, points relative images at
+none of the plugin's renderers** — it drops a YAML front matter block, points relative images at
 the raw route, numbers code blocks for the copy button, and the embedded document hands external
-link clicks to the pane. Maths therefore renders as code there.
+link clicks to the pane. Maths is typeset by that same server (#3017), below.
 
 A mermaid fence is the one diagram the preview draws itself (#2991), and how it does so is set by
 the sandbox. The preview is served under `sandbox allow-scripts; script-src 'nonce-…'` with no
@@ -77,11 +77,19 @@ that imports it and draws each fence, folding the numbered code block under the 
 (`server/files/previewMermaid.ts`). The plain `…/md` document a new tab opens is served under a
 bare `sandbox` and runs nothing, so there the fence stays a code block.
 
+Maths takes the other road (#3017), because it can: MathJax runs in Node, so `$…$` and `$$…$$` are
+typeset to SVG while the server builds the document (`server/files/previewMath.ts`), in both the
+embedded and the plain document, and nothing in the sandbox changes. The delimiter rules are the
+plugin's own `mathExtension`, so a formula is found where the Canvas finds it. What the plugin does
+that this cannot is sanitise the SVG — DOMPurify needs a DOM — so the input is narrowed instead: the
+TeX `html` package (`\href`, `\class`, `\style`, `\cssId`) is left out, and neither `require` nor
+`autoload` is loaded to bring it back. The tests pin all of them.
+
 **So "make both surfaces render the same" is a containment decision before it is a rendering
 one.** Moving the plugin's renderer to the full-screen view would render a file chosen through a
 query string with the machinery built for a file an agent named. The preview's own diagram path
 keeps the isolation at the cost of a second rendering path that drifts when the plugin gains a
-feature — a trade taken knowingly for mermaid, and the reason maths is still code there. Both are
+feature — a trade taken knowingly for mermaid, and again for maths. Both are
 defensible; neither is a refactor.
 
 ## An HTML page, an image, a PDF or media in the pane serves bytes, so it takes the raw route's base
