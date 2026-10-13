@@ -9,7 +9,7 @@ import { sanitizeDraftText } from "../pty/pty-text.js";
 import { squashForMarker, trustDialogIsUp } from "../pty/pty-scan.js";
 import { planDraftInjection } from "./draft-plan.js";
 import { submittableLineForAgent } from "../../../common/terminalSubmit.js";
-import { tmuxIsPsmux } from "../../infra/process/tmux.js";
+import { tmuxIsPsmux, tmuxPsmuxVtInput } from "../../infra/process/tmux.js";
 
 // All a session needs to be typed into: where the bytes go, and which agent reads them
 // (both the submit mapping and the completion-menu guard are Claude Code's behaviour).
@@ -64,11 +64,13 @@ const DRAFT_SUBMIT_MS = 150;
 // closing `\e[201~`, where Claude takes it as a pasted newline and the prompt is never sent.
 // Measured with a probe in a psmux pane: a CR 150 or 300 ms after the paste landed inside it every
 // time, 500 ms and more after it every time. This was every hidden translation worker timing out.
+// A psmux client on the VT input route (3.4.0 and later) keeps the paste markers, so the CR lands
+// after the paste at any delay and upstream's short beat is enough again.
 const PSMUX_DRAFT_SUBMIT_MS = 1000;
 
 /** How long after the paste the submitting Enter goes out, for a session behind psmux or not. */
-export const draftSubmitDelayMs = (target: Partial<Pick<PtyEntry, "tmux">>, psmux: boolean = tmuxIsPsmux()): number =>
-  target.tmux && psmux ? PSMUX_DRAFT_SUBMIT_MS : DRAFT_SUBMIT_MS;
+export const draftSubmitDelayMs = (target: Partial<Pick<PtyEntry, "tmux">>, psmux: boolean = tmuxIsPsmux(), vtInput: boolean = tmuxPsmuxVtInput()): number =>
+  target.tmux && psmux && !vtInput ? PSMUX_DRAFT_SUBMIT_MS : DRAFT_SUBMIT_MS;
 
 // Deliver an auto-run prompt (initialPrompt) or an editable draft by TYPING it into
 // claude's input box once it's ready — NOT as a `claude` CLI arg, which a large prompt

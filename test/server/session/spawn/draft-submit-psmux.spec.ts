@@ -6,14 +6,19 @@ import * as tmux from "../../../../server/infra/process/tmux.js";
 // Fork-only: behind psmux the submitting Enter has to wait until psmux has handed the bracketed
 // paste to the pane, or it lands inside the paste and the auto-run prompt is never sent.
 describe("draftSubmitDelayMs", () => {
-  it("waits a full second for a session behind psmux", () => {
-    expect(draftSubmitDelayMs({ tmux: true }, true)).toBe(1000);
+  it("waits a full second for a session behind psmux on the default input route", () => {
+    expect(draftSubmitDelayMs({ tmux: true }, true, false)).toBe(1000);
+  });
+
+  // The VT input route keeps the paste markers, so the CR cannot land inside the paste.
+  it("goes back to the short beat when psmux is on the VT input route", () => {
+    expect(draftSubmitDelayMs({ tmux: true }, true, true)).toBe(150);
   });
 
   it("keeps upstream's short beat for real tmux and for a session with no multiplexer", () => {
-    expect(draftSubmitDelayMs({ tmux: true }, false)).toBe(150);
-    expect(draftSubmitDelayMs({ tmux: false }, true)).toBe(150);
-    expect(draftSubmitDelayMs({}, true)).toBe(150);
+    expect(draftSubmitDelayMs({ tmux: true }, false, false)).toBe(150);
+    expect(draftSubmitDelayMs({ tmux: false }, true, false)).toBe(150);
+    expect(draftSubmitDelayMs({}, true, false)).toBe(150);
   });
 });
 

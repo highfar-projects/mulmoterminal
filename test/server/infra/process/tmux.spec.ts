@@ -26,6 +26,8 @@ import {
   isScrubbedGlobalEnvEntry,
   tmuxClientUnsetNames,
   isPsmuxVersion,
+  psmuxVersionOf,
+  psmuxVtInputFor,
   liveWheelCommand,
   tmuxConfLinesFor,
   clientSizeOfWindow,
@@ -640,6 +642,37 @@ describe("isPsmuxVersion", () => {
 
   it("does not mistake a real tmux for psmux", () => {
     expect(isPsmuxVersion("tmux 3.6a\n")).toBe(false);
+  });
+});
+
+describe("psmuxVersionOf", () => {
+  // The first line is the tmux psmux imitates; the release is on the second.
+  it("reads psmux's own version, not the imitated tmux one", () => {
+    expect(psmuxVersionOf("tmux 3.3.8\npsmux 3.4.0 (1a2b3c4 2026-10-13)\n")).toEqual([3, 4, 0]);
+  });
+
+  it("is null for a real tmux or an unreadable answer", () => {
+    expect(psmuxVersionOf("tmux 3.6a\n")).toBeNull();
+    expect(psmuxVersionOf("psmux\n")).toBeNull();
+  });
+});
+
+describe("psmuxVtInputFor", () => {
+  it("uses the VT input route from 3.4.0, the first release that has it", () => {
+    expect(psmuxVtInputFor([3, 4, 0], undefined)).toBe(true);
+    expect(psmuxVtInputFor([3, 10, 1], undefined)).toBe(true);
+    expect(psmuxVtInputFor([4, 0, 0], undefined)).toBe(true);
+  });
+
+  it("keeps the default route on a release without it, or when the version is unknown", () => {
+    expect(psmuxVtInputFor([3, 3, 8], undefined)).toBe(false);
+    expect(psmuxVtInputFor([2, 9, 9], undefined)).toBe(false);
+    expect(psmuxVtInputFor(null, undefined)).toBe(false);
+  });
+
+  // The way back if a release misbehaves on the VT route.
+  it("stays off when PSMUX_VT_INPUT=0 is set", () => {
+    expect(psmuxVtInputFor([3, 4, 0], "0")).toBe(false);
   });
 });
 

@@ -23,6 +23,7 @@ import {
   tmuxHasSession,
   tmuxIsPsmux,
   tmuxNewSessionArgs,
+  tmuxPsmuxVtInput,
   tmuxScrubEnvNames,
 } from "../../infra/process/tmux.js";
 
@@ -265,10 +266,15 @@ export function ptySpawn(
     // its whole life — so our own bind port would reach every pane it ever opens (#1919). A PORT that
     // is NOT ours (`PORT=3000 mulmoterminal --port 34601`) is the user's and still travels (#1873).
     traceTmux(tmuxIsPsmux(), "client-spawn", { id: sessionId, reattach: reattached, program: path.basename(file) });
-    const client = spawnPty("tmux", tmuxNewSessionArgs(sessionId, file, args, cwd, env), TMUX_CLIENT_CWD, [
-      ...unset,
-      ...tmuxClientUnsetNames(process.env.PORT, ownBindPort()),
-    ]);
+    // Fork-only: a psmux that has the VT input route gets its client started on it, so a bracketed
+    // paste keeps its markers instead of being guessed by timing (see tmux.ts psmuxVtInputFor).
+    const client = spawnPty(
+      "tmux",
+      tmuxNewSessionArgs(sessionId, file, args, cwd, env),
+      TMUX_CLIENT_CWD,
+      [...unset, ...tmuxClientUnsetNames(process.env.PORT, ownBindPort())],
+      tmuxPsmuxVtInput() ? { PSMUX_VT_INPUT: "1" } : {},
+    );
     return {
       term: tmuxIsPsmux() ? withPsmuxInput(client) : client,
       tmux: true,
