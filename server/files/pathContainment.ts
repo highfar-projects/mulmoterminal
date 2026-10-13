@@ -202,7 +202,7 @@ export function namesAWindowsDevice(rel: string, platform: NodeJS.Platform = pro
   });
 }
 
-function realpathOr(p: string): string {
+export function realpathOr(p: string): string {
   try {
     // .native, not the JS implementation: on Windows only the native call expands an 8.3 short
     // component (C:\Users\RUNNER~1 -> ...\runneradmin). Both sides of the containment check

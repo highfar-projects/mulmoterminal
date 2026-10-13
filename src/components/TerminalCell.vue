@@ -666,14 +666,14 @@ function watchCanvasOutput(id: string | null) {
   if (!id) return;
   unsubscribeCanvas = subscribe(`session:${id}`, () => {
     // Already looking at it: arrivals land in a pane the user can see, so nothing is unseen.
-    if (props.expanded && props.rightPane === "canvas") return;
+    if (props.paneShown && props.rightPane === "canvas") return;
     unseenCanvas.value += 1;
   });
 }
 watch(sessionId, watchCanvasOutput, { immediate: true });
 // Opening the pane on this cell clears the count — that IS having looked.
 watch(
-  () => props.expanded && props.rightPane === "canvas",
+  () => props.paneShown && props.rightPane === "canvas",
   (looking) => {
     if (looking) unseenCanvas.value = 0;
   },

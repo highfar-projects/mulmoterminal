@@ -13,9 +13,11 @@ import { themeEditorJa } from "./themeEditor/ja";
 import { headerChipsJa } from "./headerChips/ja";
 import { headerButtonsJa } from "./headerButtons/ja";
 import { settingsControlsJa } from "./settingsControls/ja";
+import { settingsHelpJa } from "./settingsHelp/ja";
 import { shortcutsJa } from "./shortcuts/ja";
 import { filesTreeJa } from "./filesTree/ja";
 import { previewCodeCopyJa } from "./previewCodeCopy/ja";
+import { fileLinksJa } from "./fileLinks/ja";
 import { skillsViewJa } from "./skillsView/ja";
 import { processesViewJa } from "./processesView/ja";
 
@@ -173,9 +175,7 @@ export const ja: Messages = {
       },
     },
 
-    guide: {
-      prompt: "MulmoTerminal の使い方が分からないときはガイドをどうぞ —",
-    },
+    ...settingsHelpJa,
 
     push: {
       intro:
@@ -505,7 +505,6 @@ export const ja: Messages = {
   cellMenu: {
     history: "履歴",
     tools: "道具",
-    enlargeFirst: "セルを拡大すると横に開けます",
     canvasUnavailable: "このディレクトリでは描画用の MCP が無効です。ランチャーで Canvas を有効にして、このセルを再起動してください",
     items: {
       prompts: { label: "送ったプロンプト", detail: "このセッションで自分が打ち込んだ指示" },
@@ -576,13 +575,6 @@ export const ja: Messages = {
   // 2打のショートカットが2打目を待っている間に出す案内（#2265）。
   commandPalette: commandPaletteJa,
   // The path menu's file items. Its repository section stays in the forge's own words.
-  pathMenu: {
-    insertFilePath: "ファイルのパスを挿入",
-    reveal: "ファイルマネージャで開く",
-    browseFiles: "アプリでファイルを見る",
-    dirSettings: "このディレクトリの設定",
-    newTerminal: "ここで新しいターミナル",
-  },
   prefixKeys: {
     waiting: "{key} のあとに押すキー:",
     cancel: "Esc で取り消し",
@@ -654,6 +646,7 @@ export const ja: Messages = {
   settingsControls: settingsControlsJa,
   ...filesTreeJa,
   ...previewCodeCopyJa,
+  ...fileLinksJa,
   ...skillsViewJa,
   ...processesViewJa,
   tips: tipsJa,

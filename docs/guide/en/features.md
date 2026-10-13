@@ -45,13 +45,13 @@ MulmoTerminal — a browser terminal for parallel coding agents — organized by
 | PR phase / work phase | Each roster row badges the branch's **PR state** (draft / CI fail / changes / ready / merged …) and the work phase (planning / editing) |
 | Model / context size | e.g. `Opus · ctx 35%` — the active model and how full the context is |
 | Activity timeline | Tool-call history (Bash / Read / Edit …) shown newest-first in a modal — in the cell header's **History** menu, with the prompts and conversation panes below |
-| Prompts pane | The prompts **you** sent this session, newest first, in a pane beside the enlarged cell — the mirror of the timeline above (what the agent ran vs. what you asked for). Read-only, keeps up while left open, Claude and Codex |
+| Prompts pane | The prompts **you** sent this session, newest first, in a pane beside the cell (or to the right of the tiled grid) — the mirror of the timeline above (what the agent ran vs. what you asked for). Read-only, keeps up while left open, Claude and Codex |
 | Conversation pane | The session's **conversation as turns**, in place of the terminal — read from the agent's own transcript, not the screen, so a Claude cell's alternate screen no longer means "what scrolled past is gone". **Scroll up to walk back to the first turn**, a page at a time. A frame per speaker (you / the agent, named), the reply as **rendered markdown**, and the tool traffic **folded to one line** saying what ran. A snapshot with a reload, not a live tail. Claude, Codex, Cursor, Copilot |
 | Copy the last code block | A cell-header button puts the **last fenced block of the latest reply** on the clipboard, taken from the agent's own transcript rather than the screen — so no line wrapping or leading spaces come with it and it pastes cleanly into Discord / Slack / email. Where the browser blocks clipboard access (any address that is not https or localhost, i.e. from your phone) it shows the block selected for copying by hand instead |
 | Cost (estimated) | Approximate **session / today / this month** cost in settings |
 | Worktree diff badge | Shows the amount of change on a worktree cell; click for the diff panel (→ [the diff badge](worktree.html#diff-badge)) |
 | GUI panel | Renders diagrams, forms, images, and documents — plus HTML, **video/slides (MulmoCast)**, collections, and accounting — from the agent's tool calls (Claude / Codex both supported). Scenes Claude Code writes as Remotion components need packages you install: [MulmoCast videos](mulmocast.html#remotion) |
-| Clickable file paths | A **file path an agent prints** in the terminal becomes a link, and **what it opens is chosen by extension**: `.md` renders, `.json` is indented, `.csv` / `.tsv` become a table, `.html` shows as the rendered page (each in a new tab), source and `.txt` open in the app's own **Files** view for editing, and images / PDF / video open as-is. A line after the path — `src/a.ts:42`, `:42:7`, or tsc's `(12,5)` — opens the file as text at that line wherever it opens in the Files pane or view (an image, PDF, video or audio file still opens as itself); a new tab ignores it. **Anything a tab cannot display** — an `.xlsx`, a `.zip`, a `Makefile` — also goes to the **Files** view, where it offers **Open in OS** rather than starting a download nobody asked for. **While a grid cell is enlarged the file pane beside it takes the click instead**, so the file opens next to the terminal that printed it — an image shows as a picture, a PDF in a frame, a video or audio file in a player, an HTML page in its Preview — and only for files under that cell's own directory. Files within the session's working directory ([routing table](https://github.com/receptron/mulmoterminal#clicking-a-file-path)) |
+| Clickable file paths | A **file path an agent prints** in the terminal becomes a link, and **what it opens is chosen by extension**: `.md` renders, `.json` is indented, `.csv` / `.tsv` become a table, `.html` shows as the rendered page (each in a new tab), source and `.txt` open in the app's own **Files** view for editing, and images / PDF / video open as-is. A line after the path — `src/a.ts:42`, `:42:7`, or tsc's `(12,5)` — opens the file as text at that line wherever it opens in the Files pane or view (an image, PDF, video or audio file still opens as itself); a new tab ignores it. **Anything a tab cannot display** — an `.xlsx`, a `.zip`, a `Makefile` — also goes to the **Files** view, where it offers **Open in OS** rather than starting a download nobody asked for. **While a grid cell is enlarged, or a file pane is open beside the tiled grid, that pane takes the click instead**, so the file opens next to the terminal that printed it — an image shows as a picture, a PDF in a frame, a video or audio file in a player, an HTML page in its Preview — and only for files under the directory of the cell the pane belongs to. A file outside the session's working directory opens too; an HTML page, an image, a PDF, a video or an audio file there opens in a new tab through a link to that one file ([routing table](https://github.com/receptron/mulmoterminal#clicking-a-file-path)) |
 | Cross-repo PRs / Issues view | All registered repos' **open PRs and issues** in the toolbar's full-screen Pull requests view |
 | Wiki / Collections / Accounting / Files | In-app views: a Wiki (with a graph view), collections, accounting (opened from the top row of the Collections screen), and a **file explorer + editor** |
 | Work from a collection | A chat started from a collection card runs **under the collection** instead of taking the screen to the grid. It is the same terminal either way — whichever view you have open drives it → [working from a collection](#collection-chat) |
@@ -138,7 +138,8 @@ once per directory, so a second terminal in the same repository still starts on 
 
 **More than one file, as tabs.** A plain click replaces the file you are on. **Cmd+click** a file
 (Ctrl+click on Windows and Linux), or pick **Open in a new tab** from its right-click menu, to keep
-both: a row of tabs appears under the header. Switching tabs saves the file you leave, and each tab
+both: a row of tabs appears under the header. A path clicked in a terminal works the same way:
+Cmd+click (Ctrl+click) opens it in a new tab instead of replacing the one in front. Switching tabs saves the file you leave, and each tab
 comes back where you were in it. The tree follows the tab in front, opening its folders. Close a
 tab with its **×**, a middle click, or **Delete**.
 
@@ -173,7 +174,7 @@ file may appear as plain text for a moment before the colours arrive. Anything e
 
 **An outline of a Markdown file.** The **Outline** button (the list icon) in the header lists the file's headings, indented by level — in the editor, the one you are reading is marked — and picking one puts it at the top: the line in the editor, or the heading in the Preview. Headings inside code fences, HTML comments and the front matter are not listed, nor are headings inside quotes or lists.
 
-**Editor and Preview side by side.** For a Markdown file, the button beside **Preview** (the split icon) shows the editor on the left and the Preview on the right. As you scroll the editor, the Preview follows the heading you are under — by heading, not by line, so within a section the two scroll on their own. The Preview shows the file as saved: an edit reaches it on the next save. Press the button again to go back to the editor alone.
+**Editor and Preview side by side.** For a Markdown file, the button beside **Preview** (the split icon) shows the editor on the left and the Preview on the right. As you scroll the editor, the Preview follows the heading you are under — by heading, not by line, so within a section the two scroll on their own. The Preview shows the file as saved: an edit reaches it on the next save. Press the button again to go back to the editor alone. With the **Canvas** view on, the same button puts the editor beside the Canvas view instead; it shows the saved file too, and redraws when you save.
 
 **HTML pages, images, PDFs, video and audio open in the pane.** An `.html` file gets a **Preview** that shows the page
 itself (sandboxed: its scripts run but cannot fetch; images beside it load, a relative stylesheet or
@@ -185,16 +186,23 @@ opens it here, drawn, when the pane is up.
 
 **Hand the selected lines to the agent.** The **@** button in the header (or the `files-insert-selection` key) puts the selected lines at the prompt of the terminal beside the pane as `@src/a.ts#L10-20` — the form Claude Code's IDE integration uses. Nothing is sent, so you can go on to say what to do with them. With nothing selected — or in Preview — it inserts the file alone. Unsaved edits are saved first, so the line numbers match the file the agent reads. It is Claude Code's form; another agent sees it as plain text.
 
+**Canvas shows the open file inside the pane.** For a Markdown, HTML, MulmoScript or ShapeScript (`.shape`) file, **Canvas** in the pane's header (or **Open in the Canvas** on a row) switches the file to the view the Canvas draws it with, with the tree still beside it; press **Canvas** again to go back to the editor. Unsaved edits are saved first. Nothing is added to the cell's own Canvas. Only in the pane beside a cell — the full-screen file view keeps Preview.
+
+**The agent can show you a file, or ask you to check its work.** With the Canvas tools on (the `render` group), an agent has two tools for your terminal's right pane. `showInPane` opens a file in the Files pane in a given view (editor, Preview, Canvas view, or the editor beside the Canvas view) and at a given line. `requestCheck` puts a checklist over the terminal: each item can open its file in one click, you mark it **OK** or **NG** with a note, and **Send** types the results into the terminal as your next message, so the agent can fix what was NG. A cell that is not on screen keeps the request until you enlarge it; with nothing enlarged, the cell is enlarged for you. Paths stay inside the terminal's directory. What each tool does, how to turn it on and what to ask for: [The agent drives your right pane](pane-tools.html).
+
 **A Markdown file can be read in Preview.** Relative images are shown, a YAML front matter block
 is left out, and external links open in a new browser tab. A link to another file (`./b.md`,
 `../README.md`) opens it in a new tab of the pane — in Preview when it is Markdown; a link that
-climbs above the pane's folder says so instead. Mermaid and maths stay as code there;
-**Canvas** in the pane's header renders them. A code block is coloured for its language (the
+climbs above the pane's folder says so instead. A ` ```mermaid ` fence is drawn as a diagram,
+with its code folded under it (open **Diagram source** to see or copy it), and `$…$` / `$$…$$`
+maths is typeset, in the full-screen view too. A code block is coloured for its language (the
 editor's languages — JavaScript/TypeScript, Python, JSON, CSS, HTML, YAML, XML, Rust, Go, Java,
-C/C++, PHP, SQL, Markdown; others stay plain). The small copy button at a block's top right opens
-the block in a dialog of the app's own, read from the file, with **Copy** there: a Markdown file
-controls how its Preview looks, so what you check before copying is shown where the file cannot
-restyle it.
+C/C++, PHP, SQL, Markdown; others stay plain). The small copy button at a block's top right copies
+the block as the file has it — read from the file, not from the page — and a notice at the bottom
+shows its first line and line count. A Markdown file controls how its Preview looks, so check that
+first line before pasting. A block holding characters you cannot see (invisible, control or
+direction-changing ones) opens in a dialog of the app's own instead, with each written out as
+`<U+…>`, and so does every block where the browser will not let the app write to the clipboard.
 
 **Editing is safe against the agent working in the same directory.**
 
@@ -230,6 +238,7 @@ so a very large unsaved buffer may not get out.
 | Voice input | Dictate into the prompt via microphone transcription. Settings picks **the language you dictate in** (per browser) — your browser's, per-clip detection, or a fixed one; speaking a language the mic isn't expecting comes back **translated** into the one it is |
 | MCP servers | Join your own HTTP MCP servers to sessions via the MCP SERVERS setting |
 | `/mulmoterminal-bug-report` | Something looks broken? The bundled skill hears the symptom, checks whether it is actually configuration or by design (reading your real config and version), searches the existing issues, and only then helps you file one — with the environment collected and secrets masked |
+| `/mulmoterminal-help` / the toolbar's help icon | Ask anything about MulmoTerminal — what it can do, how a feature or a part of the screen works, how to set something up, what is new in your version and in the latest one — answered from the shipped guide, changelog and source, with the place each fact was checked. The icon next to the gear opens it in one press; it changes nothing |
 
 ![A cell header with the Mulmo dropdown open beside the Skill menu, listing two decks — one declared by the project, one from the workspace's stories directory](../images/mulmo-menu.png)
 

@@ -4,7 +4,7 @@ nav_title: Feature list
 layout: default
 parent: English
 nav_order: 6.5
-as_of: 9.6.0
+as_of: 10.4.0
 description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 9.1.0)."
 ---
 
@@ -20,6 +20,7 @@ Every capability MulmoTerminal has as of 9.1.0, one line each, grouped by area. 
 
 More: [Basics](basics.html)
 
+- A tile's History and Tools menus open their pane to the right of the tiled grid, without enlarging the cell (v10.4.0)
 - The launch directory may start with `~` (v8.5.0)
 - Reopen a recently closed cell beside the current terminal from "Reopen: …" in the command palette; an agent resumes its conversation. The `terminal-reopen` action reopens the newest (v8.2.0)
 - The grid-ordering button opens an Auto / Manual / Priority menu with the current one checked (v6.6.0)
@@ -71,6 +72,7 @@ More: [Agents](agents.html)
 - Beta: token rotation starts each new Claude session on whichever of several subscriptions has the most weekly room per hour until its reset, and conversations carry across them (v9.2.0)
 - A rotated session moves to another subscription at 98%, or when it hits its limit, and carries on with the same conversation (v9.2.0)
 - A cell's header names the subscription it runs on, and More features → Token usage lists each subscription's 5h / weekly room (v9.2.0)
+- A token held out at its usage limit shows when each window last said it would reset (v9.7.0)
 - Clicking that name lists the other subscriptions with their weekly room and the time until it resets, and picking one restarts the session on it with the same conversation (v9.6.0)
 - Unavailable agents are dimmed in the Agent Picker, with the reason and an install guide link (v5.8.0)
 - Declare the default agent with --agent or defaultAgent, so the app starts without Claude Code installed (v4.25.0)
@@ -91,6 +93,7 @@ More: [Agents](agents.html)
 
 More: [Conversations](conversation.html)
 
+- Every code block in rendered markdown (conversation pane, wiki, skills, What's new, release notes, blueprints, canvas) has a copy button that copies it as written (v10.0.0)
 - A conversation pane shows the session transcript as rendered markdown, back to the first turn (v5.0.0)
 - A prompts pane lists the prompts you sent this session, newest first (v4.9.0)
 - An optional Question pane shows Claude's AskUserQuestion choices as buttons beside the enlarged terminal (v4.8.3)
@@ -107,6 +110,7 @@ More: [Conversations](conversation.html)
 
 More: [Phone](phone.html)
 
+- From a terminal on the phone, list every earlier session of its directory (every agent) and read one as a conversation, paged back on request; the phone screen comes with a MulmoServer update (v10.0.0)
 - A terminal on the phone opens its project's shared files with one button, and comes back from them (v9.1.0)
 - A project chooses which of its files (md / html / pdf / pictures) the phone may list and open, under `mobileFiles` in `.mulmoterminal.json`; the phone screen comes with a MulmoServer update (v9.0.0)
 - Phone terminal rows are named from the conversation instead of a bare UUID (v5.7.0)
@@ -132,6 +136,18 @@ More: [Phone](phone.html)
 
 More: [Feature reference](features.html)
 
+- A clicked video, image, PDF, sound or HTML page outside the cell opens in a tab, through a link for that one file (v10.4.0)
+- Closing the agent's checklist without sending tells the agent, in one line, that it was closed (v10.4.0)
+- The agent opens a file in the Files pane beside its terminal, in a chosen view and at a line (showInPane) (v10.3.0)
+- The agent puts a checklist over the terminal; your OK / NG answers and notes come back as your next message (requestCheck) (v10.3.0)
+- Maths ($…$ and $$…$$) is drawn in the full-screen Markdown preview, typeset on the server (v10.2.0)
+- A Markdown file's editor sits beside the Canvas view with the side-by-side button (v10.2.0)
+- ShapeScript (.shape) files open in the Files pane's Canvas view (v10.2.0)
+- The Files pane switches the open Markdown, HTML or MulmoScript file to the Canvas view in place, the tree kept beside it (v10.1.0)
+- The Files pane remembers which files were in the Canvas view across reopening the pane and a reload (v10.1.0)
+- Cmd/Ctrl+click on a path in terminal output opens it in a new Files tab (v10.1.0)
+- A Preview code block copies in one press and shows a notice; the dialog opens only when the block cannot be copied as it is (v10.0.0)
+- A mermaid fence in a Markdown file's Preview is drawn as a diagram, in the app's theme, with its code folded under it (v9.9.0)
 - The Files pane shows PDF, video and audio; a text file too large to edit offers Open in OS (v7.3.0)
 - Saving .mulmoterminal.json in the Files pane applies it at once, with key completion and rejected values marked (v7.2.0)
 - The Files tree offers New file, New folder, Rename and Move to Trash, from empty space too since 7.3 (v7.2.0)
@@ -224,6 +240,8 @@ More: [Configuration](config.html)
 
 More: [Configuration](config.html)
 
+- A help icon in the toolbar opens a bundled help desk that answers questions about MulmoTerminal from the shipped guide, changelog and source (v9.8.0)
+- `tmuxPrefix` sets the dedicated tmux server's prefix key: off by default so Ctrl+B reaches the agent, or `C-b` / another control key; Settings -> Terminal keys has a dropdown (v9.8.0)
 - Directory settings → Change here edits every .mulmoterminal.json key in a form; Use global removes one (v8.0.0)
 - Settings adds open buttons (URL, folder, shell, view, PR, picker) and action buttons to the header (v7.3.0)
 - Default agent, header status-colour mode and Playful effects are selectable in Settings (v7.2.0)
@@ -261,6 +279,7 @@ More: [Configuration](config.html)
 
 More: [From a collection](from-collection.html) · [MulmoCast videos](mulmocast.html)
 
+- JingleScript tools read a score from a `.json` file by path, so a long score need not be sent inline, and the player offers a MIDI download (v9.7.0)
 - The agent can write a short jingle or sound effect as a JingleScript score, and the Canvas plays it with a waveform, beat grid and cues (manageJingleScript) (v9.6.0)
 - The agent in a cell can write a MulmoCast Remotion scene itself (`code`) and refine it with you (v9.1.0)
 - MulmoCast `remotion` scenes: Claude Code writes a beat as a Remotion animation, or you pass one you wrote (`code`); the optional packages are yours to install and `init` checks them (v9.0.0)

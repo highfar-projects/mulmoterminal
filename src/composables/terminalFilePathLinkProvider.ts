@@ -21,8 +21,11 @@ import { browserDisplays } from "../../common/rawContentType";
 import { findFilePathLinks } from "./terminalFilePathLinks";
 import type { FileLocation } from "./filePathLocation";
 import { pathWithinCwd, rebaseOutsideCwd } from "./pathWithinCwd";
+import { joinedPath } from "./grantedTab";
+import { grantKind } from "../../common/fileGrant";
 import { fileMediaKind, filePreviewKind } from "../components/filePreviewKind";
 import { HTML_FILE_NAME, filesPageUrl } from "../../common/filesPage";
+import { wantsNewTab } from "./newTabModifier";
 
 export interface TerminalCell {
   chars: string;
@@ -130,7 +133,7 @@ export function fileLinkTarget(filePath: string, cwd: string): FileLinkTarget {
   return { kind: "url", url: rawFileUrl(filePath, cwd) };
 }
 
-/** Whether the Files pane beside a zoomed cell can show this path: anything the app renders
+/** Whether the grid's Files pane can show this path: anything the app renders
  *  as text or as Markdown, an HTML page, an image, a PDF, a video or a sound. Derived from the
  *  tables above rather than being another one, so a new extension row reaches the pane without a
  *  second edit. With no pane open the click still goes to a tab. */
@@ -174,10 +177,12 @@ export function createFilePathLinkProvider(
   // `location` is the line an agent named after the path (`a.ts:42`). The pane and the Files view
   // open the text at it; a route that renders the file in a new tab has no line to go to.
   openInFiles: (filePath: string, cwd: string, location?: FileLocation) => void,
-  // First chance at the click, ahead of the extension table: the Files pane beside an enlarged
-  // cell, which can show most of these WITHOUT leaving the grid (#910). Returns whether it took
-  // it; false falls through to the routing below, unchanged.
-  openInPane: (filePath: string, cwd: string, location?: FileLocation) => boolean,
+  // First chance at the click, ahead of the extension table: the grid's Files pane, which can show most of these WITHOUT leaving the grid (#910). Returns whether it took
+  // it; false falls through to the routing below, unchanged. `newTab` is Cmd/Ctrl on the click (#3005).
+  openInPane: (filePath: string, cwd: string, location: FileLocation | undefined, newTab: boolean) => boolean,
+  // A file outside the cell that a tab shows — a video, an image, a PDF, a sound, an HTML page —
+  // gets a one-file URL from the server first (#3024): the raw route refuses its directory.
+  openOutside: (absPath: string) => void,
 ): ILinkProvider {
   return {
     provideLinks(bufferLineNumber: number, callback: (links: ILink[] | undefined) => void): void {
@@ -188,14 +193,18 @@ export function createFilePathLinkProvider(
         text: link.text,
         range: { start: { x: link.startX, y: bufferLineNumber }, end: { x: link.endX, y: bufferLineNumber } },
         decorations: { pointerCursor: true, underline: true },
-        activate: () => {
+        activate: (event: MouseEvent) => {
           // A Windows path is linked as printed (`.claude\x\a.md`) but opened `/`-separated, the
           // one shape the pane, the routes and the containment checks all compare in.
           const token = link.text.replace(/\\/g, "/");
-          if (openInPane(token, cwd, link.location)) return;
+          if (openInPane(token, cwd, link.location, wantsNewTab(event))) return;
           // A path outside the cell is served relative to its own directory: the routes contain
           // `path` within `cwd`, so handing them the cell's cwd refused it as an escape (#2260).
           const rebased = rebaseOutsideCwd(token, cwd);
+          if (rebased && grantKind(rebased.rel) !== null) {
+            openOutside(joinedPath(rebased.base, rebased.rel));
+            return;
+          }
           const base = rebased?.base ?? cwd;
           const filePath = rebased?.rel ?? token;
           const target = fileLinkTarget(filePath, base);

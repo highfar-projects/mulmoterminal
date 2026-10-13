@@ -41,8 +41,8 @@ describe("filesRowActions — the Canvas entry", () => {
     expect(ids({ ...inProject, pathRel: "site/page.html" })[0]).toBe("open-canvas");
   });
 
-  // RELATIVE, because `open-in-canvas` already carries that from the pane's own button and the
-  // receiver resolves it against the pane's cwd — an absolute one would be resolved twice.
+  // RELATIVE, like the tab it is opened in: the Canvas view resolves it against the pane's cwd, so
+  // an absolute one would be resolved twice.
   it("carries the row's path relative to the tree root", () => {
     const action = call({ ...inProject, pathRel: "notes/talk.md" }).find((a) => a.id === "open-canvas");
     expect(action).toEqual({ id: "open-canvas", labelKey: "filesRowMenu.openCanvas", icon: "space_dashboard", pathRel: "notes/talk.md" });

@@ -20,7 +20,7 @@ differ as a consequence of that, not as a design of their own.
 
 | surface | root | what it may reach | who chose the path |
 |---|---|---|---|
-| **Right pane** (`TerminalGrid` → `FilesPane`, `canvas-target` set) | the expanded cell's directory | that directory's subtree | the user, by zooming a cell |
+| **Right pane** (`TerminalGrid` → `FilesPane`, `canvas-target` set) | the directory of the cell it is on (the enlarged one, or the tile that opened it) | that directory's subtree | the user, by zooming a cell or opening the pane from its menu |
 | **Full screen** (`/files?cwd=`, `FilesOverlay` → `FilesPane`) | whatever `?cwd=` says | that base's subtree | a browser, through a query string |
 | **Watched documents** (`containForWatching`) | the workspace + every live session directory | those subtrees | a browser, checked against roots the server already serves |
 | **`presentDocument` / `presentHtml` / …** (`backends/files/openPath.ts`) | **none** | any file of the right extension, anywhere | an agent the user launched |
@@ -30,8 +30,9 @@ differ as a consequence of that, not as a design of their own.
 `FilesPane` **never watches its `cwd` prop** (`defineExpose`'s contract, FilesPane.vue): reacting
 to it would discard a buffer the host may still be asking the user about. The host calls `reload`
 when the root changes and it has already cleared that with the user. `TerminalGrid` re-roots the
-pane to the cell being zoomed, which is why the right pane is bound to a directory the user
-picked by looking at it.
+pane to the cell it is on — the one being zoomed, or on the tiled grid the tile whose menu opened
+it — which is why the right pane is bound to a directory the user picked by zooming a cell or
+opening the pane from it.
 
 ### The full screen takes its base from the URL
 
@@ -58,22 +59,46 @@ one tool call cannot mean two different things in the two apps.
 The right pane can open a document **on the canvas**, which mounts the markdown plugin's view: an
 in-app Shadow DOM component that registers marked extensions and renders mermaid, maths and the
 rest. The full-screen view has no canvas to open into, so a `.md` goes to the **preview**, which is
-an iframe served from `/api/files/browse/md` and built by a **stock `marked` with no
-extensions at all** — it only drops a YAML front matter block and points relative images at the raw
-route, and the embedded document hands external link clicks to the pane. A mermaid fence therefore renders as a code block there, and does so by
-design rather than by failure — nothing tries to load mermaid, which is why no error appears
-either.
+an iframe served from `/api/files/browse/md` and built by a **`marked` of the server's own, with
+none of the plugin's renderers** — it drops a YAML front matter block, points relative images at
+the raw route, numbers code blocks for the copy button, and the embedded document hands external
+link clicks to the pane. Maths is typeset by that same server (#3017), below.
 
-The preview is also served under `sandbox allow-scripts; script-src 'nonce-…'` with no
-`allow-same-origin`. That is what keeps a previewed file's own scripts inert, and it blocks both
-external scripts and dynamic `import()` — so the plugin's lazy `import("mermaid")` cannot work
-there even if the extension were registered.
+A mermaid fence is the one diagram the preview draws itself (#2991), and how it does so is set by
+the sandbox. The preview is served under `sandbox allow-scripts; script-src 'nonce-…'` with no
+`allow-same-origin`: that keeps a previewed file's own scripts inert and blocks any external
+script that carries no nonce. It does **not** block a `<script type="module">` that carries the
+nonce, nor the imports that script makes — a static or dynamic import inherits the importing
+script's nonce (measured in Chromium and WebKit; `plans/feat-files-preview-mermaid.md` describes
+the probe). What DOES stop an import from this document is CORS: the origin is opaque, so a module
+fetch goes out with `Origin: null` and needs `Access-Control-Allow-Origin` on the answer. So the
+server serves mermaid's own ESM build under `/api/files/mermaid/<version>/…` with that header
+(`server/files/mermaidAssets.ts`), and the embedded document ends with a nonce'd module script
+that imports it and draws each fence, folding the numbered code block under the diagram
+(`server/files/previewMermaid.ts`). The plain `…/md` document a new tab opens is served under a
+bare `sandbox` and runs nothing, so there the fence stays a code block.
+
+Maths takes the other road (#3017), because it can: MathJax runs in Node, so `$…$` and `$$…$$` are
+typeset to SVG while the server builds the document (`server/files/previewMath.ts`), in both the
+embedded and the plain document, and nothing in the sandbox changes. The delimiter rules are the
+plugin's own `mathExtension`, so a formula is found where the Canvas finds it. What the plugin does
+that this cannot is run DOMPurify — it needs a DOM — and leaving TeX packages out is not a
+substitute: `\mmlToken` is in `base` and writes `href`, `style` and colours, and `\color`,
+`\unicode`, `\tag` and error titles carry author text into attributes too, and MathJax's SVG
+`<title>` holds error text unescaped, which an HTML parser reads as markup inside an `<svg>`. So
+MathJax's tree is filtered by what is PERMITTED before it is serialised
+(`server/files/mathAttributes.ts`): an element MathJax builds formulas from (`keepMathElement`;
+anything else, `<title>` first, goes with its contents), and on it only the attributes MathJax
+writes, each in the shape of value it gives them (`keepMathAttribute`). The tests throw markup and
+attribute-writing commands at the renderer and check what a real HTML parser BUILDS from the
+output — no foreign element, no `on…` handler, no `url(` or `javascript`.
 
 **So "make both surfaces render the same" is a containment decision before it is a rendering
 one.** Moving the plugin's renderer to the full-screen view would render a file chosen through a
-query string with the machinery built for a file an agent named. Adding diagrams to the preview
-instead keeps the isolation and costs a second rendering path that will drift again the next time
-the plugin gains a feature. Both are defensible; neither is a refactor.
+query string with the machinery built for a file an agent named. The preview's own diagram path
+keeps the isolation at the cost of a second rendering path that drifts when the plugin gains a
+feature — a trade taken knowingly for mermaid, and again for maths. Both are
+defensible; neither is a refactor.
 
 ## An HTML page, an image, a PDF or media in the pane serves bytes, so it takes the raw route's base
 
@@ -110,6 +135,26 @@ A CSV / TSV table Preview (#2559) is on the other side of this line. Like Markdo
 the server renders from the file's text — `/api/files/browse/table`, escaped cells under a bare
 `sandbox` CSP, no script — so it takes the browse routes' base and previews wherever the text opens,
 the full-screen view included.
+
+## A clicked file outside every served directory gets a one-file grant
+
+The raw route and the page route serve bytes only under the workspace or a live session's directory,
+because a GET carries no Origin a cross-site `<img>` or `<video>` could be told apart by. A path an agent
+printed and the user clicked can be anywhere, though — a video rendered to `~/Movies`, a report in
+another repo (#3024). For those, and only for a type a tab shows (`grantKind`, `common/fileGrant.ts`),
+the link provider opens a blank tab, POSTs the path to `/api/files/grant`, and sends the tab to the URL
+that comes back (`server/backends/files/fileGrants.ts`).
+
+- **Who may mint:** a POST, so `sameOriginGuard` already limits it to the app's own pages. Same-origin
+  code could already read any file through the browse routes; this adds a URL a tab can load, not reach.
+- **What it opens:** one file. The token is unguessable and kept in memory until the server restarts
+  (or until it is the oldest of a full map),
+  and any other name under it — the image an HTML page links beside itself — is a 404.
+- **How it is served:** exactly as the raw route serves the same file (`sendRawFile`, Range included),
+  or an HTML page under the preview CSP (`sendHtmlDocument`). A spec pins the raw half against the raw
+  route itself.
+
+So do not widen `authorizedServingBase` to reach such a file: that would let any site embed it.
 
 ## What to check before changing any of this
 

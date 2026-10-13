@@ -15,9 +15,10 @@ import { useOpenFile } from "../composables/useOpenFile";
 import { useFilesReveal } from "../composables/useFilesReveal";
 import { useFilesPreviewWire } from "../composables/useFilesPreviewWire";
 import PreviewCodeBlockDialog from "./PreviewCodeBlockDialog.vue";
+import PreviewCopiedNotice from "./PreviewCopiedNotice.vue";
 import type { FilesPaneState } from "./filesPaneState";
 import { useFilesTabs } from "../composables/useFilesTabs";
-import { tabLabels } from "./filesTabs";
+import { tabLabels, withCanvasView } from "./filesTabs";
 import { nextTabIndex } from "./tabKeys";
 import { previewLinkTarget } from "./previewLinkTarget";
 import { fileMediaKind, previewFollowsAppTheme } from "./filePreviewKind";
@@ -35,7 +36,7 @@ import { useFileSearchPanel } from "../composables/useFileSearchPanel";
 import { useFileTreeWidth } from "../composables/useFileTreeWidth";
 import { clippedNameTip } from "./fileTreeWidth";
 import FilesToolbarButton from "./FilesToolbarButton.vue";
-import { canOpenInCanvas, absoluteUnder, type StoriesRoots } from "../composables/canvasOpenFile";
+import type { StoriesRoots } from "../composables/canvasOpenFile";
 import { filesRowActions, type FilesRowAction } from "./filesRowActions";
 import { menuAttrsFor, useFilesRowMenu } from "../composables/useFilesRowMenu";
 import { isTreeOpAction, useTreeFileOps } from "../composables/useTreeFileOps";
@@ -47,9 +48,14 @@ import { useI18n } from "vue-i18n";
 import { useFileOutline } from "../composables/useFileOutline";
 import FilesOutlineMenu from "./FilesOutlineMenu.vue";
 import FilesViewModeButtons from "./FilesViewModeButtons.vue";
+import FilesCanvasView from "./FilesCanvasView.vue";
+import FilesCanvasButton from "./FilesCanvasButton.vue";
+import { useFilesCanvasMode } from "../composables/useFilesCanvasMode";
+import { showFileWith } from "../composables/useShowFile";
 import { useSideBySide } from "../composables/useSideBySide";
 import { useFileHistory } from "../composables/useFileHistory";
 import { useRequestedOpen } from "../composables/useRequestedOpen";
+import { wantsNewTab } from "../composables/newTabModifier";
 import FilesHistoryMenu from "./FilesHistoryMenu.vue";
 import FilesComparingBanner from "./FilesComparingBanner.vue";
 
@@ -70,7 +76,7 @@ const props = defineProps<{
   // its notes — that needs the id this server registered the subtree under (#1933).
   storiesRoots?: StoriesRoots;
 }>();
-const emit = defineEmits<{ close: []; dirty: [boolean]; "open-in-canvas": [path: string]; "insert-text": [text: string] }>();
+const emit = defineEmits<{ close: []; dirty: [boolean]; "insert-text": [text: string] }>();
 
 // The tree is its own thing now (#2158): what has been read, what is expanded, what is on screen.
 // The markup for it stays here.
@@ -86,7 +92,7 @@ const { flush, save, overwrite, discardAndReload, openInOs } = file;
 // Which files are open as tabs, and which is in front (#2267). Every open below goes through it, so
 // a path that already has a tab is brought forward rather than opened twice.
 const tabs = useFilesTabs(file);
-const { openAt, openRequested, openClicked } = useRequestedOpen(tabs, file);
+const { openRequested, openFromTerminal } = useRequestedOpen(tabs, file, (pathRel) => canvasMode.hide(pathRel));
 const strip = tabs.strip;
 // One tab is the pane as it always was — the header names the file. The strip is for two or more,
 // and for a lone tab that is not on screen, which would otherwise have no control at all.
@@ -95,14 +101,10 @@ const showStrip = computed(() => strip.value.tabs.length > 1 || strip.value.tabs
 // tabs are all -1 cannot be reached from the keyboard.
 const focusablePath = computed(() => strip.value.activePath ?? strip.value.tabs[0]?.path ?? null);
 const labels = computed(() => tabLabels(strip.value.tabs.map((tab) => tab.path)));
-// Whether the Canvas has a View for the open file — the plugins' own gates decide, not an
-// extension test here (see canvasOpenFile.ts).
-// Gated on the path the CARD will carry, not the row's relative one: a cell whose directory has a
-// dot segment (`~/.config/proj`) makes `p.html` pass here and the joined path fail the plugin's
-// own guard, which is a button that does nothing when pressed.
-const NO_ROOTS: StoriesRoots = { workspaces: [], roots: [] };
-const storiesRoots = computed<StoriesRoots>(() => props.storiesRoots ?? NO_ROOTS);
-const canvasOpenable = computed(() => canOpenInCanvas(openPath.value ? absoluteUnder(props.cwd, openPath.value) : null, storiesRoots.value));
+const storiesRoots = computed<StoriesRoots>(() => props.storiesRoots ?? { workspaces: [], roots: [] });
+// The open file drawn by the Canvas's plugin view, in place of the editor (#3008).
+const canvasMode = useFilesCanvasMode({ enabled: () => !!props.canvasTarget, cwd: () => props.cwd, storiesRoots: () => storiesRoots.value, file, tabs });
+const { active: showCanvas, card: canvasCard, openable: canvasOpenable } = canvasMode;
 
 const editorHost = ref<HTMLDivElement>();
 
@@ -112,7 +114,7 @@ const previewScroll = useFilesPreviewWire(file, openPreviewLink, () => props.cwd
 
 // A Markdown file's headings, to go to one in the editor or the Preview (#2576).
 const outline = useFileOutline({ editor: file.editor, showPreview, goToPreviewHeading: previewScroll.goToHeading });
-const sideBySide = useSideBySide({ file, editorHost, preview: previewScroll });
+const { layout, ...sideBySide } = useSideBySide({ file, editorHost, preview: previewScroll, showCanvas });
 
 // A link clicked in the Preview (#2268), resolved against the document being read. It opens in a
 // tab of its own, keeping the one it was clicked in; a Markdown file comes up in Preview, since
@@ -155,7 +157,13 @@ const rowActionsFor = (node: TreeNode): FilesRowAction[] =>
 
 /** The @ button and key (#2575): the reference for the selection, at the terminal's prompt, not sent. */
 async function insertSelection(): Promise<boolean> {
-  const deps = { file, hasTarget: () => !!props.insertTarget, cwd: () => props.cwd, terminalCwd: () => props.insertTargetCwd ?? null };
+  const deps = {
+    file,
+    hasTarget: () => !!props.insertTarget,
+    cwd: () => props.cwd,
+    terminalCwd: () => props.insertTargetCwd ?? null,
+    editorHidden: () => !layout.value.editor,
+  };
   const text = await selectionReferenceText(deps);
   if (text !== null) emit("insert-text", text);
   return text !== null;
@@ -163,9 +171,7 @@ async function insertSelection(): Promise<boolean> {
 
 /** What picking one does — the other end that belongs to this pane, because it emits. */
 function runRowAction(action: FilesRowAction): void {
-  // The Canvas entry carries the row's path, not text for the terminal — and it goes out on the
-  // SAME emit as the header button, relative to the tree's root, so the receiver resolves it once.
-  if (action.id === "open-canvas") emit("open-in-canvas", action.pathRel);
+  if (action.id === "open-canvas") void canvasMode.open(action.pathRel);
   else if (action.id === "open-tab") void tabs.open(action.pathRel, true);
   // Not an emit: nothing above this pane takes part. The browser cannot open a file manager, so
   // the local server does it (#2039) — through filesPaneApi, like every other request here.
@@ -194,10 +200,7 @@ function tipIfClipped(name: string, event: Event): void {
   else row.setAttribute("data-tip", tip);
 }
 
-async function openFile(node: TreeNode, event: MouseEvent): Promise<void> {
-  if (node.dir) return tree.toggleDir(node);
-  await tabs.open(node.path, event.metaKey || event.ctrlKey);
-}
+const openFile = (node: TreeNode, event: MouseEvent): Promise<void> => (node.dir ? tree.toggleDir(node) : tabs.open(node.path, wantsNewTab(event)));
 
 const stripEl = useTemplateRef<HTMLElement>("stripEl");
 
@@ -223,7 +226,7 @@ async function onTabKey(e: KeyboardEvent, index: number): Promise<void> {
 function focusAfterTabMove(): void {
   const front = strip.value.tabs.findIndex((entry) => entry.path === strip.value.activePath);
   const tab = stripEl.value?.querySelectorAll<HTMLElement>('[role="tab"]')[front];
-  const editor = showPreview.value ? null : editorHost.value?.querySelector<HTMLElement>('[contenteditable="true"]');
+  const editor = layout.value.editor ? editorHost.value?.querySelector<HTMLElement>('[contenteditable="true"]') : null;
   (tab ?? editor ?? treeEl.value?.querySelector<HTMLElement>("button"))?.focus();
 }
 
@@ -336,6 +339,7 @@ function teardown(): void {
   gitStatus.reset();
   file.teardown();
   tabs.reset();
+  canvasMode.reset();
   // And the search, for the finder's reason: the root is changing, and a panel left open goes on
   // showing the OLD project's matches. Clicking one then reveals that relative path under the NEW
   // root — opening a different file where the same path exists, and nothing where it does not.
@@ -406,6 +410,9 @@ async function restore(state: FilesPaneState | null, reqIdAtStart: number): Prom
       }),
     );
   }
+  // A pane opened FOR a file (#1979) starts on it as text, as it would with Preview: when an open got here
+  // first — landed or still in flight, so its path cannot be asked — no remembered Canvas view comes back.
+  if (file.generation() === reqIdAtStart) canvasMode.reset(state.tabs.filter((tab) => tab.showCanvas === true).map((tab) => tab.path));
   await tabs.restore({ tabs: state.tabs, activePath: state.activePath }, () => file.generation() === reqIdAtStart);
   // Last, and only after a tick: the rows have to exist before there is anything to scroll past,
   // and the expansions above are what create them.
@@ -435,15 +442,9 @@ onBeforeUnmount(teardown);
 // user" — the pane never watches `cwd` itself, because reacting to it would discard a buffer
 // the host may still be asking about.
 defineExpose({
-  /** Say why an action the pane STARTED could not finish — the Canvas open, whose refusal comes
-   *  back from the server (#1941). Shown where the click happened, in the same place a failed save
-   *  reports: a message the user has to go looking for is one they never read. */
-  showError: (message: string) => {
-    fileError.value = message;
-  },
   /** What this pane looks like right now, for a host that will bring the user back here. */
   snapshot: (): FilesPaneState => ({
-    ...tabs.current(),
+    ...withCanvasView(tabs.current(), canvasMode.has),
     expanded: expandedPaths(tree.roots.value ?? []),
     treeScrollTop: treeEl.value?.scrollTop ?? 0,
   }),
@@ -469,7 +470,9 @@ defineExpose({
   // A page, an SVG or a table comes up drawn: a path clicked in terminal output to a chart is asking
   // to see the chart, and a CSV opened from there as a table before the pane took the click (#2559).
   // Markdown opens as it always has.
-  openFile: (pathRel: string, location?: FileLocation) => (location ? openAt(pathRel, location, false) : openClicked(pathRel)),
+  openFile: openFromTerminal,
+  /** A file in a given view and at a given line, for an agent's `showInPane` or a check item (#3022). */
+  showFile: showFileWith({ tabs, file, canvasMode, sideBySide, openAt: openFromTerminal }),
   /** The `files-insert-selection` key (#2575), reached from the grid like the tab keys. */
   insertSelection,
   /** The `files-tab-*` keys (#2267), reached from the grid like the finder's. */
@@ -481,20 +484,20 @@ defineExpose({
 
 <template>
   <div class="relative flex min-h-0 min-w-0 flex-auto flex-col" @keydown="onKeydown">
-    <header class="flex flex-none items-center gap-2.5 border-b border-border bg-panel px-4 py-2">
+    <header class="flex flex-none flex-wrap items-center justify-end gap-x-2.5 gap-y-1.5 border-b border-border bg-panel px-4 py-2">
       <slot name="title" />
       <span class="flex-auto" />
       <span v-if="openPath && !showStrip" class="min-w-0 truncate font-mono text-[12px]" :class="dirty ? 'text-fg' : 'text-secondary'"
         >{{ openName }}<span v-if="dirty" class="ml-1 text-amber" :data-tip="t('tips.panes.unsaved')">●</span></span
       >
       <FilesViewModeButtons
-        v-if="openPath && previewKind && previewSrc"
-        v-bind="{ showPreview, saving, canSideBySide: previewKind === 'markdown' && !unpreviewable, sideBySide: sideBySide.active.value }"
+        v-if="openPath && previewKind && previewSrc && (!showCanvas || sideBySide.offered.value)"
+        v-bind="{ showPreview, canPreview: !showCanvas, saving, canSideBySide: sideBySide.offered.value, sideBySide: sideBySide.active.value }"
         @toggle-preview="file.togglePreview()"
         @toggle-side-by-side="sideBySide.toggle()"
       />
       <button
-        v-if="openPath && head.hasOriginal.value && !showPreview && !unpreviewable"
+        v-if="openPath && head.hasOriginal.value && layout.editor && !unpreviewable"
         type="button"
         data-testid="files-changes-btn"
         class="h-[26px] cursor-pointer rounded-md border border-border px-2.5 py-1 text-[12px] hover:bg-hover hover:text-fg"
@@ -506,32 +509,23 @@ defineExpose({
         Changes
       </button>
       <FilesOutlineMenu
-        v-if="openPath && previewKind === 'markdown' && !unpreviewable"
+        v-if="openPath && previewKind === 'markdown' && !unpreviewable && (layout.editor || layout.preview)"
         :key="`${openPath}:${showPreview}`"
         v-bind="outline.menu.value"
         @opened="outline.refresh()"
         @pick="outline.pick"
       />
       <FilesHistoryMenu
-        v-if="openPath && !showPreview && !unpreviewable && !conflict"
+        v-if="openPath && layout.editor && !unpreviewable && !conflict"
         v-bind="history.menu.value"
         @toggle="history.toggle()"
         @close="history.close()"
         @compare="history.compare"
         @restore="history.restore"
       />
-      <!-- Only where there is a cell to open it beside: this pane is also mounted full-screen by
-           FilesOverlay, which has no enlarged terminal and so nothing to put a Canvas next to. -->
-      <button
-        v-if="canvasTarget && canvasOpenable"
-        type="button"
-        data-testid="files-canvas-btn"
-        class="h-[26px] cursor-pointer rounded-md border border-border bg-base px-2.5 py-1 text-[12px] text-secondary enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-50"
-        :data-tip="t('tips.panes.openInCanvas')"
-        @click="openPath && emit('open-in-canvas', openPath)"
-      >
-        Canvas
-      </button>
+      <!-- Only in the right pane: this pane is also mounted full-screen by FilesOverlay, whose base
+           is a query string, and the plugin views stay off that surface (docs/file-surfaces.md). -->
+      <FilesCanvasButton v-if="canvasTarget && canvasOpenable" :active="showCanvas" :disabled="saving" @toggle="canvasMode.toggle()" />
       <button
         v-if="openPath"
         type="button"
@@ -547,7 +541,7 @@ defineExpose({
       <FilesToolbarButton icon="search" :label="t('tips.panes.findByName')" test-id="files-find-btn" opens-a-panel @click="openFinder()" />
       <FilesToolbarButton icon="manage_search" :label="t('tips.panes.searchInFiles')" test-id="files-search-btn" opens-a-panel @click="openSearch()" />
       <FilesToolbarButton
-        v-if="insertTarget && openPath && !unpreviewable"
+        v-if="insertTarget && openPath && !unpreviewable && (!showCanvas || layout.editor)"
         icon="alternate_email"
         :label="t('tips.panes.insertSelection')"
         test-id="files-insert-selection"
@@ -609,7 +603,7 @@ defineExpose({
     <!-- In the flow, not over the editor: it stays up for the whole comparison, and a bar laid over
          the text would hide line 1 — often the very change being compared. -->
     <FilesComparingBanner
-      v-if="!conflict && history.comparing.value && !showPreview && !unpreviewable"
+      v-if="!conflict && history.comparing.value && layout.editor && !unpreviewable"
       :at="history.comparing.value.entry.at"
       :failed="history.restoreFailed.value"
       @restore="history.comparing.value && history.restore(history.comparing.value.entry)"
@@ -743,7 +737,7 @@ defineExpose({
              page is loaded only while it is being looked at — it runs its own scripts, which the
              Markdown document (the reporter is its only script) does not. -->
         <iframe
-          v-show="openPath && !unpreviewable && (showPreview || sideBySide.active.value)"
+          v-show="openPath && !unpreviewable && layout.preview"
           ref="previewFrame"
           :key="previewKind === 'markdown' ? 'markdown' : 'page'"
           class="flex-auto border-0"
@@ -752,7 +746,8 @@ defineExpose({
           sandbox="allow-scripts"
           :title="previewKind === 'markdown' ? t('tips.panes.markdownPreview') : t('tips.panes.filePreview')"
         />
-        <div v-show="openPath && !unpreviewable && !showPreview" ref="editorHost" :class="sideBySide.editorClass.value" />
+        <div v-show="openPath && !unpreviewable && layout.editor" ref="editorHost" :class="sideBySide.editorClass.value" />
+        <FilesCanvasView v-if="openPath && showCanvas" :class="sideBySide.previewClass.value" :card="canvasCard" @update-result="canvasMode.onUpdateResult" />
       </section>
     </div>
     <FileFinder v-if="finderOpen" :cwd="cwd" :seed="finderSeed" @pick="onFinderPick" @close="closeFinder" />
@@ -781,5 +776,6 @@ defineExpose({
       </div>
     </Teleport>
     <PreviewCodeBlockDialog v-if="previewScroll.codeBlock?.shown.value" :lookup="previewScroll.codeBlock.shown.value" @close="previewScroll.codeBlock.close" />
+    <PreviewCopiedNotice v-if="previewScroll.codeBlock?.copied.value" :notice="previewScroll.codeBlock.copied.value" />
   </div>
 </template>

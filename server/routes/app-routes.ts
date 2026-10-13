@@ -26,6 +26,7 @@ import { getSessionIdleReapDays, getQuestionPaneEnabled, getTokenRotation } from
 import { sweepIdleSessions } from "../session/reaping/reap-idle-sessions.js";
 import { mountHookRoute } from "../routes/hook-routes.js";
 import { mountPluginRoutes } from "../routes/plugin-routes.js";
+import { mountPaneToolRoutes } from "./pane-tool-routes.js";
 import { mountBlueprints } from "../blueprint/wiring.js";
 import { mountMcpRoutes } from "../routes/mcp-routes.js";
 import { guiCallRecorderFor, historyIsGuiOnly } from "../mcp/gui-call-history.js";
@@ -71,6 +72,7 @@ import { mountWhisperRoutes } from "../backends/media/whisper.js";
 import { mountSchedulerRoutes } from "../backends/scheduler/scheduler.js";
 import { mountFilesRoutes } from "../backends/files/files.js";
 import { mountFilesPageRoute } from "../backends/files/filesPage.js";
+import { mountFileGrantRoutes } from "../backends/files/fileGrants.js";
 import {
   hookedSessions,
   ptys,
@@ -85,6 +87,7 @@ import {
 import { mountShortcutsRoutes } from "../backends/shortcuts.js";
 import { mountDecisionRoutes } from "./decision-routes.js";
 import { mountWhatsNewRoutes } from "../whatsNew/routes.js";
+import { mountHelpRoutes } from "../help/routes.js";
 import { mountRoomRoutes } from "./room-routes.js";
 import { mountSkillCatalogRoutes } from "./skill-catalog-routes.js";
 import { mountTranslationRoutes } from "../backends/media/translation.js";
@@ -204,6 +207,9 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
     registerBackgroundSession: deps.registerBackgroundSession,
   });
 
+  // showInPane / requestCheck (#3022): host tools too, so before the catch-all like the ones above.
+  mountPaneToolRoutes(app, { publish: (channel, data) => deps.publish(channel, data) });
+
   mountBlueprints(app, deps.spawnClaudePty, deps.reap);
 
   // presentHtml View's source-editor dispatch (loadHtml/saveHtml) on
@@ -285,6 +291,7 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
   // workspace; a `?cwd=` is honoured only for a live session's own directory.
   mountFilesRoutes(app, { workspace: CLAUDE_CWD, sessionCwds: () => [...ptys.values()].map((entry) => entry.cwd) });
   mountFilesPageRoute(app, { workspace: CLAUDE_CWD, sessionCwds: () => [...ptys.values()].map((entry) => entry.cwd) });
+  mountFileGrantRoutes(app);
 
   // Serve presentHtml pages for the View's iframe (GET /artifacts/html/<rest>) with an
   // HTML preview CSP. The View navigates the iframe to this URL (htmlArtifactPreviewUrl).
@@ -305,6 +312,9 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
   // The dated release guides a user has not been shown since their last upgrade, recorded as
   // seen as they are answered (POST /api/whats-new).
   mountWhatsNewRoutes(app);
+
+  // Where this install keeps its docs and source, for the bundled help skill (GET /api/help/sources).
+  mountHelpRoutes(app);
 
   // Local voice input (POST /api/transcribe + model status/download) — macOS only,
   // whisper.cpp via @mulmoclaude/core/whisper. Models live in the shared

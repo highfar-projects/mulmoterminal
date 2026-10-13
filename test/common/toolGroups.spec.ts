@@ -113,6 +113,8 @@ describe("tool groups", () => {
       "renderShapeScript",
       "exportShapeScriptUsdz",
       "exportShapeScriptStl",
+      "showInPane",
+      "requestCheck",
     ]);
     expect(AUTO_ALLOWED_TOOLS).not.toContain("presentDocument");
   });

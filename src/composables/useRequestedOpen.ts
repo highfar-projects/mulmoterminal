@@ -10,23 +10,28 @@ import type { OpenFile } from "./useOpenFile";
 export function useRequestedOpen(
   tabs: FilesTabs,
   file: OpenFile,
+  /** Takes `pathRel` out of any view that is not its text (the Canvas view, #3010). The REQUEST, not the
+   *  landing, does it: asked before the open, so a file in that view does not start drawing only to be
+   *  put away, and a declined or superseded open still leaves it on its editor for the next visit. */
+  showText: (pathRel: string) => void = () => {},
 ): {
-  openAt: (pathRel: string, location: FileLocation, focus: boolean) => Promise<void>;
+  openAt: (pathRel: string, location: FileLocation, focus: boolean, newTab?: boolean) => Promise<void>;
   openRequested: (pathRel: string, location: FileLocation | null) => Promise<void>;
-  openClicked: (pathRel: string) => Promise<void>;
+  openFromTerminal: (pathRel: string, location: FileLocation | undefined, newTab: boolean) => Promise<void>;
 } {
   // The newest located open. Reads can come back out of order, and the line the reader clicked LAST
   // is the one to show — an older click resuming later must not scroll over it.
   let locatedOpens = 0;
 
-  /** Open `pathRel` at `location`. The line lives in the text, so a tab up in Preview goes to Edit; a
+  /** Open `pathRel` at `location`. The line lives in the text, so a tab up in Preview or the Canvas view goes to Edit; a
    *  picture, a PDF or a video has no line and simply opens. Columns arrive 1-based, as the tools print them. `focus`
    *  only where no terminal is beside the pane: a click in the grid leaves the keyboard in the
    *  terminal, or a reply typed to the agent would land in the file. */
-  async function openAt(pathRel: string, location: FileLocation, focus: boolean): Promise<void> {
-    if (fileMediaKind(pathRel) !== null) return tabs.open(pathRel);
+  async function openAt(pathRel: string, location: FileLocation, focus: boolean, newTab = false): Promise<void> {
+    if (fileMediaKind(pathRel) !== null) return tabs.open(pathRel, newTab);
     const mine = ++locatedOpens;
-    await tabs.open(pathRel, false, { path: pathRel, showPreview: false });
+    showText(pathRel);
+    await tabs.open(pathRel, newTab, { path: pathRel, showPreview: false });
     if (mine !== locatedOpens || file.openPath.value !== pathRel) return;
     if (file.showPreview.value) await file.togglePreview();
     await nextTick();
@@ -46,8 +51,15 @@ export function useRequestedOpen(
     return kind === "html" || kind === "svg" || kind === "table";
   };
 
-  /** A path clicked in terminal output with no line named: drawn when it has something to draw. */
-  const openClicked = (pathRel: string): Promise<void> => tabs.open(pathRel, false, opensDrawn(pathRel) ? { path: pathRel, showPreview: true } : undefined);
+  /** A path clicked in terminal output with no line named: drawn when it has something to draw, in a
+   *  new tab when the click asked for one (#3005). */
+  const openClicked = (pathRel: string, newTab: boolean): Promise<void> =>
+    tabs.open(pathRel, newTab, opensDrawn(pathRel) ? { path: pathRel, showPreview: true } : undefined);
 
-  return { openAt, openRequested, openClicked };
+  /** A path clicked in terminal output beside the pane: at its line when one was named, leaving the
+   *  keyboard in the terminal; in a new tab when the click asked for one (#3005). */
+  const openFromTerminal = (pathRel: string, location: FileLocation | undefined, newTab: boolean): Promise<void> =>
+    location ? openAt(pathRel, location, false, newTab) : openClicked(pathRel, newTab);
+
+  return { openAt, openRequested, openFromTerminal };
 }

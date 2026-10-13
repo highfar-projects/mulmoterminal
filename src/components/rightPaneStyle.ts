@@ -1,4 +1,4 @@
-// The flex style of a right pane beside the enlarged cell, split or full.
+// The flex style of the right pane, split or full (full only beside an enlarged cell).
 //
 // `width: auto` while full because these panes carry their own w-[340px], which would outlive
 // `flex: 1`. `min-width: 0` in both because a flex item's automatic minimum is its min-content

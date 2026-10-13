@@ -8,8 +8,8 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **9.6.0 is out.** Click the subscription name on a cell to move that session to another subscription, with each one's
-> weekly room and time to reset beside it, and agents can write jingles with JingleScript. [Setup guide](v9.6.0.html)
+> **10.4.0 is out.** A tile's History and Tools menus open their pane to the right of the grid without
+> enlarging anything, and a clicked file outside the cell opens in a tab. [Setup guide](v10.4.0.html)
 
 ## What is MulmoTerminal? {#what-is}
 

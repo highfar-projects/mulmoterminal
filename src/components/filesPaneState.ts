@@ -12,6 +12,9 @@ export interface FilesTabState {
   /** Whether it was being READ in the Markdown preview rather than edited (#2137). Optional because
    *  nothing written before this existed carries one — absent is the editor. */
   showPreview?: boolean;
+  /** Whether it was shown in the Canvas view (#3011). Absent is "no", and only a surface that HAS
+   *  a Canvas view acts on it — the full-screen view ignores it. */
+  showCanvas?: boolean;
   /** Where the reader was in it, so coming back does not mean finding the line again (#2149). A
    *  place in the file, not a pixel: the pane is often a different width next time. */
   caret?: CaretAt | undefined;

@@ -93,7 +93,7 @@ export const commandPaletteZhTW = {
     terminalVoice: "在目前終端機開始或停止語音輸入（麥克風可用時）。",
     terminalDiff: "開啟目前 worktree 終端機的變更面板（有變更時）。",
     terminalNote: "開啟目前終端機的備註以撰寫或修改。",
-    paneFiles: "開啟或關閉目前終端機旁的檔案面板；平鋪時先放大。",
+    paneFiles: "開啟或關閉目前終端機旁的檔案面板；平鋪時顯示在格線右側。",
     panePrompts: "開啟或關閉目前終端機已送出提示的面板。",
     paneTranscript: "開啟或關閉目前終端機的對話面板。",
     paneTools: "開啟或關閉目前終端機中代理所用工具的面板。",

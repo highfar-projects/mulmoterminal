@@ -16,7 +16,6 @@ const paneStub = vi.hoisted(() => ({
   reload: vi.fn(),
   flush: vi.fn(async () => undefined),
   snapshot: vi.fn((): FilesPaneState => oneFile("README.md", { expanded: ["src"] })),
-  showError: vi.fn(),
 }));
 // Only the roster menu's unread/read wire is replaced; everything else the grid calls stays real.
 const sendAttention = vi.hoisted(() => vi.fn());
@@ -31,9 +30,9 @@ vi.mock("../../../src/components/FilesPane.vue", () => ({
   default: {
     name: "FilesPane",
     props: ["cwd", "requestedPath", "initialState", "canvasTarget"],
-    emits: ["close", "dirty", "open-in-canvas"],
+    emits: ["close", "dirty"],
     setup: (_p: unknown, { expose, slots }: { expose: (e: Record<string, unknown>) => void; slots: { title?: () => VNode[] } }) => {
-      expose({ reload: paneStub.reload, flush: paneStub.flush, snapshot: paneStub.snapshot, showError: paneStub.showError });
+      expose({ reload: paneStub.reload, flush: paneStub.flush, snapshot: paneStub.snapshot });
       return () => h("div", { class: "stub-files-pane" }, slots.title?.());
     },
   },
@@ -1042,8 +1041,9 @@ describe("file pane beside the enlarged cell", () => {
     expect(paneOf(w).exists()).toBe(false);
   });
 
-  // Collapsing the zoom only HIDES the row; the pane stays mounted, so an unsaved buffer is
-  // still there when the cell is enlarged again. (Codex read this as an unguarded discard.)
+  // Collapsing the zoom moves the row beside the tiles (#3027); the pane stays mounted, so an
+  // unsaved buffer is still there when the cell is enlarged again. (Codex read the older hide as an
+  // unguarded discard.)
   it("keeps the pane and its buffer mounted while the zoom is collapsed", async () => {
     const w = mountCockpit([cell(1, "s1", "/proj"), cell(2)], 1, []);
     await openPane(w);
@@ -1052,11 +1052,88 @@ describe("file pane beside the enlarged cell", () => {
     await w.setProps({ expandedUid: null });
     await flushPromises();
     expect(paneOf(w).exists()).toBe(true);
-    expect(w.find(".zoom-main").element.parentElement?.className).toContain("hidden");
+    expect(paneOf(w).element).toBe(before);
+    expect(paneStub.flush).not.toHaveBeenCalled();
+    expect(w.find(".zoom-main").element.parentElement?.className).toContain("order-last");
 
     await w.setProps({ expandedUid: 1 });
     await flushPromises();
     expect(paneOf(w).element).toBe(before); // same instance, never torn down
+  });
+
+  describe("beside the tiled grid (#3027)", () => {
+    const tiles = () => [cell(1, "s1", "/one"), cell(2, "s2", "/two")];
+    const press = async (w: ReturnType<typeof mount>, index: number, event: string) => {
+      await w.findAllComponents({ name: "TerminalCell" })[index].vm.$emit(event);
+      await flushPromises();
+    };
+
+    it("opens on the cell whose menu asked, enlarging nothing", async () => {
+      const w = mountCockpit(tiles(), null, []);
+      await press(w, 1, "toggle-prompts");
+      expect(w.emitted("toggle-expand")).toBeUndefined();
+      expect(w.findComponent({ name: "PromptsPane" }).props("sessionId")).toBe("s2");
+      expect(w.find(".stage").classes()).toContain("flex-row!");
+    });
+
+    it("closes from the same cell's menu, and the row hides with it", async () => {
+      const w = mountCockpit(tiles(), null, []);
+      await press(w, 0, "toggle-prompts");
+      await press(w, 0, "toggle-prompts");
+      expect(w.findComponent({ name: "PromptsPane" }).exists()).toBe(false);
+      expect(w.find(".zoom-main").element.parentElement?.className).toContain("hidden");
+      expect(w.find(".stage").classes()).not.toContain("flex-row!");
+    });
+
+    // Fixed to the cell that opened it: focus moving across the tiles is not a request to move it.
+    it("stays on its cell when another tile takes focus", async () => {
+      const w = mountCockpit(tiles(), null, []);
+      await press(w, 0, "toggle-prompts");
+      w.findAll(".stub-cell")[1].element.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+      await flushPromises();
+      expect(w.findComponent({ name: "PromptsPane" }).props("sessionId")).toBe("s1");
+    });
+
+    it("moves to another cell when that cell's menu asks", async () => {
+      const w = mountCockpit(tiles(), null, []);
+      await press(w, 0, "toggle-prompts");
+      await press(w, 1, "toggle-prompts");
+      expect(w.findComponent({ name: "PromptsPane" }).props("sessionId")).toBe("s2");
+    });
+
+    it("roots a files pane opened from a tile at that tile's directory", async () => {
+      const w = mountCockpit(tiles(), null, []);
+      await press(w, 1, "open-files");
+      expect(w.emitted("toggle-expand")).toBeUndefined();
+      expect(paneOf(w).props("cwd")).toBe("/two");
+    });
+
+    // Only beside an enlarged terminal: covering every tile is not a view of the grid any more.
+    it("never takes the full width, even for the conversation", async () => {
+      const w = mountCockpit(tiles(), null, []);
+      await press(w, 0, "toggle-transcript");
+      expect(w.find(".zoom-main").element.parentElement?.className).not.toContain("pane-full");
+    });
+
+    // The tiled grid is handed one page; a pane whose cell is on another has nothing to sit beside.
+    // ...and is not re-rooted while it is away: a missing cell has no directory, and reading the
+    // grid's default in its place would save the buffer and walk the tree off to the workspace.
+    it("hides, still mounted and still rooted, while its cell is off the page", async () => {
+      const w = mountCockpit(tiles(), null, []);
+      await press(w, 1, "open-files");
+      const before = paneOf(w).element;
+      paneStub.flush.mockClear();
+      await w.setProps({ cells: [cell(1, "s1", "/one")] });
+      await flushPromises();
+      expect(w.find(".zoom-main").element.parentElement?.className).toContain("hidden");
+      expect(paneOf(w).props("cwd")).toBe("/two");
+      await w.setProps({ cells: tiles() });
+      await flushPromises();
+      expect(paneOf(w).element).toBe(before);
+      expect(paneOf(w).props("cwd")).toBe("/two");
+      expect(paneStub.flush).not.toHaveBeenCalled();
+      expect(paneStub.reload).not.toHaveBeenCalled();
+    });
   });
 
   // Coming back to a terminal should not mean opening the same three directories again. Only
@@ -1262,9 +1339,9 @@ describe("file pane beside the enlarged cell", () => {
       expect(w.findComponent({ name: "GuiPanel" }).exists()).toBe(false);
     });
 
-    // A pane asked for while the grid is tiled is that cell's answer for when it IS enlarged —
-    // which is the case the issue opens with (#1378): the canvas cannot open with nothing zoomed.
-    it("opens on enlarging a cell whose pane was asked for while tiled", async () => {
+    // A pane asked for while the grid is tiled opens beside the tiles at once (#3027), saving the
+    // files pane it replaces, and is still that cell's answer once it IS enlarged (#1378).
+    it("opens beside the tiles, and stays on enlarging, a cell whose pane was asked for while tiled", async () => {
       const w = mountCockpit([cell(1, "s1", "/one"), cell(2, "s2", "/two")], 1, []);
       await openPane(w);
       await w.setProps({ expandedUid: null });
@@ -1272,7 +1349,9 @@ describe("file pane beside the enlarged cell", () => {
 
       await w.findAllComponents({ name: "TerminalCell" })[1].vm.$emit("toggle-canvas");
       await flushPromises();
-      expect(paneOf(w).exists()).toBe(true); // the tiled press moved nothing: cell 1's pane stays
+      expect(paneStub.flush).toHaveBeenCalled();
+      expect(w.emitted("toggle-expand")).toBeUndefined();
+      expect(w.findComponent({ name: "GuiPanel" }).props("sessionId")).toBe("s2");
 
       await w.setProps({ expandedUid: 2 });
       await flushPromises();
@@ -1354,11 +1433,27 @@ describe("file pane width restored from storage", () => {
     await flushPromises();
     expect(w.findComponent({ name: "FilesPane" }).attributes("style")).toContain("400px");
   });
+  // The width is shared by every pane, so the clamp is too — not the files pane's alone.
+  it("clamps any pane, not only the files pane", async () => {
+    localStorage.setItem("pane_open_by_session", JSON.stringify({ s1: "prompts" }));
+    localStorage.setItem("files_pane_width", "900");
+    const w = mountCockpit([cell(1, "s1", "/proj"), cell(2)], 1, []);
+    await flushPromises();
+    expect(w.findComponent({ name: "PromptsPane" }).attributes("style")).toContain(`${PANE_ROOM - 320}px`);
+  });
+
+  // Beside the tiles (#3027) the pane divides the whole stage with them.
+  it("clamps a pane opened beside the tiled grid against the stage", async () => {
+    localStorage.setItem("files_pane_width", "2000");
+    const w = mountCockpit([cell(1, "s1", "/proj"), cell(2)], null, []);
+    await w.findAllComponents({ name: "TerminalCell" })[0].vm.$emit("toggle-prompts");
+    await flushPromises();
+    expect(w.findComponent({ name: "PromptsPane" }).attributes("style")).toContain(`${STAGE - (SEPARATOR + 1) - 320}px`);
+  });
 });
 
-// Opening a file the user picked into the Canvas (#1374). The write is a round trip, and the zoom
-// can move while it is in flight — the reply then belongs to a cell that is no longer on screen.
-describe("open-in-canvas", () => {
+// A card seeded into the Canvas of the cell that is already enlarged (#1965).
+describe("a card seeded for the enlarged cell", () => {
   // Same reduced-motion stub the pane tests need: the zoom FLIP asks for it and jsdom omits it.
   beforeEach(() => {
     localStorage.clear();
@@ -1376,56 +1471,9 @@ describe("open-in-canvas", () => {
     }
   });
 
-  // One helper for the whole block: four fetch mocks were each declaring their own copy, which is
-  // the duplication this repo's DRY rule is about (CodeRabbit read it as a redeclaration — it was
-  // not, each sat in its own arrow-function scope, and `yarn typecheck` and the 68 tests here both
-  // pass either way; the copies were still worth collapsing).
   const ok = (body: unknown) => ({ ok: true, json: async () => body }) as unknown as Response;
 
-  // Only the WRITE is held open; the reads the grid makes on expand must settle as usual. The two
-  // are told apart by the trailing `s`, not by a substring test — `/toolResults/<id>` CONTAINS
-  // `/toolResult`, so a `.includes` here holds the read as well and the race under test never runs.
-  const deferredWrite = () => {
-    const held: Array<() => void> = [];
-    globalThis.fetch = vi.fn(
-      (url: RequestInfo | URL) =>
-        new Promise<Response>((resolve) => {
-          const u = String(url);
-          if (u.includes("/api/agent/toolResults/")) return resolve(ok({ toolResults: [] }));
-          if (u.includes("/api/agent/toolResult")) return void held.push(() => resolve(ok({ ok: true })));
-          resolve(ok({ tools: [] }));
-        }),
-    ) as unknown as typeof fetch;
-    return () => held.forEach((r) => r());
-  };
-
-  const gridWithPaneOpen = async () => {
-    const w = mountGrid([cell(1, "s-one", "/work/a"), cell(2, "s-two", "/work/b")], 1);
-    await flushPromises();
-    if (!w.findComponent({ name: "FilesPane" }).exists()) {
-      await w.findComponent({ name: "TerminalCell" }).vm.$emit("open-files");
-      await flushPromises();
-    }
-    return w;
-  };
-
-  // Awaited: the card is built before the write is even issued, so releasing the write any earlier
-  // releases nothing and the test proves whatever the timing happened to be.
-  const pickFile = async (w: ReturnType<typeof mount>) => {
-    w.findComponent({ name: "FilesPane" }).vm.$emit("open-in-canvas", "design.md");
-    await flushPromises();
-  };
-
-  it("shows the Canvas beside the cell the file was picked in", async () => {
-    const release = deferredWrite();
-    const w = await gridWithPaneOpen();
-    await pickFile(w);
-    release();
-    await flushPromises();
-    expect(w.find(".stub-gui-panel").exists()).toBe(true);
-  });
-
-  // The OTHER route that seeds a card and then asks for the Canvas: the header's `[Mulmo]` menu
+  // The route that seeds a card and then asks for the Canvas: the header's `[Mulmo]` menu
   // (#1948), which seeds in Terminal.vue and emits `canvas`. On a cell that is ALREADY enlarged
   // nothing re-runs the watch that takes `canvasHasCard`, so the pane said "not enabled for this
   // session" over the card just written, and collapsing the cell and re-enlarging it was what
@@ -1456,130 +1504,6 @@ describe("open-in-canvas", () => {
     await flushPromises();
 
     expect(w.findComponent({ name: "GuiPanel" }).props("unavailable")).toBeNull();
-  });
-
-  // The cell moved on while the write was in flight. `canvasHasCard` is one flag for whichever
-  // cell is enlarged, so a late reply would enable the SECOND cell's Canvas button on the strength
-  // of a card written for the first — and pressing it opens a Canvas with nothing of its own in it.
-  // A refusal is the server's sentence about the file that was clicked, and the reopen it comes
-  // from is a round trip. Walk to another cell while it is in flight and the pane on screen is
-  // rooted somewhere else — writing there names a file that tree is not showing (Codex on #1942).
-  it("does not put a late refusal in the pane the user walked to", async () => {
-    // The reopen answers a refusal, held until the zoom has moved.
-    const held: Array<() => void> = [];
-    globalThis.fetch = vi.fn((url: RequestInfo | URL) => {
-      const u = String(url);
-      if (u.includes("/api/plugin/presentMulmoScript")) {
-        return new Promise<Response>((resolve) => held.push(() => resolve(ok({ ok: false, code: "not_found", error: "File not found: stories/x.json" }))));
-      }
-      if (u.includes("/api/agent/toolResults/")) return Promise.resolve(ok({ toolResults: [] }));
-      return Promise.resolve(ok({ tools: [] }));
-    }) as unknown as typeof fetch;
-
-    const w = await gridWithPaneOpen();
-    // The grid must know a stories root, or nothing is a story and the refusal under test never
-    // happens — the test would pass with the guard removed, which is how it read on the first try.
-    await w.setProps({ storiesRoots: [{ id: "root-a", paths: ["/work/a"] }] });
-    paneStub.showError.mockClear();
-    w.findComponent({ name: "FilesPane" }).vm.$emit("open-in-canvas", "artifacts/stories/x.json");
-    await flushPromises();
-    // The reopen IS in flight. Without this the test passes when nothing was ever requested —
-    // `showError` is not called either way, which is the shape of a test that cannot fail
-    // (CodeRabbit on #1942).
-    expect(held.length).toBeGreaterThan(0);
-
-    // The zoom moves AND the new cell opens its own Files pane — the case that actually
-    // misattributes. With no pane on the new cell there is nothing to write into, so the guard
-    // would be untestable: the mutation would pass.
-    await w.setProps({ expandedUid: 2 });
-    await flushPromises();
-    const enlarged = w.findAllComponents({ name: "TerminalCell" }).find((c) => c.props("expanded"));
-    if (!w.findComponent({ name: "FilesPane" }).exists()) {
-      enlarged?.vm.$emit("open-files");
-      await flushPromises();
-    }
-    expect(w.findComponent({ name: "FilesPane" }).exists()).toBe(true); // a pane IS on screen to mis-write into
-    held.forEach((release) => release());
-    await flushPromises();
-
-    expect(paneStub.showError).not.toHaveBeenCalled();
-  });
-
-  // Same cell, same tree, but NOT the same pane: `v-if` unmounts the pane on close, so closing and
-  // reopening while the reopen is in flight leaves a fresh instance at an identical uid and cwd.
-  // A guard on those two alone reads that as "the pane that asked is still here" and writes a
-  // sentence into a pane the user has since thrown away and rebuilt (Codex on #1942).
-  it("does not put a late refusal in a pane that was closed and reopened", async () => {
-    const held: Array<() => void> = [];
-    globalThis.fetch = vi.fn((url: RequestInfo | URL) => {
-      const u = String(url);
-      if (u.includes("/api/plugin/presentMulmoScript")) {
-        return new Promise<Response>((resolve) => held.push(() => resolve(ok({ ok: false, code: "not_found", error: "File not found: stories/x.json" }))));
-      }
-      if (u.includes("/api/agent/toolResults/")) return Promise.resolve(ok({ toolResults: [] }));
-      return Promise.resolve(ok({ tools: [] }));
-    }) as unknown as typeof fetch;
-
-    const w = await gridWithPaneOpen();
-    await w.setProps({ storiesRoots: [{ id: "root-a", paths: ["/work/a"] }] });
-    paneStub.showError.mockClear();
-    const asked = w.findComponent({ name: "FilesPane" });
-    asked.vm.$emit("open-in-canvas", "artifacts/stories/x.json");
-    await flushPromises();
-    expect(held.length).toBeGreaterThan(0); // the reopen IS in flight
-
-    // Closed, then reopened on the SAME cell — the uid and the cwd are unchanged by design.
-    asked.vm.$emit("close");
-    await flushPromises();
-    expect(w.findComponent({ name: "FilesPane" }).exists()).toBe(false);
-    await w
-      .findAllComponents({ name: "TerminalCell" })
-      .find((c) => c.props("expanded"))
-      ?.vm.$emit("open-files");
-    await flushPromises();
-    const reopened = w.findComponent({ name: "FilesPane" });
-    expect(reopened.exists()).toBe(true);
-
-    held.forEach((release) => release());
-    await flushPromises();
-    expect(paneStub.showError).not.toHaveBeenCalled();
-  });
-
-  // The positive half of the guard above, and the reason it is a separate test: the suppression one
-  // asserts `showError` was NOT called, so a `showPaneError` that suppressed EVERYTHING would pass
-  // it. Nothing at this level proved the sentence ever reaches the pane at all (Codex on #1942).
-  it("puts the server's own sentence in the pane the file was picked in", async () => {
-    globalThis.fetch = vi.fn((url: RequestInfo | URL) => {
-      const u = String(url);
-      // Measured against the running server: an unresolvable deck answers 200 with its own sentence.
-      if (u.includes("/api/plugin/presentMulmoScript")) return Promise.resolve(ok({ ok: false, code: "not_found", error: "File not found: stories/x.json" }));
-      if (u.includes("/api/agent/toolResults/")) return Promise.resolve(ok({ toolResults: [] }));
-      return Promise.resolve(ok({ tools: [] }));
-    }) as unknown as typeof fetch;
-
-    const w = await gridWithPaneOpen();
-    await w.setProps({ storiesRoots: [{ id: "root-a", paths: ["/work/a"] }] });
-    paneStub.showError.mockClear();
-    w.findComponent({ name: "FilesPane" }).vm.$emit("open-in-canvas", "artifacts/stories/x.json");
-    await flushPromises();
-
-    // The SERVER's sentence, not a generic fallback: what makes the message worth showing is that
-    // it names the file and says what to do about it (#1941).
-    expect(paneStub.showError).toHaveBeenCalledWith("File not found: stories/x.json");
-    expect(w.find(".stub-gui-panel").exists()).toBe(false); // and no Canvas was opened on a refusal
-  });
-
-  it("does not enable the Canvas button on the cell the zoom moved to", async () => {
-    const release = deferredWrite();
-    const w = await gridWithPaneOpen();
-    await pickFile(w);
-    await w.setProps({ expandedUid: 2 });
-    await flushPromises();
-    release();
-    await flushPromises();
-    const enlarged = w.findAllComponents({ name: "TerminalCell" }).find((c) => c.props("expanded"));
-    expect(enlarged?.props("initialSessionId")).toBe("s-two");
-    expect(enlarged?.props("canvasAvailable")).toBe(false);
   });
 });
 

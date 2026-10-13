@@ -132,7 +132,7 @@ English, and the line under the picker says so.
 | **Directory settings** | What each directory's `.mulmoterminal.json` is **actually doing**. Expand a row for the values in force (colors with a swatch), **which file each came from**, **keys dropped in validation**, and **keys this app never reads**. **Change here** below it edits the name, colours, status colours, theme, palette, font, grid priority, model, closing summary, extra directories, icon, background, sounds and header buttons / chips / commands (→ [Per-project settings](#per-dir)). "Explain my settings…" starts the `mulmoterminal-config` skill to say why and fix it (→ [When a setting isn't working](#dir-settings-preview)) |
 | **Launch commands** | Commands you can launch besides the agents in a grid cell (`{ label, command }`). A plain shell needs no entry — the launcher's **Shell** toggle opens `$SHELL` unconfigured |
 | **Header buttons and chips** | Your global header buttons and chips, edited right here — add, edit, remove, and group buttons into folders — plus the colour per status and the status colour on the header. "Set up header buttons…" starts the `mulmoterminal-header` skill (→ [Customizing the header](#header)) |
-| **Terminal keys** | [Copy on select](#copy-on-select) (`copyOnSelect`, off), the [question pane](#question-pane) (`questionPaneEnabled`), and which bytes your Claude reads as **submit** ([Enter — submit vs. newline](#terminal-submit), `terminalSubmit`) |
+| **Terminal keys** | [Copy on select](#copy-on-select) (`copyOnSelect`, off), the [question pane](#question-pane) (`questionPaneEnabled`), and which bytes your Claude reads as **submit** ([Enter — submit vs. newline](#terminal-submit), `terminalSubmit`), and the [tmux prefix key](#tmux-prefix) (`tmuxPrefix`, off) |
 | **Keyboard shortcuts** | Every action and the `send` row, bound or not, read-only. **Everything starts as Not set** — **Recommended keys** adds a starter set for this platform in one click (only to unbound actions and unused keys), and "Set up shortcuts…" starts the `mulmoterminal-keys` skill to bind anything else in `keymap` (→ [Keyboard shortcuts](#keymap)) |
 | **Voice input** | The language you **dictate in** (your browser's, per-clip detection, or a fixed one). Shown only on a machine that can transcribe |
 | **Models and backends** | The backends a session can run on and whether each can be **reached right now**, read-only. "Add a backend…" starts the `mulmoterminal-model` skill (→ [Using another model](providers.html)) |
@@ -564,7 +564,7 @@ With none set, you get a **built-in starter set**: **Open this branch's PR** (gi
 
 *Insert a file path*, *Reveal in the file manager*, *Browse files in the app*, *New terminal here* and *Open on GitHub* used to be defaults too. They are **items in the path menu** now — click the directory path on the terminal's header row (Open on GitHub became its repository section, headed **GitHub** or **GitLab** with that site's own pages). They are all file operations on this directory, which is what the path itself is; keeping a permanent icon for each cost more room than it was worth in a tiled cell. Nothing changed about them as config: list any of them yourself and it works exactly as before, as a button — you will then have it both places, since the menu is fixed.
 
-One of them no longer matches its menu item. *Browse files in the app* **in the menu** opens the file pane beside the enlarged cell (enlarging it first if it is tiled); the same thing **as a button** (`open.files`) opens the **full-screen** Files view, as it always did. That is not an oversight: a button carries whatever path you give it, and the pane can only ever be rooted at the enlarged cell's directory.
+One of them no longer matches its menu item. *Browse files in the app* **in the menu** opens the file pane beside that cell (beside the enlarged cell, or to the right of the tiled grid); the same thing **as a button** (`open.files`) opens the **full-screen** Files view, as it always did. That is not an oversight: a button carries whatever path you give it, and the pane can only ever be rooted at its cell's directory.
 
 ```json
 {
@@ -1048,6 +1048,28 @@ An invalid value (a typo, or anything other than `"cr"` / `"esc-cr"`) is ignored
 - **Japanese / other IME input** — while the IME is composing, **Enter confirms the candidate** and
   is never taken as submit or newline, in either mode. Your CJK input is unaffected.
 
+## The tmux prefix key (`tmuxPrefix`) {#tmux-prefix}
+
+Each cell runs inside a dedicated tmux so the session survives a restart. tmux listens for a **prefix
+key** (by default **Ctrl+B**) and reads the key after it as a tmux command. That collides with
+**Ctrl+B = "one character left"**, which the shell's line editor, Claude Code's input box and the macOS
+text system all use: the first press looks ignored, and the key you press next (`c`, `%`, `d`) runs a
+tmux command instead of reaching your agent. MulmoTerminal never uses the prefix, so it is **off by
+default** and every key goes to the agent.
+
+```jsonc
+{ "tmuxPrefix": "none" }   // default: no prefix, every key goes to the agent
+{ "tmuxPrefix": "C-b" }    // tmux's own default
+{ "tmuxPrefix": "C-]" }    // a prefix that does not collide with cursor keys
+```
+
+- A value is `none`, or Control plus one of `a`-`z`, `Space`, `]`, `_`, `^`, `@`. Anything else falls back to `none`.
+- Change it only if you attach to the sessions yourself (`tmux -L mulmoterminal attach`) and want tmux's
+  keyboard commands, such as detach with `Ctrl+B d`. The mouse wheel scrolls history in every setting.
+- Saving applies to the tmux server already running; no restart. **Settings -> Terminal keys** has a picker for
+  the three values above.
+
+
 ## Notification sounds (`soundKinds` / `sounds`) {#sounds}
 
 Seven moments can beep, each with its own sound and its own switch. Running many agents at once
@@ -1262,7 +1284,7 @@ is refused there, and one the browser keeps for itself is saved with a warning. 
 | `terminal-talk` | **Talk to another terminal** from the current one | no — un-zoomed, the cursor's cell |
 | `terminal-park` | **Set the current terminal aside**, or wake it | no — un-zoomed, the cursor's cell |
 | `terminal-copy-code` / `terminal-insert-path` / `terminal-reveal` / `terminal-voice` / `terminal-diff` / `terminal-note` | On the current terminal: **copy the last code block** / **insert a file path** / **open its directory** in the file manager / **voice input** on-off / the **changes panel** / its **note** — the same as the row-2 buttons and the path menu | no — un-zoomed, the cursor's cell |
-| `pane-files` / `pane-prompts` / `pane-transcript` / `pane-tools` / `pane-canvas` / `pane-collections` | Open or close that **pane** beside the current terminal — the same panes as its History and Tools menus. On a tiled cell it enlarges it first | no — un-zoomed, the cursor's cell |
+| `pane-files` / `pane-prompts` / `pane-transcript` / `pane-tools` / `pane-canvas` / `pane-collections` | Open or close that **pane** beside the current terminal — the same panes as its History and Tools menus. On a tiled cell it opens to the right of the grid, enlarging nothing | no — un-zoomed, the cursor's cell |
 | `files-find` | **Open a file by name** in the Files pane beside the current terminal — type part of a name or path, pick from the list, and it opens with the tree expanded to it. In a git repository the candidates come from git, so `.gitignore` applies; elsewhere the tree is walked, no ignore file is read, and only directories nobody authors by hand (`node_modules`, virtualenvs, caches) are skipped. Opens the pane first if it is not already up | yes — or the full-screen Files view is open |
 | `files-search` | **Search inside the files** of that project — the companion to `files-find`. Matches are grouped by file with the matching lines under them; picking one opens the file and puts the cursor on that line. The query is literal by default, with toggles for regular expressions and for matching case; otherwise case is smart — a lower-case query matches either case, one with a capital in it does not. In a git repository `.gitignore` applies, and a file your agent created a moment ago is searched too; elsewhere no ignore file is read. A file you have open with unsaved edits is searched from what is on your screen rather than from disk — in literal mode; with the regex toggle on it is left out instead, with a note asking you to save it, since running a half-typed pattern on the page can freeze it. Its out-of-date matches from disk are dropped either way. What you typed is emphasised in every line, a line whose match falls past the edge of the row is scrolled to it, and the result you are on opens onto the lines around it. Opens the pane first if it is not already up | yes — or the full-screen Files view is open |
 | `files-tab-close` | **Close the tab in front** in the Files pane, saving it first; the tab beside it comes forward, and closing the last one leaves the pane empty. Does nothing while the pane is closed — it does not open it | yes — or the full-screen Files view is open |

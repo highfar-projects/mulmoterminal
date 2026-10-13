@@ -13,9 +13,11 @@ import { themeEditorKo } from "./themeEditor/ko";
 import { headerChipsKo } from "./headerChips/ko";
 import { headerButtonsKo } from "./headerButtons/ko";
 import { settingsControlsKo } from "./settingsControls/ko";
+import { settingsHelpKo } from "./settingsHelp/ko";
 import { shortcutsKo } from "./shortcuts/ko";
 import { filesTreeKo } from "./filesTree/ko";
 import { previewCodeCopyKo } from "./previewCodeCopy/ko";
+import { fileLinksKo } from "./fileLinks/ko";
 import { skillsViewKo } from "./skillsView/ko";
 import { processesViewKo } from "./processesView/ko";
 
@@ -171,9 +173,7 @@ export const ko: Messages = {
       },
     },
 
-    guide: {
-      prompt: "MulmoTerminal을 어떻게 쓰는지 모르겠다면 가이드를 보세요 ——",
-    },
+    ...settingsHelpKo,
 
     push: {
       intro:
@@ -502,7 +502,6 @@ export const ko: Messages = {
   cellMenu: {
     history: "기록",
     tools: "도구",
-    enlargeFirst: "셀을 확대하면 옆에 열 수 있습니다",
     canvasUnavailable: "이 디렉터리에서는 렌더링 MCP가 꺼져 있습니다. 런처에서 Canvas를 켜고 이 셀을 다시 시작하세요",
     items: {
       prompts: { label: "보낸 프롬프트", detail: "이 세션에서 직접 입력한 지시" },
@@ -573,13 +572,6 @@ export const ko: Messages = {
   // 2타 단축키가 두 번째 키를 기다리는 동안 보이는 안내 (#2265).
   commandPalette: commandPaletteKo,
   // The path menu's file items. Its repository section stays in the forge's own words.
-  pathMenu: {
-    insertFilePath: "파일 경로 삽입",
-    reveal: "파일 관리자에서 열기",
-    browseFiles: "앱에서 파일 보기",
-    dirSettings: "이 디렉터리의 설정",
-    newTerminal: "여기서 새 터미널",
-  },
   prefixKeys: {
     waiting: "{key} 다음에 누를 키:",
     cancel: "Esc로 취소",
@@ -651,6 +643,7 @@ export const ko: Messages = {
   settingsControls: settingsControlsKo,
   ...filesTreeKo,
   ...previewCodeCopyKo,
+  ...fileLinksKo,
   ...skillsViewKo,
   ...processesViewKo,
   tips: tipsKo,

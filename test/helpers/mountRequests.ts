@@ -1,8 +1,8 @@
 // The requests TerminalGrid makes just by being mounted on an enlarged session, answered so a
 // spec that is about something else does not reach the network.
 //
-// Three of them, all from watchers that run immediately: is a question open, does this session
-// already have a canvas card, and what can it draw. None of the specs using this cares about the
+// Four of them, all from watchers that run immediately: is a question open, is a checklist open
+// (#3022), does this session already have a canvas card, and what can it draw. None of the specs using this cares about the
 // answers — but unmocked they go out for real, and every caller catches its own failure, so the
 // miss leaves nothing to notice. That is how three spec files acquired it without anyone seeing.
 //
@@ -13,6 +13,7 @@ import { expect, vi } from "vitest";
 /** The routes a mount issues, per session, in the shape their callers read. */
 const routesFor = (session: string): [string, () => unknown][] => [
   [`/api/question/${encodeURIComponent(session)}`, () => ({ question: null })],
+  [`/api/pane/check/${encodeURIComponent(session)}`, () => ({ check: null })],
   [`/api/agent/toolResults/${encodeURIComponent(session)}`, () => ({ toolResults: [] })],
   [`/api/tools?sessionId=${encodeURIComponent(session)}`, () => ({ groups: [] })],
 ];

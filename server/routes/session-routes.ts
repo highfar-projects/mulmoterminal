@@ -6,10 +6,10 @@
 // a summarizer, which belongs to the title machinery index.ts still owns.
 import type { Express, Request, Response } from "express";
 import { promises as fs } from "node:fs";
+import { hasErrnoCode } from "../errors.js";
 import { SESSION_ID_RE } from "../config/env.js";
 import { normalizeAgent, workspaceForRoute } from "./routeParams.js";
 import { cwdForSessionHydrated } from "../session/session-cwd.js";
-import { hasErrnoCode } from "../errors.js";
 import { isProbeSessionId } from "../agents/probe/probe-session.js";
 import {
   activity,
@@ -42,6 +42,7 @@ import {
   readSessionMeta,
   readSessionSummary,
   sessionLastTurn,
+  transcriptFilesIn,
   sessionPrompts,
   sessionTimeline,
 } from "../session/session-reads.js";
@@ -354,16 +355,6 @@ async function lastTurn(req: Request, res: Response) {
   // asked, and that prompt is the asker's own text coming home.
   const shape: HandoffShape = req.query.as === "reply" ? "reply" : "exchange";
   res.json({ ...turn, text: formatHandoff({ label: agent, cwd }, turn, undefined, shape) });
-}
-
-// The transcripts in one project directory; a directory that does not exist yet has none.
-async function transcriptFilesIn(dir: string): Promise<string[]> {
-  try {
-    return (await fs.readdir(dir)).filter((f) => f.endsWith(".jsonl"));
-  } catch (err) {
-    if (!hasErrnoCode(err) || err.code !== "ENOENT") throw err;
-    return [];
-  }
 }
 
 // List the chat sessions for the current project (CLAUDE_CWD), including

@@ -93,7 +93,7 @@ export const commandPaletteZhCN = {
     terminalVoice: "在当前终端开始或停止语音输入（麦克风可用时）。",
     terminalDiff: "打开当前 worktree 终端的变更面板（有变更时）。",
     terminalNote: "打开当前终端的备注以编写或修改。",
-    paneFiles: "打开或关闭当前终端旁的文件面板；平铺时先放大。",
+    paneFiles: "打开或关闭当前终端旁的文件面板；平铺时显示在网格右侧。",
     panePrompts: "打开或关闭当前终端已发送提示的面板。",
     paneTranscript: "打开或关闭当前终端的对话面板。",
     paneTools: "打开或关闭当前终端中代理所用工具的面板。",

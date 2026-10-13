@@ -35,6 +35,7 @@ import { formatCwd } from "./cwdDisplay";
 import FilesPane from "./FilesPane.vue";
 import type { FilesPaneState } from "./filesPaneState";
 import GuiPanel from "./GuiPanel.vue";
+import CheckCard from "./CheckCard.vue";
 import CollectionsPane from "./CollectionsPane.vue";
 import ToolsPane from "./ToolsPane.vue";
 import PromptsPane from "./PromptsPane.vue";
@@ -62,6 +63,10 @@ import { hasCanvasGroup, hasCollectionsGroup } from "../../common/toolGroups";
 import { isRightPane, type RightPane } from "./gridCell";
 import QuestionPane from "./QuestionPane.vue";
 import { ASK_QUESTION_CHANNEL, isAskQuestionDone, isAskQuestionEvent } from "../../common/askQuestion";
+import { PANE_COMMAND_CHANNEL, checkClosedNotice, checkSummary, isPaneCommand, type CheckAnswer, type PaneTarget } from "../../common/paneCommand";
+import { dirPathKey } from "../../common/dirPathKey";
+import { createPaneCommandBox } from "../composables/paneCommandBox";
+import { fetchOpenCheck, postCheckClosed } from "../composables/openCheck";
 import { fetchOpenQuestion, postAnswer, postWords } from "../composables/openQuestion";
 import type { AnswerFailure } from "../../common/askQuestion";
 import { createQuestionBox } from "../composables/questionBox";
@@ -69,7 +74,7 @@ import { parsePaneStore, rememberPane, recallPane } from "./filesPaneStore";
 import { isRecord } from "../../common/isRecord";
 import { asTerminalAgent, type SessionAgent } from "../../common/sessionAgent";
 import type { AgentReport } from "./gridCell";
-import { buildCanvasCard, seedCanvasCard, hasStoredCard, absoluteUnder, storiesRootsFrom, type StoriesRoots } from "../composables/canvasOpenFile";
+import { hasStoredCard, storiesRootsFrom, type StoriesRoots } from "../composables/canvasOpenFile";
 import { jsonBody } from "../jsonBody";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
@@ -281,8 +286,8 @@ function stackItemStyle(index: number) {
   return { marginLeft: `${s.gapPx}px` };
 }
 
-// The file pane beside the enlarged cell. ONE pane, not one per cell: it re-roots to whichever
-// cell is enlarged, so walking the zoom doesn't accumulate editors. WHICH pane a cell has open is
+// The file pane beside the enlarged cell, or beside the tiled grid (#3027). ONE pane, not one per
+// cell: it re-roots to whichever cell it is on, so walking the zoom doesn't accumulate editors. WHICH pane a cell has open is
 // that cell's own (#1378, see paneByCell); the width is per-browser (localStorage), like the
 // single view's splitter and the terminal font size.
 //
@@ -309,7 +314,7 @@ const remember = (key: string, value: string): void => {
     // storage blocked: the pane still works this session, it just isn't remembered
   }
 };
-// Which pane holds the one slot beside the enlarged terminal (see gridCell.ts):
+// Which pane holds the one right-pane slot (see gridCell.ts):
 //   files   — the file tree/editor (the original occupant).
 //   canvas  — what the agent DREW: the GUI plugin views for this cell's session.
 //   tools   — which GUI tools this session actually has, read-only.
@@ -327,6 +332,11 @@ const remember = (key: string, value: string): void => {
 // behind when a re-root could not be saved out of — so a snapshot is filed under the cell the
 // pane is on rather than the one it failed to reach.
 const paneUid = ref<number | null>(null);
+// Where the pane should be while nothing is enlarged (#3027): the cell whose menu last opened it,
+// so moving the keyboard across tiles never re-roots a files pane under the user. The re-root
+// watcher moves `paneUid` here, and keeps this in step with every move it makes, which is how a
+// collapsed zoom leaves the pane on the cell that was enlarged.
+const tiledPaneUid = ref<number | null>(null);
 
 // Which pane each cell has open (#1378). ABSENT means never asked, which is where a cell starts
 // and what lets a reload restore one; an explicit `null` is a cell whose pane the user closed,
@@ -355,6 +365,22 @@ const filesOpen = computed(() => rightPane.value === "files");
 const paneOf = (uid: number): RightPane | null => paneByCell.value.get(uid) ?? null;
 
 const sessionOf = (uid: number): string | null => props.cells.find((cell) => cell.uid === uid)?.session ?? null;
+const cellOf = (uid: number | null): Cell | undefined => (uid === null ? undefined : props.cells.find((cell) => cell.uid === uid));
+
+// The cell the re-root watcher puts the pane on: the enlarged one, or with nothing enlarged the one
+// asked for from a tile.
+const paneTargetUid = computed(() => (zoomed.value ? props.expandedUid : tiledPaneUid.value));
+// The cell the pane's CONTENTS answer for — session, directory, agent, where text is typed. The
+// enlarged cell while there is one, exactly as before; on the tiled grid the cell the pane is on.
+const paneCellUid = computed(() => props.expandedUid ?? paneUid.value);
+// The tiled grid is handed one page of cells, so a pane whose cell is on another page has nothing
+// beside it to belong to. Hidden then, not closed: its editor stays mounted, as it does on collapse.
+const paneOnScreen = computed(() => rightPane.value !== null && (zoomed.value || cellOf(paneUid.value) !== undefined));
+const tiledPane = computed(() => !zoomed.value && paneOnScreen.value);
+const zoomRowClass = computed(() => {
+  if (zoomed.value) return "zoom-row relative flex min-h-0 min-w-0 flex-auto";
+  return tiledPane.value ? "order-last flex min-h-0 flex-none" : "hidden";
+});
 
 // Sessions kept, newest last. A browser-wide cap for the same reason the files pane's store has
 // one: without it this grows for as long as the user starts terminals, and localStorage answers a
@@ -389,7 +415,9 @@ function restoreSessionPane(uid: number): void {
 // long as the pane does — closing it, or switching to another one, is the end of the takeover.
 const paneExpanded = ref(false);
 // Collections joins canvas/tools in the full-width mode: it is a browser, not a sidebar strip.
-const paneFull = computed(() => paneExpanded.value && rightPane.value !== null && rightPane.value !== "files");
+// Never on the tiled grid: there the pane sits beside every tile, and covering them is not a view of
+// the grid any more.
+const paneFull = computed(() => zoomed.value && paneExpanded.value && rightPane.value !== null && rightPane.value !== "files");
 function togglePaneExpanded(): void {
   paneExpanded.value = !paneExpanded.value;
 }
@@ -410,7 +438,9 @@ const PANE_CHROME_PX = SEPARATOR_PX + 1;
 
 // Between the keystrokes that answer a question dialog. The dialog rebuilds itself between
 // questions and after a toggle, so the keys are paced rather than written as one block.
-const rowWidth = () => Math.max(0, (zoomRow.value?.clientWidth ?? 0) - (rightPane.value ? PANE_CHROME_PX : 0));
+// On the tiled grid the row holds the pane alone, and what the pane divides is the stage it shares
+// with the tiles.
+const rowWidth = () => Math.max(0, ((zoomed.value ? zoomRow.value : stage.value)?.clientWidth ?? 0) - (rightPane.value ? PANE_CHROME_PX : 0));
 // Mirrored into a ref so the separator can announce its range (a plain function call would not
 // re-render when the row resizes). The pane's floor gives way to the terminal's on a narrow row,
 // which is why the minimum is itself clamped.
@@ -455,8 +485,8 @@ function setRightPane(pane: RightPane | null, uid: number | null): void {
   // the user is looking at, and collapsing THAT pane out of full width would be a second cell's
   // button rearranging the one in front of them.
   if (paneUid.value === uid) paneExpanded.value = pane === "transcript";
-  // Leaving files drops the directory it was on, so coming back re-roots to whichever cell is
-  // enlarged THEN rather than resuming a directory the user has since walked away from.
+  // Leaving files drops the directory it was on, so coming back re-roots to whichever cell the pane
+  // is on THEN rather than resuming a directory the user has since walked away from.
   if (leavingFiles) paneCwd.value = null;
 }
 
@@ -512,20 +542,21 @@ async function openCanvasFor(uid: number, enlarge = true, stillWanted?: () => bo
 // authority anyway: the seed's POST awaits the write before answering, so the GET below sees the
 // card — and it answers 200 for a card it DROPPED as well, which a hand-set flag would report as
 // something to render.
-const mayHaveGainedACard = (): boolean => expandedSessionId.value !== null && !canvasAvailable.value && !canvasHasCard.value;
+const mayHaveGainedACard = (): boolean => paneCellSessionId.value !== null && !canvasAvailable.value && !canvasHasCard.value;
 
 async function adoptStoredCard(): Promise<void> {
-  const sessionId = expandedSessionId.value;
+  const sessionId = paneCellSessionId.value;
   if (!sessionId) return;
   const has = await hasStoredCard(sessionId);
   // The zoom can walk while the ask is in flight; `canvasHasCard` is one flag for whichever cell
   // is enlarged, so a late answer must not speak for the cell that replaced it.
-  if (sessionId === expandedSessionId.value) canvasHasCard.value = has;
+  if (sessionId === paneCellSessionId.value) canvasHasCard.value = has;
 }
 
 // The same gesture for the files pane: the path menu's "Browse files in the app", which is on
 // every cell whether it is enlarged or not (#1910). It used to open the full-screen view — the
-// pane is what the user is after, and it exists only beside an enlarged cell, so this enlarges.
+// pane is what the user is after. With a cell enlarged it moves the zoom to this one; on the tiled
+// grid it puts the pane beside the tiles, on this cell, and enlarges nothing (#3027).
 //
 // Not a toggle. "Browse files" is "show me", the way `openCanvasFor` is; the pane's own close
 // button is what puts it away.
@@ -533,20 +564,24 @@ async function adoptStoredCard(): Promise<void> {
 // The flush condition is narrower than openCanvasFor's only for `files`, which re-roots a files pane
 // on ANOTHER cell and leaves one on this cell alone. Any other pane replaces it outright — on this
 // cell too, since a collapsed zoom leaves the files pane mounted, hidden, on the cell it was on.
-async function openPaneFor(uid: number, pane: RightPane): Promise<void> {
+// `stillWanted` is asked again after the save, which awaits: a caller that did not come from a click
+// (an agent's showInPane) must not take the zoom back from a cell the user moved to meanwhile.
+async function openPaneFor(uid: number, pane: RightPane, stillWanted: () => boolean = () => true): Promise<void> {
   const filesUnmounts = filesOpen.value && (paneUid.value !== uid || pane !== "files");
   if (filesUnmounts && (await filesPane.value?.flush()) === false) return;
-  if (props.expandedUid !== uid) emit("toggle-expand", uid);
+  if (!stillWanted()) return;
+  if (props.expandedUid === null) tiledPaneUid.value = uid;
+  else if (props.expandedUid !== uid) emit("toggle-expand", uid);
   setRightPane(pane, uid);
 }
 
-// A pane asked for by name — a header button, a shortcut, the palette. On the enlarged cell it is
-// the History / Tools menu's toggle; on a tile it is the gesture above, because a toggle there only
-// records what the cell should show once enlarged, and an action that visibly does nothing reads as
-// broken.
+// A pane asked for by name — a header button, a shortcut, the palette. On the cell the pane is on
+// (the enlarged one, or on the tiled grid the one that last opened it) it is the History / Tools
+// menu's toggle; on any other cell it is the gesture above, because a toggle there would only record
+// what that cell should show later, and an action that visibly does nothing reads as broken.
 function pressPane(uid: number, pane: RightPane): void {
-  if (uid === props.expandedUid) void toggleRightPane(pane, uid);
-  else if (pane === "canvas") void openCanvasFor(uid);
+  if (uid === paneTargetUid.value) void toggleRightPane(pane, uid);
+  else if (pane === "canvas" && props.expandedUid !== null) void openCanvasFor(uid);
   else void openPaneFor(uid, pane);
 }
 
@@ -571,66 +606,6 @@ function moveCell(uid: number, dir: -1 | 1): boolean {
 }
 
 onBeforeUnmount(registerGridCellRunner((uid, action) => runCellAction(action, uid)));
-
-/** What a refusal has to come back to for it to be worth showing. */
-type PaneIdentity = { uid: number | null; cwd: string | null; pane: FilesPaneInstance | null };
-
-/** Put a refusal in the pane that ASKED for it, or nowhere.
- *
- *  Nowhere is the right answer when that pane is gone: the user closed it or walked to another
- *  cell, and a message about a file they are no longer looking at is worse than none. What must
- *  not happen is the middle case — a pane is still open and takes a sentence it did not ask for.
- *
- *  The INSTANCE, not just where it sits. `v-if` unmounts the pane on close, so closing and
- *  reopening on the same cell gives a fresh pane at an identical uid and cwd — which a check on
- *  those two alone reads as the original still being there (Codex on #1942). Comparing the
- *  instance costs nothing and cannot be fooled by a location that repeats. */
-function showPaneError(askedFrom: PaneIdentity, reason: string): void {
-  if (paneUid.value !== askedFrom.uid || paneCwd.value !== askedFrom.cwd || !filesOpen.value) return;
-  if (filesPane.value !== askedFrom.pane) return;
-  filesPane.value?.showError(reason);
-}
-
-// Show a file the user picked in the Canvas, without the agent having presented it (#1374). The
-// card is written the way the agent's own results arrive, so it is stored, replayed on reload, and
-// collapsed against the agent's card for the same file — see canvasOpenFile.ts.
-//
-// Revealed only if the write landed: enlarging a cell to show nothing is worse than not enlarging.
-async function openFileInCanvas(path: string): Promise<void> {
-  const uid = props.expandedUid;
-  const sessionId = expandedSessionId.value;
-  if (uid === null || !sessionId) return;
-  // Which pane asked. The reopen below is a network round trip (up to 10s), and the user can walk
-  // to another cell while it is in flight — the re-root watcher then points `filesPane` at a
-  // different tree, and a refusal written there names a file that pane is not showing (Codex on
-  // #1942). Held as values, compared after, the way the seed's own `sessionId` check already is.
-  const askedFrom: PaneIdentity = { uid: paneUid.value, cwd: paneCwd.value, pane: filesPane.value };
-  // The pane's rows are relative to the CELL's cwd; the plugins resolve against the workspace.
-  const result = await buildCanvasCard(absoluteUnder(paneCwd.value, path), storiesRoots.value);
-  // A refusal is the server's sentence about what went wrong — an unregistered root from a card
-  // made under a different launch directory, a workspace that moved since boot. Saying nothing
-  // here is what made those look like a dead button (#1941). `none` stays silent: nothing offers
-  // the action for a file no plugin renders, so it cannot be clicked.
-  if (result.kind === "refused") {
-    showPaneError(askedFrom, result.reason);
-    return;
-  }
-  if (result.kind === "none") return;
-  if (!(await seedCanvasCard(sessionId, result.card))) return;
-  // Re-asked after the await, like every other late reply here. openCanvasFor already refuses to
-  // reveal the pane on a cell it was not asked for, but `canvasHasCard` is one flag for whichever
-  // cell is enlarged: walking the zoom while the write was in flight would otherwise leave the
-  // NEW cell's Canvas button enabled on the strength of a card that is not its.
-  if (sessionId !== expandedSessionId.value) return;
-  // The pane this came from is about to be replaced by the Canvas, so its buffer has to flush —
-  // openCanvasFor does that. Already enlarged, hence `false`.
-  //
-  // Said rather than asked: this route just wrote the card and the write came back, so it needs no
-  // round trip — and `adoptStoredCard`'s probe answers "no" when it cannot reach the server, which
-  // over a card that IS there would put the pane's "not enabled" message back.
-  canvasHasCard.value = true;
-  await openCanvasFor(uid, false);
-}
 
 // GridView drives this one from OUTSIDE a user gesture (placing a spawned chat whose Canvas is
 // already seeded). The pane is TerminalGrid's own state — GridView owns the cells, not what sits
@@ -709,9 +684,10 @@ async function toggleRightPane(pane: RightPane, uid: number | null = props.expan
   setRightPane(paneOf(uid) === pane ? null : pane, uid);
 }
 
-// The enlarged cell's project dir — what the pane browses. A cell that hasn't reported one yet
-// (a launcher, a session still starting) falls back to the grid's default.
-const expandedCwd = computed(() => props.cells.find((c) => c.uid === props.expandedUid)?.cwd ?? props.defaultCwd);
+// A cell's project dir — what the pane browses. A cell that hasn't reported one yet (a launcher, a
+// session still starting) falls back to the grid's default.
+const cwdOf = (uid: number | null): string | null => cellOf(uid)?.cwd ?? props.defaultCwd;
+const paneCellCwd = computed(() => cwdOf(paneCellUid.value));
 
 // The pair every "can the Canvas show this file" question is decided against. Both halves come
 // from the server: the id because a card carries it, and the path because it is CANONICAL — the
@@ -720,14 +696,18 @@ const expandedCwd = computed(() => props.cells.find((c) => c.uid === props.expan
 // named root existed.
 const storiesRoots = computed<StoriesRoots>(() => storiesRootsFrom(props.storiesRoots ?? []));
 
-// The enlarged cell's session — what Canvas and Tools read. Null for a cell with no session
-// yet (a launcher, a command cell), which both panes already render as empty.
-const expandedSessionId = computed(() => props.cells.find((c) => c.uid === props.expandedUid)?.session ?? null);
+// The session of the cell the pane answers for — what Canvas and Tools read. Null for a cell with
+// no session yet (a launcher, a command cell), which both panes already render as empty.
+const paneCellSessionId = computed(() => cellOf(paneCellUid.value)?.session ?? null);
+// The ENLARGED cell's session, which is not the same thing on the tiled grid: what opens the pane by
+// itself — a drawing, a question, an agent's showInPane — answers to this one only, so a cell whose
+// pane was closed long ago does not put one beside the tiles unasked.
+const expandedSessionId = computed(() => cellOf(props.expandedUid)?.session ?? null);
 
 // Which log the Prompts pane reads: claude keeps what a person typed in its own history file,
 // codex only in its rollout, and the server needs to be told which (#1748). Absent means Claude —
 // the same default `Cell.agent` encodes by omission.
-const expandedAgent = computed(() => asTerminalAgent(props.cells.find((c) => c.uid === props.expandedUid)?.agent));
+const paneCellAgent = computed(() => asTerminalAgent(cellOf(paneCellUid.value)?.agent));
 
 // A drawing that lands on the cell you are already looking at opens the Canvas by itself. The
 // agent calling presentDocument IS its answer to what was asked; with the pane closed that answer
@@ -776,14 +756,14 @@ const questionBox = createQuestionBox(fetchOpenQuestion);
 // zoom moves, so it can only ever describe the buttons currently on screen.
 const answerFailure = ref<AnswerFailure | null>(null);
 
-const expandedQuestion = computed(() => (expandedSessionId.value ? (questionBox.questions.value.get(expandedSessionId.value) ?? null) : null));
+const expandedQuestion = computed(() => (paneCellSessionId.value ? (questionBox.questions.value.get(paneCellSessionId.value) ?? null) : null));
 
 // Answered — in the terminal, in the pane, or cancelled with Esc. The pane goes with the question
 // it was opened for: it exists to answer one, and leaving an empty panel behind is something the
 // user then has to close by hand.
 const dropQuestion = (sessionId: string): void => {
   questionBox.drop(sessionId);
-  if (sessionId === expandedSessionId.value && rightPane.value === "question") setRightPane(null, paneUid.value);
+  if (sessionId === paneCellSessionId.value && rightPane.value === "question") setRightPane(null, paneUid.value);
 };
 
 const unsubscribeQuestion = subscribeSession(ASK_QUESTION_CHANNEL, (data) => {
@@ -828,7 +808,7 @@ watch(
 // A reconnect is the other way to have missed one: pub/sub replays room membership, not the events
 // that landed while the socket was down.
 const unsubscribeQuestionReconnect = onPubSubReconnect(() => {
-  if (expandedSessionId.value) void revealQuestion(expandedSessionId.value);
+  if (paneCellSessionId.value) void revealQuestion(paneCellSessionId.value);
 });
 onBeforeUnmount(() => unsubscribeQuestionReconnect());
 
@@ -836,8 +816,77 @@ onBeforeUnmount(() => unsubscribeQuestionReconnect());
 // to this cell does not put it back. Answering in the terminal is always available, and a question
 // that arrives after this opens normally.
 function dismissQuestionPane(): void {
-  if (expandedSessionId.value) questionBox.dismiss(expandedSessionId.value);
+  if (paneCellSessionId.value) questionBox.dismiss(paneCellSessionId.value);
   setRightPane(null, paneUid.value);
+}
+
+// What an agent asked of its own cell's right pane (#3022): a file to show, or a checklist. Acted on
+// at once for the enlarged cell, and kept for the others until they are enlarged — a background cell
+// must not take the screen. When NOTHING is enlarged, GridView enlarges the asking cell, as it does for
+// a drawing; that enlargement is what then shows it here.
+const paneCommands = createPaneCommandBox(fetchOpenCheck);
+const expandedCheck = computed(() => (expandedSessionId.value ? (paneCommands.checks.value.get(expandedSessionId.value) ?? null) : null));
+
+/** A file in the Files pane of the enlarged cell, in the view the agent asked for. Through
+ *  openPaneFor, so a buffer open there is saved first and a save that fails keeps the pane put. A pane
+ *  rooted somewhere else than the agent's directory is left alone: the path is relative to that. */
+let latestShow = 0;
+async function showInFilesPane(target: PaneTarget, cwd: string): Promise<void> {
+  const uid = props.expandedUid;
+  if (uid === null) return;
+  const show = ++latestShow;
+  const stillWanted = (): boolean => show === latestShow && props.expandedUid === uid;
+  await openPaneFor(uid, "files", stillWanted);
+  await nextTick();
+  if (!stillWanted() || !filesOpen.value || dirPathKey(paneCwd.value ?? "") !== dirPathKey(cwd)) return;
+  await filesPane.value?.showFile(target);
+}
+
+const showPendingFile = (sessionId: string): void => {
+  const show = sessionId === expandedSessionId.value ? paneCommands.takeShow(sessionId) : undefined;
+  if (show) void showInFilesPane(show, show.cwd);
+};
+
+const unsubscribePaneCommands = subscribeSession(PANE_COMMAND_CHANNEL, (data) => {
+  if (!isPaneCommand(data)) return;
+  paneCommands.offer(data);
+  showPendingFile(data.sessionId);
+});
+onBeforeUnmount(() => unsubscribePaneCommands());
+
+watch(
+  expandedSessionId,
+  async (sessionId) => {
+    if (!sessionId) return;
+    showPendingFile(sessionId);
+    await paneCommands.hydrate(sessionId);
+  },
+  { immediate: true },
+);
+const unsubscribeCheckReconnect = onPubSubReconnect(() => {
+  if (expandedSessionId.value) void paneCommands.hydrate(expandedSessionId.value);
+});
+onBeforeUnmount(() => unsubscribeCheckReconnect());
+
+/** The card's close button: the agent is told, since it was asked to wait for the results. Closed even
+ *  when the terminal cannot be typed into — putting it away is what the user asked for. */
+function dismissExpandedCheck(): void {
+  const check = expandedCheck.value;
+  if (check) sendToPaneCell(checkClosedNotice(check));
+  closeExpandedCheck();
+}
+
+function closeExpandedCheck(): void {
+  const sessionId = expandedSessionId.value;
+  const id = sessionId ? paneCommands.close(sessionId) : null;
+  if (sessionId && id) void postCheckClosed(sessionId, id);
+}
+
+/** The results typed into the terminal as the user's next message. Kept on screen if the terminal
+ *  cannot be typed into, so the answers are not lost. */
+function sendCheck(answers: CheckAnswer[]): void {
+  const check = expandedCheck.value;
+  if (check && sendToPaneCell(checkSummary(check, answers))) closeExpandedCheck();
 }
 
 // None of the options fits, so the user says it in their own words (#1693). The dialog's own
@@ -898,11 +947,12 @@ function paneTargetFor(cell: { session: string | null; command?: unknown }): HTM
   return claim && !cell.command && cell.session === claim.sessionId ? claim.el : null;
 }
 
-// GUI -> LLM for the enlarged cell (a submitted form's answer). App.vue routes this through the
+// GUI -> LLM for the cell the pane answers for (a submitted form's answer). App.vue routes this through the
 // single view's Terminal ref; here the slot key is derivable from the uid, so the connection
 // runtime can be addressed directly rather than threading a component ref through the Teleport.
-function sendToExpandedCell(text: string): boolean {
-  return props.expandedUid === null ? false : conn.submitText(`cell-${props.expandedUid}`, text);
+function sendToPaneCell(text: string): boolean {
+  const uid = paneCellUid.value;
+  return uid === null ? false : conn.submitText(`cell-${uid}`, text);
 }
 
 // Whether the terminal on screen can be typed into at all. A COMMAND cell's terminal is handed no
@@ -910,22 +960,23 @@ function sendToExpandedCell(text: string): boolean {
 // (Terminal.vue) — offering an insert there would put items in the menu that silently do nothing.
 // Launcher cells DO use `cell-<uid>` and keep it: the question is the connection, not the session.
 // Caught by CodeRabbit on PR #1912.
-const expandedTakesInput = computed(() => props.cells.some((c) => c.uid === props.expandedUid && !c.command));
+const paneCellTakesInput = computed(() => props.cells.some((c) => c.uid === paneCellUid.value && !c.command));
 
 // A path picked in the files pane's tree, typed at the cursor of the terminal on screen (#1859).
 // `insertText`, not `submitText`: nothing is sent — the user reviews it and adds the sentence it
 // belongs to, the same bargain a drop (#750) and a pasted screenshot (#938) already make.
 //
 // The ENLARGED cell, which is not always the one the pane is rooted at: the pane keeps the cell
-// it is on when a re-root could not be saved out of. That is exactly why it is told `expandedCwd`
+// it is on when a re-root could not be saved out of. That is exactly why it is told `paneCellCwd`
 // below — filesRowActions withholds the relative path when the two disagree, and the absolute one
 // is right either way.
-function insertIntoExpandedCell(text: string): void {
-  if (props.expandedUid === null || !expandedTakesInput.value) return;
-  conn.insertText(`cell-${props.expandedUid}`, text);
+function insertIntoPaneCell(text: string): void {
+  const uid = paneCellUid.value;
+  if (uid === null || !paneCellTakesInput.value) return;
+  conn.insertText(`cell-${uid}`, text);
 }
 
-// Does the enlarged cell's session have the drawing tools? Only the server knows: a grid cell
+// Does the pane cell's session have the drawing tools? Only the server knows: a grid cell
 // reaches them through the user's own per-folder MCP config, and the server learns which groups
 // a session has from the URLs it connects to.
 //
@@ -948,7 +999,7 @@ const canvasOpenable = computed(() => canvasAvailable.value || canvasHasCard.val
 const collectionsAvailable = ref(false);
 
 watch(
-  [expandedSessionId, () => props.expandedUid],
+  [paneCellSessionId, paneCellUid],
   async ([sessionId]) => {
     canvasAvailable.value = false;
     canvasChecked.value = false;
@@ -961,7 +1012,7 @@ watch(
     // session CAN draw, this answers what it already HAS. A failure here leaves the flag false —
     // the tools answer still decides, exactly as before this existed.
     void hasStoredCard(sessionId).then((has) => {
-      if (sessionId === expandedSessionId.value) canvasHasCard.value = has;
+      if (sessionId === paneCellSessionId.value) canvasHasCard.value = has;
     });
     try {
       const res = await fetchWithTimeout(`/api/tools?sessionId=${encodeURIComponent(sessionId)}`);
@@ -972,7 +1023,7 @@ watch(
       // ASK is not recorded as an answer. Defaulting here would record one.
       if (!isUnknownArray(body.groups)) throw new Error("GET /api/tools → body has no groups array");
       // Late reply for a cell we have since walked away from would show the wrong button.
-      if (sessionId !== expandedSessionId.value) return;
+      if (sessionId !== paneCellSessionId.value) return;
       // The GROUPS, not the tool names. Every cell here is a grid cell, so "has a canvas group"
       // is the whole question — and matching on a `present*` prefix would count
       // presentCollection, which belongs to `data` and draws nothing without the collection
@@ -983,7 +1034,7 @@ watch(
     } catch {
       // Unreachable server: no button rather than one that opens an empty panel. Left unchecked
       // so the panel does not blame the session for what is our own failure to ask.
-      if (sessionId === expandedSessionId.value) {
+      if (sessionId === paneCellSessionId.value) {
         canvasAvailable.value = false;
         collectionsAvailable.value = false;
       }
@@ -997,7 +1048,7 @@ watch(
 // server to say so is what stops that first "no" from standing until the user collapses and
 // re-expands the cell.
 onToolGroupsAnnounced((announcement) => {
-  if (announcement.sessionId !== expandedSessionId.value) return;
+  if (announcement.sessionId !== paneCellSessionId.value) return;
   // Only the announcement that actually carries groups says anything about them; the bare
   // "my MCP client is up" one is a cue to ask again, not an empty answer.
   if (!announcement.groups) return;
@@ -1020,11 +1071,14 @@ const gridCellProps = (cell: Cell) => ({
   // THIS cell's pane, not the one on screen: the header buttons say what this terminal has open,
   // and after #1378 two cells can disagree.
   rightPane: paneOf(cell.uid),
-  canvasAvailable: canvasOpenable.value,
+  paneShown: cell.uid === paneUid.value && paneOnScreen.value,
+  // Both answers are asked for ONE session, the pane's cell's. Any other tile is unknown: Canvas
+  // stays pressable there (the pane says so if it cannot draw), Collections stays hidden as it was.
+  canvasAvailable: cell.uid === paneCellUid.value ? canvasOpenable.value : true,
   // The raw answer. The "an open pane must keep its only close" clause is CellChromeButtons'
   // own, where the button is rendered and where `rightPane` names that cell's pane rather than
   // the one the grid happens to be showing.
-  collectionsAvailable: collectionsAvailable.value,
+  collectionsAvailable: cell.uid === paneCellUid.value && collectionsAvailable.value,
   // Nothing to enlarge INTO while the collection pane is holding this cell: the pane wins over the
   // zoom (cellTeleport.ts), so the button would set a state nobody sees until they leave (#2001).
   hideExpand: placementOf(cell) === "collection",
@@ -1055,14 +1109,14 @@ const gridCellEvents = (cell: Cell) => ({
   "toggle-expand": () => emit("toggle-expand", cell.uid),
   // Each carries the cell it was pressed on: a header button answers for ITS terminal, tiled or
   // enlarged, and after #1378 two cells can want different panes.
-  "toggle-canvas": () => toggleRightPane("canvas", cell.uid),
+  "toggle-canvas": () => pressPane(cell.uid, "canvas"),
   "open-canvas": () => openCanvasFor(cell.uid),
   "open-files": () => openPaneFor(cell.uid, "files"),
   "new-here": () => emit("new-here", cell.uid),
-  "toggle-tools": () => toggleRightPane("tools", cell.uid),
-  "toggle-prompts": () => toggleRightPane("prompts", cell.uid),
-  "toggle-transcript": () => toggleRightPane("transcript", cell.uid),
-  "toggle-collections": () => toggleRightPane("collections", cell.uid),
+  "toggle-tools": () => pressPane(cell.uid, "tools"),
+  "toggle-prompts": () => pressPane(cell.uid, "prompts"),
+  "toggle-transcript": () => pressPane(cell.uid, "transcript"),
+  "toggle-collections": () => pressPane(cell.uid, "collections"),
   close: () => emit("close", cell.uid),
   move: (dir: -1 | 1) => emit("move", cell.uid, dir),
   attention: (waiting: boolean) => markAttention(cell.uid, waiting),
@@ -1073,7 +1127,7 @@ const gridCellEvents = (cell: Cell) => ({
 // outlives the cell it was opened on, so walking the zoom lands it on cells that can never fill
 // it — a launcher or a command cell (no session), or a directory with no render MCP.
 const canvasUnavailable = computed<"no-session" | "no-canvas-mcp" | null>(() => {
-  if (!expandedSessionId.value) return "no-session";
+  if (!paneCellSessionId.value) return "no-session";
   // `canvasOpenable`, not `canvasAvailable`: a card the user opened themselves is a thing to
   // render, and telling them the session cannot draw while their own document sits in the store
   // is both wrong and unactionable. The button and this message have to agree about that — they
@@ -1116,8 +1170,8 @@ const claimPaneState = (uid: number | null, cwd: string | null): FilesPaneState 
   return recallPane(parsePaneStore(stored(PANE_STATE_KEY)), cwd);
 };
 const paneState = ref<FilesPaneState | null>(null);
-// The root the pane is ACTUALLY on. Normally `expandedCwd`, but it stays behind when a re-root
-// is declined over unsaved edits — and it, not `expandedCwd`, is what the pane is handed, so a
+// The root the pane is ACTUALLY on. Normally `paneCellCwd`, but it stays behind when a re-root
+// is declined over unsaved edits — and it, not `paneCellCwd`, is what the pane is handed, so a
 // file opened from a tree that stayed put still resolves against the directory it came from.
 const paneCwd = ref<string | null>(null);
 
@@ -1127,19 +1181,22 @@ const paneCwd = ref<string | null>(null);
 // rather than asked about — the zoom moves from keys and filmstrip clicks, and a dialog on each of
 // those would interrupt the very flow the pane is meant to sit beside.
 //
-// `zoomed` is a GUARD, not an input: collapsing the zoom only hides the row, and the pane keeps
-// the cell it is on, buffer and all. Reading `expandedUid` here instead would close the pane on
-// every collapse — flushing an editor the user is coming straight back to.
+// The input is `paneTargetUid`, not `expandedUid`: collapsing the zoom hands the target to
+// `tiledPaneUid`, which is the cell the pane is already on, so the pane stays put, buffer and all.
+// Reading `expandedUid` here instead would close the pane on every collapse — flushing an editor
+// the user is coming straight back to.
 // `rightPane` is a dependency too, not just an input: reopening a files pane on the cell it was
 // closed on changes nothing else, and without it the pane would mount with no root and no
 // remembered tree.
 watch(
-  [zoomed, () => props.expandedUid, expandedCwd, rightPane],
-  async ([isZoomed, uid]) => {
-    if (!isZoomed || uid === null) return;
+  [paneTargetUid, () => cwdOf(paneTargetUid.value), rightPane],
+  async ([uid, targetCwd]) => {
+    // A target that is not among the cells this grid was handed — a tiled pane's cell on another
+    // page — has no directory of its own, and `cwdOf` would answer the grid's default for it.
+    if (uid === null || cellOf(uid) === undefined) return;
     const sameCell = paneUid.value === uid;
     // Nothing moved: same cell, and it still reports the same directory.
-    if (sameCell && paneCwd.value === expandedCwd.value) return;
+    if (sameCell && paneCwd.value === targetCwd) return;
     // A pane with no root yet is about to mount against this cell: it reads the root and its
     // `initial-state` on its own, and there is no buffer behind it to save.
     const firstShowing = paneCwd.value === null;
@@ -1153,9 +1210,10 @@ watch(
     // when anything comes back to it (Codex review). A pane with no root yet has nothing to file.
     if (!firstShowing) rememberPaneState(paneUid.value);
     paneUid.value = uid;
+    tiledPaneUid.value = uid;
     restoreSessionPane(uid);
-    paneCwd.value = expandedCwd.value;
-    paneState.value = claimPaneState(uid, expandedCwd.value);
+    paneCwd.value = targetCwd;
+    paneState.value = claimPaneState(uid, targetCwd);
     // Only when the files pane STAYS the pane. Arriving at one mounts it fresh, which reads the
     // new root and `initial-state` on its own; leaving one has nothing left to reload.
     if (!wasFiles || !filesOpen.value) return;
@@ -1168,19 +1226,19 @@ watch(
 // The pane's SECOND entrance (#910): a file path clicked in terminal output, offered here
 // before it falls back to a new tab or the full-screen view. Whether this grid can show it is
 // `paneCanShowClick`; all that is left here is doing it.
-function openClickedPath(cwd: string, pathRel: string, location?: FileLocation): boolean {
-  const state = { zoomed: zoomed.value, expandedCwd: expandedCwd.value, paneCwd: paneCwd.value };
+function openClickedPath(cwd: string, pathRel: string, location: FileLocation | undefined, newTab: boolean): boolean {
+  const state = { roomForPane: zoomed.value || tiledPane.value, paneCellCwd: paneCellCwd.value, paneCwd: paneCwd.value };
   if (!paneCanShowClick(state, cwd)) return false;
-  void showClickedPath(pathRel, location);
+  void showClickedPath(pathRel, location, newTab);
   return true;
 }
 
-async function showClickedPath(pathRel: string, location?: FileLocation): Promise<void> {
+async function showClickedPath(pathRel: string, location: FileLocation | undefined, newTab: boolean): Promise<void> {
   if (!filesOpen.value) setFilesOpen(true);
   // Let the pane mount and the re-root watcher put paneCwd under it — the pane resolves the
   // path against that prop, so opening any earlier would read it from the wrong directory.
   await nextTick();
-  await filesPane.value?.openFile(pathRel, location);
+  await filesPane.value?.openFile(pathRel, location, newTab);
 }
 
 onMounted(() => setFilesPaneOpener(openClickedPath));
@@ -1226,15 +1284,17 @@ function onSplitterKey(e: KeyboardEvent): void {
   remember(PANE_WIDTH_KEY, String(paneWidth.value));
 }
 // A window that shrank below the two floors would otherwise leave the pane wider than the row.
-const reclampPane = () => filesOpen.value && setPaneWidth(paneWidth.value);
+// Every pane shares the one width, so the clamp is not the files pane's alone.
+const paneOpen = computed(() => rightPane.value !== null);
+const reclampPane = () => paneOpen.value && setPaneWidth(paneWidth.value);
 onMounted(() => window.addEventListener("resize", reclampPane));
 onBeforeUnmount(() => window.removeEventListener("resize", reclampPane));
 
 // A width restored from storage was clamped against WHATEVER row existed when it was stored —
 // a wider window, or the other zoom mode. Re-clamp once the row is actually on screen, or a
 // remembered 900px opens against a 1000px row and leaves the terminal 100px wide.
-watch([filesOpen, zoomed, () => props.listMode], async ([open, isZoomed]) => {
-  if (!open || !isZoomed) return;
+watch([paneOpen, zoomed, tiledPane, () => props.listMode], async ([open, isZoomed, isTiled]) => {
+  if (!open || !(isZoomed || isTiled)) return;
   await nextTick();
   setPaneWidth(paneWidth.value);
 });
@@ -1625,7 +1685,14 @@ function onRosterDragLeave(event: DragEvent) {
 </script>
 
 <template>
-  <div ref="stage" class="stage" :class="{ zoomed, listmode: listMode, flipping: flippingUids.size > 0 }" :style="flipVars" @focusin="onFocusIn">
+  <!-- `flex-row!` because the scoped `.stage` rule's column outranks a plain utility. -->
+  <div
+    ref="stage"
+    class="stage"
+    :class="{ zoomed, listmode: listMode, flipping: flippingUids.size > 0, 'flex-row!': tiledPane }"
+    :style="flipVars"
+    @focusin="onFocusIn"
+  >
     <!-- Cockpit roster: a tall text row per cell (status / dir / memo / summary / prompt / latest
          reply). Click a row to swap which terminal is enlarged.
          The 9px gap is 5px of visible channel plus the 2px ring every row paints on each side
@@ -1764,8 +1831,9 @@ function onRosterDragLeave(event: DragEvent) {
     <!-- The enlarged cell and its file pane, side by side. A row wrapper rather than two more
          siblings of the stage: the stage is a ROW in list mode (roster | terminal) and a COLUMN
          in strip mode (terminal / filmstrip), so only nesting puts the pane beside the terminal
-         in both. Hidden outright when nothing is zoomed, like .zoom-main itself. -->
-    <div ref="zoomRow" :class="[zoomed ? 'zoom-row flex min-h-0 min-w-0 flex-auto' : 'hidden', paneFull ? 'pane-full' : '']">
+         in both. With nothing zoomed it holds the pane alone, after the tiles (#3027) — .zoom-main
+         stays hidden — and is hidden outright when there is no pane to show. -->
+    <div ref="zoomRow" :class="[zoomRowClass, paneFull ? 'pane-full' : '']">
       <!-- Off-screen but still MOUNTED is what keeps xterm measurable (#1125) — and a terminal has
            plenty to focus: its header buttons and xterm's own textarea. Without `inert`, Shift+Tab
            from the pane's first control walks into controls nobody can see. Reported by Codex on
@@ -1794,15 +1862,14 @@ function onRosterDragLeave(event: DragEvent) {
           ref="filesPane"
           :cwd="paneCwd"
           :initial-state="paneState"
-          :canvas-target="expandedUid !== null"
-          :insert-target="expandedTakesInput"
-          :insert-target-cwd="expandedCwd"
+          :canvas-target="paneCellUid !== null"
+          :insert-target="paneCellTakesInput"
+          :insert-target-cwd="paneCellCwd"
           :stories-roots="storiesRoots"
           :style="{ flex: `0 0 ${paneWidth}px` }"
           class="border-l border-border bg-deep"
           @close="setFilesOpen(false)"
-          @open-in-canvas="openFileInCanvas"
-          @insert-text="insertIntoExpandedCell"
+          @insert-text="insertIntoPaneCell"
         >
           <!-- Which directory the tree is actually rooted at. It normally follows the enlarged
                cell, but declining a re-root leaves it behind — and then this is the only thing
@@ -1811,14 +1878,14 @@ function onRosterDragLeave(event: DragEvent) {
             <span class="truncate font-mono text-[11px] text-muted" :data-tip="paneCwd ?? ''">{{ formatCwd(paneCwd, home) }}</span>
           </template>
         </FilesPane>
-        <!-- Canvas and Tools follow the enlarged cell's SESSION, not its directory, and neither
+        <!-- Canvas and Tools follow the pane cell's SESSION, not its directory, and neither
              holds an unsaved buffer — so unlike the files pane they re-root unconditionally and
              need none of its decline-a-re-root machinery. -->
         <GuiPanel
           v-else-if="rightPane === 'canvas'"
-          :session-id="expandedSessionId"
-          :cwd="expandedCwd"
-          :send-text-message="sendToExpandedCell"
+          :session-id="paneCellSessionId"
+          :cwd="paneCellCwd"
+          :send-text-message="sendToPaneCell"
           :unavailable="canvasUnavailable"
           :expanded="paneFull"
           :style="{ flex: paneFull ? '1 1 0%' : `0 0 ${paneWidth}px` }"
@@ -1827,7 +1894,7 @@ function onRosterDragLeave(event: DragEvent) {
         />
         <ToolsPane
           v-else-if="rightPane === 'tools'"
-          :session-id="expandedSessionId"
+          :session-id="paneCellSessionId"
           :expanded="paneFull"
           :style="rightPaneStyle(paneFull, paneWidth)"
           class="border-l border-border"
@@ -1835,14 +1902,14 @@ function onRosterDragLeave(event: DragEvent) {
           @close="setRightPane(null, paneUid)"
         />
         <!-- What this session was ASKED for, against the tools pane's what it then ran. Follows
-             the enlarged cell's session like those two, and needs its AGENT as well: the prompts
+             the pane cell's session like those two, and needs its AGENT as well: the prompts
              live in claude's own history file or in codex's rollout, and only the cell knows
              which (#1748). -->
         <PromptsPane
           v-else-if="rightPane === 'prompts'"
-          :session-id="expandedSessionId"
-          :cwd="expandedCwd"
-          :agent="expandedAgent"
+          :session-id="paneCellSessionId"
+          :cwd="paneCellCwd"
+          :agent="paneCellAgent"
           :expanded="paneFull"
           :style="rightPaneStyle(paneFull, paneWidth)"
           class="border-l border-border"
@@ -1850,15 +1917,15 @@ function onRosterDragLeave(event: DragEvent) {
           @close="setRightPane(null, paneUid)"
         />
         <!-- The conversation itself — what the prompts and tools panes each show one half of.
-             Follows the enlarged cell's session like they do, and needs no AGENT: the reader asks
+             Follows the pane cell's session like they do, and needs no AGENT: the reader asks
              each agent's log whether it HAS a file for this session rather than being told which to
              open, because a restarted claude cell reports its agent as `shell`
              (server/session/transcript/transcript-view-read.ts). -->
         <TranscriptPane
           v-else-if="rightPane === 'transcript'"
-          :session-id="expandedSessionId"
-          :cwd="expandedCwd"
-          :agent="expandedAgent"
+          :session-id="paneCellSessionId"
+          :cwd="paneCellCwd"
+          :agent="paneCellAgent"
           :expanded="paneFull"
           :style="rightPaneStyle(paneFull, paneWidth)"
           class="border-l border-border"
@@ -1869,7 +1936,7 @@ function onRosterDragLeave(event: DragEvent) {
              cell already names one. -->
         <CollectionsPane
           v-else-if="rightPane === 'collections'"
-          :cwd="expandedCwd"
+          :cwd="paneCellCwd"
           :expanded="paneFull"
           :style="rightPaneStyle(paneFull, paneWidth)"
           class="border-l border-border"
@@ -1890,6 +1957,16 @@ function onRosterDragLeave(event: DragEvent) {
           @close="dismissQuestionPane"
         />
       </template>
+      <!-- Over the cell, not in the right pane's one slot: opening an item's file puts the Files pane
+           there, and the checklist has to stay beside it to be marked (#3022). -->
+      <CheckCard
+        v-if="zoomed && expandedCheck"
+        class="absolute right-3 bottom-3 z-30 max-h-[70%]"
+        :check="expandedCheck"
+        @open="(item) => item.target && expandedCheck && showInFilesPane(item.target, expandedCheck.cwd)"
+        @send="sendCheck"
+        @close="dismissExpandedCheck"
+      />
     </div>
     <!-- Enlarged cell / thumbnail strip. The stage is a COLUMN in strip mode, so this separator
          is the horizontal one — dragged up and down, and driven by Up/Down rather than Left/Right. -->
@@ -1913,7 +1990,7 @@ function onRosterDragLeave(event: DragEvent) {
          bound only in that mode so it cannot reach the tiled grid or list mode's off-screen one. -->
     <div
       ref="gridEl"
-      class="grid"
+      class="grid min-w-0"
       :class="{ 'stack-mode': stackMode && !zoomed }"
       :style="[gridStyle, stackStyle, zoomed && !listMode ? { flexBasis: `${stripHeight}px` } : {}]"
     >

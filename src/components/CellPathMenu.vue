@@ -104,7 +104,7 @@ function openForgePage(url: string) {
 //
 // Files asks the GRID for the pane beside this cell (#1910), which is somewhere only the grid can put
 // it. A user's own `open.files` button still opens the full-screen view, and has to — it carries an
-// arbitrary path, while the pane can only ever be rooted at the enlarged cell.
+// arbitrary path, while the pane can only ever be rooted at its own cell.
 function browseFiles() {
   emit("open-files");
 }

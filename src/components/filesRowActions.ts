@@ -50,9 +50,8 @@ export type FilesRowAction =
     })
   | (RowActionChrome & {
       id: "open-canvas";
-      /** RELATIVE to the tree's root, which is what `open-in-canvas` already carries from the
-       *  pane's own button — the receiver resolves it against the pane's cwd, so an absolute one
-       *  would be resolved twice. */
+      /** RELATIVE to the tree's root, like the tab it is opened in — the Canvas view resolves it
+       *  against the pane's cwd, so an absolute one would be resolved twice. */
       pathRel: string;
     });
 

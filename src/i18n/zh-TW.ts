@@ -13,9 +13,11 @@ import { themeEditorZhTW } from "./themeEditor/zh-TW";
 import { headerChipsZhTW } from "./headerChips/zh-TW";
 import { headerButtonsZhTW } from "./headerButtons/zh-TW";
 import { settingsControlsZhTW } from "./settingsControls/zh-TW";
+import { settingsHelpZhTW } from "./settingsHelp/zh-TW";
 import { shortcutsZhTW } from "./shortcuts/zh-TW";
 import { filesTreeZhTW } from "./filesTree/zh-TW";
 import { previewCodeCopyZhTW } from "./previewCodeCopy/zh-TW";
+import { fileLinksZhTW } from "./fileLinks/zh-TW";
 import { skillsViewZhTW } from "./skillsView/zh-TW";
 import { processesViewZhTW } from "./processesView/zh-TW";
 
@@ -171,9 +173,7 @@ export const zhTW: Messages = {
       },
     },
 
-    guide: {
-      prompt: "不確定 MulmoTerminal 怎麼用？看看指南 ——",
-    },
+    ...settingsHelpZhTW,
 
     push: {
       intro: "背景作業完成時，向你註冊過的裝置推播。需要 {remoteHost} 連線 —— 通知的驗證來自它的登入，所以只有在連線時才會送出。",
@@ -495,7 +495,6 @@ export const zhTW: Messages = {
   cellMenu: {
     history: "歷史",
     tools: "工具",
-    enlargeFirst: "放大儲存格後可在旁邊開啟",
     canvasUnavailable: "此目錄未啟用繪製用的 MCP。請在啟動器中開啟 Canvas，然後重新啟動此儲存格",
     items: {
       prompts: { label: "送出的提示", detail: "本工作階段中你輸入的指令" },
@@ -564,13 +563,6 @@ export const zhTW: Messages = {
   // 雙鍵快捷鍵等待第二個鍵時顯示的提示（#2265）。
   commandPalette: commandPaletteZhTW,
   // The path menu's file items. Its repository section stays in the forge's own words.
-  pathMenu: {
-    insertFilePath: "插入檔案路徑",
-    reveal: "在檔案管理員中顯示",
-    browseFiles: "在應用程式中瀏覽檔案",
-    dirSettings: "此目錄的設定",
-    newTerminal: "在此處新增終端機",
-  },
   prefixKeys: {
     waiting: "{key} 之後按：",
     cancel: "按 Esc 取消",
@@ -642,6 +634,7 @@ export const zhTW: Messages = {
   settingsControls: settingsControlsZhTW,
   ...filesTreeZhTW,
   ...previewCodeCopyZhTW,
+  ...fileLinksZhTW,
   ...skillsViewZhTW,
   ...processesViewZhTW,
   tips: tipsZhTW,

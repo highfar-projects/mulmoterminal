@@ -1,5 +1,5 @@
 // The full-screen Files view's side of the `files-*` keys and the palette's `/` and `#` (#2655).
-// Those reach the Files pane beside an enlarged grid cell through the grid; the full-screen view is
+// Those reach the grid's Files pane through the grid; the full-screen view is
 // not in the grid, so it registers here while it is mounted, the way the grid registers its host.
 import { shallowRef } from "vue";
 import type { FilesScreenAction } from "../components/filesPaneActions";

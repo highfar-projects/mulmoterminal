@@ -22,6 +22,7 @@
 import { TOOL_NAME as DOCUMENT_TOOL, isDocumentPath } from "@mulmoclaude/markdown-plugin/vue";
 import { TOOL_NAME as HTML_TOOL, isPresentableHtmlPath, isHtmlArtifactPath, htmlArtifactPreviewUrl, htmlFileUrl } from "@mulmoclaude/html-plugin";
 import { TOOL_NAME as STORY_TOOL } from "@mulmoclaude/mulmoscript-plugin";
+import { TOOL_NAME as SHAPE_TOOL, isPresentableShapePath } from "@gui-chat-plugin/shapescript";
 import { dirPathKey, isRootedPath } from "../../common/dirPathKey";
 // The wire spelling is minted here and parsed back into a path there — one pair of constants, so a
 // card's identity cannot come to disagree with the ref that opened it.
@@ -118,6 +119,9 @@ export function canvasCardForFile(path: string): CanvasCard | null {
     const previewUrl = isHtmlArtifactPath(path) ? htmlArtifactPreviewUrl(path) : htmlFileUrl(path);
     return { toolName: HTML_TOOL, data: { filePath: path, ...(previewUrl ? { previewUrl } : {}) } };
   }
+  // The View reads the model itself (`loadShape` on `filePath`), as html does; `script: ""` is the
+  // placeholder it replaces once that load lands (#3016).
+  if (isPresentableShapePath(path)) return { toolName: SHAPE_TOOL, data: { script: "", filePath: path } };
   return null;
 }
 
@@ -302,7 +306,7 @@ async function reopenStory(ref: StoryRef, expectPath: string): Promise<CanvasCar
     // on both branches below.
     //
     // Blank counts as ABSENT, not as a sentence: `??` only catches null, so an `error: ""` from any
-    // layer between us and the plugin would survive to `showError`, where the pane renders it under
+    // layer between us and the plugin would survive to the Files pane's error line, rendered under
     // `v-if="fileError"` — i.e. nothing at all, which is the dead button this whole change removes
     // (CodeRabbit on #1942).
     const refusal = isRecord(body) && typeof body.error === "string" && body.error.trim() !== "" ? body.error : null;

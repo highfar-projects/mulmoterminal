@@ -32,10 +32,13 @@ import { previewCodeBlocks } from "../../common/previewCodeBlocks.js";
 import { previewThemeFromQuery, type PreviewTheme } from "../../common/previewTheme.js";
 import { mdPreviewEmbedCsp, newPreviewNonce, wantsMdPreviewEmbed } from "./mdPreviewEmbed.js";
 import { mdPreviewReporterTag } from "./mdPreviewReporter.js";
+import { diagramFenceRenderer, MERMAID_STYLE, mermaidBootstrapTag, mermaidThemeFor } from "./previewMermaid.js";
+import { installedMermaid, mountMermaidAssetRoute } from "./mermaidAssets.js";
 import { isPreviewToken, MD_PREVIEW_EMBED_PARAM, MD_PREVIEW_TOKEN_PARAM } from "../../common/mdPreviewMessage.js";
 import { requestBody } from "../routes/requestBody.js";
 import { mountFilesTreeRoutes } from "./files-tree-routes.js";
 import { splitFrontmatter } from "@mulmoclaude/markdown-utils/markdown/frontmatter";
+import { MATH_STYLE, previewMath } from "./previewMath.js";
 import { mountFilesGitStatusRoute } from "./files-git-status.js";
 import { dirConfigDetail, dirConfigDirOf } from "../config/dir/dir-config.js";
 import { dirConfigSaveReport, type DirConfigSaveReport } from "../../common/dirConfigSaveReport.js";
@@ -405,32 +408,58 @@ function mountCodeBlockRoute(app: Express, defaultCwd: string): void {
 // does not narrow it.
 const isImageToken = (token: Token): token is Tokens.Image => token.type === "image";
 
+interface MdRender {
+  html: string;
+  /** How many mermaid fences were drawn with a placeholder — none in the plain document. */
+  diagrams: number;
+  /** The maths style the document needs, or "" when it has no maths renderer (#3017). */
+  style: string;
+}
+
 /** Markdown to HTML with each relative image pointed at the raw route, beside the document
  *  rather than under `/api/files/browse/` (#2261). A fresh instance per document, because the
  *  rewrite depends on where THIS document sits. Front matter is metadata, not body (#2264): only a
  *  block that parses as YAML counts, as on the Canvas and in MulmoClaude — a document may open
- *  with a `---` rule, and that is body. */
-const mdBody = async (text: string, doc: ServedDoc): Promise<string> => {
-  const colour = fenceColourer();
-  return new Marked({
+ *  with a `---` rule, and that is body. A mermaid fence gets its placeholder only in the document
+ *  that will run the script drawing it (#2991). */
+const mdRender = async (text: string, doc: ServedDoc, withDiagrams: boolean): Promise<MdRender> => {
+  const numbered = numberedCodeRenderer(fenceColourer());
+  const fences = diagramFenceRenderer(numbered);
+  const { body } = splitFrontmatter(text);
+  const math = await previewMath(body);
+  const marked = new Marked({
     walkTokens(token) {
       if (!isImageToken(token)) return;
       token.href = servedImageSrc(token.href, doc) ?? token.href;
     },
     // A fence in a language with a grammar is coloured here (#2579); every block is numbered for the
     // Preview's copy button (#2615).
-    renderer: { code: numberedCodeRenderer(colour) },
-  }).parse(splitFrontmatter(text).body);
+    renderer: { code: withDiagrams ? fences.code : numbered },
+  });
+  // Maths is typeset in BOTH documents: it is SVG, so the plain one needs no script to show it.
+  if (math) marked.use(math);
+  const html = await marked.parse(body);
+  return { html, diagrams: fences.drawn(), style: math ? MATH_STYLE : "" };
 };
 
 /** The Markdown document every caller has always had. */
-const renderMd = async (text: string, title: string, doc: ServedDoc): Promise<string> => htmlDoc(await mdBody(text, doc), title);
+const renderMd = async (text: string, title: string, doc: ServedDoc): Promise<string> => {
+  const { html, style } = await mdRender(text, doc, false);
+  return htmlDoc(html, title, style);
+};
 
-/** The same document with the scroll reporter as its last body element (#2157). Composed here
- *  rather than inside `htmlDoc` so the shared document shell stays a shell that never runs
- *  anything, whoever calls it. */
-const embedMd = async (text: string, title: string, nonce: string, doc: ServedDoc, theme: PreviewTheme | null, token: string | null): Promise<string> =>
-  htmlDoc((await mdBody(text, doc)) + mdPreviewReporterTag(nonce, token), title, theme ? themeStyle(theme) : "");
+/** The same document with the scroll reporter as its last body element (#2157) — followed by the
+ *  script drawing the diagrams, for a document that has any (#2991). Composed here rather than
+ *  inside `htmlDoc` so the shared document shell stays a shell that never runs anything, whoever
+ *  calls it. */
+const embedMdWith =
+  (mermaidEntryUrl: string): EmbedDoc =>
+  async (text, title, nonce, doc, theme, token) => {
+    const { html, diagrams, style: mathStyle } = await mdRender(text, doc, true);
+    const diagramsScript = diagrams ? mermaidBootstrapTag(nonce, mermaidEntryUrl, mermaidThemeFor(theme)) : "";
+    const style = (theme ? themeStyle(theme) : "") + (diagrams ? MERMAID_STYLE : "") + mathStyle;
+    return htmlDoc(html + mdPreviewReporterTag(nonce, token) + diagramsScript, title, style);
+  };
 
 export function mountFilesBrowseRoutes(app: Express, deps: BrowseDeps): void {
   const { defaultCwd, backupRoot } = deps;
@@ -510,7 +539,7 @@ export function mountFilesBrowseRoutes(app: Express, deps: BrowseDeps): void {
 
   const serveRendered = (routePath: string, render: RenderDoc, embed?: EmbedDoc) => mountRenderedRoute(app, routePath, defaultCwd, render, embed);
 
-  serveRendered("/api/files/browse/md", renderMd, embedMd);
+  serveRendered("/api/files/browse/md", renderMd, embedMdWith(mountMermaidAssetRoute(app, installedMermaid())));
   serveRendered("/api/files/browse/json", (text, title) => jsonHtmlDoc(text, title));
   // The delimiter comes from the file's own extension, so one route serves .csv and .tsv.
   serveRendered("/api/files/browse/table", (text, title, _doc, theme) => tableHtmlDoc(text, title, delimiterForExtension(path.extname(title)), theme));

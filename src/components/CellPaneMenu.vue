@@ -2,7 +2,7 @@
 // One icon on a cell's header that opens a menu of related views — the history ones, or the tool
 // ones — instead of a row of look-alike glyphs. Each entry says what it is in a line, reads as
 // checked while its pane is open (choosing it again hides it), and can be shown DISABLED with the
-// reason, which is how a tiled cell offers panes that need the cell enlarged first.
+// reason, which is how a Canvas the session cannot draw on is offered.
 //
 // The frame — placement, keyboard and dismissal — is AnchoredMenu, like the toolbar's feature menu.
 import { computed, useTemplateRef } from "vue";

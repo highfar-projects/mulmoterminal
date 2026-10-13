@@ -8,6 +8,180 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@10.4.0 — 2026-10-13
+
+> **Setup guide:** [10.4.0 — Panes beside the tiled grid, and files outside the cell open in a tab](https://receptron.github.io/mulmoterminal/guide/en/v10.4.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.4.0.html))
+
+### The right pane opens beside the tiled grid (#3029)
+
+- A tile's History / Tools menus, *Browse files in the app*, the command palette's pane entries and the `pane-*` keys now open the pane to the right of the tiled grid instead of enlarging the cell (#3027). The menu no longer greys panes out with "Enlarge the cell to open this beside it"; the `cellMenu.enlargeFirst` string is gone from all five locales.
+- The pane stays on the tile whose menu opened it (`tiledPaneUid`); focus moving across tiles does not move it. The re-root watcher now takes `paneTargetUid` (the enlarged cell, else that tile), so the Files pane's save-then-re-root path is still the only one, and a pane survives zoom ↔ tiled as the same instance.
+- Contents and triggers are split: what the pane shows (session, directory, agent, where text is typed, Canvas / Collections availability) reads `paneCellUid`; what opens the pane by itself (a drawing, a question, `showInPane`, the check card) still reads the enlarged cell only.
+- No full width beside the tiles; the pane hides, still mounted and still rooted, while its tile is on another page. A terminal path click goes to the pane on the tiled grid when the Files pane is already up there and the directory matches.
+- The pane-width re-clamp now applies to every pane, not only Files, and measures the stage on the tiled grid.
+- README, the guide (basics, config, features, header, glossary) and comments describe the pane beside the tiled grid; `docs/grid-view-modes.md` has a section on the pane in each mode.
+
+### A clicked file outside the cell opens in a tab through a one-file grant (#3028)
+
+- Clicking a terminal path to a video, image, PDF, audio file or HTML page outside the cell's directory used to open a tab showing `{"error":"cwd is not an active session directory"}` (#3024). `POST /api/files/grant` now mints `/api/files/granted/<token>/<name>`, which serves only that one file (any other name under the token is a 404). Grants are in memory until the server restarts.
+- Media is served through the raw route's own code (Range included) and HTML under the preview CSP. The client opens a blank tab synchronously so popup blockers allow it, then navigates it, or writes why it could not.
+- Markdown, JSON, tables and source outside the cell, and every file inside it, open as before.
+
+### Closing a checklist tells the agent (#3026)
+
+- Closing a `requestCheck` card with its close button types `Check "<title>" was closed without answers.` into the terminal, so an agent told to wait for the results is not left waiting (#3025). The card closes even when the terminal cannot be typed into. `requestCheck`'s prompt says what the line means.
+
+## mulmoterminal@10.3.0 — 2026-10-12
+
+> **Setup guide:** [10.3.0 — The agent shows you files and asks you to check its work](https://receptron.github.io/mulmoterminal/guide/en/v10.3.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.3.0.html))
+
+### MCP tools that drive the right pane: showInPane and requestCheck (#3023)
+
+- Two host tools in the `render` group act on the right pane of the calling session's cell (#3022). `showInPane` opens a file in the Files pane as editor / preview / canvas / split, or at a line. `requestCheck` puts a checklist card over the enlarged cell; each item can open a file, the human marks it OK / NG with a note, and Send types a one-line summary into the terminal as the next user message. The tools' own `prompt` text tells agents when to use them and not to wait for the answer.
+- Server: `server/routes/pane-tool-routes.ts` takes the session from the MCP broker's header, contains every path in the session's directory, and publishes on a new `pane-command` channel. The open check is kept per session (`GET /api/pane/check/:sessionId`, `POST …/close`) so a reload or reconnect brings the card back.
+- Browser: a command for a cell that is not enlarged waits until it is; with nothing enlarged, the cell is enlarged. A show that waits on a save does not take the zoom back from a cell the user moved to, and a newer show wins. The summary is one line with control characters removed.
+- New living guide page: [The agent drives your right pane](https://receptron.github.io/mulmoterminal/guide/en/pane-tools.html).
+
+## mulmoterminal@10.2.0 — 2026-10-12
+
+> **Setup guide:** [10.2.0 — Maths in the full-screen preview, ShapeScript and the editor beside the Canvas view](https://receptron.github.io/mulmoterminal/guide/en/v10.2.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.2.0.html))
+
+### Maths in the full-screen preview, typeset on the server (#3021)
+
+- The full-screen `/files` Markdown preview now draws `$…$` and `$$…$$` (#3017); it used to leave them as code. `server/files/previewMath.ts` uses the markdown plugin's own `mathExtension` tokenizers (the same delimiter rules as the Canvas) and typesets to SVG with `mathjax-full`, loaded on the first document with a `$`. Both the embedded and the plain (new-tab) document get it; the sandbox and CSP are unchanged.
+- No DOMPurify on the server, so MathJax's tree is filtered by permitted lists before serialisation (`server/files/mathAttributes.ts`): only the elements MathJax builds formulas from (SVG `<title>`, which holds unescaped error text, is dropped) and only the attributes it writes, each in the value shape it gives them. The TeX `html` and `action` packages are left out. A parse5 test checks what an HTML parser builds from attack inputs.
+- `mathjax-full` is now a direct dependency; `parse5` a dev dependency. `docs/file-surfaces.md` updated.
+
+### The editor beside the Canvas view (#3020)
+
+- For a Markdown file, the side-by-side button puts the editor beside the Files pane's Canvas view as well as beside Preview (#3015); the Canvas button chooses the right half. What is on screen is decided by one pure `viewLayout()` (`src/components/filesViewLayout.ts`) that every "is the editor showing" condition reads; the old conditions were run against it over all eight switch combinations.
+
+### ShapeScript files open in the Canvas view (#3019)
+
+- `.shape` files now open in the Files pane's Canvas view (#3016); the View loads the model itself through its existing dispatch.
+
+## mulmoterminal@10.1.0 — 2026-10-12
+
+> **Setup guide:** [10.1.0 — Switch a file to the Canvas view inside the Files pane](https://receptron.github.io/mulmoterminal/guide/en/v10.1.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.1.0.html))
+
+### The Files pane shows the open file in the Canvas view, with the tree kept beside it (#3009)
+
+- The Files pane's **Canvas** button and the row menu's **Open in the Canvas** used to swap the right pane from Files to the session's Canvas, so closing the Canvas closed the tree too (#3008). They now switch the open file to the Canvas's plugin view inside the pane; pressing **Canvas** again goes back to the editor.
+- One file's card is built in memory (`buildCanvasCard`) and drawn with the same plugin view the Canvas uses (`FilesCanvasView.vue`); nothing is written to the session's Canvas. Markdown, HTML and MulmoScript files can be shown this way.
+- The buffer is saved in place first (`savedInPlace`, as Preview does): a save that loses to another writer keeps the conflict banner up and the switch does not happen.
+- Right pane only (`canvasTarget`): the full-screen `/files` view keeps Preview, for the containment reasons in `docs/file-surfaces.md`.
+- While the Canvas view is up, the editor-only controls are hidden and the insert-selection key inserts the file alone, as in Preview. A re-root forgets which files were in the Canvas view.
+- Removed: the swap path (`open-in-canvas`, `TerminalGrid.openFileInCanvas`). The session Canvas still opens from agent drawings, the cell's Canvas button and the Mulmo menu.
+
+### A terminal path with a line leaves the Canvas view for the editor (#3012)
+
+- `design.md:42` on a file that is in the Canvas view now opens it on the editor at that line, as a located open already turns a Preview back to Edit (#3010). A click with no line keeps the Canvas view. The request, not the landing, exits the Canvas view: a located open that is declined or superseded still leaves the file on its editor next time.
+
+### The Canvas view is remembered across reopening the pane and a reload (#3013)
+
+- `FilesTabState.showCanvas` is written by the pane's snapshot and read back on restore, the way `showPreview` is (#3011). The store whitelists it (anything but `true` reads as absent), so earlier entries read as the editor.
+- Only a surface with a Canvas view acts on it, checked on every read. An open that gets in before the remembered tabs are put back (#1979) comes up as text, and no remembered Canvas view is restored that time.
+
+### Cmd/Ctrl+click on a terminal path opens a new Files tab (#3007)
+
+- With **Cmd** (macOS) or **Ctrl** (Windows / Linux) held, a path clicked in terminal output opens in a new tab of the Files pane instead of replacing the front tab (#3005). A plain click is unchanged. `newTab` is a required parameter along the whole chain, so dropping it is a type error.
+
+### Docs
+
+- The 10.0.0 setup guide gained a screenshot of the phone listing a directory's past sessions (#3006).
+
+## mulmoterminal@10.0.0 — 2026-10-11
+
+> **Setup guide:** [10.0.0 — Read a directory's past sessions from the phone](https://receptron.github.io/mulmoterminal/guide/en/v10.0.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.0.0.html))
+
+### The phone lists a directory's past sessions and reads their conversation (#3001)
+
+- Two remote-host commands. `listPastSessions` (`sessionId`) answers every hosted agent's past sessions for the directory of an open session, merged newest first and capped: `{ cwd, sessions: { id, title, mtime, agent, readable, account? }[] }`. `getPastTranscript` (`sessionId`, `pastSessionId`, `before?`) answers one `TranscriptPage` through the existing `sessionTranscriptPage`, so a long conversation is read newest first and walked back with the opaque cursor (#2999).
+- Containment: the phone names an open session, never a path; that session must exist here (a live pty or an exact tmux name), and its directory comes from the host. A page is read only for an id that directory's own list holds (`server/session/list/past-transcript-gate.ts`), because codex locates a rollout by id alone. Agents with no transcript reader (antigravity, grok, muse) are listed with `readable: false` and answered `not-supported` without opening anything.
+- One agent's broken store does not empty the list; antigravity rows fold in conversations another process added since hydration. Wire shapes are in `docs/remote-host-protocol.md`; the phone screen is receptron/mulmoserver#353.
+
+### A copy button on every code block in rendered markdown (#3000)
+
+- The conversation pane, the wiki browser, skills, What's new, release notes and blueprints put a copy button on each code block, copying the block's source exactly as written (#2998). `src/appMarked.ts` is an app-owned `Marked` carrying `@mulmoclaude/markdown-utils`' `rawHtmlPolicyExtension` and `codeCopyExtension` — the same button, wording and nonce check as MulmoClaude. The permitted-markup list admits the button's markers; `[[link]]` spans in the wiki keep their class. Labels in five locales.
+
+### A Preview code block copies in one press, with a notice (#3004)
+
+- The Files pane Preview's copy button copies at once and shows a short notice with the line count and first line (#3003). The text still comes from the file (`/api/files/browse/code-block`). The dialog from #2615 opens only when a one-press copy is not possible: invisible characters (written out as `<U+…>`), no Clipboard API, a refused write, or a block that is gone. `writeClipboardLater` starts the write before the fetch as a `ClipboardItem` holding the pending text, falling back to `writeText`.
+
+### Canvas copy buttons copy (#3002)
+
+- `@mulmoclaude/markdown-utils` 3.0.1 -> 3.0.2. The canvas mounts plugin views in a shadow root, where 3.0.1's document-level handler saw the retargeted host and copied nothing; 3.0.2 reads `event.composedPath()`. Deduplicated so the markdown plugin and core do not keep nested 3.0.1 copies.
+
+### An at-limit subscription says so; the `/login` gauge is named (#2997)
+
+- An account or rotation token whose probe stalled at the usage limit read `n/a`, like "not measured"; it now reads `at limit` in the warning colour, and the hover adds when its windows were last due to reset (from `lastLimits`). The default login is labelled `/login` when named logins of the same agent share the row (#2995). Guides updated.
+
+### Audio and video opened by path play (#2993)
+
+- `/api/files/raw` served media under the same sandbox CSP as other files, which stopped playback. Audio and video are now served without it, like PDFs; every other type stays sandboxed.
+
+### JingleScript scores carry an author and a copyright (#2996)
+
+- `@gui-chat-plugin/jinglescript` and `jinglescript` ^0.6.0 -> ^0.7.0. 0.7.0 adds optional `author` and `copyright` to a score, next to `title`; all three are written into the rendered audio's tags (WAV, MP3, OGG — including the player's embedded audio) and, for the copyright, the MIDI file. The tool tells the model to fill them only with what the user gives. No host changes: the tool and its player view come from the plugin.
+
+## mulmoterminal@9.9.0 — 2026-10-10
+
+> **Setup guide:** [9.9.0 — Mermaid diagrams in the Files preview](https://receptron.github.io/mulmoterminal/guide/en/v9.9.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v9.9.0.html))
+
+### Mermaid fences are drawn as diagrams in the Files pane's Preview (#2994)
+
+- A ` ```mermaid ` fence in a Markdown file's Preview (and the side-by-side view) is drawn as a diagram, in the app's theme. The numbered code block stays under it, folded in a **Diagram source** disclosure, so the copy button and the pane's block numbering are untouched; a fence mermaid cannot parse keeps its block open with the error above it (#2991).
+- The Preview's sandbox is unchanged. The server serves mermaid's own ESM build from the installed package under `/api/files/mermaid/<version>/…` (`server/files/mermaidAssets.ts`: an allowlist of the entry and its chunk directory, the CORS header an opaque-origin module fetch needs, immutable caching keyed by the version in the URL), and a Preview document that drew at least one fence ends with a nonce'd `<script type="module">` that imports it and draws each placeholder (`server/files/previewMermaid.ts`). The script draws nothing until the document has a width: the pane loads the Markdown frame while the editor is up, and a document with no layout measures text as zero-size, on which mermaid draws an empty diagram or throws.
+- The plain `…/md` document a new tab opens runs no script, so there the fence stays a code block.
+- The disclosure's label comes from the host in the app's language (`previewCodeCopy.diagramSource`, every locale), through the same message that names the copy buttons.
+- The docs said the Preview's CSP blocks a dynamic import; measured in Chromium and WebKit, an import made by a nonce'd script inherits the nonce, and what blocked it was CORS from the opaque origin. `CLAUDE.md` and `docs/file-surfaces.md` now say so.
+
+### Bracketed paste is restored after a reload; only the latest tmux is supported (#2990)
+
+- A program that turns bracketed paste (mode 2004) on once at startup lost it from the browser after a reload or reconnect once the replay's bounded tail no longer began at that sequence, so a multi-line paste reached the program as bare CRs. The modes read back from tmux ahead of the replay now include `bracket_paste_flag` (`TERMINAL_MODE_FLAGS` in `server/infra/process/tmux.ts`). The variable exists from tmux 3.7 and an older tmux renders it empty, which reads as off: only the latest tmux release is supported (3.8 as of 2026-10-10), and the README, the getting-started pages, `docs/facts.json` and the bug-report skill now say so.
+
+## mulmoterminal@9.8.0 — 2026-10-10
+
+> **Setup guide:** [9.8.0 — A help desk, and Ctrl+B reaches your agent](https://receptron.github.io/mulmoterminal/guide/en/v9.8.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v9.8.0.html))
+
+### tmux prefix key setting; Ctrl+B reaches the agent (#2981)
+
+- New `tmuxPrefix` setting (`"none"` by default, `"C-b"`, or a control key such as `"C-]"`) for the dedicated tmux server's prefix. The tmux default `C-b` swallowed the first Ctrl+B in a cell and read the next key as a tmux command, which collides with "one character left" in readline, Claude Code's input and the macOS text system. Nothing here uses the prefix, so it is off by default. The lines (`set -g prefix …`, `unbind-key C-b`, `bind-key … send-prefix`) go in `tmux.conf` and are also run on a tmux server that outlived the process, both at boot and when the setting is saved (`common/tmuxPrefix.ts`, `setTmuxPrefix` in `server/infra/process/tmux.ts`). Settings → Terminal keys has a picker. Someone who attaches with tmux and wants `Ctrl+B d` sets `"C-b"`.
+
+### A help desk you can ask about MulmoTerminal (#2984)
+
+- A bundled skill, `mulmoterminal-help`, answers questions about the app — what it can do, how a feature or a part of the screen works, how to set something up, what is new in the running version and in the latest one — from the shipped guide, changelog, source and the running server, never from memory, naming where each fact was checked. It hands "it is broken" to `mulmoterminal-bug-report` and "change it for me" to `mulmoterminal-config`.
+- A **help** icon in the toolbar, next to the gear, opens it in one press; Settings → Help has the same button under its guide links. Both start a terminal in the workspace, and neither asks first, since the skill edits nothing (`src/components/helpChat.ts`). `SkillLaunchButton` takes a `hint` for the same reason: its shared sentence promises config edits.
+- `GET /api/help/sources` tells the skill where the running install keeps its docs and source (`server/help/`), so it reads the version that is actually running rather than a path it guessed.
+- The npm package now ships every guide page (`docs/guide/{en,ja}/*.md`, not only the dated release pages), `docs/ChangeLog.md` and `docs/facts.json`, so the skill works offline and version-exact.
+
+### Session width and the Files pane header
+
+- [#2989](https://github.com/receptron/mulmoterminal/pull/2989) — a session started from the header while the Files pane was open came up at the width the terminal had beside the pane: the browser's first `resize`, sent the instant the socket opened, was dropped because the early-frame buffer was only attached after the admission's awaits. The buffer now starts when the socket is accepted (`acceptTerminalConnection` in `server/routes/ws-accept.ts`, first thing every connection handler does) and is handed down to the admission, which discards it on a refusal. `/ws/run` had the same gap. Closes #2986.
+- [#2988](https://github.com/receptron/mulmoterminal/pull/2988) — the Files pane header is one flex row that could not wrap, so with a Markdown file open its last buttons, Close among them, sat past the pane's edge at a narrow split. It now wraps (`flex-wrap`, `justify-end`); nothing is hidden or reordered. Closes #2983.
+
+## mulmoterminal@9.7.0 — 2026-10-10
+
+> **Setup guide:** [9.7.0 — See when a token at its limit resets, and JingleScript reads scores from files](https://receptron.github.io/mulmoterminal/guide/en/v9.7.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v9.7.0.html))
+
+### Token usage: when an at-limit token resets (#2976)
+
+- [#2977](https://github.com/receptron/mulmoterminal/pull/2977) — a token held out at its usage limit used to read only "At its usage limit — skipped until it resets". The row now adds, per window (5h / weekly), the reset time that window last reported, if still ahead, in the interface language and labelled as last read. Both windows are listed because the probe cannot say which one blocked. The server sends the windows as last read (`lastLimits`) only while the current ones are too old to vouch for; the toolbar gauge and the default login are unchanged.
+
+### JingleScript reads a score from a file
+
+- `@gui-chat-plugin/jinglescript` and `jinglescript` ^0.4.0 -> ^0.6.0. 0.5.0 adds MIDI export (a "Download MIDI" link in the player); 0.6.0 lets `checkScore` / `renderScore` take `path`, a `.json` score file, instead of the score inline, so a long score need not travel in every tool call. The plugin reads that file through the host's `files.byPath`, so this host now hands `manageJingleScript` a `.json`-scoped one (`jingleScriptByPath`, `server/backends/files/openPath.ts`) and lists the tool in `PRESENT_PATH_EXTENSIONS`, so a relative `path` names the file in the session's own directory, as presentDocument's does. Without the binding the plugin refuses `path` and asks for the score inline.
+
+### mulmocast 2.19.0
+
+- `mulmocast` and `@mulmocast/types` ^2.17.0 -> ^2.19.0. 2.18.0 makes `gemini-omni-1.1-flash` the default Gemini API video model (the Veo 3.1 previews shut down on 2026-10-22; a script that names one gets an error pointing at the replacement) and adds an opt-in strict network mode for the HTML renderers and PDF. 2.19.0 adds `beat.soundEffects` (sound effects at a chosen time inside a beat), lets a sound effect's source be a JingleScript score (`{ "kind": "jinglescript", "score": … }`, which is why mulmocast now peer-requires `jinglescript ^0.6.0`, the version above), and moves to avatarscript 0.4.0. Nothing in this repo names a Veo preview model.
+
+### Dependencies and guide upkeep
+
+- [#2978](https://github.com/receptron/mulmoterminal/pull/2978), [#2980](https://github.com/receptron/mulmoterminal/pull/2980) — package updates, including the JingleScript plugin and library.
+- [#2982](https://github.com/receptron/mulmoterminal/pull/2982) — `material-symbols` ^0.47.6 -> ^0.48.0 (the icon font); the stylesheet import and class name are unchanged.
+- [#2965](https://github.com/receptron/mulmoterminal/pull/2965), [#2967](https://github.com/receptron/mulmoterminal/pull/2967), [#2969](https://github.com/receptron/mulmoterminal/pull/2969), [#2971](https://github.com/receptron/mulmoterminal/pull/2971), [#2972](https://github.com/receptron/mulmoterminal/pull/2972), [#2973](https://github.com/receptron/mulmoterminal/pull/2973), [#2974](https://github.com/receptron/mulmoterminal/pull/2974) — the guide: a 9.6.0 screenshot, a new opening that says what MulmoTerminal is, old 4.x notes dropped from the English top, every page in the reading list, pages brought in line with the code (agent lists, notification kinds, Settings, worktree limit), the Japanese shared-apps page filled out, and a table row that showed literal `**`.
+
 ## mulmoterminal@9.6.0 — 2026-10-09
 
 > **Setup guide:** [9.6.0 — Move a session to another subscription from its header, and JingleScript](https://receptron.github.io/mulmoterminal/guide/en/v9.6.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v9.6.0.html))
