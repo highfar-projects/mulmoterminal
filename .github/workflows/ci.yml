@@ -198,6 +198,18 @@ jobs:
           restore-keys: |
             node-modules-${{ runner.os }}-node${{ steps.setup-node.outputs.node-version }}-
 
+      # Restored BEFORE install so puppeteer's postinstall finds its Chrome and skips the download:
+      # ~/.cache/puppeteer is outside node_modules, so the cache above never covered it, and macOS
+      # shards hung in `yarn install` unzipping it (#3030). Every shard may save, unlike
+      # node_modules: the download is what hangs, so a cold run whose first shard hangs must still
+      # leave a cache behind from whichever shard got through. The others' saves are rejected as
+      # duplicates, which costs nothing at this size.
+      - uses: actions/cache@v5
+        if: steps.gate.outputs.run == 'true'
+        with:
+          path: ~/.cache/puppeteer
+          key: puppeteer-${{ runner.os }}-${{ hashFiles('yarn.lock') }}
+
       - if: steps.gate.outputs.run == 'true'
         run: yarn install --frozen-lockfile
 
