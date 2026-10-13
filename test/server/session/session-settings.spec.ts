@@ -12,6 +12,7 @@ import {
   withSettingsCleanup,
   pruneOrphanSettings,
   appendedPromptArgument,
+  usableSettingsDir,
 } from "../../../server/session/session-settings.js";
 import { resolvePtyLaunch } from "../../../server/infra/process/resolve-bin.js";
 import { hookSettingsJson } from "../../../server/session/spawn/setup/hook-settings.js";
@@ -335,5 +336,18 @@ describe("pruneOrphanSettings", () => {
 
   it("is a no-op when nothing has ever been written", () => {
     expect(pruneOrphanSettings(new Set(), path.join(tmpDir(), "never-created"))).toEqual([]);
+  });
+});
+
+describe("usableSettingsDir", () => {
+  // A devcontainer bind-mounts this directory at the same path, so a `--settings` PATH written
+  // after the container is up still resolves inside it. It has to be the directory the files
+  // actually land in, and it has to exist before the first of them is written.
+  it("is the directory a file-borne --settings is written to, and it exists", () => {
+    const dir = usableSettingsDir();
+    expect(dir).toBe(path.dirname(fileFor(SESSION)));
+    expect(statSync(dir ?? "").isDirectory()).toBe(true);
+    const written = settingsArgument(SESSION, JSON.stringify({ env: { TOKEN: "x" } }), true, "linux");
+    expect(path.dirname(written)).toBe(dir);
   });
 });
