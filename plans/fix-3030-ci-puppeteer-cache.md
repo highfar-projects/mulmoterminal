@@ -15,7 +15,7 @@ macOS のシャードで 2 回、`yarn install` の Building fresh packages で 
 | --- | --- |
 | 直し方 | A: `~/.cache/puppeteer` を install の前に戻す（#3030 でユーザーが選択） |
 | キー | `puppeteer-${{ runner.os }}-${{ hashFiles('yarn.lock') }}`。`windows-pr.yaml` / `windows-daily.yaml` と同じ |
-| 保存と復元の分け方 | `node_modules` と同じ: 1 番目のシャードだけ `actions/cache`（保存あり）、残りは `actions/cache/restore` |
+| 保存と復元の分け方 | 全シャードが `actions/cache`（保存あり）。止まるのはダウンロードそのものなので、キャッシュの無い run で 1 番目のシャードが止まっても、通ったシャードが保存できるようにする（CodeRabbit）。同じキーへの 2 回目以降の保存は重複として断られるだけ |
 | 対象 | `ci.yml` の `test` ジョブだけ。`checks` と `package-smoke` は Chrome を起動しないので今回は触らない |
 
 `@puppeteer/browsers` は展開先に実行ファイルがあればダウンロードしない（`install.js` の
@@ -23,6 +23,6 @@ macOS のシャードで 2 回、`yarn install` の Building fresh packages で 
 
 ## 確かめ方
 
-- PR の CI で、`test` の 1 番目のシャードが新しいキーを保存すること（初回は外れて当然）
+- PR の CI で、`test` のどれかのシャードが新しいキーを保存すること（初回は外れて当然）
 - その後の run（再実行）で、ubuntu / macOS の各シャードが `Cache restored from key: puppeteer-…` になること
 - Chrome を起動するテスト（`headlessPreview.spec.ts` など）が飛ばされず走っていること
