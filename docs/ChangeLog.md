@@ -8,6 +8,29 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@10.4.0 — 2026-10-13
+
+> **Setup guide:** [10.4.0 — Panes beside the tiled grid, and files outside the cell open in a tab](https://receptron.github.io/mulmoterminal/guide/en/v10.4.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.4.0.html))
+
+### The right pane opens beside the tiled grid (#3029)
+
+- A tile's History / Tools menus, *Browse files in the app*, the command palette's pane entries and the `pane-*` keys now open the pane to the right of the tiled grid instead of enlarging the cell (#3027). The menu no longer greys panes out with "Enlarge the cell to open this beside it"; the `cellMenu.enlargeFirst` string is gone from all five locales.
+- The pane stays on the tile whose menu opened it (`tiledPaneUid`); focus moving across tiles does not move it. The re-root watcher now takes `paneTargetUid` (the enlarged cell, else that tile), so the Files pane's save-then-re-root path is still the only one, and a pane survives zoom ↔ tiled as the same instance.
+- Contents and triggers are split: what the pane shows (session, directory, agent, where text is typed, Canvas / Collections availability) reads `paneCellUid`; what opens the pane by itself (a drawing, a question, `showInPane`, the check card) still reads the enlarged cell only.
+- No full width beside the tiles; the pane hides, still mounted and still rooted, while its tile is on another page. A terminal path click goes to the pane on the tiled grid when the Files pane is already up there and the directory matches.
+- The pane-width re-clamp now applies to every pane, not only Files, and measures the stage on the tiled grid.
+- README, the guide (basics, config, features, header, glossary) and comments describe the pane beside the tiled grid; `docs/grid-view-modes.md` has a section on the pane in each mode.
+
+### A clicked file outside the cell opens in a tab through a one-file grant (#3028)
+
+- Clicking a terminal path to a video, image, PDF, audio file or HTML page outside the cell's directory used to open a tab showing `{"error":"cwd is not an active session directory"}` (#3024). `POST /api/files/grant` now mints `/api/files/granted/<token>/<name>`, which serves only that one file (any other name under the token is a 404). Grants are in memory until the server restarts.
+- Media is served through the raw route's own code (Range included) and HTML under the preview CSP. The client opens a blank tab synchronously so popup blockers allow it, then navigates it, or writes why it could not.
+- Markdown, JSON, tables and source outside the cell, and every file inside it, open as before.
+
+### Closing a checklist tells the agent (#3026)
+
+- Closing a `requestCheck` card with its close button types `Check "<title>" was closed without answers.` into the terminal, so an agent told to wait for the results is not left waiting (#3025). The card closes even when the terminal cannot be typed into. `requestCheck`'s prompt says what the line means.
+
 ## mulmoterminal@10.3.0 — 2026-10-12
 
 > **Setup guide:** [10.3.0 — The agent shows you files and asks you to check its work](https://receptron.github.io/mulmoterminal/guide/en/v10.3.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.3.0.html))

@@ -4,7 +4,7 @@ nav_title: Feature list
 layout: default
 parent: English
 nav_order: 6.5
-as_of: 10.3.0
+as_of: 10.4.0
 description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 9.1.0)."
 ---
 
@@ -20,6 +20,7 @@ Every capability MulmoTerminal has as of 9.1.0, one line each, grouped by area. 
 
 More: [Basics](basics.html)
 
+- A tile's History and Tools menus open their pane to the right of the tiled grid, without enlarging the cell (v10.4.0)
 - The launch directory may start with `~` (v8.5.0)
 - Reopen a recently closed cell beside the current terminal from "Reopen: …" in the command palette; an agent resumes its conversation. The `terminal-reopen` action reopens the newest (v8.2.0)
 - The grid-ordering button opens an Auto / Manual / Priority menu with the current one checked (v6.6.0)
@@ -135,6 +136,8 @@ More: [Phone](phone.html)
 
 More: [Feature reference](features.html)
 
+- A clicked video, image, PDF, sound or HTML page outside the cell opens in a tab, through a link for that one file (v10.4.0)
+- Closing the agent's checklist without sending tells the agent, in one line, that it was closed (v10.4.0)
 - The agent opens a file in the Files pane beside its terminal, in a chosen view and at a line (showInPane) (v10.3.0)
 - The agent puts a checklist over the terminal; your OK / NG answers and notes come back as your next message (requestCheck) (v10.3.0)
 - Maths ($…$ and $$…$$) is drawn in the full-screen Markdown preview, typeset on the server (v10.2.0)

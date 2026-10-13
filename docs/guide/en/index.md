@@ -8,8 +8,8 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **10.3.0 is out.** The agent can open a file in the pane beside its terminal, and ask you to check its
-> work with a checklist whose answers come back to it. [Setup guide](v10.3.0.html)
+> **10.4.0 is out.** A tile's History and Tools menus open their pane to the right of the grid without
+> enlarging anything, and a clicked file outside the cell opens in a tab. [Setup guide](v10.4.0.html)
 
 ## What is MulmoTerminal? {#what-is}
 
