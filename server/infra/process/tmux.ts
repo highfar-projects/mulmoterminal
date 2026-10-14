@@ -49,8 +49,11 @@ export function psmuxVersionOf(stdout: string): Version | null {
 const PSMUX_VT_INPUT_SINCE: Version = [3, 4, 0];
 
 function atLeast(v: Version, min: Version): boolean {
-  const differs = v.findIndex((part, i) => part !== min[i]);
-  return differs === -1 || v[differs] > min[differs];
+  for (const [i, part] of v.entries()) {
+    const floor = min[i] ?? 0;
+    if (part !== floor) return part > floor;
+  }
+  return true;
 }
 
 /** Whether a psmux client should be started on the VT input route (`PSMUX_VT_INPUT=1`).
