@@ -17,6 +17,8 @@ export interface FileTextCopy {
 export function useFileTextCopy(editor: () => CmEditor | null): FileTextCopy {
   const notice = useCopiedNotice();
   const copy = async (): Promise<boolean> => {
+    // An earlier success's toast must not stand for this attempt, which may fail.
+    notice.clear();
     const text = editor()?.getDoc();
     if (text === undefined) return false;
     try {

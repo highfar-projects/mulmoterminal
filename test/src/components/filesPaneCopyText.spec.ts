@@ -69,6 +69,17 @@ describe("the Files pane's copy button (#3058)", () => {
     expect(notice()).toBeNull();
   });
 
+  it("takes down an earlier success's toast when the next copy fails", async () => {
+    const w = await mountOn();
+    await w.get('[data-testid="files-copy-text"]').trigger("click");
+    await flushPromises();
+    expect(notice()).not.toBeNull();
+    writeText.mockRejectedValueOnce(new Error("denied"));
+    await w.get('[data-testid="files-copy-text"]').trigger("click");
+    await flushPromises();
+    expect(notice()).toBeNull();
+  });
+
   // Plain http on a LAN address has no Clipboard API, and a button that cannot copy is not offered.
   it("offers no button where the page has no clipboard", async () => {
     setClipboard(undefined);
