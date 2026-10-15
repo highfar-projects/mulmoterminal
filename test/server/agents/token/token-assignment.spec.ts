@@ -13,6 +13,7 @@ import type { RateLimits } from "../../../../common/rateLimits";
 
 const NOW = 1_800_000_000;
 const DAY = 86_400;
+const HOUR_SEC = 3600;
 const A: RotationToken = { id: "a", label: "A", keychain: "k-a" };
 const B: RotationToken = { id: "b", label: "B", file: "/t/b" };
 const used = (percent: number, resetIn_sec = 3 * DAY): RateLimits => ({
@@ -134,5 +135,19 @@ describe("live sessions (#2926)", () => {
       ),
     );
     expect(busy?.tokenId).toBe("a");
+  });
+});
+
+describe("a token's weekly reserve (#3064)", () => {
+  it("carries the config's reserve to the choice, so a token at its line is passed over", () => {
+    const reservedB: RotationToken = { ...B, reserveWeeklyPercent: 5 };
+    const limitsOf = (token: RotationToken) => (token.id === "a" ? used(50) : used(95, HOUR_SEC));
+    expect(assignToken(deps({ includeDefaultLogin: false }, { tokenLimits: limitsOf }))?.tokenId).toBe("b");
+    expect(assignToken(deps({ includeDefaultLogin: false, tokens: [A, reservedB] }, { tokenLimits: limitsOf }))?.tokenId).toBe("a");
+  });
+
+  it("starts nothing on rotation when the only token is down to its reserve", () => {
+    const reservedA: RotationToken = { ...A, reserveWeeklyPercent: 5 };
+    expect(assignToken(deps({ includeDefaultLogin: false, tokens: [reservedA] }, { tokenLimits: () => used(96) }))).toBeNull();
   });
 });

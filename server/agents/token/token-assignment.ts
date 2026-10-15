@@ -43,6 +43,7 @@ const candidatesOf = (deps: TokenAssignmentDeps): TokenCandidate[] => {
     limits: deps.tokenLimits(token),
     spentUntil_sec: spent(token.id),
     liveSessions: live(token.id),
+    reserveWeeklyPercent: token.reserveWeeklyPercent,
   }));
   if (!deps.rotation.includeDefaultLogin) return tokens;
   return [

@@ -22,6 +22,8 @@ export interface RotationToken {
   keychainAccount?: string;
   /** A file holding the token, absolute or `~/`-relative. */
   file?: string;
+  /** Percent of the 7-day window rotation leaves unused on this subscription (#3064). */
+  reserveWeeklyPercent?: number;
 }
 
 export interface TokenRotation {
@@ -41,6 +43,8 @@ export const ROTATION_TOKEN_LABEL_MAX = 24;
 export const ROTATION_TOKEN_REF_MAX = 500;
 export const ROTATION_TOKENS_MAX = 8;
 export const ROTATION_TOKEN_EMAIL_MAX = 254;
+/** A reserve of the whole week would make the token a candidate that can never be chosen. */
+export const ROTATION_RESERVE_PERCENT_MAX = 99;
 
 /** What a terminal line calls the `/login` credential. */
 export const DEFAULT_LOGIN_LABEL = "the /login account";
@@ -71,6 +75,9 @@ const optionalEmail = (value: unknown): string | undefined => {
   return trimmed.length <= ROTATION_TOKEN_EMAIL_MAX && /^[^\s@]+@[^\s@]+$/.test(trimmed) ? trimmed : undefined;
 };
 
+const optionalReserve = (value: unknown): number | undefined =>
+  typeof value === "number" && Number.isFinite(value) && value > 0 && value <= ROTATION_RESERVE_PERCENT_MAX ? value : undefined;
+
 const optionalRef = (value: unknown): string | undefined => {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
@@ -86,7 +93,9 @@ export function rotationTokenFrom(row: unknown): RotationToken | null {
   const file = optionalRef(row.file);
   if (!isRotationTokenId(id) || !label) return null;
   const email = optionalEmail(row.email);
-  const named = email ? { id, label, email } : { id, label };
+  const reserveWeeklyPercent = optionalReserve(row.reserveWeeklyPercent);
+  const labelled = email ? { id, label, email } : { id, label };
+  const named = reserveWeeklyPercent === undefined ? labelled : { ...labelled, reserveWeeklyPercent };
   if (keychain !== undefined && file === undefined) {
     const keychainAccount = optionalRef(row.keychainAccount);
     return keychainAccount ? { ...named, keychain, keychainAccount } : { ...named, keychain };

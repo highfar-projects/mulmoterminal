@@ -295,6 +295,10 @@ be resumed on any subscription — the same as switching with `/login`, done aut
   with the reason in the server log. Exactly one of the two per entry; an entry with both or neither is dropped.
 - `email` is what the user signs in with — shown beside that token's usage so they can tell which
   subscription is which. MulmoTerminal cannot read it from the token.
+- `reserveWeeklyPercent` (optional, above 0 up to 99): part of that subscription's week rotation never
+  spends — for a subscription the user also needs outside MulmoTerminal. With `5` it counts as full at
+  95%: no new session starts on it, a running one moves off at the end of its turn, and it is not used
+  even when every other subscription is out. Any other value is ignored.
 - `includeDefaultLogin` (default `true`): the `/login` credential is one more candidate. Once EVERY
   subscription is a token, advise `false`: the `/login` account is always one of them, so it would be
   counted twice, and which one it duplicates changes whenever the user runs `/login` again.

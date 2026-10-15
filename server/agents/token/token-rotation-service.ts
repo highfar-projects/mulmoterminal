@@ -86,6 +86,7 @@ export function createTokenRotation(deps: TokenRotationDeps): TokenRotationRunti
     const token = getTokenRotation().tokens.find((candidate) => candidate.id === tokenId);
     return token ? meters.lastClaudeLimits(meteredToken(token)) : null;
   };
+  const reserveOf = (tokenId: string): number | undefined => getTokenRotation().tokens.find((token) => token.id === tokenId)?.reserveWeeklyPercent;
 
   const assign = (onlyFree: boolean): TokenAssignment | null =>
     assignToken({
@@ -105,6 +106,6 @@ export function createTokenRotation(deps: TokenRotationDeps): TokenRotationRunti
     keptAssignment: (tokenId) => keptAssignment(getTokenRotation(), tokenId, readRotationToken),
     markSpent: (tokenId) => spentUntil.set(tokenId, nowSec() + SPENT_HOLD_SEC),
     hasFreeChoice: () => assign(true) !== null,
-    isNearLimit: (tokenId) => nearLimit(limitsOf(tokenId), nowSec()),
+    isNearLimit: (tokenId) => nearLimit(limitsOf(tokenId), nowSec(), reserveOf(tokenId)),
   };
 }

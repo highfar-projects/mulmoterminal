@@ -5,6 +5,7 @@ import {
   rotationLoginLabel,
   rotationTokenFrom,
   sanitizeTokenRotation,
+  ROTATION_RESERVE_PERCENT_MAX,
   ROTATION_TOKENS_MAX,
   ROTATION_TOKEN_LABEL_MAX,
   TOKEN_ROTATION_OFF,
@@ -27,6 +28,32 @@ describe("rotationTokenFrom (#2919)", () => {
     expect(rotationTokenFrom({ ...keychainRow, email: " me@example.com " })).toEqual({ ...keychainRow, email: "me@example.com" });
     expect(rotationTokenFrom({ ...keychainRow, email: "not an address" })).toEqual(keychainRow);
     expect(rotationTokenFrom({ ...keychainRow, email: 3 })).toEqual(keychainRow);
+  });
+
+  it("keeps a weekly reserve inside its range (#3064)", () => {
+    expect(rotationTokenFrom({ ...keychainRow, reserveWeeklyPercent: 5 })).toEqual({ ...keychainRow, reserveWeeklyPercent: 5 });
+    expect(rotationTokenFrom({ ...fileRow, email: "me@example.com", reserveWeeklyPercent: 2.5 })).toEqual({
+      ...fileRow,
+      email: "me@example.com",
+      reserveWeeklyPercent: 2.5,
+    });
+    expect(rotationTokenFrom({ ...keychainRow, reserveWeeklyPercent: ROTATION_RESERVE_PERCENT_MAX })).toEqual({
+      ...keychainRow,
+      reserveWeeklyPercent: ROTATION_RESERVE_PERCENT_MAX,
+    });
+  });
+
+  it.each([
+    ["zero", 0],
+    ["negative", -5],
+    ["the whole week", 100],
+    ["above the max", ROTATION_RESERVE_PERCENT_MAX + 0.5],
+    ["a string", "5"],
+    ["NaN", Number.NaN],
+    ["Infinity", Number.POSITIVE_INFINITY],
+    ["null", null],
+  ])("drops a weekly reserve that is %s, keeping the entry", (_name, reserveWeeklyPercent) => {
+    expect(rotationTokenFrom({ ...keychainRow, reserveWeeklyPercent })).toEqual(keychainRow);
   });
 
   it("trims, and cuts a long label", () => {
