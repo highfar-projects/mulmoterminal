@@ -57,6 +57,13 @@ describe("parseRecentStore", () => {
     expect(parseRecentStore(raw)).toEqual([{ cwd: "/p", paths: ["a.md", "b.md"] }]);
   });
 
+  it("keeps at most MAX_RECENT_DIRS stored directories, the most recent first", () => {
+    const stored = Array.from({ length: MAX_RECENT_DIRS + 4 }, (_, i) => ({ cwd: `/d${i}`, paths: ["a.md"] }));
+    const store = parseRecentStore(JSON.stringify(stored));
+    expect(store).toHaveLength(MAX_RECENT_DIRS);
+    expect(store[0].cwd).toBe("/d0");
+  });
+
   it("caps a stored list that is longer than this build keeps", () => {
     const paths = Array.from({ length: MAX_RECENT_FILES + 5 }, (_, i) => `f${i}.md`);
     expect(recentFor(parseRecentStore(JSON.stringify([{ cwd: "/p", paths }])), "/p")).toHaveLength(MAX_RECENT_FILES);

@@ -26,7 +26,7 @@ export function parseRecentStore(raw: string | null): RecentFiles[] {
   if (raw === null) return [];
   try {
     const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.map(asRecent).filter((entry): entry is RecentFiles => entry !== null) : [];
+    return Array.isArray(parsed) ? parsed.map(asRecent).filter((entry): entry is RecentFiles => entry !== null).slice(0, MAX_RECENT_DIRS) : [];
   } catch {
     return [];
   }
