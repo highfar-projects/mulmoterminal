@@ -291,8 +291,9 @@ export function markUnplacedSession(id: string, agent: TerminalAgent = "claude")
   appendUnplacedSession(id, agent);
 }
 
-/** A grid cell has taken this session — or the user closed it. Either way it is no longer waiting
- *  for a home, and must not be adopted again on the next load. */
+/** A grid cell has taken this session — or the user closed it, or it ended in a way that would have
+ *  closed its cell (pty-exit.ts). Either way it is no longer waiting for a home, and must not be
+ *  adopted again on the next load. */
 export function markSessionPlaced(id: string): void {
   if (!isValidSessionId(id)) return;
   unplacedSessions.delete(id);

@@ -10,7 +10,9 @@
 // here sends one (node-pty's `kill()` sends SIGHUP), so it came from outside — macOS ending a
 // process under memory pressure, in the reported case. Reaping there kills a tmux session with a
 // live agent in it, and forgets the title, which is what drops the row from the phone's list.
-import { ptys } from "../registry.js";
+import { markSessionPlaced, ptys } from "../registry.js";
+import { shouldCloseEndedCell } from "../../../common/endedCellClose.js";
+import { worktreeLabel } from "../../../common/worktreePath.js";
 import { tmuxHasSession } from "../../infra/process/tmux.js";
 import { sendExitAndClose, type PtyExitReport } from "../ws-frames.js";
 import type { PtyEntry } from "../types.js";
@@ -80,7 +82,13 @@ export function reportPtyExit(
   reap: (id: string) => void,
 ): PtyExitDisposition {
   const disposition = decidePtyExit(sessionId, entry);
-  sendExitAndClose(entry.ws, { ...exit, reattached: !!entry.reattached, ended: disposition === "reap" });
+  const reattached = !!entry.reattached;
+  sendExitAndClose(entry.ws, { ...exit, reattached, ended: disposition === "reap" });
+  // The cell nobody opened yet (an agent's spawnBackgroundChat with no grid on screen) gets the
+  // same answer an open one would: if that cell would have closed itself, no grid should adopt the
+  // session later and resume it as a new cell (#3055).
+  const worktreeCell = worktreeLabel(entry.cwd) !== null;
+  if (shouldCloseEndedCell({ sessionEnded: disposition === "reap", lifetimeMs: exit.lifetimeMs, reattached, worktreeCell })) markSessionPlaced(sessionId);
   applyPtyExit(sessionId, disposition, reap);
   return disposition;
 }
