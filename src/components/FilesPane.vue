@@ -36,6 +36,7 @@ import { useFileSearchPanel } from "../composables/useFileSearchPanel";
 import { useFileTreeWidth } from "../composables/useFileTreeWidth";
 import { clippedNameTip } from "./fileTreeWidth";
 import FilesToolbarButton from "./FilesToolbarButton.vue";
+import FilesEditorActions from "./FilesEditorActions.vue";
 import type { StoriesRoots } from "../composables/canvasOpenFile";
 import { filesRowActions, type FilesRowAction } from "./filesRowActions";
 import { menuAttrsFor, useFilesRowMenu } from "../composables/useFilesRowMenu";
@@ -540,12 +541,11 @@ defineExpose({
            anyone who has not written a keymap. -->
       <FilesToolbarButton icon="search" :label="t('tips.panes.findByName')" test-id="files-find-btn" opens-a-panel @click="openFinder()" />
       <FilesToolbarButton icon="manage_search" :label="t('tips.panes.searchInFiles')" test-id="files-search-btn" opens-a-panel @click="openSearch()" />
-      <FilesToolbarButton
-        v-if="insertTarget && openPath && !unpreviewable && (!showCanvas || layout.editor)"
-        icon="alternate_email"
-        :label="t('tips.panes.insertSelection')"
-        test-id="files-insert-selection"
-        @click="insertSelection"
+      <FilesEditorActions
+        v-if="openPath && !unpreviewable && (!showCanvas || layout.editor)"
+        :editor="file.editor.value"
+        :can-insert="!!insertTarget"
+        @insert="insertSelection"
       />
       <FilesToolbarButton icon="refresh" :label="t('tips.panes.reloadTree')" @click="reloadTree" />
       <FilesToolbarButton icon="right_panel_close" :label="t('tips.panes.closeFiles')" @click="requestClose" />

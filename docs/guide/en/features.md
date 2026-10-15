@@ -165,6 +165,8 @@ a save replaces it; the newest few — and each can be
 The same editor still opens full-screen from a **Files** header button or by clicking a file
 path an agent printed.
 
+**Copy the whole file.** The copy button in the header (the two-sheets icon) puts the file's text on the clipboard — what the editor holds, unsaved edits included — and says so with its line count and first line. A selection you drag with the mouse across the line numbers copies the numbers rather than the text, so use this button for the whole file.
+
 **The editor colours the language it is showing.** Markdown, JS/TS and JSON are always ready;
 HTML (including `.vue`, `.svelte` and `.astro`), CSS/SCSS, YAML, XML/SVG, Python, Rust, Go,
 Java/Kotlin, C/C++/Objective-C, PHP and SQL are fetched the first time you open one — so such a
