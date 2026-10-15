@@ -30,6 +30,7 @@ import {
   antigravityConversations,
   antigravityConversationsHydrated,
   customAgentSessionsHydrated,
+  guiGroupRestrictionsHydrated,
   codexRollouts,
   codexRolloutsHydrated,
   museConversations,
@@ -527,6 +528,9 @@ export async function handleClaudeConnection(deps: WsRouteDeps, ws: WebSocket, r
   // conversation on plain claude — a different model, mid-thread. Same guard the antigravity
   // conversation map takes, for the same restart case.
   await customAgentSessionsHydrated;
+  // And which GUI tool groups it was limited to (#3033), read by the spawn: a resume that ran ahead
+  // of the log would hand a restricted session its directory's whole registration.
+  await guiGroupRestrictionsHydrated;
   // The account, before resolving too: resolving asks whether the transcript exists, and a session
   // started on a second login has it in THAT home. A requested session runs wherever its transcript
   // already is; only a newly minted one takes the picked account.

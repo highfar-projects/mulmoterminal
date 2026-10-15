@@ -179,3 +179,11 @@ export function mcpConfigJson({ sessionId, host = DEFAULT_HOST, port, userMcpSer
  */
 export const fullGuiAllowedTools = (guiMcpTools: string, userMcpServers: readonly UserMcpServer[]): string =>
   [guiMcpTools, ...userMcpServers.map((server) => `mcp__${server.id}`)].join(",");
+
+/** The grid's blind pre-approval, cut down to the groups a restricted session may use (#3033): a
+ *  tool the session is not served must not stand pre-approved under a name it could still load. */
+export const restrictedAllowedTools = (gridMcpTools: string, groups: readonly ToolGroup[]): string =>
+  gridMcpTools
+    .split(",")
+    .filter((name) => groups.some((group) => name.startsWith(`mcp__${toolGroupServerId(group)}__`)))
+    .join(",");

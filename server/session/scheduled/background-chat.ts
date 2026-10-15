@@ -7,6 +7,7 @@
 import { asTerminalAgent, type TerminalAgent } from "../../../common/sessionAgent.js";
 import { isRecord } from "../../../common/isRecord.js";
 import { isSafeSlug } from "@mulmoclaude/core/collection";
+import { isToolGroup, TOOL_GROUPS, type ToolGroup } from "../../../common/toolGroups.js";
 
 export interface BackgroundChatRequest {
   agent: TerminalAgent;
@@ -28,6 +29,18 @@ export interface BackgroundChatRequest {
    *  project actually has, and what a cell wears comes from that resolution rather than from
    *  anything the caller sent. A slug naming nothing is therefore harmless — it records nothing. */
   collection: string | null;
+  /** The GUI tool groups the session may use (#3033), or null for every GUI tool. `[]` is no GUI
+   *  tool at all. Claude only: the route refuses it for any other agent. */
+  guiGroups: readonly ToolGroup[] | null;
+}
+
+/** `guiGroups` as asked for: absent is null (unrestricted), and anything that is not a list of
+ *  known groups is a refusal rather than "absent" — falling back would hand out every tool to a
+ *  caller that asked for fewer. */
+function parseGuiGroups(value: unknown): { ok: true; groups: readonly ToolGroup[] | null } | { ok: false } {
+  if (value === undefined || value === null) return { ok: true, groups: null };
+  if (!Array.isArray(value) || !value.every(isToolGroup)) return { ok: false };
+  return { ok: true, groups: [...new Set(value)] };
 }
 
 /** The request, or the message to answer with when it cannot be served. */
@@ -35,13 +48,18 @@ export function parseBackgroundChat(body: unknown): { ok: true; request: Backgro
   const record: Record<string, unknown> = isRecord(body) ? body : {};
   const message = typeof record.message === "string" ? record.message.trim() : "";
   if (!message) return { ok: false, message: "spawnBackgroundChat: `message` is required (non-empty string)." };
+  const guiGroups = parseGuiGroups(record.guiGroups);
+  if (!guiGroups.ok) return { ok: false, message: `spawnBackgroundChat: \`guiGroups\` must be a list of tool groups (${TOOL_GROUPS.join(", ")}).` };
+  // Anything unrecognised is claude, the default — the same rule the UI's remembered
+  // toggle reads by, so a model naming an agent we don't host gets a session rather
+  // than an error about a field it half-guessed.
+  const agent = asTerminalAgent(record.agent);
+  if (guiGroups.groups !== null && agent !== "claude")
+    return { ok: false, message: `spawnBackgroundChat: \`guiGroups\` is supported for claude only, not ${agent}.` };
   return {
     ok: true,
     request: {
-      // Anything unrecognised is claude, the default — the same rule the UI's remembered
-      // toggle reads by, so a model naming an agent we don't host gets a session rather
-      // than an error about a field it half-guessed.
-      agent: asTerminalAgent(record.agent),
+      agent,
       draft: record.draft === true,
       hidden: record.hidden === true,
       message,
@@ -49,6 +67,7 @@ export function parseBackgroundChat(body: unknown): { ok: true; request: Backgro
       // Shape only. Whether it names a real collection is the resolver's question, and it has to
       // be — the answer depends on the project the spawn lands in, which is decided after this.
       collection: typeof record.collection === "string" && isSafeSlug(record.collection) ? record.collection : null,
+      guiGroups: guiGroups.groups,
     },
   };
 }

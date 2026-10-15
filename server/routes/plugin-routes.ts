@@ -68,7 +68,13 @@ export interface PluginRouteDeps {
 function spawnSeededSession(
   deps: PluginRouteDeps,
   mode: SpawnMode,
-  { sessionId, message, mcpGroups, cwd }: { sessionId: string; message: string; mcpGroups: readonly ToolGroup[]; cwd: string },
+  {
+    sessionId,
+    message,
+    mcpGroups,
+    cwd,
+    guiGroups,
+  }: { sessionId: string; message: string; mcpGroups: readonly ToolGroup[]; cwd: string; guiGroups: readonly ToolGroup[] | null },
 ): void {
   // GUI MCP: every branch below keeps the full toolset regardless of the directory, and that is a
   // decision rather than an oversight. `carriesFullGuiMcp()` is consulted inside each spawner —
@@ -94,8 +100,9 @@ function spawnSeededSession(
   // inherit anything from cursor, so it asks which session it belongs to and is told these groups
   // with the answer (bridge-session.ts).
   else if (mode === "cursor-run") deps.spawnCursorPty(sessionId, null, null, cwd, { mcpGroups, initialPrompt });
-  else if (mode === "claude-draft") deps.spawnClaudePty(sessionId, null, null, { draft: message, cwd });
-  else deps.spawnClaudePty(sessionId, null, null, { initialPrompt: message, cwd });
+  // `guiGroups` reaches claude only: the parser refuses it for every other agent (#3033).
+  else if (mode === "claude-draft") deps.spawnClaudePty(sessionId, null, null, { draft: message, cwd, guiGroups: guiGroups ?? undefined });
+  else deps.spawnClaudePty(sessionId, null, null, { initialPrompt: message, cwd, guiGroups: guiGroups ?? undefined });
 }
 
 /** Where a seeded chat runs: the project it was started from, or the workspace when it named
@@ -143,7 +150,7 @@ export function mountPluginRoutes(app: Express, deps: PluginRouteDeps): void {
   app.post("/api/plugin/spawnBackgroundChat", async (req, res) => {
     const parsed = parseBackgroundChat(req.body);
     if (!parsed.ok) return res.json({ message: parsed.message });
-    const { agent, collection, draft, hidden, message, project } = parsed.request;
+    const { agent, collection, draft, hidden, message, project, guiGroups } = parsed.request;
     const cwd = spawnCwdFor(project);
     if (cwd === null) return res.json({ message: `spawnBackgroundChat: unknown project '${project?.replace(/[\r\n]/g, " ") ?? ""}'.` });
     const sessionId = randomUUID();
@@ -160,7 +167,7 @@ export function mountPluginRoutes(app: Express, deps: PluginRouteDeps): void {
     if (agent === "cursor") await syncCursorDirectoryMcp(cwd, mcpGroups);
     try {
       runWithHiddenMarker(hidden, sessionId, backgroundMarkers, () =>
-        spawnSeededSession(deps, spawnModeFor(agent, draft), { sessionId, message, mcpGroups, cwd }),
+        spawnSeededSession(deps, spawnModeFor(agent, draft), { sessionId, message, mcpGroups, cwd, guiGroups }),
       );
       // After the spawn, like the marks below: a launch that threw has no session, and a record
       // for one would sit in the log forever describing nothing.

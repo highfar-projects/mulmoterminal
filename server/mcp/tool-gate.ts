@@ -58,18 +58,37 @@ export const describeTool = (def: PluginToolDefinition): string => [def.descript
 // Standing down is not the same as not existing: the group server still connects and still reports
 // itself, with no tools. A 404 would surface in the client as "server failed to connect", which is a
 // worse account of the situation than "connected, nothing here".
+//
+// `restrictedTo` is the FOURTH, and it is the session's rather than the url's: the groups a
+// spawnBackgroundChat caller limited the session to (#3033), or null when it was never limited. It
+// filters every url the session reaches, the all-tools one included, and it drops every ungrouped
+// tool — a group list cannot name them, so a restricted session never has them.
 export function offeredTools(
   isTranslationWorker: boolean,
   plugins: readonly PluginToolDefinition[],
   workerTool: OfferedTool,
   group: ToolGroup | null = null,
   carriesAllTools = false,
+  restrictedTo: readonly ToolGroup[] | null = null,
 ): OfferedTool[] {
   if (isTranslationWorker) return [workerTool];
   if (group !== null && carriesAllTools) return [];
-  const offered = group === null ? plugins : plugins.filter((def) => groupOfTool(def.name) === group);
+  const offered = plugins.filter((def) => withinGroup(def.name, group) && withinRestriction(def.name, restrictedTo));
   return offered.map((def) => ({ name: def.name, description: describeTool(def), inputSchema: def.parameters ?? NO_PARAMETERS }));
 }
+
+const withinGroup = (toolName: string, group: ToolGroup | null): boolean => group === null || groupOfTool(toolName) === group;
+
+function withinRestriction(toolName: string, restrictedTo: readonly ToolGroup[] | null): boolean {
+  if (restrictedTo === null) return true;
+  const group = groupOfTool(toolName);
+  return group !== null && restrictedTo.includes(group);
+}
+
+/** The groups a url proves a session has, cut down to its restriction: a restricted session that
+ *  reaches a url it was not limited to has not gained that group, and the Canvas gate reads this. */
+export const groupsWithin = (groups: readonly ToolGroup[], restrictedTo: readonly ToolGroup[] | null): ToolGroup[] =>
+  restrictedTo === null ? [...groups] : groups.filter((group) => restrictedTo.includes(group));
 
 export type ToolRoute =
   | { kind: "submit-translation" }
@@ -77,7 +96,13 @@ export type ToolRoute =
   // Hand off to the plugin dispatch route.
   | { kind: "dispatch" };
 
-export function routeToolCall(name: string, isTranslationWorker: boolean, group: ToolGroup | null = null, carriesAllTools = false): ToolRoute {
+export function routeToolCall(
+  name: string,
+  isTranslationWorker: boolean,
+  group: ToolGroup | null = null,
+  carriesAllTools = false,
+  restrictedTo: readonly ToolGroup[] | null = null,
+): ToolRoute {
   const isWorkerTool = name === SUBMIT_TRANSLATION_TOOL_NAME;
   if (isTranslationWorker) {
     if (isWorkerTool) return { kind: "submit-translation" };
@@ -88,6 +113,9 @@ export function routeToolCall(name: string, isTranslationWorker: boolean, group:
   // translation pending, which is a 404 from another module rather than a decision made here
   // — and the layer above already assumes a model can name a tool it was never shown.
   if (isWorkerTool) return { kind: "refused", message: `Tool "${name}" is not available.` };
+  // Second layer of the session's restriction, ahead of the url's own gates: whichever url it
+  // arrived on, a tool outside the restriction is not this session's to call.
+  if (!withinRestriction(name, restrictedTo)) return { kind: "refused", message: `Tool "${name}" is not available to this session.` };
   // Second layer of the stood-down group. Named before the group filter below so the message can
   // say where the tool actually IS — refusing it as "not in this group" would be true and useless,
   // since the session can call it right now under the all-tools server.
@@ -96,7 +124,7 @@ export function routeToolCall(name: string, isTranslationWorker: boolean, group:
   }
   // Second layer of the group gate. Refused, not dispatched: the dispatch route would happily
   // run any registered plugin, so "we never offered it" is not a control.
-  if (group !== null && groupOfTool(name) !== group) {
+  if (!withinGroup(name, group)) {
     return { kind: "refused", message: `Tool "${name}" is not available on the "${group}" tool group.` };
   }
   return { kind: "dispatch" };

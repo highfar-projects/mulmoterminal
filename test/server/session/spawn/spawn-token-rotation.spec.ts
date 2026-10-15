@@ -25,6 +25,8 @@ vi.mock("../../../../server/session/registry.js", () => ({
   knownSessions: new Map(),
   launchChoices: new Map(),
   customAgentSessions: new Map(),
+  guiGroupRestriction: () => null,
+  rememberGuiGroupRestriction: vi.fn(),
   rememberCustomAgentSession: vi.fn(),
   ptys: new Map(),
   hookedSessions: new Set(),
