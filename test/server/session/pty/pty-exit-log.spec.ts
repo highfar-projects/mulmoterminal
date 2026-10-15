@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 
-import { diedDuringStartup, formatLifetime, ptyExitLine, ptyStartLine, STARTUP_WINDOW_MS } from "../../../../server/session/pty/pty-exit-log";
+import { diedDuringStartup, formatLifetime, ptyExitLine, ptyStartLine } from "../../../../server/session/pty/pty-exit-log";
+import { STARTUP_WINDOW_MS } from "../../../../common/endedCellClose";
 
 describe("ptyStartLine", () => {
   // The distinction #1063 needed and no log carried: `-A` returns a terminal either way, so

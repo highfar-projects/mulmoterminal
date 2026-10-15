@@ -38,7 +38,7 @@ export function startAgentPty(start: AgentPtyStart): StartedAgentPty {
   const { term, tmux, reattached } = ptySpawn(sessionId, file, args, cwd, true, spawnEnv);
   const spawnedAtMs = Date.now();
   console.log(ptyStartLine({ agent, pid: term.pid, cwd, tmux, reattached, sessionId, note }));
-  const entry: PtyEntry = { term, ws, buffer: "", cwd, tmux, active: false, agent };
+  const entry: PtyEntry = { term, ws, buffer: "", cwd, tmux, reattached, active: false, agent };
   ptys.set(sessionId, entry);
   return { entry, spawnedAtMs, reattached };
 }
