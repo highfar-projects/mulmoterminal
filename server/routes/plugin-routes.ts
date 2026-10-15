@@ -88,21 +88,22 @@ function spawnSeededSession(
   // directory get them from `groupsForSpawn(agent, cwd)` instead, which is the per-directory
   // mechanism that DOES have to follow the cwd.
   const initialPrompt = codexifySkillSeed(message);
-  if (mode === "codex-run") deps.spawnCodexPty(sessionId, null, null, cwd, true, { initialPrompt });
+  // `guiGroups` reaches claude, codex and copilot only: the parser refuses it for every other agent (#3033).
+  const limit = guiGroups ?? undefined;
+  if (mode === "codex-run") deps.spawnCodexPty(sessionId, null, null, cwd, true, { initialPrompt, guiGroups: limit });
   else if (mode === "antigravity-run") deps.spawnAntigravityPty(sessionId, null, null, cwd, { mcpGroups, initialPrompt });
   else if (mode === "grok-run") deps.spawnGrokPty(sessionId, null, null, cwd, { mcpGroups, initialPrompt });
   else if (mode === "muse-run") deps.spawnMusePty(sessionId, null, null, cwd, { mcpGroups, initialPrompt });
   // A seeded copilot chat carries the whole GUI MCP (attachGuiMcp = true): it has no cell, which is
   // the same reason claude and codex get it here.
-  else if (mode === "copilot-run") deps.spawnCopilotPty(sessionId, null, null, cwd, true, { mcpGroups, initialPrompt });
+  else if (mode === "copilot-run") deps.spawnCopilotPty(sessionId, null, null, cwd, true, { mcpGroups, initialPrompt, guiGroups: limit });
   // Cursor reaches its groups through a file in the directory, written and approved by the caller
   // before this runs (cursor-mcp.ts). The list is passed anyway, as muse's is: the bridge cannot
   // inherit anything from cursor, so it asks which session it belongs to and is told these groups
   // with the answer (bridge-session.ts).
   else if (mode === "cursor-run") deps.spawnCursorPty(sessionId, null, null, cwd, { mcpGroups, initialPrompt });
-  // `guiGroups` reaches claude only: the parser refuses it for every other agent (#3033).
-  else if (mode === "claude-draft") deps.spawnClaudePty(sessionId, null, null, { draft: message, cwd, guiGroups: guiGroups ?? undefined });
-  else deps.spawnClaudePty(sessionId, null, null, { initialPrompt: message, cwd, guiGroups: guiGroups ?? undefined });
+  else if (mode === "claude-draft") deps.spawnClaudePty(sessionId, null, null, { draft: message, cwd, guiGroups: limit });
+  else deps.spawnClaudePty(sessionId, null, null, { initialPrompt: message, cwd, guiGroups: limit });
 }
 
 /** Where a seeded chat runs: the project it was started from, or the workspace when it named

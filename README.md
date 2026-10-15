@@ -2137,7 +2137,7 @@ From a shell: `mulmoterminal room read <room>` · `room post <room> <text…> [-
 | Endpoint | Purpose |
 | -------- | ------- |
 | `POST /api/mcp/:sessionId` | Per-session GUI MCP server (Streamable HTTP; `GET`/`DELETE` → 405). |
-| `POST /api/plugin/:toolName` | GUI-plugin dispatch (incl. `spawnBackgroundChat`, `manageAccounting`, `presentHtml`). `spawnBackgroundChat` takes an optional `guiGroups` (claude only): a list of tool groups (`render`, `data`, `media`, `external`) the spawned session is limited to, `[]` for no GUI tool. The limit holds across a resume. It is not a sandbox: the tools stay callable over HTTP. |
+| `POST /api/plugin/:toolName` | GUI-plugin dispatch (incl. `spawnBackgroundChat`, `manageAccounting`, `presentHtml`). `spawnBackgroundChat` takes an optional `guiGroups` (claude, codex and copilot): a list of tool groups (`render`, `data`, `media`, `external`) the spawned session is limited to, `[]` for no GUI tool. The limit holds across a resume, including a codex resume opened by its rollout id. It is not a sandbox: the tools stay callable over HTTP. |
 | `GET /api/agent/toolResults/:id` · `POST /api/agent/toolResult` | GUI-panel result history / persist. |
 | `GET /api/tools` · `GET /api/tool-calls/:id` | Available tools / tool-call history. |
 | `POST /api/accounting` | Double-entry accounting (bundled plugin). |

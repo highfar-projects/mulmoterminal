@@ -102,10 +102,16 @@ describe("parseBackgroundChat", () => {
       }
     });
 
+    it("accepts it for codex and copilot, which take their GUI MCP per spawn as claude does", () => {
+      for (const agent of ["codex", "copilot"]) {
+        expect(ok({ message: "m", agent, guiGroups: ["render"] }).guiGroups).toEqual(["render"]);
+      }
+    });
+
     // Ignoring it would spawn the very full-toolset session the caller was trying to avoid.
-    it("refuses it for every agent but claude", () => {
-      for (const agent of ["codex", "antigravity", "grok", "muse", "copilot", "cursor"]) {
-        expect(refusal({ message: "m", agent, guiGroups: [] })).toMatch(/supported for claude only/);
+    it("refuses it for every agent that reads its groups from a file in the directory", () => {
+      for (const agent of ["antigravity", "grok", "muse", "cursor"]) {
+        expect(refusal({ message: "m", agent, guiGroups: [] })).toMatch(/supported for claude, codex, copilot only/);
         expect(ok({ message: "m", agent }).guiGroups).toBeNull();
       }
     });

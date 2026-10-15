@@ -20,6 +20,7 @@ import { copilotHome, syncCopilotHooksFile } from "../../../agents/copilot/copil
 import type { ToolGroup } from "../../../../common/toolGroups.js";
 import { codexGuiMcpServers } from "../setup/mcp-config.js";
 import { spawnWithFullGuiClaim, type FullGuiClaimRequest } from "../spawn-with-full-gui-claim.js";
+import { sessionGuiRestriction } from "./session-gui-restriction.js";
 import { ptyWouldReattach } from "../../pty/pty-spawn.js";
 import { startAgentPty } from "../../pty/agent-pty-start.js";
 import { wireAgentPtyRelay } from "../../pty/pty-relay.js";
@@ -36,9 +37,12 @@ export function createCopilotSpawner(deps: SpawnDeps) {
     _resumeId: string | null,
     cwd: string,
     attachGuiMcp: boolean,
-    options: { initialPrompt?: string | null; mcpGroups?: readonly ToolGroup[] } = {},
+    // `guiGroups` limits this session to those GUI tool groups, for this spawn and every later one (#3033).
+    options: { initialPrompt?: string | null; mcpGroups?: readonly ToolGroup[]; guiGroups?: readonly ToolGroup[] | undefined } = {},
   ): PtyEntry {
-    const { initialPrompt = null, mcpGroups = [] } = options;
+    const { initialPrompt = null, mcpGroups = [], guiGroups } = options;
+    // `--session-id` is our id on resume too, so the record is always under this key.
+    const restrictedTo = sessionGuiRestriction(sessionId, guiGroups);
     // Every spawn, not only at boot: the file is one the user can delete, and rewriting it costs a
     // read when it already matches (see syncCopilotHooksFile).
     syncCopilotHooksFile("127.0.0.1", PORT);
@@ -47,11 +51,13 @@ export function createCopilotSpawner(deps: SpawnDeps) {
     // MCP on one URL, a project cell carries one URL per group its DIRECTORY registered. Copilot
     // can be given either through the same per-spawn flag, so unlike agy/grok/muse there is no
     // file in the directory to keep in step.
-    const claim: FullGuiClaimRequest = { sessionId, attachGuiMcp, cwd, wouldReattach: ptyWouldReattach(sessionId, true), agent: "copilot" };
+    // A restricted session is handed exactly its groups, whatever the directory registered.
+    const restricted = restrictedTo !== null;
+    const claim: FullGuiClaimRequest = { sessionId, attachGuiMcp, cwd, wouldReattach: ptyWouldReattach(sessionId, true), agent: "copilot", restricted };
     const { entry, spawnedAtMs } = spawnWithFullGuiClaim(claim, (allTools) => {
       const mcpConfig = allTools
         ? deps.mcpConfigJson(sessionId, "127.0.0.1")
-        : copilotMcpConfigJson(codexGuiMcpServers({ sessionId, port: PORT, groups: mcpGroups, allTools }));
+        : copilotMcpConfigJson(codexGuiMcpServers({ sessionId, port: PORT, groups: restrictedTo ?? mcpGroups, allTools }));
 
       // A seed this agent takes as an ARGUMENT cannot carry a newline on Windows, so it may travel in
       // a file with the command line naming it instead (#1518, session-settings.ts).

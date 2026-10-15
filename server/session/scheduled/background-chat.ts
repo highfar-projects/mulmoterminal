@@ -30,9 +30,14 @@ export interface BackgroundChatRequest {
    *  anything the caller sent. A slug naming nothing is therefore harmless — it records nothing. */
   collection: string | null;
   /** The GUI tool groups the session may use (#3033), or null for every GUI tool. `[]` is no GUI
-   *  tool at all. Claude only: the route refuses it for any other agent. */
+   *  tool at all. claude, codex and copilot only: the parser refuses it for any other agent. */
   guiGroups: readonly ToolGroup[] | null;
 }
+
+/** The agents handed their GUI MCP per spawn, so one session can be limited without touching its
+ *  neighbours. agy / grok / cursor / muse read their groups from a file every session in the
+ *  directory shares. */
+const GUI_GROUP_AGENTS: readonly TerminalAgent[] = ["claude", "codex", "copilot"];
 
 /** `guiGroups` as asked for: absent is null (unrestricted), and anything that is not a list of
  *  known groups is a refusal rather than "absent" — falling back would hand out every tool to a
@@ -54,8 +59,8 @@ export function parseBackgroundChat(body: unknown): { ok: true; request: Backgro
   // toggle reads by, so a model naming an agent we don't host gets a session rather
   // than an error about a field it half-guessed.
   const agent = asTerminalAgent(record.agent);
-  if (guiGroups.groups !== null && agent !== "claude")
-    return { ok: false, message: `spawnBackgroundChat: \`guiGroups\` is supported for claude only, not ${agent}.` };
+  if (guiGroups.groups !== null && !GUI_GROUP_AGENTS.includes(agent))
+    return { ok: false, message: `spawnBackgroundChat: \`guiGroups\` is supported for ${GUI_GROUP_AGENTS.join(", ")} only, not ${agent}.` };
   return {
     ok: true,
     request: {
