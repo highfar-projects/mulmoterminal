@@ -2185,7 +2185,7 @@ connection (or reattach to an existing background PTY).
 | ------- | ------- |
 | `{ "type": "session", "id": string }` | Sent immediately on connect — the session id this socket is bound to (lets the client learn a new session's generated id). |
 | `{ "type": "output", "data": string }` | PTY output to write to the terminal. On reattach, the first `output` frame is the replayed tail buffer (≤ 64 KB). |
-| `{ "type": "exit", "exitCode": number, "signal": number }` | The `claude` process exited; the socket then closes. |
+| `{ "type": "exit", "exitCode": number, "signal": number, "lifetimeMs": number, "reattached": boolean, "ended": boolean }` | The pty exited; the socket then closes. `ended` is true only when the SESSION ended (tmux closed with the program) — a tmux client killed from outside, or an exit after an explicit close or restart, sends `false`. Under tmux `exitCode` is the client's and reads `0` even when the program failed. `lifetimeMs` is this pty's, which on a reattach (`reattached: true`) is not the program's. An agent cell closes itself on `ended` unless the program died while starting. The three newer fields are additive; a client treats their absence as "not ended". |
 | `{ "type": "paneMode", "inCopyMode": boolean }` | tmux-backed sessions only: whether the pane is in tmux copy-mode, where keys go to tmux instead of the program. Sent when it changes, and again to a reattached socket. |
 
 **Client → server** (JSON text frames):
@@ -2331,6 +2331,13 @@ Key rules:
   offering to take it over — and the server answers "anywhere" from its own PTY
   table plus tmux, so another browser tab and a second `mulmoterminal` process
   count too.
+- **An agent that ends on its own takes its cell with it.** `/exit`, Ctrl+C or a crash
+  closes the cell as the close button would, so it is in the palette's **Reopen** list
+  and resumes the conversation. Three cases keep the `[session ended]` banner instead:
+  an agent that died while still starting up (a launch failure — under tmux its
+  exit code reads 0, so the banner is the only evidence), a tmux client killed from
+  outside while the agent still runs, and a worktree cell (its close asks whether to
+  keep the worktree).
 - Brand-new sessions are listed **immediately** (before their `.jsonl`
   exists) via the in-memory `knownSessions` registry + a `created` push; an
   unused one disappears when its PTY is reaped.

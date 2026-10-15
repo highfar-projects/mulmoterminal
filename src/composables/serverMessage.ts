@@ -73,6 +73,21 @@ export function messageEffect(type: string | undefined, isCommand: boolean, erro
  *  a missing code would call a broken build a success. */
 export const exitCodeOf = (msg: { exitCode?: unknown }): number | null => (typeof msg.exitCode === "number" ? msg.exitCode : null);
 
+/** What an `exit` frame says about the SESSION rather than the pty: whether the server reaped it,
+ *  and how long the pty lived (null when the frame names none). Missing reads as "not ended", so a
+ *  frame without the field never closes a cell. */
+export const sessionExitOf = (msg: { ended?: unknown; lifetimeMs?: unknown; reattached?: unknown }): SessionExit => ({
+  sessionEnded: msg.ended === true,
+  lifetimeMs: typeof msg.lifetimeMs === "number" && Number.isFinite(msg.lifetimeMs) ? msg.lifetimeMs : null,
+  reattached: msg.reattached === true,
+});
+
+export interface SessionExit {
+  sessionEnded: boolean;
+  lifetimeMs: number | null;
+  reattached: boolean;
+}
+
 /** A `paneMode` frame's copy-mode flag (#2207), or null for any frame that does not carry one. Null
  *  rather than false so a malformed frame leaves the banner as it was instead of taking it down. */
 export const copyModeOf = (msg: Record<string, unknown>): boolean | null =>

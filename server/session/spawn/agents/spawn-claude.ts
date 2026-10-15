@@ -34,7 +34,7 @@ import { ptyExitLine } from "../../pty/pty-exit-log.js";
 import { startAgentPty, type StartedAgentPty } from "../../pty/agent-pty-start.js";
 import { spawnWithFullGuiClaim } from "../spawn-with-full-gui-claim.js";
 import { attachDraftInjection } from "../draft-injection.js";
-import { sendExitAndClose, sendFrame } from "../../ws-frames.js";
+import { sendFrame } from "../../ws-frames.js";
 import { wireBufferedOutput } from "../../pty/output-relay.js";
 import { sessionExistsOnDisk } from "../../session-reads.js";
 import { accountSpawnEnv } from "../../session-home.js";
@@ -47,7 +47,7 @@ import { announceCredential } from "../../credentials/credential-announce.js";
 import { takeSwitchedToken } from "../../credentials/token-switch-pins.js";
 import type { PtyEntry } from "../../types.js";
 import type { SpawnDeps } from "../spawn-deps.js";
-import { handlePtyExit } from "../../pty/pty-exit.js";
+import { isCurrentPty, reportPtyExit } from "../../pty/pty-exit.js";
 import { loadDirConfig } from "../../../config/dir/dir-config.js";
 import { repoRootSync } from "../../../git/repo-root-sync.js";
 import { workdirFooter } from "../../../git/pr-footer.js";
@@ -404,17 +404,18 @@ export function createClaudeSpawner(deps: SpawnDeps) {
     const output = wireBufferedOutput(entry, deps.outputBufferLimit, scanForDraftReady);
 
     entry.term.onExit(({ exitCode, signal }) => {
-      console.log(ptyExitLine({ agent: "claude", exitCode, signal, lifetimeMs: Date.now() - spawnedAtMs, cwd, sessionId }));
+      const lifetimeMs = Date.now() - spawnedAtMs;
+      console.log(ptyExitLine({ agent: "claude", exitCode, signal, lifetimeMs, cwd, sessionId }));
       output.flush(); // a queued batch must not arrive after the exit frame
-      sendExitAndClose(entry.ws, exitCode, signal);
       // Clear the dot if it died mid-turn, then tear down everything (deletes
       // ptys/knownSessions/activity and publishes "closed") so a process that
       // exits on its own — e.g. a brand-new session that never persisted —
       // doesn't linger in the sidebar.
-      deps.setWorking(sessionId, false);
+      // Only for the CURRENT pty: a restart's replacement may already hold this id.
+      if (isCurrentPty(sessionId, entry)) deps.setWorking(sessionId, false);
       // Not always a reap: under tmux this pty is the CLIENT, and one killed from outside leaves
-      // the session running (#1496). handlePtyExit asks tmux which of the two just happened.
-      handlePtyExit(sessionId, deps.reap);
+      // the session running (#1496). reportPtyExit asks tmux which of the two just happened.
+      reportPtyExit(sessionId, entry, { exitCode, signal, lifetimeMs }, deps.reap);
     });
 
     return entry;
