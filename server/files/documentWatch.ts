@@ -127,7 +127,7 @@ export interface DocumentWatchersDeps {
    *
    *  Return the promise if delivery is async, so the poll can wait for it rather than recording
    *  a stamp the subscribers have not been given. */
-  announce: (channelPath: string) => void | Promise<void>;
+  announce: (channelPath: string, isCurrent: () => boolean) => void | Promise<void>;
   sleep: (ms: number) => Promise<void>;
   pollMs?: number;
   maxWatched?: number;
@@ -186,7 +186,9 @@ export function createDocumentWatchers(deps: DocumentWatchersDeps) {
         // Carry on from where the last watcher on this document stopped, rather than starting
         // afresh. `undefined` means never watched; a stored `null` means it was absent then.
         ...(previouslySeen === undefined ? {} : { startFrom: previouslySeen }),
-        onChanged: () => deps.announce(channelPath),
+        // `isCurrent` for an announcement that waits on something of its own: it outlives this
+        // generation's `keepGoing` checks, and a room re-created meanwhile is not its audience.
+        onChanged: () => deps.announce(channelPath, () => alive),
         keepGoing: () => alive,
         sleep: deps.sleep,
         ...(deps.pollMs === undefined ? {} : { pollMs: deps.pollMs }),

@@ -276,7 +276,7 @@ describe("createDocumentWatchers", () => {
     watchers.stop(channel);
     stamp = "after";
     watchers.start(channel);
-    await vi.waitFor(() => expect(announce).toHaveBeenCalledWith("a.md"));
+    await vi.waitFor(() => expect(announce).toHaveBeenCalledWith("a.md", expect.any(Function)));
     watchers.stopAll();
   });
 
@@ -348,7 +348,7 @@ describe("createDocumentWatchers", () => {
     watchers.stop(watched);
     current = "v2";
     watchers.start(watched);
-    await vi.waitFor(() => expect(announce).toHaveBeenCalledWith("watched.md"));
+    await vi.waitFor(() => expect(announce).toHaveBeenCalledWith("watched.md", expect.any(Function)));
     watchers.stopAll();
   });
 
@@ -419,7 +419,7 @@ describe("createDocumentWatchers", () => {
 
     // The view reconnects. It must be told, because nobody ever was.
     watchers.start(channel);
-    await vi.waitFor(() => expect(announce).toHaveBeenCalledWith("a.md"));
+    await vi.waitFor(() => expect(announce).toHaveBeenCalledWith("a.md", expect.any(Function)));
     watchers.stopAll();
   });
 
@@ -462,7 +462,7 @@ describe("createDocumentWatchers", () => {
       },
     });
     watchers.start("plugin:markdown:file:/Users/x/docs/a.md");
-    await vi.waitFor(() => expect(announce).toHaveBeenCalledWith("/Users/x/docs/a.md"));
+    await vi.waitFor(() => expect(announce).toHaveBeenCalledWith("/Users/x/docs/a.md", expect.any(Function)));
     watchers.stopAll();
   });
 });

@@ -79,14 +79,16 @@ export function createMulmoScriptWatch() {
         return file ? containForWatching(deps.roots(), file, os.homedir()) : null;
       },
       stamp: pollStamp,
-      announce: async (channelPath) => {
+      announce: async (channelPath, isCurrent) => {
         const file = onDisk(channelPath);
         if (!file) return;
         const key = canonicalPath(file);
         const observed = polled.get(key) ?? (await fileStamp(key));
         if (isEchoOfOwnWrite(observed, ownWrites.get(key))) return;
         await ownWriteGrace();
-        if (isEchoOfOwnWrite(observed, ownWrites.get(key))) return;
+        // The wait can outlive this watcher: if the channel was dropped and subscribed again, the new
+        // watcher announces the change itself, and this one would make it twice.
+        if (!isCurrent() || isEchoOfOwnWrite(observed, ownWrites.get(key))) return;
         // The channel's own spelling, which is the card's `filePath`: the View compares the two
         // as strings, so any other spelling of the same file would reload nothing.
         deps.publishChanged(channelPath);

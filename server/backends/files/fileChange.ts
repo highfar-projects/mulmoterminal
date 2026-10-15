@@ -114,7 +114,9 @@ export function fileStampSync(absolutePath: string): FileStamp {
   }
 }
 
-const stampOf = ({ mtimeMs, size, ino }: BigIntStats): string => `${mtimeMs}:${size}:${ino}`;
+// Nanoseconds, not milliseconds: an in-place write keeps the inode, so only the time separates two
+// same-size writes, and a millisecond holds more than one of them.
+const stampOf = ({ mtimeNs, size, ino }: BigIntStats): string => `${mtimeNs}:${size}:${ino}`;
 
 export function startDocumentWatchers(deps: { workspace: string; pubsub: SubscriptionSource; sessionCwds: () => Iterable<string> }): () => void {
   const watchers = createDocumentWatchers({

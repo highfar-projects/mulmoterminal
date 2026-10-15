@@ -22,16 +22,18 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 
 /** A wait the test opens and closes by hand, so a write can be put inside it deterministically. */
 function heldGrace() {
-  let release: () => void = () => {};
-  let entered = false;
+  const pending: Array<() => void> = [];
+  let opened = 0;
   return {
     wait: () =>
       new Promise<void>((resolve) => {
-        entered = true;
-        release = resolve;
+        opened += 1;
+        pending.push(resolve);
       }),
-    entered: () => entered,
-    release: () => release(),
+    entered: () => opened > 0,
+    opened: () => opened,
+    /** Close the oldest wait still open. */
+    release: () => pending.shift()?.(),
   };
 }
 
@@ -65,7 +67,8 @@ function setup(ownWriteGrace?: () => Promise<void>) {
     }),
   );
   const subscribe = (channel: string) => listener?.(channel, true);
-  return { workspace, deck, dirs, published, watch, subscribe };
+  const unsubscribe = (channel: string) => listener?.(channel, false);
+  return { workspace, deck, dirs, published, watch, subscribe, unsubscribe };
 }
 
 /** Wait until `done` holds, or give up after a while. */
@@ -152,6 +155,28 @@ describe("watching an open MulmoScript (#3014)", () => {
     grace.release();
     await sleep(QUIET_MS);
     expect(published).toEqual([]);
+  });
+
+  // The wait outlives the watcher that started it. When the channel is dropped and subscribed again
+  // meanwhile, the new watcher announces the change itself; the old one must not add a second.
+  it("announces a change once when the channel is subscribed again during the wait", async () => {
+    const grace = heldGrace();
+    const { deck, published, subscribe, unsubscribe } = setup(grace.wait);
+    const channel = pluginFileChannel(MULMOSCRIPT_SCOPE, "stories/deck.json");
+    subscribe(channel);
+    await sleep(QUIET_MS);
+    fs.writeFileSync(deck, '{"beats":[{"text":"an editor wrote this"}]}');
+    await until(grace.entered);
+    unsubscribe(channel);
+    subscribe(channel);
+    await until(() => grace.opened() === 2);
+    grace.release();
+    await sleep(QUIET_MS);
+    expect(published).toEqual([]);
+    grace.release();
+    await announced(published);
+    await sleep(QUIET_MS);
+    expect(published).toEqual(["stories/deck.json"]);
   });
 
   it("does not watch a file outside the roots it was given", async () => {
