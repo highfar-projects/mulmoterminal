@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { computed, ref, shallowRef, type ShallowRef } from "vue";
+import { computed, ref, shallowRef, type Ref, type ShallowRef } from "vue";
+import { flushPromises } from "@vue/test-utils";
 import { rowElementFor, useFilesReveal, type FilesRevealDeps } from "../../../src/composables/useFilesReveal";
 import type { FilesTree, TreeNode } from "../../../src/composables/useFilesTree";
 
@@ -49,6 +50,8 @@ interface Harness {
   scrolled: string[];
   openPath: FilesRevealDeps["openPath"];
   treeEl: ShallowRef<HTMLElement | null>;
+  /** The tab in front, which the tree follows once the pane is up. */
+  frontPath: Ref<string | null>;
 }
 
 /** A rendered tree, so scrolling is observable. jsdom has no layout and no `scrollIntoView`, so
@@ -69,6 +72,7 @@ function harness(over: Partial<{ startup: Promise<void>; holdDir: Promise<void>;
   const reads: string[] = [];
   const scrolled: string[] = [];
   const openPath = ref<string | null>(null);
+  const frontPath = ref<string | null>(null);
   const treeEl = shallowRef<HTMLElement | null>(rowsHost(["src/deep/buried.ts", "README.md"], scrolled));
   const reveal = useFilesReveal({
     tree: fakeTree(["src", "src/deep"], opened, over.holdDir),
@@ -80,8 +84,9 @@ function harness(over: Partial<{ startup: Promise<void>; holdDir: Promise<void>;
       if (over.opens !== false) openPath.value = pathRel;
     },
     openPath,
+    frontPath: () => frontPath.value,
   });
-  return { reveal, opened, reads, scrolled, openPath, treeEl };
+  return { reveal, opened, reads, scrolled, openPath, treeEl, frontPath };
 }
 
 describe("useFilesReveal", () => {
@@ -252,5 +257,38 @@ describe("rowElementFor", () => {
   // scroll to the other.
   it("does not match a path by prefix", () => {
     expect(rowElementFor(treeWith("src/a.ts"), "src")).toBeUndefined();
+  });
+});
+
+// #2495 / #3058. Following the front tab waits for the remembered pane, and stops when the pane re-roots.
+describe("following the tab in front", () => {
+  const frontTo = async (h: Harness, path: string): Promise<void> => {
+    h.frontPath.value = path;
+    await flushPromises();
+  };
+
+  it("does not follow until the pane is put back, then follows", async () => {
+    const h = harness();
+    await frontTo(h, "README.md");
+    expect(h.scrolled).toEqual([]);
+    h.reveal.followFrontTab();
+    await frontTo(h, "src/deep/buried.ts");
+    expect(h.scrolled).toEqual(["README.md", "src/deep/buried.ts"]);
+  });
+
+  it("brings the front row into view when following starts, without opening a folder", async () => {
+    const h = harness();
+    h.frontPath.value = "src/deep/buried.ts";
+    h.reveal.followFrontTab();
+    expect(h.scrolled).toEqual(["src/deep/buried.ts"]);
+    expect(h.opened).toEqual([]);
+  });
+
+  it("stops following when the pane re-roots", async () => {
+    const h = harness();
+    h.reveal.followFrontTab();
+    h.reveal.reset();
+    await frontTo(h, "README.md");
+    expect(h.scrolled).toEqual([]);
   });
 });

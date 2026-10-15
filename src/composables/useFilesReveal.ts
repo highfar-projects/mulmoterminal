@@ -5,7 +5,7 @@
 // The two halves are here together because the finder has no other purpose: picking in it is a
 // reveal, and the panel closes because the reveal is starting. Splitting them would leave two
 // files whose only content is each other's call.
-import { nextTick, ref, type Ref, type ShallowRef } from "vue";
+import { nextTick, ref, watch, type Ref, type ShallowRef } from "vue";
 import { ancestorDirs } from "../components/filesTreeState";
 import type { FilesTree } from "./useFilesTree";
 
@@ -20,6 +20,8 @@ export interface FilesRevealDeps {
   open: (pathRel: string) => Promise<void>;
   /** What the editor is REALLY showing, which is not always what was asked for. */
   openPath: Ref<string | null>;
+  /** The path of the tab in front, which the tree follows (#2495). */
+  frontPath: () => string | null;
 }
 
 export interface FilesReveal {
@@ -31,6 +33,9 @@ export interface FilesReveal {
   /** Put the tree on a file that is already open — the tab in front changed (#2495). Expands its
    *  folders and scrolls its row into view; opens nothing. */
   showInTree: (pathRel: string) => Promise<void>;
+  /** The remembered pane is back: from now on the tree follows the tab in front, and it is put on
+   *  that tab's row at once — the remembered scroll may have left the row off screen (#3058). */
+  followFrontTab: () => void;
   /** The pane is re-rooting: a reveal in flight must not scroll the new tree to a row from the
    *  project it just left, and the panel must not go on offering the old project's paths. */
   reset: () => void;
@@ -42,6 +47,32 @@ export interface FilesReveal {
  *  pane cannot easily be given a file named `a"b`. */
 export function rowElementFor(treeEl: HTMLElement | null, pathRel: string): HTMLElement | undefined {
   return [...(treeEl?.querySelectorAll<HTMLElement>("[data-path]") ?? [])].find((el) => el.dataset.path === pathRel);
+}
+
+// The tree follows the tab in front, as VS Code's explorer follows the active editor (#2495): its
+// folders open and its row comes into view. A row already on screen — the one just clicked — stays.
+// Not while the remembered pane is being put back: its expanded folders (#2156) are where the reader
+// LEFT the tree. Once it is back, the front row is brought into view only if those folders show it
+// (#3058) — the remembered scroll may have left it off screen, but a folder they closed stays closed.
+function followsFrontTab(
+  frontPath: () => string | null,
+  showInTree: (pathRel: string) => Promise<void>,
+  scrollToRow: (pathRel: string) => void,
+): { start: () => void; stop: () => void } {
+  let following = false;
+  watch(frontPath, (pathRel) => {
+    if (pathRel && following) void showInTree(pathRel);
+  });
+  return {
+    start: () => {
+      following = true;
+      const pathRel = frontPath();
+      if (pathRel) scrollToRow(pathRel);
+    },
+    stop: () => {
+      following = false;
+    },
+  };
 }
 
 export function useFilesReveal(deps: FilesRevealDeps): FilesReveal {
@@ -100,9 +131,12 @@ export function useFilesReveal(deps: FilesRevealDeps): FilesReveal {
     await deps.started();
     if (!current() || !(await expandTo(pathRel, current))) return;
     await nextTick();
-    // `nearest`: a row already on screen — the one just clicked — does not move.
-    if (current()) rowElementFor(deps.treeEl.value, pathRel)?.scrollIntoView({ block: "nearest" });
+    if (current()) scrollToRow(pathRel);
   }
+  // `nearest`: a row already on screen — the one just clicked — does not move.
+  const scrollToRow = (pathRel: string): void => rowElementFor(deps.treeEl.value, pathRel)?.scrollIntoView({ block: "nearest" });
+
+  const front = followsFrontTab(deps.frontPath, showInTree, scrollToRow);
 
   // Picking is "show me this file", not only "open it": the tree is how the user goes on to its
   // neighbours, and a file opened with the tree still collapsed leaves them where they started.
@@ -117,7 +151,9 @@ export function useFilesReveal(deps: FilesRevealDeps): FilesReveal {
     onFinderPick,
     revealPath,
     showInTree,
+    followFrontTab: front.start,
     reset: () => {
+      front.stop();
       revealId += 1;
       showId += 1;
       closeFinder();

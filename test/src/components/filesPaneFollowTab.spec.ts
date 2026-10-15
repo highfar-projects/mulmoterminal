@@ -82,3 +82,21 @@ describe("the Files tree follows the tab in front", () => {
     expect(scrolled).toContain("docs/a.md");
   });
 });
+
+// #3058. A directory with many files hid which one was open: the remembered scroll could leave its row
+// off screen, and its mark was the hover colour.
+describe("the open file in the Files tree", () => {
+  it("brings the open row into view once the pane is put back, when the remembered folders show it", async () => {
+    await mountPane({ tabs: [{ path: "docs/a.md" }], activePath: "docs/a.md", expanded: ["docs"] });
+    expect(scrolled).toContain("docs/a.md");
+  });
+
+  it("marks the open row as current, in the tabs' selected colour, and no other row", async () => {
+    const w = await mountPane({ tabs: [{ path: "docs/a.md" }], activePath: "docs/a.md", expanded: ["docs"] });
+    const current = w.findAll('[data-testid="files-row"][aria-current="true"]');
+    expect(current.map((r) => r.attributes("data-path"))).toEqual(["docs/a.md"]);
+    expect(current[0].classes()).toContain("bg-selected");
+    // `bg-transparent` beside it wins in the stylesheet, which is how the old mark never showed at all.
+    expect(current[0].classes()).not.toContain("bg-transparent");
+  });
+});
