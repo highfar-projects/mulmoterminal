@@ -62,15 +62,6 @@ export function createMulmoScriptWatch() {
       const dirs = deps.dirs();
       return dirs && isScriptPath(filePath) ? scriptFileOnDisk(filePath, undefined, dirs) : null;
     };
-    // The stamp each poll last read, by canonical path. A change is judged by the stamp that made
-    // the poll notice it, never by a fresh read: by the time a fresh read returns, a later write of
-    // the plugin's own may have replaced the outside edit, and the edit would be dropped as an echo.
-    const polled = new Map<string, FileStamp>();
-    const pollStamp = async (absolutePath: string): Promise<FileStamp> => {
-      const stamp = await fileStamp(absolutePath);
-      polled.set(canonicalPath(absolutePath), stamp);
-      return stamp;
-    };
     const watchers = createDocumentWatchers({
       resolve: (channel) => {
         const parsed = parsePluginFileChannel(channel);
@@ -78,12 +69,12 @@ export function createMulmoScriptWatch() {
         const file = onDisk(parsed.path);
         return file ? containForWatching(deps.roots(), file, os.homedir()) : null;
       },
-      stamp: pollStamp,
-      announce: async (channelPath, isCurrent) => {
-        const file = onDisk(channelPath);
-        if (!file) return;
-        const key = canonicalPath(file);
-        const observed = polled.get(key) ?? (await fileStamp(key));
+      stamp: fileStamp,
+      // Judged by the stamp that made this watcher notice, never by a fresh read: by then a later
+      // write of the plugin's own may have replaced the outside edit, which would be dropped as an
+      // echo of it.
+      announce: async (channelPath, { observed, absolutePath, isCurrent }) => {
+        const key = canonicalPath(absolutePath);
         if (isEchoOfOwnWrite(observed, ownWrites.get(key))) return;
         await ownWriteGrace();
         // The wait can outlive this watcher: if the channel was dropped and subscribed again, the new

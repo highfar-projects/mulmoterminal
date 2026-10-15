@@ -126,6 +126,36 @@ describe("pollDocument", () => {
   });
 });
 
+// The stamp a change is announced WITH is the one this loop read when it noticed. A consumer that
+// looked the stamp up later instead would see whatever some other reader saw since (#3014).
+describe("pollDocument hands each change the stamp it saw", () => {
+  async function observedFor(stamps: readonly FileStamp[], startFrom?: FileStamp): Promise<FileStamp[]> {
+    let tick = 0;
+    const observed: FileStamp[] = [];
+    await pollDocument({
+      stamp: async () => stamps[tick] ?? null,
+      onChanged: (stamp) => {
+        observed.push(stamp);
+      },
+      keepGoing: () => tick < stamps.length,
+      sleep: async () => {
+        tick += 1;
+      },
+      ...(startFrom === undefined ? {} : { startFrom }),
+    });
+    return observed;
+  }
+
+  it("passes the stamp that differed, for each change", async () => {
+    expect(await observedFor(["a", "b", "b", "c"])).toEqual(["b", "c"]);
+    expect(await observedFor(["a", null])).toEqual([null]);
+  });
+
+  it("passes the stamp it found on a document that moved while nobody watched", async () => {
+    expect(await observedFor(["b"], "a")).toEqual(["b"]);
+  });
+});
+
 describe("resolveWatchableDocument", () => {
   /** Stands in for the host's containment gate: everything under /ws, nothing else. */
   const contain = (candidate: string): string | null => {
@@ -188,6 +218,26 @@ describe("createDocumentWatchers", () => {
     const watchers = parkedWatchers(resolvable);
     watchers.start("plugin:markdown:file:docs/a.md");
     expect(watchers.watching).toBe(1);
+  });
+
+  it("announces with the stamp this watcher read, and says when the watcher has stopped", async () => {
+    const reads: FileStamp[] = ["a", "b"];
+    const channel = "plugin:markdown:file:docs/a.md";
+    let currentAfterStop: boolean | null = null;
+    const announce = vi.fn((_path: string, change: { observed: FileStamp; absolutePath: string; isCurrent: () => boolean }) => {
+      watchers.stop(channel);
+      currentAfterStop = change.isCurrent();
+    });
+    const watchers = createDocumentWatchers({
+      resolve: resolvable,
+      stamp: async () => reads.shift() ?? "z",
+      announce,
+      sleep: async () => {},
+    });
+    watchers.start(channel);
+    await vi.waitFor(() => expect(announce).toHaveBeenCalled());
+    expect(announce).toHaveBeenCalledWith("docs/a.md", expect.objectContaining({ observed: "b", absolutePath: "/ws/docs/a.md" }));
+    expect(currentAfterStop).toBe(false);
   });
 
   it("watches nothing for a channel that names no watchable document", () => {
@@ -276,7 +326,7 @@ describe("createDocumentWatchers", () => {
     watchers.stop(channel);
     stamp = "after";
     watchers.start(channel);
-    await vi.waitFor(() => expect(announce).toHaveBeenCalledWith("a.md", expect.any(Function)));
+    await vi.waitFor(() => expect(announce).toHaveBeenCalledWith("a.md", expect.objectContaining({ isCurrent: expect.any(Function) })));
     watchers.stopAll();
   });
 
@@ -348,7 +398,7 @@ describe("createDocumentWatchers", () => {
     watchers.stop(watched);
     current = "v2";
     watchers.start(watched);
-    await vi.waitFor(() => expect(announce).toHaveBeenCalledWith("watched.md", expect.any(Function)));
+    await vi.waitFor(() => expect(announce).toHaveBeenCalledWith("watched.md", expect.objectContaining({ isCurrent: expect.any(Function) })));
     watchers.stopAll();
   });
 
@@ -419,7 +469,7 @@ describe("createDocumentWatchers", () => {
 
     // The view reconnects. It must be told, because nobody ever was.
     watchers.start(channel);
-    await vi.waitFor(() => expect(announce).toHaveBeenCalledWith("a.md", expect.any(Function)));
+    await vi.waitFor(() => expect(announce).toHaveBeenCalledWith("a.md", expect.objectContaining({ isCurrent: expect.any(Function) })));
     watchers.stopAll();
   });
 
@@ -462,7 +512,7 @@ describe("createDocumentWatchers", () => {
       },
     });
     watchers.start("plugin:markdown:file:/Users/x/docs/a.md");
-    await vi.waitFor(() => expect(announce).toHaveBeenCalledWith("/Users/x/docs/a.md", expect.any(Function)));
+    await vi.waitFor(() => expect(announce).toHaveBeenCalledWith("/Users/x/docs/a.md", expect.objectContaining({ isCurrent: expect.any(Function) })));
     watchers.stopAll();
   });
 });
