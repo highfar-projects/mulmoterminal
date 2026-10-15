@@ -24,6 +24,8 @@ Scope both names by the home directory, but only when `HOME` is overridden:
   `""` when the two resolve to the same path (or the account home is unknown), otherwise
   `-<8 hex of sha256(resolved homeDir)>`.
 - `accountHomeDir` is `os.userInfo().homedir` — read from the passwd entry, not `$HOME`.
+- Both sides go through `realpathSync.native` first, so a symlinked or case-variant spelling of
+  the account's own home is not an override.
 - tmux server: `mulmoterminal<suffix>`; drops: `mulmoterminal-drops<suffix>`.
 
 The normal case (no override) keeps today's names, so existing sessions reattach with no
@@ -32,6 +34,13 @@ three effects above at once.
 
 ## Not done
 
-- No migration path for someone who already runs with a permanently overridden `HOME`: their
-  sessions live on the old `mulmoterminal` server and will not reattach after this change. The
-  conversations themselves resume from disk.
+- No migration for someone who already runs with a permanently overridden `HOME`. After the
+  upgrade their server uses the scoped names; their old tmux sessions stay on `-L mulmoterminal`
+  and their old drop copies in `mulmoterminal-drops`. A migration cannot be written safely: those
+  legacy names belong to the real-home server, and nothing in a session or a drop directory says
+  which HOME created it, so adopting or pruning them from the scoped server is the reach this
+  change removes. The leftovers end when a real-home server sweeps them, or by hand with
+  `tmux -L mulmoterminal kill-server`. The conversations resume from disk. Say this in the
+  release note.
+- When `os.userInfo()` throws (no passwd entry), the suffix stays empty: today's behaviour, since
+  scoping by HOME there would move every such install off its sessions.

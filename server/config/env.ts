@@ -116,8 +116,19 @@ function accountHomeDir(): string | null {
   }
 }
 
+// `.native` resolves symlinks AND letter case (`/var` → `/private/var`, `/USERS/x` → `/Users/x`), so
+// two spellings of one directory share a scope. A directory that does not exist keeps its spelling.
+function canonicalDir(dir: string): string {
+  try {
+    return fs.realpathSync.native(dir);
+  } catch {
+    return dir;
+  }
+}
+
 // Appended to the names that live outside HOME (the tmux server, the drop directory) — see home-scope.ts.
-export const HOME_SCOPE_SUFFIX = homeScopeSuffix(os.homedir(), accountHomeDir());
+const accountHome = accountHomeDir();
+export const HOME_SCOPE_SUFFIX = homeScopeSuffix(canonicalDir(os.homedir()), accountHome === null ? null : canonicalDir(accountHome));
 
 // A session id is always a UUID (server-generated, or a .jsonl basename). Reject anything
 // else so a client can't smuggle CLI flags (e.g. "--resume" followed by a value that claude
