@@ -18,6 +18,7 @@ import { buildActivitySnapshot, mergeOwnedActivity, parseActivityState, type Per
 import { parseSessionIdLog, sessionIdLogLine } from "./session-id-log.js";
 import { applyCustomAgentSession, customAgentSessionLine, customAgentSessionRecord } from "./spawn/agents/custom-agent-log.js";
 import { isCustomAgentId } from "../../common/customAgents.js";
+import { applyGuiGroupRestriction, guiGroupRestrictionLine, guiGroupRestrictionRecord } from "./spawn/agents/gui-group-restriction-log.js";
 import {
   agentConversationLine,
   agentConversationRecord,
@@ -690,6 +691,44 @@ export function rememberCustomAgentSession(sessionId: string, agentId: string): 
     .then(() => fs.mkdir(MULMOTERMINAL_HOME, { recursive: true }))
     .then(() => fs.appendFile(CUSTOM_AGENT_SESSIONS_FILE, customAgentSessionLine({ sessionId, agentId })))
     .catch((e) => console.error(`[custom-agent-sessions] failed to persist: ${messageOf(e)}`));
+}
+
+// The GUI tool groups a spawnBackgroundChat session was limited to (#3033). Persisted and never
+// dropped at reap, for custom-agent-sessions' reason: a resume must come back as restricted as the
+// spawn was, and the reconnect that resumes it carries nothing that says so.
+const guiGroupRestrictions = new Map<string, readonly ToolGroup[]>();
+const GUI_GROUP_RESTRICTIONS_FILE = path.join(MULMOTERMINAL_HOME, "gui-group-restrictions.jsonl");
+// Ids this process has already written — the same startup race customAgentWrittenIds guards.
+const guiGroupRestrictionWrittenIds = new Set<string>();
+
+export const guiGroupRestrictionsHydrated: Promise<void> = (async () => {
+  try {
+    await forEachJsonlRecord(GUI_GROUP_RESTRICTIONS_FILE, (parsed) => {
+      const record = guiGroupRestrictionRecord(parsed, isValidSessionId);
+      if (record && !guiGroupRestrictionWrittenIds.has(record.sessionId)) applyGuiGroupRestriction(guiGroupRestrictions, record);
+    });
+  } catch {
+    // absent on first run / unreadable => no session was ever restricted
+  }
+})();
+
+let guiGroupRestrictionPersist: Promise<void> = Promise.resolve();
+trackPersistQueue(() => guiGroupRestrictionPersist);
+
+/** Limit a session to these GUI tool groups, and persist it. */
+export function rememberGuiGroupRestriction(sessionId: string, groups: readonly ToolGroup[]): void {
+  if (!isValidSessionId(sessionId)) return;
+  guiGroupRestrictionWrittenIds.add(sessionId);
+  applyGuiGroupRestriction(guiGroupRestrictions, { sessionId, groups });
+  guiGroupRestrictionPersist = guiGroupRestrictionPersist
+    .then(() => fs.mkdir(MULMOTERMINAL_HOME, { recursive: true }))
+    .then(() => fs.appendFile(GUI_GROUP_RESTRICTIONS_FILE, guiGroupRestrictionLine({ sessionId, groups })))
+    .catch((e) => console.error(`[gui-group-restrictions] failed to persist: ${messageOf(e)}`));
+}
+
+/** The groups a session is limited to, or null when it was never restricted. */
+export function guiGroupRestriction(sessionId: string): readonly ToolGroup[] | null {
+  return guiGroupRestrictions.get(sessionId) ?? null;
 }
 
 // The one-line note the user wrote on a session (#1084). Their own words about what a cell is

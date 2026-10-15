@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 
-import { mcpConfigJson, guiMcpEnv, codexGuiMcpServers } from "../../../../../server/session/spawn/setup/mcp-config.js";
+import { mcpConfigJson, guiMcpEnv, codexGuiMcpServers, restrictedAllowedTools } from "../../../../../server/session/spawn/setup/mcp-config.js";
 import { guiMcpUrlTemplate } from "../../../../../server/infra/process/gui-mcp-registration.js";
 import { TOOL_GROUPS, toolsInGroup, toolGroupServerId, AUTO_ALLOWED_TOOLS, type ToolGroup } from "../../../../../common/toolGroups.js";
 
@@ -140,5 +140,40 @@ describe("codexGuiMcpServers auto-approval", () => {
   // wired; narrowing it here would start prompting in a setup that works today.
   it("leaves the single view approved", () => {
     expect(codexGuiMcpServers({ sessionId: SESSION, port: 34567, groups: [], allTools: true })[0].autoApprove).toBe(true);
+  });
+});
+
+// What a session limited to some groups pre-approves (#3033): its own groups' share of the grid's
+// blind list, so nothing outside the limit stands approved under a name the session could load.
+describe("restrictedAllowedTools", () => {
+  const grid = TOOL_GROUPS.flatMap((group) => toolsInGroup(group).map((tool) => `mcp__${toolGroupServerId(group)}__${tool}`)).join(",");
+  const groupsOf = (list: string): string[] => [
+    ...new Set(
+      list
+        .split(",")
+        .filter(Boolean)
+        .map((name) => name.split("__")[1]),
+    ),
+  ];
+
+  it("keeps exactly the listed groups' tools", () => {
+    for (const group of TOOL_GROUPS) {
+      const kept = restrictedAllowedTools(grid, [group]);
+      expect(groupsOf(kept)).toEqual(toolsInGroup(group).length > 0 ? [toolGroupServerId(group)] : []);
+    }
+  });
+
+  it("keeps nothing for an empty list, and everything for every group", () => {
+    expect(restrictedAllowedTools(grid, [])).toBe("");
+    expect(restrictedAllowedTools(grid, TOOL_GROUPS)).toBe(grid);
+  });
+
+  // A server id that merely STARTS like a group's must not ride along on its prefix.
+  it("matches the whole server id, not a prefix of it", () => {
+    expect(restrictedAllowedTools("mcp__mulmoterminal-render-extra__x,mcp__mulmoterminal-render__y", ["render"])).toBe("mcp__mulmoterminal-render__y");
+  });
+
+  it("answers empty for an empty list", () => {
+    expect(restrictedAllowedTools("", ["render"])).toBe("");
   });
 });

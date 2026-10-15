@@ -1,7 +1,12 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 
-import { narrowedTools, type ToolSummary } from "../../../server/routes/tool-routes.js";
+import express from "express";
+import { narrowedTools, mountToolRoutes, type ToolSummary } from "../../../server/routes/tool-routes.js";
+import { createToolStores } from "../../../server/session/tool-store.js";
+import { routeCall } from "../../helpers/routeCall";
+import { makeTempDir } from "../../support/tempDir";
+import type { ToolGroup } from "../../../common/toolGroups.js";
 
 const TOOLS: ToolSummary[] = [
   { toolName: "presentDocument", title: "presentDocument" },
@@ -63,5 +68,68 @@ describe("narrowedTools", () => {
   it("does not mutate the list it was given", () => {
     narrowedTools(TOOLS, ["render"], true);
     expect(TOOLS).toHaveLength(5);
+  });
+});
+
+// A session a spawnBackgroundChat caller limited (#3033) has exactly its restriction's groups,
+// whatever else is true of it — the MCP routes serve that and nothing more, so the pane must not
+// list more. Checked against every combination of the other three inputs.
+describe("a session limited to some tool groups", () => {
+  const learned: ToolGroup[][] = [[], ["render", "data"]];
+  const combos = [false, true].flatMap((isGrid) => [false, true].flatMap((hasAll) => learned.map((groups) => ({ isGrid, hasAll, groups }))));
+
+  it("lists only its groups' tools, never an ungrouped one", () => {
+    for (const { isGrid, hasAll, groups } of combos) {
+      const listed = names(narrowedTools(TOOLS, groups, isGrid, hasAll, ["render"]));
+      expect(listed, JSON.stringify({ isGrid, hasAll, groups })).toEqual(["presentDocument", "presentHtml"]);
+    }
+  });
+
+  it("lists nothing when limited to no group", () => {
+    for (const { isGrid, hasAll, groups } of combos) {
+      expect(narrowedTools(TOOLS, groups, isGrid, hasAll, [])).toEqual([]);
+    }
+  });
+
+  it("changes nothing for a session that was never limited", () => {
+    for (const { isGrid, hasAll, groups } of combos) {
+      expect(narrowedTools(TOOLS, groups, isGrid, hasAll, null)).toEqual(narrowedTools(TOOLS, groups, isGrid, hasAll));
+    }
+  });
+});
+
+// The route has to hand the restriction to narrowedTools — a pure function told nothing narrows
+// nothing, and every check above stays green while the pane lists every tool.
+describe("GET /api/tools for a limited session", () => {
+  const LIMITED = "11111111-2222-4333-8444-555555555555";
+  const app = express();
+  mountToolRoutes(app, {
+    stores: createToolStores({ publish: () => {}, root: makeTempDir("mt-narrowed-tools-") }),
+    toolSummaries: TOOLS,
+    sessionToolGroups: () => [],
+    sessionToolGroupsHydrated: Promise.resolve(),
+    hasAllGuiTools: () => false,
+    allToolsSessionsHydrated: Promise.resolve(),
+    guiGroupRestriction: (id) => (id === LIMITED ? ["render"] : null),
+    guiGroupRestrictionsHydrated: Promise.resolve(),
+    isGridSession: () => false,
+    devTerminalSessionsHydrated: Promise.resolve(),
+    guiOnlyHistory: () => false,
+    publish: () => {},
+    sessionChannel: (id) => id,
+    questionPaneEnabled: () => false,
+  });
+  const call = routeCall(app);
+  const listed = async (id: string): Promise<unknown> => {
+    const { tools } = (await call(`/api/tools?sessionId=${id}`)).body;
+    return Array.isArray(tools) ? tools.map((tool: unknown) => (typeof tool === "object" && tool !== null && "toolName" in tool ? tool.toolName : null)) : null;
+  };
+
+  it("lists only the restriction's tools", async () => {
+    expect(await listed(LIMITED)).toEqual(["presentDocument", "presentHtml"]);
+  });
+
+  it("lists every tool for a chat session that was never limited", async () => {
+    expect(await listed("11111111-2222-4333-8444-666666666666")).toEqual(names(TOOLS));
   });
 });
