@@ -2,7 +2,8 @@
 title: MulmoTerminal compared with Claude Squad
 nav_title: Compared with Claude Squad
 layout: default
-parent: Answers
+parent: Answers in English
+grand_parent: Answers
 nav_order: 11
 description: Both bundle tmux and git worktrees. Claude Squad is a TUI that keeps everything inside the terminal; MulmoTerminal puts it in a browser. Which fits depends on whether you want to leave the terminal at all.
 ---
@@ -53,7 +54,7 @@ Two or three sessions run fine on tmux alone. See [compared with tmux](tmux-diff
 
 ## Related
 
-- [Open-source alternatives](../guide/en/alternatives.html) — Vibe Kanban, Nimbalyst, Conductor too
+- [Open-source alternatives](../../guide/en/alternatives.html) — Vibe Kanban, Nimbalyst, Conductor too
 - [Knowing which session is waiting for you](which-is-waiting.html)
 
 ---

@@ -2,7 +2,8 @@
 title: 7つのうちどの coding agent を選べばいいのか
 nav_title: どのエージェントを選ぶか
 layout: default
-parent: 疑問に答える
+parent: 日本語の答え
+grand_parent: 疑問に答える
 nav_order: 21
 description: Claude Code・Codex・Antigravity・Grok・Muse・GitHub Copilot・Cursor を同じ枠組みで動かすと、できることの差が並びます。状態を知らせるか、承認を飛ばせるか、skills をそのまま読むか。選ぶときに効く順に並べました。
 ---
@@ -50,7 +51,7 @@ Codex は写され、Antigravity は別のファイルが要ります。
 ## 関連
 
 - [どのセッションが自分待ちか知るには](which-is-waiting.html)
-- [どの coding agent を使うか（詳細）](../guide/ja/agents.html)
+- [どの coding agent を使うか（詳細）](../../guide/ja/agents.html)
 - [対応表の原文](https://github.com/receptron/mulmoterminal/blob/main/docs/agent-capability-matrix.md)
 
 ---

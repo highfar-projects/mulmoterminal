@@ -2,7 +2,8 @@
 title: MulmoTerminal compared with cmux
 nav_title: Compared with cmux
 layout: default
-parent: Answers
+parent: Answers in English
+grand_parent: Answers
 nav_order: 12
 description: cmux is a native macOS terminal with vertical tabs and agent notifications. MulmoTerminal runs in a browser and does not care about the OS. Staying on a Mac favours the native app; Windows, Linux or a phone favours the browser.
 ---
@@ -50,8 +51,8 @@ Two or three sessions run fine on tmux alone.
 
 ## Related
 
-- [Open-source alternatives](../guide/en/alternatives.html)
-- [Using it from a phone](../guide/en/phone.html)
+- [Open-source alternatives](../../guide/en/alternatives.html)
+- [Using it from a phone](../../guide/en/phone.html)
 
 ---
 

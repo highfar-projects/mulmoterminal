@@ -2,7 +2,8 @@
 title: tmux で並列にするのと何が違うのか
 nav_title: tmux との違い
 layout: default
-parent: 疑問に答える
+parent: 日本語の答え
+grand_parent: 疑問に答える
 nav_order: 10
 description: tmux はペイン・永続化・レイアウトを既に解決しています。解決していないのは、どのエージェントが人を待っているかの見分けと、worktree との結びつけです。差が出るのは数が増えてからです。
 ---
@@ -58,7 +59,7 @@ npx mulmoterminal@latest
 
 ## 関連
 
-- [git worktree で作業を隔離する](../guide/ja/worktree.html)
+- [git worktree で作業を隔離する](../../guide/ja/worktree.html)
 - [どのセッションが自分待ちか知るには](which-is-waiting.html)
 
 ---

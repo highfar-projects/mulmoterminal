@@ -2,7 +2,8 @@
 title: What a browser grid adds over plain tmux
 nav_title: Compared with tmux
 layout: default
-parent: Answers
+parent: Answers in English
+grand_parent: Answers
 nav_order: 10
 description: tmux already solves panes, persistence and layout, and MulmoTerminal keeps using it underneath. What tmux does not solve is which pane is blocked on you, which pane maps to which worktree, and the screen running out past a handful of panes.
 ---
@@ -58,7 +59,7 @@ telling-apart is added.**
 
 ## Related
 
-- [Isolating work with git worktrees](../guide/en/worktree.html)
+- [Isolating work with git worktrees](../../guide/en/worktree.html)
 - [Knowing which session is waiting for you](which-is-waiting.html)
 
 ---

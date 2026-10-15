@@ -2,7 +2,8 @@
 title: Which of the seven coding agents to run
 nav_title: Which agent to use
 layout: default
-parent: Answers
+parent: Answers in English
+grand_parent: Answers
 nav_order: 21
 description: Claude Code, Codex, Antigravity, Grok, Muse, GitHub Copilot and Cursor hosted through one mechanism, so their differences line up — whether they report state, whether approvals can be waived, and whether they read .claude/skills as-is.
 ---
@@ -50,7 +51,7 @@ grid.
 ## Related
 
 - [Knowing which session is waiting for you](which-is-waiting.html)
-- [Which coding agent to use](../guide/en/agents.html)
+- [Which coding agent to use](../../guide/en/agents.html)
 - [The capability matrix](https://github.com/receptron/mulmoterminal/blob/main/docs/agent-capability-matrix.md)
 
 ---

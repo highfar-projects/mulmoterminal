@@ -2,7 +2,8 @@
 title: Using several Claude subscriptions without wasting them
 nav_title: Several Claude subscriptions
 layout: default
-parent: Answers
+parent: Answers in English
+grand_parent: Answers
 nav_order: 22
 description: Unused allowance on a Claude subscription disappears at the reset, and reset times do not line up across subscriptions. Switching by hand leaves some exhausted and others expiring half full. The number that decides which to use is the remainder divided by the time left.
 ---
@@ -54,8 +55,8 @@ limit is moved to another one with the conversation intact.
 npx mulmoterminal@latest
 ```
 
-Setup is in [rotating between subscriptions](../guide/en/token-rotation.html); assigning one to a
-specific cell is in [running several subscriptions side by side](../guide/en/accounts.html).
+Setup is in [rotating between subscriptions](../../guide/en/token-rotation.html); assigning one to a
+specific cell is in [running several subscriptions side by side](../../guide/en/accounts.html).
 
 ## For Codex
 
@@ -64,8 +65,8 @@ which cell uses which. See [using several Codex subscriptions](codex-multiple-ac
 
 ## Related
 
-- [Rotating between subscriptions](../guide/en/token-rotation.html)
-- [Running several subscriptions side by side](../guide/en/accounts.html)
+- [Rotating between subscriptions](../../guide/en/token-rotation.html)
+- [Running several subscriptions side by side](../../guide/en/accounts.html)
 
 ---
 

@@ -2,7 +2,8 @@
 title: Claude Squad と何が違うのか
 nav_title: Claude Squad との違い
 layout: default
-parent: 疑問に答える
+parent: 日本語の答え
+grand_parent: 疑問に答える
 nav_order: 11
 description: Claude Squad は端末の中で完結する TUI で、tmux と git worktree を束ねます。MulmoTerminal はブラウザに出します。端末から出たくないなら Claude Squad、スマホや別の端末から見たいならブラウザのほうが向きます。
 ---
@@ -53,7 +54,7 @@ MulmoTerminal は、**終わったことと人を待っていることを分け�
 
 ## 関連
 
-- [他の選択肢との比較](../guide/ja/alternatives.html)（Vibe Kanban・Nimbalyst・Conductor も）
+- [他の選択肢との比較](../../guide/ja/alternatives.html)（Vibe Kanban・Nimbalyst・Conductor も）
 - [どのセッションが自分待ちか知るには](which-is-waiting.html)
 
 ---

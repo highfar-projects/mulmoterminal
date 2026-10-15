@@ -2,7 +2,8 @@
 title: cmux と何が違うのか
 nav_title: cmux との違い
 layout: default
-parent: 疑問に答える
+parent: 日本語の答え
+grand_parent: 疑問に答える
 nav_order: 12
 description: cmux は macOS 専用の端末アプリで、縦タブと通知を持ちます。MulmoTerminal はブラウザなので OS を選びません。Mac だけで完結するなら cmux、Windows や Linux や スマホから触るならブラウザのほうが向きます。
 ---
@@ -50,8 +51,8 @@ MulmoTerminal は枠ごとに git の worktree を切ります。同じリポジ
 
 ## 関連
 
-- [他の選択肢との比較](../guide/ja/alternatives.html)
-- [スマホから使う](../guide/ja/phone.html)
+- [他の選択肢との比較](../../guide/ja/alternatives.html)
+- [スマホから使う](../../guide/ja/phone.html)
 
 ---
 

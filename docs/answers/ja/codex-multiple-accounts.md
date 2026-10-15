@@ -2,7 +2,8 @@
 title: Codex の契約を複数使い分けるには
 nav_title: Codex の契約を複数
 layout: default
-parent: 疑問に答える
+parent: 日本語の答え
+grand_parent: 疑問に答える
 nav_order: 23
 description: Codex の契約を複数持っているとき、セルごとに使い分けられます。CODEX_HOME を分けた専用のディレクトリを登録して、起動フォームで選ぶ形です。Claude と違って自動の振り分けは無いので、どのセルをどの契約で動かすかは自分で決めます。
 ---
@@ -73,13 +74,13 @@ Codex のアカウントでは、**使用枠を出すための追加の手順は
 | 使用枠を出す準備 | 手順が要る | 要らない |
 
 **自動の振り分けは Claude だけです。** 残りを時間で割って選ぶ仕組みは、
-[トークンのローテーション](../guide/ja/token-rotation.html)に書きましたが、Codex は対象外です。
+[トークンのローテーション](../../guide/ja/token-rotation.html)に書きましたが、Codex は対象外です。
 
 Codex では、どのセルをどの契約で動かすかを自分で決めることになります。
 
 ## 関連
 
-- [Claude Code / Codex の契約を複数並べて使う](../guide/ja/accounts.html)
+- [Claude Code / Codex の契約を複数並べて使う](../../guide/ja/accounts.html)
 - [Claude の契約を複数持っているとき、どう使い分けるか](multiple-accounts.html)
 - [Codex を並列で動かすには](codex-parallel.html)
 

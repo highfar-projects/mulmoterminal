@@ -2,7 +2,8 @@
 title: Using several Codex subscriptions
 nav_title: Several Codex subscriptions
 layout: default
-parent: Answers
+parent: Answers in English
+grand_parent: Answers
 nav_order: 23
 description: Codex subscriptions sit side by side by giving each its own CODEX_HOME directory and registering it as an account. Unlike Claude, there is no automatic selection — which cell uses which subscription is yours to decide.
 ---
@@ -72,11 +73,11 @@ An account that has never run a session shows nothing in the tool bar. One run f
 | Setup for the usage gauge | a step is needed | none |
 
 **Automatic selection is Claude-only.** The remainder-over-time rule described in
-[rotating between subscriptions](../guide/en/token-rotation.html) does not cover Codex.
+[rotating between subscriptions](../../guide/en/token-rotation.html) does not cover Codex.
 
 ## Related
 
-- [Running several subscriptions side by side](../guide/en/accounts.html)
+- [Running several subscriptions side by side](../../guide/en/accounts.html)
 - [Using several Claude subscriptions](multiple-accounts.html)
 - [Running Codex sessions in parallel](codex-parallel.html)
 

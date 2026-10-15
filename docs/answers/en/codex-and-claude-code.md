@@ -2,7 +2,8 @@
 title: Running Codex and Claude Code side by side
 nav_title: Codex and Claude Code together
 layout: default
-parent: Answers
+parent: Answers in English
+grand_parent: Answers
 nav_order: 20
 description: Putting both in the same grid surfaces the differences one at a time — who owns the session id, whether approvals can be waived, what ends up in the record. Having both open also makes it cheap to send one task to each and compare.
 ---
@@ -51,12 +52,12 @@ separate, so both touching the same file breaks nothing.
 ## Separate subscriptions
 
 Claude Code subscriptions can be assigned per cell. See
-[rotating between subscriptions](../guide/en/token-rotation.html); the Codex equivalent is in
+[rotating between subscriptions](../../guide/en/token-rotation.html); the Codex equivalent is in
 [using several Codex subscriptions](codex-multiple-accounts.html).
 
 ## Related
 
-- [Which coding agent to use](../guide/en/agents.html)
+- [Which coding agent to use](../../guide/en/agents.html)
 - [Running Codex sessions in parallel](codex-parallel.html)
 
 ---

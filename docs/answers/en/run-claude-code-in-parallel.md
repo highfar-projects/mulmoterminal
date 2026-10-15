@@ -2,7 +2,8 @@
 title: How to run several Claude Code sessions at once
 nav_title: Running Claude Code in parallel
 layout: default
-parent: Answers
+parent: Answers in English
+grand_parent: Answers
 nav_order: 1
 description: Three ways to run several Claude Code sessions side by side — separate terminal windows, tmux panes, or a browser grid. What each one buys you, what it costs, and the point where the simplest option stops being enough.
 ---
@@ -71,9 +72,9 @@ becomes the thing costing you time.
 
 ## Related
 
-- [Isolating work with git worktrees](../guide/en/worktree.html)
+- [Isolating work with git worktrees](../../guide/en/worktree.html)
 - [Knowing which session is waiting for you](which-is-waiting.html)
-- [Open-source alternatives](../guide/en/alternatives.html)
+- [Open-source alternatives](../../guide/en/alternatives.html)
 
 ---
 

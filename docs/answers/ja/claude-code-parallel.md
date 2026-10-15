@@ -2,7 +2,8 @@
 title: Claude Code を複数同時に動かすには
 nav_title: Claude Code を複数同時に
 layout: default
-parent: 疑問に答える
+parent: 日本語の答え
+grand_parent: 疑問に答える
 nav_order: 1
 description: Claude Code を複数同時に動かす方法は3つあります。ターミナルを分ける、tmux で分ける、ブラウザのグリッドに並べる。それぞれ何が楽になって何が面倒になるかを、作っている側から書きます。
 ---
@@ -70,9 +71,9 @@ npx mulmoterminal@latest
 
 ## 関連
 
-- [git worktree で作業を隔離する](../guide/ja/worktree.html)
+- [git worktree で作業を隔離する](../../guide/ja/worktree.html)
 - [どのセッションが自分待ちか知るには](which-is-waiting.html)
-- [他の選択肢との比較](../guide/ja/alternatives.html)
+- [他の選択肢との比較](../../guide/ja/alternatives.html)
 
 ---
 

@@ -2,7 +2,8 @@
 title: How to run Codex sessions in parallel
 nav_title: Running Codex in parallel
 layout: default
-parent: Answers
+parent: Answers in English
+grand_parent: Answers
 nav_order: 2
 description: Running several Codex CLI sessions at once means one of them is always stopped at an approval prompt — Codex has no flag for skipping approvals the way Claude Code does. The fix is not avoiding the stop; it is being told about it.
 ---
@@ -70,7 +71,7 @@ trust dialog and lost.
 
 - [Running Codex and Claude Code together](codex-and-claude-code.html)
 - [Knowing which session is waiting for you](which-is-waiting.html)
-- [Which coding agent to use](../guide/en/agents.html)
+- [Which coding agent to use](../../guide/en/agents.html)
 
 ---
 

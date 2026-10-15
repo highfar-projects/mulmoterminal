@@ -2,7 +2,8 @@
 title: Codex と Claude Code を一緒に動かすには
 nav_title: Codex と Claude Code を一緒に
 layout: default
-parent: 疑問に答える
+parent: 日本語の答え
+grand_parent: 疑問に答える
 nav_order: 20
 description: 同じ画面に Codex と Claude Code を並べると、作法の違いが順番に出てきます。セッションの番号を誰が決めるか、承認を飛ばせるか、何を記録に残すか。同じ仕事を両方に投げて比べる使い方もできます。
 ---
@@ -50,11 +51,11 @@ Codex は止まって聞いてきます。並列には不便ですが、**勝手
 ## 契約の使い分け
 
 Claude Code の契約を複数持っている場合は、枠ごとに別の契約を割り当てられます。
-[複数の契約を使い分ける](../guide/ja/token-rotation.html)に書きました。
+[複数の契約を使い分ける](../../guide/ja/token-rotation.html)に書きました。
 
 ## 関連
 
-- [どの coding agent を使うか](../guide/ja/agents.html)
+- [どの coding agent を使うか](../../guide/ja/agents.html)
 - [Codex を並列で動かすには](codex-parallel.html)
 
 ---

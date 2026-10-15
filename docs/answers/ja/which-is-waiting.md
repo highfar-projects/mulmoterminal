@@ -2,7 +2,8 @@
 title: どのセッションが自分待ちか知るには
 nav_title: どれが自分待ちか
 layout: default
-parent: 疑問に答える
+parent: 日本語の答え
+grand_parent: 疑問に答える
 nav_order: 3
 description: 複数のエージェントを並べると、終わったものと人を待っているものの区別がつかなくなります。終わったことを知らせる CLI は多いのですが、止まっていることまで知らせるものは、7つ中2つしかありません。
 ---
@@ -69,9 +70,9 @@ MulmoTerminal は枠の色で出します。枠ごとに git の worktree が切
 
 ## 関連
 
-- [エージェントが呼んだらスマホに通知する](../guide/ja/notifications.html)
+- [エージェントが呼んだらスマホに通知する](../../guide/ja/notifications.html)
 - [Codex を並列で動かすには](codex-parallel.html)
-- [どの coding agent を使うか](../guide/ja/agents.html)
+- [どの coding agent を使うか](../../guide/ja/agents.html)
 
 ---
 

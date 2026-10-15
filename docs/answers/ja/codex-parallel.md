@@ -2,7 +2,8 @@
 title: Codex を並列で動かすには
 nav_title: Codex を並列で
 layout: default
-parent: 疑問に答える
+parent: 日本語の答え
+grand_parent: 疑問に答える
 nav_order: 2
 description: Codex CLI を複数同時に動かすと、承認待ちで止まります。Claude Code と違って承認を飛ばす起動方法が無いためです。止まるのを避けるのではなく、止まったことに気づく方法を用意するのが筋です。
 ---
@@ -66,7 +67,7 @@ Windows ではフックを登録しません。コマンドがシェルの展開
 
 - [Codex と Claude Code を一緒に動かすには](codex-and-claude-code.html)
 - [どのセッションが自分待ちか知るには](which-is-waiting.html)
-- [どの coding agent を使うか](../guide/ja/agents.html)
+- [どの coding agent を使うか](../../guide/ja/agents.html)
 
 ---
 

@@ -2,7 +2,8 @@
 title: How to tell which agent session is waiting for you
 nav_title: Which session is waiting
 layout: default
-parent: Answers
+parent: Answers in English
+grand_parent: Answers
 nav_order: 3
 description: Plenty of coding-agent CLIs can tell you a turn finished. Far fewer can tell you they are blocked on your input — two of the seven hosted here. Two more emit something that looks like it and fires on every tool call.
 ---
@@ -70,9 +71,9 @@ does not collide.
 
 ## Related
 
-- [Push notifications to your phone](../guide/en/notifications.html)
+- [Push notifications to your phone](../../guide/en/notifications.html)
 - [Running Codex sessions in parallel](codex-parallel.html)
-- [Which coding agent to use](../guide/en/agents.html)
+- [Which coding agent to use](../../guide/en/agents.html)
 
 ---
 

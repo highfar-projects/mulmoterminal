@@ -2,7 +2,8 @@
 title: Claude の契約を複数持っているとき、どう使い分けるか
 nav_title: 複数の契約を使い分ける
 layout: default
-parent: 疑問に答える
+parent: 日本語の答え
+grand_parent: 疑問に答える
 nav_order: 22
 description: Claude Code の週の枠は、使わずに残った分がリセットで消えます。契約ごとにリセットの時刻がずれているので、手で切り替えると余らせる契約と使い切る契約が出ます。残りとリセットまでの時間から自動で選ぶ方法を書きます。
 ---
@@ -53,8 +54,8 @@ Claude の有料プランには、5時間ごとにリセットされる枠と、
 npx mulmoterminal@latest
 ```
 
-設定の手順は[複数の契約を自動で使い分ける](../guide/ja/token-rotation.html)に、
-セルごとに契約を指定する方法は[契約を複数並べて使う](../guide/ja/accounts.html)にあります。
+設定の手順は[複数の契約を自動で使い分ける](../../guide/ja/token-rotation.html)に、
+セルごとに契約を指定する方法は[契約を複数並べて使う](../../guide/ja/accounts.html)にあります。
 
 ## Codex の場合
 
@@ -64,8 +65,8 @@ npx mulmoterminal@latest
 
 ## 関連
 
-- [複数の Claude の契約を自動で使い分ける](../guide/ja/token-rotation.html)
-- [Claude Code / Codex の契約を複数並べて使う](../guide/ja/accounts.html)
+- [複数の Claude の契約を自動で使い分ける](../../guide/ja/token-rotation.html)
+- [Claude Code / Codex の契約を複数並べて使う](../../guide/ja/accounts.html)
 - [Codex の契約を複数使い分けるには](codex-multiple-accounts.html)
 
 ---
