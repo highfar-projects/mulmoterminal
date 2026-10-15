@@ -43,6 +43,7 @@ import accountingCss from "@mulmoclaude/accounting-plugin/style.css?inline";
 // utilities their components use.
 import mulmochatPluginCss from "./plugin-tailwind.css?inline";
 import { fetchWithTimeout } from "./utils/fetchWithTimeout";
+import { MULMOSCRIPT_SCOPE } from "../common/fileChannel";
 
 // Movie/PDF bytes for the mulmoscript View's download / clip-play UI. A plain
 // <video src> can't ride the dispatch envelope, so the package asks the host for
@@ -215,7 +216,7 @@ const PACKAGES: Record<string, Registration> = {
     // presentMulmoScript, where server/backends/plugins/mulmoscript.ts routes by kind.
     // The host adapter supplies authenticated-media fetch (movie/PDF bytes).
     viewComponent: wrapWithPluginRuntime(
-      "mulmoScript",
+      MULMOSCRIPT_SCOPE,
       mulmoScriptPlugin.toolDefinition.name,
       withMulmoScriptHostAdapter(viewOf("@mulmoclaude/mulmoscript-plugin", mulmoScriptPlugin.viewComponent)),
     ),

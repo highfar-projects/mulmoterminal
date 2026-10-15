@@ -151,6 +151,20 @@ describe("fileStamp", () => {
     expect(after).not.toBe(before);
   });
 
+  // An in-place write keeps the inode, so the time has to tell two writes apart; at millisecond
+  // resolution two same-size writes inside one millisecond were the same stamp.
+  it("changes when a same-size in-place write lands inside the same millisecond", async () => {
+    const target = path.join(dir, "doc.md");
+    writeFileSync(target, "AAAA");
+    utimesSync(target, 1_700_000_000.0001, 1_700_000_000.0001);
+    const before = await fileStamp(target);
+
+    writeFileSync(target, "BBBB");
+    utimesSync(target, 1_700_000_000.0002, 1_700_000_000.0002);
+
+    expect(await fileStamp(target)).not.toBe(before);
+  });
+
   it("is stable while the file is untouched", async () => {
     const target = path.join(dir, "doc.md");
     writeFileSync(target, "AAAA");

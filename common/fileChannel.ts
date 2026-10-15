@@ -14,6 +14,10 @@ const PATH_MARKER = ":file:";
 /** The scope the markdown plugin's View and the server's markdown matcher agree on. */
 export const MARKDOWN_FILE_SCOPE = "markdown";
 
+/** The mulmoScript plugin's scope: its View's runtime channels (`plugin:mulmoScript:<event>`), and
+ *  the one-file channel the Files pane subscribes to so the server watches an open story (#3014). */
+export const MULMOSCRIPT_SCOPE = "mulmoScript";
+
 /** The channel one file is announced on, under one plugin scope. */
 export function pluginFileChannel(scope: string, posixPath: string): string {
   return `${CHANNEL_PREFIX}${scope}${PATH_MARKER}${posixPath}`;
