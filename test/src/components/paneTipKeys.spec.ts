@@ -18,6 +18,7 @@ import CollectionChatPaneSource from "../../../src/components/CollectionChatPane
 import FilesViewModeButtonsSource from "../../../src/components/FilesViewModeButtons.vue?raw";
 import CheckCardSource from "../../../src/components/CheckCard.vue?raw";
 import FilesCanvasButtonSource from "../../../src/components/FilesCanvasButton.vue?raw";
+import FilesEditorActionsSource from "../../../src/components/FilesEditorActions.vue?raw";
 
 // The surface this section covers. A file added to the side panes belongs here too.
 describeTipSurface("panes", {
@@ -37,6 +38,7 @@ describeTipSurface("panes", {
   "FilesViewModeButtons.vue": FilesViewModeButtonsSource,
   "CheckCard.vue": CheckCardSource,
   "FilesCanvasButton.vue": FilesCanvasButtonSource,
+  "FilesEditorActions.vue": FilesEditorActionsSource,
 });
 
 // The six panes share one set of controls. Each pane words them as whole sentences, so a pane

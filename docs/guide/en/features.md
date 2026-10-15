@@ -165,6 +165,8 @@ a save replaces it; the newest few — and each can be
 The same editor still opens full-screen from a **Files** header button or by clicking a file
 path an agent printed.
 
+**Copy the whole file.** The copy button in the header (the two-sheets icon) puts the file's text on the clipboard — what the editor holds, unsaved edits included — and says so with its line count and first line. A selection you drag with the mouse across the line numbers copies the numbers rather than the text, so use this button for the whole file.
+
 **Recently opened files.** The clock button in the header lists the files opened in this folder, newest first, with the one open now marked — so a file whose tab you closed is one click away. The list is kept in this browser, per folder, across reloads. It is not **History**, which lists earlier versions of the one file that is open.
 
 **The editor colours the language it is showing.** Markdown, JS/TS and JSON are always ready;
