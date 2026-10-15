@@ -36,6 +36,12 @@ vi.mock("../../../../server/agents/claude/claude-help-probe.js", () => ({ refuse
 // log format — which custom-agent-log.spec.ts covers.
 const customAgentSessions = new Map<string, string>();
 
+// The real fold, minus the disk, for the same reason: gui-group-restriction-log.spec.ts covers the
+// format. The claim and its release are watched because a restricted session must never claim.
+const guiGroupRestrictions = new Map<string, readonly string[]>();
+const claimFullGuiMcp = vi.fn(() => true);
+const releaseAllToolsSession = vi.fn();
+
 // What the renderer decision answered, and for which directory (#2808); the decision itself is
 // claude-fullscreen.spec.ts.
 let rendererEnv: Record<string, string> = {};
@@ -52,10 +58,13 @@ vi.mock("../../../../server/session/registry.js", () => ({
   launchChoices: new Map(),
   customAgentSessions,
   rememberCustomAgentSession: (sessionId: string, agentId: string) => customAgentSessions.set(sessionId, agentId),
+  guiGroupRestriction: (sessionId: string) => guiGroupRestrictions.get(sessionId) ?? null,
+  rememberGuiGroupRestriction: (sessionId: string, groups: readonly string[]) => guiGroupRestrictions.set(sessionId, groups),
+  releaseAllToolsSession,
   ptys: new Map(),
   hookedSessions: new Set(),
   resetSessionToolGroups: vi.fn(),
-  claimFullGuiMcp: () => true,
+  claimFullGuiMcp,
 }));
 
 // Whether the session being asked for has a transcript — which is what makes a spawn a RESUME
@@ -264,5 +273,65 @@ describe("spawnClaudePty and a second login's directory groups", () => {
   it("leaves a full-GUI session's config alone — it already carries every tool", () => {
     spawn({ attachGuiMcp: true, directoryMcpGroups: ["render"] }, freshId());
     expect(mcpConfigArg()).toBe("{}");
+  });
+});
+
+describe("spawnClaudePty limited to some GUI tool groups (#3033)", () => {
+  const argAfter = (flag: string): string | undefined => {
+    const at = spawnedArgs.indexOf(flag);
+    return at < 0 ? undefined : spawnedArgs[at + 1];
+  };
+  const mcpConfigArg = (): string | undefined => {
+    const value = argAfter("--mcp-config");
+    return value === undefined || value.startsWith("{") ? value : readFileSync(value, "utf8");
+  };
+  const handedServers = (): string[] => {
+    const parsed: unknown = JSON.parse(mcpConfigArg() ?? "{}");
+    const servers = typeof parsed === "object" && parsed !== null && "mcpServers" in parsed ? parsed.mcpServers : {};
+    return Object.keys(typeof servers === "object" && servers !== null ? servers : {});
+  };
+
+  beforeEach(() => {
+    claimFullGuiMcp.mockClear();
+    releaseAllToolsSession.mockClear();
+  });
+
+  it("hands exactly its groups, even where it would otherwise carry every tool", () => {
+    spawn({ attachGuiMcp: true, guiGroups: ["render", "media"] }, freshId());
+    expect(handedServers()).toEqual(["mulmoterminal-render", "mulmoterminal-media"]);
+  });
+
+  it("releases any all-tools claim and never makes one", () => {
+    const id = freshId();
+    spawn({ attachGuiMcp: true, guiGroups: ["render"] }, id);
+    expect(claimFullGuiMcp).not.toHaveBeenCalled();
+    expect(releaseAllToolsSession).toHaveBeenCalledWith(id);
+  });
+
+  it("hands no GUI MCP at all for an empty list", () => {
+    spawn({ attachGuiMcp: true, guiGroups: [] }, freshId());
+    expect(mcpConfigArg()).toBeUndefined();
+  });
+
+  it("pre-approves only its own groups' tools", () => {
+    spawn({ guiGroups: ["render"] }, freshId());
+    expect(argAfter("--allowedTools")).toBe("mcp__mulmoterminal-render__presentHtml");
+    spawn({ guiGroups: ["data"] }, freshId());
+    expect(spawnedArgs).not.toContain("--allowedTools");
+  });
+
+  it("stays limited when the id is spawned again without the field — a resume", () => {
+    const id = freshId();
+    spawn({ guiGroups: ["data"] }, id);
+    resume({ attachGuiMcp: true, directoryMcpGroups: ["render"] }, id);
+    expect(handedServers()).toEqual(["mulmoterminal-data"]);
+    expect(claimFullGuiMcp).not.toHaveBeenCalled();
+  });
+
+  it("leaves an unrestricted session exactly as before", () => {
+    spawn({ attachGuiMcp: true }, freshId());
+    expect(claimFullGuiMcp).toHaveBeenCalledTimes(1);
+    expect(releaseAllToolsSession).not.toHaveBeenCalled();
+    expect(argAfter("--allowedTools")).toBe("mcp__mt");
   });
 });

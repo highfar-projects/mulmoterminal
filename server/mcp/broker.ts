@@ -78,6 +78,8 @@ const SUBMIT_TRANSLATION_TOOL = {
  * @param opts.group  serve only one GROUP of the GUI tools (the `/api/mcp/<group>/<id>` URLs,
  *                    which exist so a directory can enable a subset through Claude Code's own
  *                    per-folder MCP config). Null/absent = every tool, the single view's URL.
+ * @param opts.restrictedTo  the groups this SESSION was limited to at spawn (#3033), applied on
+ *                           every url; null/absent = not limited.
  * @param opts.history  feed each call into the tools pane's call history. Set only for agents
  *                      that have no hooks of their own — see mcp/gui-call-history.ts, which
  *                      also explains why claude must NOT get one.
@@ -85,9 +87,16 @@ const SUBMIT_TRANSLATION_TOOL = {
 export function buildGuiMcpServer(
   sessionId: string,
   baseUrl: string,
-  opts: { submitTranslationTool?: boolean; group?: ToolGroup | null; history?: GuiCallRecorder | null; carriesAllTools?: boolean } = {},
+  opts: {
+    submitTranslationTool?: boolean;
+    group?: ToolGroup | null;
+    history?: GuiCallRecorder | null;
+    carriesAllTools?: boolean;
+    restrictedTo?: readonly ToolGroup[] | null;
+  } = {},
 ): Server {
   const group = opts.group ?? null;
+  const restrictedTo = opts.restrictedTo ?? null;
   // Whether this session already reaches every tool on the all-tools url, in which case a group
   // url of ours has nothing left to add and stands down (see tool-gate.ts).
   const carriesAllTools = !!opts.carriesAllTools;
@@ -100,13 +109,13 @@ export function buildGuiMcpServer(
   // offer is filtered here, and anything outside it that gets named anyway is refused below.
   const isWorker = !!opts.submitTranslationTool;
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: offeredTools(isWorker, toolDefinitions, SUBMIT_TRANSLATION_TOOL, group, carriesAllTools),
+    tools: offeredTools(isWorker, toolDefinitions, SUBMIT_TRANSLATION_TOOL, group, carriesAllTools, restrictedTo),
   }));
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
-    const route = routeToolCall(name, isWorker, group, carriesAllTools);
+    const route = routeToolCall(name, isWorker, group, carriesAllTools, restrictedTo);
 
     // Worker-only result tool: deliver the structured translations back to the
     // waiting request (keyed by session id), bypassing the plugin dispatch path.

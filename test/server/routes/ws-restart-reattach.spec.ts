@@ -40,6 +40,7 @@ vi.mock("../../../server/session/registry.js", () => ({
   codexRollouts,
   codexRolloutsHydrated: Promise.resolve(),
   customAgentSessionsHydrated: Promise.resolve(),
+  guiGroupRestrictionsHydrated: Promise.resolve(),
   markDevTerminalSession: vi.fn(),
   markAttachedSessionPlaced: vi.fn(),
 }));
