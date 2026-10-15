@@ -8,6 +8,16 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@10.7.1 — 2026-10-16
+
+> **Setup guide:** [10.7.1 — Keep part of a subscription's week for yourself](https://receptron.github.io/mulmoterminal/guide/en/v10.7.1.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.7.1.html))
+
+### A per-token weekly reserve for token rotation (#3065, #3064)
+
+- `tokenRotation.tokens[].reserveWeeklyPercent` (optional, above 0 up to 99): rotation treats that subscription's week as spent at `min(98, 100 - reserve)` percent. No new session starts on it past that line (`blockedUntil`), a running session moves off it at the end of its turn (`nearLimit`, via the new pure `tokenNearLimit`), and its burn pace counts only the room above the reserve.
+- The "every candidate is held out" fallback never picks a token down to its reserve. When every candidate is down to its own reserve, rotation assigns nothing and the spawn runs on the `/login` credential, the same outcome as when no token secret can be read.
+- Any other value is dropped by the sanitizer and the entry kept; entries without the field behave as before.
+
 ## mulmoterminal@10.7.0 — 2026-10-16
 
 > **Setup guide:** [10.7.0 — Copy a whole file, see which file is open, and reopen recent files](https://receptron.github.io/mulmoterminal/guide/en/v10.7.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.7.0.html))

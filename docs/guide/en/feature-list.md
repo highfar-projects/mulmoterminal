@@ -4,7 +4,7 @@ nav_title: Feature list
 layout: default
 parent: English
 nav_order: 6.5
-as_of: 10.7.0
+as_of: 10.7.1
 description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 9.1.0)."
 ---
 
@@ -77,6 +77,7 @@ More: [Agents](agents.html)
 - A rotated session moves to another subscription at 98%, or when it hits its limit, and carries on with the same conversation (v9.2.0)
 - A cell's header names the subscription it runs on, and More features → Token usage lists each subscription's 5h / weekly room (v9.2.0)
 - A token held out at its usage limit shows when each window last said it would reset (v9.7.0)
+- A token's `reserveWeeklyPercent` keeps that share of its week unused by rotation, for a subscription also used elsewhere (v10.7.1)
 - Clicking that name lists the other subscriptions with their weekly room and the time until it resets, and picking one restarts the session on it with the same conversation (v9.6.0)
 - Unavailable agents are dimmed in the Agent Picker, with the reason and an install guide link (v5.8.0)
 - Declare the default agent with --agent or defaultAgent, so the app starts without Claude Code installed (v4.25.0)

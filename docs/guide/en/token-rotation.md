@@ -97,7 +97,7 @@ all landing on the most urgent one.
 
 A subscription is skipped when its 5-hour window is at 90% or more, or its week is at 98% or more.
 
-## Keeping part of a week back
+## Keeping part of a week back {#keep-week-back}
 
 To keep some of a subscription for use outside MulmoTerminal, give its entry `reserveWeeklyPercent`:
 

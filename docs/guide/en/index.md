@@ -8,8 +8,8 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **10.7.0 is out.** The Files view copies a whole file with one button, marks the open file in the tree,
-> and lists your recently opened files. [Setup guide](v10.7.0.html)
+> **10.7.1 is out.** Token rotation can keep part of a subscription's week unused, for a subscription you
+> also need elsewhere. [Setup guide](v10.7.1.html)
 
 ## What is MulmoTerminal? {#what-is}
 
