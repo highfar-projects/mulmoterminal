@@ -154,11 +154,16 @@ export function isSafeBranchName(name) {
 // and equal shas mean it is already current. Only a clean checkout whose HEAD
 // differs from the remote's is behind — count is deliberately absent, since
 // counting commits needs the objects a `git fetch` would bring and we skip it.
+// A pull alone updates the server's code and nothing else: the dependencies and the browser's
+// build stay as they were, and this notice clears anyway, so the command carries both steps. The
+// restart is said before "run: " because what follows it is the part the badge copies.
+const AFTER_PULL = "yarn install && yarn build";
+
 export function gitUpdateNotice({ localSha, localShort, remoteSha, defaultBranch, dirty }) {
   if (dirty) return null;
   if (!localSha || !remoteSha || localSha === remoteSha) return null;
   const pull = isSafeBranchName(defaultBranch) ? `git pull origin ${defaultBranch}` : "git pull";
-  return `Update available: ${localShort || localSha.slice(0, 7)} → origin  ·  run: ${pull}`;
+  return `Update available: ${localShort || localSha.slice(0, 7)} → origin (restart after updating)  ·  run: ${pull} && ${AFTER_PULL}`;
 }
 
 // ls-remote reaches the network (an SSH/HTTPS handshake to the origin host), so it routinely

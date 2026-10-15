@@ -211,21 +211,33 @@ describe("gitUpdateNotice", () => {
   // tell whether the notice used the captured short sha or re-sliced the full one.
   const behind = { localSha: "0123456789abcdef", localShort: "short12", remoteSha: "fedcba9876543210", dirty: false };
 
+  // A pull alone updates the server's code and nothing else: the dependencies and the browser's
+  // build stay as they were, and the notice clears anyway (#3044).
+  it("tells a clone to install and build after pulling, and to restart", () => {
+    const notice = gitUpdateNotice({ ...behind, defaultBranch: "main" });
+    expect(notice).toContain("&& yarn install && yarn build");
+    expect(notice).toContain("restart after updating");
+  });
+
   it("names the local short sha and a bare git pull when the default branch is unknown", () => {
-    expect(gitUpdateNotice(behind)).toBe("Update available: short12 → origin  ·  run: git pull");
+    expect(gitUpdateNotice(behind)).toBe("Update available: short12 → origin (restart after updating)  ·  run: git pull && yarn install && yarn build");
   });
 
   // `git pull` alone pulls the current branch's upstream, not the release. Naming the remote's
   // default branch is what actually updates a clone that's on it (or behind it).
   it("names origin + the default branch when it is known", () => {
-    expect(gitUpdateNotice({ ...behind, defaultBranch: "main" })).toBe("Update available: short12 → origin  ·  run: git pull origin main");
+    expect(gitUpdateNotice({ ...behind, defaultBranch: "main" })).toBe(
+      "Update available: short12 → origin (restart after updating)  ·  run: git pull origin main && yarn install && yarn build",
+    );
     expect(gitUpdateNotice({ ...behind, defaultBranch: "master" })).toContain("git pull origin master");
   });
 
   // The branch is untrusted remote metadata pasted into a shell — a metachar name must fall
   // back to a bare `git pull`, never inject.
   it("falls back to a bare git pull for an unsafe branch name", () => {
-    expect(gitUpdateNotice({ ...behind, defaultBranch: "main;rm -rf ~" })).toBe("Update available: short12 → origin  ·  run: git pull");
+    expect(gitUpdateNotice({ ...behind, defaultBranch: "main;rm -rf ~" })).toBe(
+      "Update available: short12 → origin (restart after updating)  ·  run: git pull && yarn install && yarn build",
+    );
     expect(gitUpdateNotice({ ...behind, defaultBranch: "$(whoami)" })).not.toContain("whoami");
   });
 
@@ -325,7 +337,7 @@ describe("computeUpdateNotice", () => {
   it("takes the git path for a checkout and reports behind", async () => {
     const git = cleanCheckoutGit("ref: refs/heads/main\tHEAD\nfedcba9876543210\tHEAD");
     const notice = await computeUpdateNotice("/home/dev/mulmoterminal", "0.7.0", { runGit: git, fetchLatest: async () => null });
-    expect(notice).toBe("Update available: 0123456 → origin  ·  run: git pull origin main");
+    expect(notice).toBe("Update available: 0123456 → origin (restart after updating)  ·  run: git pull origin main && yarn install && yarn build");
   });
 
   // End to end: a hostile remote whose default branch carries a shell metachar must not reach
@@ -333,7 +345,7 @@ describe("computeUpdateNotice", () => {
   it("does not inject an unsafe remote default branch into the command", async () => {
     const git = cleanCheckoutGit("ref: refs/heads/main;rm$IFS-rf\tHEAD\nfedcba9876543210\tHEAD");
     const notice = await computeUpdateNotice("/home/dev/mulmoterminal", "0.7.0", { runGit: git, fetchLatest: async () => null });
-    expect(notice).toBe("Update available: 0123456 → origin  ·  run: git pull");
+    expect(notice).toBe("Update available: 0123456 → origin (restart after updating)  ·  run: git pull && yarn install && yarn build");
   });
 
   it("is silent on the git path when the checkout is dirty", async () => {
@@ -431,7 +443,7 @@ describe("computeUpdateInfo", () => {
       version: "0.7.0",
       commit: "0123456",
       latest: null,
-      notice: "Update available: 0123456 → origin  ·  run: git pull origin main",
+      notice: "Update available: 0123456 → origin (restart after updating)  ·  run: git pull origin main && yarn install && yarn build",
     });
   });
 
