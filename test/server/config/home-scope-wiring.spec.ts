@@ -19,11 +19,9 @@ afterEach(() => {
   dirs.splice(0).forEach((dir) => rmSync(dir, { recursive: true, force: true }));
 });
 
-async function scopedNames(home: string | null) {
-  if (home !== null) {
-    vi.stubEnv("HOME", home);
-    vi.stubEnv("USERPROFILE", home);
-  }
+async function scopedNames(home: string) {
+  vi.stubEnv("HOME", home);
+  vi.stubEnv("USERPROFILE", home);
   vi.resetModules();
   const env = await import("../../../server/config/env.js");
   const tmux = await import("../../../server/infra/process/tmux.js");
@@ -37,7 +35,7 @@ async function scopedNames(home: string | null) {
 
 describe("names scoped by HOME", () => {
   it("keeps the names every existing install uses on the account's own home", async () => {
-    expect(await scopedNames(null)).toEqual({ suffix: "", socket: "mulmoterminal", dropsRoot: "mulmoterminal-drops" });
+    expect(await scopedNames(os.userInfo().homedir)).toEqual({ suffix: "", socket: "mulmoterminal", dropsRoot: "mulmoterminal-drops" });
   });
 
   it("gives an overridden HOME its own tmux server and drop directory, under one suffix", async () => {

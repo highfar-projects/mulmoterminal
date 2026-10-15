@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 import { homeScopeSuffix } from "../../../server/config/home-scope.js";
 
