@@ -81,6 +81,8 @@ import {
   devTerminalSessionsHydrated,
   hasAllGuiTools,
   allToolsSessionsHydrated,
+  guiGroupRestriction,
+  guiGroupRestrictionsHydrated,
   sessionCwd,
 } from "../session/registry.js";
 import { mountShortcutsRoutes } from "../backends/shortcuts.js";
@@ -367,6 +369,8 @@ const toolRouteDeps = (deps: AppRouteDeps): Parameters<typeof mountToolRoutes>[1
   sessionToolGroupsHydrated,
   hasAllGuiTools,
   allToolsSessionsHydrated,
+  guiGroupRestriction,
+  guiGroupRestrictionsHydrated,
   isGridSession: (id) => devTerminalSessions.has(id),
   devTerminalSessionsHydrated,
   // Built from the same two signals as the broker's recorder, but with the stricter rule the
