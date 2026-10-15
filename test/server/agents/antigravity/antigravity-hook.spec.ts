@@ -54,17 +54,26 @@ describe.skipIf(process.platform === "win32")("antigravityHookCommand under sh",
   let dir = "";
   const record = (): string => path.join(dir, "curl.log");
 
+  let failingDir = "";
+
   beforeAll(() => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), "agy-hook-"));
     fs.writeFileSync(path.join(dir, "curl"), `#!/bin/sh\n{ printf '%s\\n' "$@"; cat; } > "${record()}"\necho ignored-output\n`, { mode: 0o755 });
+    // A curl that gives up before reading its input — a refused connection, a bad option.
+    failingDir = fs.mkdtempSync(path.join(os.tmpdir(), "agy-hook-fail-"));
+    fs.writeFileSync(path.join(failingDir, "curl"), "#!/bin/sh\nexit 7\n", { mode: 0o755 });
   });
-  afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
+  afterAll(() => [dir, failingDir].forEach((d) => fs.rmSync(d, { recursive: true, force: true })));
 
-  const run = (event: (typeof ANTIGRAVITY_HOOK_EVENTS)[number], env: Record<string, string>): string => {
+  // Larger than a pipe buffer, so a command that exits without reading stdin fails the write with
+  // EPIPE every time rather than only when the shell happens to exit first.
+  const BIG_PAYLOAD = JSON.stringify({ conversationId: "x", pad: "a".repeat(1 << 20) });
+
+  const run = (event: (typeof ANTIGRAVITY_HOOK_EVENTS)[number], env: Record<string, string>, input = '{"conversationId":"x"}', curlDir = dir): string => {
     fs.rmSync(record(), { force: true });
     return execFileSync("/bin/sh", ["-c", antigravityHookCommand(event)], {
-      input: '{"conversationId":"x"}',
-      env: { PATH: `${dir}:/usr/bin:/bin`, ...env },
+      input,
+      env: { PATH: `${curlDir}:/usr/bin:/bin`, ...env },
     }).toString();
   };
 
@@ -83,9 +92,19 @@ describe.skipIf(process.platform === "win32")("antigravityHookCommand under sh",
     expect(JSON.parse(run("PreInvocation", { MULMOTERMINAL_SESSION_ID: "sid-1", MULMOTERMINAL_PORT: "4321" }))).toEqual({});
   });
 
-  it("posts nothing outside a MulmoTerminal session, and still answers agy", () => {
-    const stdout = run("Stop", { MULMOTERMINAL_PORT: "4321" });
+  it("posts nothing outside a MulmoTerminal session, and still reads the payload and answers agy", () => {
+    const stdout = run("Stop", { MULMOTERMINAL_PORT: "4321" }, BIG_PAYLOAD);
     expect(fs.existsSync(record())).toBe(false);
     expect(JSON.parse(stdout)).toEqual({ decision: "" });
+  });
+
+  it("still reads the payload and answers agy when curl fails without reading it", () => {
+    const stdout = run("Stop", { MULMOTERMINAL_SESSION_ID: "sid-1", MULMOTERMINAL_PORT: "4321" }, BIG_PAYLOAD, failingDir);
+    expect(JSON.parse(stdout)).toEqual({ decision: "" });
+  });
+
+  it("sends a large payload whole", () => {
+    run("Stop", { MULMOTERMINAL_SESSION_ID: "sid-1", MULMOTERMINAL_PORT: "4321" }, BIG_PAYLOAD);
+    expect(fs.readFileSync(record(), "utf8")).toContain(BIG_PAYLOAD);
   });
 });

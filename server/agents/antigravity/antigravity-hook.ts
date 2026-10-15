@@ -28,11 +28,13 @@ const HOOK_REPLY: Readonly<Record<AntigravityHookEvent, string>> = {
 // every session in the directory, so nothing per-session may be written into it. Unset outside a
 // MulmoTerminal agy cell, which is why the post is skipped rather than sent with an empty header.
 // `--noproxy` because curl otherwise sends even a loopback URL to an `http_proxy` the pane inherited.
+// The `cat` drains stdin whenever curl did not (skipped, missing, failed early): agy writes the payload
+// there, and a command that exits without reading it hands the writer an EPIPE.
 export const antigravityHookCommand = (event: AntigravityHookEvent): string =>
   '[ -n "$MULMOTERMINAL_SESSION_ID" ] && ' +
   "curl --noproxy 127.0.0.1 -s -m 5 -X POST -H content-type:application/json -H x-mt-agent:antigravity " +
   `-H x-mt-hook:${event} -H x-mt-session:$MULMOTERMINAL_SESSION_ID ` +
-  `-d @- http://127.0.0.1:$MULMOTERMINAL_PORT/api/hook >/dev/null 2>&1; echo '${HOOK_REPLY[event]}'`;
+  `-d @- http://127.0.0.1:$MULMOTERMINAL_PORT/api/hook >/dev/null 2>&1; cat >/dev/null; echo '${HOOK_REPLY[event]}'`;
 
 const str = (value: unknown): string | undefined => (typeof value === "string" ? value : undefined);
 
