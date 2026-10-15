@@ -194,6 +194,7 @@ export const tipsKo: Messages["tips"] = {
     showChanges: "줄 옆 표시뿐 아니라 삭제된 줄도 그 자리에 표시",
     sideBySide: "편집기와 Preview를 나란히 표시(Preview가 편집 중인 제목을 따라감)",
     insertSelection: "선택한 줄을 {'@'}파일#L10-20 형식으로 터미널 입력에 넣기(저장하지 않은 편집은 먼저 저장, 선택이 없으면 파일만)",
+    copyText: "이 파일의 본문 전체를 복사(저장하지 않은 편집 포함)",
     fileTree: "파일 트리",
     git: {
       modified: "수정됨",

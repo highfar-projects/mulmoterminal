@@ -456,7 +456,8 @@ for the details and model notes.
 A global install isn't auto-updated, so on startup MulmoTerminal checks npm and
 prints a one-line notice when a newer version is available — and the web toolbar shows a
 clickable **update badge** with the exact command for your install (`npm i -g mulmoterminal`,
-or `git pull` for a clone). The server repeats that check every few hours, so a release that
+or `git pull origin main && yarn install && yarn build` for a clone, then restart — a pull alone
+updates the server's code but leaves the dependencies and the browser's build as they were). The server repeats that check every few hours, so a release that
 ships while it is running still reaches the badge; the startup console notice is printed once
 and is not repeated. Disable with `MULMOTERMINAL_NO_UPDATE_CHECK=1` (or `NO_UPDATE_NOTIFIER=1`).
 
@@ -762,7 +763,9 @@ a tmux session, so **a server crash or restart doesn't kill your terminals** —
 processes keep running and reattach when the server comes back (like `screen`/`tmux`).
 A long build, a dev server, or a mid-turn Claude session all survive `node --watch`
 reloads and crashes. It uses its **own** tmux server (`-L mulmoterminal`) and config, so
-it never touches your personal tmux sessions or keybindings.
+it never touches your personal tmux sessions or keybindings. A server started with `HOME`
+pointed somewhere else gets a tmux server of its own (`mulmoterminal-<hash>`), so it never
+sweeps or reconfigures the sessions of the one running on your real home.
 
 **And the server comes back by itself.** `npx mulmoterminal` supervises the server it
 started: a crash is restarted with a short backoff, so the browser tab reconnects to the
@@ -2229,7 +2232,7 @@ From a shell: `mulmoterminal room read <room>` · `room post <room> <text…> [-
 | Endpoint | Purpose |
 | -------- | ------- |
 | `POST /api/mcp/:sessionId` | Per-session GUI MCP server (Streamable HTTP; `GET`/`DELETE` → 405). |
-| `POST /api/plugin/:toolName` | GUI-plugin dispatch (incl. `spawnBackgroundChat`, `manageAccounting`, `presentHtml`). |
+| `POST /api/plugin/:toolName` | GUI-plugin dispatch (incl. `spawnBackgroundChat`, `manageAccounting`, `presentHtml`). `spawnBackgroundChat` takes an optional `guiGroups` (claude, codex and copilot): a list of tool groups (`render`, `data`, `media`, `external`) the spawned session is limited to, `[]` for no GUI tool. The limit holds across a resume, including a codex resume opened by its rollout id. It is not a sandbox: the tools stay callable over HTTP. |
 | `GET /api/agent/toolResults/:id` · `POST /api/agent/toolResult` | GUI-panel result history / persist. |
 | `GET /api/tools` · `GET /api/tool-calls/:id` | Available tools / tool-call history. |
 | `POST /api/accounting` | Double-entry accounting (bundled plugin). |
@@ -2279,7 +2282,7 @@ connection (or reattach to an existing background PTY).
 | ------- | ------- |
 | `{ "type": "session", "id": string }` | Sent immediately on connect — the session id this socket is bound to (lets the client learn a new session's generated id). |
 | `{ "type": "output", "data": string }` | PTY output to write to the terminal. On reattach, the first `output` frame is the replayed tail buffer (≤ 64 KB). |
-| `{ "type": "exit", "exitCode": number, "signal": number }` | The `claude` process exited; the socket then closes. |
+| `{ "type": "exit", "exitCode": number, "signal": number, "lifetimeMs": number, "reattached": boolean, "ended": boolean }` | The pty exited; the socket then closes. `ended` is true only when the SESSION ended (tmux closed with the program) — a tmux client killed from outside, or an exit after an explicit close or restart, sends `false`. Under tmux `exitCode` is the client's and reads `0` even when the program failed. `lifetimeMs` is this pty's, which on a reattach (`reattached: true`) is not the program's. An agent cell closes itself on `ended` unless the program died while starting. The three newer fields are additive; a client treats their absence as "not ended". |
 | `{ "type": "paneMode", "inCopyMode": boolean }` | tmux-backed sessions only: whether the pane is in tmux copy-mode, where keys go to tmux instead of the program. Sent when it changes, and again to a reattached socket. |
 
 **Client → server** (JSON text frames):
@@ -2425,6 +2428,13 @@ Key rules:
   offering to take it over — and the server answers "anywhere" from its own PTY
   table plus tmux, so another browser tab and a second `mulmoterminal` process
   count too.
+- **An agent that ends on its own takes its cell with it.** `/exit`, Ctrl+C or a crash
+  closes the cell as the close button would, so it is in the palette's **Reopen** list
+  and resumes the conversation. Three cases keep the `[session ended]` banner instead:
+  an agent that died while still starting up (a launch failure — under tmux its
+  exit code reads 0, so the banner is the only evidence), a tmux client killed from
+  outside while the agent still runs, and a worktree cell (its close asks whether to
+  keep the worktree).
 - Brand-new sessions are listed **immediately** (before their `.jsonl`
   exists) via the in-memory `knownSessions` registry + a `created` push; an
   unused one disappears when its PTY is reaped.

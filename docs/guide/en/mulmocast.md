@@ -4,7 +4,7 @@ nav_title: MulmoCast videos
 layout: default
 parent: English
 nav_order: 24
-description: Let Claude Code write each scene of a MulmoCast video as a Remotion component, or pass a component you wrote. Optional packages you install yourself, where to put them so an npx upgrade keeps them, and how to tell it works.
+description: Let Claude Code write each scene of a MulmoCast video as a Remotion component, or pass a component you wrote, and give a speaker a talking avatar. Optional packages you install yourself, where to put them so an npx upgrade keeps them, and how to tell it works.
 ---
 
 # MulmoCast videos
@@ -152,3 +152,88 @@ component.
   are then found by **any** Node project under it that does not install its own copy.
 - A `remotion` beat cannot also have a `moviePrompt`.
 - On Linux without a GPU, three.js scenes may fail to get a WebGL context.
+
+## Talking avatars {#avatar}
+
+A speaker can have an **avatar**: an illustrated character laid over the slide,
+moving its mouth with the narration, with an expression and a movement you set per beat.
+
+```json
+{
+  "speechParams": {
+    "speakers": {
+      "Ani": {
+        "provider": "gemini",
+        "voiceId": "Leda",
+        "avatar": { "source": "https://raw.githubusercontent.com/receptron/mulmocast-media/main/avatars/ani" }
+      }
+    }
+  },
+  "beats": [
+    {
+      "speaker": "Ani",
+      "text": "Hello, everyone!",
+      "image": { "type": "markdown", "markdown": ["# Hello"] },
+      "avatarParams": { "emotion": "happy", "motions": [{ "motion": "nod", "at": "everyone" }] }
+    }
+  ]
+}
+```
+
+- `speechParams.speakers.<name>.avatar.source` — where the avatar is: a URL, or a path relative to
+  the script. Ready-made ones: `ani`, `marilyn`, `reika`, `seiya`, `ken` (swap the last part of the
+  URL above).
+- `avatarParams.emotion` — `neutral`, `happy`, `sad`, `angry`, `surprised` or `relaxed`.
+- `avatarParams.motions` — `[{ "motion": …, "at": … }]`: `nod`, `tilt`, `think`, `giggle`,
+  `surprise`, `shy`, `no`, `wink` or `greet`, starting when the narration reaches the word in `at`.
+- `avatarParams.position` and `hidden` place or hide it for a beat. The full reference is
+  [mulmocast's avatar.md](https://github.com/receptron/mulmocast-cli/blob/main/docs/avatar.md).
+
+### 1. Install the packages, in your home directory
+
+They are optional packages of mulmocast and **MulmoTerminal does not install them**, for the same
+reason as Remotion's: only people who want avatars need them, and `onnxruntime-node` alone is about
+290 MB.
+
+```bash
+cd ~
+npm install avatarscript onnxruntime-node
+```
+
+The home directory works for `npx` (each release is a new folder under `~/.npm/_npx/`) and for a clone
+under your home, because Node looks in every parent folder's `node_modules`. If you use `npx`, keep
+them there: a global install is not searched from `npx`. Only if MulmoTerminal itself is installed
+globally (`npm install -g mulmoterminal`, which usually lives outside your home in
+`/opt/homebrew/lib/node_modules` or `/usr/local/lib/node_modules`) install them globally next to it
+instead: `npm install -g avatarscript onnxruntime-node`. Installing
+into a clone with `yarn add` works too, but leaves a change in its `package.json`.
+
+### 2. Check that MulmoCast can see them
+
+```bash
+npx mulmoterminal@latest init
+```
+
+The tool list should include:
+
+```
+  ✓ avatar — talking avatars in MulmoCast videos
+```
+
+`○ avatar — optional` means nothing was found; `installed only in part; missing: …` names the
+package still to install.
+
+### 3. Make a video
+
+Write the avatar into the script — or ask the agent, for example *"give the narrator the ani avatar,
+looking surprised on the first beat"* — then press **Movie** in the GUI panel as usual. The speaker's
+voice needs that provider's key, and the movie needs ffmpeg.
+
+The first render downloads the model that matches the speech to the text (about 635 MB) into
+`~/.cache/avatarscript/models`, once. After that the avatar video is cached and made again when
+the script, the audio or the avatar changes, or when the avatar is drawn at a different height (the
+canvas height, or the largest `scale` it is placed at).
+
+When an avatar video has to be made and the packages are missing, the beat stops with mulmocast's
+message naming them (`npm install avatarscript onnxruntime-node`). A video already in the cache is
+reused without them.

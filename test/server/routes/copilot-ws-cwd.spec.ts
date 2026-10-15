@@ -18,6 +18,8 @@ import type { WebSocket } from "ws";
 const ptys = new Map<string, unknown>();
 const sessionCwd = vi.fn((): string | null => null);
 const markDevTerminalSession = vi.fn();
+// Replaced by a test that holds the GUI tool restriction log back, as a restart can.
+const restrictionLog = { hydrated: Promise.resolve() };
 vi.mock("../../../server/session/registry.js", () => ({
   ptys,
   sessionCwd: () => sessionCwd(),
@@ -29,6 +31,9 @@ vi.mock("../../../server/session/registry.js", () => ({
   codexRollouts: new Map(),
   codexRolloutsHydrated: Promise.resolve(),
   customAgentSessionsHydrated: Promise.resolve(),
+  get guiGroupRestrictionsHydrated() {
+    return restrictionLog.hydrated;
+  },
   markDevTerminalSession,
   markAttachedSessionPlaced: vi.fn(),
 }));
@@ -79,6 +84,7 @@ beforeEach(() => {
   requestDir = mkdtempSync(path.join(tmpdir(), "mt-copilot-req-"));
   rememberedDir = mkdtempSync(path.join(tmpdir(), "mt-copilot-remembered-"));
   sessionCwd.mockReturnValue(null);
+  restrictionLog.hydrated = Promise.resolve();
 });
 
 /** The 4th positional argument of spawnCopilotPty is the directory the session runs in. */
@@ -101,5 +107,20 @@ describe("handleCopilotConnection", () => {
     sessionCwd.mockReturnValue(rememberedDir);
     await handleCopilotConnection(deps, fakeWs(), { url: `/ws/copilot?cwd=${encodeURIComponent(requestDir)}&session=${ID}&gui=0` } as never);
     expect(markDevTerminalSession).toHaveBeenCalledWith(ID, rememberedDir);
+  });
+
+  // The spawn reads the restriction synchronously (#3033): a resume that ran ahead of the log would
+  // hand a restricted session every tool.
+  it("does not spawn until the GUI tool restriction log has been read", async () => {
+    let release = () => {};
+    restrictionLog.hydrated = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const connecting = handleCopilotConnection(deps, fakeWs(), { url: `/ws/copilot?cwd=${encodeURIComponent(requestDir)}&session=${ID}&gui=0` } as never);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(spawnCopilotPty).not.toHaveBeenCalled();
+    release();
+    await connecting;
+    expect(spawnCopilotPty).toHaveBeenCalledTimes(1);
   });
 });

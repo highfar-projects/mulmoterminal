@@ -37,6 +37,10 @@ export interface PtyEntry {
   // True when `term` is a tmux client (persistent): killing it only detaches, so reap
   // must kill the tmux session to actually end the program.
   tmux?: boolean;
+  // tmux ATTACHED a program that was already running rather than starting one, so this pty's own
+  // lifetime says nothing about whether that program got going (an exit soon after is not a launch
+  // failure).
+  reattached?: boolean;
   // A reattach replayed a delta tail, so the browser's screen is only as complete as that window
   // (see tmuxRedrawClient). Cleared by the first resize frame after the reattach — waiting for it
   // is the point, since that frame is where the client tells us the size it actually settled at.

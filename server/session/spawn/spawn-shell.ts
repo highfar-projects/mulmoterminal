@@ -4,7 +4,7 @@
 // Split from index.ts (#548 step 3c).
 import type { IPty } from "node-pty";
 import type { WebSocket } from "ws";
-import { handlePtyExit } from "../pty/pty-exit.js";
+import { reportPtyExit } from "../pty/pty-exit.js";
 import { getLaunchers } from "../../config/config-routes.js";
 import { launcherAt, launchInvocation, launchTargetLabel, shellInvocation, type LaunchTarget } from "./shell-command.js";
 import { ptys } from "../registry.js";
@@ -30,8 +30,9 @@ export function createShellSpawners(deps: SpawnDeps) {
       sendFrame(ws, { type: "output", data });
     });
     term.onExit(({ exitCode, signal }) => {
-      console.log(ptyExitLine({ agent: "command", exitCode, signal, lifetimeMs: Date.now() - spawnedAtMs, cwd }));
-      sendExitAndClose(ws, exitCode, signal);
+      const lifetimeMs = Date.now() - spawnedAtMs;
+      console.log(ptyExitLine({ agent: "command", exitCode, signal, lifetimeMs, cwd }));
+      sendExitAndClose(ws, { exitCode, signal, lifetimeMs, reattached: false, ended: false });
     });
     return term;
   }
@@ -62,17 +63,17 @@ export function createShellSpawners(deps: SpawnDeps) {
     // this app does not read it: it once recorded `codex` for a command that started with the word
     // codex (#1208), which is a guess about someone else's text and the same guess that made a chip
     // indistinguishable from the Agent Picker. The Agent Picker is what records a real agent.
-    const entry: PtyEntry = { term, ws, buffer: "", cwd, tmux, active: false, agent: "shell" };
+    const entry: PtyEntry = { term, ws, buffer: "", cwd, tmux, reattached, active: false, agent: "shell" };
     ptys.set(sessionId, entry);
 
     const output = wireBufferedOutput(entry, deps.outputBufferLimit);
     term.onExit(({ exitCode, signal }) => {
-      console.log(ptyExitLine({ agent: "launcher", exitCode, signal, lifetimeMs: Date.now() - spawnedAtMs, cwd, sessionId }));
+      const lifetimeMs = Date.now() - spawnedAtMs;
+      console.log(ptyExitLine({ agent: "launcher", exitCode, signal, lifetimeMs, cwd, sessionId }));
       output.flush(); // a queued batch must not arrive after the exit frame
-      sendExitAndClose(entry.ws, exitCode, signal);
       // A launcher is persistent and tmux-backed like an agent cell, so it has the same two ways to
       // lose its pty — and only one of them means the program is over (#1496).
-      handlePtyExit(sessionId, deps.reap);
+      reportPtyExit(sessionId, entry, { exitCode, signal, lifetimeMs }, deps.reap);
     });
     return entry;
   }

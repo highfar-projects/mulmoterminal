@@ -39,6 +39,8 @@ vi.mock("../../../server/session/registry.js", () => ({
   // The Agent Picker's custom agents (#1414). Empty: this spec starts plain claude, and the
   // spawn asks this map on every start to see which wrapper the session began under.
   customAgentSessions: new Map(),
+  guiGroupRestriction: () => null,
+  rememberGuiGroupRestriction: vi.fn(),
   ptys: new Map(),
   // Every claude spawn registers itself as reporting its own tool calls (the MCP broker reads this
   // to decide it must NOT record them a second time — see mcp/gui-call-history.ts).

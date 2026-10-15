@@ -1275,8 +1275,8 @@ describe("GridView skill launch — capacity and placement (#1111)", () => {
     w.unmount();
   });
 
-  // What the seeded collection is FOR: the Canvas pane exists only beside an enlarged cell, so a
-  // card placed into a tiled one is two gestures away and invisible until both are made. Reported
+  // What the seeded collection is FOR: a Canvas that opens by itself does so only beside an enlarged
+  // cell, so a card placed into a tiled one is two gestures away and invisible until both are made. Reported
   // live — the card was landing correctly and looked like a feature that did nothing.
   it("enlarges the placed cell and opens its Canvas when a collection was seeded", async () => {
     const { placeSpawnedChat } = await import("../../../src/composables/useSpawnedChat");

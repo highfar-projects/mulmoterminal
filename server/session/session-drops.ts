@@ -13,12 +13,13 @@ import os from "node:os";
 import path from "node:path";
 import { removeQuietly } from "../infra/fs/fs-cleanup.js";
 import { hasErrnoCode, messageOf } from "../errors.js";
-import { SESSION_ID_RE } from "../config/env.js";
+import { HOME_SCOPE_SUFFIX, SESSION_ID_RE } from "../config/env.js";
 import { extensionForMime } from "../backends/remoteHost/attachment-path.js";
 
 // One parent for every session's drops, so the sweep reads a directory of ours instead of
 // walking the whole of tmp.
-export const DROPS_ROOT = path.join(os.tmpdir(), "mulmoterminal-drops");
+// Scoped by HOME like the tmux server: the boot prune decides from that server's sessions (#3039).
+export const DROPS_ROOT = path.join(os.tmpdir(), `mulmoterminal-drops${HOME_SCOPE_SUFFIX}`);
 
 // tmp is world-readable by default, and a dropped file is whatever the user had open.
 const PRIVATE_MODE = 0o700;

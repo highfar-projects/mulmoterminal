@@ -18,6 +18,7 @@ import { tipsEn } from "./tips/en";
 import { commandPaletteEn } from "./commandPalette/en";
 import { focusModeEn } from "./focusMode/en";
 import { fileHistoryEn } from "./fileHistory/en";
+import { filesRecentEn } from "./filesRecent/en";
 import { dirConfigSaveEn } from "./dirConfigSave/en";
 import { releaseNotesEn } from "./releaseNotes/en";
 import { dirConfigOpenEn } from "./dirConfigOpen/en";
@@ -655,6 +656,7 @@ export const en = {
     close: "Got it",
   },
   fileHistory: fileHistoryEn,
+  filesRecent: filesRecentEn,
   dirConfigSave: dirConfigSaveEn,
   releaseNotes: releaseNotesEn,
   dirConfigOpen: dirConfigOpenEn,

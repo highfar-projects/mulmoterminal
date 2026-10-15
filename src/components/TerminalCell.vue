@@ -101,6 +101,8 @@ import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
+import { shouldCloseEndedCell } from "../../common/endedCellClose";
+import type { SessionExit } from "../composables/serverMessage";
 
 // How long a handoff failure stays on the cell before it clears itself.
 const ASK_MSG_MS = 4000;
@@ -1175,6 +1177,12 @@ async function close() {
 // the close was asked for.
 defineExpose({ close });
 
+// An agent that ended on its own (`/exit`, Ctrl+C, a crash) takes its cell with it (#3049), through
+// the same teardown as the close button so the cell lands in the reopen list.
+function onTerminalExit(_exitCode: number | null, session: SessionExit) {
+  if (shouldCloseEndedCell({ ...session, worktreeCell: isWorktreeCell.value })) teardown();
+}
+
 // Nothing dismisses the confirmation once the removal has started. The pty is terminated before the
 // route is even called, so a dialog that closes here would claim the worktree was kept while it is
 // being deleted — and would take its failure off the screen with it (Codex and CodeRabbit, #1550).
@@ -2002,6 +2010,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
           @credential="(credential) => (cellCredential = credential)"
           @run="(cmd) => emit('runSpare', cmd)"
           @canvas="emit('canvas')"
+          @exit="onTerminalExit"
         >
           <!-- Row 2 — actions on the SESSION, gathered onto the terminal's header row beside the
              ones Terminal.vue puts there itself (Run, Skills, the configured header buttons,

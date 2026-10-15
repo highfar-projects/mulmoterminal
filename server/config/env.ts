@@ -7,6 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { parsePort, portFromArgv } from "./port-from-argv.js";
 import { agentFromArgv, declaresAgent } from "./agent/agent-from-argv.js";
+import { homeScopeSuffix } from "./home-scope.js";
 
 // `--port` is the launcher's channel (see port-from-argv.ts for why it is not an env var).
 // `PORT` is the DEV channel and must stay: `yarn dev` runs server/index.ts directly, and
@@ -105,6 +106,29 @@ export function isWorkspaceCwd(cwd: string | undefined): boolean {
 // lives here, keyed by sessionId (a global UUID) — NOT under the workspace dir, so it stays
 // valid regardless of which directory is active.
 export const MULMOTERMINAL_HOME = path.join(os.homedir(), ".mulmoterminal");
+
+// The passwd entry's home, which an overridden $HOME does not change. Null when the account has none.
+function accountHomeDir(): string | null {
+  try {
+    return os.userInfo().homedir;
+  } catch {
+    return null;
+  }
+}
+
+// `.native` resolves symlinks AND letter case (`/var` → `/private/var`, `/USERS/x` → `/Users/x`), so
+// two spellings of one directory share a scope. A directory that does not exist keeps its spelling.
+function canonicalDir(dir: string): string {
+  try {
+    return fs.realpathSync.native(dir);
+  } catch {
+    return dir;
+  }
+}
+
+// Appended to the names that live outside HOME (the tmux server, the drop directory) — see home-scope.ts.
+const accountHome = accountHomeDir();
+export const HOME_SCOPE_SUFFIX = homeScopeSuffix(canonicalDir(os.homedir()), accountHome === null ? null : canonicalDir(accountHome));
 
 // A session id is always a UUID (server-generated, or a .jsonl basename). Reject anything
 // else so a client can't smuggle CLI flags (e.g. "--resume" followed by a value that claude

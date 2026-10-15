@@ -29,7 +29,7 @@ export interface DocumentPollDeps {
   /** Deliver the announcement. May be async — the shared publisher stats the file before it
    *  emits — and the poll WAITS for it, because a stamp recorded before delivery is a change
    *  the next watcher will not repeat (codex on #2147). */
-  onChanged: () => void | Promise<void>;
+  onChanged: (observed: FileStamp) => void | Promise<void>;
   /** False once the last subscriber has gone; the loop stops on the next tick. */
   keepGoing: () => boolean;
   sleep: (ms: number) => Promise<void>;
@@ -63,7 +63,7 @@ export async function pollDocument(deps: DocumentPollDeps): Promise<void> {
   // Unless a previous watcher on this document stopped on something else: then the file moved
   // while nobody was watching, and adopting it silently is how a reconnecting view keeps
   // showing what it had.
-  if (deps.startFrom !== undefined && deps.startFrom !== last) await deps.onChanged();
+  if (deps.startFrom !== undefined && deps.startFrom !== last) await deps.onChanged(last);
   // Asked again: delivery is itself an await, and a subscriber that left inside it got nothing.
   // Recording the stamp anyway would tell the next watcher the change had landed.
   if (!deps.keepGoing()) return;
@@ -78,7 +78,7 @@ export async function pollDocument(deps: DocumentPollDeps): Promise<void> {
     // A disappearance is a change too. The views handle a file that is gone — the pane reports
     // it, the card stops showing content that is no longer on disk — and staying silent leaves
     // whatever was last rendered on screen as if it were still true.
-    await deps.onChanged();
+    await deps.onChanged(now);
     if (!deps.keepGoing()) return;
     deps.onObserved?.(last);
   }
@@ -117,6 +117,20 @@ export function resolveWatchableDocument(channel: string, scopes: readonly Watch
  *  stays a channel transport that knows nothing about files. */
 export const MAX_WATCHED_DOCUMENTS = 64;
 
+/** What a watcher hands an announcement about the change it saw. */
+export interface AnnouncedChange {
+  /** The stamp that made THIS watcher notice. Carried with the call, never looked up later: another
+   *  watcher on the same file, or a newer generation of this one, may have read a different stamp
+   *  since, and judging by theirs would describe a change this announcement is not about. */
+  observed: FileStamp;
+  /** The file this watcher polls, as it resolved the channel when it started — not re-resolved, so
+   *  a symlink retargeted since still names the file the observation was made on. */
+  absolutePath: string;
+  /** False once this watcher has stopped. An announcement that waits on something of its own
+   *  outlives the poll's own checks, and a room re-created meanwhile is not its audience. */
+  isCurrent: () => boolean;
+}
+
 export interface DocumentWatchersDeps {
   /** The absolute path this channel names, or null when it names nothing watchable. */
   resolve: (channel: string) => string | null;
@@ -127,7 +141,7 @@ export interface DocumentWatchersDeps {
    *
    *  Return the promise if delivery is async, so the poll can wait for it rather than recording
    *  a stamp the subscribers have not been given. */
-  announce: (channelPath: string) => void | Promise<void>;
+  announce: (channelPath: string, change: AnnouncedChange) => void | Promise<void>;
   sleep: (ms: number) => Promise<void>;
   pollMs?: number;
   maxWatched?: number;
@@ -186,7 +200,7 @@ export function createDocumentWatchers(deps: DocumentWatchersDeps) {
         // Carry on from where the last watcher on this document stopped, rather than starting
         // afresh. `undefined` means never watched; a stored `null` means it was absent then.
         ...(previouslySeen === undefined ? {} : { startFrom: previouslySeen }),
-        onChanged: () => deps.announce(channelPath),
+        onChanged: (observed) => deps.announce(channelPath, { observed, absolutePath, isCurrent: () => alive }),
         keepGoing: () => alive,
         sleep: deps.sleep,
         ...(deps.pollMs === undefined ? {} : { pollMs: deps.pollMs }),

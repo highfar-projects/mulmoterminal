@@ -97,6 +97,19 @@ all landing on the most urgent one.
 
 A subscription is skipped when its 5-hour window is at 90% or more, or its week is at 98% or more.
 
+## Keeping part of a week back {#keep-week-back}
+
+To keep some of a subscription for use outside MulmoTerminal, give its entry `reserveWeeklyPercent`:
+
+```json
+{ "id": "personal", "label": "Personal", "email": "me@example.com", "keychain": "mulmoterminal-token-personal", "reserveWeeklyPercent": 5 }
+```
+
+With `5`, that subscription counts as full once its week reaches 95%: no new session starts on it, and a
+session running there moves to another one at the end of its turn. Even when every other subscription is
+out, rotation does not dip into the reserve. Any value from above 0 up to 99 is accepted; anything else is
+ignored and the entry works as if it had no reserve.
+
 ## When a subscription runs low
 
 - **At 98%**: when a session finishes a turn on a subscription whose 5-hour or weekly window is at 98%

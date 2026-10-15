@@ -7,20 +7,33 @@
 // `kill()` sends SIGHUP), so it came from outside, and reaping there ends a tmux session with a
 // live agent in it.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { STARTUP_WINDOW_MS } from "../../../../common/endedCellClose";
 
 const hasSession = vi.fn<(id: string) => boolean>(() => false);
 vi.mock("../../../../server/infra/process/tmux.js", () => ({ tmuxHasSession: (id: string) => hasSession(id), tmuxIsPsmux: () => false }));
 
-const { ptyExitDisposition, handlePtyExit } = await import("../../../../server/session/pty/pty-exit.js");
+// The real one appends to ~/.mulmoterminal, which a spec must not write.
+const placed = vi.hoisted(() => ({ ids: [] as string[] }));
+vi.mock("../../../../server/session/registry.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../../server/session/registry.js")>()),
+  markSessionPlaced: (id: string) => placed.ids.push(id),
+}));
+
+const { isCurrentPty, ptyExitDisposition, reportPtyExit } = await import("../../../../server/session/pty/pty-exit.js");
 const { ptys } = await import("../../../../server/session/registry.js");
 
-const register = (id: string, tmux: boolean) => {
-  // Only `tmux` is read here; the rest of the entry stands in for a live pty.
-  ptys.set(id, { tmux, cwd: "/repo", agent: "claude" } as unknown as NonNullable<ReturnType<typeof ptys.get>>);
+type Entry = NonNullable<ReturnType<typeof ptys.get>>;
+// Only `tmux` and `ws` are read here; the rest of the entry stands in for a live pty.
+const entryOf = (tmux: boolean, ws: unknown = null): Entry => ({ tmux, ws, cwd: "/repo", agent: "claude" }) as unknown as Entry;
+const register = (id: string, tmux: boolean, ws: unknown = null): Entry => {
+  const entry = entryOf(tmux, ws);
+  ptys.set(id, entry);
+  return entry;
 };
 
 beforeEach(() => {
   ptys.clear();
+  placed.ids.length = 0;
   // Cleared, not just re-stubbed: the "never asks tmux" assertion below reads the CALL COUNT, and
   // a shared mock carries the previous test's calls into it.
   hasSession.mockClear();
@@ -48,7 +61,11 @@ describe("ptyExitDisposition", () => {
   });
 });
 
-describe("handlePtyExit", () => {
+const EXIT = { exitCode: 0, signal: undefined, lifetimeMs: 60_000 };
+// The entry that exited is the one registered, unless a test says otherwise.
+const handlePtyExit = (id: string, reap: (id: string) => void) => reportPtyExit(id, ptys.get(id) ?? entryOf(true), EXIT, reap);
+
+describe("reportPtyExit — applying the decision", () => {
   it("does not reap a session tmux still has, and drops the dead pty entry", () => {
     const reap = vi.fn();
     register("s-1", true);
@@ -87,5 +104,130 @@ describe("handlePtyExit", () => {
 
     expect(handlePtyExit("never-registered", reap)).toBe("gone");
     expect(reap).not.toHaveBeenCalled();
+  });
+});
+
+// The browser closes an agent cell on `ended` (#3049), so the frame must say the SESSION ended only
+// when it did: a lost tmux client is a live agent, and a cell closing on it drops that agent.
+describe("reportPtyExit — what the exit frame tells the browser", () => {
+  const socketRecording = (events: string[]) => {
+    const frames: unknown[] = [];
+    const socket = {
+      readyState: 1,
+      OPEN: 1,
+      send: (data: string) => {
+        events.push("frame");
+        frames.push(JSON.parse(data));
+      },
+      close: () => undefined,
+    };
+    return { socket, frames };
+  };
+
+  it.each([
+    { name: "the session went with the program", tmuxAlive: false, registered: true, ended: true },
+    { name: "only the tmux client died", tmuxAlive: true, registered: true, ended: false },
+    { name: "an explicit close already reaped it", tmuxAlive: false, registered: false, ended: false },
+  ])("$name → ended: $ended", ({ tmuxAlive, registered, ended }) => {
+    const { socket, frames } = socketRecording([]);
+    const exiting = registered ? register("s-1", true, socket) : entryOf(true, socket);
+    hasSession.mockReturnValue(tmuxAlive);
+
+    reportPtyExit("s-1", exiting, EXIT, vi.fn());
+
+    expect(frames).toEqual([{ type: "exit", exitCode: 0, lifetimeMs: 60_000, reattached: false, ended }]);
+  });
+
+  // A reattached pty's lifetime is not the agent's; the browser needs to know which it got.
+  it("says whether the pty had attached to an agent already running", () => {
+    const { socket, frames } = socketRecording([]);
+    const exiting = register("s-1", true, socket);
+    exiting.reattached = true;
+
+    reportPtyExit("s-1", exiting, EXIT, vi.fn());
+
+    expect(frames).toEqual([{ type: "exit", exitCode: 0, lifetimeMs: 60_000, reattached: true, ended: true }]);
+  });
+
+  it("sends the frame before the reap tears the session down", () => {
+    const events: string[] = [];
+    const { socket } = socketRecording(events);
+    const exiting = register("s-1", true, socket);
+
+    reportPtyExit("s-1", exiting, EXIT, () => events.push("reap"));
+
+    expect(events).toEqual(["frame", "reap"]);
+  });
+});
+
+// An explicit close or a restart (#1918) unregisters the old pty first, and the replacement can be
+// registered under the same id before the old process's exit arrives.
+describe("reportPtyExit — a stale exit after the id was reused", () => {
+  it.each([
+    { name: "the replacement's tmux is alive", tmuxAlive: true },
+    { name: "tmux says no session", tmuxAlive: false },
+  ])("leaves the replacement alone when $name", ({ tmuxAlive }) => {
+    const old = entryOf(true);
+    const replacement = register("s-1", true);
+    hasSession.mockReturnValue(tmuxAlive);
+    const reap = vi.fn();
+
+    expect(reportPtyExit("s-1", old, EXIT, reap)).toBe("gone");
+    expect(reap).not.toHaveBeenCalled();
+    expect(ptys.get("s-1")).toBe(replacement);
+  });
+
+  it("tells the old socket the session did not end", () => {
+    const frames: unknown[] = [];
+    const old = entryOf(true, { readyState: 1, OPEN: 1, send: (d: string) => frames.push(JSON.parse(d)), close: () => undefined });
+    register("s-1", true);
+
+    reportPtyExit("s-1", old, EXIT, vi.fn());
+
+    expect(frames).toEqual([{ type: "exit", exitCode: 0, lifetimeMs: 60_000, reattached: false, ended: false }]);
+  });
+});
+
+describe("isCurrentPty", () => {
+  it("is true only for the very entry registered under the id", () => {
+    const entry = register("s-1", true);
+    expect(isCurrentPty("s-1", entry)).toBe(true);
+    expect(isCurrentPty("s-1", entryOf(true))).toBe(false);
+    expect(isCurrentPty("s-2", entry)).toBe(false);
+  });
+});
+
+// A session an agent opened with no grid on screen waits to be adopted by the next one. When it ends
+// in a way that would have closed an open cell, nothing should adopt it later (#3055).
+describe("reportPtyExit — the unplaced mark of a session that ended", () => {
+  const exitAfter = (lifetimeMs: number) => ({ exitCode: 0, signal: undefined, lifetimeMs });
+
+  it("is dropped when the agent ended after it had started", () => {
+    register("s-1", true);
+    reportPtyExit("s-1", ptys.get("s-1") ?? entryOf(true), exitAfter(STARTUP_WINDOW_MS), vi.fn());
+    expect(placed.ids).toEqual(["s-1"]);
+  });
+
+  it("is dropped for a reattached pty however soon the agent ended", () => {
+    const entry = register("s-1", true);
+    entry.reattached = true;
+    reportPtyExit("s-1", entry, exitAfter(0), vi.fn());
+    expect(placed.ids).toEqual(["s-1"]);
+  });
+
+  it.each([
+    { name: "only the tmux client died", tmuxAlive: true, lifetimeMs: 60_000, cwd: "/repo", stale: false },
+    { name: "the agent died while starting", tmuxAlive: false, lifetimeMs: STARTUP_WINDOW_MS - 1, cwd: "/repo", stale: false },
+    { name: "it runs in a worktree", tmuxAlive: false, lifetimeMs: 60_000, cwd: "/home/me/proj/.claude/worktrees/proj-0123abcd/task", stale: false },
+    { name: "the exit is a stale one after the id was reused", tmuxAlive: false, lifetimeMs: 60_000, cwd: "/repo", stale: true },
+  ])("is kept when $name", ({ tmuxAlive, lifetimeMs, cwd, stale }) => {
+    const registered = register("s-1", true);
+    registered.cwd = cwd;
+    const exiting = stale ? { ...entryOf(true), cwd } : registered;
+    hasSession.mockReturnValue(tmuxAlive);
+
+    reportPtyExit("s-1", exiting, exitAfter(lifetimeMs), vi.fn());
+
+    expect(placed.ids).toEqual([]);
   });
 });

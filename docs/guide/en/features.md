@@ -165,6 +165,10 @@ a save replaces it; the newest few — and each can be
 The same editor still opens full-screen from a **Files** header button or by clicking a file
 path an agent printed.
 
+**Copy the whole file.** The copy button in the header (the two-sheets icon) puts the file's text on the clipboard — what the editor holds, unsaved edits included — and says so with its line count and first line. A selection you drag with the mouse across the line numbers copies the numbers rather than the text, so use this button for the whole file.
+
+**Recently opened files.** The clock button in the header lists the files opened in this folder, newest first, with the one open now marked — so a file whose tab you closed is one click away. The list is kept in this browser, per folder, across reloads. It is not **History**, which lists earlier versions of the one file that is open.
+
 **The editor colours the language it is showing.** Markdown, JS/TS and JSON are always ready;
 HTML (including `.vue`, `.svelte` and `.astro`), CSS/SCSS, YAML, XML/SVG, Python, Rust, Go,
 Java/Kotlin, C/C++/Objective-C, PHP and SQL are fetched the first time you open one — so such a
@@ -174,7 +178,7 @@ file may appear as plain text for a moment before the colours arrive. Anything e
 
 **An outline of a Markdown file.** The **Outline** button (the list icon) in the header lists the file's headings, indented by level — in the editor, the one you are reading is marked — and picking one puts it at the top: the line in the editor, or the heading in the Preview. Headings inside code fences, HTML comments and the front matter are not listed, nor are headings inside quotes or lists.
 
-**Editor and Preview side by side.** For a Markdown file, the button beside **Preview** (the split icon) shows the editor on the left and the Preview on the right. As you scroll the editor, the Preview follows the heading you are under — by heading, not by line, so within a section the two scroll on their own. The Preview shows the file as saved: an edit reaches it on the next save. Press the button again to go back to the editor alone. With the **Canvas** view on, the same button puts the editor beside the Canvas view instead; it shows the saved file too, and redraws when you save.
+**Editor and Preview side by side.** For a Markdown file, the button beside **Preview** (the split icon) shows the editor on the left and the Preview on the right. As you scroll the editor, the Preview follows the heading you are under — by heading, not by line, so within a section the two scroll on their own. The Preview shows the file as saved: an edit reaches it on the next save. Press the button again to go back to the editor alone. With the **Canvas** view on, the same button puts the editor beside the Canvas view instead; it shows the saved file too, and redraws when you save. A MulmoScript in the Canvas view also redraws when something outside the app rewrites the file — an editor, git, or the agent — while an edit you make in the view itself does not redraw it under you.
 
 **HTML pages, images, PDFs, video and audio open in the pane.** An `.html` file gets a **Preview** that shows the page
 itself (sandboxed: its scripts run but cannot fetch; images beside it load, a relative stylesheet or

@@ -10,7 +10,7 @@ import { initNotifier } from "./notifier.js";
 import { initMarkdownBackend } from "./plugins/markdown.js";
 import { initArtifactsBackend } from "./plugins/artifacts.js";
 import { initOpenPathBackend } from "./files/openPath.js";
-import { initMulmoScriptBackend } from "./plugins/mulmoscript.js";
+import { initMulmoScriptBackend, startMulmoScriptWatchers } from "./plugins/mulmoscript.js";
 import { initCollectionsBackend } from "./collections/collections.js";
 import { initSharedCollections } from "./collections/sharedCollections.js";
 import { initGoogleBackend } from "./calendar/google.js";
@@ -27,6 +27,8 @@ export interface BootBackendsDeps extends FeedsWorkerDeps {
   pubsub: ReturnType<typeof createPubSub>;
 }
 
+const liveSessionCwds = (): string[] => [...ptys.values()].map((entry) => entry.cwd);
+
 // The shared file-change publisher (markdown + html live-refresh) and the watchers that hear an
 // edit this app did NOT make. Must run before any write route fires — publishFileChange is a no-op
 // until configured.
@@ -40,7 +42,7 @@ function initFileChanges(pubsub: BootBackendsDeps["pubsub"]): void {
     pubsub,
     // The same root set the raw file route serves from: a path a browser names is contained against
     // the workspace and the live sessions' own directories, and nothing else.
-    sessionCwds: () => [...ptys.values()].map((entry) => entry.cwd),
+    sessionCwds: liveSessionCwds,
   });
 }
 
@@ -63,6 +65,8 @@ function initDocumentBackends(pubsub: BootBackendsDeps["pubsub"]): void {
   // becomes the absolute-path capability. `extraRoots` — every directory the user launches in, read
   // ONCE; why in mulmoscript.ts (#1951).
   initMulmoScriptBackend({ workspace: CLAUDE_CWD, extraRoots: getCwdPresets().map((preset) => preset.path), pubsub });
+  // The same watching for an open story, which hears its edits on the plugin's own channel (#3014).
+  startMulmoScriptWatchers({ workspace: CLAUDE_CWD, pubsub, sessionCwds: liveSessionCwds });
 }
 
 // The collection engine and the shared (firestore-backed) rosters on top of it.

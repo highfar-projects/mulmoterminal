@@ -12,13 +12,17 @@ export interface FullGuiClaimRequest {
   /** The caller's own reattach probe, taken once and shared — see spawn-claude.ts. */
   wouldReattach: boolean;
   agent: SessionAgent;
+  /** Limited to some GUI tool groups at spawn (#3033): never carries the all-tools url, wherever it
+   *  runs — so any claim the id holds is released, as for any spawn not handed that url. */
+  restricted?: boolean;
 }
 
 /** Claim, then run `spawn` with the answer. A throw releases the claim (fresh spawns only) and is
  *  rethrown unchanged. */
 export function spawnWithFullGuiClaim<T>(request: FullGuiClaimRequest, spawn: (carriesFullGuiMcp: boolean) => T): T {
-  const { sessionId, attachGuiMcp, cwd, wouldReattach, agent } = request;
-  const carriesFullGuiMcp = claimFullGuiMcp(sessionId, attachGuiMcp, cwd, wouldReattach, agent);
+  const { sessionId, attachGuiMcp, cwd, wouldReattach, agent, restricted = false } = request;
+  if (restricted) releaseAllToolsSession(sessionId);
+  const carriesFullGuiMcp = !restricted && claimFullGuiMcp(sessionId, attachGuiMcp, cwd, wouldReattach, agent);
   try {
     return spawn(carriesFullGuiMcp);
   } catch (e) {

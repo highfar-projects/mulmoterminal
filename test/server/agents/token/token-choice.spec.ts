@@ -6,6 +6,7 @@ import {
   chooseToken,
   FIVE_HOUR_CEILING_PERCENT,
   nearLimit,
+  sevenDayCeiling,
   SWITCH_AT_PERCENT,
   type TokenCandidate,
 } from "../../../../server/agents/token/token-choice";
@@ -169,5 +170,65 @@ describe("spreading parallel sessions (#2926)", () => {
 
   it("treats a missing count as nobody running", () => {
     expect(chooseToken([candidate("a", limits(50, DAY)), busy("b", limits(50, DAY), 1)], NOW)).toBe("a");
+  });
+});
+
+describe("a weekly reserve (#3064)", () => {
+  const reserved = (id: string, readings: RateLimits | null, reserveWeeklyPercent: number, spentUntil_sec: number | null = null): TokenCandidate => ({
+    id,
+    limits: readings,
+    spentUntil_sec,
+    reserveWeeklyPercent,
+  });
+
+  it("lowers the weekly ceiling to what the reserve leaves, never raising it past the switch line", () => {
+    expect(sevenDayCeiling()).toBe(SWITCH_AT_PERCENT);
+    expect(sevenDayCeiling(0)).toBe(SWITCH_AT_PERCENT);
+    expect(sevenDayCeiling(1)).toBe(SWITCH_AT_PERCENT);
+    expect(sevenDayCeiling(5)).toBe(95);
+    expect(sevenDayCeiling(50)).toBe(50);
+  });
+
+  it("holds a candidate out once its week reaches the reserve, and not before", () => {
+    expect(blockedUntil(reserved("a", limits(94.9, DAY), 5), NOW)).toBeNull();
+    expect(blockedUntil(reserved("a", limits(95, DAY), 5), NOW)).toBe(NOW + DAY);
+  });
+
+  it("does not hold out on a reserve the window has reset past", () => {
+    const resetPassed: RateLimits = { fiveHour: null, sevenDay: { usedPercentage: 99, resetsAt_sec: NOW - 1 } };
+    expect(blockedUntil(reserved("a", resetPassed, 5), NOW)).toBeNull();
+  });
+
+  it("skips the reserved candidate for another below its line", () => {
+    expect(chooseToken([reserved("a", limits(96, HOUR), 5), candidate("b", limits(90, 6 * DAY))], NOW)).toBe("b");
+  });
+
+  it("ranks by the room above the reserve", () => {
+    // a: 60% used, 40% reserved -> nothing above the line; b: 60% used, no reserve.
+    expect(burnPace(limits(60, DAY), NOW, 40)).toBe(0);
+    expect(chooseToken([reserved("a", limits(30, DAY), 40), candidate("b", limits(50, DAY))], NOW)).toBe("b");
+    expect(chooseToken([reserved("a", limits(30, DAY), 5), candidate("b", limits(50, DAY))], NOW)).toBe("a");
+  });
+
+  it("never falls back onto a candidate down to its reserve, even when it frees soonest", () => {
+    const a = reserved("a", limits(96, HOUR), 5);
+    const b = candidate("b", limits(SWITCH_AT_PERCENT, 3 * DAY));
+    expect(chooseToken([a, b], NOW)).toBe("b");
+  });
+
+  it("chooses nothing when every candidate is down to its reserve", () => {
+    expect(chooseToken([reserved("a", limits(96, HOUR), 5), reserved("b", limits(91, DAY), 10)], NOW)).toBeNull();
+  });
+
+  it("still falls back onto a reserved candidate held out for another reason", () => {
+    const a = reserved("a", limits(10, DAY, FIVE_HOUR_CEILING_PERCENT, HOUR), 5);
+    const b = candidate("b", limits(SWITCH_AT_PERCENT, 3 * DAY));
+    expect(chooseToken([a, b], NOW)).toBe("a");
+  });
+
+  it("moves a running session at the reserve's line", () => {
+    expect(nearLimit(limits(94, DAY), NOW, 5)).toBe(false);
+    expect(nearLimit(limits(95, DAY), NOW, 5)).toBe(true);
+    expect(nearLimit(limits(95, DAY), NOW)).toBe(false);
   });
 });

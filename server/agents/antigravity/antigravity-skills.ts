@@ -16,11 +16,10 @@
 // Unlike the MCP config there is no off-switch and nothing machine-specific in what we add, so
 // entries are only ever ensured present, never removed — deleting a path entry we did not write
 // would break a user's own skill setup with no error anywhere.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { isRecord } from "../../../common/isRecord.js";
 import { symlinkFreeWriteTarget } from "../../infra/fs/symlink-guard.js";
-import { excludeFromGit } from "../git-exclude.js";
+import { readAntigravityConfig, writeAntigravityConfig } from "./antigravity-config-file.js";
 
 /** agy's workspace customization dir — the same one its MCP config lives in. */
 const CUSTOMIZATION_DIR = ".agents";
@@ -62,21 +61,6 @@ export function syncAntigravitySkillsConfig(cwd: string): void {
   // reads/writes below all follow links — so a cloned repo could point this sync at a file of
   // the user's own and have it silently rewritten (symlink-guard.ts).
   if (!symlinkFreeWriteTarget(file)) return;
-  let existing: unknown = {};
-  if (existsSync(file)) {
-    try {
-      existing = JSON.parse(readFileSync(file, "utf8"));
-    } catch {
-      return; // present but not JSON — someone else's file, and rewriting it would lose it
-    }
-  }
-  const merged = mergeAntigravitySkillsConfig(existing);
-  if (merged === null) return;
-  try {
-    mkdirSync(path.dirname(file), { recursive: true });
-    writeFileSync(file, JSON.stringify(merged, null, 2) + "\n", "utf8");
-    excludeFromGit(cwd, EXCLUDE_ENTRY);
-  } catch (err) {
-    console.warn(`[antigravity] could not write ${file}: ${err}`);
-  }
+  const merged = mergeAntigravitySkillsConfig(readAntigravityConfig(file));
+  if (merged !== null) writeAntigravityConfig(cwd, file, merged, EXCLUDE_ENTRY);
 }

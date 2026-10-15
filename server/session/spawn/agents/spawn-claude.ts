@@ -5,7 +5,7 @@ import type { WebSocket } from "ws";
 import { CLAUDE_CWD, PORT } from "../../../config/env.js";
 import { hookSocketPath } from "../../../infra/hook-socket.js";
 import { devcontainerAuthEnv } from "../../../infra/claude-credentials.js";
-import { guiMcpEnv, carriesFullGuiMcp, directoryGroupsMcpConfigJson, fullGuiAllowedTools } from "../setup/mcp-config.js";
+import { guiMcpEnv, carriesFullGuiMcp, directoryGroupsMcpConfigJson, fullGuiAllowedTools, restrictedAllowedTools } from "../setup/mcp-config.js";
 import type { ToolGroup } from "../../../../common/toolGroups.js";
 import {
   getUserMcpServers,
@@ -25,9 +25,10 @@ import { customAgentSessions, hookedSessions, knownSessions, launchChoices, reme
 import { ptyWouldReattach, type PtySpawnEnv } from "../../pty/pty-spawn.js";
 import { ptyExitLine } from "../../pty/pty-exit-log.js";
 import { startAgentPty, type StartedAgentPty } from "../../pty/agent-pty-start.js";
+import { sessionGuiRestriction } from "./session-gui-restriction.js";
 import { spawnWithFullGuiClaim } from "../spawn-with-full-gui-claim.js";
 import { attachDraftInjection } from "../draft-injection.js";
-import { sendExitAndClose, sendFrame } from "../../ws-frames.js";
+import { sendFrame } from "../../ws-frames.js";
 import { wireBufferedOutput } from "../../pty/output-relay.js";
 import { sessionExistsOnDisk } from "../../session-reads.js";
 import { accountSpawnEnv } from "../../session-home.js";
@@ -40,7 +41,7 @@ import { announceCredential } from "../../credentials/credential-announce.js";
 import { takeSwitchedToken } from "../../credentials/token-switch-pins.js";
 import type { PtyEntry } from "../../types.js";
 import type { SpawnDeps } from "../spawn-deps.js";
-import { handlePtyExit } from "../../pty/pty-exit.js";
+import { isCurrentPty, reportPtyExit } from "../../pty/pty-exit.js";
 import { loadDirConfig } from "../../../config/dir/dir-config.js";
 import { repoRootSync } from "../../../git/repo-root-sync.js";
 import { workdirFooter } from "../../../git/pr-footer.js";
@@ -85,6 +86,9 @@ export interface SpawnClaudeOptions {
   // caller from the DEFAULT login's config, because that is where the launcher's switches live
   // and the account's own `.claude.json` has none of them. Empty for everything else.
   directoryMcpGroups?: readonly ToolGroup[];
+  /** Limit this session to these GUI tool groups, for this spawn and every later one on the id
+   *  (#3033). Absent leaves whatever was recorded before — on a fresh id, nothing. */
+  guiGroups?: readonly ToolGroup[] | undefined;
 }
 
 // The `work in <clone>` line for a session's PRs, or null when the footer is switched off or the
@@ -303,7 +307,9 @@ function sessionProgram(
   return { file: launch.file, prefixArgs: launch.prefixArgs, spawnEnv: env, note };
 }
 
-/** What a session is handed as --mcp-config, if anything: every tool, or the directory's groups.
+/** What a session is handed as --mcp-config, if anything: every tool, or the directory's groups —
+ *  or, for a restricted session, exactly its groups, so a resume has the tools the spawn had
+ *  whatever the worktree registered; the MCP routes serve nothing outside them either way.
  *  Its own function for the reason resolveSessionBackend states: the spawn body is at its line
  *  budget. File-ized only when it is actually passed, so a cell that never carries the GUI MCP
  *  leaves no file behind for reap to clean up. */
@@ -311,11 +317,22 @@ function sessionMcpConfig(
   mcpJson: string,
   sessionId: string,
   fullGuiMcp: boolean,
-  directoryMcpGroups: readonly ToolGroup[],
+  handedGroups: readonly ToolGroup[],
 ): { mcpConfig: string; directoryGroupsJson: string | null } {
-  const directoryGroupsJson = directoryMcpGroups.length > 0 ? directoryGroupsMcpConfigJson({ sessionId, port: PORT, groups: directoryMcpGroups }) : null;
+  const directoryGroupsJson = handedGroups.length > 0 ? directoryGroupsMcpConfigJson({ sessionId, port: PORT, groups: handedGroups }) : null;
   const handedMcpJson = fullGuiMcp ? mcpJson : directoryGroupsJson;
   return { mcpConfig: handedMcpJson === null ? mcpJson : mcpConfigArgument(sessionId, handedMcpJson), directoryGroupsJson };
+}
+
+// What `--allowedTools` pre-approves. Carrying the whole GUI MCP: the GUI tools + the user's own
+// configured MCP servers (mcp__<id>), so their tools don't trip a permission prompt on every call.
+// A project-directory cell: no --mcp-config of ours, so there is nothing of ours to name — except
+// the tool GROUPS the directory may have registered itself, which are pre-approved blind (see
+// GRID_MCP_TOOLS). The user's own servers keep their normal prompts there, since that path never
+// went through our allowlist before. A restricted session: only its own groups' share of that.
+function claudeAllowedTools(deps: SpawnDeps, fullGuiMcp: boolean, restrictedTo: readonly ToolGroup[] | null): string {
+  if (fullGuiMcp) return fullGuiAllowedTools(deps.guiMcpTools, getUserMcpServers());
+  return restrictedTo === null ? deps.gridMcpTools : restrictedAllowedTools(deps.gridMcpTools, restrictedTo);
 }
 
 export function createClaudeSpawner(deps: SpawnDeps) {
@@ -324,8 +341,9 @@ export function createClaudeSpawner(deps: SpawnDeps) {
   // a viewer yet (e.g. spawnBackgroundChat) — output just buffers until a client
   // reattaches.
   function spawnClaudePty(sessionId: string, resume: string | null, ws: WebSocket | null, options: SpawnClaudeOptions = {}): PtyEntry {
-    const { initialPrompt, cwd = CLAUDE_CWD, attachGuiMcp = true, draft, launch, customAgentId, directoryMcpGroups = [] } = options;
-    const fullGuiMcp = carriesFullGuiMcp(attachGuiMcp, cwd, "claude");
+    const { initialPrompt, cwd = CLAUDE_CWD, attachGuiMcp = true, draft, launch, customAgentId, directoryMcpGroups = [], guiGroups } = options;
+    const restrictedTo = sessionGuiRestriction(sessionId, guiGroups);
+    const fullGuiMcp = restrictedTo === null && carriesFullGuiMcp(attachGuiMcp, cwd, "claude");
     // fullGuiMcp picks the MCP mode (see buildClaudeArgs, and its own doc for who earns it): our
     // broker on one all-tools url; a project-directory cell gets none of ours and loads the GUI
     // tools its own directory registered. Either way the user's own MCP servers load.
@@ -339,7 +357,8 @@ export function createClaudeSpawner(deps: SpawnDeps) {
     const credential = sessionCredentialFor(deps, sessionId, resolved, customAgentId, canResume);
 
     const hookSettings = sessionHookSettings(deps.hookSettingsJson, sessionId, credential.env, dir.devcontainer === true);
-    const { mcpConfig, directoryGroupsJson } = sessionMcpConfig(deps.mcpConfigJson(sessionId, "127.0.0.1"), sessionId, fullGuiMcp, directoryMcpGroups);
+    const handedGroups = restrictedTo ?? directoryMcpGroups;
+    const { mcpConfig, directoryGroupsJson } = sessionMcpConfig(deps.mcpConfigJson(sessionId, "127.0.0.1"), sessionId, fullGuiMcp, handedGroups);
     const args = buildClaudeArgs({
       model: resolved.model,
       sessionId,
@@ -351,13 +370,7 @@ export function createClaudeSpawner(deps: SpawnDeps) {
       permissionMode: deps.permissionMode,
       attachGuiMcp: fullGuiMcp || directoryGroupsJson !== null,
       mcpConfig,
-      // Carrying the whole GUI MCP: auto-allow the GUI tools + the user's own configured MCP
-      // servers (mcp__<id>), so their tools don't trip a permission prompt on every call.
-      // A project-directory cell: no --mcp-config at all, so there is nothing of ours to name —
-      // except the tool GROUPS the directory may have registered itself, which we pre-approve
-      // blind (see GRID_MCP_TOOLS). The user's own servers keep their normal prompts there, since
-      // that path never went through our allowlist before.
-      allowedTools: fullGuiMcp ? fullGuiAllowedTools(deps.guiMcpTools, getUserMcpServers()) : deps.gridMcpTools,
+      allowedTools: claudeAllowedTools(deps, fullGuiMcp, restrictedTo),
       addDirs,
       appendedPrompt: sessionAppendedPrompt(sessionId, cwd, dir.appendSystemPrompt),
     });
@@ -399,7 +412,7 @@ export function createClaudeSpawner(deps: SpawnDeps) {
       // Only a NEW process is on the chosen token; a reattached one keeps the token it started with.
       if (!reattaching) rememberTokenSession(sessionId, credential.tokenId);
       if (!reattaching) printMovedNotice(sessionId, ws, credential.tokenId);
-      return spawnWithFullGuiClaim({ sessionId, attachGuiMcp, cwd, wouldReattach: reattaching, agent: "claude" }, () => {
+      return spawnWithFullGuiClaim({ sessionId, attachGuiMcp, cwd, wouldReattach: reattaching, agent: "claude", restricted: restrictedTo !== null }, () => {
         const where = { devcontainer: { cwd, enabled: dir.devcontainer === true }, permissionMode: deps.permissionMode };
         const program = sessionProgram(deps.claudeBin, sessionId, customAgentId, canResume ? resume : null, credential.unset, where);
         const spawnEnv = { ...program.spawnEnv, env: { ...program.spawnEnv.env, ...claudeRendererEnv(sessionId, cwd) } };
@@ -429,17 +442,18 @@ export function createClaudeSpawner(deps: SpawnDeps) {
     const output = wireBufferedOutput(entry, deps.outputBufferLimit, scanForDraftReady);
 
     entry.term.onExit(({ exitCode, signal }) => {
-      console.log(ptyExitLine({ agent: "claude", exitCode, signal, lifetimeMs: Date.now() - spawnedAtMs, cwd, sessionId }));
+      const lifetimeMs = Date.now() - spawnedAtMs;
+      console.log(ptyExitLine({ agent: "claude", exitCode, signal, lifetimeMs, cwd, sessionId }));
       output.flush(); // a queued batch must not arrive after the exit frame
-      sendExitAndClose(entry.ws, exitCode, signal);
       // Clear the dot if it died mid-turn, then tear down everything (deletes
       // ptys/knownSessions/activity and publishes "closed") so a process that
       // exits on its own — e.g. a brand-new session that never persisted —
       // doesn't linger in the sidebar.
-      deps.setWorking(sessionId, false);
+      // Only for the CURRENT pty: a restart's replacement may already hold this id.
+      if (isCurrentPty(sessionId, entry)) deps.setWorking(sessionId, false);
       // Not always a reap: under tmux this pty is the CLIENT, and one killed from outside leaves
-      // the session running (#1496). handlePtyExit asks tmux which of the two just happened.
-      handlePtyExit(sessionId, deps.reap);
+      // the session running (#1496). reportPtyExit asks tmux which of the two just happened.
+      reportPtyExit(sessionId, entry, { exitCode, signal, lifetimeMs }, deps.reap);
     });
 
     return entry;

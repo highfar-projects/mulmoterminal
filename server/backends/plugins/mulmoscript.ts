@@ -36,21 +36,28 @@ import { storiesRootId } from "../files/storiesRoot.js";
 import { uniqueRootPaths } from "../files/storiesRootSet.js";
 import { canonicalPath } from "../../infra/fs/canonical-path.js";
 import { isRecord } from "../../../common/isRecord.js";
+import { MULMOSCRIPT_SCOPE } from "../../../common/fileChannel.js";
+import { mulmoScriptWatch } from "./mulmoscriptWatch.js";
+import type { SubscriptionSource } from "../files/fileChange.js";
+import type { ScriptDirs } from "./mulmoscriptWatchRules.js";
 
 /** Pubsub channel the extracted View subscribes to for generation progress —
  *  `plugin:<scope>:<event>`, matching the client runtime's channel formula
  *  (src/composables/pluginRuntime.ts) with scope "mulmoScript". */
-const GENERATION_CHANNEL = `plugin:mulmoScript:${GENERATION_EVENT}`;
+const GENERATION_CHANNEL = `plugin:${MULMOSCRIPT_SCOPE}:${GENERATION_EVENT}`;
 
 /** Same formula, for "this script was written" — what makes an agent's edit appear in a
  *  canvas that is already open, instead of only after the user reopens it. */
-const SCRIPT_CHANGED_CHANNEL = `plugin:mulmoScript:${SCRIPT_CHANGED_EVENT}`;
+const SCRIPT_CHANGED_CHANNEL = `plugin:${MULMOSCRIPT_SCOPE}:${SCRIPT_CHANGED_EVENT}`;
 
 interface PubSubLike {
   publish(channel: string, data: unknown): void;
 }
 
 let ops: MulmoScriptServerOps | null = null;
+/** Where the plugin keeps stories, as it was registered — what a watched file's `filePath` is
+ *  resolved against. Null before the backend is initialised. */
+let scriptDirs: ScriptDirs | null = null;
 /** The named stories root this server actually registered with the plugin, or null before boot. */
 let registeredRoots: Array<{ id: string; canonical: string; paths: string[] }> = [];
 
@@ -75,7 +82,7 @@ function probeFfmpeg(): void {
   // eslint-disable-next-line sonarjs/no-os-command-from-path -- 'ffmpeg' is deliberately resolved from PATH (that's what the probe checks); fixed argv, no shell
   execFile("ffmpeg", ["-version"], (err) => {
     ffmpegAvailable = !err;
-    if (err) console.warn("[mulmo-script] ffmpeg not found — movie and beat rendering will be unavailable");
+    if (err) console.warn("[mulmo-script] ffmpeg not found — movies and beats that make or use a movie will be unavailable");
   });
 }
 
@@ -149,8 +156,9 @@ export function initMulmoScriptBackend(deps: {
   // gate is lexical, so knowing only one hides the Canvas entry for every deck under the other
   // (Codex P1 iter-5 on #1934). The plugin still resolves against the canonical directory.
   registeredRoots = [...byCanonical.values()];
+  scriptDirs = { storiesDir: path.resolve(deps.workspace, "artifacts", "stories"), rootDirs: dirForId };
   ops = createMulmoScriptServerOps({
-    storiesDir: path.resolve(deps.workspace, "artifacts", "stories"),
+    storiesDir: scriptDirs.storiesDir,
     extraRoots: Object.fromEntries([...dirForId].map(([id, dir]) => [id, dir])),
     // Registration is the containment boundary and it is checked FIRST, so answering here for an
     // id we never registered would still not widen what is addressable. The guard is the lookup.
@@ -184,7 +192,10 @@ export function initMulmoScriptBackend(deps: {
     },
     // An agent — or another window — wrote this script. Every open View reloads from disk;
     // the one that made the write recognises its own `origin` on the event and skips it.
+    // Remembered before it is published, so the watcher on an open story can tell this write from
+    // one made outside the plugin (#3014).
     onScriptChanged: (event) => {
+      mulmoScriptWatch.recordOwnWrite(event, scriptDirs);
       deps.pubsub?.publish(SCRIPT_CHANGED_CHANNEL, event);
     },
     log: {
@@ -469,6 +480,18 @@ const realpathOrNull = async (p: string): Promise<string | null> => {
  *  Handles everything itself — MUST be registered BEFORE mountAllRoutes so the
  *  generic catch-all (lexical guard only, no movie trigger) never runs for
  *  this tool. */
+/** Watch the stories a Canvas view has open, so an edit made outside the plugin redraws them
+ *  (#3014). After initMulmoScriptBackend: the directories and the publish are what it registered.
+ *  A file is watched only inside the workspace, a live session's directory, or a stories root. */
+export function startMulmoScriptWatchers(deps: { workspace: string; pubsub: SubscriptionSource; sessionCwds: () => Iterable<string> }): () => void {
+  return mulmoScriptWatch.start({
+    pubsub: deps.pubsub,
+    dirs: () => scriptDirs,
+    roots: () => [deps.workspace, ...deps.sessionCwds(), ...registeredRoots.map((root) => root.canonical)],
+    publishChanged: (filePath) => ops?.publishScriptChanged(filePath),
+  });
+}
+
 /** Drive the script-changed broadcast without a real write — the publish is the feature, and
  *  it has no other observable, so a test needs a way to reach it. */
 export function publishMulmoScriptChangedForTest(filePath: string, origin?: string): void {

@@ -36,6 +36,7 @@ import { useFileSearchPanel } from "../composables/useFileSearchPanel";
 import { useFileTreeWidth } from "../composables/useFileTreeWidth";
 import { clippedNameTip } from "./fileTreeWidth";
 import FilesToolbarButton from "./FilesToolbarButton.vue";
+import FilesEditorActions from "./FilesEditorActions.vue";
 import type { StoriesRoots } from "../composables/canvasOpenFile";
 import { filesRowActions, type FilesRowAction } from "./filesRowActions";
 import { menuAttrsFor, useFilesRowMenu } from "../composables/useFilesRowMenu";
@@ -57,6 +58,7 @@ import { useFileHistory } from "../composables/useFileHistory";
 import { useRequestedOpen } from "../composables/useRequestedOpen";
 import { wantsNewTab } from "../composables/newTabModifier";
 import FilesHistoryMenu from "./FilesHistoryMenu.vue";
+import FilesRecentMenu from "./FilesRecentMenu.vue";
 import FilesComparingBanner from "./FilesComparingBanner.vue";
 
 const { t } = useI18n();
@@ -288,7 +290,8 @@ const {
   closeFinder,
   onFinderPick,
   revealPath,
-  showInTree,
+  followFrontTab,
+  startEpoch,
   reset: resetReveal,
 } = useFilesReveal({
   tree,
@@ -296,6 +299,7 @@ const {
   started: () => started,
   open: (pathRel) => tabs.open(pathRel),
   openPath,
+  frontPath: () => strip.value.activePath,
 });
 
 // "Search in files" (#2140) — the finder's companion, and its own panel for the reason its own
@@ -334,7 +338,6 @@ function teardown(): void {
   // re-root and adopt the OLD project's content into the new tree, because its own generation check
   // still passes (Codex on #2102). Invalidating ALL of them is what makes "the pane is being torn
   // down" stop the work, rather than each request's own successor — so all three say so here.
-  restored = false;
   resetReveal();
   gitStatus.reset();
   file.teardown();
@@ -363,22 +366,9 @@ function teardown(): void {
 // it in the same breath (Codex on #2102).
 let started: Promise<void> = Promise.resolve();
 
-// Whether the remembered pane has been put back. Until then the tree is being restored to where the
-// reader LEFT it — its expanded folders and its scroll (#2156) — and following the front tab would
-// scroll it somewhere else.
-let restored = false;
-
-// The tree follows the tab in front, as VS Code's explorer follows the active editor (#2495): its
-// folders open and its row comes into view. A row already on screen — the one just clicked — stays.
-watch(
-  () => strip.value.activePath,
-  (pathRel) => {
-    if (pathRel && restored) void showInTree(pathRel);
-  },
-);
-
 async function start(): Promise<void> {
   const reqIdAtStart = file.generation();
+  const startedAt = startEpoch();
   await nextTick();
   if (editorHost.value) file.attach(editorHost.value);
   // A re-root makes a new editor, which knows nothing of the reader's choice.
@@ -386,7 +376,7 @@ async function start(): Promise<void> {
   void gitStatus.refresh();
   await tree.loadRoot();
   await restore(props.initialState ?? null, reqIdAtStart);
-  restored = true;
+  if (!followFrontTab(startedAt)) return;
   // An explicitly requested path wins over whatever was remembered — it is the more recent
   // intent (a clicked path in terminal output).
   if (props.requestedPath) void openRequested(props.requestedPath, props.requestedLocation ?? null);
@@ -538,14 +528,14 @@ defineExpose({
       <!-- Each panel's only entrance that needs no configuration: neither `files-find` nor
            `files-search` has a default binding, so without these the features are invisible to
            anyone who has not written a keymap. -->
+      <FilesRecentMenu :cwd="cwd" :open-path="openPath" @open="(pathRel) => tabs.open(pathRel)" />
       <FilesToolbarButton icon="search" :label="t('tips.panes.findByName')" test-id="files-find-btn" opens-a-panel @click="openFinder()" />
       <FilesToolbarButton icon="manage_search" :label="t('tips.panes.searchInFiles')" test-id="files-search-btn" opens-a-panel @click="openSearch()" />
-      <FilesToolbarButton
-        v-if="insertTarget && openPath && !unpreviewable && (!showCanvas || layout.editor)"
-        icon="alternate_email"
-        :label="t('tips.panes.insertSelection')"
-        test-id="files-insert-selection"
-        @click="insertSelection"
+      <FilesEditorActions
+        v-if="openPath && !unpreviewable && (!showCanvas || layout.editor)"
+        :editor="file.editor.value"
+        :can-insert="!!insertTarget"
+        @insert="insertSelection"
       />
       <FilesToolbarButton icon="refresh" :label="t('tips.panes.reloadTree')" @click="reloadTree" />
       <FilesToolbarButton icon="right_panel_close" :label="t('tips.panes.closeFiles')" @click="requestClose" />
@@ -620,8 +610,11 @@ defineExpose({
           type="button"
           data-testid="files-row"
           :data-path="node.path"
-          class="flex w-full cursor-pointer items-center gap-1 whitespace-nowrap border-0 bg-transparent px-2 py-[3px] text-left font-mono text-[12px]"
-          :class="node.path === openPath ? 'bg-hover text-fg' : 'text-secondary hover:bg-hover hover:text-fg'"
+          class="flex w-full cursor-pointer items-center gap-1 whitespace-nowrap border-0 px-2 py-[3px] text-left font-mono text-[12px]"
+          :class="
+            node.path === openPath ? 'bg-selected text-fg shadow-[inset_2px_0_0_var(--accent)]' : 'bg-transparent text-secondary hover:bg-hover hover:text-fg'
+          "
+          :aria-current="node.path === openPath ? 'true' : undefined"
           :style="{ paddingLeft: `${8 + depth * 14}px` }"
           @click="openFile(node, $event)"
           @pointerover="tipIfClipped(node.name, $event)"

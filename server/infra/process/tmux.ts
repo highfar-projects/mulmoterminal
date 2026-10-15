@@ -3,15 +3,16 @@
 // back — like `screen`/`tmux` do. When tmux isn't installed, callers fall back to a
 // direct pty.spawn (non-persistent, current behavior).
 //
-// Isolation: we use our OWN tmux server (`-L mulmoterminal`) and config file, so none
-// of this touches the user's own tmux sessions, keybindings, or status bar.
+// Isolation: we use our OWN tmux server (SERVER_SOCKET: `-L mulmoterminal` on the account's own
+// home, `mulmoterminal-<hash>` on an overridden HOME) and config file, so none of this touches the
+// user's own tmux sessions, keybindings, or status bar.
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 // The bind port, to tell OUR leaked PORT from the user's own (see isOwnPort). config/ is
 // otherwise above this layer; the alternative was threading the same two values through
 // tmuxAvailable's four call sites, where a path that forgot them would scrub nothing.
-import { PORT } from "../../config/env.js";
+import { HOME_SCOPE_SUFFIX, PORT } from "../../config/env.js";
 import { isLauncherEnvVar } from "./pty-env.js";
 import { spawnCapture, spawnCaptureAsync } from "./spawnCapture.js";
 import { splitLines } from "../fs/split-lines.js";
@@ -19,7 +20,8 @@ import { callerFrames, traceTmux } from "../tmux-trace.js";
 import { writeFileAtomicSync } from "../../files/atomic-write.js";
 import { TMUX_PREFIX_DEFAULT, staleSendPrefixKeys, tmuxPrefixCommands } from "../../../common/tmuxPrefix.js";
 
-const SERVER_SOCKET = "mulmoterminal";
+// Per HOME, so a server started on another one never sweeps or reconfigures this one's sessions (#3039).
+const SERVER_SOCKET = `mulmoterminal${HOME_SCOPE_SUFFIX}`;
 const SESSION_PREFIX = "mt-";
 const CONF_FILE = path.join(os.homedir(), ".mulmoterminal", "tmux.conf");
 

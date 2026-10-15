@@ -7,7 +7,7 @@
 // the pane already carries enough, and the list must be FRESH — the agent running in this very
 // directory creates files while the user watches, so a list cached between openings would be
 // missing exactly the file they just saw scroll past.
-import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, useId, useTemplateRef, watch } from "vue";
 import { finderRow, rankPaths } from "./filePathMatch";
 import type { FilesPanelSeed } from "../composables/filesPanelSeed";
 import { usePickerPanelKeys } from "../composables/usePickerPanelKeys";
@@ -24,6 +24,8 @@ const MAX_RESULTS = 50;
 
 const props = defineProps<{ cwd: string | null; seed?: FilesPanelSeed | undefined }>();
 const emit = defineEmits<{ pick: [pathRel: string]; close: [] }>();
+// Per instance: two panes can be mounted at once, and the list and row ids must name this one's.
+const listId = `file-finder-list-${useId()}`;
 
 const query = ref("");
 // The palette's `/` text, also when the finder is already open.
@@ -132,9 +134,9 @@ onBeforeUnmount(() => {
         type="text"
         role="combobox"
         aria-expanded="true"
-        aria-controls="file-finder-list"
+        :aria-controls="listId"
         aria-autocomplete="list"
-        :aria-activedescendant="rows.length > 0 ? `file-finder-row-${active}` : undefined"
+        :aria-activedescendant="rows.length > 0 ? `${listId}-row-${active}` : undefined"
         placeholder="Open a file by name"
         class="min-w-0 flex-auto border-0 bg-transparent font-mono text-[13px] text-fg outline-none placeholder:text-dim"
       />
@@ -151,10 +153,10 @@ onBeforeUnmount(() => {
     <p v-if="loadError" role="alert" data-testid="file-finder-error" class="px-3 py-2 text-[12px] text-err">{{ loadError }}</p>
     <p v-else-if="loading" class="px-3 py-2 text-[12px] text-muted">Reading the project…</p>
     <p v-else-if="rows.length === 0" data-testid="file-finder-empty" class="px-3 py-2 text-[12px] text-muted">No file matches that.</p>
-    <ul v-show="!loading && !loadError && rows.length > 0" id="file-finder-list" ref="listEl" role="listbox" class="max-h-[320px] overflow-auto py-1">
+    <ul v-show="!loading && !loadError && rows.length > 0" :id="listId" ref="listEl" role="listbox" class="max-h-[320px] overflow-auto py-1">
       <li
         v-for="(row, index) in rows"
-        :id="`file-finder-row-${index}`"
+        :id="`${listId}-row-${index}`"
         :key="row.path"
         :data-index="index"
         data-testid="file-finder-row"

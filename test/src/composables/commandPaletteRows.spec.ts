@@ -197,7 +197,7 @@ describe("the Files tab actions", () => {
     expect(reasons(ZOOMED)).toEqual(TAB_ACTIONS.map((action) => [action, "files pane only"]));
   });
 
-  it("say they need an enlarged terminal first, which is what puts a pane there at all", () => {
+  it("say they need an enlarged terminal first, since the key names no tile to act on", () => {
     expect(reasons({ ...UNZOOMED, filesOpen: true })).toEqual(TAB_ACTIONS.map((action) => [action, "needs enlarged"]));
   });
 

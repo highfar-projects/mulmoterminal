@@ -42,6 +42,8 @@ interface Seen {
   draft?: string | undefined;
   /** What `groupsForSpawn` decided for this agent — see the describe block at the end. */
   mcpGroups?: readonly string[] | undefined;
+  /** The GUI groups a claude spawn was limited to (#3033). */
+  guiGroups?: readonly string[] | undefined;
 }
 const seen = new Map<string, Seen>();
 const record =
@@ -55,7 +57,7 @@ const record =
 const lastOption = (args: unknown[]): Seen => {
   const opts = args.find((a, i) => i > 2 && a !== null && typeof a === "object");
   const o = (opts ?? {}) as Seen;
-  return { initialPrompt: o.initialPrompt, draft: o.draft, mcpGroups: o.mcpGroups };
+  return { initialPrompt: o.initialPrompt, draft: o.draft, mcpGroups: o.mcpGroups, guiGroups: o.guiGroups };
 };
 
 const app = express();
@@ -75,9 +77,9 @@ const call = routeCall(app);
 const SKILL_SEED = "/mulmoterminal-theme";
 const CODEXIFIED = 'Use the "mulmoterminal-theme" skill.';
 
-async function spawn(agent: string, message = SKILL_SEED, draft = false): Promise<Seen> {
+async function spawn(agent: string, message = SKILL_SEED, draft = false, extra: Record<string, unknown> = {}): Promise<Seen> {
   seen.delete(agent);
-  await call("/api/plugin/spawnBackgroundChat", jsonPost({ message, agent, draft }));
+  await call("/api/plugin/spawnBackgroundChat", jsonPost({ message, agent, draft, ...extra }));
   const got = seen.get(agent);
   if (!got) throw new Error(`the ${agent} spawner was never called`);
   return got;
@@ -139,5 +141,32 @@ describe("which agents are asked for the directory's tool groups", () => {
     for (const agent of ["antigravity", "grok", "muse"]) {
       expect((await spawn(agent)).mcpGroups).toEqual(["render"]);
     }
+  });
+});
+
+// The restriction has to reach the claude spawner on BOTH claude branches and the codex and copilot
+// spawners, and no other spawner may be started with it ignored — that would be the full-toolset
+// session the caller asked to avoid.
+describe("guiGroups through the route (#3033)", () => {
+  it("hands claude the groups, run and draft alike", async () => {
+    expect((await spawn("claude", "go", false, { guiGroups: ["render"] })).guiGroups).toEqual(["render"]);
+    expect((await spawn("claude", "go", true, { guiGroups: [] })).guiGroups).toEqual([]);
+  });
+
+  it("hands claude nothing when the field is absent", async () => {
+    expect((await spawn("claude", "go")).guiGroups).toBeUndefined();
+  });
+
+  it.each(["codex", "copilot"])("hands %s the groups, and nothing when the field is absent", async (agent) => {
+    expect((await spawn(agent, "go", false, { guiGroups: ["data"] })).guiGroups).toEqual(["data"]);
+    expect((await spawn(agent, "go", false, { guiGroups: [] })).guiGroups).toEqual([]);
+    expect((await spawn(agent, "go")).guiGroups).toBeUndefined();
+  });
+
+  it.each(TERMINAL_AGENTS.filter((a) => !["claude", "codex", "copilot"].includes(a)))("starts no %s session when asked to limit it", async (agent) => {
+    seen.delete(agent);
+    const { body } = await call("/api/plugin/spawnBackgroundChat", jsonPost({ message: "go", agent, guiGroups: ["render"] }));
+    expect(seen.has(agent)).toBe(false);
+    expect(body.message).toMatch(/supported for claude, codex, copilot only/);
   });
 });

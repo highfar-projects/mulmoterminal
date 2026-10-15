@@ -5,6 +5,7 @@
 import type { Express, Request, Response } from "express";
 import { SESSION_ID_RE } from "../config/env.js";
 import { isRecord } from "../../common/isRecord.js";
+import { antigravityHookBody } from "../agents/antigravity/antigravity-hook.js";
 import { copilotHookBody } from "../agents/copilot/copilot-hook.js";
 import { cursorHookBody } from "../agents/cursor/cursor-hook.js";
 import { codexHookBody } from "../agents/codex/codex-hook.js";
@@ -257,6 +258,7 @@ const TRANSLATE_HOOK = new Map<string, (hookName: string | undefined, payload: u
   ["copilot", copilotHookBody],
   ["cursor", cursorHookBody],
   ["codex", codexHookBody],
+  ["antigravity", antigravityHookBody],
 ]);
 
 // What a turn's end sets off beyond the activity flags. A hidden translation worker that ends its

@@ -8,6 +8,107 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@10.7.1 — 2026-10-16
+
+> **Setup guide:** [10.7.1 — Keep part of a subscription's week for yourself](https://receptron.github.io/mulmoterminal/guide/en/v10.7.1.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.7.1.html))
+
+### A per-token weekly reserve for token rotation (#3065, #3064)
+
+- `tokenRotation.tokens[].reserveWeeklyPercent` (optional, above 0 up to 99): rotation treats that subscription's week as spent at `min(98, 100 - reserve)` percent. No new session starts on it past that line (`blockedUntil`), a running session moves off it at the end of its turn (`nearLimit`, via the new pure `tokenNearLimit`), and its burn pace counts only the room above the reserve.
+- The "every candidate is held out" fallback never picks a token down to its reserve. When every candidate is down to its own reserve, rotation assigns nothing and the spawn runs on the `/login` credential, the same outcome as when no token secret can be read.
+- Any other value is dropped by the sanitizer and the entry kept; entries without the field behave as before.
+
+## mulmoterminal@10.7.0 — 2026-10-16
+
+> **Setup guide:** [10.7.0 — Copy a whole file, see which file is open, and reopen recent files](https://receptron.github.io/mulmoterminal/guide/en/v10.7.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.7.0.html))
+
+### Copy the whole open file (#3060)
+
+- A copy button in the Files header (right pane and full-screen `/files`) puts `CmEditor.getDoc()` on the clipboard — unsaved edits included — and shows the existing "Copied!" toast with the line count and first line. A mouse drag that starts in CodeMirror's line-number gutter copies the numbers, not the text (measured in Chromium), which is what was reported as newlines turning into tabs (#3058).
+- No button where the page has no Clipboard API; a refused write shows no toast, and takes down an earlier success's toast.
+- The `@` and copy buttons share one condition and live in `FilesEditorActions.vue`; the toast's timer is shared with the Preview code-block copy through `useCopiedNotice`.
+
+### The open file stands out in the tree (#3061)
+
+- The open row's mark never showed: the row's static `bg-transparent` won over the conditional `bg-hover` in the stylesheet. The open row now gets `bg-selected`, an accent stripe and `aria-current`. The same never-applied background was on `ToolbarPopover`'s open state and the active Settings tab, both fixed; `test/scripts/static-background-conflict.spec.ts` scans every `.vue` template for it.
+- After the remembered pane is restored, the open row is brought into view when the remembered folders show it; a folder the reader closed stays closed (#2156). The front-tab following moved into `useFilesReveal`, with a per-startup epoch so a startup made stale by a re-root cannot switch following on in the new root.
+
+### Recently opened files (#3062)
+
+- A clock button in the Files header lists the files opened in this folder, newest first, the open one marked; picking one opens it. Kept per folder in `localStorage` (`files_recent`), capped per folder and in folders, re-read on every write and every open. A re-root does not record the old root's file under the new folder.
+- Named "Recently opened" / 最近開いたファイル and kept distinct from History (#2574), which lists earlier versions of one file.
+- The Files menus (History, Outline, Recently opened) and the finder's list and row ids are now per instance (`useId`), so with two panes mounted each trigger's `aria-controls` names its own list.
+
+### Dependencies (#3063)
+
+- `@google/genai` 2.30.0, `zod` 4.6.7, `light-my-request` 6.8.0, `vitest` 5.0.5.
+
+## mulmoterminal@10.6.0 — 2026-10-15
+
+> **Setup guide:** [10.6.0 — Codex and Copilot workers can be limited to some GUI tools](https://receptron.github.io/mulmoterminal/guide/en/v10.6.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.6.0.html))
+
+### `guiGroups` for Codex and Copilot sessions (#3057)
+
+- `POST /api/plugin/spawnBackgroundChat` accepts `guiGroups` for `codex` and `copilot` as well as `claude` (#3050), closing #3033. `spawnCodexPty` / `spawnCopilotPty` record the restriction, read it back on every spawn of the id, hand exactly those groups whatever the directory registered, and never claim the all-tools url. The MCP routes already enforced the record by session id for every agent. Antigravity / Grok / Cursor / Muse stay refused: their groups live in a file shared by every session in the directory.
+- A Codex conversation is listed for resuming under its rollout id, a key the restriction was never recorded for. `inheritedGuiRestriction()` takes the narrowest restriction among the sessions holding that rollout, and the spawn records it under the new key.
+- The Codex and Copilot cell handlers now wait for the restriction log before spawning, as the Claude handler does, so a resume right after a restart is no longer handed every tool.
+- Not changed: a restricted Copilot session keeps `--allow-all-tools`, so Copilot's built-ins and the user's own MCP servers stay pre-approved, as for every Copilot session. The restriction log is read at boot only, so it is not shared live between two servers on one `~/.mulmoterminal` (an unsupported setup).
+
+### Note missing from 10.5.0: a permanently overridden `HOME` (#3053)
+
+- If MulmoTerminal always runs with `HOME` pointed away from the account's own home, the first start on 10.5.0 or later cannot reattach the pre-upgrade terminals: they stay on the shared `-L mulmoterminal` tmux server and their drop copies in `mulmoterminal-drops`. Conversations resume from disk. End the leftovers with `tmux -L mulmoterminal kill-server` — only when no server ever runs on the real home. No migration is possible: nothing in a session or a drop directory records which `HOME` made it.
+
+## mulmoterminal@10.5.0 — 2026-10-15
+
+> **Setup guide:** [10.5.0 — A cell closes when its agent ends, and Antigravity tells you when it is done](https://receptron.github.io/mulmoterminal/guide/en/v10.5.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.5.0.html))
+
+### An agent cell closes itself when its session ends on its own (#3051)
+
+- `/exit`, Ctrl+C or a crash used to leave the cell on the grid with `[session ended]`, so cells an agent opened with `spawnBackgroundChat` piled up (#3049). The cell now closes through its normal teardown, so it is in the palette's Reopen list and resumes its conversation.
+- The `exit` frame alone does not mean the session ended: under tmux the pty is the client, and a client killed from outside leaves the agent running (#1496). `reportPtyExit` now decides `reap` / `keep` / `gone` **before** sending the frame, which carries `ended` (true only for `reap`), `lifetimeMs` and `reattached`. The claude spawner, the shared agent relay and launchers all go through it.
+- Under tmux the exit code is the client's (an inner `exit 3` arrives as `0`), so a launch failure is told apart by lifetime: a pty that started the agent and ended inside `STARTUP_WINDOW_MS` keeps its banner. A reattached pty's lifetime is not the agent's, so it closes on any ended exit. A worktree cell keeps the banner (its close asks about the worktree). The rule is `shouldCloseEndedCell` in `common/endedCellClose.ts`.
+- An exit is handled for the pty that exited, not for whatever holds its id now (`isCurrentPty`): a restart or explicit close can register a replacement under the same id first, and a stale exit used to be able to reap or forget it.
+- README's WebSocket protocol table documents the new frame fields.
+
+### An unplaced session that ended on its own is no longer adopted (#3056)
+
+- A session spawned with no grid on screen stayed marked unplaced after its agent ended, so the next grid adopted it — resuming the ended conversation, or minting a new session with a new agent when there was no transcript (#3055). The exit now drops the mark whenever an open cell would have closed itself on it; a launch failure, a lost tmux client, a stale exit, a worktree session and a server restart keep it.
+
+### Antigravity turn hooks: working dot and finished sound (#3038)
+
+- An `agy` cell lights the working dot when a turn starts, and when it ends raises the attention mark, plays the sound and sends the "finished" push, through the existing `/api/hook` effect tables (#3034). A named hook `mulmoterminal` is merged into `<cwd>/.agents/hooks.json` beside the user's hooks, with the same symlink guard, `.git/info/exclude` entry and non-JSON safeguard as the other agy config files. There is still no "waiting for input" signal.
+
+### A MulmoScript on the Canvas redraws on outside changes (#3040)
+
+- While the Files pane's Canvas shows a MulmoScript, the server watches its file and sends an origin-less `scriptChanged` when an editor, git or an agent changes it; the plugin's view redraws (#3014). The host remembers the file's mtime / size / inode at each of the plugin's own writes, so those do not cause a redraw. Only files inside the workspace, a session cwd or a registered stories root are watched.
+
+### Limit a `spawnBackgroundChat` Claude session to some GUI tool groups (#3050)
+
+- `guiGroups` (claude only) is validated with `isToolGroup`; omitted keeps every tool, `[]` gives none. A malformed value, or `guiGroups` for another agent, refuses the request. The limit is recorded in `~/.mulmoterminal/gui-group-restrictions.jsonl` and holds across reattach, restart and resume; a restricted session never takes the all-tools url (#3033).
+
+### Talking avatars: install guide and an `init` check (#3043)
+
+- The MulmoCast guide (en/ja) has a "Talking avatars" section: writing `speechParams.speakers.<name>.avatar` and `avatarParams`, installing the optional `avatarscript` / `onnxruntime-node`, checking with `init`, and the first-run model download (#3042). `npx mulmoterminal@latest init` prints an avatar line, sharing `optionalPackagesLine` with the Remotion line.
+
+### MulmoCast 2.23 and the MulmoScript plugin 5.5 (#3037, #3036)
+
+- `mulmocast` ^2.23.0 and `@mulmoclaude/mulmoscript-plugin` ^5.5.0 (#3035): JingleScript 0.8 sound effects and `grandpiano` in `soundEffects`, `html_tailwind` beat previews with background, branding and scripts, and still images without ffmpeg.
+- puppeteer / puppeteer-core / @puppeteer/browsers deduplicated to one copy in `yarn.lock`; the ffmpeg-missing startup warning now names only movies and beats that make or use one (#3036).
+
+### A second server on another HOME gets its own tmux server and drop directory (#3053, #3054)
+
+- A server started with `HOME` pointed elsewhere shared `-L mulmoterminal` and `$TMPDIR/mulmoterminal-drops` with the one on the real home, so at boot it could reap that server's idle sessions, apply its own tmux options to it, and prune its drop directories (#3039). Both names now carry `homeScopeSuffix()` — empty when `HOME` is the account's own home, so the normal case needs no migration. #3054 corrects the isolation note in `tmux.ts`.
+
+### The clone update notice says to install, build and restart (#3045)
+
+- `gitUpdateNotice` now says `git pull origin <branch> && yarn install && yarn build` with "(restart after updating)" before `run: `, so the badge copies only the commands (#3044). README's clone update steps match.
+
+### Docs, dependencies and CI
+
+- Ten search-answer pages under `docs/answers/` (#3052).
+- Wording fixes left from the #3043 / #3047 reviews (#3048) and the remaining "right pane only beside an enlarged cell" comments (#3041).
+- Dependency update (#3032). CI caches puppeteer's Chrome on ubuntu / macOS test jobs (#3031) and on every Windows shard (#3047).
+
 ## mulmoterminal@10.4.0 — 2026-10-13
 
 > **Setup guide:** [10.4.0 — Panes beside the tiled grid, and files outside the cell open in a tab](https://receptron.github.io/mulmoterminal/guide/en/v10.4.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.4.0.html))

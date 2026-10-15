@@ -32,6 +32,12 @@ describe("parseUpdateNotice", () => {
     expect(parseUpdateNotice("Update available: a1b2c3d → origin  ·  run: git pull")?.command).toBe("git pull");
   });
 
+  // The clone's notice (#3044): the whole chain is copied, and the restart reminder is not part of it.
+  it("copies the whole pull, install and build chain, and not the restart reminder", () => {
+    const notice = "Update available: a1b2c3d → origin (restart after updating)  ·  run: git pull origin main && yarn install && yarn build";
+    expect(parseUpdateNotice(notice)?.command).toBe("git pull origin main && yarn install && yarn build");
+  });
+
   // A notice without the marker still shows (as the tooltip); there is just nothing to copy.
   it("keeps the text but has no command when there is no run marker", () => {
     expect(parseUpdateNotice("A new version is out")).toEqual({ text: "A new version is out", command: null });

@@ -5,6 +5,7 @@ import {
   offeredTools,
   routeToolCall,
   describeTool,
+  groupsWithin,
   SUBMIT_TRANSLATION_TOOL_NAME,
   type PluginToolDefinition,
   type OfferedTool,
@@ -230,5 +231,59 @@ describe("a group URL on a session that already carries every tool", () => {
   it("does not disturb a translation worker", () => {
     expect(names(offeredTools(true, PLUGINS, WORKER_TOOL, "render", true))).toEqual([SUBMIT_TRANSLATION_TOOL_NAME]);
     expect(routeToolCall(SUBMIT_TRANSLATION_TOOL_NAME, true, "render", true)).toEqual({ kind: "submit-translation" });
+  });
+});
+
+// A spawnBackgroundChat caller can limit the session to some groups (#3033). The limit is the
+// SESSION's, so it holds on whichever url the session reaches — the all-tools one included, since a
+// session id in a url is not a credential.
+describe("a session limited to some tool groups", () => {
+  it("is offered only those groups' tools on the all-tools url, and no ungrouped tool", () => {
+    expect(names(offeredTools(false, PLUGINS, WORKER_TOOL, null, false, ["render"]))).toEqual(["presentHtml"]);
+    expect(names(offeredTools(false, PLUGINS, WORKER_TOOL, null, false, ["render", "data"]))).toEqual(["manageCollection", "presentHtml"]);
+  });
+
+  it("is offered nothing anywhere when limited to no group", () => {
+    expect(names(offeredTools(false, PLUGINS, WORKER_TOOL, null, false, []))).toEqual([]);
+    expect(names(offeredTools(false, PLUGINS, WORKER_TOOL, "render", false, []))).toEqual([]);
+  });
+
+  it("is offered a group url's tools only when that group is in the limit", () => {
+    expect(names(offeredTools(false, PLUGINS, WORKER_TOOL, "render", false, ["render"]))).toEqual(["presentHtml"]);
+    expect(names(offeredTools(false, PLUGINS, WORKER_TOOL, "data", false, ["render"]))).toEqual([]);
+  });
+
+  it("refuses a tool outside the limit on every url, and the ungrouped spawn tool above all", () => {
+    for (const group of [null, "data", "render"] as const) {
+      expect(routeToolCall("manageCollection", false, group, false, ["render"]).kind).toBe("refused");
+      expect(routeToolCall("spawnBackgroundChat", false, group, false, ["render"]).kind).toBe("refused");
+    }
+  });
+
+  it("dispatches a tool inside the limit on the urls that serve it", () => {
+    expect(routeToolCall("presentHtml", false, null, false, ["render"])).toEqual({ kind: "dispatch" });
+    expect(routeToolCall("presentHtml", false, "render", false, ["render"])).toEqual({ kind: "dispatch" });
+  });
+
+  // null is "never limited", and must be indistinguishable from leaving the argument out.
+  it("changes nothing when the session was never limited", () => {
+    expect(offeredTools(false, PLUGINS, WORKER_TOOL, null, false, null)).toEqual(offeredTools(false, PLUGINS, WORKER_TOOL));
+    expect(routeToolCall("spawnBackgroundChat", false, null, false, null)).toEqual({ kind: "dispatch" });
+  });
+
+  it("does not disturb a translation worker", () => {
+    expect(names(offeredTools(true, PLUGINS, WORKER_TOOL, null, false, []))).toEqual([SUBMIT_TRANSLATION_TOOL_NAME]);
+    expect(routeToolCall(SUBMIT_TRANSLATION_TOOL_NAME, true, null, false, [])).toEqual({ kind: "submit-translation" });
+  });
+});
+
+describe("groupsWithin", () => {
+  it("keeps every group for a session that was never limited", () => {
+    expect(groupsWithin(["render", "data"], null)).toEqual(["render", "data"]);
+  });
+
+  it("keeps only the groups inside the limit", () => {
+    expect(groupsWithin(["render", "data", "media"], ["data"])).toEqual(["data"]);
+    expect(groupsWithin(["render"], [])).toEqual([]);
   });
 });

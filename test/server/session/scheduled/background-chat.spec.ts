@@ -20,6 +20,7 @@ describe("parseBackgroundChat", () => {
       collection: null,
       hidden: false,
       message: "look at the failing test",
+      guiGroups: null,
     });
   });
 
@@ -68,6 +69,50 @@ describe("parseBackgroundChat", () => {
     it("refuses a body that is not an object", () => {
       for (const body of [null, undefined, "just a string", 42, []]) {
         expect(rejected(body)).toMatch(/`message` is required/);
+      }
+    });
+  });
+
+  // Unlike every other field, a malformed `guiGroups` refuses the request: reading it as absent
+  // would spawn with EVERY tool a session whose caller asked for fewer (#3033).
+  describe("guiGroups", () => {
+    const refusal = (body: unknown): string => {
+      const parsed = parseBackgroundChat(body);
+      return parsed.ok ? "" : parsed.message;
+    };
+
+    it("is null — every tool — when absent or null", () => {
+      expect(ok({ message: "m" }).guiGroups).toBeNull();
+      expect(ok({ message: "m", guiGroups: null }).guiGroups).toBeNull();
+    });
+
+    it("keeps a list of known groups, deduplicated, and an empty list as empty", () => {
+      expect(ok({ message: "m", guiGroups: ["render", "data", "render"] }).guiGroups).toEqual(["render", "data"]);
+      expect(ok({ message: "m", guiGroups: [] }).guiGroups).toEqual([]);
+    });
+
+    it("accepts it for claude, including an unknown agent that falls back to claude", () => {
+      expect(ok({ message: "m", agent: "claude", guiGroups: ["media"] }).guiGroups).toEqual(["media"]);
+      expect(ok({ message: "m", agent: "gpt-9", guiGroups: ["media"] }).guiGroups).toEqual(["media"]);
+    });
+
+    it("refuses anything that is not a list of known groups", () => {
+      for (const guiGroups of ["render", ["render", "everything"], [1], { render: true }, true, [null]]) {
+        expect(refusal({ message: "m", guiGroups })).toMatch(/`guiGroups` must be a list of tool groups/);
+      }
+    });
+
+    it("accepts it for codex and copilot, which take their GUI MCP per spawn as claude does", () => {
+      for (const agent of ["codex", "copilot"]) {
+        expect(ok({ message: "m", agent, guiGroups: ["render"] }).guiGroups).toEqual(["render"]);
+      }
+    });
+
+    // Ignoring it would spawn the very full-toolset session the caller was trying to avoid.
+    it("refuses it for every agent that reads its groups from a file in the directory", () => {
+      for (const agent of ["antigravity", "grok", "muse", "cursor"]) {
+        expect(refusal({ message: "m", agent, guiGroups: [] })).toMatch(/supported for claude, codex, copilot only/);
+        expect(ok({ message: "m", agent }).guiGroups).toBeNull();
       }
     });
   });

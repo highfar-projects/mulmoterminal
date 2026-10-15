@@ -68,7 +68,13 @@ export interface PluginRouteDeps {
 function spawnSeededSession(
   deps: PluginRouteDeps,
   mode: SpawnMode,
-  { sessionId, message, mcpGroups, cwd }: { sessionId: string; message: string; mcpGroups: readonly ToolGroup[]; cwd: string },
+  {
+    sessionId,
+    message,
+    mcpGroups,
+    cwd,
+    guiGroups,
+  }: { sessionId: string; message: string; mcpGroups: readonly ToolGroup[]; cwd: string; guiGroups: readonly ToolGroup[] | null },
 ): void {
   // GUI MCP: every branch below keeps the full toolset regardless of the directory, and that is a
   // decision rather than an oversight. `carriesFullGuiMcp()` is consulted inside each spawner —
@@ -82,20 +88,22 @@ function spawnSeededSession(
   // directory get them from `groupsForSpawn(agent, cwd)` instead, which is the per-directory
   // mechanism that DOES have to follow the cwd.
   const initialPrompt = codexifySkillSeed(message);
-  if (mode === "codex-run") deps.spawnCodexPty(sessionId, null, null, cwd, true, { initialPrompt });
+  // `guiGroups` reaches claude, codex and copilot only: the parser refuses it for every other agent (#3033).
+  const limit = guiGroups ?? undefined;
+  if (mode === "codex-run") deps.spawnCodexPty(sessionId, null, null, cwd, true, { initialPrompt, guiGroups: limit });
   else if (mode === "antigravity-run") deps.spawnAntigravityPty(sessionId, null, null, cwd, { mcpGroups, initialPrompt });
   else if (mode === "grok-run") deps.spawnGrokPty(sessionId, null, null, cwd, { mcpGroups, initialPrompt });
   else if (mode === "muse-run") deps.spawnMusePty(sessionId, null, null, cwd, { mcpGroups, initialPrompt });
   // A seeded copilot chat carries the whole GUI MCP (attachGuiMcp = true): it has no cell, which is
   // the same reason claude and codex get it here.
-  else if (mode === "copilot-run") deps.spawnCopilotPty(sessionId, null, null, cwd, true, { mcpGroups, initialPrompt });
+  else if (mode === "copilot-run") deps.spawnCopilotPty(sessionId, null, null, cwd, true, { mcpGroups, initialPrompt, guiGroups: limit });
   // Cursor reaches its groups through a file in the directory, written and approved by the caller
   // before this runs (cursor-mcp.ts). The list is passed anyway, as muse's is: the bridge cannot
   // inherit anything from cursor, so it asks which session it belongs to and is told these groups
   // with the answer (bridge-session.ts).
   else if (mode === "cursor-run") deps.spawnCursorPty(sessionId, null, null, cwd, { mcpGroups, initialPrompt });
-  else if (mode === "claude-draft") deps.spawnClaudePty(sessionId, null, null, { draft: message, cwd });
-  else deps.spawnClaudePty(sessionId, null, null, { initialPrompt: message, cwd });
+  else if (mode === "claude-draft") deps.spawnClaudePty(sessionId, null, null, { draft: message, cwd, guiGroups: limit });
+  else deps.spawnClaudePty(sessionId, null, null, { initialPrompt: message, cwd, guiGroups: limit });
 }
 
 /** Where a seeded chat runs: the project it was started from, or the workspace when it named
@@ -143,7 +151,7 @@ export function mountPluginRoutes(app: Express, deps: PluginRouteDeps): void {
   app.post("/api/plugin/spawnBackgroundChat", async (req, res) => {
     const parsed = parseBackgroundChat(req.body);
     if (!parsed.ok) return res.json({ message: parsed.message });
-    const { agent, collection, draft, hidden, message, project } = parsed.request;
+    const { agent, collection, draft, hidden, message, project, guiGroups } = parsed.request;
     const cwd = spawnCwdFor(project);
     if (cwd === null) return res.json({ message: `spawnBackgroundChat: unknown project '${project?.replace(/[\r\n]/g, " ") ?? ""}'.` });
     const sessionId = randomUUID();
@@ -160,7 +168,7 @@ export function mountPluginRoutes(app: Express, deps: PluginRouteDeps): void {
     if (agent === "cursor") await syncCursorDirectoryMcp(cwd, mcpGroups);
     try {
       runWithHiddenMarker(hidden, sessionId, backgroundMarkers, () =>
-        spawnSeededSession(deps, spawnModeFor(agent, draft), { sessionId, message, mcpGroups, cwd }),
+        spawnSeededSession(deps, spawnModeFor(agent, draft), { sessionId, message, mcpGroups, cwd, guiGroups }),
       );
       // After the spawn, like the marks below: a launch that threw has no session, and a record
       // for one would sit in the log forever describing nothing.

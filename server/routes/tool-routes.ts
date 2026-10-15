@@ -30,6 +30,9 @@ export interface ToolRouteDeps {
    *  ungrouped tools are reachable only that way — see narrowedTools. */
   hasAllGuiTools: (sessionId: string) => boolean;
   allToolsSessionsHydrated: Promise<void>;
+  /** The groups a spawnBackgroundChat caller limited this session to (#3033), or null. */
+  guiGroupRestriction: (sessionId: string) => readonly ToolGroup[] | null;
+  guiGroupRestrictionsHydrated: Promise<void>;
   /**
    * Is this a GRID cell? The two kinds of session get their GUI tools by different routes, and
    * "no groups learned" means the opposite thing for each — see narrowedTools.
@@ -67,8 +70,17 @@ const hasGroup = (group: ToolGroup | null, groups: readonly ToolGroup[]): boolea
  *       group url at a time. Nothing registered, nothing learned, nothing available: the empty
  *       list here means "has nothing", the opposite of what it means above, and conflating the
  *       two once had a grid cell reporting every tool and offering a Canvas nothing could fill.
+ *   limited at spawn (#3033) — has its restriction's groups and nothing else, wherever it runs and
+ *       whatever it connected on: the MCP routes serve exactly that, so the pane lists exactly that.
  */
-export function narrowedTools(tools: readonly ToolSummary[], groups: readonly ToolGroup[], isGrid: boolean, hasAllTools = false): ToolSummary[] {
+export function narrowedTools(
+  tools: readonly ToolSummary[],
+  groups: readonly ToolGroup[],
+  isGrid: boolean,
+  hasAllTools = false,
+  restrictedTo: readonly ToolGroup[] | null = null,
+): ToolSummary[] {
+  if (restrictedTo !== null) return tools.filter((tool) => hasGroup(groupOfTool(tool.toolName), restrictedTo));
   if (!isGrid || hasAllTools) return [...tools];
   return tools.filter((tool) => hasGroup(groupOfTool(tool.toolName), groups));
 }
@@ -163,11 +175,12 @@ export function mountToolRoutes(app: Express, deps: ToolRouteDeps): void {
     if (sessionId === null || !SESSION_ID_RE.test(sessionId)) return res.json({ tools: deps.toolSummaries, guiOnlyHistory: false });
     // Both sets are persisted and hydrated at boot; asked before either resolves, a grid cell
     // would read as having nothing and a resumed one as having lost its groups.
-    await Promise.all([deps.sessionToolGroupsHydrated, deps.devTerminalSessionsHydrated, deps.allToolsSessionsHydrated]);
+    await Promise.all([deps.sessionToolGroupsHydrated, deps.devTerminalSessionsHydrated, deps.allToolsSessionsHydrated, deps.guiGroupRestrictionsHydrated]);
     const groups = deps.sessionToolGroups(sessionId);
     const isGrid = deps.isGridSession(sessionId);
     const hasAllTools = deps.hasAllGuiTools(sessionId);
-    res.json({ tools: narrowedTools(deps.toolSummaries, groups, isGrid, hasAllTools), groups, guiOnlyHistory: deps.guiOnlyHistory(sessionId) });
+    const tools = narrowedTools(deps.toolSummaries, groups, isGrid, hasAllTools, deps.guiGroupRestriction(sessionId));
+    res.json({ tools, groups, guiOnlyHistory: deps.guiOnlyHistory(sessionId) });
   });
 
   // Replay a session's tool-call history — every tool for claude (its Pre/PostToolUse hooks),

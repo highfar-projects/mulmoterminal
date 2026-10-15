@@ -13,7 +13,16 @@ import type { Express, Request, Response } from "express";
 import { PORT, SESSION_ID_RE } from "../config/env.js";
 import { buildGuiMcpServer } from "../mcp/broker.js";
 import type { GuiCallRecorder } from "../mcp/gui-call-history.js";
-import { translationWorkerIds, markSessionToolGroup, sessionToolGroups, markAllToolsSession, hasAllGuiTools } from "../session/registry.js";
+import {
+  translationWorkerIds,
+  markSessionToolGroup,
+  sessionToolGroups,
+  markAllToolsSession,
+  hasAllGuiTools,
+  guiGroupRestriction,
+  guiGroupRestrictionsHydrated,
+} from "../session/registry.js";
+import { groupsWithin } from "../mcp/tool-gate.js";
 import { isToolGroup, TOOL_GROUPS, type ToolGroup } from "../../common/toolGroups.js";
 import { isRecord } from "../../common/isRecord.js";
 import { entitledToolGroups, bridgeResolvableSessions, resolveBridgeSession } from "../session/bridge-session.js";
@@ -81,6 +90,40 @@ function resolveBridge(req: Request, res: Response) {
   return res.json({ sessionId, groups });
 }
 
+interface McpServeOptions {
+  group: ToolGroup | null;
+  carriesAllTools?: boolean;
+  restrictedTo: readonly ToolGroup[] | null;
+}
+
+// The GUI tool groups a spawnBackgroundChat caller limited this session to (#3033), or null. Asked
+// on EVERY url: a restricted session is never handed the all-tools one, but a session id is not a
+// credential, and a resumed cell loads whatever group urls the worktree's own `.mcp.json` names.
+// Waits for the log, so a request right after a restart is not served unrestricted.
+async function sessionRestriction(sessionId: string): Promise<readonly ToolGroup[] | null> {
+  await guiGroupRestrictionsHydrated;
+  return guiGroupRestriction(sessionId);
+}
+
+function sessionMcpServer(
+  sessionId: string,
+  { group, carriesAllTools = false, restrictedTo }: McpServeOptions,
+  guiCallHistory: McpRouteDeps["guiCallHistory"],
+): ReturnType<typeof buildGuiMcpServer> {
+  // Hidden translation workers (and only they) get the worker-only submitTranslation
+  // tool, so a normal chat's tool list stays clean.
+  // A translation worker is a hidden claude session with no pane to feed, so it never gets a
+  // recorder — asking would only be an extra lookup for a guaranteed null.
+  const isWorker = translationWorkerIds.has(sessionId);
+  return buildGuiMcpServer(sessionId, `http://127.0.0.1:${PORT}`, {
+    submitTranslationTool: isWorker,
+    group,
+    carriesAllTools,
+    restrictedTo,
+    history: isWorker ? null : guiCallHistory(sessionId),
+  });
+}
+
 export function mountMcpRoutes(app: Express, deps: McpRouteDeps): void {
   /**
    * Tell the panel this session's MCP client is up, so anything it asked too early can be re-asked.
@@ -120,24 +163,14 @@ export function mountMcpRoutes(app: Express, deps: McpRouteDeps): void {
   // We run in STATELESS mode (sessionIdGenerator: undefined): one fresh Server+transport per
   // request, no session header and no initialize handshake required across requests. The SDK
   // forbids reusing a stateless transport, so it is never cached.
-  async function handleMcpRequest(req: Request, res: Response, sessionId: string, group: ToolGroup | null, carriesAllTools = false) {
+  async function handleMcpRequest(req: Request, res: Response, sessionId: string, serve: McpServeOptions) {
     if (!SESSION_ID_RE.test(sessionId)) {
       return res.status(400).json({ error: "invalid sessionId" });
     }
     // Both routes, because both kinds of session are asked about too early. The group route's own
     // announcement below carries the groups it learned; this one only says "I am here".
     announceMcpContact(sessionId);
-    // Hidden translation workers (and only they) get the worker-only submitTranslation
-    // tool, so a normal chat's tool list stays clean.
-    // A translation worker is a hidden claude session with no pane to feed, so it never gets a
-    // recorder — asking would only be an extra lookup for a guaranteed null.
-    const isWorker = translationWorkerIds.has(sessionId);
-    const server = buildGuiMcpServer(sessionId, `http://127.0.0.1:${PORT}`, {
-      submitTranslationTool: isWorker,
-      group,
-      carriesAllTools,
-      history: isWorker ? null : deps.guiCallHistory(sessionId),
-    });
+    const server = sessionMcpServer(sessionId, serve, deps.guiCallHistory);
     // No sessionIdGenerator at all is the SDK's stateless mode. Spelling it `undefined` says
     // the same thing to the runtime but not to the type — the option is exact-optional.
     const transport = new StreamableHTTPServerTransport({});
@@ -173,15 +206,18 @@ export function mountMcpRoutes(app: Express, deps: McpRouteDeps): void {
   //
   // Grid cells proper are untouched: without --mcp-config they never reach this URL, and what
   // they can call still comes only from what their directory registered.
-  app.post("/api/mcp/:sessionId", (req, res) => {
+  // A restricted session reaching it is served only its groups, and recorded as nothing more.
+  app.post("/api/mcp/:sessionId", async (req, res) => {
+    const { sessionId } = req.params;
+    const restrictedTo = await sessionRestriction(sessionId);
     // Two facts, and they are NOT the same one. The groups say which drawing/data/media/external
     // tools the session can call — that is what the Canvas gate reads. This says it carries the
     // WHOLE MCP, which additionally includes the tools belonging to no group at all
     // (spawnBackgroundChat); a directory that registered all four group urls has the first and
     // not the second.
-    markAllToolsSession(req.params.sessionId);
-    learnToolGroups(req.params.sessionId, TOOL_GROUPS);
-    return handleMcpRequest(req, res, req.params.sessionId, null);
+    if (restrictedTo === null) markAllToolsSession(sessionId);
+    learnToolGroups(sessionId, groupsWithin(TOOL_GROUPS, restrictedTo));
+    return handleMcpRequest(req, res, sessionId, { group: null, restrictedTo });
   });
   app.get("/api/mcp/:sessionId", rejectNonPost);
   app.delete("/api/mcp/:sessionId", rejectNonPost);
@@ -191,20 +227,23 @@ export function mountMcpRoutes(app: Express, deps: McpRouteDeps): void {
   //
   // An unknown group is a 404 rather than a fallback to the all-tools surface: a typo in a
   // user's own `.mcp.json` must not silently hand a directory every tool there is.
-  app.post("/api/mcp/:group/:sessionId", (req, res) => {
+  app.post("/api/mcp/:group/:sessionId", async (req, res) => {
     const { group, sessionId } = req.params;
     if (!isToolGroup(group)) return res.status(404).json({ error: `unknown tool group: ${group}` });
+    // A group the session was limited out of still connects but serves nothing and is not learned —
+    // the stood-down group's "connected, nothing here" rather than a failed server.
+    const restrictedTo = await sessionRestriction(sessionId);
     // Reaching us here IS the evidence that this session has the group — nothing else tells
     // us, since the registration lives in the user's own MCP config. Marked before the request
     // is served so a panel asking right after the first ListTools already sees it. Still recorded
     // when the group stands down below: the directory really did register it, and the Canvas gate
     // reads that fact.
-    learnToolGroups(sessionId, [group]);
+    learnToolGroups(sessionId, groupsWithin([group], restrictedTo));
     // A session already holding the all-tools url reaches every one of these tools under a name of
     // its own, so this url serves none of them (#1338). Answerable on the FIRST request only
     // because the spawn recorded it — learning it from whichever url connected first would make
     // the answer depend on connection order.
-    return handleMcpRequest(req, res, sessionId, group, hasAllGuiTools(sessionId));
+    return handleMcpRequest(req, res, sessionId, { group, carriesAllTools: hasAllGuiTools(sessionId), restrictedTo });
   });
   // NOT `/api/mcp/resolve`: that is one segment, so the all-tools route above — `/api/mcp/:sessionId`,
   // registered first — swallows it and answers 400 "invalid sessionId". Which it did, silently, until

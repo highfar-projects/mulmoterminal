@@ -47,7 +47,7 @@ import { connectionWillReturn, reconnectDelayMs, shouldReconnect } from "./recon
 import type { RunCommand } from "../components/runCommand";
 import { readableSlot, type SlotCandidate, type SlotInfo } from "./readableSlot";
 import { makeEnterHandler, makeSendHandler } from "./terminalKeyHandlers";
-import { exitCodeOf, messageEffect, parseServerFrame } from "./serverMessage";
+import { exitCodeOf, messageEffect, parseServerFrame, sessionExitOf, type SessionExit } from "./serverMessage";
 import { applyViewFrame, type ConnViewState } from "./connViewFrames";
 import { enterSubmits, submitSequence, submittableLine, DEFAULT_TERMINAL_SUBMIT_MODE, type TerminalSubmitMode } from "../../common/terminalSubmit";
 import { TERMINAL_FONT_SIZE_DEFAULT } from "../../common/terminalFontSize";
@@ -106,8 +106,9 @@ export interface ConnHandlers {
   onCredential?: (credential: CellCredential | null) => void;
   // `exitCode` is the command's status when the server reported one, else null (a start
   // failure, or an agent session that ended without one). A Run cell reads it to tell a
-  // clean finish from a broken build.
-  onExit?: (exitCode: number | null) => void;
+  // clean finish from a broken build. `session` is whether the session itself ended, which an
+  // agent cell reads to close itself.
+  onExit?: (exitCode: number | null, session: SessionExit) => void;
   // The user put something INTO this terminal. Fired from the one place keystrokes, bound keys
   // and pastes all funnel through on their way to the socket, so it cannot be reached by output
   // the server writes back or by anything the app renders — only by someone using the session.
@@ -621,7 +622,7 @@ function applyTerminalFrame(c: Conn, msg: Record<string, unknown>): void {
   c.sawExit = true;
   if (effect.banner) c.term.write(effect.banner);
   setStatus(c, "disconnected");
-  if (effect.callsOnExit) c.handlers.onExit?.(exitCodeOf(msg));
+  if (effect.callsOnExit) c.handlers.onExit?.(exitCodeOf(msg), sessionExitOf(msg));
 }
 
 function handleMessage(c: Conn, event: MessageEvent) {

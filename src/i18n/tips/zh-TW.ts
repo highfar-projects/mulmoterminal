@@ -193,6 +193,7 @@ export const tipsZhTW: Messages["tips"] = {
     showChanges: "不只在行旁標記，也在原處顯示刪除的行",
     sideBySide: "編輯器與 Preview 並排顯示（Preview 跟隨正在編輯的標題）",
     insertSelection: "把選取的行以 {'@'}檔案#L10-20 的形式放到終端機的輸入處（先儲存未儲存的編輯；未選取時只放檔案）",
+    copyText: "複製此檔案的全部內文（包括未儲存的編輯）",
     fileTree: "檔案樹",
     git: {
       modified: "已修改",
