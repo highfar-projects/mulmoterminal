@@ -101,13 +101,17 @@ describe("copyModeOf", () => {
 
 describe("sessionExitOf", () => {
   it("reads a reaped session and its lifetime", () => {
-    expect(sessionExitOf({ ended: true, lifetimeMs: 5000 })).toEqual({ sessionEnded: true, lifetimeMs: 5000 });
-    expect(sessionExitOf({ ended: false, lifetimeMs: 0 })).toEqual({ sessionEnded: false, lifetimeMs: 0 });
+    expect(sessionExitOf({ ended: true, lifetimeMs: 5000, reattached: true })).toEqual({ sessionEnded: true, lifetimeMs: 5000, reattached: true });
+    expect(sessionExitOf({ ended: false, lifetimeMs: 0, reattached: false })).toEqual({ sessionEnded: false, lifetimeMs: 0, reattached: false });
   });
 
   // Anything but a literal true must not close a cell: a frame from an older server has no field.
   it.each([[{}], [{ ended: "true" }], [{ ended: 1 }], [{ ended: null }]])("is not ended for %j", (frame) => {
     expect(sessionExitOf(frame).sessionEnded).toBe(false);
+  });
+
+  it.each([[{}], [{ reattached: "true" }], [{ reattached: 1 }]])("is not reattached for %j", (frame) => {
+    expect(sessionExitOf(frame).reattached).toBe(false);
   });
 
   it.each([[{}], [{ lifetimeMs: "5000" }], [{ lifetimeMs: Number.NaN }], [{ lifetimeMs: Number.POSITIVE_INFINITY }], [{ lifetimeMs: null }]])(

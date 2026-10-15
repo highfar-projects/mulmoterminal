@@ -73,9 +73,14 @@ function applyPtyExit(sessionId: string, disposition: PtyExitDisposition, reap: 
 /** A persistent pty's exit, end to end: decide, tell the browser whether the SESSION ended (only a
  *  reap means that — a `keep` is a lost client, and a cell closing on it would drop a live agent),
  *  then apply. `entry.ws` is read here, at exit time, because a reattach can swap it. */
-export function reportPtyExit(sessionId: string, entry: PtyEntry, exit: Omit<PtyExitReport, "ended">, reap: (id: string) => void): PtyExitDisposition {
+export function reportPtyExit(
+  sessionId: string,
+  entry: PtyEntry,
+  exit: Omit<PtyExitReport, "ended" | "reattached">,
+  reap: (id: string) => void,
+): PtyExitDisposition {
   const disposition = decidePtyExit(sessionId, entry);
-  sendExitAndClose(entry.ws, { ...exit, ended: disposition === "reap" });
+  sendExitAndClose(entry.ws, { ...exit, reattached: !!entry.reattached, ended: disposition === "reap" });
   applyPtyExit(sessionId, disposition, reap);
   return disposition;
 }

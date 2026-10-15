@@ -95,7 +95,16 @@ describe("startAgentPty", () => {
         { sessionId: start.sessionId, file: start.file, args: start.args, cwd: start.cwd, persistent: true, options: start.spawnEnv },
       ]);
       expect(spawnCalls[0]?.options).toBe(start.spawnEnv);
-      expect(entry).toEqual({ term: { pid: index }, ws: null, buffer: "", cwd: start.cwd, tmux: outcome.tmux, active: false, agent: start.agent });
+      expect(entry).toEqual({
+        term: { pid: index },
+        ws: null,
+        buffer: "",
+        cwd: start.cwd,
+        tmux: outcome.tmux,
+        reattached: outcome.reattached,
+        active: false,
+        agent: start.agent,
+      });
       expect(ptys.get(start.sessionId)).toBe(entry);
       expect(spawnedAtMs).toBe(clockMs);
       // codex picks its rollout tail from this, so it must be the pty's own answer, not a guess.

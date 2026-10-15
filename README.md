@@ -2185,7 +2185,7 @@ connection (or reattach to an existing background PTY).
 | ------- | ------- |
 | `{ "type": "session", "id": string }` | Sent immediately on connect — the session id this socket is bound to (lets the client learn a new session's generated id). |
 | `{ "type": "output", "data": string }` | PTY output to write to the terminal. On reattach, the first `output` frame is the replayed tail buffer (≤ 64 KB). |
-| `{ "type": "exit", "exitCode": number, "signal": number }` | The `claude` process exited; the socket then closes. |
+| `{ "type": "exit", "exitCode": number, "signal": number, "lifetimeMs": number, "reattached": boolean, "ended": boolean }` | The pty exited; the socket then closes. `ended` is true only when the SESSION ended (tmux closed with the program) — a tmux client killed from outside, or an exit after an explicit close or restart, sends `false`. Under tmux `exitCode` is the client's and reads `0` even when the program failed. `lifetimeMs` is this pty's, which on a reattach (`reattached: true`) is not the program's. An agent cell closes itself on `ended` unless the program died while starting. The three newer fields are additive; a client treats their absence as "not ended". |
 | `{ "type": "paneMode", "inCopyMode": boolean }` | tmux-backed sessions only: whether the pane is in tmux copy-mode, where keys go to tmux instead of the program. Sent when it changes, and again to a reattached socket. |
 
 **Client → server** (JSON text frames):

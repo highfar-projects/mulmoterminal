@@ -38,6 +38,8 @@ export interface PtyExitReport {
   exitCode: number;
   signal: number | undefined;
   lifetimeMs: number;
+  /** The pty attached to a program already running, so `lifetimeMs` is not the program's. */
+  reattached: boolean;
   ended: boolean;
 }
 

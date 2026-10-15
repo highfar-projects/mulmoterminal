@@ -56,7 +56,7 @@ const mountCell = (cwd = "/home/me/proj") =>
     },
   });
 
-async function exitWith(w: ReturnType<typeof mountCell>, session: { sessionEnded: boolean; lifetimeMs: number | null }) {
+async function exitWith(w: ReturnType<typeof mountCell>, session: { sessionEnded: boolean; lifetimeMs: number | null; reattached: boolean }) {
   await flushPromises();
   w.findComponent({ name: "TerminalView" }).vm.$emit("exit", 0, session);
   await flushPromises();
@@ -65,16 +65,24 @@ async function exitWith(w: ReturnType<typeof mountCell>, session: { sessionEnded
 describe("an agent cell whose session ended on its own", () => {
   it("closes through its normal teardown once the session ended after startup", async () => {
     const w = mountCell();
-    await exitWith(w, { sessionEnded: true, lifetimeMs: STARTUP_WINDOW_MS });
+    await exitWith(w, { sessionEnded: true, lifetimeMs: STARTUP_WINDOW_MS, reattached: false });
     expect(w.emitted("close")).toHaveLength(1);
     expect(terminateCalls).toEqual(["/api/session/sess-1/terminate"]);
     w.unmount();
   });
 
+  // Reopened onto an agent already running: an `/exit` right after is an ending, not a launch failure.
+  it("closes a reattached cell whose agent ended soon after the attach", async () => {
+    const w = mountCell();
+    await exitWith(w, { sessionEnded: true, lifetimeMs: 100, reattached: true });
+    expect(w.emitted("close")).toHaveLength(1);
+    w.unmount();
+  });
+
   it.each([
-    { name: "only the pty ended (a lost tmux client)", session: { sessionEnded: false, lifetimeMs: 60_000 } },
-    { name: "the agent died while starting", session: { sessionEnded: true, lifetimeMs: STARTUP_WINDOW_MS - 1 } },
-    { name: "the frame named no lifetime", session: { sessionEnded: true, lifetimeMs: null } },
+    { name: "only the pty ended (a lost tmux client)", session: { sessionEnded: false, lifetimeMs: 60_000, reattached: false } },
+    { name: "the agent died while starting", session: { sessionEnded: true, lifetimeMs: STARTUP_WINDOW_MS - 1, reattached: false } },
+    { name: "the frame named no lifetime", session: { sessionEnded: true, lifetimeMs: null, reattached: false } },
   ])("stays open when $name", async ({ session }) => {
     const w = mountCell();
     await exitWith(w, session);
@@ -85,7 +93,7 @@ describe("an agent cell whose session ended on its own", () => {
 
   it("stays open in a worktree cell, whose close asks about the worktree", async () => {
     const w = mountCell(WORKTREE_CWD);
-    await exitWith(w, { sessionEnded: true, lifetimeMs: 60_000 });
+    await exitWith(w, { sessionEnded: true, lifetimeMs: 60_000, reattached: false });
     expect(w.emitted("close")).toBeUndefined();
     w.unmount();
   });

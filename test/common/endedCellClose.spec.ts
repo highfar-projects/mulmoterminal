@@ -2,7 +2,13 @@
 import { describe, it, expect } from "vitest";
 import { shouldCloseEndedCell, STARTUP_WINDOW_MS, type EndedCellExit } from "../../common/endedCellClose";
 
-const ended = (over: Partial<EndedCellExit> = {}): EndedCellExit => ({ sessionEnded: true, lifetimeMs: 60_000, worktreeCell: false, ...over });
+const ended = (over: Partial<EndedCellExit> = {}): EndedCellExit => ({
+  sessionEnded: true,
+  lifetimeMs: 60_000,
+  reattached: false,
+  worktreeCell: false,
+  ...over,
+});
 
 describe("shouldCloseEndedCell", () => {
   it("closes an agent cell whose session ended after it had started", () => {
@@ -19,6 +25,17 @@ describe("shouldCloseEndedCell", () => {
   it("keeps a cell whose agent died inside the startup window", () => {
     expect(shouldCloseEndedCell(ended({ lifetimeMs: STARTUP_WINDOW_MS - 1 }))).toBe(false);
     expect(shouldCloseEndedCell(ended({ lifetimeMs: 0 }))).toBe(false);
+  });
+
+  // The lifetime is the reattached pty's, not the agent's: `/exit` right after reopening is an ending.
+  it("closes a reattached cell however soon after the attach the agent ended", () => {
+    expect(shouldCloseEndedCell(ended({ reattached: true, lifetimeMs: 0 }))).toBe(true);
+    expect(shouldCloseEndedCell(ended({ reattached: true, lifetimeMs: null }))).toBe(true);
+  });
+
+  it("still needs the session to have ended, and no worktree, when reattached", () => {
+    expect(shouldCloseEndedCell(ended({ reattached: true, sessionEnded: false }))).toBe(false);
+    expect(shouldCloseEndedCell(ended({ reattached: true, worktreeCell: true }))).toBe(false);
   });
 
   it("keeps the cell when the frame named no lifetime", () => {

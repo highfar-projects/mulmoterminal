@@ -126,7 +126,18 @@ describe("reportPtyExit — what the exit frame tells the browser", () => {
 
     reportPtyExit("s-1", exiting, EXIT, vi.fn());
 
-    expect(frames).toEqual([{ type: "exit", exitCode: 0, lifetimeMs: 60_000, ended }]);
+    expect(frames).toEqual([{ type: "exit", exitCode: 0, lifetimeMs: 60_000, reattached: false, ended }]);
+  });
+
+  // A reattached pty's lifetime is not the agent's; the browser needs to know which it got.
+  it("says whether the pty had attached to an agent already running", () => {
+    const { socket, frames } = socketRecording([]);
+    const exiting = register("s-1", true, socket);
+    exiting.reattached = true;
+
+    reportPtyExit("s-1", exiting, EXIT, vi.fn());
+
+    expect(frames).toEqual([{ type: "exit", exitCode: 0, lifetimeMs: 60_000, reattached: true, ended: true }]);
   });
 
   it("sends the frame before the reap tears the session down", () => {
@@ -164,7 +175,7 @@ describe("reportPtyExit — a stale exit after the id was reused", () => {
 
     reportPtyExit("s-1", old, EXIT, vi.fn());
 
-    expect(frames).toEqual([{ type: "exit", exitCode: 0, lifetimeMs: 60_000, ended: false }]);
+    expect(frames).toEqual([{ type: "exit", exitCode: 0, lifetimeMs: 60_000, reattached: false, ended: false }]);
   });
 });
 

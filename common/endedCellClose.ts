@@ -12,11 +12,15 @@ export interface EndedCellExit {
    *  client's and reads 0 even for an agent that failed to start, so the lifetime is what is left
    *  to tell a launch failure, whose banner must stay readable, from an agent that was ended. */
   lifetimeMs: number | null;
+  /** The pty attached to an agent that was already running, so its lifetime is not the agent's
+   *  and an exit soon after the attach is an ending, not a launch failure. */
+  reattached: boolean;
   /** A worktree cell's close asks whether to keep the worktree; that is not asked unprompted. */
   worktreeCell: boolean;
 }
 
 export function shouldCloseEndedCell(exit: EndedCellExit): boolean {
-  if (!exit.sessionEnded || exit.worktreeCell || exit.lifetimeMs === null) return false;
-  return exit.lifetimeMs >= STARTUP_WINDOW_MS;
+  if (!exit.sessionEnded || exit.worktreeCell) return false;
+  if (exit.reattached) return true;
+  return exit.lifetimeMs !== null && exit.lifetimeMs >= STARTUP_WINDOW_MS;
 }
