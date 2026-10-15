@@ -62,6 +62,15 @@ describe("syncAntigravitySkillsConfig", () => {
 
   const read = (): Record<string, unknown> => JSON.parse(fs.readFileSync(antigravitySkillsConfigFile(dir), "utf8"));
 
+  it.skipIf(process.platform === "win32")("keeps an existing file's mode", () => {
+    fs.mkdirSync(path.join(dir, ".agents"));
+    fs.writeFileSync(antigravitySkillsConfigFile(dir), "{}");
+    fs.chmodSync(antigravitySkillsConfigFile(dir), 0o600);
+    syncAntigravitySkillsConfig(dir);
+    expect(read().entries).toHaveLength(2);
+    expect(fs.statSync(antigravitySkillsConfigFile(dir)).mode & 0o777).toBe(0o600);
+  });
+
   it("writes .agents/skills.json pointing at both skill roots", () => {
     syncAntigravitySkillsConfig(dir);
     expect(read()).toEqual({ entries: [{ path: ".claude/skills" }, { path: "~/.claude/skills" }] });

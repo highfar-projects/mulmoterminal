@@ -34,9 +34,10 @@ Every command can be pointed elsewhere with `CLAUDE_BIN` / `CODEX_BIN` / `ANTIGR
 `GROK_BIN` / `MUSE_BIN` / `COPILOT_BIN` / `CURSOR_BIN` — a pinned version, a wrapper, a path
 outside `PATH`.
 
-**Which ones tell you when they finish.** Claude, Codex, Cursor and Copilot all raise the
-attention mark and play the sound when a turn finishes in a cell you are not looking at. Antigravity,
-Grok and Muse drive neither — their cells run fine and simply stay quiet. Claude, and Codex since
+**Which ones tell you when they finish.** Claude, Codex, Cursor, Copilot and Antigravity all raise
+the attention mark and play the sound when a turn finishes in a cell you are not looking at.
+Antigravity does it through a hook MulmoTerminal adds to `.agents/hooks.json` in the directory (not
+on Windows). Grok and Muse drive neither — their cells run fine and simply stay quiet. Claude, and Codex since
 6.2.0, can also tell you they are **blocked waiting for you** — Codex once you trust its hook, the
 first time a Codex cell asks ([6.2.0 guide](v6.2.0.html)). For every other agent an approval prompt
 sits in the cell without a sound.

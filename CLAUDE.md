@@ -269,8 +269,9 @@ the working/waiting dots and the attention sound from its hooks; **cursor drives
 the sound for input** — its `stop` hook ends the turn, and nothing reports being blocked; codex drives
 both from two sources — the rollout for turns and a `PermissionRequest` hook for its approval dialog;
 copilot drives the **working half only**, because the event that looks like "blocked" (`permissionRequest`) fires on every tool call
-whether or not anyone is asked, which is cursor's `beforeShellExecution` trap as well; agy, grok and
-muse drive neither — and for grok and muse that is a missing WIRE, not a missing
+whether or not anyone is asked, which is cursor's `beforeShellExecution` trap as well; agy drives
+both dots from a hook file in the directory (`.agents/hooks.json`), again with nothing for input;
+grok and muse drive neither — and for them that is a missing WIRE, not a missing
 record, since this repo already parses their own per-turn logs for the token badges (on a badge poll,
 though, not on a live tail: the tail is part of what a status wire would still have to add). Cursor
 inverts that pair: its status is wired and its counts come from the same hook, because it writes them
