@@ -45,11 +45,16 @@ export function missingRemotionPackages(packages, isResolvable) {
   return packages.filter((name) => !isResolvable(name));
 }
 
-export function remotionCheckLine(missing, total) {
-  if (missing.length === 0) return `  ✓ remotion — ${WHY}`;
+/** The `init` line for a set of optional packages: passing, absent, or installed only in part. */
+export function optionalPackagesLine({ label, why, guideUrl }, missing, total) {
+  if (missing.length === 0) return `  ✓ ${label} — ${why}`;
   const head =
-    missing.length === total ? `  ○ remotion — optional (${WHY})` : `  ○ remotion — optional (${WHY}), installed only in part; missing: ${missing.join(", ")}`;
-  return `${head}\n      → ${GUIDE_URL}`;
+    missing.length === total ? `  ○ ${label} — optional (${why})` : `  ○ ${label} — optional (${why}), installed only in part; missing: ${missing.join(", ")}`;
+  return `${head}\n      → ${guideUrl}`;
+}
+
+export function remotionCheckLine(missing, total) {
+  return optionalPackagesLine({ label: "remotion", why: WHY, guideUrl: GUIDE_URL }, missing, total);
 }
 
 /** The `init` line for remotion, or null when mulmocast cannot be asked. */
