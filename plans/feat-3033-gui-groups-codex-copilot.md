@@ -20,8 +20,13 @@ to the two other agents that take their GUI MCP per spawn.
 - `spawnCodexPty` / `spawnCopilotPty` take `guiGroups`, record it, and read the record back on
   every spawn. A restricted session never carries the all-tools url and is handed exactly its
   groups (`codexGuiMcpServers({ groups: restriction, allTools: false })`), whatever the directory
-  registered. Pre-approval follows: codex approves per server, and copilot's `--allow-all-tools`
-  can only approve what it was handed.
+  registered. Pre-approval follows for the GUI tools: codex approves per server, and a GUI tool
+  outside the groups is never offered to copilot, so its `--allow-all-tools` cannot approve it.
+  That flag still approves the user's own MCP servers and copilot's built-ins, as it does for
+  every copilot session — narrowing it would block a background worker on every shell command,
+  which is a product decision outside #3033.
+- `handleCodexConnection` / `handleCopilotConnection` await the restriction log before spawning,
+  as the claude handler does: a resume right after a restart would otherwise be handed every tool.
 - `plugin-routes.ts` passes `guiGroups` to both.
 
 ## The codex-only gap: a resume under the rollout id
@@ -42,3 +47,10 @@ copilot has no such gap: `--session-id` is our own id on both new and resume.
 
 - The guarantee stays "not offered, not pre-approved", as in #3050: the tools remain callable over
   HTTP by anything with a shell.
+- Cross-process: the restriction log (and codex's rollout map) is read at boot only, so a session
+  restricted by another live MulmoTerminal sharing `~/.mulmoterminal` is unknown here — for every
+  agent since #3050. That setup is warned about as unsupported at boot.
+- A codex rollout is listed before its mapping is written (the watcher polls once a second after
+  the first turn starts). Opened from the list inside that window it resumes unrestricted — and
+  would start a second codex on a live rollout regardless of #3033. An unmapped rollout cannot be
+  restricted by default: one started outside MulmoTerminal looks the same.
