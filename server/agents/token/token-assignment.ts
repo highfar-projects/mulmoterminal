@@ -4,7 +4,7 @@
 // Pure: the config, the readings, the secret reader and the clock are injected.
 import type { RateLimits } from "../../../common/rateLimits.js";
 import { DEFAULT_LOGIN_ID, type RotationToken, type TokenRotation } from "../../../common/tokenRotation.js";
-import { blockedUntil, chooseToken, type TokenCandidate } from "./token-choice.js";
+import { blockedUntil, chooseToken, nearLimit, type TokenCandidate } from "./token-choice.js";
 
 /** Anything that would outrank the chosen credential (an API key, a provider's token) or stand in
  *  for it (an inherited token) is removed from the session's environment. */
@@ -96,4 +96,11 @@ export function assignToken(deps: TokenAssignmentDeps): TokenAssignment | null {
  *  rotation did not start has no record and counts toward none. */
 export function countLiveSessions(liveSessionIds: Iterable<string>, tokenOf: (sessionId: string) => string | undefined, tokenId: string): number {
   return [...liveSessionIds].filter((sessionId) => tokenOf(sessionId) === tokenId).length;
+}
+
+/** Whether a running session on `tokenId` should move at the end of its turn, at that token's own
+ *  weekly reserve line (#3064). The `/login` credential and a token gone from the config have none. */
+export function tokenNearLimit(rotation: TokenRotation, tokenId: string, limits: RateLimits | null, now_sec: number): boolean {
+  const reserve = rotation.tokens.find((token) => token.id === tokenId)?.reserveWeeklyPercent;
+  return nearLimit(limits, now_sec, reserve);
 }

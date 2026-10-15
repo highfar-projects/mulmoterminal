@@ -6,6 +6,7 @@ import {
   keptAssignment,
   OAUTH_TOKEN_ENV,
   ROTATION_UNSET_ENV,
+  tokenNearLimit,
   type TokenAssignmentDeps,
 } from "../../../../server/agents/token/token-assignment";
 import { DEFAULT_LOGIN_ID, type RotationToken, type TokenRotation } from "../../../../common/tokenRotation";
@@ -149,5 +150,21 @@ describe("a token's weekly reserve (#3064)", () => {
   it("starts nothing on rotation when the only token is down to its reserve", () => {
     const reservedA: RotationToken = { ...A, reserveWeeklyPercent: 5 };
     expect(assignToken(deps({ includeDefaultLogin: false, tokens: [reservedA] }, { tokenLimits: () => used(96) }))).toBeNull();
+  });
+});
+
+describe("tokenNearLimit (#3064)", () => {
+  const rotation: TokenRotation = { enabled: true, includeDefaultLogin: true, tokens: [A, { ...B, reserveWeeklyPercent: 5 }] };
+
+  it("moves a session on a reserved token at its own line, and not below it", () => {
+    expect(tokenNearLimit(rotation, "b", used(95), NOW)).toBe(true);
+    expect(tokenNearLimit(rotation, "b", used(94.9), NOW)).toBe(false);
+  });
+
+  it("keeps the usual line for a token without a reserve, the /login credential and a token gone from the config", () => {
+    expect(tokenNearLimit(rotation, "a", used(95), NOW)).toBe(false);
+    expect(tokenNearLimit(rotation, DEFAULT_LOGIN_ID, used(95), NOW)).toBe(false);
+    expect(tokenNearLimit(rotation, "gone", used(95), NOW)).toBe(false);
+    expect(tokenNearLimit(rotation, "a", used(98), NOW)).toBe(true);
   });
 });

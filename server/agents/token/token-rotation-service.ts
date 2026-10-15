@@ -4,9 +4,8 @@
 // A token is measured in the DEFAULT home under its own credential — exactly how a cell on it runs —
 // by the same meter an account uses, keyed by the token rather than the home they all share.
 import { createAccountRateLimits } from "../rate-limit/account-rate-limits.js";
-import { assignToken, keptAssignment, OAUTH_TOKEN_ENV, ROTATION_UNSET_ENV, type TokenAssignment } from "./token-assignment.js";
+import { assignToken, keptAssignment, OAUTH_TOKEN_ENV, ROTATION_UNSET_ENV, tokenNearLimit, type TokenAssignment } from "./token-assignment.js";
 import { readRotationToken } from "./token-secret.js";
-import { nearLimit } from "./token-choice.js";
 import { agentHome } from "../agent-homes.js";
 import { getTokenRotation } from "../../config/config-routes.js";
 import { DEFAULT_LOGIN_ID, type RotationToken } from "../../../common/tokenRotation.js";
@@ -86,7 +85,6 @@ export function createTokenRotation(deps: TokenRotationDeps): TokenRotationRunti
     const token = getTokenRotation().tokens.find((candidate) => candidate.id === tokenId);
     return token ? meters.lastClaudeLimits(meteredToken(token)) : null;
   };
-  const reserveOf = (tokenId: string): number | undefined => getTokenRotation().tokens.find((token) => token.id === tokenId)?.reserveWeeklyPercent;
 
   const assign = (onlyFree: boolean): TokenAssignment | null =>
     assignToken({
@@ -106,6 +104,6 @@ export function createTokenRotation(deps: TokenRotationDeps): TokenRotationRunti
     keptAssignment: (tokenId) => keptAssignment(getTokenRotation(), tokenId, readRotationToken),
     markSpent: (tokenId) => spentUntil.set(tokenId, nowSec() + SPENT_HOLD_SEC),
     hasFreeChoice: () => assign(true) !== null,
-    isNearLimit: (tokenId) => nearLimit(limitsOf(tokenId), nowSec(), reserveOf(tokenId)),
+    isNearLimit: (tokenId) => tokenNearLimit(getTokenRotation(), tokenId, limitsOf(tokenId), nowSec()),
   };
 }
