@@ -75,7 +75,7 @@ function probeFfmpeg(): void {
   // eslint-disable-next-line sonarjs/no-os-command-from-path -- 'ffmpeg' is deliberately resolved from PATH (that's what the probe checks); fixed argv, no shell
   execFile("ffmpeg", ["-version"], (err) => {
     ffmpegAvailable = !err;
-    if (err) console.warn("[mulmo-script] ffmpeg not found — movie and beat rendering will be unavailable");
+    if (err) console.warn("[mulmo-script] ffmpeg not found — movies and beats that make or use a movie will be unavailable");
   });
 }
 
