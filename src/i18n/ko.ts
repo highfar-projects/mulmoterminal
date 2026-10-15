@@ -5,6 +5,7 @@ import { tipsKo } from "./tips/ko";
 import { commandPaletteKo } from "./commandPalette/ko";
 import { focusModeKo } from "./focusMode/ko";
 import { fileHistoryKo } from "./fileHistory/ko";
+import { filesRecentKo } from "./filesRecent/ko";
 import { dirConfigSaveKo } from "./dirConfigSave/ko";
 import { releaseNotesKo } from "./releaseNotes/ko";
 import { dirConfigOpenKo } from "./dirConfigOpen/ko";
@@ -632,6 +633,7 @@ export const ko: Messages = {
     close: "확인",
   },
   fileHistory: fileHistoryKo,
+  filesRecent: filesRecentKo,
   dirConfigSave: dirConfigSaveKo,
   releaseNotes: releaseNotesKo,
   dirConfigOpen: dirConfigOpenKo,

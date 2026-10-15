@@ -5,6 +5,7 @@ import { tipsZhCN } from "./tips/zh-CN";
 import { commandPaletteZhCN } from "./commandPalette/zh-CN";
 import { focusModeZhCN } from "./focusMode/zh-CN";
 import { fileHistoryZhCN } from "./fileHistory/zh-CN";
+import { filesRecentZhCN } from "./filesRecent/zh-CN";
 import { dirConfigSaveZhCN } from "./dirConfigSave/zh-CN";
 import { releaseNotesZhCN } from "./releaseNotes/zh-CN";
 import { dirConfigOpenZhCN } from "./dirConfigOpen/zh-CN";
@@ -618,6 +619,7 @@ export const zhCN: Messages = {
     close: "知道了",
   },
   fileHistory: fileHistoryZhCN,
+  filesRecent: filesRecentZhCN,
   dirConfigSave: dirConfigSaveZhCN,
   releaseNotes: releaseNotesZhCN,
   dirConfigOpen: dirConfigOpenZhCN,
