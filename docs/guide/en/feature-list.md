@@ -4,7 +4,7 @@ nav_title: Feature list
 layout: default
 parent: English
 nav_order: 6.5
-as_of: 10.5.0
+as_of: 10.6.0
 description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 9.1.0)."
 ---
 
@@ -66,6 +66,7 @@ More: [Agents](agents.html)
 
 - Antigravity cells light the working dot during a turn and play the finished sound and push when it ends (v10.5.0)
 - An agent can start a Claude session with only some GUI tool groups (`spawnBackgroundChat` `guiGroups`) (v10.5.0)
+- The same `guiGroups` limit works for a Codex or Copilot session, and holds when a Codex session is reopened from its rollout in the resume list (v10.6.0)
 - The Skills viewer's skills.sh mode searches the public directory for skills not on disk and shows a skill's `SKILL.md`, every file it brings and the ones that can run code, with the `npx skills add` line to copy; it installs nothing (v8.4.0)
 - More features → Skills lists every Claude skill on disk — `~/.claude/skills`, each enabled plugin (as `plugin:skill`), and the `.claude/skills` of each folder a terminal ran in — in three columns with search, marking a folder skill that overrides yours (v8.3.0)
 - Settings → Models and backends adds and removes custom agents, accounts and backends, validating URLs and keys (v7.2.0)

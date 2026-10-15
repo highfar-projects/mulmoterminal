@@ -8,6 +8,21 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@10.6.0 — 2026-10-15
+
+> **Setup guide:** [10.6.0 — Codex and Copilot workers can be limited to some GUI tools](https://receptron.github.io/mulmoterminal/guide/en/v10.6.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.6.0.html))
+
+### `guiGroups` for Codex and Copilot sessions (#3057)
+
+- `POST /api/plugin/spawnBackgroundChat` accepts `guiGroups` for `codex` and `copilot` as well as `claude` (#3050), closing #3033. `spawnCodexPty` / `spawnCopilotPty` record the restriction, read it back on every spawn of the id, hand exactly those groups whatever the directory registered, and never claim the all-tools url. The MCP routes already enforced the record by session id for every agent. Antigravity / Grok / Cursor / Muse stay refused: their groups live in a file shared by every session in the directory.
+- A Codex conversation is listed for resuming under its rollout id, a key the restriction was never recorded for. `inheritedGuiRestriction()` takes the narrowest restriction among the sessions holding that rollout, and the spawn records it under the new key.
+- The Codex and Copilot cell handlers now wait for the restriction log before spawning, as the Claude handler does, so a resume right after a restart is no longer handed every tool.
+- Not changed: a restricted Copilot session keeps `--allow-all-tools`, so Copilot's built-ins and the user's own MCP servers stay pre-approved, as for every Copilot session. The restriction log is read at boot only, so it is not shared live between two servers on one `~/.mulmoterminal` (an unsupported setup).
+
+### Note missing from 10.5.0: a permanently overridden `HOME` (#3053)
+
+- If MulmoTerminal always runs with `HOME` pointed away from the account's own home, the first start on 10.5.0 or later cannot reattach the pre-upgrade terminals: they stay on the shared `-L mulmoterminal` tmux server and their drop copies in `mulmoterminal-drops`. Conversations resume from disk. End the leftovers with `tmux -L mulmoterminal kill-server` — only when no server ever runs on the real home. No migration is possible: nothing in a session or a drop directory records which `HOME` made it.
+
 ## mulmoterminal@10.5.0 — 2026-10-15
 
 > **Setup guide:** [10.5.0 — A cell closes when its agent ends, and Antigravity tells you when it is done](https://receptron.github.io/mulmoterminal/guide/en/v10.5.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.5.0.html))

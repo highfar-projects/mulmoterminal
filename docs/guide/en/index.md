@@ -8,8 +8,8 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **10.5.0 is out.** A cell closes itself when its agent ends on its own, and Antigravity cells light the
-> working dot and say when they are done. [Setup guide](v10.5.0.html)
+> **10.6.0 is out.** An agent can now limit a Codex or Copilot worker to some GUI tools, as it already
+> could a Claude one. [Setup guide](v10.6.0.html)
 
 ## What is MulmoTerminal? {#what-is}
 

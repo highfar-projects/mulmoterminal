@@ -4,7 +4,7 @@ nav_title: 全機能リスト
 layout: default
 parent: 日本語
 nav_order: 6.5
-as_of: 10.5.0
+as_of: 10.6.0
 description: MulmoTerminal のいまある機能を、入った版つきで領域ごとに一行ずつ並べた一覧（9.1.0 時点）。
 ---
 
@@ -66,6 +66,7 @@ description: MulmoTerminal のいまある機能を、入った版つきで領�
 
 - Antigravity のセルで、ターン中は作業中の点が付き、終わると終了の音と通知が出る (v10.5.0)
 - エージェントが、GUI の道具を一部のグループだけ持つ Claude のセッションを立ち上げられる（`spawnBackgroundChat` の `guiGroups`） (v10.5.0)
+- 同じ `guiGroups` の制限が Codex と Copilot のセッションでも使え、Codex のセッションを再開一覧から開き直しても続く (v10.6.0)
 - Skills 画面の skills.sh の切り替えで、まだ入っていないスキルを公開一覧から検索し、`SKILL.md`・持ち込むファイル・コードを実行できるファイルを見られる。インストールはせず、`npx skills add` の行をコピーできる (v8.4.0)
 - その他の機能 → Skills で、`~/.claude/skills`・有効なプラグイン（`plugin:skill` の名前で）・ターミナルを開いたフォルダの `.claude/skills` にあるスキルを 3 列で一覧・検索。自分のスキルを上書きするフォルダのスキルに印がつく (v8.3.0)
 - 設定の「Models and backends」でカスタムエージェント・アカウント・バックエンドを追加・削除できる（URL とキーを検証） (v7.2.0)
