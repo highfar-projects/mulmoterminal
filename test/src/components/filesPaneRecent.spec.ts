@@ -105,4 +105,36 @@ describe("the Files pane's recently opened files (#3058)", () => {
     await flushPromises();
     expect(w.find('[data-testid="files-recent"]').exists()).toBe(false);
   });
+
+  // The pane changes directory before it lets go of the old root's file (Codex review round 1).
+  it("does not record the old root's open file under a new directory", async () => {
+    const w = await mountPane("/proj");
+    await openRow(w, "a.ts");
+    await w.setProps({ cwd: "/other" });
+    await flushPromises();
+    await openMenu(w);
+    expect(listed(w)).not.toContain("a.ts");
+  });
+
+  it("names the list it opens and says whether it is open, and keeps the keyboard after a pick", async () => {
+    const w = await mountPane();
+    await openRow(w, "a.ts");
+    const trigger = w.get('[data-testid="files-recent-btn"]');
+    expect(trigger.attributes("aria-expanded")).toBe("false");
+    await openMenu(w);
+    expect(trigger.attributes("aria-expanded")).toBe("true");
+    expect(w.get('[data-testid="files-recent"]').attributes("id")).toBe(trigger.attributes("aria-controls"));
+    await w.get('[data-testid="files-recent-entry"][data-path="a.ts"]').trigger("click");
+    await flushPromises();
+    expect(document.activeElement).toBe(trigger.element);
+  });
+
+  // Another pane on the same folder, or another browser tab, records into the same store.
+  it("shows what another pane recorded since this one loaded", async () => {
+    const w = await mountPane();
+    await openRow(w, "a.ts");
+    localStorage.setItem("files_recent", JSON.stringify([{ cwd: "/proj", paths: ["c.ts", "a.ts"] }]));
+    await openMenu(w);
+    expect(listed(w)).toEqual(["c.ts", "a.ts"]);
+  });
 });

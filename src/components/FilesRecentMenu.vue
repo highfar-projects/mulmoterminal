@@ -10,7 +10,7 @@ import { useRecentFiles } from "../composables/useRecentFiles";
 const props = defineProps<{ cwd: string | null; openPath: string | null }>();
 const emit = defineEmits<{ open: [pathRel: string] }>();
 const { t } = useI18n();
-const { recent } = useRecentFiles(
+const { recent, refresh } = useRecentFiles(
   () => props.cwd,
   () => props.openPath,
 );
@@ -35,8 +35,14 @@ watch(open, (isOpen) => {
 });
 onBeforeUnmount(stopListening);
 
+function toggle(): void {
+  if (!open.value) refresh();
+  open.value = !open.value;
+}
+// The entry pressed is about to leave the page; keep the keyboard where the list came from.
 function pick(pathRel: string): void {
   open.value = false;
+  root.value?.querySelector<HTMLElement>('[data-testid="files-recent-btn"]')?.focus();
   emit("open", pathRel);
 }
 const nameOf = (pathRel: string): string => pathRel.split("/").at(-1) ?? pathRel;
@@ -45,9 +51,18 @@ const dirOf = (pathRel: string): string => pathRel.split("/").slice(0, -1).join(
 
 <template>
   <div ref="root" class="relative">
-    <FilesToolbarButton icon="schedule" :label="t('filesRecent.tip')" test-id="files-recent-btn" opens-a-panel @click="open = !open" />
+    <FilesToolbarButton
+      icon="schedule"
+      :label="t('filesRecent.tip')"
+      test-id="files-recent-btn"
+      opens-a-panel
+      :aria-expanded="open"
+      aria-controls="files-recent-list"
+      @click="toggle"
+    />
     <div
       v-if="open"
+      id="files-recent-list"
       data-testid="files-recent"
       class="absolute right-0 top-[30px] z-20 max-h-[60vh] w-[300px] overflow-y-auto rounded-md border border-border bg-base p-1 text-[12px] shadow-lg"
     >
