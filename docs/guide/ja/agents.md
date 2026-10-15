@@ -33,9 +33,10 @@ GUI ツールへの到達方法が3通りに分かれていて、選ぶ前に読
 `COPILOT_BIN` / `CURSOR_BIN` で差し替えられます（バージョン固定、ラッパー、`PATH` の外にある
 パスなど）。
 
-**どれが「終わった」を教えてくれるか。** Claude・Codex・Cursor・Copilot は、見ていないセルでターンが
-終わると、注目マークが付き、音が鳴ります。Antigravity・Grok・
-Muse はどちらも出しません（セルは正常に動き、ただ静かなだけです）。**入力待ちを知らせられるのは
+**どれが「終わった」を教えてくれるか。** Claude・Codex・Cursor・Copilot・Antigravity は、見ていない
+セルでターンが終わると、注目マークが付き、音が鳴ります。Antigravity は、MulmoTerminal がディレクトリの
+`.agents/hooks.json` に足すフックで知らせます（Windows を除く）。Grok・Muse はどちらも出しません
+（セルは正常に動き、ただ静かなだけです）。**入力待ちを知らせられるのは
 Claude と、6.2.0 からの Codex**です。Codex は、最初の Codex セルで聞かれる hook の確認に答えて
 からになります（[6.2.0 のガイド](v6.2.0.html)）。他のエージェントでは承認プロンプトが無音のまま
 セルに表示されます。

@@ -72,8 +72,8 @@ is where to go read why, not a gap nobody noticed.
 | 6 | Resume form | `--resume <id>` | `resume <id>` subcommand | `--conversation <id>` | `--resume <id>` | `resume <id>` + `--workspace` | **the same `--session-id`** — one flag mints and resumes | **the same `--resume`** — a uuid we invent starts a new chat under it |
 | 7 | Conversation history list | `/api/sessions` | `/api/codex/sessions` | `/api/antigravity/sessions` | `/api/grok/sessions` | `/api/muse/sessions` | `/api/copilot/sessions` | `/api/cursor/sessions` |
 | 8 | Survives a server restart | transcript on disk | rollout map | conversation map | key *is* the conversation id | conversation map | key *is* the session id (`session-state/<id>/`) | key *is* the chat id (`projects/<slug>/agent-transcripts/<id>/`) |
-| 9 | **working / waiting flags** | **hooks** (`--settings`) — both | **rollout tail** (1s poll) for working, **`PermissionRequest` hook** (`-c`, trusted once per machine) for waiting — **both** | — | — | — | **hooks** (a machine-global file) — **working only** | **hooks** (a machine-global file) — **both** |
-| 10 | **Attention sound / Web Push** | yes — finished **and** blocked | yes — finished **and** blocked (the latter once its hook is trusted) | — | — | — | yes — finished only | yes — finished only |
+| 9 | **working / waiting flags** | **hooks** (`--settings`) — both | **rollout tail** (1s poll) for working, **`PermissionRequest` hook** (`-c`, trusted once per machine) for waiting — **both** | **hooks** (`.agents/hooks.json` in the directory) — **both**, not on Windows | — | — | **hooks** (a machine-global file) — **working only** | **hooks** (a machine-global file) — **both** |
+| 10 | **Attention sound / Web Push** | yes — finished **and** blocked | yes — finished **and** blocked (the latter once its hook is trusted) | yes — finished only | — | — | yes — finished only | yes — finished only |
 | 11 | Tool-call history (Tools pane) + work phase | yes (from `Pre`/`PostToolUse`) | — | — | — | — | yes (from `preToolUse` / `postToolUse`) | yes (from `preToolUse` / `postToolUse`) |
 | 12 | Last turn → header prompt, handoff, round table, prompts pane | yes | yes | — | — | — | — (its `turns` table would give it) | yes, from the transcript `.jsonl` |
 | 13 | AI-generated session title | yes | — (shows codex's own `/rename` name in the list) | — | — | — | — (the list shows copilot's own `summary`) | — (the list shows the first user message) |
@@ -160,7 +160,22 @@ screen-scraping the PTY is deliberately not a third:
 sequences land between the words), and the markers it does match are narrow, version-fragile
 strings.
 
-**`—` in rows 9-10 means unwired, and for two of the three it is only that.** Grok appends one
+**Antigravity is the fourth agent on the hook route, and its file is per DIRECTORY, not per
+machine** — `.agents/hooks.json`, beside the skills and MCP configs already written there
+(`server/agents/antigravity/antigravity-hooks-file.ts`). Measured on agy 1.3.5 in the TUI (#3034):
+
+- `Stop` fires exactly once per turn, and `PreInvocation` once per model call with `invocationNum`
+  restarting at 0 each turn — so `invocationNum === 0` is the turn's start. `SessionStart` is not:
+  it fires on the conversation's first turn only.
+- The hook command inherits the agy process's environment, so it reads the session and port from
+  `guiMcpEnv` exactly as codex's `PermissionRequest` command does, and the shared file names neither.
+- **One malformed entry voids the whole file, the user's hooks included** — cursor's trap again. An
+  event without a matcher takes its handlers directly; wrapped in `{"hooks":[…]}` agy logs
+  `command hook must specify 'command'` and runs nothing from the file.
+- No payload carries the prompt text, so row 12 stays empty, and no event distinguishes a blocked
+  turn from a running one, so row 10 is "finished" only.
+
+**`—` in rows 9-10 means unwired, and for both remaining agents it is only that.** Grok appends one
 `turn_completed` record per turn to `updates.jsonl`, and muse appends a `model_completed` per model
 call — and this repo **already parses both**, incrementally, for the token badges in row 15
 (`server/agents/grok/grok-usage.ts`, `muse-usage.ts`).
