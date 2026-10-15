@@ -3,6 +3,7 @@
 // hidden characters, no Clipboard API, a refused write, or a block that is gone. Only the latest press
 // counts, and only while that file is open.
 import { onScopeDispose, ref, watch, type Ref } from "vue";
+import { useCopiedNotice } from "./useCopiedNotice";
 import { previewCodeBlockAt, type CodeBlockLookup } from "../components/previewCodeBlockApi";
 import { copiedNoticeFor, directCopyText, writeClipboardLater, type CopiedNotice } from "../components/previewCodeCopy";
 import { clipboardAvailable } from "../components/codeBlockCopy";
@@ -29,22 +30,10 @@ export interface PreviewCodeBlockDialogState {
   close: () => void;
 }
 
-const COPIED_NOTICE_MS = 2500;
-
 export function usePreviewCodeBlock(deps: PreviewCodeBlockDeps): PreviewCodeBlockDialogState {
   const shown = ref<CodeBlockLookup | null>(null);
-  const copied = ref<CopiedNotice | null>(null);
+  const { copied, show: showCopied, clear: clearCopied } = useCopiedNotice();
   let latest = 0;
-  let noticeTimer: ReturnType<typeof setTimeout> | undefined;
-  const clearCopied = (): void => {
-    clearTimeout(noticeTimer);
-    copied.value = null;
-  };
-  const showCopied = (notice: CopiedNotice): void => {
-    clearCopied();
-    copied.value = notice;
-    noticeTimer = setTimeout(() => (copied.value = null), COPIED_NOTICE_MS);
-  };
   const open = async (index: number): Promise<void> => {
     const path = deps.openPath();
     if (!path) return;
