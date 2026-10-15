@@ -93,6 +93,15 @@ describe("syncAntigravityHooks", () => {
     expect(fs.readFileSync(target, "utf8")).toBe("{}");
   });
 
+  it.skipIf(process.platform === "win32")("keeps an existing file's mode", () => {
+    fs.mkdirSync(path.join(cwd, ".agents"));
+    fs.writeFileSync(antigravityHooksFile(cwd), "{}", { mode: 0o600 });
+    fs.chmodSync(antigravityHooksFile(cwd), 0o600);
+    syncAntigravityHooks(cwd);
+    expect(read()).toEqual({ [ANTIGRAVITY_HOOK_NAME]: ourAntigravityHook() });
+    expect(fs.statSync(antigravityHooksFile(cwd)).mode & 0o777).toBe(0o600);
+  });
+
   it("keeps the file out of git status", () => {
     fs.mkdirSync(path.join(cwd, ".git", "info"), { recursive: true });
     syncAntigravityHooks(cwd);
