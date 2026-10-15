@@ -5,7 +5,7 @@
 // the favicon, the close guard.
 //
 // The single terminal view lived here until #1202. Everything it owned has a home in the grid: the
-// settings modal (GridView's own), the tools and Canvas panes (beside a zoomed cell), the session
+// settings modal (GridView's own), the tools and Canvas panes (the grid's right pane), the session
 // list (the cockpit roster, and the launcher's resume list for sessions off the grid), and the
 // content surfaces (the Collections door in the toolbar). What it uniquely had — one terminal
 // filling the window — is a zoomed cell.
