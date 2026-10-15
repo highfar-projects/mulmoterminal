@@ -109,8 +109,9 @@ jobs:
 
       # Restored BEFORE install so puppeteer's postinstall skips its ~120 MB download.
       # Every shard may save, unlike node_modules: the download is what hangs (#3030), so a cold
-      # run whose first shard hangs must still leave a cache behind from whichever shard got
-      # through. The others' saves are rejected as duplicates, which costs nothing at this size.
+      # run whose first shard hangs must still leave a cache behind from whichever shard finishes —
+      # actions/cache saves only after a job succeeds, so a failed or cancelled shard never stores a
+      # half-unpacked Chrome. The others' saves are rejected as duplicates, which costs nothing here.
       - uses: actions/cache@v5
         if: steps.scope.outputs.code == 'true'
         with:
