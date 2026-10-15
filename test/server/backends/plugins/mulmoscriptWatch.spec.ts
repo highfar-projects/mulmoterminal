@@ -20,8 +20,23 @@ afterEach(() => {
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+/** A wait the test opens and closes by hand, so a write can be put inside it deterministically. */
+function heldGrace() {
+  let release: () => void = () => {};
+  let entered = false;
+  return {
+    wait: () =>
+      new Promise<void>((resolve) => {
+        entered = true;
+        release = resolve;
+      }),
+    entered: () => entered,
+    release: () => release(),
+  };
+}
+
 /** A workspace with a default stories directory holding one story, and a watcher on it. */
-function setup() {
+function setup(ownWriteGrace?: () => Promise<void>) {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "mulmo-watch-"));
   tmpDirs.push(workspace);
   const storiesDir = path.join(workspace, "artifacts", "stories");
@@ -46,10 +61,16 @@ function setup() {
       roots: () => [workspace],
       publishChanged: (filePath) => published.push(filePath),
       pollMs: POLL_MS,
+      ...(ownWriteGrace ? { ownWriteGrace } : {}),
     }),
   );
   const subscribe = (channel: string) => listener?.(channel, true);
   return { workspace, deck, dirs, published, watch, subscribe };
+}
+
+/** Wait until `done` holds, or give up after a while. */
+async function until(done: () => boolean): Promise<void> {
+  for (let waited = 0; !done() && waited < 2000; waited += POLL_MS) await sleep(POLL_MS);
 }
 
 /** Wait until something is announced, or give up after a while. */
@@ -98,6 +119,37 @@ describe("watching an open MulmoScript (#3014)", () => {
     await sleep(QUIET_MS);
     fs.writeFileSync(deck, '{"beats":[{"text":"typed, saved by absolute path"}]}');
     watch.recordOwnWrite({ filePath: deck }, dirs);
+    await sleep(QUIET_MS);
+    expect(published).toEqual([]);
+  });
+
+  // A change is judged by the stamp that made the poll notice it. Reading the file again later
+  // would see the plugin's next write in place of the outside edit and drop the edit as an echo.
+  it("still announces an outside edit when the plugin writes again before the announcement", async () => {
+    const grace = heldGrace();
+    const { deck, dirs, published, watch, subscribe } = setup(grace.wait);
+    subscribe(pluginFileChannel(MULMOSCRIPT_SCOPE, "stories/deck.json"));
+    await sleep(QUIET_MS);
+    fs.writeFileSync(deck, '{"beats":[{"text":"an editor wrote this"}]}');
+    await until(grace.entered);
+    fs.writeFileSync(deck, '{"beats":[{"text":"then the View saved, longer than before"}]}');
+    watch.recordOwnWrite({ filePath: "stories/deck.json" }, dirs);
+    grace.release();
+    await announced(published);
+    expect(published).toEqual(["stories/deck.json"]);
+  });
+
+  // The plugin writes first and reports the write afterwards, so a poll can see its own edit
+  // before the hook has recorded it. Announcing then would reload the View under its own caret.
+  it("says nothing about the plugin's own write when the poll sees it before the hook records it", async () => {
+    const grace = heldGrace();
+    const { deck, dirs, published, watch, subscribe } = setup(grace.wait);
+    subscribe(pluginFileChannel(MULMOSCRIPT_SCOPE, "stories/deck.json"));
+    await sleep(QUIET_MS);
+    fs.writeFileSync(deck, '{"beats":[{"text":"saved by the View"}]}');
+    await until(grace.entered);
+    watch.recordOwnWrite({ filePath: "stories/deck.json" }, dirs);
+    grace.release();
     await sleep(QUIET_MS);
     expect(published).toEqual([]);
   });

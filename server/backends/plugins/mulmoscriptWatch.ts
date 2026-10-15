@@ -17,6 +17,12 @@ import { isEchoOfOwnWrite, isScriptPath, scriptFileOnDisk, type ScriptDirs } fro
  *  needs; the bound only keeps a long session from growing it. */
 const MAX_REMEMBERED_WRITES = 256;
 
+/** How long a change that is not yet known to be the plugin's own waits before it is announced.
+ *  The plugin writes and only then reports the write, with awaits between, so a poll can see its
+ *  own edit before the hook has recorded it; announcing that would reload the View under its
+ *  own caret. A few event-loop turns is the whole gap — this is a margin, not a measurement. */
+const OWN_WRITE_GRACE_MS = 250;
+
 export interface MulmoScriptWatchDeps {
   pubsub: SubscriptionSource;
   /** Where stories live, or null before the plugin backend is initialised. */
@@ -27,6 +33,9 @@ export interface MulmoScriptWatchDeps {
   publishChanged: (filePath: string) => void;
   sleep?: (ms: number) => Promise<void>;
   pollMs?: number;
+  /** The wait before an unrecognised change is announced; injectable so a test can put a write
+   *  inside it deterministically. */
+  ownWriteGrace?: () => Promise<void>;
 }
 
 export function createMulmoScriptWatch() {
@@ -47,9 +56,20 @@ export function createMulmoScriptWatch() {
   }
 
   function start(deps: MulmoScriptWatchDeps): () => void {
+    const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+    const ownWriteGrace = deps.ownWriteGrace ?? (() => sleep(OWN_WRITE_GRACE_MS));
     const onDisk = (filePath: string): string | null => {
       const dirs = deps.dirs();
       return dirs && isScriptPath(filePath) ? scriptFileOnDisk(filePath, undefined, dirs) : null;
+    };
+    // The stamp each poll last read, by canonical path. A change is judged by the stamp that made
+    // the poll notice it, never by a fresh read: by the time a fresh read returns, a later write of
+    // the plugin's own may have replaced the outside edit, and the edit would be dropped as an echo.
+    const polled = new Map<string, FileStamp>();
+    const pollStamp = async (absolutePath: string): Promise<FileStamp> => {
+      const stamp = await fileStamp(absolutePath);
+      polled.set(canonicalPath(absolutePath), stamp);
+      return stamp;
     };
     const watchers = createDocumentWatchers({
       resolve: (channel) => {
@@ -58,17 +78,20 @@ export function createMulmoScriptWatch() {
         const file = onDisk(parsed.path);
         return file ? containForWatching(deps.roots(), file, os.homedir()) : null;
       },
-      stamp: fileStamp,
+      stamp: pollStamp,
       announce: async (channelPath) => {
         const file = onDisk(channelPath);
         if (!file) return;
         const key = canonicalPath(file);
-        if (isEchoOfOwnWrite(await fileStamp(key), ownWrites.get(key))) return;
+        const observed = polled.get(key) ?? (await fileStamp(key));
+        if (isEchoOfOwnWrite(observed, ownWrites.get(key))) return;
+        await ownWriteGrace();
+        if (isEchoOfOwnWrite(observed, ownWrites.get(key))) return;
         // The channel's own spelling, which is the card's `filePath`: the View compares the two
         // as strings, so any other spelling of the same file would reload nothing.
         deps.publishChanged(channelPath);
       },
-      sleep: deps.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
+      sleep,
       ...(deps.pollMs === undefined ? {} : { pollMs: deps.pollMs }),
       warn: (message, data) => console.warn(`[mulmo-script] ${message}`, data ?? ""),
     });
