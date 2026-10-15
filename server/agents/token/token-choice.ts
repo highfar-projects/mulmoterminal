@@ -16,6 +16,8 @@ export interface TokenCandidate {
   spentUntil_sec?: number | null;
   /** How many sessions are running on it right now (#2926). */
   liveSessions?: number;
+  /** Percent of the 7-day window never to spend on it (#3064). */
+  reserveWeeklyPercent?: number | undefined;
 }
 
 /** At or above this, a 5-hour window is too close to blocking a turn to start a session on it. */
@@ -37,29 +39,36 @@ const usedNow = (window: RateLimitWindow | null, now_sec: number): number => {
   return window.resetsAt_sec !== null && window.resetsAt_sec <= now_sec ? 0 : window.usedPercentage;
 };
 
+/** Where a 7-day window counts as spent: the switch line, or lower when part of the week is reserved. */
+export const sevenDayCeiling = (reserveWeeklyPercent = 0): number => Math.min(SEVEN_DAY_CEILING_PERCENT, FULL_PERCENT - reserveWeeklyPercent);
+
+/** Whether the candidate's week is down to its reserve — the one hold-out the fallback must respect. */
+const reserveReached = (candidate: TokenCandidate, now_sec: number): boolean =>
+  !!candidate.reserveWeeklyPercent && !!candidate.limits && usedNow(candidate.limits.sevenDay, now_sec) >= sevenDayCeiling(candidate.reserveWeeklyPercent);
+
 /** When this candidate can take a session again, or null when it can now. */
 export function blockedUntil(candidate: TokenCandidate, now_sec: number): number | null {
   const blocks: number[] = [];
   if (candidate.spentUntil_sec && candidate.spentUntil_sec > now_sec) blocks.push(candidate.spentUntil_sec);
   const limits = candidate.limits;
   const reset = (window: RateLimitWindow | null): number => window?.resetsAt_sec ?? Number.POSITIVE_INFINITY;
-  if (limits && usedNow(limits.sevenDay, now_sec) >= SEVEN_DAY_CEILING_PERCENT) blocks.push(reset(limits.sevenDay));
+  if (limits && usedNow(limits.sevenDay, now_sec) >= sevenDayCeiling(candidate.reserveWeeklyPercent)) blocks.push(reset(limits.sevenDay));
   if (limits && usedNow(limits.fiveHour, now_sec) >= FIVE_HOUR_CEILING_PERCENT) blocks.push(reset(limits.fiveHour));
   return blocks.length > 0 ? Math.max(...blocks) : null;
 }
 
 /** Whether a running session on these readings should move at the end of its turn: either window is
- *  at the switch line. Null readings never move anything — there is nothing to say it is full. */
-export function nearLimit(limits: RateLimits | null, now_sec: number): boolean {
+ *  at the switch line, the week at its reserve's. Null readings never move anything — there is nothing to say it is full. */
+export function nearLimit(limits: RateLimits | null, now_sec: number, reserveWeeklyPercent = 0): boolean {
   if (!limits) return false;
-  return usedNow(limits.fiveHour, now_sec) >= SWITCH_AT_PERCENT || usedNow(limits.sevenDay, now_sec) >= SWITCH_AT_PERCENT;
+  return usedNow(limits.fiveHour, now_sec) >= SWITCH_AT_PERCENT || usedNow(limits.sevenDay, now_sec) >= sevenDayCeiling(reserveWeeklyPercent);
 }
 
-/** Remaining weekly percent per hour to its reset — higher is more urgent to use. A reading with no
- *  7-day window, or no reset time, is ranked by what remains over a full week. */
-export function burnPace(limits: RateLimits, now_sec: number): number {
+/** Remaining weekly percent above the reserve per hour to its reset — higher is more urgent to use. A
+ *  reading with no 7-day window, or no reset time, is ranked by what remains over a full week. */
+export function burnPace(limits: RateLimits, now_sec: number, reserveWeeklyPercent = 0): number {
   const window = limits.sevenDay;
-  const remaining = FULL_PERCENT - usedNow(window, now_sec);
+  const remaining = Math.max(0, FULL_PERCENT - reserveWeeklyPercent - usedNow(window, now_sec));
   const resetsAt = window?.resetsAt_sec;
   const hours = resetsAt && resetsAt > now_sec ? (resetsAt - now_sec) / SECONDS_PER_HOUR : HOURS_PER_WEEK;
   return remaining / Math.max(hours, MIN_HOURS_TO_RESET);
@@ -73,7 +82,7 @@ const RANK_UNMEASURED = 1;
  *
  * Eligible and measured first, by burn pace shared among the sessions already running there; then
  * eligible but never measured (the next probe measures it); and only when every one is held out, the
- * one free soonest. Ties go to fewer running sessions, then config order.
+ * one free soonest — never one down to its reserve, which would spend the very room it keeps. Ties go to fewer running sessions, then config order.
  *
  * The sharing is what spreads parallel sessions (#2926): by pace alone every one of them landed on
  * the same subscription until its 5-hour window filled, because the readings only move when a probe
@@ -84,11 +93,12 @@ export function chooseToken(candidates: readonly TokenCandidate[], now_sec: numb
   const free = candidates.filter((candidate) => blockedUntil(candidate, now_sec) === null);
   if (free.length === 0) {
     const freeAt = (candidate: TokenCandidate): number => blockedUntil(candidate, now_sec) ?? now_sec;
-    return candidates.reduce((best, candidate) => (freeAt(candidate) < freeAt(best) ? candidate : best)).id;
+    const spendable = candidates.filter((candidate) => !reserveReached(candidate, now_sec));
+    return spendable.length === 0 ? null : spendable.reduce((best, candidate) => (freeAt(candidate) < freeAt(best) ? candidate : best)).id;
   }
   const ranked = free.map((candidate, order) => {
     const load = candidate.liveSessions ?? 0;
-    const pace = candidate.limits ? burnPace(candidate.limits, now_sec) : 0;
+    const pace = candidate.limits ? burnPace(candidate.limits, now_sec, candidate.reserveWeeklyPercent) : 0;
     return { id: candidate.id, order, load, rank: candidate.limits ? RANK_MEASURED : RANK_UNMEASURED, share: pace / (1 + load) };
   });
   ranked.sort((a, b) => a.rank - b.rank || b.share - a.share || a.load - b.load || a.order - b.order);
