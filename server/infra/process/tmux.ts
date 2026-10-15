@@ -3,8 +3,9 @@
 // back — like `screen`/`tmux` do. When tmux isn't installed, callers fall back to a
 // direct pty.spawn (non-persistent, current behavior).
 //
-// Isolation: we use our OWN tmux server (`-L mulmoterminal`) and config file, so none
-// of this touches the user's own tmux sessions, keybindings, or status bar.
+// Isolation: we use our OWN tmux server (SERVER_SOCKET: `-L mulmoterminal` on the account's own
+// home, `mulmoterminal-<hash>` on an overridden HOME) and config file, so none of this touches the
+// user's own tmux sessions, keybindings, or status bar.
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
