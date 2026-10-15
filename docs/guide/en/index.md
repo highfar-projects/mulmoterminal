@@ -8,8 +8,8 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **10.6.0 is out.** An agent can now limit a Codex or Copilot worker to some GUI tools, as it already
-> could a Claude one. [Setup guide](v10.6.0.html)
+> **10.7.0 is out.** The Files view copies a whole file with one button, marks the open file in the tree,
+> and lists your recently opened files. [Setup guide](v10.7.0.html)
 
 ## What is MulmoTerminal? {#what-is}
 
