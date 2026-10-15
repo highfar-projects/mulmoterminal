@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
+import { defineComponent, h } from "vue";
 import { fakeCmEditor } from "../../helpers/cmEditorDouble";
 import FilesPane from "../../../src/components/FilesPane.vue";
 
@@ -136,5 +137,22 @@ describe("the Files pane's recently opened files (#3058)", () => {
     localStorage.setItem("files_recent", JSON.stringify([{ cwd: "/proj", paths: ["c.ts", "a.ts"] }]));
     await openMenu(w);
     expect(listed(w)).toEqual(["c.ts", "a.ts"]);
+  });
+
+  // Two panes are mounted at once in the grid — in ONE app, which is what `useId` is unique within.
+  it("gives each mounted pane's list its own id", async () => {
+    const state = { tabs: [], activePath: null, expanded: [] };
+    const Both = defineComponent(
+      () => () => h("div", [h(FilesPane, { cwd: "/proj", initialState: state }), h(FilesPane, { cwd: "/proj", initialState: state })]),
+    );
+    const w = mount(Both, { attachTo: document.body });
+    await flushPromises();
+    const triggers = w.findAll('[data-testid="files-recent-btn"]');
+    for (const trigger of triggers) await trigger.trigger("click");
+    await flushPromises();
+    const ids = w.findAll('[data-testid="files-recent"]').map((panel) => panel.attributes("id"));
+    expect(ids).toHaveLength(2);
+    expect(new Set(ids).size).toBe(2);
+    expect(triggers.map((trigger) => trigger.attributes("aria-controls"))).toEqual(ids);
   });
 });

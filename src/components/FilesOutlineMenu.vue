@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // The Files pane's Outline button and the headings it lists (#2576). Its own open state and
 // dismissal (useDropdownMenu); the pane reads the headings when it opens and does the going.
-import { useTemplateRef } from "vue";
+import { useId, useTemplateRef } from "vue";
 import { useI18n } from "vue-i18n";
 import { useDropdownMenu } from "../composables/useDropdownMenu";
 import type { OutlineHeading } from "./markdownOutline";
@@ -10,6 +10,8 @@ defineProps<{ headings: OutlineHeading[]; current: number | null }>();
 const emit = defineEmits<{ opened: []; pick: [index: number] }>();
 const { t } = useI18n();
 const root = useTemplateRef<HTMLElement>("root");
+// Per instance: two panes can be mounted at once, and `aria-controls` must name this one's list.
+const listId = `files-outline-list-${useId()}`;
 const { open, close, toggle } = useDropdownMenu(root, () => emit("opened"));
 const pick = (index: number): void => {
   close();
@@ -27,7 +29,7 @@ const INDENT_PX = 12;
       class="h-[26px] cursor-pointer rounded-md border border-border px-2.5 py-1 text-[12px] hover:bg-hover hover:text-fg"
       :class="open ? 'bg-selected text-fg' : 'bg-base text-secondary'"
       :aria-expanded="open"
-      aria-controls="files-outline-list"
+      :aria-controls="listId"
       :aria-label="t('fileOutline.button')"
       :data-tip="t('fileOutline.tip')"
       @click="toggle"
@@ -36,7 +38,7 @@ const INDENT_PX = 12;
     </button>
     <div
       v-if="open"
-      id="files-outline-list"
+      :id="listId"
       data-testid="files-outline"
       class="absolute right-0 top-[30px] z-20 max-h-[60vh] w-[300px] overflow-auto rounded-md border border-border bg-base p-1 text-[12px] shadow-lg"
     >

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // The Files pane's History button and the list it opens (#2574): a file's stored versions, each of
 // which can be compared with the buffer or restored into it. The pane owns what those do.
-import { onBeforeUnmount, useTemplateRef, watch } from "vue";
+import { onBeforeUnmount, useId, useTemplateRef, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import type { BackupEntry } from "../../common/fileBackups";
 
@@ -13,6 +13,8 @@ const emit = defineEmits<{ toggle: []; close: []; compare: [entry: BackupEntry];
 // useDropdownMenu's dismissal without its state. `immediate`: the pane can remount the menu already
 // open (a conflict hides it and then clears), and it must dismiss like a fresh one.
 const root = useTemplateRef<HTMLElement>("root");
+// Per instance: two panes can be mounted at once, and `aria-controls` must name this one's list.
+const listId = `files-history-list-${useId()}`;
 const onPointerDown = (event: PointerEvent): void => {
   if (event.target instanceof Node && !root.value?.contains(event.target)) emit("close");
 };
@@ -46,7 +48,7 @@ const ROW_BUTTON = "cursor-pointer rounded px-1.5 py-0.5 text-secondary hover:bg
       class="flex h-[26px] cursor-pointer items-center gap-1 rounded-md border border-border px-2.5 py-1 text-[12px] hover:bg-hover hover:text-fg"
       :class="open ? 'bg-selected text-fg' : 'bg-base text-secondary'"
       :aria-expanded="open"
-      aria-controls="files-history-list"
+      :aria-controls="listId"
       :data-tip="t('fileHistory.tip')"
       @click="emit('toggle')"
     >
@@ -54,7 +56,7 @@ const ROW_BUTTON = "cursor-pointer rounded px-1.5 py-0.5 text-secondary hover:bg
     </button>
     <div
       v-if="open"
-      id="files-history-list"
+      :id="listId"
       data-testid="files-history"
       class="absolute right-0 top-[30px] z-20 w-[280px] rounded-md border border-border bg-base p-1 text-[12px] shadow-lg"
     >

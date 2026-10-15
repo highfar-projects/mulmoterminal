@@ -2,9 +2,10 @@
 // "Recently opened" in the Files header (#3058): the files this directory had open, newest first, so
 // one whose tab was closed can be found again. Not the History menu beside it, which lists earlier
 // versions of ONE file (#2574) — the label and the icon say which is which.
-import { onBeforeUnmount, ref, useTemplateRef, watch } from "vue";
+import { useId, useTemplateRef } from "vue";
 import { useI18n } from "vue-i18n";
 import FilesToolbarButton from "./FilesToolbarButton.vue";
+import { useDropdownMenu } from "../composables/useDropdownMenu";
 import { useRecentFiles } from "../composables/useRecentFiles";
 
 const props = defineProps<{ cwd: string | null; openPath: string | null }>();
@@ -14,34 +15,15 @@ const { recent, refresh } = useRecentFiles(
   () => props.cwd,
   () => props.openPath,
 );
-
-const open = ref(false);
 const root = useTemplateRef<HTMLElement>("root");
-const onPointerDown = (event: PointerEvent): void => {
-  if (event.target instanceof Node && !root.value?.contains(event.target)) open.value = false;
-};
-const onKeyDown = (event: KeyboardEvent): void => {
-  if (event.key === "Escape") open.value = false;
-};
-const stopListening = (): void => {
-  window.removeEventListener("pointerdown", onPointerDown);
-  window.removeEventListener("keydown", onKeyDown);
-};
-watch(open, (isOpen) => {
-  stopListening();
-  if (!isOpen) return;
-  window.addEventListener("pointerdown", onPointerDown);
-  window.addEventListener("keydown", onKeyDown);
-});
-onBeforeUnmount(stopListening);
+// Read again on opening: another pane or tab may have recorded since.
+const { open, close, toggle } = useDropdownMenu(root, refresh);
+// Per instance: two panes can be mounted at once, and `aria-controls` must name this one's list.
+const listId = `files-recent-list-${useId()}`;
 
-function toggle(): void {
-  if (!open.value) refresh();
-  open.value = !open.value;
-}
 // The entry pressed is about to leave the page; keep the keyboard where the list came from.
 function pick(pathRel: string): void {
-  open.value = false;
+  close();
   root.value?.querySelector<HTMLElement>('[data-testid="files-recent-btn"]')?.focus();
   emit("open", pathRel);
 }
@@ -57,12 +39,12 @@ const dirOf = (pathRel: string): string => pathRel.split("/").slice(0, -1).join(
       test-id="files-recent-btn"
       opens-a-panel
       :aria-expanded="open"
-      aria-controls="files-recent-list"
+      :aria-controls="listId"
       @click="toggle"
     />
     <div
       v-if="open"
-      id="files-recent-list"
+      :id="listId"
       data-testid="files-recent"
       class="absolute right-0 top-[30px] z-20 max-h-[60vh] w-[300px] overflow-y-auto rounded-md border border-border bg-base p-1 text-[12px] shadow-lg"
     >
