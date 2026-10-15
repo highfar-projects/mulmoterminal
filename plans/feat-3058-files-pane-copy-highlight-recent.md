@@ -17,10 +17,12 @@ full-screen `/files` view, so each lands on both surfaces.
 
 ## 2. The open file stands out in the tree
 
-- The open row is already marked, but with `bg-hover` — the hover colour, so it reads as nothing.
-  Use the tabs' `bg-selected`, a stripe at the left edge, and `aria-current`.
+- The open row's mark never showed: its static `bg-transparent` won over the conditional `bg-hover`
+  in the stylesheet (measured: background `rgba(0, 0, 0, 0)`). Put `bg-transparent` on the other
+  rows only; give the open row the tabs' `bg-selected`, a stripe at the left edge, and `aria-current`.
 - The tree follows the front tab (#2495) only after the remembered state is restored, so a remembered
-  scroll can leave the open row off screen. Bring it into view after the restore too.
+  scroll can leave the open row off screen. Bring it into view after the restore too — only when the
+  remembered folders show it; a folder the reader closed stays closed (#2156).
 
 ## 3. Recent files
 
