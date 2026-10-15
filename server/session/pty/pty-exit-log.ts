@@ -11,9 +11,7 @@
 const MS_PER_SECOND = 1000;
 const MS_PER_MINUTE = 60 * MS_PER_SECOND;
 
-// Under this, an exit is a failure to start rather than an ending. Claude Code takes ~1.5s to
-// draw its first frame here, so anything inside this window is a process that never got going.
-export const STARTUP_WINDOW_MS = 2000;
+import { STARTUP_WINDOW_MS } from "../../../common/endedCellClose.js";
 
 /** Whether an exit should read as "it never started". A clean exit never does, however fast:
  *  `--version`-style commands finish in milliseconds and finish correctly. */

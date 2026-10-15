@@ -11,7 +11,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const hasSession = vi.fn<(id: string) => boolean>(() => false);
 vi.mock("../../../../server/infra/process/tmux.js", () => ({ tmuxHasSession: (id: string) => hasSession(id) }));
 
-const { ptyExitDisposition, handlePtyExit } = await import("../../../../server/session/pty/pty-exit.js");
+const { ptyExitDisposition, reportPtyExit } = await import("../../../../server/session/pty/pty-exit.js");
 const { ptys } = await import("../../../../server/session/registry.js");
 
 const register = (id: string, tmux: boolean) => {
@@ -48,7 +48,10 @@ describe("ptyExitDisposition", () => {
   });
 });
 
-describe("handlePtyExit", () => {
+const EXIT = { exitCode: 0, signal: undefined, lifetimeMs: 60_000 };
+const handlePtyExit = (id: string, reap: (id: string) => void) => reportPtyExit(id, null, EXIT, reap);
+
+describe("reportPtyExit — applying the decision", () => {
   it("does not reap a session tmux still has, and drops the dead pty entry", () => {
     const reap = vi.fn();
     register("s-1", true);
@@ -87,5 +90,47 @@ describe("handlePtyExit", () => {
 
     expect(handlePtyExit("never-registered", reap)).toBe("gone");
     expect(reap).not.toHaveBeenCalled();
+  });
+});
+
+// The browser closes an agent cell on `ended` (#3049), so the frame must say the SESSION ended only
+// when it did: a lost tmux client is a live agent, and a cell closing on it drops that agent.
+describe("reportPtyExit — what the exit frame tells the browser", () => {
+  const socketRecording = (events: string[]) => {
+    const frames: unknown[] = [];
+    const socket = {
+      readyState: 1,
+      OPEN: 1,
+      send: (data: string) => {
+        events.push("frame");
+        frames.push(JSON.parse(data));
+      },
+      close: () => undefined,
+    };
+    return { socket, frames };
+  };
+
+  it.each([
+    { name: "the session went with the program", tmuxAlive: false, registered: true, ended: true },
+    { name: "only the tmux client died", tmuxAlive: true, registered: true, ended: false },
+    { name: "an explicit close already reaped it", tmuxAlive: false, registered: false, ended: false },
+  ])("$name → ended: $ended", ({ tmuxAlive, registered, ended }) => {
+    if (registered) register("s-1", true);
+    hasSession.mockReturnValue(tmuxAlive);
+    const { socket, frames } = socketRecording([]);
+
+    reportPtyExit("s-1", socket, EXIT, vi.fn());
+
+    expect(frames).toEqual([{ type: "exit", exitCode: 0, lifetimeMs: 60_000, ended }]);
+  });
+
+  it("sends the frame before the reap tears the session down", () => {
+    const events: string[] = [];
+    register("s-1", true);
+    const { socket } = socketRecording(events);
+
+    reportPtyExit("s-1", socket, EXIT, () => events.push("reap"));
+
+    expect(events).toEqual(["frame", "reap"]);
   });
 });

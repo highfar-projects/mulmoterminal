@@ -2331,6 +2331,13 @@ Key rules:
   offering to take it over — and the server answers "anywhere" from its own PTY
   table plus tmux, so another browser tab and a second `mulmoterminal` process
   count too.
+- **An agent that ends on its own takes its cell with it.** `/exit`, Ctrl+C or a crash
+  closes the cell as the close button would, so it is in the palette's **Reopen** list
+  and resumes the conversation. Three cases keep the `[session ended]` banner instead:
+  an agent that died while still starting up (a launch failure — under tmux its
+  exit code reads 0, so the banner is the only evidence), a tmux client killed from
+  outside while the agent still runs, and a worktree cell (its close asks whether to
+  keep the worktree).
 - Brand-new sessions are listed **immediately** (before their `.jsonl`
   exists) via the in-memory `knownSessions` registry + a `created` push; an
   unused one disappears when its PTY is reaped.

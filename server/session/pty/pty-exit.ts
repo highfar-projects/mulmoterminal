@@ -12,6 +12,7 @@
 // live agent in it, and forgets the title, which is what drops the row from the phone's list.
 import { ptys } from "../registry.js";
 import { tmuxHasSession } from "../../infra/process/tmux.js";
+import { sendExitAndClose, type FrameSocket, type PtyExitReport } from "../ws-frames.js";
 
 /** What the pty's death is evidence of. */
 export type PtyExitDisposition = "reap" | "keep" | "gone";
@@ -27,21 +28,26 @@ export function ptyExitDisposition(facts: { stillRegistered: boolean; tmuxBacked
   return facts.tmuxBacked && facts.tmuxAlive ? "keep" : "reap";
 }
 
-/**
- * Apply that decision. `reap` is passed in rather than imported because it belongs to the lifecycle
- * the spawners already receive it from — and because it is the half that must NOT run for a session
- * that is still alive.
- */
-export function handlePtyExit(sessionId: string, reap: (id: string) => void): PtyExitDisposition {
+/** Read the facts for this session and decide. Separate from applying it, because the browser has
+ *  to be told the outcome in the exit frame, and the frame must go out before the reap tears down. */
+function decidePtyExit(sessionId: string): PtyExitDisposition {
   const entry = ptys.get(sessionId);
   const tmuxBacked = !!entry?.tmux;
-  const disposition = ptyExitDisposition({
+  return ptyExitDisposition({
     stillRegistered: !!entry,
     tmuxBacked,
     // Asked only when it can matter: a non-tmux pty has nothing that could outlive it, and this
     // shells out.
     tmuxAlive: tmuxBacked && tmuxHasSession(sessionId),
   });
+}
+
+/**
+ * Apply that decision. `reap` is passed in rather than imported because it belongs to the lifecycle
+ * the spawners already receive it from — and because it is the half that must NOT run for a session
+ * that is still alive.
+ */
+function applyPtyExit(sessionId: string, disposition: PtyExitDisposition, reap: (id: string) => void): void {
   if (disposition === "keep") {
     // The entry has to go even though the session stays: `ptys.has()` is what every reconnect path
     // reads as "there is a live pty here", and a dead one left in the table would be reused instead
@@ -55,5 +61,19 @@ export function handlePtyExit(sessionId: string, reap: (id: string) => void): Pt
   } else if (disposition === "reap") {
     reap(sessionId);
   }
+}
+
+/** A persistent pty's exit, end to end: decide, tell the browser whether the SESSION ended (only a
+ *  reap means that — a `keep` is a lost client, and a cell closing on it would drop a live agent),
+ *  then apply. The socket is read by the caller at exit time because a reattach can swap it. */
+export function reportPtyExit(
+  sessionId: string,
+  socket: FrameSocket | null | undefined,
+  exit: Omit<PtyExitReport, "ended">,
+  reap: (id: string) => void,
+): PtyExitDisposition {
+  const disposition = decidePtyExit(sessionId);
+  sendExitAndClose(socket, { ...exit, ended: disposition === "reap" });
+  applyPtyExit(sessionId, disposition, reap);
   return disposition;
 }

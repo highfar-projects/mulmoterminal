@@ -32,9 +32,17 @@ export function sendFrame(socket: FrameSocket | null | undefined, payload: unkno
 }
 
 // Report a PTY exit to the browser, then hang up — shared by every PTY kind. The
-// socket is read at exit time because a reattach can swap it after wiring.
-export function sendExitAndClose(socket: FrameSocket | null | undefined, exitCode: number, signal: number | undefined): void {
-  if (sendFrame(socket, { type: "exit", exitCode, signal })) socket?.close();
+// socket is read at exit time because a reattach can swap it after wiring. `ended` says the
+// session itself is over, which a pty's exit alone does not (see pty-exit.ts).
+export interface PtyExitReport {
+  exitCode: number;
+  signal: number | undefined;
+  lifetimeMs: number;
+  ended: boolean;
+}
+
+export function sendExitAndClose(socket: FrameSocket | null | undefined, report: PtyExitReport): void {
+  if (sendFrame(socket, { type: "exit", ...report })) socket?.close();
 }
 
 // Send a terminal error to the socket and close it (no reconnect on the client side).

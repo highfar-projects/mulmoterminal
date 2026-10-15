@@ -52,28 +52,28 @@ describe("sendFrame", () => {
 describe("sendExitAndClose", () => {
   it("reports the exit, then hangs up", () => {
     const f = fakeSocket();
-    sendExitAndClose(f.socket, 0, undefined);
-    expect(f.parsed()).toEqual([{ type: "exit", exitCode: 0, signal: undefined }]);
+    sendExitAndClose(f.socket, { exitCode: 0, signal: undefined, lifetimeMs: 5000, ended: true });
+    expect(f.parsed()).toEqual([{ type: "exit", exitCode: 0, lifetimeMs: 5000, ended: true }]);
     expect(f.closeCount()).toBe(1);
   });
 
   it("carries a non-zero code and a signal through", () => {
     const f = fakeSocket();
-    sendExitAndClose(f.socket, 137, 9);
-    expect(f.parsed()).toEqual([{ type: "exit", exitCode: 137, signal: 9 }]);
+    sendExitAndClose(f.socket, { exitCode: 137, signal: 9, lifetimeMs: 40, ended: false });
+    expect(f.parsed()).toEqual([{ type: "exit", exitCode: 137, signal: 9, lifetimeMs: 40, ended: false }]);
   });
 
   it("does not close a socket the exit frame never reached", () => {
     // Closing a socket we could not write to would double-close one a reattach
     // has already swapped in.
     const f = fakeSocket(CLOSED);
-    sendExitAndClose(f.socket, 0, undefined);
+    sendExitAndClose(f.socket, { exitCode: 0, signal: undefined, lifetimeMs: 0, ended: true });
     expect(f.closeCount()).toBe(0);
   });
 
   it("tolerates a missing socket", () => {
-    expect(() => sendExitAndClose(null, 0, undefined)).not.toThrow();
-    expect(() => sendExitAndClose(undefined, 1, 15)).not.toThrow();
+    expect(() => sendExitAndClose(null, { exitCode: 0, signal: undefined, lifetimeMs: 0, ended: true })).not.toThrow();
+    expect(() => sendExitAndClose(undefined, { exitCode: 1, signal: 15, lifetimeMs: 0, ended: false })).not.toThrow();
   });
 });
 
