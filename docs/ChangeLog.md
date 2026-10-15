@@ -8,6 +8,57 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@10.5.0 — 2026-10-15
+
+> **Setup guide:** [10.5.0 — A cell closes when its agent ends, and Antigravity tells you when it is done](https://receptron.github.io/mulmoterminal/guide/en/v10.5.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.5.0.html))
+
+### An agent cell closes itself when its session ends on its own (#3051)
+
+- `/exit`, Ctrl+C or a crash used to leave the cell on the grid with `[session ended]`, so cells an agent opened with `spawnBackgroundChat` piled up (#3049). The cell now closes through its normal teardown, so it is in the palette's Reopen list and resumes its conversation.
+- The `exit` frame alone does not mean the session ended: under tmux the pty is the client, and a client killed from outside leaves the agent running (#1496). `reportPtyExit` now decides `reap` / `keep` / `gone` **before** sending the frame, which carries `ended` (true only for `reap`), `lifetimeMs` and `reattached`. The claude spawner, the shared agent relay and launchers all go through it.
+- Under tmux the exit code is the client's (an inner `exit 3` arrives as `0`), so a launch failure is told apart by lifetime: a pty that started the agent and ended inside `STARTUP_WINDOW_MS` keeps its banner. A reattached pty's lifetime is not the agent's, so it closes on any ended exit. A worktree cell keeps the banner (its close asks about the worktree). The rule is `shouldCloseEndedCell` in `common/endedCellClose.ts`.
+- An exit is handled for the pty that exited, not for whatever holds its id now (`isCurrentPty`): a restart or explicit close can register a replacement under the same id first, and a stale exit used to be able to reap or forget it.
+- README's WebSocket protocol table documents the new frame fields.
+
+### An unplaced session that ended on its own is no longer adopted (#3056)
+
+- A session spawned with no grid on screen stayed marked unplaced after its agent ended, so the next grid adopted it — resuming the ended conversation, or minting a new session with a new agent when there was no transcript (#3055). The exit now drops the mark whenever an open cell would have closed itself on it; a launch failure, a lost tmux client, a stale exit, a worktree session and a server restart keep it.
+
+### Antigravity turn hooks: working dot and finished sound (#3038)
+
+- An `agy` cell lights the working dot when a turn starts, and when it ends raises the attention mark, plays the sound and sends the "finished" push, through the existing `/api/hook` effect tables (#3034). A named hook `mulmoterminal` is merged into `<cwd>/.agents/hooks.json` beside the user's hooks, with the same symlink guard, `.git/info/exclude` entry and non-JSON safeguard as the other agy config files. There is still no "waiting for input" signal.
+
+### A MulmoScript on the Canvas redraws on outside changes (#3040)
+
+- While the Files pane's Canvas shows a MulmoScript, the server watches its file and sends an origin-less `scriptChanged` when an editor, git or an agent changes it; the plugin's view redraws (#3014). The host remembers the file's mtime / size / inode at each of the plugin's own writes, so those do not cause a redraw. Only files inside the workspace, a session cwd or a registered stories root are watched.
+
+### Limit a `spawnBackgroundChat` Claude session to some GUI tool groups (#3050)
+
+- `guiGroups` (claude only) is validated with `isToolGroup`; omitted keeps every tool, `[]` gives none. A malformed value, or `guiGroups` for another agent, refuses the request. The limit is recorded in `~/.mulmoterminal/gui-group-restrictions.jsonl` and holds across reattach, restart and resume; a restricted session never takes the all-tools url (#3033).
+
+### Talking avatars: install guide and an `init` check (#3043)
+
+- The MulmoCast guide (en/ja) has a "Talking avatars" section: writing `speechParams.speakers.<name>.avatar` and `avatarParams`, installing the optional `avatarscript` / `onnxruntime-node`, checking with `init`, and the first-run model download (#3042). `npx mulmoterminal@latest init` prints an avatar line, sharing `optionalPackagesLine` with the Remotion line.
+
+### MulmoCast 2.23 and the MulmoScript plugin 5.5 (#3037, #3036)
+
+- `mulmocast` ^2.23.0 and `@mulmoclaude/mulmoscript-plugin` ^5.5.0 (#3035): JingleScript 0.8 sound effects and `grandpiano` in `soundEffects`, `html_tailwind` beat previews with background, branding and scripts, and still images without ffmpeg.
+- puppeteer / puppeteer-core / @puppeteer/browsers deduplicated to one copy in `yarn.lock`; the ffmpeg-missing startup warning now names only movies and beats that make or use one (#3036).
+
+### A second server on another HOME gets its own tmux server and drop directory (#3053, #3054)
+
+- A server started with `HOME` pointed elsewhere shared `-L mulmoterminal` and `$TMPDIR/mulmoterminal-drops` with the one on the real home, so at boot it could reap that server's idle sessions, apply its own tmux options to it, and prune its drop directories (#3039). Both names now carry `homeScopeSuffix()` — empty when `HOME` is the account's own home, so the normal case needs no migration. #3054 corrects the isolation note in `tmux.ts`.
+
+### The clone update notice says to install, build and restart (#3045)
+
+- `gitUpdateNotice` now says `git pull origin <branch> && yarn install && yarn build` with "(restart after updating)" before `run: `, so the badge copies only the commands (#3044). README's clone update steps match.
+
+### Docs, dependencies and CI
+
+- Ten search-answer pages under `docs/answers/` (#3052).
+- Wording fixes left from the #3043 / #3047 reviews (#3048) and the remaining "right pane only beside an enlarged cell" comments (#3041).
+- Dependency update (#3032). CI caches puppeteer's Chrome on ubuntu / macOS test jobs (#3031) and on every Windows shard (#3047).
+
 ## mulmoterminal@10.4.0 — 2026-10-13
 
 > **Setup guide:** [10.4.0 — Panes beside the tiled grid, and files outside the cell open in a tab](https://receptron.github.io/mulmoterminal/guide/en/v10.4.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.4.0.html))

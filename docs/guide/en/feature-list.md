@@ -4,7 +4,7 @@ nav_title: Feature list
 layout: default
 parent: English
 nav_order: 6.5
-as_of: 10.4.0
+as_of: 10.5.0
 description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 9.1.0)."
 ---
 
@@ -20,6 +20,7 @@ Every capability MulmoTerminal has as of 9.1.0, one line each, grouped by area. 
 
 More: [Basics](basics.html)
 
+- A cell whose agent ends on its own (`/exit`, Ctrl+C, a crash) closes itself and is listed under Reopen; a launch failure, a lost connection and a worktree cell keep it (v10.5.0)
 - A tile's History and Tools menus open their pane to the right of the tiled grid, without enlarging the cell (v10.4.0)
 - The launch directory may start with `~` (v8.5.0)
 - Reopen a recently closed cell beside the current terminal from "Reopen: …" in the command palette; an agent resumes its conversation. The `terminal-reopen` action reopens the newest (v8.2.0)
@@ -63,6 +64,8 @@ More: [Basics](basics.html)
 
 More: [Agents](agents.html)
 
+- Antigravity cells light the working dot during a turn and play the finished sound and push when it ends (v10.5.0)
+- An agent can start a Claude session with only some GUI tool groups (`spawnBackgroundChat` `guiGroups`) (v10.5.0)
 - The Skills viewer's skills.sh mode searches the public directory for skills not on disk and shows a skill's `SKILL.md`, every file it brings and the ones that can run code, with the `npx skills add` line to copy; it installs nothing (v8.4.0)
 - More features → Skills lists every Claude skill on disk — `~/.claude/skills`, each enabled plugin (as `plugin:skill`), and the `.claude/skills` of each folder a terminal ran in — in three columns with search, marking a folder skill that overrides yours (v8.3.0)
 - Settings → Models and backends adds and removes custom agents, accounts and backends, validating URLs and keys (v7.2.0)
@@ -279,6 +282,9 @@ More: [Configuration](config.html)
 
 More: [From a collection](from-collection.html) · [MulmoCast videos](mulmocast.html)
 
+- A MulmoScript open on the Canvas redraws when an editor, git or an agent changes the file (v10.5.0)
+- `init` reports whether MulmoCast's talking-avatar parts are installed, and the guide shows how to add them (v10.5.0)
+- MulmoScript sound effects include JingleScript 0.8's effects and `grandpiano`; beat previews draw `html_tailwind` beats in full (v10.5.0)
 - JingleScript tools read a score from a `.json` file by path, so a long score need not be sent inline, and the player offers a MIDI download (v9.7.0)
 - The agent can write a short jingle or sound effect as a JingleScript score, and the Canvas plays it with a waveform, beat grid and cues (manageJingleScript) (v9.6.0)
 - The agent in a cell can write a MulmoCast Remotion scene itself (`code`) and refine it with you (v9.1.0)

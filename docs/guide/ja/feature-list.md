@@ -4,7 +4,7 @@ nav_title: 全機能リスト
 layout: default
 parent: 日本語
 nav_order: 6.5
-as_of: 10.4.0
+as_of: 10.5.0
 description: MulmoTerminal のいまある機能を、入った版つきで領域ごとに一行ずつ並べた一覧（9.1.0 時点）。
 ---
 
@@ -20,6 +20,7 @@ description: MulmoTerminal のいまある機能を、入った版つきで領�
 
 詳しく: [基本編](basics.html)
 
+- エージェントが自分で終わる（`/exit`・Ctrl+C・異常終了）とセルが閉じ、Reopen に並ぶ。起動失敗・接続切れ・worktree のセルは残る (v10.5.0)
 - タイルの履歴・道具メニューからペインを開くと、セルを拡大せずにグリッドの右に出る (v10.4.0)
 - 起動のディレクトリを `~` から書ける (v8.5.0)
 - 最近閉じたセルをコマンドパレットの「Reopen: …」から今のターミナルの隣に開き直す。エージェントは会話を再開する。キー割り当て `terminal-reopen` で最新の一つを開く (v8.2.0)
@@ -63,6 +64,8 @@ description: MulmoTerminal のいまある機能を、入った版つきで領�
 
 詳しく: [エージェント](agents.html)
 
+- Antigravity のセルで、ターン中は作業中の点が付き、終わると終了の音と通知が出る (v10.5.0)
+- エージェントが、GUI の道具を一部のグループだけ持つ Claude のセッションを立ち上げられる（`spawnBackgroundChat` の `guiGroups`） (v10.5.0)
 - Skills 画面の skills.sh の切り替えで、まだ入っていないスキルを公開一覧から検索し、`SKILL.md`・持ち込むファイル・コードを実行できるファイルを見られる。インストールはせず、`npx skills add` の行をコピーできる (v8.4.0)
 - その他の機能 → Skills で、`~/.claude/skills`・有効なプラグイン（`plugin:skill` の名前で）・ターミナルを開いたフォルダの `.claude/skills` にあるスキルを 3 列で一覧・検索。自分のスキルを上書きするフォルダのスキルに印がつく (v8.3.0)
 - 設定の「Models and backends」でカスタムエージェント・アカウント・バックエンドを追加・削除できる（URL とキーを検証） (v7.2.0)
@@ -278,6 +281,9 @@ description: MulmoTerminal のいまある機能を、入った版つきで領�
 
 詳しく: [コレクションから作る](from-collection.html) · [MulmoCast の動画](mulmocast.html)
 
+- Canvas で開いている MulmoScript が、エディタ・git・エージェントによる変更で描き直される (v10.5.0)
+- `init` が MulmoCast のしゃべるアバターの部品が入っているかを示し、ガイドに入れ方がある (v10.5.0)
+- MulmoScript の効果音に JingleScript 0.8 の効果音と `grandpiano` が加わり、ビートのプレビューが `html_tailwind` を描く (v10.5.0)
 - JingleScript のツールが `.json` の譜面をパスで読めるようになり、長い譜面を毎回貼らずに済み、プレイヤーに MIDI のダウンロードが付く (v9.7.0)
 - エージェントが JingleScript の譜面で短いジングルや効果音を書き、Canvas が波形・拍の目盛り・キューつきで再生する (manageJingleScript) (v9.6.0)
 - セルのエージェントが MulmoCast の Remotion の場面を自分で書き（`code`）、一緒に直せる (v9.1.0)
