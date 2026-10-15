@@ -57,6 +57,7 @@ import { useFileHistory } from "../composables/useFileHistory";
 import { useRequestedOpen } from "../composables/useRequestedOpen";
 import { wantsNewTab } from "../composables/newTabModifier";
 import FilesHistoryMenu from "./FilesHistoryMenu.vue";
+import FilesRecentMenu from "./FilesRecentMenu.vue";
 import FilesComparingBanner from "./FilesComparingBanner.vue";
 
 const { t } = useI18n();
@@ -524,6 +525,7 @@ defineExpose({
       <!-- Each panel's only entrance that needs no configuration: neither `files-find` nor
            `files-search` has a default binding, so without these the features are invisible to
            anyone who has not written a keymap. -->
+      <FilesRecentMenu :cwd="cwd" :open-path="openPath" @open="(pathRel) => tabs.open(pathRel)" />
       <FilesToolbarButton icon="search" :label="t('tips.panes.findByName')" test-id="files-find-btn" opens-a-panel @click="openFinder()" />
       <FilesToolbarButton icon="manage_search" :label="t('tips.panes.searchInFiles')" test-id="files-search-btn" opens-a-panel @click="openSearch()" />
       <FilesToolbarButton

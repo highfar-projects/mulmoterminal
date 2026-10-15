@@ -5,6 +5,7 @@ import { tipsZhTW } from "./tips/zh-TW";
 import { commandPaletteZhTW } from "./commandPalette/zh-TW";
 import { focusModeZhTW } from "./focusMode/zh-TW";
 import { fileHistoryZhTW } from "./fileHistory/zh-TW";
+import { filesRecentZhTW } from "./filesRecent/zh-TW";
 import { dirConfigSaveZhTW } from "./dirConfigSave/zh-TW";
 import { releaseNotesZhTW } from "./releaseNotes/zh-TW";
 import { dirConfigOpenZhTW } from "./dirConfigOpen/zh-TW";
@@ -623,6 +624,7 @@ export const zhTW: Messages = {
     close: "知道了",
   },
   fileHistory: fileHistoryZhTW,
+  filesRecent: filesRecentZhTW,
   dirConfigSave: dirConfigSaveZhTW,
   releaseNotes: releaseNotesZhTW,
   dirConfigOpen: dirConfigOpenZhTW,

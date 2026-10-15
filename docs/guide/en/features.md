@@ -165,6 +165,8 @@ a save replaces it; the newest few — and each can be
 The same editor still opens full-screen from a **Files** header button or by clicking a file
 path an agent printed.
 
+**Recently opened files.** The clock button in the header lists the files opened in this folder, newest first, with the one open now marked — so a file whose tab you closed is one click away. The list is kept in this browser, per folder, across reloads. It is not **History**, which lists earlier versions of the one file that is open.
+
 **The editor colours the language it is showing.** Markdown, JS/TS and JSON are always ready;
 HTML (including `.vue`, `.svelte` and `.astro`), CSS/SCSS, YAML, XML/SVG, Python, Rust, Go,
 Java/Kotlin, C/C++/Objective-C, PHP and SQL are fetched the first time you open one — so such a
