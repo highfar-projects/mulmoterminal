@@ -4,7 +4,7 @@ nav_title: MulmoCast の動画
 layout: default
 parent: 日本語
 nav_order: 24
-description: MulmoCast の動画の場面を、Claude Code に Remotion のコンポーネントとして書かせるか、自分で書いたコンポーネントを渡します。自分で入れる任意のパッケージ、npx の更新で消えない入れ場所、動くかどうかの確かめ方。
+description: MulmoCast の動画の場面を、Claude Code に Remotion のコンポーネントとして書かせるか、自分で書いたコンポーネントを渡します。話者にしゃべるアバターも付けられます。自分で入れる任意のパッケージ、npx の更新で消えない入れ場所、動くかどうかの確かめ方。
 ---
 
 # MulmoCast の動画
@@ -141,3 +141,81 @@ mulmocast 2.14.0 から、`remotion` のビートにコンポーネントその�
   自分で入れていないかぎり、**どれも**このパッケージを見つけるようになります。
 - `remotion` のビートには `moviePrompt` を一緒に付けられません。
 - GPU の無い Linux では、three.js の場面が WebGL を使えずに失敗することがあります。
+
+## しゃべるアバター {#avatar}
+
+話者に**アバター**を付けられます。スライドの上にイラストのキャラクターが重なり、ナレーションに
+合わせて口を動かします。表情と動きはビートごとに指定できます。
+
+```json
+{
+  "speechParams": {
+    "speakers": {
+      "Ani": {
+        "provider": "gemini",
+        "voiceId": "Leda",
+        "avatar": { "source": "https://raw.githubusercontent.com/receptron/mulmocast-media/main/avatars/ani" }
+      }
+    }
+  },
+  "beats": [
+    {
+      "speaker": "Ani",
+      "text": "みなさん、こんにちは！",
+      "image": { "type": "markdown", "markdown": ["# Hello"] },
+      "avatarParams": { "emotion": "happy", "motions": [{ "motion": "nod", "at": "みなさん" }] }
+    }
+  ]
+}
+```
+
+- `speechParams.speakers.<名前>.avatar.source` — アバターの場所。URL か、台本からの相対パス。すぐ使えるものは
+  `ani`・`marilyn`・`reika`・`seiya`・`ken`（上の URL の最後を入れ替える）。
+- `avatarParams.emotion` — 表情。`neutral`・`happy`・`sad`・`angry`・`surprised`・`relaxed`。
+- `avatarParams.motions` — `[{ "motion": …, "at": … }]`。`nod`・`tilt`・`think`・`giggle`・`surprise`・`shy`・`no`・
+  `wink`・`greet` のどれかで、ナレーションが `at` の言葉に来たときに始まります。
+- `avatarParams.position` と `hidden` で、そのビートだけ位置を変えたり隠したりできます。詳しくは
+  [mulmocast の avatar.md](https://github.com/receptron/mulmocast-cli/blob/main/docs/avatar.md) を見てください。
+
+### 1. パッケージをホームに入れる
+
+これらは mulmocast の任意のパッケージで、**MulmoTerminal は入れません**。理由は Remotion と同じで、アバターを使いたい
+人だけが入れます。`onnxruntime-node` だけで約 290MB あります。
+
+```bash
+cd ~
+npm install avatarscript onnxruntime-node
+```
+
+ホームディレクトリに入れれば、`npx`（版ごとに `~/.npm/_npx/` の下の新しいフォルダになる）でも、ホームの下に clone した
+場合でも見つかります。Node が親のフォルダの `node_modules` を順にたどって探すからです。`npx` で使うなら、
+ホームに入れてください。グローバルに入れたものは `npx` からは探されません。MulmoTerminal 自体をグローバルに入れている
+（`npm install -g mulmoterminal`）場合だけは、ふつうホームの外（`/opt/homebrew/lib/node_modules` や
+`/usr/local/lib/node_modules`）にあるので、その隣にグローバルで入れてください: `npm install -g avatarscript onnxruntime-node`。clone に `yarn add` で入れても動きますが、その
+`package.json` に差分が残ります。
+
+### 2. MulmoCast から見えるか確かめる
+
+```bash
+npx mulmoterminal@latest init
+```
+
+確認の一覧に次の行が出れば入っています。
+
+```
+  ✓ avatar — talking avatars in MulmoCast videos
+```
+
+`○ avatar — optional` なら見つかっていません。`installed only in part; missing: …` は、まだ入っていないパッケージの名前です。
+
+### 3. 動画を作る
+
+台本にアバターを書くか、エージェントに頼みます（たとえば「ナレーターに ani のアバターを付けて、1 つ目のビートでは
+驚いた顔にして」）。そのあと、いつもどおり GUI パネルの **Movie** を押します。話者の声にはその読み上げサービスの
+キーが、動画には ffmpeg が要ります。
+
+最初の描画で、音声と文章を合わせるためのモデル（約 635MB）が `~/.cache/avatarscript/models` に一度だけダウンロード
+されます。そのあとはアバターの映像がキャッシュされ、台本・音声・アバターが変わったときだけ作り直されます。
+
+アバターの映像を作る必要があるときにパッケージが入っていないと、そのビートは mulmocast の案内
+（`npm install avatarscript onnxruntime-node`）を出して止まります。キャッシュ済みの映像は、パッケージが無くてもそのまま使われます。
