@@ -290,6 +290,7 @@ const {
   onFinderPick,
   revealPath,
   followFrontTab,
+  startEpoch,
   reset: resetReveal,
 } = useFilesReveal({
   tree,
@@ -366,6 +367,7 @@ let started: Promise<void> = Promise.resolve();
 
 async function start(): Promise<void> {
   const reqIdAtStart = file.generation();
+  const startedAt = startEpoch();
   await nextTick();
   if (editorHost.value) file.attach(editorHost.value);
   // A re-root makes a new editor, which knows nothing of the reader's choice.
@@ -373,7 +375,7 @@ async function start(): Promise<void> {
   void gitStatus.refresh();
   await tree.loadRoot();
   await restore(props.initialState ?? null, reqIdAtStart);
-  followFrontTab();
+  if (!followFrontTab(startedAt)) return;
   // An explicitly requested path wins over whatever was remembered — it is the more recent
   // intent (a clicked path in terminal output).
   if (props.requestedPath) void openRequested(props.requestedPath, props.requestedLocation ?? null);

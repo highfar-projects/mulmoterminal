@@ -34,8 +34,11 @@ export interface FilesReveal {
    *  folders and scrolls its row into view; opens nothing. */
   showInTree: (pathRel: string) => Promise<void>;
   /** The remembered pane is back: from now on the tree follows the tab in front, and it is put on
-   *  that tab's row at once — the remembered scroll may have left the row off screen (#3058). */
-  followFrontTab: () => void;
+   *  that tab's row at once — the remembered scroll may have left the row off screen (#3058).
+   *  False, and nothing done, for a startup a reset has since made stale. */
+  followFrontTab: (startedAt: number) => boolean;
+  /** Which startup this is, for `followFrontTab`: a reset makes every earlier one stale. */
+  startEpoch: () => number;
   /** The pane is re-rooting: a reveal in flight must not scroll the new tree to a row from the
    *  project it just left, and the panel must not go on offering the old project's paths. */
   reset: () => void;
@@ -58,20 +61,26 @@ function followsFrontTab(
   frontPath: () => string | null,
   showInTree: (pathRel: string) => Promise<void>,
   scrollToRow: (pathRel: string) => void,
-): { start: () => void; stop: () => void } {
+): { start: (startedAt: number) => boolean; stop: () => void; epoch: () => number } {
   let following = false;
+  // A startup still running when the pane re-rooted must not switch following on in the new root.
+  let epoch = 0;
   watch(frontPath, (pathRel) => {
     if (pathRel && following) void showInTree(pathRel);
   });
   return {
-    start: () => {
+    start: (startedAt) => {
+      if (startedAt !== epoch) return false;
       following = true;
       const pathRel = frontPath();
       if (pathRel) scrollToRow(pathRel);
+      return true;
     },
     stop: () => {
       following = false;
+      epoch += 1;
     },
+    epoch: () => epoch,
   };
 }
 
@@ -152,6 +161,7 @@ export function useFilesReveal(deps: FilesRevealDeps): FilesReveal {
     revealPath,
     showInTree,
     followFrontTab: front.start,
+    startEpoch: front.epoch,
     reset: () => {
       front.stop();
       revealId += 1;
