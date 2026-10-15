@@ -3,6 +3,7 @@
 // reconnect resume it.
 import { antigravityAdapter } from "../../../agents/antigravity/antigravity.js";
 import { buildAntigravityArgs } from "../../../agents/antigravity/antigravity-args.js";
+import { syncAntigravityHooks } from "../../../agents/antigravity/antigravity-hooks-file.js";
 import { syncAntigravityMcpConfig } from "../../../agents/antigravity/antigravity-mcp.js";
 import { syncAntigravitySkillsConfig } from "../../../agents/antigravity/antigravity-skills.js";
 import { antigravityBrainRoot, snapshotAntigravitySessions, watchForAntigravitySession } from "../../../agents/antigravity/antigravity-session.js";
@@ -26,9 +27,9 @@ export function createAntigravitySpawner(deps: SpawnDeps) {
         rememberAntigravityConversation(sessionId, id, cwd);
         // The cell is holding a header badge answered before this id existed — agy names its model
         // in the transcript this mapping points at, and until now there was no transcript to point
-        // at. Nothing else will correct it: an agy session has no hooks and no activity tracker, so
-        // it never goes working -> idle, and that transition is the cell's only other badge
-        // refresh. One push, on the one edge where the answer changed.
+        // at. Its first working -> idle (the turn hooks) may already have passed, and on Windows,
+        // where the hooks are not written, it never comes — that transition is the cell's only
+        // other badge refresh. One push, on the one edge where the answer changed.
         deps.publishActivity(sessionId);
         console.log(`[pty] captured antigravity conversation ${id} for session ${sessionId}`);
       })
@@ -46,6 +47,9 @@ export function createAntigravitySpawner(deps: SpawnDeps) {
     // read `.claude/skills` on its own, unlike every other agent hosted here. The entries point
     // at the live skill roots, so this is registration, not a mirror to keep fresh.
     syncAntigravitySkillsConfig(cwd);
+    // The turn hooks that drive the working dot and the finished sound live in the same directory
+    // (`.agents/hooks.json`). Not on Windows: the hook command is an `sh` line.
+    if (process.platform !== "win32") syncAntigravityHooks(cwd);
     // Snapshotted between the sync and the spawn: the capture below tells agy's new conversation
     // from the ones already on disk by the difference, so it must be the world agy is about to find.
     const root = antigravityBrainRoot();
