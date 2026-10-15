@@ -5,8 +5,8 @@
 // other side gives up its own, because a terminal below its minimum reflows xterm into garbage
 // while a squeezed panel is merely cramped.
 //
-// Five splitters now answer to this: terminal|GUI in the single view, — beside an enlarged
-// grid cell — terminal|file-pane, roster|terminal, and terminal/thumbnail-strip, and the chat pane
+// Five splitters now answer to this: terminal|GUI in the single view, the grid's right pane
+// (beside an enlarged cell or the tiles), roster|terminal, and terminal/thumbnail-strip, and the chat pane
 // under a collection (#2001), which is the one that answers along EITHER axis: the same pane docks
 // under the collection or beside it, so it reads one of two floor pairs. Stated once
 // because four copies of a tie-break drift apart, and the drift only shows on the narrow window

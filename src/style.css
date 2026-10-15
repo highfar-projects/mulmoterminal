@@ -208,7 +208,7 @@
 
   /* CodeMirror injects `.cm-editor` into the host at runtime, so no utility can reach it
      and this cannot live on an element we render. Global rather than scoped: the same
-     editor is mounted by the full-screen Files view and by the pane beside a zoomed cell. */
+     editor is mounted by the full-screen Files view and by the grid's right pane. */
   .files-editor .cm-editor {
     height: 100%;
   }

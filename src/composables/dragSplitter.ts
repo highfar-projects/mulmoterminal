@@ -1,5 +1,5 @@
 /** One splitter drag: follow the pointer until it is released, then remember where it landed.
- *  Shared by all three separators beside an enlarged cell (#1077).
+ *  Shared by the grid's separators: the right pane's, the roster's and the filmstrip's (#1077).
  *
  *  `resize` — the pointer's travel along the axis turned into a new size — is the caller's,
  *  because the SIGN is the only thing that differs between them and it is the part worth
