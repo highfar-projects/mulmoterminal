@@ -88,6 +88,11 @@ describe.skipIf(process.platform === "win32")("antigravityHookCommand under sh",
     expect(JSON.parse(stdout)).toEqual({ decision: "" });
   });
 
+  it("keeps an environment value with spaces as one argument", () => {
+    run("Stop", { MULMOTERMINAL_SESSION_ID: "a b -X DELETE", MULMOTERMINAL_PORT: "4321" });
+    expect(fs.readFileSync(record(), "utf8").split("\n")).toContain("x-mt-session:a b -X DELETE");
+  });
+
   it("answers PreInvocation with an empty object", () => {
     expect(JSON.parse(run("PreInvocation", { MULMOTERMINAL_SESSION_ID: "sid-1", MULMOTERMINAL_PORT: "4321" }))).toEqual({});
   });

@@ -33,8 +33,8 @@ const HOOK_REPLY: Readonly<Record<AntigravityHookEvent, string>> = {
 export const antigravityHookCommand = (event: AntigravityHookEvent): string =>
   '[ -n "$MULMOTERMINAL_SESSION_ID" ] && ' +
   "curl --noproxy 127.0.0.1 -s -m 5 -X POST -H content-type:application/json -H x-mt-agent:antigravity " +
-  `-H x-mt-hook:${event} -H x-mt-session:$MULMOTERMINAL_SESSION_ID ` +
-  `-d @- http://127.0.0.1:$MULMOTERMINAL_PORT/api/hook >/dev/null 2>&1; cat >/dev/null; echo '${HOOK_REPLY[event]}'`;
+  `-H x-mt-hook:${event} -H "x-mt-session:$MULMOTERMINAL_SESSION_ID" ` +
+  `-d @- "http://127.0.0.1:$MULMOTERMINAL_PORT/api/hook" >/dev/null 2>&1; cat >/dev/null; echo '${HOOK_REPLY[event]}'`;
 
 const str = (value: unknown): string | undefined => (typeof value === "string" ? value : undefined);
 
