@@ -82,3 +82,7 @@ Codex では、どのセルをどの契約で動かすかを自分で決める�
 - [Claude Code / Codex の契約を複数並べて使う](../guide/ja/accounts.html)
 - [Claude の契約を複数持っているとき、どう使い分けるか](multiple-accounts.html)
 - [Codex を並列で動かすには](codex-parallel.html)
+
+---
+
+*English version: [codex multiple accounts](../en/codex-multiple-accounts.html)*

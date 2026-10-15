@@ -67,3 +67,7 @@ npx mulmoterminal@latest
 - [複数の Claude の契約を自動で使い分ける](../guide/ja/token-rotation.html)
 - [Claude Code / Codex の契約を複数並べて使う](../guide/ja/accounts.html)
 - [Codex の契約を複数使い分けるには](codex-multiple-accounts.html)
+
+---
+
+*English version: [multiple accounts](../en/multiple-accounts.html)*

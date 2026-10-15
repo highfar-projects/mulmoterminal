@@ -1,19 +1,22 @@
 ---
-title: 疑問に答える
-nav_title: 疑問に答える
+title: Answers
+nav_title: Answers
 layout: default
 nav_order: 5
 has_children: true
-description: Claude Code や Codex を並列で動かすときによく出る疑問に、1ページ1つずつ答えます。他のツールとの違い、組み合わせ方、どのセッションが自分待ちかの見分け方。
+description: One page per question about running Claude Code and Codex in parallel — how the tools differ, how to combine them, and how to tell which session is waiting for you.
 ---
 
-# 疑問に答える
+# Answers
 {: .no_toc }
 
-検索して辿り着いた人向けに、**1ページで1つの疑問に答えます。**
+**One page, one question.** Written for people arriving from a search rather than from the guide.
 
-詳しい手順は[ガイド](../guide/ja/)に、ツール同士の比較は[他の選択肢との比較](../guide/ja/alternatives.html)にあります。
-ここは、その入口です。
+Step-by-step instructions live in the [guide](../guide/en/); the tool-by-tool map lives in
+[alternatives](../guide/en/alternatives.html). This is the way in.
 
-**断っておくと、このページを書いているのは MulmoTerminal を作っている側**です。中立ではありません。
-その代わり、他のツールが向く場面と、**この製品を使わずに済ませる方法**を先に書きます。
+**Disclosure: these pages are written by the maintainer of MulmoTerminal**, so they are not
+neutral. What they offer instead is being specific about where other tools fit better, and about
+[when you need none of them](en/tmux-difference.html).
+
+日本語のページは[こちら](ja/claude-code-parallel.html)にあります。

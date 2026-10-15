@@ -52,3 +52,7 @@ Codex は写され、Antigravity は別のファイルが要ります。
 - [どのセッションが自分待ちか知るには](which-is-waiting.html)
 - [どの coding agent を使うか（詳細）](../guide/ja/agents.html)
 - [対応表の原文](https://github.com/receptron/mulmoterminal/blob/main/docs/agent-capability-matrix.md)
+
+---
+
+*English version: [which agent to use](../en/which-agent-to-use.html)*

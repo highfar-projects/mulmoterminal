@@ -60,3 +60,7 @@ npx mulmoterminal@latest
 
 - [git worktree で作業を隔離する](../guide/ja/worktree.html)
 - [どのセッションが自分待ちか知るには](which-is-waiting.html)
+
+---
+
+*English version: [tmux difference](../en/tmux-difference.html)*

@@ -73,3 +73,7 @@ npx mulmoterminal@latest
 - [git worktree で作業を隔離する](../guide/ja/worktree.html)
 - [どのセッションが自分待ちか知るには](which-is-waiting.html)
 - [他の選択肢との比較](../guide/ja/alternatives.html)
+
+---
+
+*English version: [run claude code in parallel](../en/run-claude-code-in-parallel.html)*

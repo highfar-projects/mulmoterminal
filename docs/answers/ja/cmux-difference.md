@@ -52,3 +52,7 @@ MulmoTerminal は枠ごとに git の worktree を切ります。同じリポジ
 
 - [他の選択肢との比較](../guide/ja/alternatives.html)
 - [スマホから使う](../guide/ja/phone.html)
+
+---
+
+*English version: [cmux difference](../en/cmux-difference.html)*

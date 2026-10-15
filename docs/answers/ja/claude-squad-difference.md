@@ -55,3 +55,7 @@ MulmoTerminal は、**終わったことと人を待っていることを分け�
 
 - [他の選択肢との比較](../guide/ja/alternatives.html)（Vibe Kanban・Nimbalyst・Conductor も）
 - [どのセッションが自分待ちか知るには](which-is-waiting.html)
+
+---
+
+*English version: [claude squad difference](../en/claude-squad-difference.html)*

@@ -56,3 +56,7 @@ Claude Code の契約を複数持っている場合は、枠ごとに別の契�
 
 - [どの coding agent を使うか](../guide/ja/agents.html)
 - [Codex を並列で動かすには](codex-parallel.html)
+
+---
+
+*English version: [codex and claude code](../en/codex-and-claude-code.html)*

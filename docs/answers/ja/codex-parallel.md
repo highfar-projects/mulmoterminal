@@ -67,3 +67,7 @@ Windows ではフックを登録しません。コマンドがシェルの展開
 - [Codex と Claude Code を一緒に動かすには](codex-and-claude-code.html)
 - [どのセッションが自分待ちか知るには](which-is-waiting.html)
 - [どの coding agent を使うか](../guide/ja/agents.html)
+
+---
+
+*English version: [codex parallel](../en/codex-parallel.html)*

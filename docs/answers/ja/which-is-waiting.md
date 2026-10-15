@@ -72,3 +72,7 @@ MulmoTerminal は枠の色で出します。枠ごとに git の worktree が切
 - [エージェントが呼んだらスマホに通知する](../guide/ja/notifications.html)
 - [Codex を並列で動かすには](codex-parallel.html)
 - [どの coding agent を使うか](../guide/ja/agents.html)
+
+---
+
+*English version: [which is waiting](../en/which-is-waiting.html)*
