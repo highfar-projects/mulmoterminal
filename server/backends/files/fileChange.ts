@@ -10,6 +10,7 @@
 import path from "node:path";
 import os from "node:os";
 import { stat } from "node:fs/promises";
+import { statSync, type BigIntStats } from "node:fs";
 import { configureFileChangePublisher, publishFileChange } from "@mulmoclaude/core/file-change";
 import type { Publisher } from "../../infra/async/pubsub.js";
 import { MARKDOWN_FILE_SCOPE } from "../../../common/fileChannel.js";
@@ -95,14 +96,25 @@ export { publishFileChange };
  *  form silently loses precision on large ones (CodeRabbit on #2147). */
 export async function fileStamp(absolutePath: string): Promise<FileStamp> {
   try {
-    const { mtimeMs, size, ino } = await stat(absolutePath, { bigint: true });
-    return `${mtimeMs}:${size}:${ino}`;
+    return stampOf(await stat(absolutePath, { bigint: true }));
   } catch {
     // Missing, or unreadable — both are "not the file we last saw", which is what the poll
     // compares. Distinguishing them would change nothing it decides.
     return null;
   }
 }
+
+/** The same stamp, read synchronously: for a caller that must record it before anything awaits,
+ *  such as a write hook racing the next poll. */
+export function fileStampSync(absolutePath: string): FileStamp {
+  try {
+    return stampOf(statSync(absolutePath, { bigint: true }));
+  } catch {
+    return null;
+  }
+}
+
+const stampOf = ({ mtimeMs, size, ino }: BigIntStats): string => `${mtimeMs}:${size}:${ino}`;
 
 export function startDocumentWatchers(deps: { workspace: string; pubsub: SubscriptionSource; sessionCwds: () => Iterable<string> }): () => void {
   const watchers = createDocumentWatchers({
