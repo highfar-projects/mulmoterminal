@@ -669,7 +669,9 @@ a tmux session, so **a server crash or restart doesn't kill your terminals** —
 processes keep running and reattach when the server comes back (like `screen`/`tmux`).
 A long build, a dev server, or a mid-turn Claude session all survive `node --watch`
 reloads and crashes. It uses its **own** tmux server (`-L mulmoterminal`) and config, so
-it never touches your personal tmux sessions or keybindings.
+it never touches your personal tmux sessions or keybindings. A server started with `HOME`
+pointed somewhere else gets a tmux server of its own (`mulmoterminal-<hash>`), so it never
+sweeps or reconfigures the sessions of the one running on your real home.
 
 **And the server comes back by itself.** `npx mulmoterminal` supervises the server it
 started: a crash is restarted with a short backoff, so the browser tab reconnects to the
