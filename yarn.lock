@@ -6649,7 +6649,7 @@ mulmocast-vision@^1.0.12:
     puppeteer "^25.3.0"
     yauzl "^3.4.0"
 
-mulmocast@^2.22.1:
+mulmocast@^2.23.0:
   version "2.23.0"
   resolved "https://registry.yarnpkg.com/mulmocast/-/mulmocast-2.23.0.tgz#73c9c6efbfe0364cb6f72ed474a55c7d0b916df9"
   integrity sha512-lLZgtwq/Z8VSCPkWPA/3M7jh7G3NyNKZHhBIsuQpyy49fX+ADFdbQRG0jm3iPpd/1v1y4DQMEAtXoX1atNpaRw==
