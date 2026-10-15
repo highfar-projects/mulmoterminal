@@ -231,8 +231,8 @@ voice needs that provider's key, and the movie needs ffmpeg.
 
 The first render downloads the model that matches the speech to the text (about 635 MB) into
 `~/.cache/avatarscript/models`, once. After that the avatar video is cached and made again when
-the script, the audio or the avatar changes, or when the avatar is shown at a different size (the
-canvas size or its `scale`).
+the script, the audio or the avatar changes, or when the avatar is drawn at a different height (the
+canvas height, or the largest `scale` it is placed at).
 
 When an avatar video has to be made and the packages are missing, the beat stops with mulmocast's
 message naming them (`npm install avatarscript onnxruntime-node`). A video already in the cache is
