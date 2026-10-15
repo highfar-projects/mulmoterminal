@@ -271,7 +271,7 @@ describe("following the tab in front", () => {
     const h = harness();
     await frontTo(h, "README.md");
     expect(h.scrolled).toEqual([]);
-    h.reveal.followFrontTab();
+    h.reveal.followFrontTab(h.reveal.startEpoch());
     await frontTo(h, "src/deep/buried.ts");
     expect(h.scrolled).toEqual(["README.md", "src/deep/buried.ts"]);
   });
@@ -279,16 +279,28 @@ describe("following the tab in front", () => {
   it("brings the front row into view when following starts, without opening a folder", async () => {
     const h = harness();
     h.frontPath.value = "src/deep/buried.ts";
-    h.reveal.followFrontTab();
+    h.reveal.followFrontTab(h.reveal.startEpoch());
     expect(h.scrolled).toEqual(["src/deep/buried.ts"]);
     expect(h.opened).toEqual([]);
   });
 
   it("stops following when the pane re-roots", async () => {
     const h = harness();
-    h.reveal.followFrontTab();
+    h.reveal.followFrontTab(h.reveal.startEpoch());
     h.reveal.reset();
     await frontTo(h, "README.md");
     expect(h.scrolled).toEqual([]);
+  });
+
+  // A startup that was still running when the pane re-rooted reaches this after the reset.
+  it("does nothing for a startup that a re-root made stale", async () => {
+    const h = harness();
+    const stale = h.reveal.startEpoch();
+    h.reveal.reset();
+    h.frontPath.value = "README.md";
+    expect(h.reveal.followFrontTab(stale)).toBe(false);
+    await frontTo(h, "src/deep/buried.ts");
+    expect(h.scrolled).toEqual([]);
+    expect(h.reveal.followFrontTab(h.reveal.startEpoch())).toBe(true);
   });
 });
