@@ -62,6 +62,7 @@ describe("syncAntigravityHooks", () => {
   it("creates .agents/hooks.json in a directory that has none", () => {
     syncAntigravityHooks(cwd);
     expect(read()).toEqual({ [ANTIGRAVITY_HOOK_NAME]: ourAntigravityHook() });
+    expect(fs.readdirSync(path.join(cwd, ".agents"))).toEqual(["hooks.json"]);
   });
 
   it("merges into the user's file and leaves the file alone once current", () => {

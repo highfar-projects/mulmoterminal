@@ -10,12 +10,11 @@
 // event without a matcher (`PreInvocation`, `Stop`) takes its handlers directly. Wrapped in
 // `{"hooks":[…]}` like `PreToolUse`'s, agy logs `command hook must specify 'command'` and runs no
 // hook from the file at all — the user's included.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { isRecord } from "../../../common/isRecord.js";
 import { symlinkFreeWriteTarget } from "../../infra/fs/symlink-guard.js";
-import { excludeFromGit } from "../git-exclude.js";
+import { readAntigravityConfig, writeAntigravityConfig } from "./antigravity-config-file.js";
 import { ANTIGRAVITY_HOOK_EVENTS, antigravityHookCommand } from "./antigravity-hook.js";
 
 const CUSTOMIZATION_DIR = ".agents";
@@ -51,15 +50,6 @@ export function mergeAntigravityHooks(existing: unknown): Record<string, unknown
 
 const EXCLUDE_ENTRY = `${CUSTOMIZATION_DIR}/hooks.json`;
 
-function readHooksFile(file: string): unknown {
-  if (!existsSync(file)) return {};
-  try {
-    return JSON.parse(readFileSync(file, "utf8"));
-  } catch {
-    return null; // present but not JSON — someone else's file, and rewriting it would lose it
-  }
-}
-
 /** Register the turn hooks for this directory's agy sessions. Idempotent, and quiet on failure: a
  *  read-only project is a reason for the cell to have no status dots, not for it to fail to start. */
 export function syncAntigravityHooks(cwd: string): void {
@@ -67,13 +57,6 @@ export function syncAntigravityHooks(cwd: string): void {
   // A checkout can commit `.agents` or the file itself as a symlink to a file of the user's own,
   // and every fs call below follows links (symlink-guard.ts).
   if (!symlinkFreeWriteTarget(file)) return;
-  const merged = mergeAntigravityHooks(readHooksFile(file));
-  if (merged === null) return;
-  try {
-    mkdirSync(path.dirname(file), { recursive: true });
-    writeFileSync(file, JSON.stringify(merged, null, 2) + "\n", "utf8");
-    excludeFromGit(cwd, EXCLUDE_ENTRY);
-  } catch (err) {
-    console.warn(`[antigravity] could not write ${file}: ${err}`);
-  }
+  const merged = mergeAntigravityHooks(readAntigravityConfig(file));
+  if (merged !== null) writeAntigravityConfig(cwd, file, merged, EXCLUDE_ENTRY);
 }
