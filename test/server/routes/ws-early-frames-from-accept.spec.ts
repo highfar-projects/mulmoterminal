@@ -28,6 +28,7 @@ vi.mock("../../../server/session/registry.js", () => ({
   codexRollouts: new Map(),
   codexRolloutsHydrated: Promise.resolve(),
   customAgentSessionsHydrated: Promise.resolve(),
+  guiGroupRestrictionsHydrated: Promise.resolve(),
   markDevTerminalSession: vi.fn(),
   markAttachedSessionPlaced: vi.fn(),
 }));

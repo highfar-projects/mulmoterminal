@@ -29,6 +29,8 @@ const mocks = vi.hoisted(() => ({
 
 const ptys = new Map<string, unknown>();
 const codexRollouts = new Map<string, unknown>();
+// Replaced by a test that holds the GUI tool restriction log back, as a restart can.
+const restrictionLog = { hydrated: Promise.resolve() };
 vi.mock("../../../server/session/registry.js", () => ({
   ptys,
   sessionCwd: () => mocks.rememberedCwd,
@@ -40,7 +42,9 @@ vi.mock("../../../server/session/registry.js", () => ({
   codexRollouts,
   codexRolloutsHydrated: Promise.resolve(),
   customAgentSessionsHydrated: Promise.resolve(),
-  guiGroupRestrictionsHydrated: Promise.resolve(),
+  get guiGroupRestrictionsHydrated() {
+    return restrictionLog.hydrated;
+  },
   markDevTerminalSession: vi.fn(),
   markAttachedSessionPlaced: vi.fn(),
 }));
@@ -155,6 +159,7 @@ beforeEach(() => {
   registeredGuiMcpGroups.mockResolvedValue(["render"]);
   account.bound = false;
   dir = mkdtempSync(path.join(tmpdir(), "mt-ws-restart-"));
+  restrictionLog.hydrated = Promise.resolve();
 });
 afterEach(() => {
   ptys.clear();
@@ -178,6 +183,21 @@ describe("/ws/codex after a server restart (tmux survivor, no live pty)", () => 
     await handleCodexConnection(makeDeps(), fakeWs() as unknown as WebSocket, request("&gui=0"));
     expect(registeredGuiMcpGroups).toHaveBeenCalledWith(dir, expect.anything());
     expect(spawnCodexPty).toHaveBeenCalledWith(expect.any(String), expect.anything(), null, dir, false, { mcpGroups: ["render"] });
+  });
+
+  // The spawn reads the restriction synchronously (#3033): a resume that ran ahead of the log would
+  // hand a restricted session every tool and claim them.
+  it("does not spawn until the GUI tool restriction log has been read", async () => {
+    let release = () => {};
+    restrictionLog.hydrated = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const connecting = handleCodexConnection(makeDeps(), fakeWs() as unknown as WebSocket, request(`&gui=0&session=${SID}`));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(spawnCodexPty).not.toHaveBeenCalled();
+    release();
+    await connecting;
+    expect(spawnCodexPty).toHaveBeenCalledTimes(1);
   });
 });
 

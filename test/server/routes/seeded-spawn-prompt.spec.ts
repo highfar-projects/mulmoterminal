@@ -144,8 +144,9 @@ describe("which agents are asked for the directory's tool groups", () => {
   });
 });
 
-// The restriction has to reach the claude spawner on BOTH claude branches, and no other spawner may
-// be started with it ignored — that would be the full-toolset session the caller asked to avoid.
+// The restriction has to reach the claude spawner on BOTH claude branches and the codex and copilot
+// spawners, and no other spawner may be started with it ignored — that would be the full-toolset
+// session the caller asked to avoid.
 describe("guiGroups through the route (#3033)", () => {
   it("hands claude the groups, run and draft alike", async () => {
     expect((await spawn("claude", "go", false, { guiGroups: ["render"] })).guiGroups).toEqual(["render"]);
@@ -156,10 +157,16 @@ describe("guiGroups through the route (#3033)", () => {
     expect((await spawn("claude", "go")).guiGroups).toBeUndefined();
   });
 
-  it.each(TERMINAL_AGENTS.filter((a) => a !== "claude"))("starts no %s session when asked to limit it", async (agent) => {
+  it.each(["codex", "copilot"])("hands %s the groups, and nothing when the field is absent", async (agent) => {
+    expect((await spawn(agent, "go", false, { guiGroups: ["data"] })).guiGroups).toEqual(["data"]);
+    expect((await spawn(agent, "go", false, { guiGroups: [] })).guiGroups).toEqual([]);
+    expect((await spawn(agent, "go")).guiGroups).toBeUndefined();
+  });
+
+  it.each(TERMINAL_AGENTS.filter((a) => !["claude", "codex", "copilot"].includes(a)))("starts no %s session when asked to limit it", async (agent) => {
     seen.delete(agent);
     const { body } = await call("/api/plugin/spawnBackgroundChat", jsonPost({ message: "go", agent, guiGroups: ["render"] }));
     expect(seen.has(agent)).toBe(false);
-    expect(body.message).toMatch(/supported for claude only/);
+    expect(body.message).toMatch(/supported for claude, codex, copilot only/);
   });
 });

@@ -16,6 +16,7 @@ import { claimedCodexRollouts, codexRollouts, ptys, rememberCodexRollout } from 
 import { ptyWouldReattach } from "../../pty/pty-spawn.js";
 import { startAgentPty } from "../../pty/agent-pty-start.js";
 import { spawnWithFullGuiClaim, type FullGuiClaimRequest } from "../spawn-with-full-gui-claim.js";
+import { codexSessionGuiRestriction } from "./session-gui-restriction.js";
 import { wireAgentPtyRelay } from "../../pty/pty-relay.js";
 import { attachCodexAutoRun } from "../draft-injection.js";
 import type { PtyEntry } from "../../types.js";
@@ -64,9 +65,12 @@ export function createCodexSpawner(deps: SpawnDeps) {
       /** The tool groups this cell's DIRECTORY has registered, for a grid cell (gui=0). Read by
        *  the caller because the lookup reads Claude Code's config files, and this is sync. */
       mcpGroups?: readonly ToolGroup[];
+      /** Limit this session to these GUI tool groups, for this spawn and every later one (#3033). */
+      guiGroups?: readonly ToolGroup[] | undefined;
     } = {},
   ): PtyEntry {
-    const { initialPrompt = null, mcpGroups = [] } = options;
+    const { initialPrompt = null, mcpGroups = [], guiGroups } = options;
+    const restrictedTo = codexSessionGuiRestriction(sessionId, guiGroups, resumeRolloutId);
     // codex reads skills from its mirror (~/.codex/skills), not from the workspace's own
     // `.claude/skills`, and the mirror is otherwise refreshed only at boot — so a skill created
     // mid-run (a new collection) would stay invisible to codex until a restart. No-op outside
@@ -98,9 +102,11 @@ export function createCodexSpawner(deps: SpawnDeps) {
     // reuses the id, and a stale claim would stand its group urls down with nothing left to serve
     // them (Codex review on #1399). claimFullGuiMcp owns both directions so neither spawn path can
     // apply half the rule.
-    const claim: FullGuiClaimRequest = { sessionId, attachGuiMcp, cwd, wouldReattach: ptyWouldReattach(sessionId, true), agent: "codex" };
+    // A restricted session is handed exactly its groups, whatever the directory registered.
+    const restricted = restrictedTo !== null;
+    const claim: FullGuiClaimRequest = { sessionId, attachGuiMcp, cwd, wouldReattach: ptyWouldReattach(sessionId, true), agent: "codex", restricted };
     const { entry, spawnedAtMs, reattached } = spawnWithFullGuiClaim(claim, (allTools) => {
-      const guiMcpServers = codexGuiMcpServers({ sessionId, port: PORT, groups: mcpGroups, allTools });
+      const guiMcpServers = codexGuiMcpServers({ sessionId, port: PORT, groups: restrictedTo ?? mcpGroups, allTools });
       const permissionHook = wantsCodexPermissionHook(process.platform, initialPrompt !== null);
       const args = buildCodexArgs({ resume: resumeRolloutId, model: deps.codexModel, guiMcpServers, permissionHook });
       const spawnEnv = {

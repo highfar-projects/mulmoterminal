@@ -19,19 +19,11 @@ import { buildClaudeArgs } from "../../../agents/claude/claude-args.js";
 import { refuseUnsupportedPermissionMode } from "../../../agents/claude/claude-help-probe.js";
 import { claudeAdapter } from "../../../agents/claude/claude.js";
 import { appendedSystemPrompt } from "../../../agents/appended-prompt.js";
-import {
-  customAgentSessions,
-  guiGroupRestriction,
-  hookedSessions,
-  knownSessions,
-  launchChoices,
-  rememberCustomAgentSession,
-  rememberGuiGroupRestriction,
-  resetSessionToolGroups,
-} from "../../registry.js";
+import { customAgentSessions, hookedSessions, knownSessions, launchChoices, rememberCustomAgentSession, resetSessionToolGroups } from "../../registry.js";
 import { ptyWouldReattach, type PtySpawnEnv } from "../../pty/pty-spawn.js";
 import { ptyExitLine } from "../../pty/pty-exit-log.js";
 import { startAgentPty, type StartedAgentPty } from "../../pty/agent-pty-start.js";
+import { sessionGuiRestriction } from "./session-gui-restriction.js";
 import { spawnWithFullGuiClaim } from "../spawn-with-full-gui-claim.js";
 import { attachDraftInjection } from "../draft-injection.js";
 import { sendFrame } from "../../ws-frames.js";
@@ -269,14 +261,6 @@ function sessionProgram(
   const preflight = (childEnv: NodeJS.ProcessEnv) => refuseUnsupportedPermissionMode(claudeBin, permissionMode, childEnv);
   if (!launch) return { file: claudeBin, prefixArgs: [], spawnEnv: { ...env, binEnvVar: claudeAdapter.binEnvVar, preflight }, note };
   return { file: launch.file, prefixArgs: launch.prefixArgs, spawnEnv: env, note };
-}
-
-// The GUI tool groups this session is limited to, or null. Recorded before anything can connect,
-// and read back on EVERY spawn of the id: a resume arrives as a plain `?gui=0` reconnect, and only
-// this record says the session was limited.
-function sessionGuiRestriction(sessionId: string, guiGroups: readonly ToolGroup[] | undefined): readonly ToolGroup[] | null {
-  if (guiGroups) rememberGuiGroupRestriction(sessionId, guiGroups);
-  return guiGroupRestriction(sessionId);
 }
 
 // What `--allowedTools` pre-approves. Carrying the whole GUI MCP: the GUI tools + the user's own

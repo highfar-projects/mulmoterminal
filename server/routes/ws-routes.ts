@@ -708,6 +708,9 @@ export async function handleCodexConnection(deps: WsRouteDeps, ws: WebSocket, re
   // arrives while the log is still being read would see an empty map and decline to resume a
   // rollout that is right there — which is the restart case this exists for.
   await codexRolloutsHydrated;
+  // And the GUI tool restriction (#3033), for the claude handler's reason: the spawn reads it, and a
+  // resume that ran ahead of the log would be handed every tool and claim them.
+  await guiGroupRestrictionsHydrated;
   // Same order and rule as the claude handler: bind where an existing rollout is, and give only a
   // newly minted key the picked account.
   const rolloutOf = (key: string) => codexRollouts.get(key)?.conversationId ?? key;
@@ -802,6 +805,8 @@ export async function handleCopilotConnection(deps: WsRouteDeps, ws: WebSocket, 
   // would see nothing remembered and fall back to the request's directory, which is the case the
   // resolver exists to avoid.
   await devTerminalCwdsHydrated;
+  // The GUI tool restriction (#3033), read by the spawn — see the codex handler.
+  await guiGroupRestrictionsHydrated;
   const { sessionId, live: resolvedLive } = await resolveCopilotSession(requested, cwd);
   await sessionConnects(sessionId, async () => {
     const admitted = await admitInSessionDir(ws, "copilot", { requested, sessionId, resolvedLive, cwd, devTerminal: !attachGuiMcp }, early);
