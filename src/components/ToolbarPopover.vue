@@ -42,8 +42,8 @@ defineExpose({ close });
   <div ref="root" class="relative inline-flex">
     <button
       type="button"
-      class="relative inline-flex h-[30px] w-[30px] flex-none cursor-pointer items-center justify-center rounded-md border-0 bg-transparent p-0 hover:bg-hover"
-      :class="[triggerTone, { 'bg-hover': open }]"
+      class="relative inline-flex h-[30px] w-[30px] flex-none cursor-pointer items-center justify-center rounded-md border-0 p-0 hover:bg-hover"
+      :class="[triggerTone, open ? 'bg-hover' : 'bg-transparent']"
       :aria-expanded="open"
       aria-haspopup="true"
       :data-tip="title"

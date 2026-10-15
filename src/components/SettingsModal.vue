@@ -302,8 +302,10 @@ useModalKeyboard({
               v-for="tab in group.tabs"
               :id="`settings-tab-${tab}`"
               :key="tab"
-              class="w-full cursor-pointer border-0 border-l-2 bg-transparent px-3 py-1.5 text-left text-[12px]"
-              :class="activeTab === tab ? 'border-l-accent bg-elevated font-semibold text-fg' : 'border-l-transparent text-dim hover:bg-elevated'"
+              class="w-full cursor-pointer border-0 border-l-2 px-3 py-1.5 text-left text-[12px]"
+              :class="
+                activeTab === tab ? 'border-l-accent bg-elevated font-semibold text-fg' : 'border-l-transparent bg-transparent text-dim hover:bg-elevated'
+              "
               role="tab"
               :aria-selected="activeTab === tab"
               :aria-controls="SETTINGS_PANE_ID"
