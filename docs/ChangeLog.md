@@ -8,6 +8,31 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@10.7.0 — 2026-10-16
+
+> **Setup guide:** [10.7.0 — Copy a whole file, see which file is open, and reopen recent files](https://receptron.github.io/mulmoterminal/guide/en/v10.7.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.7.0.html))
+
+### Copy the whole open file (#3060)
+
+- A copy button in the Files header (right pane and full-screen `/files`) puts `CmEditor.getDoc()` on the clipboard — unsaved edits included — and shows the existing "Copied!" toast with the line count and first line. A mouse drag that starts in CodeMirror's line-number gutter copies the numbers, not the text (measured in Chromium), which is what was reported as newlines turning into tabs (#3058).
+- No button where the page has no Clipboard API; a refused write shows no toast, and takes down an earlier success's toast.
+- The `@` and copy buttons share one condition and live in `FilesEditorActions.vue`; the toast's timer is shared with the Preview code-block copy through `useCopiedNotice`.
+
+### The open file stands out in the tree (#3061)
+
+- The open row's mark never showed: the row's static `bg-transparent` won over the conditional `bg-hover` in the stylesheet. The open row now gets `bg-selected`, an accent stripe and `aria-current`. The same never-applied background was on `ToolbarPopover`'s open state and the active Settings tab, both fixed; `test/scripts/static-background-conflict.spec.ts` scans every `.vue` template for it.
+- After the remembered pane is restored, the open row is brought into view when the remembered folders show it; a folder the reader closed stays closed (#2156). The front-tab following moved into `useFilesReveal`, with a per-startup epoch so a startup made stale by a re-root cannot switch following on in the new root.
+
+### Recently opened files (#3062)
+
+- A clock button in the Files header lists the files opened in this folder, newest first, the open one marked; picking one opens it. Kept per folder in `localStorage` (`files_recent`), capped per folder and in folders, re-read on every write and every open. A re-root does not record the old root's file under the new folder.
+- Named "Recently opened" / 最近開いたファイル and kept distinct from History (#2574), which lists earlier versions of one file.
+- The Files menus (History, Outline, Recently opened) and the finder's list and row ids are now per instance (`useId`), so with two panes mounted each trigger's `aria-controls` names its own list.
+
+### Dependencies (#3063)
+
+- `@google/genai` 2.30.0, `zod` 4.6.7, `light-my-request` 6.8.0, `vitest` 5.0.5.
+
 ## mulmoterminal@10.6.0 — 2026-10-15
 
 > **Setup guide:** [10.6.0 — Codex and Copilot workers can be limited to some GUI tools](https://receptron.github.io/mulmoterminal/guide/en/v10.6.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.6.0.html))

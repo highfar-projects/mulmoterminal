@@ -4,7 +4,7 @@ nav_title: Feature list
 layout: default
 parent: English
 nav_order: 6.5
-as_of: 10.6.0
+as_of: 10.7.0
 description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 9.1.0)."
 ---
 
@@ -140,6 +140,9 @@ More: [Phone](phone.html)
 
 More: [Feature reference](features.html)
 
+- A copy button in the Files header puts the whole open file on the clipboard, unsaved edits included (v10.7.0)
+- The open file is marked in the Files tree, and brought into view when the pane comes back (v10.7.0)
+- A Recently opened list in the Files header reopens a file whose tab was closed, kept per folder across reloads (v10.7.0)
 - A clicked video, image, PDF, sound or HTML page outside the cell opens in a tab, through a link for that one file (v10.4.0)
 - Closing the agent's checklist without sending tells the agent, in one line, that it was closed (v10.4.0)
 - The agent opens a file in the Files pane beside its terminal, in a chosen view and at a line (showInPane) (v10.3.0)
