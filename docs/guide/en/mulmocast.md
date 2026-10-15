@@ -201,9 +201,11 @@ npm install avatarscript onnxruntime-node
 ```
 
 The home directory works for `npx` (each release is a new folder under `~/.npm/_npx/`) and for a clone
-under your home, because Node looks in every parent folder's `node_modules`. A **global** install
-usually lives outside your home (`/opt/homebrew/lib/node_modules`, `/usr/local/lib/node_modules`), so
-install them globally next to it instead: `npm install -g avatarscript onnxruntime-node`. Installing
+under your home, because Node looks in every parent folder's `node_modules`. If you use `npx`, keep
+them there: a global install is not searched from `npx`. Only if MulmoTerminal itself is installed
+globally (`npm install -g mulmoterminal`, which usually lives outside your home in
+`/opt/homebrew/lib/node_modules` or `/usr/local/lib/node_modules`) install them globally next to it
+instead: `npm install -g avatarscript onnxruntime-node`. Installing
 into a clone with `yarn add` works too, but leaves a change in its `package.json`.
 
 ### 2. Check that MulmoCast can see them

@@ -188,9 +188,10 @@ npm install avatarscript onnxruntime-node
 ```
 
 ホームディレクトリに入れれば、`npx`（版ごとに `~/.npm/_npx/` の下の新しいフォルダになる）でも、ホームの下に clone した
-場合でも見つかります。Node が親のフォルダの `node_modules` を順にたどって探すからです。**グローバル**に入れた場合は、
-ふつうホームの外（`/opt/homebrew/lib/node_modules` や `/usr/local/lib/node_modules`）にあるので、その隣にグローバルで
-入れてください: `npm install -g avatarscript onnxruntime-node`。clone に `yarn add` で入れても動きますが、その
+場合でも見つかります。Node が親のフォルダの `node_modules` を順にたどって探すからです。`npx` で使うなら、
+ホームに入れてください。グローバルに入れたものは `npx` からは探されません。MulmoTerminal 自体をグローバルに入れている
+（`npm install -g mulmoterminal`）場合だけは、ふつうホームの外（`/opt/homebrew/lib/node_modules` や
+`/usr/local/lib/node_modules`）にあるので、その隣にグローバルで入れてください: `npm install -g avatarscript onnxruntime-node`。clone に `yarn add` で入れても動きますが、その
 `package.json` に差分が残ります。
 
 ### 2. MulmoCast から見えるか確かめる
