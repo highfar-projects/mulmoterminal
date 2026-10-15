@@ -202,8 +202,9 @@ jobs:
       # ~/.cache/puppeteer is outside node_modules, so the cache above never covered it, and macOS
       # shards hung in `yarn install` unzipping it (#3030). Every shard may save, unlike
       # node_modules: the download is what hangs, so a cold run whose first shard hangs must still
-      # leave a cache behind from whichever shard got through. The others' saves are rejected as
-      # duplicates, which costs nothing at this size.
+      # leave a cache behind from whichever shard finishes — actions/cache saves only after a job
+      # succeeds, so a failed or cancelled shard never stores a half-unpacked Chrome. The others'
+      # saves are rejected as duplicates, which costs nothing at this size.
       - uses: actions/cache@v5
         if: steps.gate.outputs.run == 'true'
         with:
