@@ -216,5 +216,5 @@ npx mulmoterminal@latest init
 最初の描画で、音声と文章を合わせるためのモデル（約 635MB）が `~/.cache/avatarscript/models` に一度だけダウンロード
 されます。そのあとはアバターの映像がキャッシュされ、台本・音声・アバターが変わったときだけ作り直されます。
 
-パッケージが入っていないと、アバターのあるビートは mulmocast の案内（`npm install avatarscript onnxruntime-node`）を
-出して止まります。
+アバターの映像を作る必要があるときにパッケージが入っていないと、そのビートは mulmocast の案内
+（`npm install avatarscript onnxruntime-node`）を出して止まります。キャッシュ済みの映像は、パッケージが無くてもそのまま使われます。
