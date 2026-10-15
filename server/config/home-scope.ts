@@ -7,7 +7,7 @@
 import { createHash } from "node:crypto";
 import path from "node:path";
 
-const SCOPE_HASH_HEX_CHARS = 8;
+const SCOPE_HASH_HEX_CHARS = 16;
 
 /** "" when `homeDir` is the account's own home (or that is unknown), else `-<hash>` naming it. */
 export function homeScopeSuffix(homeDir: string, accountHomeDir: string | null): string {

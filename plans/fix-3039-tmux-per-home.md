@@ -20,9 +20,9 @@ sessions and prune every drop directory of the first one. So both move together.
 
 Scope both names by the home directory, but only when `HOME` is overridden:
 
-- `homeScopeSuffix(homeDir, accountHomeDir)` (pure, `server/infra/process/home-scope.ts`):
+- `homeScopeSuffix(homeDir, accountHomeDir)` (pure, `server/config/home-scope.ts`):
   `""` when the two resolve to the same path (or the account home is unknown), otherwise
-  `-<8 hex of sha256(resolved homeDir)>`.
+  `-<16 hex of sha256(resolved homeDir)>`.
 - `accountHomeDir` is `os.userInfo().homedir` — read from the passwd entry, not `$HOME`.
 - Both sides go through `realpathSync.native` first, so a symlinked or case-variant spelling of
   the account's own home is not an override.

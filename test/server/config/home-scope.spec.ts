@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { homeScopeSuffix } from "../../../../server/infra/process/home-scope.js";
+import { homeScopeSuffix } from "../../../server/config/home-scope.js";
 
-const SUFFIX_RE = /^-[0-9a-f]{8}$/;
+const SUFFIX_RE = /^-[0-9a-f]{16}$/;
 
 describe("homeScopeSuffix", () => {
   it("is empty on the account's own home, so existing tmux sessions keep reattaching", () => {

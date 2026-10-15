@@ -6,10 +6,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtempSync, rmSync, symlinkSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { canSymlink } from "../../../support/canSymlink.js";
+import { canSymlink } from "../../support/canSymlink.js";
 
 const SESSION = "00000000-0000-4000-8000-000000000000";
-const SUFFIX_RE = /^-[0-9a-f]{8}$/;
+const SUFFIX_RE = /^-[0-9a-f]{16}$/;
 
 const dirs: string[] = [];
 
@@ -25,9 +25,9 @@ async function scopedNames(home: string | null) {
     vi.stubEnv("USERPROFILE", home);
   }
   vi.resetModules();
-  const env = await import("../../../../server/config/env.js");
-  const tmux = await import("../../../../server/infra/process/tmux.js");
-  const drops = await import("../../../../server/session/session-drops.js");
+  const env = await import("../../../server/config/env.js");
+  const tmux = await import("../../../server/infra/process/tmux.js");
+  const drops = await import("../../../server/session/session-drops.js");
   return {
     suffix: env.HOME_SCOPE_SUFFIX,
     socket: tmux.tmuxNewSessionArgs(SESSION, "sh", [], "/")[1],

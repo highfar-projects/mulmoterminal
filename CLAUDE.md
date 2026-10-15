@@ -381,7 +381,7 @@ procedure: open this file, paste this, restart what, how to tell it worked, what
     at a scratch dir holding its own `.mulmoterminal/config.json` (`cwdPresets`, `launchers`), so
     **the live config is never touched** and only chosen directories appear. Ask which paths may
     be shown before publishing any. That `HOME` also gets its own tmux server and drop directory
-    (`server/infra/process/home-scope.ts`), so the capture server never touches the live sessions.
+    (`server/config/home-scope.ts`), so the capture server never touches the live sessions.
   - **A short shell prompt has to be arranged.** The demo `HOME` needs its own `.zshrc`
     (`PROMPT='%1~ $ '`), and tmux will re-attach an OLD shell that predates it — use a directory
     that has no session yet, or the prompt in the shot is not the one configured.
