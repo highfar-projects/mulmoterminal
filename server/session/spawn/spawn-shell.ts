@@ -73,7 +73,7 @@ export function createShellSpawners(deps: SpawnDeps) {
       output.flush(); // a queued batch must not arrive after the exit frame
       // A launcher is persistent and tmux-backed like an agent cell, so it has the same two ways to
       // lose its pty — and only one of them means the program is over (#1496).
-      reportPtyExit(sessionId, entry.ws, { exitCode, signal, lifetimeMs }, deps.reap);
+      reportPtyExit(sessionId, entry, { exitCode, signal, lifetimeMs }, deps.reap);
     });
     return entry;
   }

@@ -28,6 +28,6 @@ export function wireAgentPtyRelay(entry: PtyEntry, sessionId: string, spawnedAtM
     console.log(ptyExitLine({ agent: entry.agent ?? "agent", exitCode, signal, lifetimeMs, cwd: entry.cwd, sessionId }));
     output.flush(); // a queued batch must not arrive after the exit frame
     // See spawn-claude's copy: a tmux client killed from outside is not a finished session (#1496).
-    reportPtyExit(sessionId, entry.ws, { exitCode, signal, lifetimeMs }, deps.reap);
+    reportPtyExit(sessionId, entry, { exitCode, signal, lifetimeMs }, deps.reap);
   });
 }

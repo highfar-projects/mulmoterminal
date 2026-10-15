@@ -38,7 +38,7 @@ import { announceCredential } from "../../credentials/credential-announce.js";
 import { takeSwitchedToken } from "../../credentials/token-switch-pins.js";
 import type { PtyEntry } from "../../types.js";
 import type { SpawnDeps } from "../spawn-deps.js";
-import { reportPtyExit } from "../../pty/pty-exit.js";
+import { isCurrentPty, reportPtyExit } from "../../pty/pty-exit.js";
 import { loadDirConfig } from "../../../config/dir/dir-config.js";
 import { repoRootSync } from "../../../git/repo-root-sync.js";
 import { workdirFooter } from "../../../git/pr-footer.js";
@@ -382,10 +382,11 @@ export function createClaudeSpawner(deps: SpawnDeps) {
       // ptys/knownSessions/activity and publishes "closed") so a process that
       // exits on its own — e.g. a brand-new session that never persisted —
       // doesn't linger in the sidebar.
-      deps.setWorking(sessionId, false);
+      // Only for the CURRENT pty: a restart's replacement may already hold this id.
+      if (isCurrentPty(sessionId, entry)) deps.setWorking(sessionId, false);
       // Not always a reap: under tmux this pty is the CLIENT, and one killed from outside leaves
       // the session running (#1496). reportPtyExit asks tmux which of the two just happened.
-      reportPtyExit(sessionId, entry.ws, { exitCode, signal, lifetimeMs }, deps.reap);
+      reportPtyExit(sessionId, entry, { exitCode, signal, lifetimeMs }, deps.reap);
     });
 
     return entry;
