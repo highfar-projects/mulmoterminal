@@ -14,7 +14,7 @@ import { canonicalPath } from "../infra/fs/canonical-path.js";
 import { ensureWorktreeEnv } from "../config/worktree/worktree-env.js";
 import { splitLines } from "../infra/fs/split-lines.js";
 import { runTool } from "./run-tool.js";
-import { excludeFromIndexing } from "./worktree-indexing.js";
+import { excludeFromIndexing, oncePerRootUnlessFailed, type IndexingOutcome } from "./worktree-indexing.js";
 import { spawnCaptureAsync } from "../infra/process/spawnCapture.js";
 import { DIR_CONFIG_FILE, DIR_LOCAL_CONFIG_FILE } from "../config/dir/dir-config.js";
 import { writeInheritedDirConfig } from "../config/worktree/worktree-dir-config.js";
@@ -321,25 +321,21 @@ async function adoptParentDirConfig(repo: string, worktreeDir: string): Promise<
 }
 
 // Once per root, before the first worktree is cut there: the root, not each worktree (see
-// worktree-indexing.ts). A failure is logged there and the worktree is made anyway.
-const excludedRoots = new Map<string, Promise<unknown>>();
-function excludeWorktreesRootOnce(): Promise<unknown> {
-  const root = worktreesBase();
-  const pending =
-    excludedRoots.get(root) ??
-    excludeFromIndexing(root, {
-      platform: process.platform,
-      ensureDir: async (dir) => {
-        await mkdir(dir, { recursive: true });
-      },
-      exists: existsSync,
-      writeEmptyFile: (file) => writeFile(file, ""),
-      tmutil: async (args, timeoutMs) => (await spawnCaptureAsync("tmutil", args, { timeoutMs })).status ?? 1,
-      warn: (message) => console.warn(message),
-    });
-  excludedRoots.set(root, pending);
-  return pending;
-}
+// worktree-indexing.ts). A failure is logged there, retried by the next create, and the worktree is
+// made anyway.
+const excludeRoot = oncePerRootUnlessFailed((root) =>
+  excludeFromIndexing(root, {
+    platform: process.platform,
+    ensureDir: async (dir) => {
+      await mkdir(dir, { recursive: true });
+    },
+    exists: existsSync,
+    writeEmptyFile: (file) => writeFile(file, ""),
+    tmutil: async (args, timeoutMs) => (await spawnCaptureAsync("tmutil", args, { timeoutMs })).status ?? 1,
+    warn: (message) => console.warn(message),
+  }),
+);
+const excludeWorktreesRootOnce = (): Promise<IndexingOutcome> => excludeRoot(worktreesBase());
 
 // Create a fresh worktree + branch for `task`, forked from the repo's base branch. Pass `issue`
 // to anchor the branch to a GitHub issue (`issue/<N>-<slug>`), which also forks from the base as

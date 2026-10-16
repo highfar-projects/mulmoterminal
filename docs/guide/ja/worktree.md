@@ -62,7 +62,8 @@ worktree の作成自体は成功します。
 ルートに `tmutil addexclusion` をかけ、`.metadata_never_index` というファイルを置きます。中のすべての worktree
 （と、インストールで生まれる数万のファイル）は、バックアップも索引もされません。worktree は作ってはすぐ捨てる
 ものなので、消すためにバックアップするのは無駄な仕事です。やはりバックアップしたいときは
-`tmutil removeexclusion ~/.mulmoterminal/worktrees` を実行してください。
+`tmutil removeexclusion "${MULMOTERMINAL_HOME:-$HOME/.mulmoterminal}/worktrees"` を実行してください
+（`MULMOTERMINAL_HOME` で動かしている場合も、そのルートを指します）。
 
 環境変数 `MULMOTERMINAL_HOME` を設定すると、**この worktree のルートだけ**が動きます
 （→ [設定 → 環境変数](config.html#env)）。`~/.mulmoterminal` に置かれる他のもの（レート制限の

@@ -61,7 +61,8 @@ would happily dig another folder below the root.
 MulmoTerminal runs `tmutil addexclusion` on the root and puts a `.metadata_never_index` file in it, so every
 worktree inside — and the tens of thousands of files an install puts there — is neither backed up nor
 indexed. Worktrees are thrown away often, and backing them up only to delete them is work for nothing. To
-back them up after all, run `tmutil removeexclusion ~/.mulmoterminal/worktrees`.
+back them up after all, run `tmutil removeexclusion "${MULMOTERMINAL_HOME:-$HOME/.mulmoterminal}/worktrees"`
+(the root above, wherever `MULMOTERMINAL_HOME` put it).
 
 Setting the `MULMOTERMINAL_HOME` environment variable moves **this worktree root only**
 (→ [Configuration → environment variables](config.html#env)); the other things kept under

@@ -15,6 +15,8 @@ import { messageOf } from "../errors.js";
 export const NEVER_INDEX_MARKER = ".metadata_never_index";
 const TMUTIL_TIMEOUT_MS = 10_000;
 
+export type IndexingOutcome = "skipped" | "excluded" | "failed";
+
 export interface IndexingExclusionDeps {
   platform: NodeJS.Platform;
   ensureDir: (dir: string) => Promise<void>;
@@ -27,8 +29,10 @@ export interface IndexingExclusionDeps {
 
 /** Marks `dir` as excluded from Time Machine and Spotlight. macOS only; never throws — a worktree
  *  that is backed up and indexed is a worktree that works. Returns what was done, for the log. */
-export async function excludeFromIndexing(dir: string, deps: IndexingExclusionDeps): Promise<"skipped" | "excluded" | "failed"> {
+export async function excludeFromIndexing(given: string, deps: IndexingExclusionDeps): Promise<IndexingOutcome> {
   if (deps.platform !== "darwin") return "skipped";
+  // Absolute, so a relative MULMOTERMINAL_HOME such as `-p` reaches tmutil as an item, not an option.
+  const dir = path.resolve(given);
   try {
     await deps.ensureDir(dir);
     const marker = path.join(dir, NEVER_INDEX_MARKER);
@@ -41,4 +45,21 @@ export async function excludeFromIndexing(dir: string, deps: IndexingExclusionDe
     deps.warn(`[worktrees] could not exclude ${dir} from Time Machine / Spotlight: ${messageOf(err)}`);
     return "failed";
   }
+}
+
+/** `run` once per root, sharing the pending result between concurrent callers. A `failed` outcome is
+ *  forgotten, so the next call for that root tries again rather than leaving every later worktree
+ *  in Time Machine for the rest of the process. */
+export function oncePerRootUnlessFailed(run: (root: string) => Promise<IndexingOutcome>): (root: string) => Promise<IndexingOutcome> {
+  const pendingByRoot = new Map<string, Promise<IndexingOutcome>>();
+  return (root) => {
+    const known = pendingByRoot.get(root);
+    if (known) return known;
+    const pending = run(root);
+    pendingByRoot.set(root, pending);
+    void pending.then((outcome) => {
+      if (outcome === "failed" && pendingByRoot.get(root) === pending) pendingByRoot.delete(root);
+    });
+    return pending;
+  };
 }
