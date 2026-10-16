@@ -57,6 +57,12 @@ The folder name is the branch with its **first segment dropped** (`agent/fix-log
 `issue/1026-fix-login` → `1026-fix-login`), so it stays one level deep — otherwise `worktree add`
 would happily dig another folder below the root.
 
+**On macOS this root is kept out of Time Machine and Spotlight.** The first time a worktree is cut there,
+MulmoTerminal runs `tmutil addexclusion` on the root and puts a `.metadata_never_index` file in it, so every
+worktree inside — and the tens of thousands of files an install puts there — is neither backed up nor
+indexed. Worktrees are thrown away often, and backing them up only to delete them is work for nothing. To
+back them up after all, run `tmutil removeexclusion ~/.mulmoterminal/worktrees`.
+
 Setting the `MULMOTERMINAL_HOME` environment variable moves **this worktree root only**
 (→ [Configuration → environment variables](config.html#env)); the other things kept under
 `~/.mulmoterminal` (the rate-limit cache, backups) stay where they are.

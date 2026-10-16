@@ -2,7 +2,7 @@
 import { canSymlink } from "../../support/canSymlink.js";
 import { makeTempDir } from "../../support/tempDir.js";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { writeFileSync, readFileSync, existsSync, symlinkSync } from "node:fs";
+import { writeFileSync, readFileSync, existsSync, realpathSync, symlinkSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { reservedWorktreeEnv } from "../../../server/config/worktree/worktree-env.js";
 import path from "node:path";
@@ -133,6 +133,9 @@ describe("git worktree lifecycle", () => {
       expect(wt.branch).toBe("agent/fix-login");
       expect(existsSync(wt.path)).toBe(true);
       expect(isManagedWorktree(repo, wt.path)).toBe(true);
+      // #3059: the root is kept out of Spotlight (and Time Machine) on macOS, and only there.
+      const marker = path.join(realpathSync(home), "worktrees", ".metadata_never_index");
+      expect(existsSync(marker)).toBe(process.platform === "darwin");
 
       const list = await listWorktrees(repo);
       expect(list.map((w) => w.branch)).toEqual(["agent/fix-login"]); // excludes the main checkout

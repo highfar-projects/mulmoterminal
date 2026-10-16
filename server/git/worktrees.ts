@@ -6,6 +6,7 @@
 // parse / paths) are split out for unit tests; the rest shell out to git.
 import { createHash } from "node:crypto";
 import { existsSync, realpathSync } from "node:fs";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isStrictlyWithin } from "../infra/fs/path-within.js";
 import { mulmoterminalHome } from "../infra/fs/mulmoterminal-home.js";
@@ -13,6 +14,8 @@ import { canonicalPath } from "../infra/fs/canonical-path.js";
 import { ensureWorktreeEnv } from "../config/worktree/worktree-env.js";
 import { splitLines } from "../infra/fs/split-lines.js";
 import { runTool } from "./run-tool.js";
+import { excludeFromIndexing } from "./worktree-indexing.js";
+import { spawnCaptureAsync } from "../infra/process/spawnCapture.js";
 import { DIR_CONFIG_FILE, DIR_LOCAL_CONFIG_FILE } from "../config/dir/dir-config.js";
 import { writeInheritedDirConfig } from "../config/worktree/worktree-dir-config.js";
 import { ISSUE_BRANCH_PREFIX, issueFromAnchoredBranch } from "../../common/prPhase.js";
@@ -317,6 +320,27 @@ async function adoptParentDirConfig(repo: string, worktreeDir: string): Promise<
   }
 }
 
+// Once per root, before the first worktree is cut there: the root, not each worktree (see
+// worktree-indexing.ts). A failure is logged there and the worktree is made anyway.
+const excludedRoots = new Map<string, Promise<unknown>>();
+function excludeWorktreesRootOnce(): Promise<unknown> {
+  const root = worktreesBase();
+  const pending =
+    excludedRoots.get(root) ??
+    excludeFromIndexing(root, {
+      platform: process.platform,
+      ensureDir: async (dir) => {
+        await mkdir(dir, { recursive: true });
+      },
+      exists: existsSync,
+      writeEmptyFile: (file) => writeFile(file, ""),
+      tmutil: async (args, timeoutMs) => (await spawnCaptureAsync("tmutil", args, { timeoutMs })).status ?? 1,
+      warn: (message) => console.warn(message),
+    });
+  excludedRoots.set(root, pending);
+  return pending;
+}
+
 // Create a fresh worktree + branch for `task`, forked from the repo's base branch. Pass `issue`
 // to anchor the branch to a GitHub issue (`issue/<N>-<slug>`), which also forks from the base as
 // the REMOTE has it. Returns the worktree path + branch, or null if `repoDir` isn't a git repo /
@@ -330,6 +354,7 @@ export async function createWorktree(repoDir: string, task: string, issue?: numb
   // round trip on every create, and the launcher's type-a-task-name path keeps the local base it
   // has always forked from — a deliberate asymmetry, pinned by a test.
   const start = issue ? await freshStartPoint(repo) : await defaultBaseBranch(repo);
+  await excludeWorktreesRootOnce();
   return serializeCreate(async () => {
     const branch = await uniqueBranch(repo, stem, root);
     const dir = path.join(root, worktreeDirName(branch));
