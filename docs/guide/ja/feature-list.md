@@ -4,7 +4,7 @@ nav_title: 全機能リスト
 layout: default
 parent: 日本語
 nav_order: 6.5
-as_of: 10.7.1
+as_of: 10.7.2
 description: MulmoTerminal のいまある機能を、入った版つきで領域ごとに一行ずつ並べた一覧（9.1.0 時点）。
 ---
 
@@ -65,6 +65,7 @@ description: MulmoTerminal のいまある機能を、入った版つきで領�
 詳しく: [エージェント](agents.html)
 
 - Antigravity のセルで、ターン中は作業中の点が付き、終わると終了の音と通知が出る (v10.5.0)
+- `POST /api/session/:id/close` でセッションを終わらせ、それを映すセルも `/exit` のときと同じように閉じる。`terminate` ではセルは残る (v10.7.2)
 - エージェントが、GUI の道具を一部のグループだけ持つ Claude のセッションを立ち上げられる（`spawnBackgroundChat` の `guiGroups`） (v10.5.0)
 - 同じ `guiGroups` の制限が Codex と Copilot のセッションでも使え、Codex のセッションを再開一覧から開き直しても続く (v10.6.0)
 - Skills 画面の skills.sh の切り替えで、まだ入っていないスキルを公開一覧から検索し、`SKILL.md`・持ち込むファイル・コードを実行できるファイルを見られる。インストールはせず、`npx skills add` の行をコピーできる (v8.4.0)
@@ -194,6 +195,7 @@ description: MulmoTerminal のいまある機能を、入った版つきで領�
 
 詳しく: [worktree](worktree.html)
 
+- macOS では、worktree を置くフォルダを Time Machine の対象から外し、Spotlight にも索引しないよう印を付ける (v10.7.2)
 - 「Pull requests & Issues」で、issue を始めるエージェントとアカウントを選べる (v6.0.0)
 - worktreeEnv で worktree ごとに開発サーバーのポートやデータベース名を分けられる (v4.5.0)
 - issue へのコメントが書けないとき、理由と直し方をヘッダーに出す (v4.4.0)

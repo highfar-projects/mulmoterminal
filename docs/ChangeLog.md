@@ -8,6 +8,22 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@10.7.2 — 2026-10-16
+
+> **Setup guide:** [10.7.2 — End a worker and close its cell, and lighter worktrees on macOS](https://receptron.github.io/mulmoterminal/guide/en/v10.7.2.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.7.2.html))
+
+### `POST /api/session/:id/close` ends a session and closes its cell (#3068, #3067)
+
+- Another process that ended a session through `POST /api/session/:id/terminate` left the attached cell showing `[session ended]`: the route reaps the session before its process dies, so the exit was classified `gone` and sent with `ended: false`. An agent replacing its worker at each milestone left one dead cell per milestone.
+- The new route marks the live entry (`closeRequested`) before the reap, so its exit is sent as `ended: true` and the cell closes under the same rule as `/exit` (#3051): a worktree cell, or one ended within about two seconds of starting, keeps its banner.
+- `terminate` is unchanged for the cell, since a cell's own restart (#1918) and token switch (#2950) go through it and reconnect the same slot. Both routes now drop the unplaced mark, so a deliberately ended session is never adopted later by a grid (#3055).
+
+### The managed worktree root is kept out of Time Machine and Spotlight on macOS (#3066, #3059)
+
+- The first time a worktree is cut in a server process, `~/.mulmoterminal/worktrees` (or `$MULMOTERMINAL_HOME/worktrees`) gets a sticky `tmutil addexclusion` (no sudo, no `-p`) and a `.metadata_never_index` marker. One exclusion on the root covers every worktree created in it later; nothing is written inside a worktree, so `isDirty` is unaffected.
+- On by default, with no setting. Undo with `tmutil removeexclusion ~/.mulmoterminal/worktrees`. The Time Machine effect was measured; the Spotlight marker's effect could not be observed.
+- A relative `MULMOTERMINAL_HOME` now resolves the worktree root to an absolute path on first use, so the excluded root is the one git uses. A failure is logged, never thrown, and retried on the next worktree.
+
 ## mulmoterminal@10.7.1 — 2026-10-16
 
 > **Setup guide:** [10.7.1 — Keep part of a subscription's week for yourself](https://receptron.github.io/mulmoterminal/guide/en/v10.7.1.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.7.1.html))
