@@ -14,7 +14,7 @@ import express, { type Express } from "express";
 import { mountAllRoutes } from "../infra/tools/plugins-registry.js";
 import { mountConfigRoutes } from "../config/config-routes.js";
 import { mountFilesBrowseRoutes } from "../files/files-browse.js";
-import { mountTmuxRoutes } from "../infra/process/tmux-routes.js";
+import { mountTmuxRoutes, type TmuxRouteDeps } from "../infra/process/tmux-routes.js";
 import { mountSwitchTokenRoutes } from "../infra/http/switch-token-routes.js";
 import { clearSwitchedToken, pinSwitchedToken } from "../session/credentials/token-switch-pins.js";
 import { sessionToken } from "../session/credentials/token-sessions.js";
@@ -509,7 +509,12 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
   // session picker (which must never OFFER a non-resumable one) — the same rule read from
   // both directions, so they can't drift apart.
 
-  mountTmuxRoutes(app, {
+  mountTmuxRoutes(app, tmuxRouteDeps(deps));
+}
+
+/** The tmux routes' production wiring, exported so a spec can hold it to what the routes assume. */
+export function tmuxRouteDeps(deps: Pick<AppRouteDeps, "isAllowedOrigin" | "reap">): TmuxRouteDeps {
+  return {
     isAllowedOrigin: deps.isAllowedOrigin,
     isValidSessionId: (id) => SESSION_ID_RE.test(id),
     reapSession: deps.reap,
@@ -522,7 +527,7 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
     // moment as a number (session/reaping/surviving-sessions.ts).
     survivingSessions: () => survivingSessions(Date.now(), getSessionIdleReapDays()),
     armedReapIntervalHours,
-  });
+  };
 }
 
 // The live entry's exit then tells its cell the session ended (#3067); nothing to mark without one.

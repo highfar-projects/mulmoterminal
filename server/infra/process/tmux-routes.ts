@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { requestOriginAllowed } from "../../routes/same-origin-guard.js";
 import type { SurvivingSession } from "../../../common/survivingSessions.js";
 import type { ReapSweepResult } from "../../session/reaping/reap-idle-sessions.js";
@@ -39,32 +39,26 @@ export function mountTmuxRoutes(app: Express, deps: TmuxRouteDeps): void {
   // no use to the restart, which reconnects on the strength of this answer and would otherwise
   // ATTACH the very process it was asked to replace (CodeRabbit on #1920). One extra `has-session`
   // on a path taken once per close.
-  app.post("/api/session/:id/terminate", (req, res) => {
+  //
+  // `closeCell` is the one difference between the two routes below. Without it, the cell is told
+  // nothing: a restart (#1918) or a token switch (#2950) calls terminate with its cell attached, and
+  // that cell must stay. With it (#3067), the entry is marked BEFORE the reap, because the reap kills
+  // the pty and the pty's exit is what sends the cell its frame. Either way the session is marked
+  // placed, so a session nobody had open is never adopted later (#3055).
+  const endSession = (closeCell: boolean) => (req: Request<{ id: string }>, res: Response) => {
     if (!requestOriginAllowed(req, deps.isAllowedOrigin)) return res.status(403).json({ error: "forbidden origin" });
     const id = req.params.id;
     if (!deps.isValidSessionId(id)) return res.status(400).json({ error: "invalid session id" });
+    if (closeCell) deps.requestCellClose(id);
     deps.reapSession(id); // live entry → kills pty + tmux + cleanup
     if (deps.hasTmux(id)) deps.killTmux(id); // orphan (e.g. post-restart) → kill directly
-    // Placed, though the cell is told nothing: a restart (#1918) or a token switch (#2950) calls this
-    // with its cell attached, and that cell must stay; a session with no cell must not be adopted.
     deps.markPlaced(id);
     return res.json({ ok: true, ended: !deps.hasTmux(id) });
-  });
-
+  };
+  app.post("/api/session/:id/terminate", endSession(false));
   // End a session AND close the cell showing it (#3067) — the counterpart of spawnBackgroundChat for
-  // an agent that replaces its worker at each milestone. `terminate` cannot do this: the cell's own
-  // restart calls it with the cell attached. The mark is set before the reap, which is what kills
-  // the pty and so sends the cell its exit frame.
-  app.post("/api/session/:id/close", (req, res) => {
-    if (!requestOriginAllowed(req, deps.isAllowedOrigin)) return res.status(403).json({ error: "forbidden origin" });
-    const id = req.params.id;
-    if (!deps.isValidSessionId(id)) return res.status(400).json({ error: "invalid session id" });
-    deps.requestCellClose(id);
-    deps.reapSession(id);
-    if (deps.hasTmux(id)) deps.killTmux(id);
-    deps.markPlaced(id);
-    return res.json({ ok: true, ended: !deps.hasTmux(id) });
-  });
+  // an agent that replaces its worker at each milestone.
+  app.post("/api/session/:id/close", endSession(true));
 
   // Every session that outlived the server, for the Settings list (#1478). A GET, and read-only:
   // what it shows is what the other two routes act on, which is why it is mounted beside them.
