@@ -133,9 +133,14 @@ describe("git worktree lifecycle", () => {
       expect(wt.branch).toBe("agent/fix-login");
       expect(existsSync(wt.path)).toBe(true);
       expect(isManagedWorktree(repo, wt.path)).toBe(true);
-      // #3059: the root is kept out of Spotlight (and Time Machine) on macOS, and only there.
-      const marker = path.join(realpathSync(home), "worktrees", ".metadata_never_index");
-      expect(existsSync(marker)).toBe(process.platform === "darwin");
+      // #3059: the root is kept out of Spotlight and Time Machine on macOS, and only there. Time
+      // Machine is read from the attribute `tmutil addexclusion` sets: `tmutil isexcluded` already
+      // reports a temp directory as excluded, so it would pass whether or not anything ran.
+      const root = path.join(realpathSync(home), "worktrees");
+      expect(existsSync(path.join(root, ".metadata_never_index"))).toBe(process.platform === "darwin");
+      if (process.platform === "darwin") {
+        expect(execFileSync("/usr/bin/xattr", [root], { encoding: "utf8" })).toContain("com_apple_backup_excludeItem");
+      }
 
       const list = await listWorktrees(repo);
       expect(list.map((w) => w.branch)).toEqual(["agent/fix-login"]); // excludes the main checkout
