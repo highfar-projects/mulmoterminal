@@ -13,6 +13,10 @@ export interface TmuxRouteDeps {
   reapSession: (id: string) => void;
   hasTmux: (id: string) => boolean;
   killTmux: (id: string) => void;
+  // Mark the live entry so its exit tells the cell the session ended (#3067); a no-op without one.
+  requestCellClose: (id: string) => void;
+  // A deliberately ended session is never adopted later by a grid that did not have it open (#3055).
+  markPlaced: (id: string) => void;
   // Run the same sweep the server runs at boot, and say what it did. The route used to carry the
   // decision itself, against a predicate made of permanent records — which is why it reaped almost
   // nothing (#1467). One rule now, in session/reaping/reap-idle-sessions.ts.
@@ -41,6 +45,24 @@ export function mountTmuxRoutes(app: Express, deps: TmuxRouteDeps): void {
     if (!deps.isValidSessionId(id)) return res.status(400).json({ error: "invalid session id" });
     deps.reapSession(id); // live entry → kills pty + tmux + cleanup
     if (deps.hasTmux(id)) deps.killTmux(id); // orphan (e.g. post-restart) → kill directly
+    // Placed, though the cell is told nothing: a restart (#1918) or a token switch (#2950) calls this
+    // with its cell attached, and that cell must stay; a session with no cell must not be adopted.
+    deps.markPlaced(id);
+    return res.json({ ok: true, ended: !deps.hasTmux(id) });
+  });
+
+  // End a session AND close the cell showing it (#3067) — the counterpart of spawnBackgroundChat for
+  // an agent that replaces its worker at each milestone. `terminate` cannot do this: the cell's own
+  // restart calls it with the cell attached. The mark is set before the reap, which is what kills
+  // the pty and so sends the cell its exit frame.
+  app.post("/api/session/:id/close", (req, res) => {
+    if (!requestOriginAllowed(req, deps.isAllowedOrigin)) return res.status(403).json({ error: "forbidden origin" });
+    const id = req.params.id;
+    if (!deps.isValidSessionId(id)) return res.status(400).json({ error: "invalid session id" });
+    deps.requestCellClose(id);
+    deps.reapSession(id);
+    if (deps.hasTmux(id)) deps.killTmux(id);
+    deps.markPlaced(id);
     return res.json({ ok: true, ended: !deps.hasTmux(id) });
   });
 

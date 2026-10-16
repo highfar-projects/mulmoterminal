@@ -74,6 +74,7 @@ import { mountFilesPageRoute } from "../backends/files/filesPage.js";
 import { mountFileGrantRoutes } from "../backends/files/fileGrants.js";
 import {
   hookedSessions,
+  markSessionPlaced,
   ptys,
   sessionToolGroups,
   sessionToolGroupsHydrated,
@@ -514,12 +515,20 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
     reapSession: deps.reap,
     hasTmux: tmuxHasSession,
     killTmux: tmuxKillSession,
+    requestCellClose: markCloseRequested,
+    markPlaced: markSessionPlaced,
     sweep: () => sweepIdleSessions(Date.now(), getSessionIdleReapDays()),
     // `Date.now()` is read HERE rather than inside the builder, which stays pure and takes the
     // moment as a number (session/reaping/surviving-sessions.ts).
     survivingSessions: () => survivingSessions(Date.now(), getSessionIdleReapDays()),
     armedReapIntervalHours,
   });
+}
+
+// The live entry's exit then tells its cell the session ended (#3067); nothing to mark without one.
+function markCloseRequested(id: string): void {
+  const entry = ptys.get(id);
+  if (entry) entry.closeRequested = true;
 }
 
 // Moving a rotated session to the subscription a user picked on its cell's mark (#2950).
