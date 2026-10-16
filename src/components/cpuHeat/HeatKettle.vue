@@ -4,6 +4,7 @@ import { computed, useId } from "vue";
 import type { StageLevel } from "./stageLevel";
 import type { HeatFigureProps } from "./heatFigure";
 import HeatGlow from "./HeatGlow.vue";
+import HeatBodyGradient from "./HeatBodyGradient.vue";
 
 const props = defineProps<HeatFigureProps>();
 
@@ -22,11 +23,7 @@ const CLOUDS = [
 <template>
   <g>
     <defs>
-      <radialGradient :id="bodyId" cx="40%" cy="35%" r="75%">
-        <stop offset="0%" :stop-color="palette.bodyStops[0]" />
-        <stop offset="50%" :stop-color="palette.bodyStops[1]" />
-        <stop offset="100%" :stop-color="palette.bodyStops[2]" />
-      </radialGradient>
+      <HeatBodyGradient :id="bodyId" :stops="palette.bodyStops" />
     </defs>
     <HeatGlow v-if="level < 5" :x="100" :y="140" :r="90" :level="level" :animate="animate" />
     <path d="M58 104 Q100 30 142 104" fill="none" :stroke="palette.cap" stroke-width="7" stroke-linecap="round" />

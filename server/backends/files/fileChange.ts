@@ -129,7 +129,14 @@ export function startDocumentWatchers(deps: { workspace: string; pubsub: Subscri
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     warn: (message, data) => log.warn(message, data),
   });
-  const stopListening = deps.pubsub.onSubscriptionChange((channel, subscribed) => {
+  return watchWhileSubscribed(deps.pubsub, watchers);
+}
+
+type DocumentWatchers = Pick<ReturnType<typeof createDocumentWatchers>, "start" | "stop" | "stopAll">;
+
+/** A channel's watcher runs from its first subscriber to its last; the returned stop ends them all. */
+export function watchWhileSubscribed(pubsub: SubscriptionSource, watchers: DocumentWatchers): () => void {
+  const stopListening = pubsub.onSubscriptionChange((channel, subscribed) => {
     if (subscribed) watchers.start(channel);
     else watchers.stop(channel);
   });
