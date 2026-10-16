@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, renameSync, utimesSync }
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { resetFileChangePublisher } from "@mulmoclaude/core/file-change";
-import { fileStamp, initFileChangePublisher, publishFileChange } from "../../../../server/backends/files/fileChange.js";
+import { fileStamp, initFileChangePublisher, publishFileChange, watchWhileSubscribed } from "../../../../server/backends/files/fileChange.js";
 
 // Capture every pubsub publish the binding makes.
 interface Published {
@@ -181,5 +181,44 @@ describe("fileStamp", () => {
 
   it("is null for a file that is not there", async () => {
     expect(await fileStamp(path.join(dir, "missing.md"))).toBeNull();
+  });
+});
+
+describe("watchWhileSubscribed", () => {
+  const setup = () => {
+    const calls: string[] = [];
+    let listener: ((channel: string, subscribed: boolean) => void) | null = null;
+    const pubsub = {
+      onSubscriptionChange(next: (channel: string, subscribed: boolean) => void) {
+        listener = next;
+        return () => {
+          listener = null;
+        };
+      },
+    };
+    const watchers = {
+      start: (channel: string) => calls.push(`start ${channel}`),
+      stop: (channel: string) => calls.push(`stop ${channel}`),
+      stopAll: () => calls.push("stopAll"),
+    };
+    const stop = watchWhileSubscribed(pubsub, watchers);
+    const emit = (channel: string, subscribed: boolean) => listener?.(channel, subscribed);
+    return { calls, stop, emit, isListening: () => listener !== null };
+  };
+
+  it("starts a channel's watcher on its first subscriber and stops it on its last", () => {
+    const { calls, emit } = setup();
+    emit("a", true);
+    emit("b", true);
+    emit("a", false);
+    expect(calls).toEqual(["start a", "start b", "stop a"]);
+  });
+
+  it("stops listening and stops every watcher when it is stopped", () => {
+    const { calls, stop, emit, isListening } = setup();
+    emit("a", true);
+    stop();
+    expect(isListening()).toBe(false);
+    expect(calls).toEqual(["start a", "stopAll"]);
   });
 });
