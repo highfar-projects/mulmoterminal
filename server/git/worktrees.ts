@@ -34,7 +34,10 @@ function worktreesBase(): string {
   try {
     return path.join(realpath(base), "worktrees");
   } catch {
-    return path.join(base, "worktrees"); // doesn't exist yet — first run
+    // Doesn't exist yet — first run. Absolute, as the realpath above is: a relative override would
+    // otherwise be resolved by `git -C <repo>` against the repo and by everything else here against
+    // the server's cwd, so the worktree and the root excluded from Time Machine could differ.
+    return path.join(path.resolve(base), "worktrees");
   }
 }
 

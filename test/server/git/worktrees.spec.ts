@@ -79,6 +79,19 @@ describe("worktreesRoot / isManagedWorktree", () => {
     expect(isManagedWorktree("/work/myapp", "/work/myapp")).toBe(false); // the main checkout
     expect(isManagedWorktree("/work/myapp", "/etc/passwd")).toBe(false);
   });
+
+  // A relative MULMOTERMINAL_HOME that does not exist yet: git would resolve it against the repo and
+  // the Time Machine exclusion against the server's cwd, so the root has to be absolute (#3059).
+  it("is absolute even for a relative override that does not exist yet", () => {
+    process.env.MULMOTERMINAL_HOME = "not-created-yet-3059";
+    try {
+      const root = worktreesRoot("/work/myapp");
+      expect(path.isAbsolute(root)).toBe(true);
+      expect(root.startsWith(path.resolve("not-created-yet-3059"))).toBe(true);
+    } finally {
+      delete process.env.MULMOTERMINAL_HOME;
+    }
+  });
 });
 
 // Integration: a real temp git repo, with the managed root redirected to a temp dir.
