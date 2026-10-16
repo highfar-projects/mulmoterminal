@@ -9,7 +9,8 @@ import {
   type IndexingOutcome,
 } from "../../../server/git/worktree-indexing.js";
 
-const ROOT = "/home/me/.mulmoterminal/worktrees";
+// Resolved, as the function resolves it: on Windows a POSIX-looking path gains a drive letter.
+const ROOT = path.resolve("/home/me/.mulmoterminal/worktrees");
 const MARKER = path.join(ROOT, NEVER_INDEX_MARKER);
 
 function fakeDeps(over: Partial<IndexingExclusionDeps> = {}) {
@@ -96,7 +97,7 @@ describe("excludeFromIndexing (#3059)", () => {
     await excludeFromIndexing("-p/worktrees", deps);
     const tmutil = calls.find((call) => call.startsWith("tmutil"));
     expect(tmutil).toBe(`tmutil addexclusion ${path.resolve("-p/worktrees")}`);
-    expect(tmutil?.split(" ")[2]?.startsWith("/")).toBe(true);
+    expect(path.isAbsolute(tmutil?.slice("tmutil addexclusion ".length) ?? "")).toBe(true);
   });
 });
 
@@ -138,5 +139,17 @@ describe("oncePerRootUnlessFailed (#3059)", () => {
     await once("/a");
     await once("/a");
     expect(roots).toEqual(["/a"]);
+  });
+
+  it("tries again after the runner rejects, without an unhandled rejection", async () => {
+    let calls = 0;
+    const once = oncePerRootUnlessFailed(async () => {
+      calls += 1;
+      if (calls === 1) throw new Error("boom");
+      return "excluded";
+    });
+    await expect(once("/a")).rejects.toThrow("boom");
+    expect(await once("/a")).toBe("excluded");
+    expect(calls).toBe(2);
   });
 });

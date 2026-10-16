@@ -77,9 +77,11 @@ export function oncePerRootUnlessFailed(run: (root: string) => Promise<IndexingO
     if (known) return known;
     const pending = run(root);
     pendingByRoot.set(root, pending);
-    void pending.then((outcome) => {
-      if (outcome === "failed" && pendingByRoot.get(root) === pending) pendingByRoot.delete(root);
-    });
+    const forget = (): void => {
+      if (pendingByRoot.get(root) === pending) pendingByRoot.delete(root);
+    };
+    // A rejection is a failure too: forgotten like one, and handled here so it is never unhandled.
+    pending.then((outcome) => outcome === "failed" && forget(), forget);
     return pending;
   };
 }
