@@ -1468,6 +1468,9 @@ and the cell launches its agent inside a fresh
 separate working tree that shares the repo's `.git`, so several agents can work the same
 repo without colliding. Worktrees live under `~/.mulmoterminal/worktrees/` (override with
 `MULMOTERMINAL_HOME`), and existing ones are listed below the field.
+On macOS that root is kept out of Time Machine (`tmutil addexclusion`) and marked for Spotlight
+(`.metadata_never_index`) the first time a worktree is cut there, so throwaway worktrees are not
+backed up and indexed.
 
 **A worktree inherits the project's settings.** A fresh worktree used to have none — no colours,
 no name, no model, no grid rank. It is now given its own copy derived from the project's, written
