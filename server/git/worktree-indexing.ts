@@ -35,16 +35,36 @@ export async function excludeFromIndexing(given: string, deps: IndexingExclusion
   const dir = path.resolve(given);
   try {
     await deps.ensureDir(dir);
-    const marker = path.join(dir, NEVER_INDEX_MARKER);
-    if (!deps.exists(marker)) await deps.writeEmptyFile(marker);
-    const status = await deps.tmutil(["addexclusion", dir], TMUTIL_TIMEOUT_MS);
-    if (status === 0) return "excluded";
-    deps.warn(`[worktrees] tmutil addexclusion ${dir} exited ${status}; worktrees there stay in Time Machine`);
-    return "failed";
   } catch (err) {
-    deps.warn(`[worktrees] could not exclude ${dir} from Time Machine / Spotlight: ${messageOf(err)}`);
+    deps.warn(`[worktrees] could not create ${dir} to exclude it from Time Machine / Spotlight: ${messageOf(err)}`);
     return "failed";
   }
+  // Two independent marks: a marker that cannot be written must not cost the Time Machine exclusion.
+  const markedForSpotlight = await markNeverIndex(dir, deps);
+  const excludedFromBackup = await excludeFromTimeMachine(dir, deps);
+  return markedForSpotlight && excludedFromBackup ? "excluded" : "failed";
+}
+
+async function markNeverIndex(dir: string, deps: IndexingExclusionDeps): Promise<boolean> {
+  const marker = path.join(dir, NEVER_INDEX_MARKER);
+  try {
+    if (!deps.exists(marker)) await deps.writeEmptyFile(marker);
+    return true;
+  } catch (err) {
+    deps.warn(`[worktrees] could not write ${marker}; worktrees there stay in Spotlight: ${messageOf(err)}`);
+    return false;
+  }
+}
+
+async function excludeFromTimeMachine(dir: string, deps: IndexingExclusionDeps): Promise<boolean> {
+  try {
+    const status = await deps.tmutil(["addexclusion", dir], TMUTIL_TIMEOUT_MS);
+    if (status === 0) return true;
+    deps.warn(`[worktrees] tmutil addexclusion ${dir} exited ${status}; worktrees there stay in Time Machine`);
+  } catch (err) {
+    deps.warn(`[worktrees] tmutil addexclusion ${dir} failed; worktrees there stay in Time Machine: ${messageOf(err)}`);
+  }
+  return false;
 }
 
 /** `run` once per root, sharing the pending result between concurrent callers. A `failed` outcome is

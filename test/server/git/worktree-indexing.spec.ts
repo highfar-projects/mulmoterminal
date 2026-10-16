@@ -58,15 +58,36 @@ describe("excludeFromIndexing (#3059)", () => {
     expect(calls.at(-1)).toMatch(/^warn .*addexclusion.*exited 1/);
   });
 
-  it("says so, and does not throw, when the directory or the marker cannot be written", async () => {
+  // Two independent marks: losing the Spotlight marker must not cost the Time Machine exclusion.
+  it("still excludes from Time Machine when the marker cannot be written, and reports the failure", async () => {
     const { deps, calls } = fakeDeps({
       writeEmptyFile: async () => {
         throw new Error("EACCES");
       },
     });
     expect(await excludeFromIndexing(ROOT, deps)).toBe("failed");
-    expect(calls.at(-1)).toMatch(/^warn .*EACCES/);
-    expect(calls.some((call) => call.startsWith("tmutil"))).toBe(false);
+    expect(calls.some((call) => /^warn .*EACCES/.test(call))).toBe(true);
+    expect(calls).toContain(`tmutil addexclusion ${ROOT}`);
+  });
+
+  it("does neither, and says so, when the root cannot be created", async () => {
+    const { deps, calls } = fakeDeps({
+      ensureDir: async () => {
+        throw new Error("EROFS");
+      },
+    });
+    expect(await excludeFromIndexing(ROOT, deps)).toBe("failed");
+    expect(calls).toEqual([expect.stringMatching(/^warn .*EROFS/)]);
+  });
+
+  it("says so, and does not throw, when tmutil cannot be run at all", async () => {
+    const { deps, calls } = fakeDeps({
+      tmutil: async () => {
+        throw new Error("ENOENT");
+      },
+    });
+    expect(await excludeFromIndexing(ROOT, deps)).toBe("failed");
+    expect(calls.at(-1)).toMatch(/^warn .*ENOENT/);
   });
 
   // A relative MULMOTERMINAL_HOME such as `-p` would otherwise reach tmutil as an option.
