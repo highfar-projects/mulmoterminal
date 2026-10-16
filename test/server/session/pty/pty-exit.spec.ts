@@ -19,7 +19,7 @@ vi.mock("../../../../server/session/registry.js", async (importOriginal) => ({
   markSessionPlaced: (id: string) => placed.ids.push(id),
 }));
 
-const { isCurrentPty, ptyExitDisposition, reportPtyExit } = await import("../../../../server/session/pty/pty-exit.js");
+const { isCurrentPty, ptyExitDisposition, reportPtyExit, sessionEndedForCell } = await import("../../../../server/session/pty/pty-exit.js");
 const { ptys } = await import("../../../../server/session/registry.js");
 
 type Entry = NonNullable<ReturnType<typeof ptys.get>>;
@@ -128,9 +128,12 @@ describe("reportPtyExit — what the exit frame tells the browser", () => {
     { name: "the session went with the program", tmuxAlive: false, registered: true, ended: true },
     { name: "only the tmux client died", tmuxAlive: true, registered: true, ended: false },
     { name: "an explicit close already reaped it", tmuxAlive: false, registered: false, ended: false },
-  ])("$name → ended: $ended", ({ tmuxAlive, registered, ended }) => {
+    // #3067: the close route reaps first too, but asked for the cell to go.
+    { name: "the close route reaped it", tmuxAlive: false, registered: false, ended: true, closeRequested: true },
+  ])("$name → ended: $ended", ({ tmuxAlive, registered, ended, closeRequested }) => {
     const { socket, frames } = socketRecording([]);
     const exiting = registered ? register("s-1", true, socket) : entryOf(true, socket);
+    if (closeRequested) exiting.closeRequested = true;
     hasSession.mockReturnValue(tmuxAlive);
 
     reportPtyExit("s-1", exiting, EXIT, vi.fn());
@@ -229,5 +232,29 @@ describe("reportPtyExit — the unplaced mark of a session that ended", () => {
     reportPtyExit("s-1", exiting, exitAfter(lifetimeMs), vi.fn());
 
     expect(placed.ids).toEqual([]);
+  });
+});
+
+// #3067. The close route reaps before the pty dies, as terminate does — the exit is `gone` either way,
+// and only the request says whether the cell should go. A restart (#1918) never sets it.
+describe("sessionEndedForCell", () => {
+  it.each([
+    { disposition: "reap", closeRequested: false, ended: true },
+    { disposition: "reap", closeRequested: true, ended: true },
+    { disposition: "gone", closeRequested: true, ended: true },
+    { disposition: "gone", closeRequested: false, ended: false },
+    { disposition: "keep", closeRequested: false, ended: false },
+    { disposition: "keep", closeRequested: true, ended: false },
+  ] as const)("$disposition, close requested: $closeRequested → $ended", ({ disposition, closeRequested, ended }) => {
+    expect(sessionEndedForCell(disposition, closeRequested)).toBe(ended);
+  });
+});
+
+describe("reportPtyExit — a session the close route ended", () => {
+  it("drops its unplaced mark, so no grid adopts it later", () => {
+    const closed = entryOf(true);
+    closed.closeRequested = true;
+    reportPtyExit("s-1", closed, { exitCode: 0, signal: undefined, lifetimeMs: STARTUP_WINDOW_MS }, vi.fn());
+    expect(placed.ids).toEqual(["s-1"]);
   });
 });

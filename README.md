@@ -2141,6 +2141,7 @@ From a shell: `mulmoterminal room read <room>` · `room post <room> <text…> [-
 | -------- | ------- |
 | `POST /api/mcp/:sessionId` | Per-session GUI MCP server (Streamable HTTP; `GET`/`DELETE` → 405). |
 | `POST /api/plugin/:toolName` | GUI-plugin dispatch (incl. `spawnBackgroundChat`, `manageAccounting`, `presentHtml`). `spawnBackgroundChat` takes an optional `guiGroups` (claude, codex and copilot): a list of tool groups (`render`, `data`, `media`, `external`) the spawned session is limited to, `[]` for no GUI tool. The limit holds across a resume, including a codex resume opened by its rollout id. It is not a sandbox: the tools stay callable over HTTP. |
+| `POST /api/session/:id/close` | End a session **and close the cell showing it**, as if its agent had exited (`/exit`) — the counterpart of `spawnBackgroundChat` for an agent that replaces its worker. Answers `{ ok, ended }`, where `ended` says whether the tmux session is really gone. The session is never adopted later as an unplaced cell. (`POST /api/session/:id/terminate` ends a session but leaves its cell showing `[session ended]`; a cell's own restart uses it.) |
 | `GET /api/agent/toolResults/:id` · `POST /api/agent/toolResult` | GUI-panel result history / persist. |
 | `GET /api/tools` · `GET /api/tool-calls/:id` | Available tools / tool-call history. |
 | `POST /api/accounting` | Double-entry accounting (bundled plugin). |
