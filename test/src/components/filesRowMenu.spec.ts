@@ -109,7 +109,7 @@ describe("the files tree's row menu", () => {
     const w = await mountPane({ canvasTarget: true, workspace: "/ws" });
     rightClick(w.findAll('[data-testid="files-row"]')[1].element); // src/
     await flushPromises();
-    expect(labels()).toEqual(["Open this folder", "Insert relative path", "Insert absolute path"]);
+    expect(labels()).toEqual(["Open as gallery", "Open this folder", "Insert relative path", "Insert absolute path"]);
   });
 
   // The full-screen view mounts the same pane with no terminal beside it, and until #2039 the

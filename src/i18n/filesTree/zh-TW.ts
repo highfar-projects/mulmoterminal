@@ -8,6 +8,7 @@ export const filesTreeZhTW = {
   },
   filesRowMenu: {
     openTab: "在新分頁中開啟",
+    openGallery: "以圖庫開啟",
     openCanvas: "在 Canvas 中開啟",
     openFolder: "開啟此資料夾",
     showInFolder: "在資料夾中顯示",
@@ -18,5 +19,14 @@ export const filesTreeZhTW = {
     rename: "重新命名…",
     trash: "移至垃圾桶",
     emptyFolder: "空資料夾。",
+  },
+  filesGallery: {
+    close: "關閉圖庫",
+    previous: "上一個",
+    next: "下一個",
+    back: "返回圖庫",
+    loading: "正在讀取資料夾…",
+    empty: "此資料夾中沒有圖片、影片、音訊或 PDF。",
+    showMore: "再顯示 {count} 個",
   },
 };

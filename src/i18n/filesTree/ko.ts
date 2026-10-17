@@ -8,6 +8,7 @@ export const filesTreeKo = {
   },
   filesRowMenu: {
     openTab: "새 탭에서 열기",
+    openGallery: "갤러리로 열기",
     openCanvas: "Canvas에서 열기",
     openFolder: "이 폴더 열기",
     showInFolder: "폴더에서 보기",
@@ -18,5 +19,14 @@ export const filesTreeKo = {
     rename: "이름 바꾸기…",
     trash: "휴지통으로 이동",
     emptyFolder: "빈 폴더입니다.",
+  },
+  filesGallery: {
+    close: "갤러리 닫기",
+    previous: "이전",
+    next: "다음",
+    back: "목록으로",
+    loading: "폴더를 읽는 중…",
+    empty: "이 폴더에는 이미지, 동영상, 소리, PDF가 없습니다.",
+    showMore: "{count}개 더 보기",
   },
 };
