@@ -14,7 +14,7 @@ import type { FilesTabs } from "./useFilesTabs";
 import type { FilesTree } from "./useFilesTree";
 import type { OpenFile } from "./useOpenFile";
 
-type TreeOpAction = Extract<FilesRowAction, { id: "new-file" | "new-folder" | "rename" | "trash" }>;
+export type TreeOpAction = Extract<FilesRowAction, { id: "new-file" | "new-folder" | "rename" | "trash" }>;
 
 export const isTreeOpAction = (action: FilesRowAction): action is TreeOpAction =>
   action.id === "new-file" || action.id === "new-folder" || action.id === "rename" || action.id === "trash";
@@ -28,8 +28,8 @@ export interface TreeFileOpsDeps {
   /** Put the keyboard on a tree row — `""` for the first — and say whether there was one: the menu that
    *  asked is gone, and so, after a rename or a Trash, may be the row it was opened on. */
   focusRow: (pathRel: string) => boolean;
-  /** Something on disk changed — the git marks are read again. */
-  changed: () => void;
+  /** Something on disk changed — the git marks are read again, and an open gallery follows (#3079). */
+  changed: (action: TreeOpAction) => void;
   /** The browser's own dialogs by default; a spec drives the flows with its own. */
   ask?: (message: string, value: string) => string | null;
   confirm?: (message: string) => boolean;
@@ -165,7 +165,7 @@ export function useTreeFileOps(deps: TreeFileOpsDeps): TreeFileOps {
     const ctx: Ctx = { ...deps, ...dialogs, root, moved: () => deps.cwd() !== root };
     const landing = await landingOf(ctx, action);
     if (landing === null) return;
-    deps.changed();
+    deps.changed(action);
     await nextTick();
     // The landing row, else the row the menu was opened on, else the first row: never the page.
     const opener = "rowRel" in action ? action.rowRel : action.pathRel;

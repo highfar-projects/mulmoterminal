@@ -23,9 +23,19 @@ const SHOTS = [
   { name: "readme.md", dir: false, size: 10 },
 ];
 
+const fs = { shotsGone: false };
+
 beforeEach(() => {
+  // A tree operation puts the keyboard on a row by its escaped path; jsdom has no CSS.escape.
+  vi.stubGlobal("CSS", { escape: (value: string) => value });
+  fs.shotsGone = false;
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = new URL(String(input), window.location.href);
+    if (url.pathname.endsWith("/rename")) {
+      fs.shotsGone = true;
+      return { ok: true, json: async () => ({ path: "photos" }) };
+    }
+    if (url.pathname.endsWith("/list") && url.searchParams.get("path") === "shots" && fs.shotsGone) return { ok: false, status: 404, json: async () => ({}) };
     if (url.pathname.endsWith("/list")) return { ok: true, json: async () => ({ entries: url.searchParams.get("path") === "shots" ? SHOTS : ROOT }) };
     if (url.pathname.endsWith("/text")) return { ok: true, json: async () => ({ text: "# hi", version: "v1" }) };
     return { ok: true, json: async () => ({ ok: true, version: "v2" }) };
@@ -33,6 +43,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   document.body.innerHTML = "";
+  vi.unstubAllGlobals();
 });
 
 const rowNamed = (w: ReturnType<typeof mount>, name: string) => w.findAll('[data-testid="files-row"]').find((row) => row.text().includes(name));
@@ -93,6 +104,54 @@ describe("FilesPane — a folder as a gallery (#3079)", () => {
     expect(document.activeElement).toBe(w.get('[data-testid="files-gallery"]').element);
     await w.get('[data-testid="files-gallery"]').trigger("keydown", { key: "Escape" });
     expect(w.find('[data-testid="files-gallery"]').exists()).toBe(false);
+  });
+
+  // Opening the file already in front changes no path, and is still a file opened (Codex round 2).
+  it("goes when the file in front is opened again from its row menu", async () => {
+    const w = mount(FilesPane, { props: { cwd: "/proj" }, attachTo: document.body });
+    await flushPromises();
+    await rowNamed(w, "notes.md")?.trigger("click");
+    await flushPromises();
+    await openGallery(w);
+    rowNamed(w, "notes.md")?.element.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }));
+    await flushPromises();
+    document.querySelector<HTMLElement>('[data-testid="files-row-action-open-tab"]')?.click();
+    await flushPromises();
+    expect(w.find('[data-testid="files-gallery"]').exists()).toBe(false);
+  });
+
+  it("goes when the pane is re-rooted", async () => {
+    const w = mount(FilesPane, { props: { cwd: "/proj" }, attachTo: document.body });
+    await flushPromises();
+    await openGallery(w);
+    await w.setProps({ cwd: "/other" });
+    await flushPromises();
+    expect(w.find('[data-testid="files-gallery"]').exists()).toBe(false);
+  });
+
+  // Its tiles would all point at a folder that is not there any more (Codex round 2).
+  it("goes when its folder is renamed from the tree", async () => {
+    vi.stubGlobal("prompt", () => "photos");
+    const w = mount(FilesPane, { props: { cwd: "/proj" }, attachTo: document.body });
+    await flushPromises();
+    await openGallery(w);
+    rowNamed(w, "shots")?.element.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }));
+    await flushPromises();
+    document.querySelector<HTMLElement>('[data-testid="files-row-action-rename"]')?.click();
+    await flushPromises();
+    expect(w.find('[data-testid="files-gallery"]').exists()).toBe(false);
+  });
+
+  it("stays when renaming its folder is cancelled", async () => {
+    vi.stubGlobal("prompt", () => null);
+    const w = mount(FilesPane, { props: { cwd: "/proj" }, attachTo: document.body });
+    await flushPromises();
+    await openGallery(w);
+    rowNamed(w, "shots")?.element.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }));
+    await flushPromises();
+    document.querySelector<HTMLElement>('[data-testid="files-row-action-rename"]')?.click();
+    await flushPromises();
+    expect(w.findAll('[data-testid="files-gallery-tile"]')).toHaveLength(2);
   });
 
   it("closes from its own button", async () => {

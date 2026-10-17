@@ -39,3 +39,20 @@ export function steppedIndex(index: number, step: 1 | -1, length: number): numbe
   if (length <= 0) return 0;
   return (((index + step) % length) + length) % length;
 }
+
+/** What a tree operation does to an open gallery of `dir`. A rename or Trash of the folder, or of one
+ *  above it, `recheck`s: the folder is read again and the gallery closes if it is gone, since its tiles
+ *  would all point at nothing — and stays if the rename was cancelled or refused. A change among its
+ *  own files reads it again; anything elsewhere leaves it be. */
+export type GalleryAfterOp = "recheck" | "refresh" | "keep";
+
+export type TreeOp = { id: "new-file" | "new-folder"; dirRel: string } | { id: "rename" | "trash"; pathRel: string };
+
+const parentOf = (pathRel: string): string => pathRel.slice(0, Math.max(0, pathRel.lastIndexOf("/")));
+const isAtOrAbove = (pathRel: string, dir: string): boolean => dir === pathRel || dir.startsWith(`${pathRel}/`);
+
+export function galleryAfterTreeOp(dir: string, op: TreeOp): GalleryAfterOp {
+  if ("dirRel" in op) return op.dirRel === dir ? "refresh" : "keep";
+  if (isAtOrAbove(op.pathRel, dir)) return "recheck";
+  return parentOf(op.pathRel) === dir ? "refresh" : "keep";
+}

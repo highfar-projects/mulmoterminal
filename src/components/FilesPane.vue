@@ -98,10 +98,9 @@ const { flush, save, overwrite, discardAndReload, openInOs } = file;
 // Which files are open as tabs, and which is in front (#2267). Every open below goes through it, so
 // a path that already has a tab is brought forward rather than opened twice.
 const carried = useCarriedView({ props, file, canvas: () => canvasMode });
-const tabs = useFilesTabs(file, carried.inherit);
-// A folder shown as a gallery over the file area (#3079); any file opened puts the file back in front.
+// A folder shown as a gallery over the file area (#3079); any file opened, or a re-root, puts the files back.
+const tabs = useFilesTabs(file, carried.inherit, () => gallery.close());
 const gallery = useFilesGallery(() => props.cwd);
-watch([openPath, () => props.cwd], () => gallery.close());
 const { openRequested, openFromTerminal } = useRequestedOpen(tabs, file, (pathRel) => canvasMode.hide(pathRel));
 const strip = tabs.strip;
 const { showStrip, focusablePath, labels } = tabStripView(strip, openPath);
@@ -187,7 +186,15 @@ function runRowAction(action: FilesRowAction): void {
 
 // New, rename and Trash from the row menu (#2578); the browser's own dialogs ask for the name.
 const focusRow = (p: string) => focusTreeRow(treeEl.value, p);
-const fileOps = useTreeFileOps({ cwd: () => props.cwd, tree, tabs, file, t, focusRow, changed: () => void gitStatus.refresh() });
+const fileOps = useTreeFileOps({
+  cwd: () => props.cwd,
+  tree,
+  tabs,
+  file,
+  t,
+  focusRow,
+  changed: gallery.treeOpListener(() => void gitStatus.refresh()),
+});
 
 const { menu: rowMenu, ...rowMenuApi } = useFilesRowMenu<TreeNode>({ menuEl: rowMenuEl, actionsFor: rowActionsFor, run: runRowAction });
 // The menu on the tree's empty space and in an empty folder: the root as a row (#2694).
@@ -205,11 +212,7 @@ function tipIfClipped(name: string, event: Event): void {
   else row.setAttribute("data-tip", tip);
 }
 
-const openFile = (node: TreeNode, event: MouseEvent): Promise<void> => {
-  if (node.dir) return tree.toggleDir(node);
-  gallery.close();
-  return tabs.open(node.path, wantsNewTab(event));
-};
+const openFile = (node: TreeNode, event: MouseEvent): Promise<void> => (node.dir ? tree.toggleDir(node) : tabs.open(node.path, wantsNewTab(event)));
 
 const stripEl = useTemplateRef<HTMLElement>("stripEl");
 

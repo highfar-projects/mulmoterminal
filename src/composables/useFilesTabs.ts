@@ -35,7 +35,9 @@ export interface InheritedView {
   landed: (path: string) => Promise<void>;
 }
 
-export function useFilesTabs(file: OpenFile, inherit?: InheritedView): FilesTabs {
+/** `opening` hears every open before it starts, the file already in front included — which is the case
+ *  no change of path can report (#3079: a gallery over the pane goes whenever a file is opened). */
+export function useFilesTabs(file: OpenFile, inherit?: InheritedView, opening: () => void = () => {}): FilesTabs {
   const strip = ref<TabStrip>(EMPTY_STRIP);
 
   /** The open file as a tab, with the reader's place in it now. */
@@ -47,6 +49,7 @@ export function useFilesTabs(file: OpenFile, inherit?: InheritedView): FilesTabs
   };
 
   async function open(path: string, newTab = false, fresh?: FilesTabState): Promise<void> {
+    opening();
     const leaving = front();
     const own = strip.value.tabs.find((tab) => tab.path === path);
     const inherited = own || fresh ? null : (inherit?.viewFor(path) ?? null);

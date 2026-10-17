@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { galleryItems, galleryKind, steppedIndex } from "../../../src/components/filesGallery";
+import { galleryAfterTreeOp, galleryItems, galleryKind, steppedIndex } from "../../../src/components/filesGallery";
 
 const file = (name: string, dir = false) => ({ name, dir, size: 1 });
 
@@ -55,5 +55,33 @@ describe("steppedIndex", () => {
   it("answers 0 for an empty folder rather than NaN", () => {
     expect(steppedIndex(0, 1, 0)).toBe(0);
     expect(steppedIndex(0, -1, 0)).toBe(0);
+  });
+});
+
+describe("galleryAfterTreeOp", () => {
+  it("rechecks a rename or Trash of the folder, or of a folder above it", () => {
+    ["rename", "trash"].forEach((id) => {
+      expect(galleryAfterTreeOp("a/shots", { id: id === "rename" ? "rename" : "trash", pathRel: "a/shots" })).toBe("recheck");
+      expect(galleryAfterTreeOp("a/shots", { id: id === "rename" ? "rename" : "trash", pathRel: "a" })).toBe("recheck");
+    });
+  });
+
+  it("reads the folder again when one of its own files changes", () => {
+    expect(galleryAfterTreeOp("a/shots", { id: "trash", pathRel: "a/shots/x.png" })).toBe("refresh");
+    expect(galleryAfterTreeOp("a/shots", { id: "rename", pathRel: "a/shots/x.png" })).toBe("refresh");
+    expect(galleryAfterTreeOp("a/shots", { id: "new-file", dirRel: "a/shots" })).toBe("refresh");
+    expect(galleryAfterTreeOp("a/shots", { id: "new-folder", dirRel: "a/shots" })).toBe("refresh");
+  });
+
+  it("leaves it be for anything elsewhere, including a sibling sharing a prefix and a file deeper down", () => {
+    expect(galleryAfterTreeOp("a/shots", { id: "rename", pathRel: "a/shots2" })).toBe("keep");
+    expect(galleryAfterTreeOp("a/shots", { id: "trash", pathRel: "a/shots/sub/x.png" })).toBe("keep");
+    expect(galleryAfterTreeOp("a/shots", { id: "new-file", dirRel: "a" })).toBe("keep");
+    expect(galleryAfterTreeOp("a/shots", { id: "trash", pathRel: "b/x.png" })).toBe("keep");
+  });
+
+  it("treats the root gallery's own files as its own", () => {
+    expect(galleryAfterTreeOp("", { id: "trash", pathRel: "x.png" })).toBe("refresh");
+    expect(galleryAfterTreeOp("", { id: "new-file", dirRel: "" })).toBe("refresh");
   });
 });
