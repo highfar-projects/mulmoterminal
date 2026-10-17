@@ -84,7 +84,9 @@ describe("FilesGallery", () => {
   it("keeps the keyboard in the gallery going back from the large view by its button", async () => {
     const w = mountGallery();
     await w.findAll('[data-testid="files-gallery-tile"]')[0]?.find("button").trigger("click");
-    await w.get('[data-testid="files-gallery-back"]').trigger("click");
+    const back = w.get<HTMLButtonElement>('[data-testid="files-gallery-back"]');
+    back.element.focus(); // pressed by keyboard, as a real press leaves it
+    await back.trigger("click");
     await w.vm.$nextTick();
     expect(document.activeElement).toBe(w.get('[data-testid="files-gallery"]').element);
   });
