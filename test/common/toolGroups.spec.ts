@@ -108,6 +108,7 @@ describe("tool groups", () => {
     expect(AUTO_ALLOWED_TOOLS).toEqual([
       "presentForm",
       "presentChart",
+      "presentSpreadsheet",
       "presentHtml",
       "presentShapeScript",
       "renderShapeScript",

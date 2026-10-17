@@ -181,8 +181,8 @@ An MCP server you configured yourself in that file is left exactly as you wrote 
 2. Put the directory in **WORKING DIRECTORY** (the **WORKSPACE** chip, if that is where you want it).
 3. The **Canvas / Workspace data / External accounts** toggles stay visible — they do not disappear
    for these the way they do for Claude, Codex and Copilot. Flip on what you need: **Canvas**
-   (`render`) is the one that carries `presentDocument`, `presentChart`, `presentHtml` and
-   `presentForm`.
+   (`render`) is the one that carries `presentDocument`, `presentChart`, `presentSpreadsheet`,
+   `presentHtml` and `presentForm`.
 4. **Launch a new session.** A toggle registers the *directory*, so it never reaches a session that
    is already running — the one you have open keeps whatever it was given at spawn.
 

@@ -15,6 +15,7 @@ import GenerateImagePlugin from "@mulmochat-plugin/generate-image/vue";
 import { plugin as mulmoScriptPlugin, MULMOSCRIPT_HOST_ADAPTER_KEY, type MulmoScriptHostAdapter } from "@mulmoclaude/mulmoscript-plugin/vue";
 import { plugin as shapeScriptPlugin } from "@gui-chat-plugin/shapescript/vue";
 import { plugin as jingleScriptPlugin } from "@gui-chat-plugin/jinglescript/vue";
+import { plugin as spreadsheetPlugin } from "@gui-chat-plugin/spreadsheet/vue";
 import { AccountingView } from "@mulmoclaude/accounting-plugin/vue";
 import { wrapWithPluginRuntime } from "./composables/pluginRuntime";
 import CollectionCardView from "./components/CollectionCardView.vue";
@@ -32,6 +33,7 @@ import htmlCss from "@mulmoclaude/html-plugin/style.css?inline";
 import mulmoScriptCss from "@mulmoclaude/mulmoscript-plugin/style.css?inline";
 import shapeScriptCss from "@gui-chat-plugin/shapescript/style.css?inline";
 import jingleScriptCss from "@gui-chat-plugin/jinglescript/style.css?inline";
+import spreadsheetCss from "@gui-chat-plugin/spreadsheet/style.css?inline";
 import { collectionShadowCss } from "./collectionShadowCss";
 // The accounting package ships its own self-contained Tailwind in style.css (its
 // content scan can't reach node_modules), imported as a STRING for shadow-DOM
@@ -236,6 +238,20 @@ const PACKAGES: Record<string, Registration> = {
     // therefore no card.
     viewComponent: viewOf("@gui-chat-plugin/jinglescript", jingleScriptPlugin.viewComponent),
     css: jingleScriptCss,
+  },
+  "@gui-chat-plugin/spreadsheet": {
+    toolName: spreadsheetPlugin.toolDefinition.name,
+    // The workbook is a file under artifacts/spreadsheets/, and the View reads it and writes cell
+    // edits back with useRuntime().dispatch({ kind: "loadSpreadsheet" | "saveSpreadsheet" }), which
+    // reaches the package's own execute through /api/plugin/presentSpreadsheet.
+    viewComponent: wrapWithPluginRuntime(
+      "spreadsheet",
+      spreadsheetPlugin.toolDefinition.name,
+      viewOf("@gui-chat-plugin/spreadsheet", spreadsheetPlugin.viewComponent),
+    ),
+    css: spreadsheetCss,
+    // The grid scrolls inside an h-full column with the cell editor pinned below it.
+    height: CANVAS_CARD_HEIGHT,
   },
   // Keyed by the plugins.json `packages` entry (the cfg.packages loop below looks up
   // PACKAGES[name]). The collection engine + presentCollection tool moved to

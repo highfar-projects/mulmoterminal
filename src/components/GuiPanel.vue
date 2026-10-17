@@ -240,6 +240,7 @@ const TOOL_HINTS = new Map<string, string>([
   ["presentDocument", "a formatted document, written in markdown"],
   ["presentForm", "a form to fill in and send back"],
   ["presentChart", "a chart from a set of data"],
+  ["presentSpreadsheet", "a spreadsheet with live formulas — edit a cell and the sheet recalculates"],
   ["presentHtml", "a self-contained web page"],
   ["presentShapeScript", "a 3D model you can rotate and zoom, written as ShapeScript"],
   ["renderShapeScript", "a picture of a 3D model from several angles at once, saved as a PNG"],
