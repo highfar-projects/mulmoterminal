@@ -5,7 +5,6 @@ import { mkdirSync, writeFileSync, appendFileSync } from "node:fs";
 import path from "node:path";
 import { appRequest } from "../../helpers/appRequest.js";
 import { mountFilesGitStatusRoute } from "../../../server/files/files-git-status.js";
-import { MAX_GIT_STATUS_ENTRIES } from "../../../common/fileGitStatus.js";
 import { git } from "../../../server/git/worktrees.js";
 import { makeTempDir } from "../../support/tempDir";
 
@@ -24,6 +23,7 @@ const gitIn = async (dir: string, ...args: string[]): Promise<void> => {
 const SETUP_TIMEOUT_MS = 60_000;
 // The editor's cap on what it opens; HEAD past it has nothing to mark against.
 const HEAD_BYTES = 2 * 1024 * 1024;
+const SMALL_CAP = 3;
 
 beforeAll(async () => {
   repo = makeTempDir("mt-gitstatus-");
@@ -54,12 +54,27 @@ describe("the Files tree's git status route", () => {
   });
 
   // More changes than the tree marks: none rather than a part, so no folder reads as untouched.
+  // A small cap, because crossing the real one means thousands of files — slow enough on Windows
+  // to time the test out.
   it("answers more changes than it marks with none, and says so", async () => {
     const busy = makeTempDir("mt-gitstatus-busy-");
     await gitIn(busy, "init", "-q");
-    Array.from({ length: MAX_GIT_STATUS_ENTRIES + 1 }, (_, i) => writeFileSync(path.join(busy, `f${i}.txt`), "x"));
-    const res = await request(`/api/files/browse/git-status?cwd=${encodeURIComponent(busy)}`);
+    Array.from({ length: SMALL_CAP + 1 }, (_, i) => writeFileSync(path.join(busy, `f${i}.txt`), "x"));
+    const capped = express();
+    mountFilesGitStatusRoute(capped, { base: () => busy, maxHeadBytes: HEAD_BYTES, maxStatusEntries: SMALL_CAP });
+    const res = await appRequest(capped)("/api/files/browse/git-status");
     expect(await res.json()).toEqual({ repo: true, files: {}, truncated: true });
+  });
+
+  it("marks every change while they fit under the cap", async () => {
+    const fits = makeTempDir("mt-gitstatus-fits-");
+    await gitIn(fits, "init", "-q");
+    Array.from({ length: SMALL_CAP }, (_, i) => writeFileSync(path.join(fits, `f${i}.txt`), "x"));
+    const capped = express();
+    mountFilesGitStatusRoute(capped, { base: () => fits, maxHeadBytes: HEAD_BYTES, maxStatusEntries: SMALL_CAP });
+    const res = await appRequest(capped)("/api/files/browse/git-status");
+    const files = Object.fromEntries(Array.from({ length: SMALL_CAP }, (_, i) => [`f${i}.txt`, "untracked"]));
+    expect(await res.json()).toEqual({ repo: true, files });
   });
 
   // The runner stops a child whose output passes the budget, so a huge status is never read whole.
