@@ -86,6 +86,15 @@ describe("FilesPane — a folder as a gallery (#3079)", () => {
     expect(w.find('[data-testid="files-gallery"]').exists()).toBe(false);
   });
 
+  it("takes the keyboard as it opens, so Esc closes it straight away", async () => {
+    const w = mount(FilesPane, { props: { cwd: "/proj" }, attachTo: document.body });
+    await flushPromises();
+    await openGallery(w);
+    expect(document.activeElement).toBe(w.get('[data-testid="files-gallery"]').element);
+    await w.get('[data-testid="files-gallery"]').trigger("keydown", { key: "Escape" });
+    expect(w.find('[data-testid="files-gallery"]').exists()).toBe(false);
+  });
+
   it("closes from its own button", async () => {
     const w = mount(FilesPane, { props: { cwd: "/proj" }, attachTo: document.body });
     await flushPromises();

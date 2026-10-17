@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // A folder's pictures, videos, sounds and PDFs at once (#3079), over the pane's file area. A tile
 // plays in place; clicking one shows it large, with ← and → through the folder and Esc back.
-import { computed, nextTick, ref, useTemplateRef, watch } from "vue";
+import { computed, nextTick, onMounted, ref, useTemplateRef, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import FilesMediaView from "./FilesMediaView.vue";
 import { GALLERY_PAGE_SIZE, steppedIndex, type GalleryItem } from "./filesGallery";
@@ -20,11 +20,15 @@ const current = computed(() => (enlarged.value === null ? null : (props.items?.[
 const srcOf = (item: GalleryItem): string => rawFileSrc(props.cwd, item.pathRel);
 const title = computed(() => props.dir.split("/").pop() || props.dir);
 
+// The keyboard comes here as it opens: the menu item it was opened from is gone, and Esc and the
+// arrows are this view's own.
+onMounted(() => root.value?.focus());
 watch(
   () => props.dir,
   () => {
     shown.value = GALLERY_PAGE_SIZE;
     enlarged.value = null;
+    root.value?.focus();
   },
 );
 
@@ -36,7 +40,9 @@ function onlyThisPlays(event: Event): void {
   });
 }
 
-async function enlarge(index: number): Promise<void> {
+// Both ways in and out of the large view take the keyboard back to the gallery: the button that was
+// pressed is gone once the view changes, and the arrows and Esc are read here.
+async function show(index: number | null): Promise<void> {
   enlarged.value = index;
   await nextTick();
   root.value?.focus();
@@ -53,7 +59,7 @@ function onKey(event: KeyboardEvent): void {
   if (event.key === "Escape") {
     event.preventDefault();
     if (enlarged.value === null) emit("close");
-    else enlarged.value = null;
+    else void show(null);
   } else if (by !== undefined && enlarged.value !== null) {
     event.preventDefault();
     step(by);
@@ -104,7 +110,7 @@ const BUTTON =
           :aria-label="t('filesGallery.back')"
           :data-tip="t('filesGallery.back')"
           data-testid="files-gallery-back"
-          @click="enlarged = null"
+          @click="show(null)"
         >
           <span class="material-symbols-outlined text-[16px]" aria-hidden="true">grid_view</span>
         </button>
@@ -136,7 +142,7 @@ const BUTTON =
           class="flex min-w-0 flex-col gap-1 rounded-md border border-border bg-base p-1.5"
           data-testid="files-gallery-tile"
         >
-          <button v-if="item.kind === 'image'" type="button" class="cursor-pointer border-0 bg-transparent p-0" :aria-label="item.name" @click="enlarge(index)">
+          <button v-if="item.kind === 'image'" type="button" class="cursor-pointer border-0 bg-transparent p-0" :aria-label="item.name" @click="show(index)">
             <img :src="srcOf(item)" alt="" loading="lazy" draggable="false" class="aspect-square w-full rounded object-contain" />
           </button>
           <video v-else-if="item.kind === 'video'" :src="srcOf(item)" controls preload="metadata" class="aspect-video w-full rounded bg-black" />
@@ -146,7 +152,7 @@ const BUTTON =
             type="button"
             class="flex aspect-square w-full cursor-pointer items-center justify-center rounded border-0 bg-transparent"
             :aria-label="item.name"
-            @click="enlarge(index)"
+            @click="show(index)"
           >
             <span class="material-symbols-outlined text-[48px] text-muted" aria-hidden="true">picture_as_pdf</span>
           </button>
@@ -154,7 +160,7 @@ const BUTTON =
             type="button"
             class="flex min-w-0 cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-left text-[11px] text-secondary hover:text-fg"
             :data-tip="item.name"
-            @click="enlarge(index)"
+            @click="show(index)"
           >
             <span class="min-w-0 flex-auto truncate font-mono">{{ item.name }}</span>
             <span class="material-symbols-outlined text-[14px]" aria-hidden="true">open_in_full</span>
