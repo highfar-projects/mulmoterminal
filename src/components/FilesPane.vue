@@ -51,6 +51,9 @@ import FilesOutlineMenu from "./FilesOutlineMenu.vue";
 import FilesViewModeButtons from "./FilesViewModeButtons.vue";
 import FilesCanvasView from "./FilesCanvasView.vue";
 import FilesCanvasButton from "./FilesCanvasButton.vue";
+import FilesGallery from "./FilesGallery.vue";
+import FilesConflictBanner from "./FilesConflictBanner.vue";
+import { useFilesGallery } from "../composables/useFilesGallery";
 import { useFilesCanvasMode } from "../composables/useFilesCanvasMode";
 import { showFileWith } from "../composables/useShowFile";
 import { useSideBySide } from "../composables/useSideBySide";
@@ -96,6 +99,9 @@ const { flush, save, overwrite, discardAndReload, openInOs } = file;
 // a path that already has a tab is brought forward rather than opened twice.
 const carried = useCarriedView({ props, file, canvas: () => canvasMode });
 const tabs = useFilesTabs(file, carried.inherit);
+// A folder shown as a gallery over the file area (#3079); any file opened puts the file back in front.
+const gallery = useFilesGallery(() => props.cwd);
+watch([openPath, () => props.cwd], () => gallery.close());
 const { openRequested, openFromTerminal } = useRequestedOpen(tabs, file, (pathRel) => canvasMode.hide(pathRel));
 const strip = tabs.strip;
 const { showStrip, focusablePath, labels } = tabStripView(strip, openPath);
@@ -171,6 +177,7 @@ async function insertSelection(): Promise<boolean> {
 function runRowAction(action: FilesRowAction): void {
   if (action.id === "open-canvas") void canvasMode.open(action.pathRel);
   else if (action.id === "open-tab") void tabs.open(action.pathRel, true);
+  else if (action.id === "open-gallery") void gallery.open(action.pathRel);
   // Not an emit: nothing above this pane takes part. The browser cannot open a file manager, so
   // the local server does it (#2039) — through filesPaneApi, like every other request here.
   else if (action.id === "reveal") void file.reportFailure(askTheMachine("/api/files/reveal", action.pathAbs, `could not show ${action.pathAbs}`));
@@ -198,7 +205,11 @@ function tipIfClipped(name: string, event: Event): void {
   else row.setAttribute("data-tip", tip);
 }
 
-const openFile = (node: TreeNode, event: MouseEvent): Promise<void> => (node.dir ? tree.toggleDir(node) : tabs.open(node.path, wantsNewTab(event)));
+const openFile = (node: TreeNode, event: MouseEvent): Promise<void> => {
+  if (node.dir) return tree.toggleDir(node);
+  gallery.close();
+  return tabs.open(node.path, wantsNewTab(event));
+};
 
 const stripEl = useTemplateRef<HTMLElement>("stripEl");
 
@@ -658,29 +669,7 @@ defineExpose({
         @keydown="onTreeSplitterKey"
       />
       <section class="relative flex min-w-0 flex-auto">
-        <div
-          v-if="conflict"
-          role="alert"
-          data-testid="files-conflict"
-          class="absolute inset-x-0 top-0 z-10 flex flex-wrap items-center gap-2 border-b border-amber bg-[var(--warn-bg-subtle)] px-4 py-2 text-[13px] text-warn"
-        >
-          <span class="material-symbols-outlined" aria-hidden="true">warning</span>
-          <span class="flex-auto">This file changed on disk. Nothing was saved — your version is kept as a backup either way.</span>
-          <button
-            type="button"
-            class="h-[26px] cursor-pointer rounded-md border border-border bg-base px-2.5 py-1 text-[12px] text-secondary hover:bg-hover hover:text-fg"
-            @click="discardAndReload"
-          >
-            Reload (discard your edits)
-          </button>
-          <button
-            type="button"
-            class="h-[26px] cursor-pointer rounded-md border border-border bg-base px-2.5 py-1 text-[12px] text-secondary hover:bg-hover hover:text-fg"
-            @click="overwrite"
-          >
-            Overwrite anyway
-          </button>
-        </div>
+        <FilesConflictBanner v-if="conflict" @reload="discardAndReload" @overwrite="overwrite" />
         <!-- `role="alert"`, like the conflict banner above it: every message here lands AFTER an
              action the user started (a save, a read, a Canvas open that the server refused), so a
              reader who is not looking at this pane learns nothing without a live region — which is
@@ -737,6 +726,11 @@ defineExpose({
         />
         <div v-show="openPath && !unpreviewable && layout.editor" ref="editorHost" :class="sideBySide.editorClass.value" />
         <FilesCanvasView v-if="openPath && showCanvas" :class="sideBySide.previewClass.value" :card="canvasCard" @update-result="canvasMode.onUpdateResult" />
+        <FilesGallery
+          v-if="gallery.dir.value !== null"
+          v-bind="{ cwd, dir: gallery.dir.value, items: gallery.items.value, error: gallery.error.value }"
+          @close="gallery.close()"
+        />
       </section>
     </div>
     <FileFinder v-if="finderOpen" :cwd="cwd" :seed="finderSeed" @pick="onFinderPick" @close="closeFinder" />

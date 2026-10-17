@@ -98,7 +98,7 @@ async function refreshDir(roots: TreeNode[], cwd: string | null, dirRel: string)
 }
 
 /** One directory's listing, off the wire. */
-async function fetchListing(cwd: string | null, pathRel: string): Promise<ListingEntry[]> {
+export async function fetchListing(cwd: string | null, pathRel: string): Promise<ListingEntry[]> {
   const res = await fetchWithTimeout(`/api/files/browse/list?${browseQuery(cwd, pathRel)}`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await jsonBody(res);

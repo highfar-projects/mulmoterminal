@@ -8,6 +8,7 @@ export const filesTreeJa = {
   },
   filesRowMenu: {
     openTab: "新しいタブで開く",
+    openGallery: "ギャラリーで開く",
     openCanvas: "Canvas で開く",
     openFolder: "このフォルダを開く",
     showInFolder: "フォルダで表示",
@@ -18,5 +19,14 @@ export const filesTreeJa = {
     rename: "名前を変更…",
     trash: "ゴミ箱に移す",
     emptyFolder: "空のフォルダです。",
+  },
+  filesGallery: {
+    close: "ギャラリーを閉じる",
+    previous: "前へ",
+    next: "次へ",
+    back: "一覧に戻る",
+    loading: "フォルダを読み込み中…",
+    empty: "このフォルダには画像・動画・音声・PDF がありません。",
+    showMore: "あと {count} 件を表示",
   },
 };

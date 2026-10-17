@@ -259,6 +259,27 @@ describe("filesRowActions — opening a file in a new tab (#2267)", () => {
   });
 });
 
+// #3079. A folder leads with "Open as gallery", as a file leads with its new tab.
+describe("filesRowActions — opening a folder as a gallery", () => {
+  const here = { cwd: "/proj", terminal: null, canvas: null };
+
+  it("leads a folder row's menu, carrying the row's relative path", () => {
+    expect(call({ ...here, pathRel: "assets/shots", isDir: true })[0]).toEqual({
+      id: "open-gallery",
+      labelKey: "filesRowMenu.openGallery",
+      icon: "photo_library",
+      pathRel: "assets/shots",
+    });
+  });
+
+  it("is not offered on a file, the root, or where no row path can be resolved", () => {
+    const has = (t: Target) => call(t).some((a) => a.id === "open-gallery");
+    expect(has({ ...here, pathRel: "a.png" })).toBe(false);
+    expect(has({ ...here, pathRel: "", isDir: true })).toBe(false);
+    expect(has({ ...here, pathRel: "assets", isDir: true, cwd: null })).toBe(false);
+  });
+});
+
 // #2578. New, rename and Trash, last in every row's menu. A new entry goes in the row's folder, or
 // beside a file row; the Trash is offered only where the server has one.
 describe("filesRowActions — the tree's file operations (#2578)", () => {

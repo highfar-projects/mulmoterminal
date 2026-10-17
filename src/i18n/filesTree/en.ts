@@ -8,6 +8,7 @@ export const filesTreeEn = {
   },
   filesRowMenu: {
     openTab: "Open in a new tab",
+    openGallery: "Open as gallery",
     openCanvas: "Open in the Canvas",
     openFolder: "Open this folder",
     showInFolder: "Show in folder",
@@ -18,5 +19,14 @@ export const filesTreeEn = {
     rename: "Rename…",
     trash: "Move to Trash",
     emptyFolder: "Empty directory.",
+  },
+  filesGallery: {
+    close: "Close the gallery",
+    previous: "Previous",
+    next: "Next",
+    back: "Back to the gallery",
+    loading: "Reading the folder…",
+    empty: "No pictures, videos, sounds or PDFs in this folder.",
+    showMore: "Show {count} more",
   },
 };

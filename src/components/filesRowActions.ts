@@ -30,9 +30,9 @@ export type FilesRowAction =
       pathAbs: string;
     })
   | (RowActionChrome & {
-      /** Open the file in a tab of its own, beside the one in front (#2267). Relative, like the
-       *  tree's own clicks. */
-      id: "open-tab";
+      /** Open the file in a tab of its own, beside the one in front (#2267), or a folder as a gallery
+       *  of its pictures, videos, sounds and PDFs (#3079). Relative, like the tree's own clicks. */
+      id: "open-tab" | "open-gallery";
       pathRel: string;
     })
   | (RowActionChrome & {
@@ -142,6 +142,7 @@ function viewActions({ pathRel, isDir, cwd, terminal, canvas }: FilesRowTarget):
   // A plain click replaces the front tab, so this — and Cmd/Ctrl+click — is how a second tab is
   // asked for. First because it is the menu's only way to READ the file.
   if (!isDir) actions.push({ id: "open-tab", labelKey: "filesRowMenu.openTab", icon: TAB_ICON, pathRel });
+  else actions.push({ id: "open-gallery", labelKey: "filesRowMenu.openGallery", icon: "photo_library", pathRel });
   // Before the inserts, because "show me this" is the stronger reason to right-click a row than
   // "type its path" — it is what #1374 exists for.
   //
