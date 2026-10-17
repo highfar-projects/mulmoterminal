@@ -8,8 +8,8 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **10.7.2 is out.** An agent can end a worker session and close its cell in one call, and on macOS the
-> worktree folder is kept out of Time Machine and Spotlight. [Setup guide](v10.7.2.html)
+> **10.8.0 is out.** Add your own GIFs, images and short videos to the pictures shown behind a busy
+> terminal. [Setup guide](v10.8.0.html)
 
 ## What is MulmoTerminal? {#what-is}
 
