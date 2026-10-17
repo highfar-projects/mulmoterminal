@@ -473,9 +473,12 @@ export function unsupportedNodeMessage(version, execPath, upgrade) {
  * `--agent` rides the same channel for the same reason (#2082): it is a preference, and a
  * preference in the environment would reach every terminal in every cell exactly as the port did.
  * Omitted entirely when nothing was declared, so the server falls through to its config file.
+ *
+ * `--launch-dir` too: the spawn's own cwd is the package directory, so the server cannot see where
+ * the user ran the command, and a `./` path in config.json (`playfulMedia`) is read from there.
  */
 export function serverNodeArgs(serverEntry, launchDir, port, declaredAgent = null) {
-  const base = ["--import", "tsx", `--env-file-if-exists=${join(launchDir, ".env")}`, serverEntry, "--port", String(port)];
+  const base = ["--import", "tsx", `--env-file-if-exists=${join(launchDir, ".env")}`, serverEntry, "--port", String(port), "--launch-dir", launchDir];
   return declaredAgent === null ? base : [...base, "--agent", declaredAgent];
 }
 

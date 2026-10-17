@@ -39,6 +39,7 @@ import type { AgentAvailability } from "../../common/agentAvailability.js";
 import { mountIssueWorkRoutes } from "../routes/issue-work-routes.js";
 import type { SpawnIssueSession } from "../session/spawn/issue-session-spawn.js";
 import { mountDirRoutes } from "../routes/dir-routes.js";
+import { mountPlayfulMediaRoutes } from "../routes/playful-media-routes.js";
 import { mountDirConfigWriteRoute } from "../routes/dir-config-write-route.js";
 import { mountDirConfigEntriesRoute } from "../routes/dir-config-entries-route.js";
 import { mountGuiMcpRoutes } from "../routes/gui-mcp-routes.js";
@@ -444,6 +445,7 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
   // Directory-scoped reads for a terminal cell: scripts, skills, dir config, git status,
   // PR phase, resolved header, custom sound. All keyed by ?cwd= (see routes/dir-routes.ts).
   mountDirRoutes(app);
+  mountPlayfulMediaRoutes(app);
   mountSkillCatalogRoutes(app);
   mountGuiMcpRoutes(app);
 

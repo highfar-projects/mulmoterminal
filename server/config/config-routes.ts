@@ -29,6 +29,7 @@ import type { QuickCommand } from "../../common/quickCommands.js";
 import type { CustomAgent } from "../../common/customAgents.js";
 import type { AgentAccount } from "../../common/agentAccounts.js";
 import type { PlayfulEffects } from "../../common/playfulEffects.js";
+import type { PlayfulMedia } from "../../common/playfulMedia.js";
 import { systemTaskSettingsChanged } from "./system-task-settings.js";
 import { setAccountsProvider } from "../session/session-home.js";
 import { setTmuxPrefix } from "../infra/process/tmux.js";
@@ -127,6 +128,11 @@ export function getTokenRotation(): TokenRotation {
 
 export function getPlayfulEffects(): PlayfulEffects {
   return config.playfulEffects;
+}
+
+// Read live like playfulEffects, so Reload config file reaches the next list the browser asks for.
+export function getPlayfulMedia(): PlayfulMedia {
+  return config.playfulMedia;
 }
 setAccountsProvider(getAccounts);
 
