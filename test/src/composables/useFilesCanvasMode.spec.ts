@@ -205,4 +205,18 @@ describe("useFilesCanvasMode", () => {
     expect(savedInPlace).not.toHaveBeenCalled();
     expect(mode.active.value).toBe(false);
   });
+
+  // A save is a round trip, and the pane can move on before it lands — an inherited Canvas view
+  // (#3075) is put up right after a file opens, so the next click can overtake it.
+  it("does not put a file in the Canvas view once another file is in front", async () => {
+    const { mode, openPath, savedInPlace } = setup();
+    let finishSave: (saved: boolean) => void = () => {};
+    savedInPlace.mockImplementationOnce(() => new Promise<boolean>((resolve) => (finishSave = resolve)));
+    const showing = mode.show("a.md");
+    openPath.value = "b.md";
+    finishSave(true);
+    expect(await showing).toBe(false);
+    expect(mode.has("a.md")).toBe(false);
+    expect(mode.active.value).toBe(false);
+  });
 });
