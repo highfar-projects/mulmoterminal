@@ -27,7 +27,8 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { randomUUID } from "node:crypto";
 import { toolDefinitions } from "../infra/tools/plugins-registry.js";
-import { offeredTools, routeToolCall, SUBMIT_TRANSLATION_TOOL_NAME } from "./tool-gate.js";
+import { offeredTools, routeToolCall, SUBMIT_TRANSLATION_TOOL_NAME, type ToolRoute } from "./tool-gate.js";
+import { undeclaredKindRefusal } from "./view-dispatch-kind.js";
 import { toolGroupServerId, GUI_SERVER_ID, type ToolGroup } from "../../common/toolGroups.js";
 import { interpretToolEnvelope } from "./tool-envelope.js";
 import { isRecord } from "../../common/isRecord.js";
@@ -65,6 +66,17 @@ const SUBMIT_TRANSLATION_TOOL = {
     required: ["translations"],
   },
 } as const;
+
+// A gate's refusal, or a `kind` the tool's schema does not offer — the View's own dispatch
+// (view-dispatch-kind.ts). Null when the call may be dispatched.
+const refusalOf = (route: ToolRoute, name: string, args: unknown): string | null =>
+  route.kind === "refused"
+    ? route.message
+    : undeclaredKindRefusal(
+        name,
+        toolDefinitions.find((definition) => definition.name === name),
+        args,
+      );
 
 /**
  * Build a fresh GUI MCP server bound to one chat session. Stateless: create one
@@ -135,12 +147,13 @@ export function buildGuiMcpServer(
     const finished = (toolOutput: unknown, status: "completed" | "failed") =>
       history?.end({ toolUseId, toolName: name, toolInput: args, toolOutput, durationMs: Date.now() - startedAt, status });
 
-    if (route.kind === "refused") {
+    const refusal = refusalOf(route, name, args);
+    if (refusal !== null) {
       // Recorded, not skipped: a tool the agent named and was refused is precisely what someone
       // reading the history is looking for.
       started();
-      finished(route.message, "failed");
-      return { content: [{ type: "text", text: route.message }], isError: true };
+      finished(refusal, "failed");
+      return { content: [{ type: "text", text: refusal }], isError: true };
     }
 
     started();
