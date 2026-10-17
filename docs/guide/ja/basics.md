@@ -179,7 +179,7 @@ MCP 設定を渡されます（`--mcp-config`、`-c mcp_servers.…`、`--additi
 2. **WORKING DIRECTORY** にディレクトリを入れます（ワークスペースなら **WORKSPACE** チップ）。
 3. **Canvas / Workspace data / External accounts** のトグルはそのまま出ています — Claude / Codex /
    Copilot のときのように消えません。必要なものを ON にします。`presentDocument`・`presentChart`・
-   `presentHtml`・`presentForm` を持ってくるのは **Canvas**（`render`）です。
+   `presentSpreadsheet`・`presentHtml`・`presentForm` を持ってくるのは **Canvas**（`render`）です。
 4. **セッションを起動し直します。** トグルは*ディレクトリ*への登録なので、既に動いているセッションには
    届きません。開いているセッションは起動時に渡されたものを持ち続けます。
 

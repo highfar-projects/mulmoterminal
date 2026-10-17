@@ -88,6 +88,7 @@ const GROUP_BY_TOOL = new Map<string, ToolGroup>([
   ["presentDocument", "render"],
   ["presentForm", "render"],
   ["presentChart", "render"],
+  ["presentSpreadsheet", "render"],
   ["presentHtml", "render"],
   ["presentShapeScript", "render"],
   // Beside presentShapeScript deliberately: a cell that can show a 3D model should be
@@ -244,6 +245,7 @@ export const LEGACY_GUI_SERVER_IDS: readonly string[] = ["mulmoterminal-gui"];
 export const AUTO_ALLOWED_TOOLS: readonly string[] = [
   "presentForm",
   "presentChart",
+  "presentSpreadsheet",
   "presentHtml",
   "presentShapeScript",
   "renderShapeScript",

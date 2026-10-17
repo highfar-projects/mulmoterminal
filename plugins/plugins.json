@@ -9,7 +9,8 @@
     "@mulmoclaude/google-plugin",
     "@mulmoclaude/mulmoscript-plugin",
     "@gui-chat-plugin/shapescript",
-    "@gui-chat-plugin/jinglescript"
+    "@gui-chat-plugin/jinglescript",
+    "@gui-chat-plugin/spreadsheet"
   ],
   "servers": ["@mulmoclaude/x-plugin"],
   "local": []
