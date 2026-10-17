@@ -4,7 +4,7 @@ nav_title: Feature list
 layout: default
 parent: English
 nav_order: 6.5
-as_of: 10.7.2
+as_of: 10.8.0
 description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 9.1.0)."
 ---
 
@@ -256,6 +256,7 @@ More: [Configuration](config.html)
 - Settings adds open buttons (URL, folder, shell, view, PR, picker) and action buttons to the header (v7.3.0)
 - Default agent, header status-colour mode and Playful effects are selectable in Settings (v7.2.0)
 - Playful effects has a UFO picture, chosen by `random` or pinned with `"playfulEffects": "ufo"` (v9.5.0)
+- `playfulMedia` in config.json adds your own GIFs, images and short videos to the Playful effects pictures, with an optional finale file; `"builtIn": false` leaves the built-in ones out (v10.8.0)
 - Settings adds, removes and moves header chips and buttons, updating open terminals; edit in place since 7.3 (v7.2.0)
 - Reload config file re-reads config.json without a restart, refusing an invalid file (v7.2.0)
 - Header buttons can be grouped into a folder that opens a menu, edited in Settings since 7.3 (v6.6.0)
