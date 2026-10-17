@@ -52,11 +52,15 @@ export function useCarriedView(deps: CarriedViewDeps): { inherit: InheritedView;
       if (deps.canvas().openable.value) await deps.canvas().show(path);
     },
   };
+  const onScreen = (): FilesViewMode => viewModeOf({ showPreview: deps.file.showPreview.value, showCanvas: deps.canvas().active.value });
   /** A view the reader picked, as against one a restore or a located open put up: only this is what
-   *  the next file opens in. */
+   *  the next file opens in. A switch refused over a buffer that could not be saved changed nothing,
+   *  so nothing is recorded. */
   const choose = async (pick: () => Promise<unknown>): Promise<void> => {
+    const before = onScreen();
     await pick();
-    session.remember(viewModeOf({ showPreview: deps.file.showPreview.value, showCanvas: deps.canvas().active.value }));
+    const after = onScreen();
+    if (after !== before) session.remember(after);
   };
   return { inherit, choose };
 }
