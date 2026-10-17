@@ -192,3 +192,52 @@ describe("useFilesTabs (#2267)", () => {
     expect(tabs.strip.value).toEqual({ tabs: [], activePath: null });
   });
 });
+
+// #3075: a file with no tab and nothing asked of it opens in the view the pane carries.
+describe("useFilesTabs — the carried view", () => {
+  const carrying = (view: { showPreview: boolean; showCanvas: boolean } | null) => {
+    const fake = fakeFile();
+    const landed = vi.fn(async () => {});
+    const viewFor = vi.fn(() => view);
+    return { fake, landed, viewFor, tabs: useFilesTabs(fake.file, { viewFor, landed }) };
+  };
+
+  it("hands a carried Preview to the load, and puts nothing up afterwards", async () => {
+    const { fake, landed, tabs } = carrying({ showPreview: true, showCanvas: false });
+    await tabs.open("a.md");
+    expect(fake.loads.at(-1)).toEqual({ path: "a.md", remembered: { path: "a.md", showPreview: true } });
+    expect(landed).not.toHaveBeenCalled();
+  });
+
+  it("puts the carried Canvas view up only once the file is in front", async () => {
+    const { fake, landed, tabs } = carrying({ showPreview: false, showCanvas: true });
+    await tabs.open("a.md");
+    expect(landed).toHaveBeenCalledWith("a.md");
+    fake.failing.add("b.md");
+    await tabs.open("b.md");
+    expect(landed).toHaveBeenCalledTimes(1);
+  });
+
+  it("is not asked when the caller says how the file comes up", async () => {
+    const { fake, landed, viewFor, tabs } = carrying({ showPreview: false, showCanvas: true });
+    await tabs.open("a.md", false, { path: "a.md", showPreview: false });
+    expect(viewFor).not.toHaveBeenCalled();
+    expect(landed).not.toHaveBeenCalled();
+    expect(fake.loads.at(-1)?.remembered).toEqual({ path: "a.md", showPreview: false });
+  });
+
+  it("is not asked for a file that has a tab", async () => {
+    const { landed, viewFor, tabs } = carrying({ showPreview: false, showCanvas: true });
+    await tabs.open("a.md", true, { path: "a.md" });
+    await tabs.open("b.md", true, { path: "b.md" });
+    await tabs.open("a.md");
+    expect(viewFor).not.toHaveBeenCalled();
+    expect(landed).not.toHaveBeenCalled();
+  });
+
+  it("opens on the editor when there is nothing to carry", async () => {
+    const { fake, tabs } = carrying(null);
+    await tabs.open("a.md");
+    expect(fake.loads.at(-1)?.remembered).toBeNull();
+  });
+});

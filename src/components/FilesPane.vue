@@ -11,23 +11,23 @@ import { onBeforeUnmount, onMounted, ref, shallowRef, computed, nextTick, useTem
 import type { FilesPanelSeed } from "../composables/filesPanelSeed";
 import { expandedPaths, restoreLevels } from "./filesTreeState";
 import { ROOT_ROW, useFilesTree, type TreeNode } from "../composables/useFilesTree";
-import { useOpenFile } from "../composables/useOpenFile";
+import { openFileMedia, useOpenFile } from "../composables/useOpenFile";
 import { useFilesReveal } from "../composables/useFilesReveal";
 import { useFilesPreviewWire } from "../composables/useFilesPreviewWire";
 import PreviewCodeBlockDialog from "./PreviewCodeBlockDialog.vue";
 import PreviewCopiedNotice from "./PreviewCopiedNotice.vue";
 import type { FilesPaneState } from "./filesPaneState";
-import { useFilesTabs } from "../composables/useFilesTabs";
-import { tabLabels, withCanvasView } from "./filesTabs";
+import { tabStripView, useFilesTabs } from "../composables/useFilesTabs";
+import { useCarriedView } from "../composables/useSessionViewMode";
+import { withCanvasView } from "./filesTabs";
 import { nextTabIndex } from "./tabKeys";
 import { previewLinkTarget } from "./previewLinkTarget";
-import { fileMediaKind, previewFollowsAppTheme } from "./filePreviewKind";
+import { previewFollowsAppTheme } from "./filePreviewKind";
 import FilesMediaView from "./FilesMediaView.vue";
 import { GIT_LETTER, gitDecorations } from "./filesGitDecorations";
 import type { FileGitState } from "../../common/fileGitStatus";
 import { useFilesGitStatus } from "../composables/useFilesGitStatus";
 import { useFileHeadText } from "../composables/useFileHeadText";
-import { rawFileSrc } from "./filesPreviewSrc";
 import FileFinder from "./FileFinder.vue";
 import FilesTreeEmpty from "./FilesTreeEmpty.vue";
 import DirConfigSaveNote from "./DirConfigSaveNote.vue";
@@ -77,6 +77,9 @@ const props = defineProps<{
   // Where stories live, as one value: the workspace path alone cannot address a deck kept beside
   // its notes — that needs the id this server registered the subtree under (#1933).
   storiesRoots?: StoriesRoots;
+  // The session of the cell beside the pane, which the view a new file opens in is remembered by
+  // (#3075). Absent where there is no cell — the full-screen view — and then every file opens on its editor.
+  viewModeSession?: string | null;
 }>();
 const emit = defineEmits<{ close: []; dirty: [boolean]; "insert-text": [text: string] }>();
 
@@ -87,22 +90,15 @@ const tree = useFilesTree(() => props.cwd);
 // every way it is written back. Destructured because the template names these directly.
 const file = useOpenFile(() => props.cwd);
 const { openPath, openName, dirty, editSeq, saving, fileError, unpreviewable, conflict, showPreview, previewKind, previewSrc, dirConfigReport } = file;
-// A picture, PDF, video or sound: no text to edit, so the "not text" panel shows the file itself (#2269, #2674).
-const mediaKind = computed(() => (openPath.value ? fileMediaKind(openPath.value) : null));
-const mediaSrc = computed(() => (openPath.value && mediaKind.value ? rawFileSrc(props.cwd, openPath.value, file.baseVersion.value) : ""));
+const { mediaKind, mediaSrc } = openFileMedia(file, () => props.cwd);
 const { flush, save, overwrite, discardAndReload, openInOs } = file;
 // Which files are open as tabs, and which is in front (#2267). Every open below goes through it, so
 // a path that already has a tab is brought forward rather than opened twice.
-const tabs = useFilesTabs(file);
+const carried = useCarriedView({ props, file, canvas: () => canvasMode });
+const tabs = useFilesTabs(file, carried.inherit);
 const { openRequested, openFromTerminal } = useRequestedOpen(tabs, file, (pathRel) => canvasMode.hide(pathRel));
 const strip = tabs.strip;
-// One tab is the pane as it always was — the header names the file. The strip is for two or more,
-// and for a lone tab that is not on screen, which would otherwise have no control at all.
-const showStrip = computed(() => strip.value.tabs.length > 1 || strip.value.tabs.some((tab) => tab.path !== openPath.value));
-// The one tab in the Tab order: the front one, or the first when none is in front — a strip whose
-// tabs are all -1 cannot be reached from the keyboard.
-const focusablePath = computed(() => strip.value.activePath ?? strip.value.tabs[0]?.path ?? null);
-const labels = computed(() => tabLabels(strip.value.tabs.map((tab) => tab.path)));
+const { showStrip, focusablePath, labels } = tabStripView(strip, openPath);
 const storiesRoots = computed<StoriesRoots>(() => props.storiesRoots ?? { workspaces: [], roots: [] });
 // The open file drawn by the Canvas's plugin view, in place of the editor (#3008).
 const canvasMode = useFilesCanvasMode({ enabled: () => !!props.canvasTarget, cwd: () => props.cwd, storiesRoots: () => storiesRoots.value, file, tabs });
@@ -483,7 +479,7 @@ defineExpose({
       <FilesViewModeButtons
         v-if="openPath && previewKind && previewSrc && (!showCanvas || sideBySide.offered.value)"
         v-bind="{ showPreview, canPreview: !showCanvas, saving, canSideBySide: sideBySide.offered.value, sideBySide: sideBySide.active.value }"
-        @toggle-preview="file.togglePreview()"
+        @toggle-preview="carried.choose(() => file.togglePreview())"
         @toggle-side-by-side="sideBySide.toggle()"
       />
       <button
@@ -515,7 +511,7 @@ defineExpose({
       />
       <!-- Only in the right pane: this pane is also mounted full-screen by FilesOverlay, whose base
            is a query string, and the plugin views stay off that surface (docs/file-surfaces.md). -->
-      <FilesCanvasButton v-if="canvasTarget && canvasOpenable" :active="showCanvas" :disabled="saving" @toggle="canvasMode.toggle()" />
+      <FilesCanvasButton v-if="canvasTarget && canvasOpenable" :active="showCanvas" :disabled="saving" @toggle="carried.choose(() => canvasMode.toggle())" />
       <button
         v-if="openPath"
         type="button"

@@ -13,7 +13,7 @@ import { askTheMachine, bankText, browseQuery, writeBuffer } from "../components
 import type { DirConfigSaveReport } from "../../common/dirConfigSaveReport";
 import type { FilesTabState } from "../components/filesPaneState";
 import { restoresPreview, staysOnSameFile } from "../components/filesPreviewMode";
-import { diskVersion, previewSrcFor } from "../components/filesPreviewSrc";
+import { diskVersion, previewSrcFor, rawFileSrc } from "../components/filesPreviewSrc";
 import { fileMediaKind, filePreviewKind, type FilePreviewKind } from "../components/filePreviewKind";
 import { activeThemeVars } from "./useTheme";
 import { previewThemeFromVars } from "../../common/previewTheme";
@@ -542,4 +542,11 @@ export function useOpenFile(cwd: () => string | null): OpenFile {
     reportFailure: (attempt) => reportFailure(ctx, attempt),
     place: () => placeNow(ctx),
   };
+}
+
+/** A picture, PDF, video or sound: no text to edit, so the "not text" panel shows the file itself (#2269, #2674). */
+export function openFileMedia(file: Pick<OpenFile, "openPath" | "baseVersion">, cwd: () => string | null) {
+  const mediaKind = computed(() => (file.openPath.value ? fileMediaKind(file.openPath.value) : null));
+  const mediaSrc = computed(() => (file.openPath.value && mediaKind.value ? rawFileSrc(cwd(), file.openPath.value, file.baseVersion.value) : ""));
+  return { mediaKind, mediaSrc };
 }
