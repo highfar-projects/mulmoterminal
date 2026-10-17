@@ -462,7 +462,7 @@ describe("serverNodeArgs", () => {
     const args = serverNodeArgs(ENTRY, "/home/u/project", 34601);
     const entryAt = args.indexOf(ENTRY);
     expect(args.slice(0, entryAt).filter((a) => a.startsWith("--"))).toEqual(["--import", `--env-file-if-exists=${path.join("/home/u/project", ".env")}`]);
-    expect(args.slice(entryAt + 1)).toEqual(["--port", "34601"]);
+    expect(args.slice(entryAt + 1)).toEqual(["--port", "34601", "--launch-dir", "/home/u/project"]);
   });
 
   // #1857: the port used to travel in the environment, which the server hands to every PTY, so
@@ -479,7 +479,14 @@ describe("serverNodeArgs", () => {
   // would reach every terminal in every cell, which is the shape of #955 and #1857.
   it("carries a declared default agent behind the entry script", () => {
     const args = serverNodeArgs(ENTRY, "/home/u/project", 34601, "codex");
-    expect(args.slice(args.indexOf(ENTRY) + 1)).toEqual(["--port", "34601", "--agent", "codex"]);
+    expect(args.slice(args.indexOf(ENTRY) + 1)).toEqual(["--port", "34601", "--launch-dir", "/home/u/project", "--agent", "codex"]);
+  });
+
+  // The spawn's cwd is the package directory, so the server learns where the user ran the command
+  // only from here; a `./` path in config.json is read against it.
+  it("carries the launch directory behind the entry script, unquoted", () => {
+    const args = serverNodeArgs(ENTRY, "/home/u/My Projects/app", 34567);
+    expect(args[args.indexOf("--launch-dir") + 1]).toBe("/home/u/My Projects/app");
   });
 
   // Omitted rather than passed as an empty value, so the server falls through to its config file

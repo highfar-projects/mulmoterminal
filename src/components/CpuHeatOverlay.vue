@@ -5,11 +5,14 @@
 // it were behind it — without asking xterm for a transparent canvas.
 import { computed, onUnmounted, ref, useId, watch } from "vue";
 import HeatStage from "./cpuHeat/HeatStage.vue";
+import HeatMedia from "./cpuHeat/HeatMedia.vue";
 import { HEAT_PALETTE } from "./cpuHeat/heatPalette";
 import { useAppearance } from "../composables/useAppearance";
 import type { StageLevel } from "./cpuHeat/stageLevel";
-import { patternFor, type HeatLevel } from "../../common/playfulEffects";
+import type { HeatLevel } from "../../common/playfulEffects";
+import { heatPickFor } from "../../common/playfulMedia";
 import { playfulEffects } from "../composables/playfulEffects";
+import { playfulMedia } from "../composables/playfulMedia";
 
 const props = defineProps<{ sessionId: string | null; heatLevel: HeatLevel; heatFinales: number }>();
 
@@ -36,8 +39,17 @@ watch(
   },
 );
 
-const pattern = computed(() => (props.sessionId === null ? null : patternFor(props.sessionId, playfulEffects.value)));
+const pick = computed(() => (props.sessionId === null ? null : heatPickFor(props.sessionId, playfulEffects.value, playfulMedia.value, !animate)));
 const level = computed<StageLevel>(() => (finaleShowing.value ? 5 : props.heatLevel));
+// A file of the user's with no finale of its own simply goes when the session calms down.
+const shown = computed(() => pick.value !== null && level.value > 0 && !(level.value === 5 && pick.value.type === "media" && pick.value.item.finale === null));
+// A built-in picture is redrawn per level, which restarts its SVG animations; a file of the user's
+// keeps playing across levels and is only swapped for its finale.
+const stageKey = computed(() => {
+  if (pick.value === null) return "none";
+  if (pick.value.type === "builtIn") return `${pick.value.pattern}-${level.value}`;
+  return level.value === 5 ? `${pick.value.item.media.url}-finale` : pick.value.item.media.url;
+});
 
 const appearance = useAppearance();
 onUnmounted(() => {
@@ -50,8 +62,8 @@ const vignetteId = `cpu-heat-vignette-${useId()}`;
 
 <template>
   <div
-    v-if="pattern !== null && level > 0"
-    :key="`${pattern}-${level}`"
+    v-if="pick !== null && shown"
+    :key="stageKey"
     :class="palette.blend"
     class="pointer-events-none absolute inset-x-0 bottom-0 z-10 overflow-hidden"
     aria-hidden="true"
@@ -71,7 +83,15 @@ const vignetteId = `cpu-heat-vignette-${useId()}`;
       </rect>
     </svg>
     <div class="absolute inset-0 flex items-center justify-center">
-      <HeatStage class="h-[92%] w-auto max-w-[92%]" :pattern="pattern" :level="level" :palette="palette" :animate="animate" />
+      <HeatStage
+        v-if="pick.type === 'builtIn'"
+        class="h-[92%] w-auto max-w-[92%]"
+        :pattern="pick.pattern"
+        :level="level"
+        :palette="palette"
+        :animate="animate"
+      />
+      <HeatMedia v-else :item="pick.item" :level="level" :animate="animate" />
     </div>
   </div>
 </template>

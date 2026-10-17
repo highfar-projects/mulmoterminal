@@ -3,7 +3,7 @@
 // burns, and how it ends, is each picture's own.
 import type { Component } from "vue";
 import type { HeatPattern } from "../../../common/playfulEffects";
-import type { StageLevel } from "./stageLevel";
+import { STAGE_OPACITY } from "./stageLevel";
 import type { HeatFigureProps } from "./heatFigure";
 import HeatBomb from "./HeatBomb.vue";
 import HeatVolcano from "./HeatVolcano.vue";
@@ -28,7 +28,6 @@ const PICTURE: Record<HeatPattern, Component> = {
   sumo: HeatSumo,
   ufo: HeatUfo,
 };
-const OPACITY: Record<StageLevel, number> = { 0: 0, 1: 0.35, 2: 0.5, 3: 0.6, 4: 0.7, 5: 1 };
 </script>
 
 <template>
@@ -42,7 +41,7 @@ const OPACITY: Record<StageLevel, number> = { 0: 0, 1: 0.35, 2: 0.5, 3: 0.6, 4: 
         dur="0.18s"
         repeatCount="indefinite"
       />
-      <g :opacity="OPACITY[level]">
+      <g :opacity="STAGE_OPACITY[level]">
         <component :is="PICTURE[pattern]" :level="level" :palette="palette" :animate="animate" />
       </g>
     </g>

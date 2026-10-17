@@ -466,6 +466,21 @@ it. Settings → Theme has an on/off switch for it (no picture choice). Asked to
 `"random"` (the default) lets each session pick its own; one of `bomb`, `volcano`, `kettle`,
 `rocket`, `dynamite`, `balloon`, `skull`, `sumo` or `ufo` uses that one everywhere.
 
+**`playfulMedia` adds the user's own files** to what `"random"` picks from. It has no control in
+Settings, and is only for a user who asks for their own pictures. Each entry is a path, or an
+object with `file` and an optional `finale` (shown once when the session calms down). A path
+starts with `/`, `~/` (home) or `./` (the directory MulmoTerminal was started in). `"builtIn": false`
+leaves the nine built-in pictures out. Files: GIF, APNG, WebP, PNG, AVIF and SVG up to 20 MB;
+MP4 and WebM up to 50 MB, always muted. A file that cannot be used is named in the server log.
+Then Settings → Reload config file.
+
+```json
+{ "playfulMedia": { "files": ["~/Pictures/heat/fire.gif", { "file": "~/Pictures/heat/rocket.mp4", "finale": "~/Pictures/heat/boom.gif" }] } }
+```
+
+What makes a picture work (transparent background, bold shapes, a seamless loop) is in the guide:
+https://receptron.github.io/mulmoterminal/guide/en/playful-media.html
+
 ### `confetti` — a celebration over the whole page
 
 Off for every event until asked; the `confetti` keymap action (the keys skill binds it) and the

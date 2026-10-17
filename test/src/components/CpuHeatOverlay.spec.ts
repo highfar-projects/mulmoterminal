@@ -6,12 +6,25 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { defineComponent, h } from "vue";
 import { setPlayfulEffects } from "../../../src/composables/playfulEffects";
 import HeatStage from "../../../src/components/cpuHeat/HeatStage.vue";
+import { loadPlayfulMedia } from "../../../src/composables/playfulMedia";
 
 const CpuHeatOverlay = (await import("../../../src/components/CpuHeatOverlay.vue")).default;
 
 const FINALE_SHOW_MS = 2500;
 
-afterEach(() => {
+// The user's own files reach the overlay through the list the server answers; set it the same way.
+async function serveMedia(body: unknown): Promise<void> {
+  vi.stubGlobal("fetch", async () => new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } }));
+  await loadPlayfulMedia();
+}
+
+const GIF = { kind: "image", url: "/api/playful-media/0?v=1" };
+const CLIP = { kind: "video", url: "/api/playful-media/0?v=2" };
+const BOOM = { kind: "video", url: "/api/playful-media/0/finale?v=3" };
+
+afterEach(async () => {
+  await serveMedia({ builtIn: true, items: [] });
+  vi.unstubAllGlobals();
   setPlayfulEffects(undefined);
   document.documentElement.removeAttribute("data-appearance");
   vi.useRealTimers();
@@ -94,5 +107,66 @@ describe("CpuHeatOverlay", () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  describe("the user's own files", () => {
+    it("draws the file in place of a built-in picture, as solid as a built-in one at that level", async () => {
+      await serveMedia({ builtIn: false, items: [{ media: GIF, finale: null }] });
+      const wrapper = mount(CpuHeatOverlay, { props: { sessionId: "s1", heatLevel: 2, heatFinales: 0 } });
+      expect(wrapper.findComponent(HeatStage).exists()).toBe(false);
+      expect(wrapper.get('[data-testid="cpu-heat-media"] img').attributes("src")).toBe(GIF.url);
+      expect(wrapper.get('[data-testid="cpu-heat-media"]').attributes("style")).toContain("opacity: 0.5");
+    });
+
+    it("plays a video muted and on a loop", async () => {
+      await serveMedia({ builtIn: false, items: [{ media: CLIP, finale: null }] });
+      const wrapper = mount(CpuHeatOverlay, { props: { sessionId: "s1", heatLevel: 1, heatFinales: 0 } });
+      const video = wrapper.get<HTMLVideoElement>('[data-testid="cpu-heat-media"] video');
+      expect(video.attributes("src")).toBe(CLIP.url);
+      expect(video.element.muted).toBe(true);
+      expect(video.element.loop).toBe(true);
+    });
+
+    it("keeps the same element across levels, so the file is not restarted", async () => {
+      await serveMedia({ builtIn: false, items: [{ media: GIF, finale: null }] });
+      const wrapper = mount(CpuHeatOverlay, { props: { sessionId: "s1", heatLevel: 1, heatFinales: 0 } });
+      const first = wrapper.get('[data-testid="cpu-heat-media"] img').element;
+      await wrapper.setProps({ heatLevel: 3 });
+      expect(wrapper.get('[data-testid="cpu-heat-media"] img').element).toBe(first);
+    });
+
+    it("plays the finale file once, at full strength, when told of a finale", async () => {
+      await serveMedia({ builtIn: false, items: [{ media: GIF, finale: BOOM }] });
+      const wrapper = mount(CpuHeatOverlay, { props: { sessionId: "s1", heatLevel: 3, heatFinales: 0 } });
+      await wrapper.setProps({ heatLevel: 0, heatFinales: 1 });
+      const video = wrapper.get<HTMLVideoElement>('[data-testid="cpu-heat-media"] video');
+      expect(video.attributes("src")).toBe(BOOM.url);
+      expect(video.element.loop).toBe(false);
+      expect(wrapper.get('[data-testid="cpu-heat-media"]').attributes("style")).toContain("opacity: 1");
+    });
+
+    it("simply goes at the finale when the file has none", async () => {
+      await serveMedia({ builtIn: false, items: [{ media: GIF, finale: null }] });
+      const wrapper = mount(CpuHeatOverlay, { props: { sessionId: "s1", heatLevel: 3, heatFinales: 0 } });
+      await wrapper.setProps({ heatLevel: 0, heatFinales: 1 });
+      expect(wrapper.find('[data-testid="cpu-heat"]').exists()).toBe(false);
+    });
+
+    it("falls back to a still built-in picture for someone who asked for less motion", async () => {
+      await serveMedia({ builtIn: true, items: [{ media: GIF, finale: null }] });
+      vi.stubGlobal("matchMedia", (query: string) => ({ matches: query.includes("reduce"), media: query }));
+      const ids = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k"];
+      ids.forEach((id) => {
+        const wrapper = mount(CpuHeatOverlay, { props: { sessionId: id, heatLevel: 2, heatFinales: 0 } });
+        expect(wrapper.find('[data-testid="cpu-heat-media"]').exists()).toBe(false);
+        expect(wrapper.findComponent(HeatStage).props("animate")).toBe(false);
+      });
+    });
+
+    it("ignores a list whose files are not under our own route", async () => {
+      await serveMedia({ builtIn: false, items: [{ media: { kind: "image", url: "https://example.com/a.gif" }, finale: null }] });
+      const wrapper = mount(CpuHeatOverlay, { props: { sessionId: "s1", heatLevel: 4, heatFinales: 0 } });
+      expect(wrapper.find('[data-testid="cpu-heat"]').exists()).toBe(false);
+    });
   });
 });

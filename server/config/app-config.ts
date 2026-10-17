@@ -10,6 +10,8 @@ import { PALETTE_SEARCH_BOX_DEFAULT, sanitizePaletteSearchBox } from "../../comm
 import { REMOTE_SERVER_DEFAULT, sanitizeRemoteServer } from "../../common/remoteServer.js";
 import { CONFETTI_DEFAULT, sanitizeConfetti, type Confetti } from "../../common/confetti.js";
 import { PLAYFUL_EFFECTS_DEFAULT, sanitizePlayfulEffects, type PlayfulEffects } from "../../common/playfulEffects.js";
+import { PLAYFUL_MEDIA_DEFAULT, sanitizePlayfulMedia, type PlayfulMedia } from "../../common/playfulMedia.js";
+import { droppedPathWarnings } from "./playful-media.js";
 import { sanitizePresets } from "./dir/cwd-presets.js";
 import { sanitizeButtons, sanitizeChips } from "./header/header-config.js";
 import {
@@ -170,6 +172,8 @@ export interface AppConfig {
   remoteServer: boolean;
   // A little theatre on the terminal now and then. "off" switches it off; a picture name fixes the picture.
   playfulEffects: PlayfulEffects;
+  // The user's own pictures and videos for it, beside the built-in ones; see common/playfulMedia.ts.
+  playfulMedia: PlayfulMedia;
   // Which celebrations exist and which app events set one off; see common/confetti.ts.
   confetti: Confetti;
   // Which pinned favourites the toolbar shows without opening Collections (#1984), as
@@ -585,6 +589,7 @@ export const emptyConfig = (): AppConfig => ({
   paletteSearchBox: PALETTE_SEARCH_BOX_DEFAULT,
   remoteServer: REMOTE_SERVER_DEFAULT,
   playfulEffects: PLAYFUL_EFFECTS_DEFAULT,
+  playfulMedia: { ...PLAYFUL_MEDIA_DEFAULT, files: [] },
   confetti: CONFETTI_DEFAULT,
   toolbarPins: [],
   cockpitLines: { ...DEFAULT_COCKPIT_LINES },
@@ -608,6 +613,12 @@ const DROPPED_MODEL_QUOTE_MAX = 80;
 const quoteDropped = (model: unknown): string => {
   const text = JSON.stringify(model) ?? String(model);
   return text.length > DROPPED_MODEL_QUOTE_MAX ? `${text.slice(0, DROPPED_MODEL_QUOTE_MAX)}…` : text;
+};
+
+// A path in a form we do not read is dropped by the sanitizer; say so, or the picture just never appears.
+const sanitizePlayfulMediaWarning = (input: unknown): PlayfulMedia => {
+  droppedPathWarnings(input).forEach(warnOnce);
+  return sanitizePlayfulMedia(input);
 };
 
 // A model id the schema refuses is dropped in silence, and a provider whose whole list was
@@ -689,6 +700,7 @@ function sanitizeAppConfig(raw: unknown): AppConfig {
     paletteSearchBox: sanitizePaletteSearchBox(o.paletteSearchBox),
     remoteServer: sanitizeRemoteServer(o.remoteServer),
     playfulEffects: sanitizePlayfulEffects(o.playfulEffects),
+    playfulMedia: sanitizePlayfulMediaWarning(o.playfulMedia),
     confetti: sanitizeConfetti(o.confetti),
     toolbarPins: sanitizeToolbarPins(o.toolbarPins),
     cockpitLines: sanitizeCockpitLines(o.cockpitLines),
@@ -823,6 +835,7 @@ export function mergeConfigUpdate(base: AppConfig, body: Record<string, unknown>
     paletteSearchBox: updated("paletteSearchBox", sanitizePaletteSearchBox, base.paletteSearchBox),
     remoteServer: updated("remoteServer", sanitizeRemoteServer, base.remoteServer),
     playfulEffects: updated("playfulEffects", sanitizePlayfulEffects, base.playfulEffects),
+    playfulMedia: updated("playfulMedia", sanitizePlayfulMediaWarning, base.playfulMedia),
     confetti: updated("confetti", sanitizeConfetti, base.confetti),
     toolbarPins: updated("toolbarPins", sanitizeToolbarPins, base.toolbarPins),
     cockpitLines: updated("cockpitLines", sanitizeCockpitLines, base.cockpitLines),
@@ -878,6 +891,7 @@ export function toPublicAppConfig(config: AppConfig): AppConfig {
     paletteSearchBox: config.paletteSearchBox,
     remoteServer: config.remoteServer,
     playfulEffects: config.playfulEffects,
+    playfulMedia: config.playfulMedia,
     confetti: config.confetti,
     toolbarPins: config.toolbarPins,
     cockpitLines: config.cockpitLines,

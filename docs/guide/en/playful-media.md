@@ -33,8 +33,8 @@ Knowing this is most of what makes a picture work well:
 - **It sits behind the text and lets it show through.** On a dark theme the picture is blended so
   that black disappears and bright parts glow. On a light theme white disappears and dark parts
   show. It is never fully opaque except during the finale.
-- **It is fitted into the terminal**, centred, at most a little under the terminal's height, with its
-  proportions kept.
+- **It is scaled to the terminal**, centred, to a little under the terminal's height, with its
+  proportions kept, whatever the file's own size. So a small file is enlarged, and looks soft.
 - **Each session keeps its picture.** The pick comes from the session's id, so a session shows the
   same picture every time it heats up. Adding or removing a file changes which session gets which.
 
@@ -46,7 +46,7 @@ Knowing this is most of what makes a picture work well:
 - **Bold shapes and strong contrast.** The picture starts at about a third of its strength, so fine
   detail and soft photos disappear. Think of a sticker, not a photograph.
 - **Square, around 400 × 400 pixels.** Other shapes work; they are fitted with their proportions
-  kept. Much larger costs memory for nothing.
+  kept. Smaller looks soft once enlarged; much larger costs memory for nothing.
 - **A loop that joins up.** A GIF or video plays on a loop for as long as a step lasts, which can be
   minutes. A seamless loop looks calm; a jump at the end draws the eye every few seconds.
 - **No text.** It is translucent and behind the terminal's own text, so it will not be readable.
@@ -87,7 +87,7 @@ plenty, and every busy terminal plays its own copy.
 
 | starts with | means | example |
 |---|---|---|
-| `/` | an absolute path | `/Users/me/heat/fire.gif` |
+| `/` | an absolute path (on Windows, a drive letter such as `C:\` too) | `/Users/me/heat/fire.gif` |
 | `~/` | your home directory | `~/Pictures/heat/fire.gif` |
 | `./` | the directory MulmoTerminal was started in | `./effects/cat.webp` |
 

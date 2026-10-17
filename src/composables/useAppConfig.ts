@@ -30,6 +30,7 @@ import { setShowLoadAverage } from "./showLoadAverage";
 import { setPaletteSearchBox } from "./paletteSearchBox";
 import { setRemoteServer } from "./remoteServer";
 import { setPlayfulEffects } from "./playfulEffects";
+import { loadPlayfulMedia } from "./playfulMedia";
 import { setConfetti } from "./useConfetti";
 import { setDefaultAgent } from "./defaultAgent";
 import { seedLaunchAgentFromConfig } from "./useChatLauncher";
@@ -489,6 +490,7 @@ function applyGlobalSettings(c: Record<string, unknown>, pinsMark: number): void
   setPaletteSearchBox(c.paletteSearchBox);
   setRemoteServer(c.remoteServer);
   setPlayfulEffects(c.playfulEffects);
+  void loadPlayfulMedia();
   setConfetti(c.confetti);
   // Which pinned favourites the toolbar carries (#1984). Absent, it carries none. The mark is what
   // stops a read that started before a save from putting the old list back — see toolbarPins.ts.

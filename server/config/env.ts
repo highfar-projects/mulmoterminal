@@ -8,6 +8,7 @@ import path from "node:path";
 import { parsePort, portFromArgv } from "./port-from-argv.js";
 import { agentFromArgv, declaresAgent } from "./agent/agent-from-argv.js";
 import { homeScopeSuffix } from "./home-scope.js";
+import { launchDirFromArgv } from "./launch-dir-from-argv.js";
 
 // `--port` is the launcher's channel (see port-from-argv.ts for why it is not an env var).
 // `PORT` is the DEV channel and must stay: `yarn dev` runs server/index.ts directly, and
@@ -106,6 +107,9 @@ export function isWorkspaceCwd(cwd: string | undefined): boolean {
 // lives here, keyed by sessionId (a global UUID) — NOT under the workspace dir, so it stays
 // valid regardless of which directory is active.
 export const MULMOTERMINAL_HOME = path.join(os.homedir(), ".mulmoterminal");
+
+// Where the user started MulmoTerminal; a `./` path in config.json is read from here.
+export const LAUNCH_DIR = launchDirFromArgv(process.argv, process.cwd());
 
 // The passwd entry's home, which an overridden $HOME does not change. Null when the account has none.
 function accountHomeDir(): string | null {
