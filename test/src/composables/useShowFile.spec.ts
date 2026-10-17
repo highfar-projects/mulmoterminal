@@ -80,4 +80,11 @@ describe("showFileWith", () => {
     await h.show({ path: "a.md", view: "canvas" });
     expect(h.calls).toEqual([]);
   });
+
+  // #3075: the pane's carried view is not put up only for the asked-for one to replace it.
+  it("opens the file on its editor before setting the asked-for view", async () => {
+    const h = harness();
+    await h.show({ path: "a.md", view: "preview" });
+    expect(h.deps.tabs.open).toHaveBeenCalledWith("a.md", false, { path: "a.md" });
+  });
 });

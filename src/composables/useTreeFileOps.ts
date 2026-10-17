@@ -77,7 +77,8 @@ async function create(ctx: Ctx, action: { dirRel: string; rowRel: string }, kind
   const dir = action.dirRel === "" ? null : ctx.tree.findNode(action.dirRel);
   if (!ctx.moved() && dir?.dir && !dir.expanded) await ctx.tree.toggleDir(dir);
   if (ctx.moved()) return null;
-  if (kind === "file") await ctx.tabs.open(outcome.path);
+  // On its editor whatever view the pane carries: a file just made is there to be written.
+  if (kind === "file") await ctx.tabs.open(outcome.path, false, { path: outcome.path });
   return ctx.moved() ? null : outcome.path;
 }
 

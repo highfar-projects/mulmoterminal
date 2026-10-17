@@ -49,7 +49,8 @@ export function showFileWith(deps: ShowFileDeps): (target: PaneTarget) => Promis
   };
   return async (target) => {
     if (target.line !== undefined) return deps.openAt(target.path, { line: target.line, col: null }, false);
-    await deps.tabs.open(target.path);
+    // Asked to open on its editor, so the pane's carried view (#3075) is not put up only to be replaced.
+    await deps.tabs.open(target.path, false, { path: target.path });
     // A switch the pane declined (an unsaved buffer it could not save) leaves another file in front.
     if (file.openPath.value === target.path) await apply[target.view](target.path);
   };

@@ -81,7 +81,8 @@ describe("useTreeFileOps", () => {
     await ops.run({ id: "new-file", labelKey: "", icon: "", dirRel: "src", rowRel: "src" });
     expect(treeOp).toHaveBeenCalledWith("create", "cwd=%2Fproj&path=src", { name: "new.md", kind: "file" });
     expect(deps.tree.toggleDir).toHaveBeenCalledWith(src);
-    expect(deps.tabs.open).toHaveBeenCalledWith("src/new.md");
+    // On its editor, whatever view the pane carries (#3075): a file just made is there to be written.
+    expect(deps.tabs.open).toHaveBeenCalledWith("src/new.md", false, { path: "src/new.md" });
   });
 
   // A folder opened once and collapsed keeps its old listing; it is read again before it opens.

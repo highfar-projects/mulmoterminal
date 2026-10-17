@@ -5,9 +5,9 @@
 // The strip changes only AFTER the file arrived. Leaving a tab saves it (`load` flushes, as opening
 // another file always has), and a save that could not land keeps the pane where it is — so the
 // strip is asked about the file actually on screen, never the one that was requested.
-import { ref, type Ref } from "vue";
+import { computed, ref, type Ref } from "vue";
 import type { FilesTabState } from "../components/filesPaneState";
-import { EMPTY_STRIP, closed, openedInFront, openedInNewTab, steppedPath, withTab, type TabStrip } from "../components/filesTabs";
+import { EMPTY_STRIP, closed, openedInFront, openedInNewTab, steppedPath, tabLabels, withTab, type TabStrip } from "../components/filesTabs";
 import type { OpenFile } from "./useOpenFile";
 
 export interface FilesTabs {
@@ -27,7 +27,15 @@ export interface FilesTabs {
   reset: () => void;
 }
 
-export function useFilesTabs(file: OpenFile): FilesTabs {
+/** How a file with no tab of its own, opened with nothing asked of it, comes up (#3075): the view
+ *  the pane's session last chose. `viewFor` says which view, or null for the editor; `landed` puts
+ *  the Canvas view up once the file is in front, since that view is not the open file's to load. */
+export interface InheritedView {
+  viewFor: (path: string) => { showPreview: boolean; showCanvas: boolean } | null;
+  landed: (path: string) => Promise<void>;
+}
+
+export function useFilesTabs(file: OpenFile, inherit?: InheritedView): FilesTabs {
   const strip = ref<TabStrip>(EMPTY_STRIP);
 
   /** The open file as a tab, with the reader's place in it now. */
@@ -40,11 +48,14 @@ export function useFilesTabs(file: OpenFile): FilesTabs {
 
   async function open(path: string, newTab = false, fresh?: FilesTabState): Promise<void> {
     const leaving = front();
-    await file.load(path, false, strip.value.tabs.find((tab) => tab.path === path) ?? fresh ?? null);
+    const own = strip.value.tabs.find((tab) => tab.path === path);
+    const inherited = own || fresh ? null : (inherit?.viewFor(path) ?? null);
+    await file.load(path, false, own ?? fresh ?? (inherited ? { path, showPreview: inherited.showPreview } : null));
     if (file.openPath.value !== path) return;
     // Asked of the strip as it is NOW: a tab closed while the read was out stays closed.
     const base = leaving ? withTab(strip.value, leaving) : strip.value;
     strip.value = newTab ? openedInNewTab(base, path) : openedInFront(base, path);
+    if (inherited?.showCanvas) await inherit?.landed(path);
   }
 
   /** Open the tab the strip has in front. One whose file is gone is dropped and its neighbour tried
@@ -94,4 +105,17 @@ export function useFilesTabs(file: OpenFile): FilesTabs {
   }
 
   return { strip, open, close, closeFront, step, current, restore, reset: () => (strip.value = EMPTY_STRIP) };
+}
+
+/** What the pane draws of the strip. */
+export function tabStripView(strip: Ref<TabStrip>, openPath: Ref<string | null>) {
+  return {
+    // One tab is the pane as it always was — the header names the file. The strip is for two or more,
+    // and for a lone tab that is not on screen, which would otherwise have no control at all.
+    showStrip: computed(() => strip.value.tabs.length > 1 || strip.value.tabs.some((tab) => tab.path !== openPath.value)),
+    // The one tab in the Tab order: the front one, or the first when none is in front — a strip whose
+    // tabs are all -1 cannot be reached from the keyboard.
+    focusablePath: computed(() => strip.value.activePath ?? strip.value.tabs[0]?.path ?? null),
+    labels: computed(() => tabLabels(strip.value.tabs.map((tab) => tab.path))),
+  };
 }
