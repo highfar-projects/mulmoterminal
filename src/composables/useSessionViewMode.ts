@@ -34,7 +34,7 @@ export interface CarriedViewDeps {
   /** The pane's props: the session the view is kept for. The full-screen pane has none, and so
    *  never carries the Canvas view it does not have. */
   props: { viewModeSession?: string | null | undefined };
-  file: { showPreview: { readonly value: boolean } };
+  file: { showPreview: { readonly value: boolean }; openPath: { readonly value: string | null } };
   canvas: () => {
     has: (path: string) => boolean;
     openable: { readonly value: boolean };
@@ -54,13 +54,14 @@ export function useCarriedView(deps: CarriedViewDeps): { inherit: InheritedView;
   };
   const onScreen = (): FilesViewMode => viewModeOf({ showPreview: deps.file.showPreview.value, showCanvas: deps.canvas().active.value });
   /** A view the reader picked, as against one a restore or a located open put up: only this is what
-   *  the next file opens in. A switch refused over a buffer that could not be saved changed nothing,
-   *  so nothing is recorded. */
+   *  the next file opens in. Recorded only when the file it was picked on is still in front and its
+   *  view changed: a switch refused over a buffer that could not be saved changed nothing, and one
+   *  overtaken by another open would read that file's own view as the choice. */
   const choose = async (pick: () => Promise<unknown>): Promise<void> => {
-    const before = onScreen();
+    const [path, before] = [deps.file.openPath.value, onScreen()];
     await pick();
     const after = onScreen();
-    if (after !== before) session.remember(after);
+    if (deps.file.openPath.value === path && after !== before) session.remember(after);
   };
   return { inherit, choose };
 }

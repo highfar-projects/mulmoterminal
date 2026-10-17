@@ -30,12 +30,13 @@ describe("useCarriedView — what the reader chose", () => {
   const pane = () => {
     const showPreview = ref(false);
     const active = ref(false);
+    const openPath = ref<string | null>("a.md");
     const carried = useCarriedView({
       props: { viewModeSession: "s1" },
-      file: { showPreview },
+      file: { showPreview, openPath },
       canvas: () => ({ has: () => false, openable: ref(true), active, show: async () => true }),
     });
-    return { showPreview, active, carried, mode: () => useSessionViewMode(() => "s1").mode() };
+    return { showPreview, active, openPath, carried, mode: () => useSessionViewMode(() => "s1").mode() };
   };
 
   it("records a switch that happened", async () => {
@@ -59,5 +60,16 @@ describe("useCarriedView — what the reader chose", () => {
     p.showPreview.value = false; // a tab of its own brought the editor back
     await p.carried.choose(async () => {});
     expect(p.mode()).toBe("preview");
+  });
+
+  // A switch still saving when another file opens: what is on screen afterwards is that file's own
+  // view, not anything the reader picked.
+  it("records nothing when another file came to the front meanwhile", async () => {
+    const p = pane();
+    await p.carried.choose(async () => {
+      p.openPath.value = "b.md";
+      p.active.value = true; // b.md's own Canvas view
+    });
+    expect(p.mode()).toBe("edit");
   });
 });
