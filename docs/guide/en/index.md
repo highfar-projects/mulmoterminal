@@ -8,8 +8,8 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **10.8.0 is out.** Add your own GIFs, images and short videos to the pictures shown behind a busy
-> terminal. [Setup guide](v10.8.0.html)
+> **10.9.0 is out.** Spreadsheets with live formulas on the Canvas, a skill that turns a CSV into a
+> spreadsheet and charts, and a folder as a gallery in the Files pane. [Setup guide](v10.9.0.html)
 
 ## What is MulmoTerminal? {#what-is}
 

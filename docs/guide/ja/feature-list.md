@@ -4,7 +4,7 @@ nav_title: 全機能リスト
 layout: default
 parent: 日本語
 nav_order: 6.5
-as_of: 10.8.0
+as_of: 10.9.0
 description: MulmoTerminal のいまある機能を、入った版つきで領域ごとに一行ずつ並べた一覧（9.1.0 時点）。
 ---
 
@@ -142,6 +142,8 @@ description: MulmoTerminal のいまある機能を、入った版つきで領�
 
 詳しく: [機能リファレンス](features.html)
 
+- フォルダの Open as gallery で、画像・動画・音声・PDF をまとめて見る。動画と音声はタイルの中で再生でき、クリックで大きく表示する (v10.9.0)
+- 右のペインで次に開くファイルにプレビューや Canvas が引き継がれ、セッションごとに覚える (v10.9.0)
 - Files のヘッダーのコピーのボタンで、開いているファイルの本文を未保存の編集も含めてまるごとクリップボードに入れる (v10.7.0)
 - 開いているファイルが Files のツリーで目立ち、画面を開き直したときも表示位置に入る (v10.7.0)
 - Files のヘッダーの「最近開いたファイル」で、タブを閉じたファイルも開き直せる。フォルダごとに、読み込み直しても残る (v10.7.0)
@@ -287,8 +289,10 @@ description: MulmoTerminal のいまある機能を、入った版つきで領�
 
 ## Canvas・コレクション・デッキ
 
-詳しく: [コレクションから作る](from-collection.html) · [MulmoCast の動画](mulmocast.html)
+詳しく: [コレクションから作る](from-collection.html) · [MulmoCast の動画](mulmocast.html) · [表計算とグラフ](spreadsheet.html)
 
+- エージェントが計算式の入った表を Canvas に出す。セルを直すとその場で計算し直し、Excel で保存できる (presentSpreadsheet) (v10.9.0)
+- 同梱の /mulmoterminal-data-analysis スキルが、CSV や TSV を要約の統計つきの表とグラフにする (v10.9.0)
 - Canvas で開いている MulmoScript が、エディタ・git・エージェントによる変更で描き直される (v10.5.0)
 - `init` が MulmoCast のしゃべるアバターの部品が入っているかを示し、ガイドに入れ方がある (v10.5.0)
 - MulmoScript の効果音に JingleScript 0.8 の効果音と `grandpiano` が加わり、ビートのプレビューが `html_tailwind` を描く (v10.5.0)

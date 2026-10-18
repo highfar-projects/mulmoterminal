@@ -8,6 +8,45 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@10.9.0 — 2026-10-19
+
+> **Setup guide:** [10.9.0 — Spreadsheets on the Canvas, and a folder as a gallery](https://receptron.github.io/mulmoterminal/guide/en/v10.9.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.9.0.html))
+
+### Spreadsheets on the Canvas: `presentSpreadsheet` (#3078, #3076; #3089)
+
+- `@gui-chat-plugin/spreadsheet` is registered in `plugins/plugins.json` and `src/plugins-registry.ts`. An agent puts a spreadsheet with live formulas on the Canvas; editing a cell recalculates it in place, and **Excel** downloads it as `.xlsx`.
+- A sheet is saved as `artifacts/spreadsheets/YYYY/MM/<id>.json`. Edits on screen reach the existing `/api/plugin/presentSpreadsheet` route through `useRuntime().dispatch`, and the package's `execute` writes them back to the same file. No server code was added.
+- Classified as `render` and in `AUTO_ALLOWED_TOOLS`, like `presentChart`: it writes one artifact and shows it, with no external call.
+- The plugin is now at 4.0.2 (#3089), which fixes function names containing a digit (`LOG10` returned `#ERROR!`) and declares `engines.node >=22` again.
+
+### Tool calls with a View-only `kind` are refused (#3082, #3080)
+
+- `server/mcp/broker.ts` sent the model's arguments to `POST /api/plugin/<tool>` unchanged. That route also takes a View's `dispatch`, which routes on `kind` to View-only writes (`saveHtml`, `saveShape`, `saveSpreadsheet`, mulmoscript's `save`), so a model could make the same write as the screen's Save, without a prompt in a grid cell.
+- The broker now refuses a call carrying `kind` when the tool's definition does not declare `kind`, or when its value is outside the declared `enum` (`server/mcp/view-dispatch-kind.ts`, a pure function). `google` and `manageAccounting`, which declare `kind`, are unchanged. A refusal is reported like an unavailable tool (`isError`) and recorded as failed in the call history. The View path and each plugin's routing are untouched.
+
+### Artifact paths in a tool's reply are absolute (#3085, #3084)
+
+- In a project cell, `presentSpreadsheet` replied with `artifacts/spreadsheets/….json`, relative to the workspace, which the agent in the project directory could not read. The broker now rewrites `artifacts/…` paths in the text returned to the agent into the workspace's absolute path (`server/mcp/narration-artifact-paths.ts`). The `data` sent to the GUI keeps the relative path the View reads and writes. It also applies to `presentChart`; STL / USDZ already replied with absolute paths.
+
+### A bundled skill that turns a CSV into a spreadsheet and charts: `mulmoterminal-data-analysis` (#3093, #3091; #3095, #3094)
+
+- The skill reads a CSV or TSV without loading it whole, reports its columns and empty values, computes summary statistics with Node (`simple-statistics`, `csv-parse`, installed in a temp directory), and presents a spreadsheet and charts. Figures the user may change go in formulas; statistics the sheet lacks go in as values marked as computed. Its scripts are copied to `<workspace>/artifacts/analysis/YYYY/MM/<id>/`, never into the user's repository. Listed in `BUNDLED_SKILL_NAMES`.
+- Reading the sheet again after the user edits it re-presents the whole sheet with `presentSpreadsheet` rather than writing the file (#3095): an open Canvas does not re-read the file, and its next edit would overwrite the agent's change. The re-presented sheet is a new spreadsheet.
+- A guide page, `docs/guide/{en,ja}/spreadsheet.md`, covers turning it on, editing, the function list, what to ask for and the limits (#3088, #3086).
+
+### The Files pane opens a folder as a gallery (#3081, #3079)
+
+- **Open as gallery** on a folder row shows that folder's own pictures (SVG too), videos, sounds and PDFs in natural name order, a page of 60 at a time with **Show more**. Videos and sounds play in their tile, one at a time. A click shows a tile large, with ←/→ round the folder and Esc back to the grid, then closed.
+- The gallery is drawn over the file area, so nothing under it is unmounted. Opening any file (the one in front too), a re-root, and a rename or Trash of the folder or a folder above it close it; a change among its own files reads it again.
+
+### Preview / Canvas carries to the next file, per session (#3077, #3075)
+
+- Turning from a Markdown file in Preview or on the Canvas to another file used to open the next one in the editor. The view now carries to the next file opened in the right pane, remembered per session of the cell beside it and kept across a reload; a file's own remembered view still wins, and a file that cannot use the view opens in the editor. The full-screen `/files` view and path:line links are unchanged.
+
+### `FilesPane.vue` split into smaller pieces (#3087, #3083)
+
+- The tree row, splitter, tab strip, row menu, unpreviewable view and two header buttons are components; the git wiring and the startup restore are composables. Rendering and behaviour are unchanged, checked by mounting the old and new pane over the same scripted session and comparing what they render.
+
 ## mulmoterminal@10.8.0 — 2026-10-17
 
 > **Setup guide:** [10.8.0 — Your own pictures behind a busy terminal](https://receptron.github.io/mulmoterminal/guide/en/v10.8.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.8.0.html))
