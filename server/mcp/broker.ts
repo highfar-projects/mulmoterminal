@@ -31,6 +31,8 @@ import { offeredTools, routeToolCall, SUBMIT_TRANSLATION_TOOL_NAME, type ToolRou
 import { undeclaredKindRefusal } from "./view-dispatch-kind.js";
 import { toolGroupServerId, GUI_SERVER_ID, type ToolGroup } from "../../common/toolGroups.js";
 import { interpretToolEnvelope } from "./tool-envelope.js";
+import { absolutizeArtifactPaths } from "./narration-artifact-paths.js";
+import { artifactsRoot } from "../backends/plugins/artifacts.js";
 import { isRecord } from "../../common/isRecord.js";
 import { SESSION_HEADER } from "../backends/files/presentPathRoot.js";
 import type { GuiCallRecorder } from "./gui-call-history.js";
@@ -164,7 +166,8 @@ export function buildGuiMcpServer(
       // "relative to the directory THIS cell runs in" (backends/files/presentPathRoot.ts);
       // plugins that don't care never look at it.
       const parsed = await (await postJson(`${baseUrl}/api/plugin/${name}`, args ?? {}, { [SESSION_HEADER]: sessionId })).json();
-      const { publish, narration } = interpretToolEnvelope(isRecord(parsed) ? parsed : {});
+      const { publish, narration: workspaceNarration } = interpretToolEnvelope(isRecord(parsed) ? parsed : {});
+      const narration = absolutizeArtifactPaths(workspaceNarration, artifactsRoot);
 
       // A GUI toolResult, only when there is data to render.
       if (publish) {
