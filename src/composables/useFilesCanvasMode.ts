@@ -77,9 +77,10 @@ export function useFilesCanvasMode(deps: FilesCanvasModeDeps) {
     { immediate: true },
   );
 
-  /** Turn Canvas mode on for `path`, saving the buffer first; false when the save failed. */
+  /** Turn Canvas mode on for `path`, saving the buffer first; false when the save failed, or when
+   *  another file came to the front while it was saving — that file was not the one asked about. */
   async function show(path: string): Promise<boolean> {
-    if (!(await deps.file.savedInPlace())) return false;
+    if (!(await deps.file.savedInPlace()) || openPath.value !== path) return false;
     setMode(path, true);
     return true;
   }

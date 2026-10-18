@@ -32,6 +32,12 @@ export function ptyExitDisposition(facts: { stillRegistered: boolean; tmuxBacked
   return facts.tmuxBacked && facts.tmuxAlive ? "keep" : "reap";
 }
 
+/** Whether the cell is told its SESSION ended. A `reap` is the agent ending on its own; a `gone` is
+ *  usually a restart replacing the pty (the cell must stay), unless the close route asked for the
+ *  session to end and its cell to go (#3067). */
+export const sessionEndedForCell = (disposition: PtyExitDisposition, closeRequested: boolean): boolean =>
+  disposition === "reap" || (disposition === "gone" && closeRequested);
+
 /** Whether `entry` is still the pty registered under this id. An explicit close or a restart (#1918)
  *  removes it first and may register a replacement under the SAME id before the old process's exit
  *  arrives, so an exit handler that acted by id alone would end or forget the new session. */
@@ -86,12 +92,13 @@ export function reportPtyExit(
 ): PtyExitDisposition {
   const disposition = decidePtyExit(sessionId, entry);
   const reattached = !!entry.reattached;
-  sendExitAndClose(entry.ws, { ...exit, reattached, ended: disposition === "reap" });
+  const sessionEnded = sessionEndedForCell(disposition, !!entry.closeRequested);
+  sendExitAndClose(entry.ws, { ...exit, reattached, ended: sessionEnded });
   // The cell nobody opened yet (an agent's spawnBackgroundChat with no grid on screen) gets the
   // same answer an open one would: if that cell would have closed itself, no grid should adopt the
   // session later and resume it as a new cell (#3055).
   const worktreeCell = worktreeLabel(entry.cwd) !== null;
-  if (shouldCloseEndedCell({ sessionEnded: disposition === "reap", lifetimeMs: exit.lifetimeMs, reattached, worktreeCell })) markSessionPlaced(sessionId);
+  if (shouldCloseEndedCell({ sessionEnded, lifetimeMs: exit.lifetimeMs, reattached, worktreeCell })) markSessionPlaced(sessionId);
   applyPtyExit(sessionId, disposition, reap);
   return disposition;
 }

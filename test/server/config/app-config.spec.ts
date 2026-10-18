@@ -32,6 +32,7 @@ import { DEFAULT_COCKPIT_LINES } from "../../../common/cockpitLines.js";
 import { DEFAULT_HEADER_STATUS_TINT } from "../../../common/headerStatusColors.js";
 import { CONFETTI_DEFAULT } from "../../../common/confetti.js";
 import { PLAYFUL_EFFECTS_DEFAULT } from "../../../common/playfulEffects.js";
+import { PLAYFUL_MEDIA_DEFAULT } from "../../../common/playfulMedia.js";
 import { sanitizeWorklogIntervalHours } from "../../../common/worklogInterval.js";
 
 const tmp = () => mkdtempSync(path.join(tmpdir(), "mt-appcfg-"));
@@ -431,6 +432,7 @@ describe("loadAppConfig / saveAppConfig", () => {
     paletteSearchBox: false,
     remoteServer: false,
     playfulEffects: PLAYFUL_EFFECTS_DEFAULT,
+    playfulMedia: PLAYFUL_MEDIA_DEFAULT,
     confetti: CONFETTI_DEFAULT,
     toolbarPins: [],
     cockpitLines: { ...DEFAULT_COCKPIT_LINES },
@@ -487,6 +489,7 @@ describe("loadAppConfig / saveAppConfig", () => {
       paletteSearchBox: true, // opt-in (#2569): only `true` proves it persisted
       remoteServer: true, // experimental opt-in (#2669): only `true` proves it persisted
       playfulEffects: "off" as const, // defaults on, so only the opt-out proves it persisted
+      playfulMedia: { builtIn: false, files: [{ file: "~/heat/fire.gif", finale: "./boom.webm" }] }, // both halves of an entry, and the opt-out
       confetti: { styles: ["sakura" as const], events: ["pr-merged" as const] }, // a narrowed list and an opted-in event
       toolbarPins: ["collection:works"], // opt-in (#1984): only a promoted pin proves it persisted
       cockpitLines: { summary: 6, prompt: 2, response: 3 }, // a raised clamp must survive it too
@@ -573,6 +576,7 @@ describe("loadAppConfig / saveAppConfig", () => {
       paletteSearchBox: false,
       remoteServer: false,
       playfulEffects: PLAYFUL_EFFECTS_DEFAULT, // same: absent means on
+      playfulMedia: PLAYFUL_MEDIA_DEFAULT, // absent: the built-in pictures, none of the user's
       confetti: CONFETTI_DEFAULT, // absent: every style, no event
       toolbarPins: [], // opt-in the other way (#1984): a config that predates it promotes nothing
       fontFamily: null,
@@ -702,6 +706,7 @@ describe("#741 corrupt config is not silently wiped by a partial update", () => 
     paletteSearchBox: false,
     remoteServer: false,
     playfulEffects: PLAYFUL_EFFECTS_DEFAULT,
+    playfulMedia: PLAYFUL_MEDIA_DEFAULT,
     confetti: CONFETTI_DEFAULT,
     toolbarPins: [],
     cockpitLines: { ...DEFAULT_COCKPIT_LINES },
@@ -798,6 +803,7 @@ describe("mergeConfigUpdate", () => {
     paletteSearchBox: false,
     remoteServer: false,
     playfulEffects: PLAYFUL_EFFECTS_DEFAULT,
+    playfulMedia: PLAYFUL_MEDIA_DEFAULT,
     confetti: CONFETTI_DEFAULT,
     toolbarPins: [],
     cockpitLines: { ...DEFAULT_COCKPIT_LINES },

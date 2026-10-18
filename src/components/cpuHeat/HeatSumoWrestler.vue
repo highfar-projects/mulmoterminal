@@ -3,6 +3,7 @@
 import { useId } from "vue";
 import type { HeatPalette } from "./heatPalette";
 import { ARM_PATHS, BODY_TRANSFORM, type SumoPose } from "./sumoPose";
+import HeatBodyGradient from "./HeatBodyGradient.vue";
 
 defineProps<{ pose: SumoPose; palette: HeatPalette; mawashi: string; fierce: boolean }>();
 
@@ -13,11 +14,7 @@ const SAGARI_X = [-12, -6, 0, 6, 12];
 <template>
   <g :transform="BODY_TRANSFORM[pose]">
     <defs>
-      <radialGradient :id="skinId" cx="40%" cy="35%" r="75%">
-        <stop offset="0%" :stop-color="palette.bodyStops[0]" />
-        <stop offset="50%" :stop-color="palette.bodyStops[1]" />
-        <stop offset="100%" :stop-color="palette.bodyStops[2]" />
-      </radialGradient>
+      <HeatBodyGradient :id="skinId" :stops="palette.bodyStops" />
     </defs>
     <rect x="-22" y="-22" width="17" height="22" rx="8" :fill="`url(#${skinId})`" :stroke="palette.ink" stroke-width="2.5" />
     <rect x="5" y="-22" width="17" height="22" rx="8" :fill="`url(#${skinId})`" :stroke="palette.ink" stroke-width="2.5" />

@@ -488,11 +488,13 @@ describe("useAppConfig — loadConfig validates what the server sends", () => {
 // the page from its own port and answers the proxied /api with a 502 for the seconds the backend
 // takes to come back.
 describe("useAppConfig — loadConfig retries a request that failed", () => {
-  // The fetches a run made, so a test can say how many attempts happened rather than only what
-  // landed. `answers` is consumed one per call; the last one repeats.
+  // The config fetches a run made, so a test can say how many attempts happened rather than only
+  // what landed. `answers` is consumed one per call; the last one repeats. A config that lands also
+  // asks for the playfulEffects file list, which is not an attempt and is answered empty.
   function mockAttempts(...answers: Array<{ ok: boolean; body?: unknown }>) {
     const calls: string[] = [];
     globalThis.fetch = vi.fn(async (url: string) => {
+      if (String(url).startsWith("/api/playful-media")) return { ok: true, json: async () => ({}) };
       calls.push(String(url));
       const answer = answers[Math.min(calls.length - 1, answers.length - 1)];
       if (!answer.ok) throw new Error("ECONNREFUSED");
@@ -580,6 +582,7 @@ describe("useAppConfig — loadConfig retries a request that failed", () => {
   it("retries a 502 from the dev proxy", async () => {
     const calls: string[] = [];
     globalThis.fetch = vi.fn(async (url: string) => {
+      if (String(url).startsWith("/api/playful-media")) return { ok: true, json: async () => ({}) };
       calls.push(String(url));
       return calls.length === 1 ? { ok: false, status: 502 } : { ok: true, json: async () => ({ cwdPresets: [{ label: "proj", path: "/p" }] }) };
     }) as unknown as typeof fetch;
@@ -674,5 +677,21 @@ describe("useAppConfig — loadConfig retries a request that failed", () => {
 
     expect(presets.value).toEqual([{ label: "fresh", path: "/fresh" }]);
     expect(calls).toHaveLength(1); // the abandoned chain never fired again
+  });
+});
+
+// The user's own playfulEffects files are listed by their own route, read again on every config
+// load — which is what lets Reload config file reach them without a restart.
+describe("useAppConfig — the playfulEffects file list follows the config", () => {
+  it("asks for the list each time the config is loaded", async () => {
+    const urls: string[] = [];
+    globalThis.fetch = vi.fn(async (url: string) => {
+      urls.push(String(url));
+      return { ok: true, json: async () => ({}) };
+    }) as unknown as typeof fetch;
+    const { loadConfig } = useAppConfig();
+    await loadConfig();
+    await loadConfig();
+    expect(urls.filter((url) => url === "/api/playful-media")).toHaveLength(2);
   });
 });

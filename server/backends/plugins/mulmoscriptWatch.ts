@@ -9,7 +9,7 @@ import os from "node:os";
 import { canonicalPath } from "../../infra/fs/canonical-path.js";
 import { createDocumentWatchers, type FileStamp } from "../../files/documentWatch.js";
 import { containForWatching } from "../../files/pathContainment.js";
-import { fileStamp, fileStampSync, type SubscriptionSource } from "../files/fileChange.js";
+import { fileStamp, fileStampSync, watchWhileSubscribed, type SubscriptionSource } from "../files/fileChange.js";
 import { MULMOSCRIPT_SCOPE, parsePluginFileChannel } from "../../../common/fileChannel.js";
 import { isEchoOfOwnWrite, isScriptPath, scriptFileOnDisk, type ScriptDirs } from "./mulmoscriptWatchRules.js";
 
@@ -88,14 +88,7 @@ export function createMulmoScriptWatch() {
       ...(deps.pollMs === undefined ? {} : { pollMs: deps.pollMs }),
       warn: (message, data) => console.warn(`[mulmo-script] ${message}`, data ?? ""),
     });
-    const stopListening = deps.pubsub.onSubscriptionChange((channel, subscribed) => {
-      if (subscribed) watchers.start(channel);
-      else watchers.stop(channel);
-    });
-    return () => {
-      stopListening();
-      watchers.stopAll();
-    };
+    return watchWhileSubscribed(deps.pubsub, watchers);
   }
 
   return { recordOwnWrite, start };

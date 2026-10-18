@@ -29,7 +29,7 @@ vi.mock("../../../src/composables/useTerminalConnections", async (importOriginal
 vi.mock("../../../src/components/FilesPane.vue", () => ({
   default: {
     name: "FilesPane",
-    props: ["cwd", "requestedPath", "initialState", "canvasTarget"],
+    props: ["cwd", "requestedPath", "initialState", "canvasTarget", "viewModeSession"],
     emits: ["close", "dirty"],
     setup: (_p: unknown, { expose, slots }: { expose: (e: Record<string, unknown>) => void; slots: { title?: () => VNode[] } }) => {
       expose({ reload: paneStub.reload, flush: paneStub.flush, snapshot: paneStub.snapshot });
@@ -981,6 +981,17 @@ describe("file pane beside the enlarged cell", () => {
     const noCwd = mountCockpit([cell(1), cell(2)], 1, []);
     await openPane(noCwd);
     expect(paneOf(noCwd).props("cwd")).toBe("/work");
+  });
+
+  // The view a new file opens in is remembered per session (#3075), so the pane is told whose it is.
+  it("tells the pane the enlarged cell's session, and follows the zoom", async () => {
+    const w = mountCockpit([cell(1, "s1", "/one"), cell(2, "s2", "/two")], 1, []);
+    await openPane(w);
+    await openPaneOnCell(w, 1);
+    expect(paneOf(w).props("viewModeSession")).toBe("s1");
+    await w.setProps({ expandedUid: 2 });
+    await flushPromises();
+    expect(paneOf(w).props("viewModeSession")).toBe("s2");
   });
 
   // The pane ignores its `cwd` prop by design, so asserting the prop alone would pass while the

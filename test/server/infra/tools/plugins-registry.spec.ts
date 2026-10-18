@@ -22,6 +22,11 @@ describe("plugins registry", () => {
     expect(allowedToolNames()).toContain("mcp__mt__google");
   });
 
+  it("loads the spreadsheet package and auto-approves it like the other render tools", () => {
+    expect(plugins.map((plugin) => plugin.toolName)).toContain("presentSpreadsheet");
+    expect(allowedToolNames()).toContain("mcp__mt__presentSpreadsheet");
+  });
+
   it("loads every package in plugins.json without a duplicate tool name", () => {
     const names = plugins.map((plugin) => plugin.toolName);
     expect(new Set(names).size).toBe(names.length);
@@ -33,6 +38,18 @@ describe("POST /api/plugin/:toolName dispatch", () => {
   app.use(express.json());
   mountAllRoutes(app);
   const request = appRequest(app);
+
+  // The spreadsheet View's dispatch reaches the package's own execute on this route, which
+  // routes by `kind` and refuses any path outside artifacts/spreadsheets/ before touching files.
+  it("routes a spreadsheet dispatch to the package, which refuses a path outside artifacts/spreadsheets/", async () => {
+    const res = await request("/api/plugin/presentSpreadsheet", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ kind: "loadSpreadsheet", path: "artifacts/html/page.json" }),
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "path must be a .json file under artifacts/spreadsheets/" });
+  });
 
   // Regression (#748): the dispatch map was a plain object, so an Object.prototype member
   // name resolved to a truthy function and was dispatched as a plugin. A Map returns 404.

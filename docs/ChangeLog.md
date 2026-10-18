@@ -8,6 +8,45 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@10.8.0 — 2026-10-17
+
+> **Setup guide:** [10.8.0 — Your own pictures behind a busy terminal](https://receptron.github.io/mulmoterminal/guide/en/v10.8.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.8.0.html))
+
+### `playfulMedia`: your own GIFs, images and videos in playfulEffects (#3074, #3073)
+
+- `playfulMedia` in `~/.mulmoterminal/config.json` adds the user's own files to the pictures playfulEffects draws behind a busy terminal: `{ "builtIn": false, "files": ["~/heat/fire.gif", { "file": "./clip.webm", "finale": "~/heat/boom.svg" }] }`. A hidden feature with no Settings control; the user guide is `docs/guide/{en,ja}/playful-media.md`.
+- Paths are absolute (or a Windows drive letter), `~/`, or `./` for the directory MulmoTerminal was started in; anything else is dropped with a log line. GIF / APNG / WebP / PNG / AVIF / SVG up to 20 MB and MP4 / WebM up to 50 MB. A missing, oversized or unknown file is skipped with a log line naming it and the reason, and the others still work.
+- A user file is used at every level with the built-in pictures' per-level opacity (now shared as `STAGE_OPACITY`) and their shake at level 4, scaled into the same box. An optional `finale` plays once at full strength. Videos are muted and loop, except a finale.
+- The pick is the same per-session hash over the nine built-in pictures plus the user's files; `"builtIn": false` leaves the nine out. `playfulEffects: "off"` or a named built-in picture behaves exactly as before.
+- `GET /api/playful-media` lists the playable files by index with an mtime version, and `/api/playful-media/:index` (and `/:index/finale`) serves them with our own type, `nosniff` and `sandbox`. The config is the allowlist; no request names a path.
+- The launcher now passes the user's directory to the server as `--launch-dir` in argv, so `./` resolves against it. It is not passed in the environment, which would reach every PTY.
+- The browser re-reads the list on every config load, so Reload config file reaches it.
+
+### Duplicate-code alerts resolved by sharing the code (#3070, #3069)
+
+- The three open `jscpd/duplicate-code` code-scanning alerts are fixed by sharing the code, not suppressing the alerts: `HeatBodyGradient.vue` for the body gradient `HeatKettle` and `HeatSumoWrestler` both drew, `RateLimitService` derived from `TokenRotationRuntime` rather than restating its members, and `watchWhileSubscribed()` shared by the document and mulmo-script watchers.
+- The two heat pictures render identically, checked against the previous components over every theme, level and pose. The watchers' stop path, which no spec covered before, now has one.
+
+### The git-status truncation spec no longer times out on Windows (#3072, #3071)
+
+- The spec crossed the Files tree's entry cap by writing `MAX_GIT_STATUS_ENTRIES + 1` (2001) files and running `git status` over them, which timed out on Windows runners across several branches. `mountFilesGitStatusRoute` now takes the cap as an optional `maxStatusEntries` dep, defaulting to the constant, and the spec checks both sides of a small cap. Production behaviour is unchanged.
+
+## mulmoterminal@10.7.2 — 2026-10-16
+
+> **Setup guide:** [10.7.2 — End a worker and close its cell, and lighter worktrees on macOS](https://receptron.github.io/mulmoterminal/guide/en/v10.7.2.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.7.2.html))
+
+### `POST /api/session/:id/close` ends a session and closes its cell (#3068, #3067)
+
+- Another process that ended a session through `POST /api/session/:id/terminate` left the attached cell showing `[session ended]`: the route reaps the session before its process dies, so the exit was classified `gone` and sent with `ended: false`. An agent replacing its worker at each milestone left one dead cell per milestone.
+- The new route marks the live entry (`closeRequested`) before the reap, so its exit is sent as `ended: true` and the cell closes under the same rule as `/exit` (#3051): a worktree cell, or one ended within about two seconds of starting, keeps its banner.
+- `terminate` is unchanged for the cell, since a cell's own restart (#1918) and token switch (#2950) go through it and reconnect the same slot. Both routes now drop the unplaced mark, so a deliberately ended session is never adopted later by a grid (#3055).
+
+### The managed worktree root is kept out of Time Machine and Spotlight on macOS (#3066, #3059)
+
+- The first time a worktree is cut in a server process, `~/.mulmoterminal/worktrees` (or `$MULMOTERMINAL_HOME/worktrees`) gets a sticky `tmutil addexclusion` (no sudo, no `-p`) and a `.metadata_never_index` marker. One exclusion on the root covers every worktree created in it later; nothing is written inside a worktree, so `isDirty` is unaffected.
+- On by default, with no setting. Undo with `tmutil removeexclusion ~/.mulmoterminal/worktrees`. The Time Machine effect was measured; the Spotlight marker's effect could not be observed.
+- A relative `MULMOTERMINAL_HOME` now resolves the worktree root to an absolute path on first use, so the excluded root is the one git uses. A failure is logged, never thrown, and retried on the next worktree.
+
 ## mulmoterminal@10.7.1 — 2026-10-16
 
 > **Setup guide:** [10.7.1 — Keep part of a subscription's week for yourself](https://receptron.github.io/mulmoterminal/guide/en/v10.7.1.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.7.1.html))

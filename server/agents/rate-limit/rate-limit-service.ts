@@ -12,8 +12,7 @@ import { removeProbeTranscript } from "../probe/probe-transcript.js";
 import { newestRolloutFile, readRolloutTail } from "../codex/codex-rollout.js";
 import { codexSessionsRoot } from "../codex/codex-session.js";
 import { createAccountRateLimits, type AccountRateLimitReading } from "./account-rate-limits.js";
-import type { TokenAssignment } from "../token/token-assignment.js";
-import { createTokenRotation } from "../token/token-rotation-service.js";
+import { createTokenRotation, type TokenRotationRuntime } from "../token/token-rotation-service.js";
 import type { ProbeStall } from "../probe/probe-stall.js";
 import { accountHome, codexSessionsUnder, distinctAccounts, homeEnv } from "../../session/session-home.js";
 import { latestRateLimitsInRollout } from "../codex/codex-rate-limits.js";
@@ -77,13 +76,7 @@ export function startHomeProbe(
 }
 
 /** What index.ts takes: the routes' deps, and the choice of credential for a new session (#2919). */
-export type RateLimitService = RateLimitRouteDeps & {
-  assignToken: () => TokenAssignment | null;
-  keptAssignment: (tokenId: string | undefined) => TokenAssignment | null;
-  markSpent: (tokenId: string) => void;
-  hasFreeChoice: () => boolean;
-  isNearLimit: (tokenId: string) => boolean;
-};
+export type RateLimitService = RateLimitRouteDeps & Omit<TokenRotationRuntime, "meters">;
 
 /** The accounts' meters and the rotation tokens' meters, as the one list the routes read. A probe's
  *  report key is minted by the meter that started it, so at most one of the two knows it. */

@@ -25,7 +25,7 @@ const TRUNCATED: FileGitStatus = { repo: true, files: {}, truncated: true };
 // git escapes a non-ASCII path as C-quoted octal unless told not to; the tree names files as they are.
 const QUOTE_PATH_OFF = ["-c", "core.quotePath=false"];
 
-async function readTreeGitStatus(root: string): Promise<FileGitStatus> {
+async function readTreeGitStatus(root: string, maxEntries: number): Promise<FileGitStatus> {
   const prefix = await git(["rev-parse", "--show-prefix"], root, STATUS_TIMEOUT_MS);
   if (!prefix.ok) return NOT_A_REPO;
   // `-- .` limits the walk to the pane's root; the paths still come back relative to the repository.
@@ -33,7 +33,7 @@ async function readTreeGitStatus(root: string): Promise<FileGitStatus> {
   if (status.overflow) return TRUNCATED;
   if (!status.ok) return { repo: true, files: {} };
   // Only the line ending comes off: a folder name may begin with a space, and git keeps it.
-  const entries = parseStatusEntries(status.stdout, prefix.stdout.replace(/\r?\n$/, ""), MAX_GIT_STATUS_ENTRIES);
+  const entries = parseStatusEntries(status.stdout, prefix.stdout.replace(/\r?\n$/, ""), maxEntries);
   return entries.truncated ? TRUNCATED : { repo: true, files: entries.files };
 }
 
@@ -49,7 +49,8 @@ async function readHeadText(abs: string, maxBytes: number): Promise<string | nul
   return shown.ok ? shown.stdout : null;
 }
 
-export function mountFilesGitStatusRoute(app: Express, deps: { base: (cwd: unknown) => string; maxHeadBytes: number }): void {
+export function mountFilesGitStatusRoute(app: Express, deps: { base: (cwd: unknown) => string; maxHeadBytes: number; maxStatusEntries?: number }): void {
+  const maxEntries = deps.maxStatusEntries ?? MAX_GIT_STATUS_ENTRIES;
   // GET /api/files/browse/head?cwd=&path= — what the editor marks changes against (#2497). The
   // same containment as the text route: the path may not leave the base, lexically or by a link.
   app.get("/api/files/browse/head", async (req, res) => {
@@ -60,6 +61,6 @@ export function mountFilesGitStatusRoute(app: Express, deps: { base: (cwd: unkno
 
   app.get("/api/files/browse/git-status", async (req, res) => {
     const root = deps.base(req.query.cwd);
-    res.json(await coalesce(root, () => readTreeGitStatus(root)));
+    res.json(await coalesce(root, () => readTreeGitStatus(root, maxEntries)));
   });
 }

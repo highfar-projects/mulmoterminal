@@ -1863,6 +1863,7 @@ function onRosterDragLeave(event: DragEvent) {
           :cwd="paneCwd"
           :initial-state="paneState"
           :canvas-target="paneCellUid !== null"
+          :view-mode-session="paneCellSessionId"
           :insert-target="paneCellTakesInput"
           :insert-target-cwd="paneCellCwd"
           :stories-roots="storiesRoots"

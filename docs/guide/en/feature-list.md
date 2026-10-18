@@ -4,7 +4,7 @@ nav_title: Feature list
 layout: default
 parent: English
 nav_order: 6.5
-as_of: 10.7.1
+as_of: 10.8.0
 description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 9.1.0)."
 ---
 
@@ -65,6 +65,7 @@ More: [Basics](basics.html)
 More: [Agents](agents.html)
 
 - Antigravity cells light the working dot during a turn and play the finished sound and push when it ends (v10.5.0)
+- `POST /api/session/:id/close` ends a session and closes the cell showing it, as `/exit` would; `terminate` leaves the cell (v10.7.2)
 - An agent can start a Claude session with only some GUI tool groups (`spawnBackgroundChat` `guiGroups`) (v10.5.0)
 - The same `guiGroups` limit works for a Codex or Copilot session, and holds when a Codex session is reopened from its rollout in the resume list (v10.6.0)
 - The Skills viewer's skills.sh mode searches the public directory for skills not on disk and shows a skill's `SKILL.md`, every file it brings and the ones that can run code, with the `npx skills add` line to copy; it installs nothing (v8.4.0)
@@ -194,6 +195,7 @@ More: [Feature reference](features.html)
 
 More: [Worktrees](worktree.html)
 
+- On macOS the managed worktree root is kept out of Time Machine and marked for Spotlight (v10.7.2)
 - The PRs & Issues view picks which agent and account an issue starts in (v6.0.0)
 - worktreeEnv gives each git worktree its own dev-server port and database name (v4.5.0)
 - When a work comment cannot be written, the cell header shows why and how to fix it (v4.4.0)
@@ -254,6 +256,7 @@ More: [Configuration](config.html)
 - Settings adds open buttons (URL, folder, shell, view, PR, picker) and action buttons to the header (v7.3.0)
 - Default agent, header status-colour mode and Playful effects are selectable in Settings (v7.2.0)
 - Playful effects has a UFO picture, chosen by `random` or pinned with `"playfulEffects": "ufo"` (v9.5.0)
+- `playfulMedia` in config.json adds your own GIFs, images and short videos to the Playful effects pictures, with an optional finale file; `"builtIn": false` leaves the built-in ones out (v10.8.0)
 - Settings adds, removes and moves header chips and buttons, updating open terminals; edit in place since 7.3 (v7.2.0)
 - Reload config file re-reads config.json without a restart, refusing an invalid file (v7.2.0)
 - Header buttons can be grouped into a folder that opens a menu, edited in Settings since 7.3 (v6.6.0)

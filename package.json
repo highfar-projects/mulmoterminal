@@ -1,6 +1,6 @@
 {
   "name": "mulmoterminal",
-  "version": "10.7.1",
+  "version": "10.8.0",
   "description": "Run multiple Claude Code and Codex sessions in parallel — a browser terminal grid that shows which agent needs you. Local, tmux-backed.",
   "type": "module",
   "license": "MIT",
@@ -81,6 +81,7 @@
     "@google/genai": "^2.30.0",
     "@gui-chat-plugin/jinglescript": "^0.8.0",
     "@gui-chat-plugin/shapescript": "^8.2.2",
+    "@gui-chat-plugin/spreadsheet": "^3.0.0",
     "@lezer/highlight": "^1.2.3",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "@mulmobridge/web-push": "^1.1.0",

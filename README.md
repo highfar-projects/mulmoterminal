@@ -1563,6 +1563,9 @@ and the cell launches its agent inside a fresh
 separate working tree that shares the repo's `.git`, so several agents can work the same
 repo without colliding. Worktrees live under `~/.mulmoterminal/worktrees/` (override with
 `MULMOTERMINAL_HOME`), and existing ones are listed below the field.
+On macOS that root is kept out of Time Machine (`tmutil addexclusion`) and marked for Spotlight
+(`.metadata_never_index`) the first time a worktree is cut there, so throwaway worktrees are not
+backed up and indexed.
 
 **A worktree inherits the project's settings.** A fresh worktree used to have none — no colours,
 no name, no model, no grid rank. It is now given its own copy derived from the project's, written
@@ -2233,6 +2236,7 @@ From a shell: `mulmoterminal room read <room>` · `room post <room> <text…> [-
 | -------- | ------- |
 | `POST /api/mcp/:sessionId` | Per-session GUI MCP server (Streamable HTTP; `GET`/`DELETE` → 405). |
 | `POST /api/plugin/:toolName` | GUI-plugin dispatch (incl. `spawnBackgroundChat`, `manageAccounting`, `presentHtml`). `spawnBackgroundChat` takes an optional `guiGroups` (claude, codex and copilot): a list of tool groups (`render`, `data`, `media`, `external`) the spawned session is limited to, `[]` for no GUI tool. The limit holds across a resume, including a codex resume opened by its rollout id. It is not a sandbox: the tools stay callable over HTTP. |
+| `POST /api/session/:id/close` | End a session **and close the cell showing it**, as if its agent had exited (`/exit`) — the counterpart of `spawnBackgroundChat` for an agent that replaces its worker. Answers `{ ok, ended }`, where `ended` says whether the tmux session is really gone. The session is never adopted later as an unplaced cell. (`POST /api/session/:id/terminate` ends a session but leaves its cell showing `[session ended]`; a cell's own restart uses it.) |
 | `GET /api/agent/toolResults/:id` · `POST /api/agent/toolResult` | GUI-panel result history / persist. |
 | `GET /api/tools` · `GET /api/tool-calls/:id` | Available tools / tool-call history. |
 | `POST /api/accounting` | Double-entry accounting (bundled plugin). |

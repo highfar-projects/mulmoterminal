@@ -1344,6 +1344,13 @@
     three-bvh-csg "^0.0.18"
     three-mesh-bvh "0.9.15"
 
+"@gui-chat-plugin/spreadsheet@^3.0.0":
+  version "3.0.0"
+  resolved "https://registry.yarnpkg.com/@gui-chat-plugin/spreadsheet/-/spreadsheet-3.0.0.tgz#0a697579e983f2f6892e9fd6c25bd047e5852b61"
+  integrity sha512-FZNqXrIutAh+yb0sj4MX559QDINE6FUKmawzUR7klYWaEgTxaWECK3rCynP3tDI7+WXRXy80ur7kf++Hko6oSw==
+  dependencies:
+    xlsx "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+
 "@hono/node-server@^1.19.9 || ^2.0.5":
   version "2.1.1"
   resolved "https://registry.yarnpkg.com/@hono/node-server/-/node-server-2.1.1.tgz#9cfa8649e9ecbcd48edf505b103002402ea51e70"
@@ -8672,6 +8679,10 @@ ws@~8.21.0:
   version "8.21.3"
   resolved "https://registry.yarnpkg.com/ws/-/ws-8.21.3.tgz#660b4faddb6a3e575c86e078126919961f4de4fc"
   integrity sha512-201TZ/kPWxoPr/OKWjquZR1SWKXcvxdH+e1xrx89b3YbmzLMFCLfnaG1HFIgWzJOEWZ7MvpK++odZufgYR50Rw==
+
+"xlsx@https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz":
+  version "0.20.3"
+  resolved "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz#992725af0bb69fa9733590fcb8ab4a57e10b929b"
 
 xml-name-validator@^5.0.0:
   version "5.0.0"

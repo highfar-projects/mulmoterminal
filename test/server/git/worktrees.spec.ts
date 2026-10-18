@@ -2,7 +2,7 @@
 import { canSymlink } from "../../support/canSymlink.js";
 import { makeTempDir } from "../../support/tempDir.js";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { writeFileSync, readFileSync, existsSync, symlinkSync } from "node:fs";
+import { writeFileSync, readFileSync, existsSync, realpathSync, symlinkSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { reservedWorktreeEnv } from "../../../server/config/worktree/worktree-env.js";
 import path from "node:path";
@@ -79,6 +79,19 @@ describe("worktreesRoot / isManagedWorktree", () => {
     expect(isManagedWorktree("/work/myapp", "/work/myapp")).toBe(false); // the main checkout
     expect(isManagedWorktree("/work/myapp", "/etc/passwd")).toBe(false);
   });
+
+  // A relative MULMOTERMINAL_HOME that does not exist yet: git would resolve it against the repo and
+  // the Time Machine exclusion against the server's cwd, so the root has to be absolute (#3059).
+  it("is absolute even for a relative override that does not exist yet", () => {
+    process.env.MULMOTERMINAL_HOME = "not-created-yet-3059";
+    try {
+      const root = worktreesRoot("/work/myapp");
+      expect(path.isAbsolute(root)).toBe(true);
+      expect(root.startsWith(path.resolve("not-created-yet-3059"))).toBe(true);
+    } finally {
+      delete process.env.MULMOTERMINAL_HOME;
+    }
+  });
 });
 
 // Integration: a real temp git repo, with the managed root redirected to a temp dir.
@@ -133,6 +146,14 @@ describe("git worktree lifecycle", () => {
       expect(wt.branch).toBe("agent/fix-login");
       expect(existsSync(wt.path)).toBe(true);
       expect(isManagedWorktree(repo, wt.path)).toBe(true);
+      // #3059: the root is kept out of Spotlight and Time Machine on macOS, and only there. Time
+      // Machine is read from the attribute `tmutil addexclusion` sets: `tmutil isexcluded` already
+      // reports a temp directory as excluded, so it would pass whether or not anything ran.
+      const root = path.join(realpathSync(home), "worktrees");
+      expect(existsSync(path.join(root, ".metadata_never_index"))).toBe(process.platform === "darwin");
+      if (process.platform === "darwin") {
+        expect(execFileSync("/usr/bin/xattr", [root], { encoding: "utf8" })).toContain("com_apple_backup_excludeItem");
+      }
 
       const list = await listWorktrees(repo);
       expect(list.map((w) => w.branch)).toEqual(["agent/fix-login"]); // excludes the main checkout

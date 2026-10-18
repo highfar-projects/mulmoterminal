@@ -94,6 +94,8 @@ const REACHABLE_BY: Record<string, Reachable> = {
   toolbarPins: { ui: true, skill: CONFIG_SKILL },
   // On/off only in Settings, worded so it does not advertise: which pictures exist is left to find.
   playfulEffects: { ui: true, skill: CONFIG_SKILL },
+  // Config.json only, on purpose: a hidden extra for playfulEffects with no control in Settings (#3073).
+  playfulMedia: { skill: CONFIG_SKILL },
   confetti: { ui: true, skill: CONFIG_SKILL },
   fontFamily: { ui: true, skill: "mulmoterminal-dirs" },
 };

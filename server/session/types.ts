@@ -41,6 +41,10 @@ export interface PtyEntry {
   // lifetime says nothing about whether that program got going (an exit soon after is not a launch
   // failure).
   reattached?: boolean;
+  // Someone asked, through `POST /api/session/:id/close`, for the session to end AND its cell to go
+  // (#3067). The reap runs before the pty dies, so its exit reads as `gone` — this is what tells the
+  // cell that it was the session ending, not a restart replacing it.
+  closeRequested?: boolean;
   // A reattach replayed a delta tail, so the browser's screen is only as complete as that window
   // (see tmuxRedrawClient). Cleared by the first resize frame after the reattach — waiting for it
   // is the point, since that frame is where the client tells us the size it actually settled at.

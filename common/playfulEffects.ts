@@ -39,7 +39,7 @@ const FNV_PRIME = 0x01000193;
 
 // FNV-1a: stable across reloads and browsers, so "random" gives each session its own picture that
 // stays put, rather than one that changes on every re-render.
-const hashOf = (text: string): number => [...text].reduce((hash, char) => Math.imul(hash ^ char.charCodeAt(0), FNV_PRIME) >>> 0, FNV_OFFSET);
+export const hashOf = (text: string): number => [...text].reduce((hash, char) => Math.imul(hash ^ char.charCodeAt(0), FNV_PRIME) >>> 0, FNV_OFFSET);
 
 /** The picture for a session, or null when the setting is off. */
 export function patternFor(sessionId: string, setting: PlayfulEffects): HeatPattern | null {
