@@ -36,9 +36,50 @@ const recorder = () => {
 };
 
 const publisher = (store: SessionActivityStore, uid: () => string | null = () => UID, onError = vi.fn()) =>
-  createSessionActivityPublisher({ uid, hostId: HOST, store, onError });
+  createSessionActivityPublisher({ uid, hostId: () => HOST, store, onError });
 
 describe("createSessionActivityPublisher", () => {
+  // Signed in, but this machine's channel is not decided for the account yet (or the decision
+  // failed): writing anywhere would guess at a channel that may be another machine's (#3092).
+  it("writes the current state again to a channel that has not had it", () => {
+    const { writes, store } = recorder();
+    let channel = "mulmoterminal";
+    const switching = createSessionActivityPublisher({ uid: () => UID, hostId: () => channel, store, onError: vi.fn() });
+    switching.publish("s1", { working: true, waiting: false });
+    channel = "mulmoterminal-0000ffff";
+    switching.publish("s1", { working: true, waiting: false });
+    expect(writes.map((write) => write.rev)).toEqual([1, 2]);
+  });
+
+  // Teardown has to reach every channel the session was written to, or the old one keeps a
+  // dead row on the phone after the channel changed or went undecided.
+  it("removes the session from every channel it was written to under this account", () => {
+    const removed: string[] = [];
+    const store: SessionActivityStore = {
+      write: async () => undefined,
+      remove: async (uid, hostId, sessionId) => {
+        removed.push(`${uid}/${hostId}/${sessionId}`);
+      },
+    };
+    let channel: string | null = "mulmoterminal";
+    const activity = createSessionActivityPublisher({ uid: () => UID, hostId: () => channel, store, onError: vi.fn() });
+    activity.publish("s1", { working: true, waiting: false });
+    channel = "mulmoterminal-0000ffff";
+    activity.publish("s1", { working: false, waiting: false });
+    channel = null;
+    activity.forget("s1");
+    expect(removed.sort()).toEqual([`${UID}/mulmoterminal-0000ffff/s1`, `${UID}/mulmoterminal/s1`]);
+  });
+
+  it("writes and removes nothing while the channel is undecided", () => {
+    const { writes, removes, store } = recorder();
+    const undecided = createSessionActivityPublisher({ uid: () => UID, hostId: () => null, store, onError: vi.fn() });
+    undecided.publish("s1", { working: true, waiting: false });
+    undecided.forget("s1");
+    expect(writes).toEqual([]);
+    expect(removes).toEqual([]);
+  });
+
   it("writes a transition with the state that changed", () => {
     const { writes, store } = recorder();
     publisher(store).publish("s1", { working: true, waiting: false });
