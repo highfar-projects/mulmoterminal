@@ -76,12 +76,16 @@ quartiles, a total that does not add up.
 
 Put the result in `presentSpreadsheet`. Split each number by whether the user may want to change it:
 
-- **Formulas** for whatever the user may change or check: totals, ratios, growth, and the
-  assumptions a what-if depends on. A formula recalculates when the user edits a cell.
-- **Values** for what the sheet cannot compute. The sheet has no `CORREL`, `SLOPE`, `PERCENTILE`,
-  `QUARTILE`, `SUMIFS`, `COUNTIFS` or `RANK`, and any function it lacks shows `#NAME?`. Compute
-  these in the script and put the result in as a number. Label them as computed (for example
-  "Correlation (computed)"), because a value does not change when the user edits the data.
+- **Formulas** for everything the sheet can compute: totals, ratios, growth, the assumptions a
+  what-if depends on, and the statistics. A formula recalculates when the user edits a cell. The
+  sheet has `AVERAGE`, `MEDIAN`, `STDEV` / `STDEVP`, `VAR` / `VARP`, `CORREL`, `SLOPE`,
+  `INTERCEPT`, `RSQ`, `PERCENTILE`, `QUARTILE`, `LARGE`, `SMALL`, `RANK`, `COUNTIF(S)`,
+  `SUMIF(S)` and `AVERAGEIF(S)`; `PERCENTILE` and `QUARTILE` interpolate like the script's
+  `quantile`. Check a formula against the script's number before you present it.
+- **Values** only for what no function gives (a t-test, a non-linear fit, anything that needs a
+  loop). A function the sheet lacks shows `#NAME?`. Compute these in the script and put the
+  result in as a number. Label them as computed (for example "t-test p (computed)"), because a
+  value does not change when the user edits the data.
 
 Use one sheet for the data and another for the summary, so a summary formula reads the data sheet
 (`=AVERAGE(Data!C2:C201)`). If the data is too large to show, summarise it in the script first:
@@ -97,12 +101,27 @@ Use `presentChart`, and choose the chart from the shape of the data:
 | comparing categories | bar, sorted, unless the categories have an order of their own |
 | parts of a whole (few parts) | stacked bar; pie only for a handful of parts |
 | two numeric columns | scatter, with the regression line when you computed one |
-| the distribution of one column | histogram (bars over bins computed in the script) |
+| the distribution of one column | histogram (bins counted in the script, passed inline) |
 | two categories crossed | heatmap |
 
 Give each chart a title saying what it shows. Give each axis a name, with its unit.
 
-A chart is drawn from the numbers you pass it. **It is not linked to the spreadsheet.**
+**Draw a chart of sheet data from the sheet**, so it follows the user's edits. Give the chart a
+`source` and leave the data out of `option`:
+
+```json
+{ "title": "Sales by month", "source": { "spreadsheet": "<the path presentSpreadsheet reported>", "range": "Summary!A1:C13" },
+  "option": { "xAxis": { "type": "category", "name": "Month" }, "yAxis": { "name": "Sales (JPY)" },
+              "series": [{ "type": "bar" }, { "type": "bar" }] } }
+```
+
+The range's first row is the header (it names the series) and its first column the categories,
+so lay the summary sheet out that way: one row per category, one column per series. The chart is
+drawn from the calculated range, and drawn again whenever the sheet is saved. If `presentChart`
+says it cannot read the range, fix the range rather than falling back.
+
+Pass data inline in `option` only for what is not in the sheet: histogram bins, the points of a
+fitted line. Such a chart does **not** follow the sheet; say which charts do and which do not.
 
 ## 5. Say where everything is
 
@@ -118,18 +137,23 @@ End by telling the user:
 
 - the spreadsheet's path and the chart's path;
 - where the scripts are;
-- which figures are formulas and which are computed values.
+- which figures are formulas and which are computed values;
+- which charts follow the sheet and which do not.
 
 ## When the user edits the spreadsheet
 
-You are not told that the user edited it; they will tell you. Read the spreadsheet file again. It
+Formulas recalculate in the sheet, and charts drawn from it (`source`) redraw on their own. You
+are not told that the user edited it; they will tell you. Read the spreadsheet file again. It
 holds what was typed, **formulas included and their results not**, so you see `=B7+C7`, not a
-number. Work out the results in a script. Then:
+number. Work out the results in a script, and say what changed most.
+
+If the sheet holds no computed values, and every chart follows it, that is all: do not present it
+again. Otherwise the computed values and the inline charts are now stale. Then:
 
 - recompute the computed values that depended on the edited cells;
 - call `presentSpreadsheet` again with the whole spreadsheet: the user's edits, the formulas, and
   the new computed values;
-- draw the charts again;
+- draw the charts again, with their `source` pointing at the **new** spreadsheet;
 - copy the scripts as in step 5, into the folder named after the **new** spreadsheet id;
 - say what changed most, and give the new spreadsheet's, chart's and scripts' paths.
 

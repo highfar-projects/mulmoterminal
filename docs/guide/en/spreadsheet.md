@@ -55,9 +55,12 @@ an image.
 
 ![The chart card: monthly coffee and pastry sales as lines, with the monthly total as bars](../images/spreadsheet-chart.png)
 
-A chart is drawn from numbers the agent gives it. **It is not linked to the spreadsheet**: change the
-sheet and the chart stays as it was. Ask the agent to draw it again (see
-[Changing the numbers yourself](#changing-the-numbers-yourself)).
+**A chart can follow the spreadsheet.** When the agent draws a chart from a range of the sheet, the
+chart shows that range calculated, and draws itself again when the sheet is saved: change a number and
+the chart moves with it. The card says which range it comes from ("From the spreadsheet: Summary!A1:C13").
+A chart the agent drew from numbers it passed directly (a histogram, a fitted line) does not follow the
+sheet; ask the agent to draw it again (see [Changing the numbers yourself](#changing-the-numbers-yourself)).
+[Analysing data from start to finish](#analysing-data-from-start-to-finish) shows it working.
 
 ## Changing the numbers yourself
 
@@ -89,24 +92,140 @@ The file holds what you typed, **formulas included, not the results**. So the ag
 `749,000`. To use a result, it works the formula out itself. For a long or intricate sheet, ask it to
 compute the numbers with a script, rather than in its head.
 
+## Analysing data from start to finish {#analysing-data-from-start-to-finish}
+
+Hand the agent a CSV and say what you want to know. You write no code and do not reshape the data:
+the agent reads the file with a Node script, works out the statistics, and puts a live spreadsheet
+and charts on the Canvas. The bundled `mulmoterminal-data-analysis` skill carries the procedure.
+You do not have to name it.
+
+![A shell cell showing the first rows of cafe-sales.csv on the left, and the Canvas on the right with the analysis spreadsheet open on its Temperature tab: correlation, slope, intercept and R squared of hot drinks, iced drinks and pastry against temperature](../images/spreadsheet-analysis-overview.png)
+
+### How to ask {#analysis-how-to-ask}
+
+Name the file and what you want to compare:
+
+> Analyse data/cafe-sales.csv. I want to see how temperature and the day of the week affect sales.
+
+> Read orders.csv and compare the regions by month. Which region grew fastest?
+
+> Look at survey.tsv: does satisfaction depend on age group?
+
+Some things that help:
+
+- **Say what you want to compare** (temperature against sales, weekdays against weekends). The agent
+  picks the statistics and charts from that.
+- **Clear column names help.** If a column's meaning is unclear (`amt`, `v2`), the agent asks once
+  rather than guessing. Answer in a word.
+- **Any delimited text works**: CSV, TSV, an export from another tool. A large file is fine. The
+  agent reads only its first lines into the conversation and lets a script read the rest.
+
+### What the agent does {#analysis-steps}
+
+1. **Checks the data first** and tells you: the number of rows, each column and whether it holds
+   numbers, dates or categories, and how many values are empty or unreadable. Duplicate rows,
+   missing dates and values far outside the rest come before anything interesting.
+2. **Computes the statistics with a script** (`simple-statistics` in Node), so no number comes from
+   the model reading the data.
+3. **Builds the spreadsheet** with the statistics as formulas (below), and checks each formula
+   against the script's number before showing it.
+4. **Draws charts from the spreadsheet**, so they follow it.
+5. **Tells you what it found, and where everything is.**
+
+### What you get {#analysis-what-you-get}
+
+**A spreadsheet with one tab per question.** The raw data goes on a `Data` tab, and each analysis
+gets a tab that reads it with formulas. For the cafe example, that is `Temperature` (correlation and
+trend against temperature), `Weekday` (averages by day, weekdays against weekends) and `Stats`
+(average, median, standard deviation, quartiles, minimum and maximum of each column).
+
+**The statistics are formulas**, not numbers typed in: `=CORREL(Data!$C$2:$C$62,Data!$E$2:$E$62)`,
+`=AVERAGEIF(Data!$B$2:$B$62,"Sat",Data!$D$2:$D$62)`, `=QUARTILE(Data!$C$2:$C$62,1)`. So they
+recalculate when you change the data. See [Functions you can use](#functions-you-can-use) for what
+the sheet can compute.
+
+**Some results are values**, because no function gives them: a t-test, a non-linear fit. They are
+labelled as computed (for example "t value (computed)") and do not change when you edit the data.
+The agent tells you which ones they are.
+
+**Charts drawn from the sheet.** Each card says which range it comes from:
+
+![A bar chart card titled "average cups by day of week", labelled "From the spreadsheet: Weekday!A1:C8", with hot and iced drinks for Monday to Sunday; Saturday and Sunday are clearly higher](../images/spreadsheet-analysis-weekday.png)
+
+The series names come from the range's header row, and the categories from its first column. In the
+example, the regression line is drawn from a column of predicted values that is itself a formula,
+so the line moves with the data too. A chart that is not drawn from the sheet (a histogram's bins, say) has no
+"From the spreadsheet" line, and the agent tells you it does not follow the sheet.
+
+### Change the data and watch {#analysis-change-and-watch}
+
+Click a cell, type a new value in the bar at the bottom and press **Update**. Here the iced drinks
+sold on 1 June, a cool day at 18°C, are changed from 15 to 110:
+
+![The Data tab with cell E2 (iced drinks on 2026-06-01) selected. The edit bar at the bottom shows E2, Formula, the value 110, the format #,##0 and the Update button](../images/spreadsheet-analysis-edit.png)
+
+Every formula that reads the cell recalculates at once, and the charts drawn from the sheet redraw
+within a few seconds. Before the change:
+
+![The Temperature tab: iced drinks correlate 0.91 with temperature, 5.95 cups per degree, R squared 82.7%. Below it the scatter chart of iced drinks against temperature, with a steep regression line](../images/spreadsheet-analysis-before.png)
+
+After it:
+
+![The same tab after the change: iced drinks now correlate 0.74, 4.81 cups per degree, R squared 55.5%. In the scatter chart one point at 18°C has jumped to 110 and the regression line is flatter](../images/spreadsheet-analysis-after.png)
+
+The correlation fell from 0.91 to 0.74 and the line flattened, because one cool day now sold as much
+as the hottest. This is the way to ask "what if": change a number, and see how much the conclusion
+depends on it.
+
+### Asking the agent to read it again {#analysis-read-again}
+
+You do not need to tell the agent about an edit for the sheet and its charts to update; they do it
+themselves. Tell it when you want its **interpretation** of the new numbers:
+
+> I changed the iced drinks on 1 June. Read the spreadsheet again: what changed most?
+
+The agent reads the file, works the formulas out with a script and tells you what moved. If the
+sheet holds computed values (like the t value) or charts that do not follow it, those are now out
+of date, and the agent recomputes them and **presents the spreadsheet again as a new one**. From
+then on, edit the new one: the old one stays as it was and is no longer part of the analysis.
+
+### Where it is saved {#analysis-files}
+
+The agent ends by giving the paths:
+
+| What | Where |
+|---|---|
+| The spreadsheet | `<workspace>/artifacts/spreadsheets/YYYY/MM/<id>.json` |
+| The charts | `<workspace>/artifacts/charts/YYYY/MM/<name>.chart.json` |
+| The scripts it used | `<workspace>/artifacts/analysis/YYYY/MM/<spreadsheet id>/` |
+
+The scripts are kept so the analysis can be run again, for example on next month's CSV. Ask:
+
+> Run the same analysis on data/cafe-sales-august.csv.
+
+Nothing is written into your repository, and nothing is installed into your project: the agent
+works in a temporary directory of its own.
+
 ## Where the files are
 
 | What | Where |
 |---|---|
 | Spreadsheets | `<workspace>/artifacts/spreadsheets/YYYY/MM/<id>.json` |
 | Charts | `<workspace>/artifacts/charts/YYYY/MM/<name>.chart.json` |
+| Analysis scripts | `<workspace>/artifacts/analysis/YYYY/MM/<spreadsheet id>/` |
 
 The workspace is `~/mulmoclaude` unless you have set `CLAUDE_CWD`. These are plain JSON files. Back them
 up or keep them in git like any other file.
 
 ## Functions you can use
 
-These are the functions the spreadsheet calculates, as of `@gui-chat-plugin/spreadsheet` 4.0.2. Any other
+These are the functions the spreadsheet calculates, as of `@gui-chat-plugin/spreadsheet` 4.1.0. Any other
 function shows `#NAME?` in its cell.
 
 | Kind | Functions |
 |---|---|
-| Totals and statistics | `SUM` `AVERAGE` `MIN` `MAX` `COUNT` `COUNTA` `MEDIAN` `MODE` `STDEV` `VAR` `COUNTIF` `SUMIF` `AVERAGEIF` |
+| Totals and statistics | `SUM` `AVERAGE` `MIN` `MAX` `COUNT` `COUNTA` `MEDIAN` `MODE` `STDEV` `STDEVP` `VAR` `VARP` `COUNTIF` `COUNTIFS` `SUMIF` `SUMIFS` `AVERAGEIF` `AVERAGEIFS` |
+| Analysis | `CORREL` `SLOPE` `INTERCEPT` `RSQ` `PERCENTILE` `QUARTILE` `LARGE` `SMALL` `RANK` |
 | Maths | `ROUND` `ROUNDUP` `ROUNDDOWN` `FLOOR` `CEILING` `INT` `TRUNC` `ABS` `SIGN` `POWER` `SQRT` `MOD` `PI` `EXP` `LN` `LOG` `LOG10` |
 | Logic | `IF` `IFS` `AND` `OR` `NOT` `IFERROR` `IFNA` `TRUE` `FALSE` |
 | Lookup | `VLOOKUP` `HLOOKUP` `XLOOKUP` `INDEX` `MATCH` |
@@ -114,14 +233,12 @@ function shows `#NAME?` in its cell.
 | Dates and times | `TODAY` `NOW` `DATE` `TIME` `YEAR` `MONTH` `DAY` `HOUR` `MINUTE` `SECOND` `DATEDIF` |
 | Finance | `PMT` `PV` `FV` `NPV` `IRR` `RATE` `NPER` `IPMT` `PPMT` |
 
-`STDEV` and `VAR` are the sample versions (divide by n-1).
+`STDEV` and `VAR` are the sample versions (divide by n-1); `STDEVP` and `VARP` divide by n. `PERCENTILE`
+and `QUARTILE` interpolate the way Excel's `PERCENTILE.INC` and `QUARTILE.INC` do.
 
-**Not available**, though Excel has them: correlation and regression (`CORREL`, `SLOPE`), percentiles and
-quartiles (`PERCENTILE`, `QUARTILE`), `LARGE` / `SMALL` / `RANK`, conditions on several columns
-(`SUMIFS`, `COUNTIFS`, `AVERAGEIFS`), and working-day and month-end dates (`WORKDAY`, `NETWORKDAYS`,
-`EDATE`, `EOMONTH`). The package's README lists some of these, but the spreadsheet does not have them
-([receptron/GUIChatPluginSpreadsheet#59](https://github.com/receptron/GUIChatPluginSpreadsheet/issues/59)).
-For these, have the agent compute the result with a script and put it in as a value. See
+**Not available**, though Excel has them: the `.INC` / `.EXC` spellings, working-day and month-end dates
+(`WORKDAY`, `NETWORKDAYS`, `EDATE`, `EOMONTH`), and anything that needs more than one formula, such as a
+t-test. For these, have the agent compute the result with a script and put it in as a value. See
 [Statistics the sheet does not have](#statistics-the-sheet-does-not-have).
 
 ## What to ask for
@@ -139,20 +256,11 @@ another tool.
 
 ### Analyse a CSV from start to finish
 
-> /mulmoterminal-data-analysis orders.csv
+> Analyse data/cafe-sales.csv. I want to see how temperature and the day of the week affect sales.
 
-The bundled `mulmoterminal-data-analysis` skill carries the whole procedure:
-
-1. It checks the columns and the empty values, and tells you what it found.
-2. It computes the summary statistics with a Node script.
-3. It puts figures you may want to change in formulas, and the statistics the sheet does not have
-   in as values marked as computed.
-4. It picks charts that fit the data.
-5. It tells you where the spreadsheet, the charts and its scripts were saved.
-
-The scripts go in `<workspace>/artifacts/analysis/`, never in your repository. You do not have to
-name the skill. Asking "analyse orders.csv" is usually enough. When you edit the sheet and ask it to
-read it again, the recalculated sheet comes back as a new spreadsheet: edit that one from then on.
+The bundled `mulmoterminal-data-analysis` skill takes it from there. See
+[Analysing data from start to finish](#analysing-data-from-start-to-finish) for what you get and how
+to work with it.
 
 ### Your own repository
 
@@ -177,12 +285,13 @@ like, ask:
 
 ### Statistics the sheet does not have
 
-> Compute the correlation between temperature and iced-coffee sales, and a linear trend, with a script.
-> Put the coefficients in a spreadsheet as values and draw a scatter chart with the trend line.
+> Test whether weekday and weekend sales differ, with a script, and put the result in the spreadsheet.
 
-The agent works these out in Python or Node in the terminal, where nothing limits which functions it
-can use. Values that come from a script do not recalculate when you edit the sheet; formulas do. A good
-split is to let a script do the heavy statistics once, and keep in formulas whatever you want to change.
+Correlation, a linear trend, percentiles and ranks are formulas now (see
+[Functions you can use](#functions-you-can-use)). For what no function gives, such as a t-test or a
+non-linear fit, the agent works it out in Python or Node in the terminal, where nothing limits which
+functions it can use. Values that come from a script do not recalculate when you edit the sheet;
+formulas do.
 
 ### Have the numbers checked
 
@@ -196,7 +305,7 @@ Mark each line OK or NG, and your notes come back as the agent's next task.
 - The spreadsheet's buttons and labels are in English.
 - Only the functions in [Functions you can use](#functions-you-can-use). Anything else is `#NAME?`.
 - The saved file holds formulas, not their results. The agent has to work the results out.
-- A chart does not follow the spreadsheet. Ask for it to be drawn again.
+- A chart follows the spreadsheet only when the agent drew it from a range of the sheet. Ask for any other chart to be drawn again.
 - The agent is not told about your edits. Tell it in the terminal.
 
 More: [Feature reference](features.html) · [The agent drives your right pane](pane-tools.html)
