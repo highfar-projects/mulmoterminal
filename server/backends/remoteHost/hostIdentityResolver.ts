@@ -19,22 +19,28 @@ export interface HostIdentityResolverDeps {
 
 export const createHostIdentityResolver = (deps: HostIdentityResolverDeps) => {
   let current: HostIdentity | null = null;
+  // Each resolution's number. Core gives up on a slow one but cannot cancel it, so one
+  // that finishes after a later resolution began must not write or take effect.
+  let latest = 0;
 
-  const decide = async (uid: string, hostname: string): Promise<HostIdentity> => {
+  const decide = async (uid: string, hostname: string): Promise<{ identity: HostIdentity; isNew: boolean }> => {
     const stored = reusableIdentity(parseHostIdentity(await deps.readStored()), uid, hostname);
-    if (stored) return stored;
+    if (stored) return { identity: stored, isNew: false };
     const legacyDoc = await deps.readLegacyDoc(uid);
-    const identity = newIdentity({ uid, hostname, legacyDoc, suffix: deps.newSuffix(), machineId: deps.newMachineId() });
-    await deps.writeStored(identity);
-    return identity;
+    return { identity: newIdentity({ uid, hostname, legacyDoc, suffix: deps.newSuffix(), machineId: deps.newMachineId() }), isNew: true };
   };
 
-  // A failure here rejects the connect, which leaves any running channel alone; the
-  // next connect decides again. Guessing instead could put two machines on one channel.
+  // A failure here rejects the connect; the next connect decides again. Guessing
+  // instead could put two machines on one channel.
   const resolveHostId = async (uid: string): Promise<string> => {
+    latest += 1;
+    const mine = latest;
     current = null;
-    current = await decide(uid, deps.hostname());
-    return current.hostId;
+    const { identity, isNew } = await decide(uid, deps.hostname());
+    if (mine !== latest) throw new Error("remote-host: a later connect superseded this channel decision");
+    if (isNew) await deps.writeStored(identity);
+    current = identity;
+    return identity.hostId;
   };
 
   // Only the channel decided for THIS account: after an account switch, or while a

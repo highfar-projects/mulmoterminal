@@ -84,6 +84,13 @@ export interface SessionActivityPublisherDeps {
 export function createSessionActivityPublisher(deps: SessionActivityPublisherDeps) {
   const revisions = new Map<string, number>();
   const published = new Map<string, string>();
+  // Where each session was written, so teardown removes it there even after the channel changed.
+  const writtenTo = new Map<string, Map<string, { uid: string; hostId: string }>>();
+  const recordWrite = (sessionId: string, uid: string, hostId: string): void => {
+    const locations = writtenTo.get(sessionId) ?? new Map<string, { uid: string; hostId: string }>();
+    locations.set(`${uid}\0${hostId}`, { uid, hostId });
+    writtenTo.set(sessionId, locations);
+  };
   // Every field the phone renders belongs in the key: a turn that moves planning → implementing,
   // or a waiting one that changes from blocked to done, keeps the same working/waiting pair and
   // would otherwise be deduped away — leaving the phone showing the superseded status (#727).
@@ -104,6 +111,7 @@ export function createSessionActivityPublisher(deps: SessionActivityPublisherDep
     const rev = (revisions.get(sessionId) ?? 0) + 1;
     revisions.set(sessionId, rev);
     const payload = activityDoc(activity, rev);
+    recordWrite(sessionId, uid, hostId);
     deps.store.write(uid, hostId, sessionId, payload).catch((error: unknown) => {
       // The dedup entry is recorded optimistically, so a failed write would otherwise
       // swallow every later publish of the SAME state and leave the phone stale until
@@ -119,13 +127,20 @@ export function createSessionActivityPublisher(deps: SessionActivityPublisherDep
   // On teardown, so the phone's picker doesn't accumulate docs for dead sessions. The
   // local bookkeeping is dropped even when disconnected — a session that comes back
   // under the same id starts from a clean slate rather than inheriting a stale key.
+  // Only this account's locations: another account's docs are not this session's to reach.
   const forget = (sessionId: string): void => {
     revisions.delete(sessionId);
     published.delete(sessionId);
+    const recorded = [...(writtenTo.get(sessionId)?.values() ?? [])];
+    writtenTo.delete(sessionId);
     const uid = deps.uid();
+    if (!uid) return;
     const hostId = deps.hostId();
-    if (!uid || !hostId) return;
-    deps.store.remove(uid, hostId, sessionId).catch(deps.onError);
+    const mine = recorded.filter((location) => location.uid === uid);
+    const targets = mine.length > 0 || !hostId ? mine : [{ uid, hostId }];
+    targets.forEach((location) => {
+      deps.store.remove(location.uid, location.hostId, sessionId).catch(deps.onError);
+    });
   };
 
   return { publish, forget };

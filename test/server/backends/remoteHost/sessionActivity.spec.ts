@@ -51,6 +51,26 @@ describe("createSessionActivityPublisher", () => {
     expect(writes.map((write) => write.rev)).toEqual([1, 2]);
   });
 
+  // Teardown has to reach every channel the session was written to, or the old one keeps a
+  // dead row on the phone after the channel changed or went undecided.
+  it("removes the session from every channel it was written to under this account", () => {
+    const removed: string[] = [];
+    const store: SessionActivityStore = {
+      write: async () => undefined,
+      remove: async (uid, hostId, sessionId) => {
+        removed.push(`${uid}/${hostId}/${sessionId}`);
+      },
+    };
+    let channel: string | null = "mulmoterminal";
+    const activity = createSessionActivityPublisher({ uid: () => UID, hostId: () => channel, store, onError: vi.fn() });
+    activity.publish("s1", { working: true, waiting: false });
+    channel = "mulmoterminal-0000ffff";
+    activity.publish("s1", { working: false, waiting: false });
+    channel = null;
+    activity.forget("s1");
+    expect(removed.sort()).toEqual([`${UID}/mulmoterminal-0000ffff/s1`, `${UID}/mulmoterminal/s1`]);
+  });
+
   it("writes and removes nothing while the channel is undecided", () => {
     const { writes, removes, store } = recorder();
     const undecided = createSessionActivityPublisher({ uid: () => UID, hostId: () => null, store, onError: vi.fn() });

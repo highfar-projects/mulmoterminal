@@ -109,4 +109,38 @@ describe("createHostIdentityResolver", () => {
     expect(resolver.currentHostId("uid-2")).toBeNull();
     expect(resolver.currentMachine()).toBeNull();
   });
+
+  // Core times a slow resolution out but cannot cancel it; when it finally finishes it must
+  // not overwrite the file or the channel a later connect has already settled.
+  it("a resolution overtaken by a later one neither writes nor takes effect", async () => {
+    const state = world({ legacyDoc: null });
+    const firstRead: { release: (doc: LegacyHostDoc | null) => void } = { release: () => undefined };
+    const counters = { reads: 0, suffixes: 0 };
+    const nextSuffix = (): string => {
+      counters.suffixes += 1;
+      return `0000000${counters.suffixes}`;
+    };
+    const resolver = createHostIdentityResolver({
+      hostname: () => state.hostname,
+      readStored: async () => null,
+      writeStored: async (identity) => {
+        state.writes.push(identity);
+      },
+      readLegacyDoc: () => {
+        counters.reads += 1;
+        if (counters.reads > 1) return Promise.resolve(null);
+        return new Promise((resolve) => {
+          firstRead.release = resolve;
+        });
+      },
+      newSuffix: nextSuffix,
+      newMachineId: () => `m-${counters.suffixes}`,
+    });
+    const slow = resolver.resolveHostId("uid-1");
+    expect(await resolver.resolveHostId("uid-1")).toBe("mulmoterminal-00000001");
+    firstRead.release(null);
+    await expect(slow).rejects.toThrow("superseded");
+    expect(state.writes.map((identity) => identity.hostId)).toEqual(["mulmoterminal-00000001"]);
+    expect(resolver.currentHostId("uid-1")).toBe("mulmoterminal-00000001");
+  });
 });
