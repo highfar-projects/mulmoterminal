@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from "vitest";
 
-import type { HostIdentity, LegacyHostDoc } from "./hostIdentity.js";
+import { parseStoredIdentities, type HostIdentity, type LegacyHostDoc } from "./hostIdentity.js";
 import { createHostIdentityResolver } from "./hostIdentityResolver.js";
 
 interface FakeWorld {
@@ -9,6 +9,7 @@ interface FakeWorld {
   legacyDoc: LegacyHostDoc | null;
   hostname: string;
   legacyReads: string[];
+  // The record each write added, in order.
   writes: HostIdentity[];
   failLegacyRead?: boolean;
 }
@@ -26,9 +27,9 @@ const resolverFor = (state: FakeWorld) =>
   createHostIdentityResolver({
     hostname: () => state.hostname,
     readStored: async () => state.stored,
-    writeStored: async (identity) => {
-      state.writes.push(identity);
-      state.stored = identity;
+    writeStored: async (identities) => {
+      state.writes.push(identities[identities.length - 1]);
+      state.stored = { identities };
     },
     readLegacyDoc: async (uid) => {
       state.legacyReads.push(uid);
@@ -63,7 +64,7 @@ describe("createHostIdentityResolver", () => {
   });
 
   it("a stored decision is reused without reading Firestore, and the channel stays the same across connects", async () => {
-    const state = world({ stored: { uid: "uid-1", hostId: "mulmoterminal-abcdef01", machineId: "m-1", hostname: "work-mac.local" } });
+    const state = world({ stored: { identities: [{ uid: "uid-1", hostId: "mulmoterminal-abcdef01", machineId: "m-1", hostname: "work-mac.local" }] } });
     const resolver = resolverFor(state);
     expect(await resolver.resolveHostId("uid-1")).toBe("mulmoterminal-abcdef01");
     expect(await resolver.resolveHostId("uid-1")).toBe("mulmoterminal-abcdef01");
@@ -73,7 +74,7 @@ describe("createHostIdentityResolver", () => {
   });
 
   it("a record copied from another machine, or made for another account, is decided again", async () => {
-    const stored = { uid: "uid-1", hostId: "mulmoterminal", machineId: "m-1", hostname: "work-mac.local" };
+    const stored = { identities: [{ uid: "uid-1", hostId: "mulmoterminal", machineId: "m-1", hostname: "work-mac.local" }] };
     const copied = world({ stored, hostname: "home-linux", legacyDoc: { machineId: "m-1" } });
     expect(await resolverFor(copied).resolveHostId("uid-1")).toBe("mulmoterminal-0000ffff");
     const otherAccount = world({ stored, legacyDoc: null });
@@ -81,7 +82,7 @@ describe("createHostIdentityResolver", () => {
   });
 
   it("a malformed stored file is treated as none", async () => {
-    const state = world({ stored: { hostId: 3 }, legacyDoc: { machineId: null } });
+    const state = world({ stored: { identities: [{ hostId: 3 }] }, legacyDoc: { machineId: null } });
     expect(await resolverFor(state).resolveHostId("uid-1")).toBe("mulmoterminal");
   });
 
@@ -93,8 +94,21 @@ describe("createHostIdentityResolver", () => {
     expect(resolver.currentHostId("uid-1")).toBeNull();
   });
 
+  it("switching accounts and back keeps each account's channel", async () => {
+    const state = world({ stored: { identities: [{ uid: "uid-1", hostId: "mulmoterminal-abcdef01", machineId: "m-1", hostname: "work-mac.local" }] } });
+    const resolver = resolverFor(state);
+    expect(await resolver.resolveHostId("uid-2")).toBe("mulmoterminal-0000ffff");
+    expect(await resolver.resolveHostId("uid-1")).toBe("mulmoterminal-abcdef01");
+    expect(state.legacyReads).toEqual(["uid-2"]);
+    expect(
+      parseStoredIdentities(state.stored)
+        .map((identity) => identity.uid)
+        .sort(),
+    ).toEqual(["uid-1", "uid-2"]);
+  });
+
   it("answers only for the account the channel was decided for", async () => {
-    const state = world({ stored: { uid: "uid-1", hostId: "mulmoterminal-abcdef01", machineId: "m-1", hostname: "work-mac.local" } });
+    const state = world({ stored: { identities: [{ uid: "uid-1", hostId: "mulmoterminal-abcdef01", machineId: "m-1", hostname: "work-mac.local" }] } });
     const resolver = resolverFor(state);
     await resolver.resolveHostId("uid-1");
     expect(resolver.currentHostId("uid-2")).toBeNull();
@@ -102,7 +116,7 @@ describe("createHostIdentityResolver", () => {
   });
 
   it("a failed decision for a new account leaves no channel from the previous one", async () => {
-    const state = world({ stored: { uid: "uid-1", hostId: "mulmoterminal-abcdef01", machineId: "m-1", hostname: "work-mac.local" } });
+    const state = world({ stored: { identities: [{ uid: "uid-1", hostId: "mulmoterminal-abcdef01", machineId: "m-1", hostname: "work-mac.local" }] } });
     const resolver = resolverFor(state);
     await resolver.resolveHostId("uid-1");
     state.failLegacyRead = true;
@@ -125,8 +139,8 @@ describe("createHostIdentityResolver", () => {
     const resolver = createHostIdentityResolver({
       hostname: () => state.hostname,
       readStored: async () => null,
-      writeStored: async (identity) => {
-        state.writes.push(identity);
+      writeStored: async (identities) => {
+        state.writes.push(identities[identities.length - 1]);
       },
       readLegacyDoc: () => {
         counters.reads += 1;
@@ -153,7 +167,8 @@ describe("createHostIdentityResolver", () => {
     const resolver = createHostIdentityResolver({
       hostname: () => "work-mac.local",
       readStored: async () => null,
-      writeStored: (identity) => {
+      writeStored: (identities) => {
+        const identity = identities[identities.length - 1];
         counters.writes += 1;
         if (counters.writes > 1) {
           written.push(identity.hostId);
@@ -183,5 +198,31 @@ describe("createHostIdentityResolver", () => {
     await expect(slow).rejects.toThrow("superseded");
     expect(resolver.currentHostId("uid-1")).toBe("mulmoterminal-00000002");
     expect(written).toEqual(["mulmoterminal-00000001", "mulmoterminal-00000002"]);
+  });
+
+  it("a write still in flight for one account keeps another account's record in the file", async () => {
+    const uid2Record = { uid: "uid-2", hostId: "mulmoterminal-22222222", machineId: "m-2", hostname: "work-mac.local" };
+    const file: { stored: unknown } = { stored: { identities: [uid2Record] } };
+    const pendingWrite: { finish: () => void } = { finish: () => undefined };
+    const resolver = createHostIdentityResolver({
+      hostname: () => "work-mac.local",
+      readStored: async () => file.stored,
+      writeStored: (identities) =>
+        new Promise<void>((resolve) => {
+          pendingWrite.finish = () => {
+            file.stored = { identities };
+            resolve();
+          };
+        }),
+      readLegacyDoc: async () => null,
+      newSuffix: () => "11111111",
+      newMachineId: () => "m-1",
+    });
+    const first = resolver.resolveHostId("uid-1");
+    await new Promise((resolve) => setTimeout(resolve, LET_SECOND_REACH_ITS_WRITE_MS));
+    expect(await resolver.resolveHostId("uid-2")).toBe("mulmoterminal-22222222");
+    pendingWrite.finish();
+    await first.catch(() => undefined);
+    expect(parseStoredIdentities(file.stored)).toContainEqual(uid2Record);
   });
 });

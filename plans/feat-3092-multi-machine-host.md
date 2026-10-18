@@ -24,6 +24,10 @@ Design agreed on the issue: https://github.com/receptron/mulmoterminal/issues/30
 
 The session-activity publisher and Web Push read `currentHostId()` per write instead of a constant. It answers only for the account the channel was decided for, and is null while a decision is pending or after it failed. The publisher then writes nothing, and the push goes out without a host id, so the phone shows its picker.
 
+## The stored file
+
+`remote-host.json` is `{ "identities": [...] }`, one record per account the machine has connected as, so switching accounts back and forth keeps each account's channel. A resolution that a later one superseded (core timed it out but cannot cancel it) neither writes nor applies. Writes are queued, and each one re-reads the file when its turn comes, so no account's record is dropped and the newest decision is written last.
+
 ## Reading the stored file
 
 The file is read with a size bound. A missing file means "decide". An oversized or unparsable file is reported and decided again. Any other read error (permissions, I/O) fails the connect, because deciding again would overwrite a channel the machine may still own.

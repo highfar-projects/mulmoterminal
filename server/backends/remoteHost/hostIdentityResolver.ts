@@ -4,13 +4,13 @@
 // so the decision and its persistence are tested without Firebase or a home directory.
 import type { HostMachine } from "@mulmoclaude/core/remote-host";
 
-import { machineLabel, newIdentity, parseHostIdentity, reusableIdentity, type HostIdentity, type LegacyHostDoc } from "./hostIdentity.js";
+import { machineLabel, newIdentity, reusableIdentity, type HostIdentity, type LegacyHostDoc, parseStoredIdentities, withIdentity } from "./hostIdentity.js";
 
 export interface HostIdentityResolverDeps {
   hostname: () => string;
   // The stored record's JSON, or null when there is none yet.
   readStored: () => Promise<unknown>;
-  writeStored: (identity: HostIdentity) => Promise<void>;
+  writeStored: (identities: HostIdentity[]) => Promise<void>;
   // users/{uid}/hosts/mulmoterminal from the server, or null when the doc does not exist.
   readLegacyDoc: (uid: string) => Promise<LegacyHostDoc | null>;
   newSuffix: () => string;
@@ -24,7 +24,7 @@ export const createHostIdentityResolver = (deps: HostIdentityResolverDeps) => {
   let latest = 0;
 
   const decide = async (uid: string, hostname: string): Promise<{ identity: HostIdentity; isNew: boolean }> => {
-    const stored = reusableIdentity(parseHostIdentity(await deps.readStored()), uid, hostname);
+    const stored = reusableIdentity(parseStoredIdentities(await deps.readStored()), uid, hostname);
     if (stored) return { identity: stored, isNew: false };
     const legacyDoc = await deps.readLegacyDoc(uid);
     return { identity: newIdentity({ uid, hostname, legacyDoc, suffix: deps.newSuffix(), machineId: deps.newMachineId() }), isNew: true };
@@ -34,13 +34,15 @@ export const createHostIdentityResolver = (deps: HostIdentityResolverDeps) => {
     if (mine !== latest) throw new Error("remote-host: a later connect superseded this channel decision");
   };
 
-  // Writes run one at a time and re-check when their turn comes, so the newest decision's
-  // file is the last one written.
+  // Writes run one at a time, re-check when their turn comes, and re-read the file then,
+  // so a write never drops another account's record or lands after a newer decision.
   let writes: Promise<void> = Promise.resolve();
   const persist = (mine: number, identity: HostIdentity): Promise<void> => {
-    const write = writes.then(() => {
+    const write = writes.then(async () => {
       assertLatest(mine);
-      return deps.writeStored(identity);
+      const stored = parseStoredIdentities(await deps.readStored());
+      assertLatest(mine);
+      await deps.writeStored(withIdentity(stored, identity));
     });
     writes = write.catch(() => undefined);
     return write;

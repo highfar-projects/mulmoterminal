@@ -46,7 +46,7 @@ const SUFFIX_BYTES = 4;
 const identity = createHostIdentityResolver({
   hostname: os.hostname,
   readStored: () => readHostIdentityFile(),
-  writeStored: (record) => writeHostIdentityFile(record),
+  writeStored: (identities) => writeHostIdentityFile(identities),
   readLegacyDoc: async (uid) => {
     const snapshot = await getDocFromServer(doc(currentFirestore(), "users", uid, "hosts", LEGACY_HOST_ID));
     return snapshot.exists() ? legacyHostDocOf(snapshot.data()) : null;

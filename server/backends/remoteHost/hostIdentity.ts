@@ -37,9 +37,21 @@ export const legacyHostDocOf = (data: unknown): LegacyHostDoc => ({
   machineId: isRecord(data) && isNonEmptyString(data.machineId) ? data.machineId : null,
 });
 
-// The stored record still names this machine for this account.
-export const reusableIdentity = (stored: HostIdentity | null, uid: string, hostname: string): HostIdentity | null =>
-  stored && stored.uid === uid && stored.hostname === hostname ? stored : null;
+// remote-host.json keeps one record per account this machine has connected as, so
+// switching accounts back and forth keeps each account's channel.
+export const parseStoredIdentities = (value: unknown): HostIdentity[] => {
+  if (!isRecord(value) || !Array.isArray(value.identities)) return [];
+  return value.identities.map(parseHostIdentity).filter((identity): identity is HostIdentity => identity !== null);
+};
+
+// This account's record, if it was made on this machine.
+export const reusableIdentity = (stored: HostIdentity[], uid: string, hostname: string): HostIdentity | null =>
+  stored.find((identity) => identity.uid === uid && identity.hostname === hostname) ?? null;
+
+export const withIdentity = (stored: HostIdentity[], identity: HostIdentity): HostIdentity[] => [
+  ...stored.filter((other) => other.uid !== identity.uid),
+  identity,
+];
 
 // Only a host doc that predates machine ids is a machine this one may be: it was
 // connected before the upgrade, and the first machine to upgrade claims it.

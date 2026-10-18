@@ -54,5 +54,5 @@ export const readHostIdentityFile = async (file: string = hostIdentityFile()): P
   }
 };
 
-export const writeHostIdentityFile = (identity: HostIdentity, file: string = hostIdentityFile()): Promise<void> =>
-  writeFileAtomic(file, `${JSON.stringify(identity, null, 2)}\n`);
+export const writeHostIdentityFile = (identities: HostIdentity[], file: string = hostIdentityFile()): Promise<void> =>
+  writeFileAtomic(file, `${JSON.stringify({ identities }, null, 2)}\n`);

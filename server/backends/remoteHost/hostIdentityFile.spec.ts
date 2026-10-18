@@ -20,8 +20,8 @@ describe("host identity file", () => {
 
   it("round-trips a record, creating the directory", async () => {
     const file = path.join(dir, "nested", "remote-host.json");
-    await writeHostIdentityFile(IDENTITY, file);
-    expect(await readHostIdentityFile(file)).toEqual(IDENTITY);
+    await writeHostIdentityFile([IDENTITY], file);
+    expect(await readHostIdentityFile(file)).toEqual({ identities: [IDENTITY] });
     expect((await readFile(file, "utf-8")).endsWith("\n")).toBe(true);
   });
 
@@ -50,7 +50,7 @@ describe("host identity file", () => {
   // Deciding again on an unreadable file would overwrite a channel the machine may still own.
   it.skipIf(process.platform === "win32" || process.getuid?.() === 0)("rejects with the path when the file cannot be read", async () => {
     const file = path.join(dir, "remote-host.json");
-    await writeHostIdentityFile(IDENTITY, file);
+    await writeHostIdentityFile([IDENTITY], file);
     await chmod(file, 0o000);
     await expect(readHostIdentityFile(file)).rejects.toThrow(file);
     await chmod(file, 0o600);

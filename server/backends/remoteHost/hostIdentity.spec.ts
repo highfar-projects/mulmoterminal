@@ -10,6 +10,8 @@ import {
   parseHostIdentity,
   reusableIdentity,
   type HostIdentity,
+  parseStoredIdentities,
+  withIdentity,
 } from "./hostIdentity.js";
 
 const STORED: HostIdentity = { uid: "uid-1", hostId: "mulmoterminal-0000ffff", machineId: "m-1", hostname: "work-mac.local" };
@@ -48,15 +50,36 @@ describe("legacyHostDocOf", () => {
   });
 });
 
-describe("reusableIdentity", () => {
-  it("keeps the record for the same account on the same hostname", () => {
-    expect(reusableIdentity(STORED, "uid-1", "work-mac.local")).toBe(STORED);
+describe("parseStoredIdentities", () => {
+  it("reads every well-formed record and skips the rest", () => {
+    const other = { ...STORED, uid: "uid-2", hostId: "mulmoterminal" };
+    expect(parseStoredIdentities({ identities: [STORED, { uid: "x" }, other, null] })).toEqual([STORED, other]);
   });
 
-  it("drops it for another account, another hostname (a copied directory), or no record", () => {
-    expect(reusableIdentity(STORED, "uid-2", "work-mac.local")).toBeNull();
-    expect(reusableIdentity(STORED, "uid-1", "home-linux")).toBeNull();
-    expect(reusableIdentity(null, "uid-1", "work-mac.local")).toBeNull();
+  it("reads anything else as no records", () => {
+    [undefined, null, "x", [], {}, { identities: "x" }, { identities: {} }, STORED].forEach((value) => expect(parseStoredIdentities(value)).toEqual([]));
+  });
+});
+
+describe("reusableIdentity", () => {
+  it("finds this account's record made on this hostname", () => {
+    const other = { ...STORED, uid: "uid-2" };
+    expect(reusableIdentity([other, STORED], "uid-1", "work-mac.local")).toBe(STORED);
+  });
+
+  it("finds nothing for another account, another hostname (a copied directory), or no records", () => {
+    expect(reusableIdentity([STORED], "uid-2", "work-mac.local")).toBeNull();
+    expect(reusableIdentity([STORED], "uid-1", "home-linux")).toBeNull();
+    expect(reusableIdentity([], "uid-1", "work-mac.local")).toBeNull();
+  });
+});
+
+describe("withIdentity", () => {
+  it("replaces this account's record and keeps every other account's", () => {
+    const other = { ...STORED, uid: "uid-2", hostId: "mulmoterminal" };
+    const replacement = { ...STORED, hostId: "mulmoterminal-11111111" };
+    expect(withIdentity([STORED, other], replacement)).toEqual([other, replacement]);
+    expect(withIdentity([], STORED)).toEqual([STORED]);
   });
 });
 
