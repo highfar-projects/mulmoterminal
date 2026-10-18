@@ -55,9 +55,11 @@ an image.
 
 ![The chart card: monthly coffee and pastry sales as lines, with the monthly total as bars](../images/spreadsheet-chart.png)
 
-A chart is drawn from numbers the agent gives it. **It is not linked to the spreadsheet**: change the
-sheet and the chart stays as it was. Ask the agent to draw it again (see
-[Changing the numbers yourself](#changing-the-numbers-yourself)).
+**A chart can follow the spreadsheet.** When the agent draws a chart from a range of the sheet, the
+chart shows that range calculated, and draws itself again when the sheet is saved: change a number and
+the chart moves with it. The card says which range it comes from ("From the spreadsheet: Summary!A1:C13").
+A chart the agent drew from numbers it passed directly (a histogram, a fitted line) does not follow the
+sheet; ask the agent to draw it again (see [Changing the numbers yourself](#changing-the-numbers-yourself)).
 
 ## Changing the numbers yourself
 
@@ -101,12 +103,13 @@ up or keep them in git like any other file.
 
 ## Functions you can use
 
-These are the functions the spreadsheet calculates, as of `@gui-chat-plugin/spreadsheet` 4.0.2. Any other
+These are the functions the spreadsheet calculates, as of `@gui-chat-plugin/spreadsheet` 4.1.0. Any other
 function shows `#NAME?` in its cell.
 
 | Kind | Functions |
 |---|---|
-| Totals and statistics | `SUM` `AVERAGE` `MIN` `MAX` `COUNT` `COUNTA` `MEDIAN` `MODE` `STDEV` `VAR` `COUNTIF` `SUMIF` `AVERAGEIF` |
+| Totals and statistics | `SUM` `AVERAGE` `MIN` `MAX` `COUNT` `COUNTA` `MEDIAN` `MODE` `STDEV` `STDEVP` `VAR` `VARP` `COUNTIF` `COUNTIFS` `SUMIF` `SUMIFS` `AVERAGEIF` `AVERAGEIFS` |
+| Analysis | `CORREL` `SLOPE` `INTERCEPT` `RSQ` `PERCENTILE` `QUARTILE` `LARGE` `SMALL` `RANK` |
 | Maths | `ROUND` `ROUNDUP` `ROUNDDOWN` `FLOOR` `CEILING` `INT` `TRUNC` `ABS` `SIGN` `POWER` `SQRT` `MOD` `PI` `EXP` `LN` `LOG` `LOG10` |
 | Logic | `IF` `IFS` `AND` `OR` `NOT` `IFERROR` `IFNA` `TRUE` `FALSE` |
 | Lookup | `VLOOKUP` `HLOOKUP` `XLOOKUP` `INDEX` `MATCH` |
@@ -114,14 +117,12 @@ function shows `#NAME?` in its cell.
 | Dates and times | `TODAY` `NOW` `DATE` `TIME` `YEAR` `MONTH` `DAY` `HOUR` `MINUTE` `SECOND` `DATEDIF` |
 | Finance | `PMT` `PV` `FV` `NPV` `IRR` `RATE` `NPER` `IPMT` `PPMT` |
 
-`STDEV` and `VAR` are the sample versions (divide by n-1).
+`STDEV` and `VAR` are the sample versions (divide by n-1); `STDEVP` and `VARP` divide by n. `PERCENTILE`
+and `QUARTILE` interpolate the way Excel's `PERCENTILE.INC` and `QUARTILE.INC` do.
 
-**Not available**, though Excel has them: correlation and regression (`CORREL`, `SLOPE`), percentiles and
-quartiles (`PERCENTILE`, `QUARTILE`), `LARGE` / `SMALL` / `RANK`, conditions on several columns
-(`SUMIFS`, `COUNTIFS`, `AVERAGEIFS`), and working-day and month-end dates (`WORKDAY`, `NETWORKDAYS`,
-`EDATE`, `EOMONTH`). The package's README lists some of these, but the spreadsheet does not have them
-([receptron/GUIChatPluginSpreadsheet#59](https://github.com/receptron/GUIChatPluginSpreadsheet/issues/59)).
-For these, have the agent compute the result with a script and put it in as a value. See
+**Not available**, though Excel has them: the `.INC` / `.EXC` spellings, working-day and month-end dates
+(`WORKDAY`, `NETWORKDAYS`, `EDATE`, `EOMONTH`), and anything that needs more than one formula, such as a
+t-test. For these, have the agent compute the result with a script and put it in as a value. See
 [Statistics the sheet does not have](#statistics-the-sheet-does-not-have).
 
 ## What to ask for
@@ -151,8 +152,9 @@ The bundled `mulmoterminal-data-analysis` skill carries the whole procedure:
 5. It tells you where the spreadsheet, the charts and its scripts were saved.
 
 The scripts go in `<workspace>/artifacts/analysis/`, never in your repository. You do not have to
-name the skill. Asking "analyse orders.csv" is usually enough. When you edit the sheet and ask it to
-read it again, the recalculated sheet comes back as a new spreadsheet: edit that one from then on.
+name the skill. Asking "analyse orders.csv" is usually enough. The statistics are formulas and the
+charts follow the sheet, so editing the sheet updates both. Only when the sheet holds values a script
+computed does asking the agent to read it again bring back a new spreadsheet: edit that one from then on.
 
 ### Your own repository
 
@@ -177,12 +179,13 @@ like, ask:
 
 ### Statistics the sheet does not have
 
-> Compute the correlation between temperature and iced-coffee sales, and a linear trend, with a script.
-> Put the coefficients in a spreadsheet as values and draw a scatter chart with the trend line.
+> Test whether weekday and weekend sales differ, with a script, and put the result in the spreadsheet.
 
-The agent works these out in Python or Node in the terminal, where nothing limits which functions it
-can use. Values that come from a script do not recalculate when you edit the sheet; formulas do. A good
-split is to let a script do the heavy statistics once, and keep in formulas whatever you want to change.
+Correlation, a linear trend, percentiles and ranks are formulas now (see
+[Functions you can use](#functions-you-can-use)). For what no function gives, such as a t-test or a
+non-linear fit, the agent works it out in Python or Node in the terminal, where nothing limits which
+functions it can use. Values that come from a script do not recalculate when you edit the sheet;
+formulas do.
 
 ### Have the numbers checked
 
@@ -196,7 +199,7 @@ Mark each line OK or NG, and your notes come back as the agent's next task.
 - The spreadsheet's buttons and labels are in English.
 - Only the functions in [Functions you can use](#functions-you-can-use). Anything else is `#NAME?`.
 - The saved file holds formulas, not their results. The agent has to work the results out.
-- A chart does not follow the spreadsheet. Ask for it to be drawn again.
+- A chart follows the spreadsheet only when the agent drew it from a range of the sheet. Ask for any other chart to be drawn again.
 - The agent is not told about your edits. Tell it in the terminal.
 
 More: [Feature reference](features.html) · [The agent drives your right pane](pane-tools.html)
