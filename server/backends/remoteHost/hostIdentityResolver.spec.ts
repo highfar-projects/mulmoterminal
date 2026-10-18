@@ -39,6 +39,8 @@ const resolverFor = (state: FakeWorld) =>
     newMachineId: () => "m-new",
   });
 
+const LET_SECOND_REACH_ITS_WRITE_MS = 20;
+
 describe("createHostIdentityResolver", () => {
   it("before any connect there is no current channel and no machine", () => {
     const resolver = resolverFor(world());
@@ -144,28 +146,42 @@ describe("createHostIdentityResolver", () => {
     expect(resolver.currentHostId("uid-1")).toBe("mulmoterminal-00000001");
   });
 
-  it("a resolution overtaken while it is still writing the file does not take effect", async () => {
+  it("a resolution overtaken while it is still writing the file does not take effect, and the newest file is written last", async () => {
     const pendingWrite: { finish: () => void } = { finish: () => undefined };
-    const counters = { writes: 0 };
+    const counters = { writes: 0, suffixes: 0 };
+    const written: string[] = [];
     const resolver = createHostIdentityResolver({
       hostname: () => "work-mac.local",
       readStored: async () => null,
-      writeStored: () => {
+      writeStored: (identity) => {
         counters.writes += 1;
-        if (counters.writes > 1) return Promise.resolve();
+        if (counters.writes > 1) {
+          written.push(identity.hostId);
+          return Promise.resolve();
+        }
         return new Promise<void>((resolve) => {
-          pendingWrite.finish = resolve;
+          pendingWrite.finish = () => {
+            written.push(identity.hostId);
+            resolve();
+          };
         });
       },
       readLegacyDoc: async () => null,
-      newSuffix: () => `0000000${counters.writes + 1}`,
+      newSuffix: () => {
+        counters.suffixes += 1;
+        return `0000000${counters.suffixes}`;
+      },
       newMachineId: () => "m",
     });
     const slow = resolver.resolveHostId("uid-1");
     await vi.waitFor(() => expect(counters.writes).toBe(1));
-    expect(await resolver.resolveHostId("uid-1")).toBe("mulmoterminal-00000002");
+    const fast = resolver.resolveHostId("uid-1");
+    // Let the second resolution reach its own write before the first one's write lands.
+    await new Promise((resolve) => setTimeout(resolve, LET_SECOND_REACH_ITS_WRITE_MS));
     pendingWrite.finish();
+    expect(await fast).toBe("mulmoterminal-00000002");
     await expect(slow).rejects.toThrow("superseded");
     expect(resolver.currentHostId("uid-1")).toBe("mulmoterminal-00000002");
+    expect(written).toEqual(["mulmoterminal-00000001", "mulmoterminal-00000002"]);
   });
 });
