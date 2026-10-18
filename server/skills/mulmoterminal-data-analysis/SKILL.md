@@ -153,17 +153,25 @@ spreadsheet and charts from one request. If they say yes:
 - for this project only: `.claude/skills/` in the working directory.
 
 **Name it** after the data and the question, in lowercase words joined by hyphens
-(`cafe-sales-weekday-temperature`). Never start the name with `mulmoterminal-`: those names belong
-to the skills MulmoTerminal ships, and an update would overwrite a skill of that name. If the
-directory already exists, ask before replacing it.
+(`cafe-sales-weekday-temperature`). Never start the name with `mulmoterminal-`: that prefix is
+for the skills MulmoTerminal ships, and it does not install one of its own over a directory it did
+not write, so a skill of yours under such a name would keep a shipped skill out. If the directory
+already exists, ask before replacing it.
 
-**Make the scripts reusable before copying them** into `<skill>/scripts/` with `package.json`:
+**Make the scripts reusable before copying them** into `<skill>/scripts/` with `package.json`.
+Every value that came from the file you analysed is recomputed from the input at run time, or it
+will silently describe the old file when the skill runs on the next one:
 
 - the CSV path is an argument, never written into a script;
-- every range, row count and sheet size comes from the data (`Data!A1:G${rows.length + 1}`), never
-  from the file you analysed;
+- every range, row count and sheet size comes from the data (`Data!A1:G${rows.length + 1}`);
+- categories, dates, histogram bins, the points of a fitted line, lookup tables and anything else
+  derived from the rows are computed by the script, not pasted in;
 - the spreadsheet path the charts point at is an argument (it changes on every run);
 - titles name the data kind, not this file's dates.
+
+Then read the scripts and the SKILL.md you are about to write as if for a stranger: no row of the
+data, no value copied out of it, no absolute path and nothing secret goes into the skill. A skill
+outlives the conversation and can be shared; the data stays where the user keeps it.
 
 **Write `<skill>/SKILL.md`**, in the user's language:
 
@@ -176,7 +184,7 @@ directory already exists, ask before replacing it.
   path;
 - what to tell the user afterwards: the same findings as this analysis, which figures are formulas
   and which computed, which charts follow the sheet, and where everything was saved;
-- the date it was made and the file it was made from.
+- the date it was made, and the file it was made from by its name only (not its full path).
 
 Do not put a file named `schema.json` in the skill directory: MulmoTerminal reads a skill directory
 holding one as a collection.

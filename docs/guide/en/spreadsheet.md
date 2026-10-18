@@ -215,11 +215,13 @@ next file of the same kind gets the same spreadsheet and charts from one request
 
 It asks where the skill should live:
 
-- **for every terminal**: your user skills directory (`~/.claude/skills/` for Claude Code);
+- **for every terminal**: your user skills directory (for Claude Code `~/.claude/skills/`, or
+  `$CLAUDE_CONFIG_DIR/skills/` when you have set `CLAUDE_CONFIG_DIR`);
 - **for this project only**: `.claude/skills/` in the working directory.
 
 The skill holds the scripts, rewritten to take any file of that shape (the file name is an argument;
-row counts and ranges come from the data), and a description naming the columns it needs. The agent
+row counts, ranges and everything else derived from the rows are computed from the data), and a
+description naming the columns it needs. No row of your data goes into the skill. The agent
 runs it once on the file you analysed and checks it gives the same result before handing it over.
 
 Next month, in a new session:
