@@ -1344,10 +1344,10 @@
     three-bvh-csg "^0.0.18"
     three-mesh-bvh "0.9.15"
 
-"@gui-chat-plugin/spreadsheet@^3.0.0":
-  version "3.0.0"
-  resolved "https://registry.yarnpkg.com/@gui-chat-plugin/spreadsheet/-/spreadsheet-3.0.0.tgz#0a697579e983f2f6892e9fd6c25bd047e5852b61"
-  integrity sha512-FZNqXrIutAh+yb0sj4MX559QDINE6FUKmawzUR7klYWaEgTxaWECK3rCynP3tDI7+WXRXy80ur7kf++Hko6oSw==
+"@gui-chat-plugin/spreadsheet@^4.0.2":
+  version "4.0.2"
+  resolved "https://registry.yarnpkg.com/@gui-chat-plugin/spreadsheet/-/spreadsheet-4.0.2.tgz#3c37402aa7b47edef9218c1a5742027eed48c2a6"
+  integrity sha512-19RST+d0LOr2cujHdLB69mLdrIzXr+iBA2ln5OgDg2+5Jbqfpsh8ik8gFrluc9XQnfvamfSenEsng68n2O2l4Q==
   dependencies:
     xlsx "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
 

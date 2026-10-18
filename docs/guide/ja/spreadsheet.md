@@ -93,7 +93,7 @@ description: エージェントが端末の横の Canvas に、計算式の入�
 
 ## 使える関数 {#functions-you-can-use}
 
-表が計算できる関数は次のとおりです（`@gui-chat-plugin/spreadsheet` 3.0 時点）。これ以外の関数は、セルに `#NAME?` と出ます。
+表が計算できる関数は次のとおりです（`@gui-chat-plugin/spreadsheet` 4.0.2 時点）。これ以外の関数は、セルに `#NAME?` と出ます。
 
 | 種類 | 関数 |
 |---|---|
