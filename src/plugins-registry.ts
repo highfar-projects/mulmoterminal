@@ -174,10 +174,12 @@ const PACKAGES: Record<string, Registration> = {
   },
   "@mulmoclaude/chart-plugin": {
     toolName: chartPlugin.toolDefinition.name,
-    // No runtime wrap: the chart View reads everything from selectedResult.data and
-    // only optionally injects the runtime for locale (inject(KEY, undefined)?.locale
-    // ?? "en"), so it renders standalone. Its style.css is self-contained Tailwind.
-    viewComponent: viewOf("@mulmoclaude/chart-plugin", chartPlugin.viewComponent),
+    // A chart entry may draw from a spreadsheet range (`source`): the View reads it with
+    // useRuntime().dispatch({ kind: "readSource" }), which reaches the package's execute through
+    // /api/plugin/presentChart, and redraws on the workbook's file channel. Scope "chart" matches
+    // the server's (plugin:chart:file:<path>, see backends/files/fileChange.ts). An inline chart
+    // needs none of it. Its style.css is self-contained Tailwind.
+    viewComponent: wrapWithPluginRuntime("chart", chartPlugin.toolDefinition.name, viewOf("@mulmoclaude/chart-plugin", chartPlugin.viewComponent)),
     css: chartCss,
   },
   "@gui-chat-plugin/shapescript": {
