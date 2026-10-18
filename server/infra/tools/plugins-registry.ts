@@ -29,6 +29,7 @@ import type { FileOps, PluginRuntime, PluginFactoryResult, ToolDefinition } from
 import { generateImage } from "../../backends/media/image-gen.js";
 import { markdownHostApp } from "../../backends/plugins/markdown.js";
 import { artifactsFileOps } from "../../backends/plugins/artifacts.js";
+import { chartSources } from "../../backends/plugins/chartSources.js";
 import { htmlByPath, jingleScriptByPath, shapeScriptByPath } from "../../backends/files/openPath.js";
 import { createPluginRuntime } from "./pluginRuntime.js";
 import { resolvePluginTools } from "./tool-precedence.js";
@@ -78,6 +79,18 @@ const BY_PATH_BY_TOOL: Readonly<Record<string, FileOps>> = {
 function filesContextFor(toolName: string): { artifacts: FileOps; byPath?: FileOps } {
   const byPath = Object.prototype.hasOwnProperty.call(BY_PATH_BY_TOOL, toolName) ? BY_PATH_BY_TOOL[toolName] : undefined;
   return byPath ? { artifacts: artifactsFileOps, byPath } : { artifacts: artifactsFileOps };
+}
+
+// presentChart's `sources`: a chart entry may name a spreadsheet range instead of carrying its
+// numbers, and the chart plugin asks the host to calculate it (backends/plugins/chartSources.ts).
+// The View's dispatch({ kind: "readSource" }) reaches the same execute, so it gets the same bag.
+const EXTRA_CONTEXT_BY_TOOL: Readonly<Record<string, Record<string, unknown>>> = {
+  presentChart: { sources: chartSources },
+};
+
+function executeContextFor(toolName: string): Record<string, unknown> {
+  const extra = Object.prototype.hasOwnProperty.call(EXTRA_CONTEXT_BY_TOOL, toolName) ? EXTRA_CONTEXT_BY_TOOL[toolName] : undefined;
+  return { app: APP_CONTEXT, files: filesContextFor(toolName), ...extra };
 }
 
 // The normalized shape every loader below answers with, and the only one the broker and the
@@ -156,7 +169,7 @@ async function loadPackage(name: string): Promise<LoadedPlugin> {
   return {
     toolName: definition.name,
     definition,
-    execute: (args?: unknown) => execute({ app: APP_CONTEXT, files: filesContextFor(definition.name) }, args ?? {}),
+    execute: (args?: unknown) => execute(executeContextFor(definition.name), args ?? {}),
   };
 }
 

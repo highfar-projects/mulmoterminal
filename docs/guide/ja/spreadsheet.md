@@ -50,8 +50,10 @@ description: エージェントが端末の横の Canvas に、計算式の入�
 
 ![グラフのカード。コーヒーとペストリーの月別売上を折れ線、月の合計を棒で表示](../images/spreadsheet-chart.png)
 
-グラフはエージェントが渡した数字から描かれます。**表とはつながっていません。** 表を直してもグラフはそのままなので、
-エージェントに描き直しを頼んでください（[自分で数字を直す](#changing-the-numbers-yourself)）。
+**グラフは表を追いかけられます。** エージェントが表の範囲からグラフを描くと、グラフはその範囲を計算した値で描かれ、
+表が保存されるたびに描き直されます。数字を直せば、グラフも動きます。カードには、どの範囲から描いたかが出ます
+（「From the spreadsheet: Summary!A1:C13」）。エージェントが数字を直接渡して描いたグラフ（ヒストグラムや当てはめた線など）は
+表を追いかけないので、描き直しを頼んでください（[自分で数字を直す](#changing-the-numbers-yourself)）。
 
 ## 自分で数字を直す {#changing-the-numbers-yourself}
 
@@ -93,11 +95,12 @@ description: エージェントが端末の横の Canvas に、計算式の入�
 
 ## 使える関数 {#functions-you-can-use}
 
-表が計算できる関数は次のとおりです（`@gui-chat-plugin/spreadsheet` 4.0.2 時点）。これ以外の関数は、セルに `#NAME?` と出ます。
+表が計算できる関数は次のとおりです（`@gui-chat-plugin/spreadsheet` 4.1.0 時点）。これ以外の関数は、セルに `#NAME?` と出ます。
 
 | 種類 | 関数 |
 |---|---|
-| 集計・統計 | `SUM` `AVERAGE` `MIN` `MAX` `COUNT` `COUNTA` `MEDIAN` `MODE` `STDEV` `VAR` `COUNTIF` `SUMIF` `AVERAGEIF` |
+| 集計・統計 | `SUM` `AVERAGE` `MIN` `MAX` `COUNT` `COUNTA` `MEDIAN` `MODE` `STDEV` `STDEVP` `VAR` `VARP` `COUNTIF` `COUNTIFS` `SUMIF` `SUMIFS` `AVERAGEIF` `AVERAGEIFS` |
+| 分析 | `CORREL` `SLOPE` `INTERCEPT` `RSQ` `PERCENTILE` `QUARTILE` `LARGE` `SMALL` `RANK` |
 | 数学 | `ROUND` `ROUNDUP` `ROUNDDOWN` `FLOOR` `CEILING` `INT` `TRUNC` `ABS` `SIGN` `POWER` `SQRT` `MOD` `PI` `EXP` `LN` `LOG` `LOG10` |
 | 論理 | `IF` `IFS` `AND` `OR` `NOT` `IFERROR` `IFNA` `TRUE` `FALSE` |
 | 検索 | `VLOOKUP` `HLOOKUP` `XLOOKUP` `INDEX` `MATCH` |
@@ -105,14 +108,12 @@ description: エージェントが端末の横の Canvas に、計算式の入�
 | 日付・時刻 | `TODAY` `NOW` `DATE` `TIME` `YEAR` `MONTH` `DAY` `HOUR` `MINUTE` `SECOND` `DATEDIF` |
 | 財務 | `PMT` `PV` `FV` `NPV` `IRR` `RATE` `NPER` `IPMT` `PPMT` |
 
-`STDEV` と `VAR` は標本の値です（n-1 で割る）。
+`STDEV` と `VAR` は標本の値です（n-1 で割る）。`STDEVP` と `VARP` は n で割ります。`PERCENTILE` と `QUARTILE` は、
+Excel の `PERCENTILE.INC` と `QUARTILE.INC` と同じ補間をします。
 
-Excel にはあっても、**ここでは使えない**もの：相関と回帰（`CORREL`、`SLOPE`）、パーセンタイルと四分位（`PERCENTILE`、`QUARTILE`）、
-`LARGE` / `SMALL` / `RANK`、複数の列で条件を付ける集計（`SUMIFS`、`COUNTIFS`、`AVERAGEIFS`）、営業日や月末の日付（`WORKDAY`、
-`NETWORKDAYS`、`EDATE`、`EOMONTH`）。パッケージの README には一部が載っていますが、表では計算できません
-（[receptron/GUIChatPluginSpreadsheet#59](https://github.com/receptron/GUIChatPluginSpreadsheet/issues/59)）。
-これらはエージェントにスクリプトで計算してもらい、値として入れてもらいます。
-[表にない統計](#statistics-the-sheet-does-not-have)を見てください。
+Excel にはあっても、**ここでは使えない**もの：`.INC` / `.EXC` の付いた名前、営業日や月末の日付（`WORKDAY`、`NETWORKDAYS`、
+`EDATE`、`EOMONTH`）、それに t 検定のように一つの式では書けないもの。これらはエージェントにスクリプトで計算してもらい、
+値として入れてもらいます。[表にない統計](#statistics-the-sheet-does-not-have)を見てください。
 
 ## 頼み方 {#what-to-ask-for}
 
@@ -138,7 +139,8 @@ CSV、JSON、ログ、ほかの道具から書き出したものなど、エー�
 5. 表・グラフ・スクリプトの保存先を伝える。
 
 スクリプトは `<作業領域>/artifacts/analysis/` に置かれ、あなたのリポジトリには書かれません。
-表を直して読み直しを頼むと、計算し直した表が新しい表として出ます。それからは新しい表の方を直してください。
+統計は計算式で入り、グラフは表を追いかけるので、表を直せば両方が変わります。スクリプトで計算した値が表にあるときだけ、
+読み直しを頼むと、計算し直した表が新しい表として出ます。それからは新しい表の方を直してください。
 スキルの名前は言わなくても構いません。たいていは「orders.csv を分析して」で足ります。
 
 ### 自分のリポジトリを調べる
@@ -159,11 +161,11 @@ CSV、JSON、ログ、ほかの道具から書き出したものなど、エー�
 
 ### 表にない統計 {#statistics-the-sheet-does-not-have}
 
-> 気温とアイスコーヒーの売上の相関と、直線の傾向をスクリプトで計算して。係数は値として表に入れて、傾向線付きの散布図を描いて。
+> 平日と週末で売上に差があるか、スクリプトで検定して、結果を表に入れて。
 
-エージェントは端末で Python や Node を使って計算するので、使える関数に制限はありません。
-スクリプトで計算した値は、表を直しても計算し直されません。計算し直されるのは計算式だけです。
-重い統計はスクリプトで一度だけ計算し、自分で動かしたいところは計算式にしておく、という分け方がおすすめです。
+相関、直線の傾向、パーセンタイル、順位は、今は計算式で書けます（[使える関数](#functions-you-can-use)）。
+t 検定や曲線の当てはめのように関数で書けないものは、エージェントが端末で Python や Node を使って計算します。
+使える関数に制限はありません。スクリプトで計算した値は、表を直しても計算し直されません。計算し直されるのは計算式だけです。
 
 ### 数字を確認する
 
@@ -177,7 +179,7 @@ CSV、JSON、ログ、ほかの道具から書き出したものなど、エー�
 - 表のボタンや表示は英語です。
 - 使えるのは[使える関数](#functions-you-can-use)だけです。それ以外は `#NAME?` になります。
 - 保存されるファイルには計算式が入り、計算結果は入りません。結果はエージェントが計算します。
-- グラフは表に連動しません。描き直しを頼んでください。
+- グラフが表を追いかけるのは、エージェントが表の範囲から描いたときだけです。それ以外のグラフは描き直しを頼んでください。
 - 表を直したことはエージェントに知らされません。端末で伝えてください。
 
 ほかに：[機能リファレンス](features.html) · [エージェントが右ペインを操作する](pane-tools.html)
