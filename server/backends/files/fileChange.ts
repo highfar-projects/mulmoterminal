@@ -63,6 +63,8 @@ function isShapeDoc(posixPath: string): boolean {
 // A chart that draws from a spreadsheet range follows the workbook it names (chart-plugin's
 // `source`), so its View subscribes to the workbook's channel under the chart scope.
 const CHART_FILE_SCOPE = "chart";
+// Matches the runtime scope src/plugins-registry.ts wraps the spreadsheet View in.
+const SPREADSHEET_FILE_SCOPE = "spreadsheet";
 
 // The scopes a write is forwarded to — and, because a watcher exists to make a publish land,
 // the same list decides which files are worth watching (files/documentWatch.ts).
@@ -71,6 +73,9 @@ const PLUGIN_FILE_SCOPES: readonly WatchableScope[] = [
   { scope: "html", matches: isHtmlDoc },
   { scope: "shapescript", matches: isShapeDoc },
   { scope: CHART_FILE_SCOPE, matches: isWorkbookPath },
+  // The spreadsheet View follows its own workbook too, so a write from an agent or another View
+  // reaches it instead of being saved over by its next edit.
+  { scope: SPREADSHEET_FILE_SCOPE, matches: isWorkbookPath },
 ];
 
 /** Configure the shared publisher against MulmoTerminal's pubsub + workspace. Call
