@@ -206,6 +206,33 @@ The scripts are kept so the analysis can be run again, for example on next month
 Nothing is written into your repository, and nothing is installed into your project: the agent
 works in a temporary directory of its own.
 
+### A large file {#analysis-large-file}
+
+Up to about 5,000 rows, every row goes onto the Data sheet. A larger file (a year of orders, a log)
+is **aggregated first**, and the sheet gets the aggregated table: sales per store, orders per
+month, and so on. Formulas and charts then work on that table exactly as above.
+
+In the workspace, or in a project where **Workspace data** is switched on, the agent makes the file
+a read-only **collection** and lets the collection add it up. It reads the whole file, however
+large, without loading it into the conversation:
+
+> Analyse data/sales-2025.csv. It has a row per order; I want sales by store and by month.
+
+What changes from a small file:
+
+- The agent tells you the collection's name. It also appears in Collections, and it reads the
+  file, so replacing the file updates it. The file has to be inside the workspace (or the project);
+  if it is elsewhere, the agent asks before copying it into `data/`.
+- The Data sheet is labelled as aggregated (for example "Store (aggregated from sales-2025.csv)").
+  Its numbers are values: editing the CSV does not change them until you ask for the analysis
+  again. Formulas over them (totals, shares, correlation between the aggregated columns) still
+  recalculate when you edit the sheet.
+- Statistics that need every individual row, such as the median of all orders, are computed by a
+  script that reads the file in pieces, or are stated as being over the aggregated table.
+
+In a project cell without Workspace data, the agent aggregates the file with a script that reads it
+in pieces. The result on the sheet is the same; switching Workspace data on is optional.
+
 ### Keep the analysis as a skill {#analysis-keep-as-skill}
 
 When an analysis is what you wanted, the agent offers to keep it as a skill of your own, so the
@@ -334,5 +361,6 @@ Mark each line OK or NG, and your notes come back as the agent's next task.
 - The saved file holds formulas, not their results. The agent has to work the results out.
 - A chart follows the spreadsheet only when the agent drew it from a range of the sheet. Ask for any other chart to be drawn again.
 - The agent is not told about your edits. Tell it in the terminal.
+- A file above about 5,000 rows is shown aggregated, not row by row (see [A large file](#analysis-large-file)).
 
 More: [Feature reference](features.html) · [The agent drives your right pane](pane-tools.html)
