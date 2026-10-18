@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 
 import type { HostIdentity, LegacyHostDoc } from "./hostIdentity.js";
@@ -12,7 +13,14 @@ interface FakeWorld {
   failLegacyRead?: boolean;
 }
 
-const world = (overrides: Partial<FakeWorld> = {}): FakeWorld => ({ stored: null, legacyDoc: null, hostname: "work-mac.local", legacyReads: [], writes: [], ...overrides });
+const world = (overrides: Partial<FakeWorld> = {}): FakeWorld => ({
+  stored: null,
+  legacyDoc: null,
+  hostname: "work-mac.local",
+  legacyReads: [],
+  writes: [],
+  ...overrides,
+});
 
 const resolverFor = (state: FakeWorld) =>
   createHostIdentityResolver({

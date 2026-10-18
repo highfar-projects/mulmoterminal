@@ -2,15 +2,9 @@
 // never changes on its own, and answers which channel is current for the writers that
 // run outside the connect path (session activity, Web Push). Side effects are injected
 // so the decision and its persistence are tested without Firebase or a home directory.
-import {
-  LEGACY_HOST_ID,
-  machineLabel,
-  newIdentity,
-  parseHostIdentity,
-  reusableIdentity,
-  type HostIdentity,
-  type LegacyHostDoc,
-} from "./hostIdentity.js";
+import type { HostMachine } from "@mulmoclaude/core/remote-host";
+
+import { LEGACY_HOST_ID, machineLabel, newIdentity, parseHostIdentity, reusableIdentity, type HostIdentity, type LegacyHostDoc } from "./hostIdentity.js";
 
 export interface HostIdentityResolverDeps {
   hostname: () => string;
@@ -21,11 +15,6 @@ export interface HostIdentityResolverDeps {
   readLegacyDoc: (uid: string) => Promise<LegacyHostDoc | null>;
   newSuffix: () => string;
   newMachineId: () => string;
-}
-
-export interface HostMachineInfo {
-  machineId: string;
-  label: string;
 }
 
 export const createHostIdentityResolver = (deps: HostIdentityResolverDeps) => {
@@ -51,7 +40,7 @@ export const createHostIdentityResolver = (deps: HostIdentityResolverDeps) => {
   // used before machines were told apart.
   const currentHostId = (): string => current?.hostId ?? LEGACY_HOST_ID;
 
-  const currentMachine = (): HostMachineInfo | null => (current ? { machineId: current.machineId, label: machineLabel(current.hostname) } : null);
+  const currentMachine = (): HostMachine | null => (current ? { machineId: current.machineId, label: machineLabel(current.hostname) } : null);
 
   return { resolveHostId, currentHostId, currentMachine };
 };

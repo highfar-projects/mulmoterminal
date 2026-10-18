@@ -1,6 +1,16 @@
+// @vitest-environment node
 import { describe, expect, it } from "vitest";
 
-import { LEGACY_HOST_ID, chooseHostId, legacyHostDocOf, machineLabel, newIdentity, parseHostIdentity, reusableIdentity, type HostIdentity } from "./hostIdentity.js";
+import {
+  LEGACY_HOST_ID,
+  chooseHostId,
+  legacyHostDocOf,
+  machineLabel,
+  newIdentity,
+  parseHostIdentity,
+  reusableIdentity,
+  type HostIdentity,
+} from "./hostIdentity.js";
 
 const STORED: HostIdentity = { uid: "uid-1", hostId: "mulmoterminal-0000ffff", machineId: "m-1", hostname: "work-mac.local" };
 
@@ -10,7 +20,18 @@ describe("parseHostIdentity", () => {
   });
 
   it("refuses anything incomplete or malformed", () => {
-    const broken: unknown[] = [null, undefined, "x", 3, [], {}, { ...STORED, uid: "" }, { ...STORED, hostId: 1 }, { ...STORED, machineId: null }, { ...STORED, hostname: undefined }];
+    const broken: unknown[] = [
+      null,
+      undefined,
+      "x",
+      3,
+      [],
+      {},
+      { ...STORED, uid: "" },
+      { ...STORED, hostId: 1 },
+      { ...STORED, machineId: null },
+      { ...STORED, hostname: undefined },
+    ];
     broken.forEach((value) => expect(parseHostIdentity(value)).toBeNull());
   });
 });
@@ -21,7 +42,9 @@ describe("legacyHostDocOf", () => {
   });
 
   it("treats a doc without a usable machine id as one that predates them", () => {
-    [undefined, null, {}, { online: true }, { machineId: "" }, { machineId: 7 }, []].forEach((data) => expect(legacyHostDocOf(data)).toEqual({ machineId: null }));
+    [undefined, null, {}, { online: true }, { machineId: "" }, { machineId: 7 }, []].forEach((data) =>
+      expect(legacyHostDocOf(data)).toEqual({ machineId: null }),
+    );
   });
 });
 
