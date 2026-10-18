@@ -130,11 +130,17 @@ number. Work out the results in a script. Then:
 - call `presentSpreadsheet` again with the whole spreadsheet: the user's edits, the formulas, and
   the new computed values;
 - draw the charts again;
-- say what changed most.
+- copy the scripts as in step 5, into the folder named after the **new** spreadsheet id;
+- say what changed most, and give the new spreadsheet's, chart's and scripts' paths.
 
 **Never write the spreadsheet file yourself.** The open Canvas does not read it again, so it keeps
 showing the old values, and the user's next edit there saves the whole old sheet back over yours.
-The new `presentSpreadsheet` is a new file: tell the user to edit that one from now on.
+
+The new `presentSpreadsheet` is a new file. The old spreadsheet, its chart and its scripts stay as
+they were, and nothing links them to the new ones. So tell the user to edit the new spreadsheet
+from now on, and that edits to the old one are not part of this analysis. The next time they ask
+you to read it again, read the newest spreadsheet you presented; if they name the old one, ask
+which they mean.
 
 ## Do not
 

@@ -12,7 +12,7 @@
 ## 変更
 
 - `server/skills/mulmoterminal-data-analysis/SKILL.md`
-  - 「When the user edits the spreadsheet」：表の全体を `presentSpreadsheet` で出し直す。ファイルは書かない。新しい表を直すよう伝える。
+  - 「When the user edits the spreadsheet」：表の全体を `presentSpreadsheet` で出し直す。ファイルは書かない。スクリプトは新しい表の id の場所に写す。新しい表を直すよう伝え、古い表・グラフ・スクリプトは残ったまま分析には含まれないと言う。
   - 「Summary statistics」：`quantile` は Excel の `QUARTILE.INC` / `PERCENTILE.INC` と同じ求め方だと書く。
 - ガイド `docs/guide/{en,ja}/spreadsheet.md` の、スキルの節に一言足す。
 
