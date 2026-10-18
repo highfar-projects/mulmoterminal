@@ -7,8 +7,10 @@
 // supplies host specifics (hostId, handler table, session-backed runner, logger)
 // and wires the module's lifecycle/session into the injectable routes (routes.ts).
 //
-// Single-account, single-host (HOST_ID = "mulmoterminal", distinct from the
-// MulmoClaude host so the two never compete for the same command queue). The
+// One channel per machine under an account (#3092): the machine that was connected
+// before machines were told apart keeps "mulmoterminal" (distinct from MulmoClaude's
+// "mulmoclaude"), every other one gets "mulmoterminal-<8 hex>", decided on its first
+// connect and kept in ~/.mulmoterminal/remote-host.json (hostIdentityResolver.ts). The
 // Firebase session is parked in the browser (case A', mulmoserver#50), so a server
 // restart doesn't force a re-login: the client reconnects from its stored blob. The
 // runner reads the CURRENT session's firestore/storage (both change on each
@@ -28,15 +30,34 @@ import { createHealthNotice } from "./healthNotice.js";
 import { createRemoteHostHandlers, type RemoteHostHandlerDeps } from "./handlers/index.js";
 import { createSaveAttachment } from "./attachmentStore.js";
 import { buildIngestAttachments } from "./ingestAttachments.js";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
+import os from "node:os";
+import { doc, getDocFromServer } from "firebase/firestore";
 import { createMobileFileStager, firebaseStagingStorage } from "./mobileFileStaging.js";
 import { onExpire } from "./onExpire.js";
 import { currentFirestore, currentStorage, currentUid, exportSession, reconnectErrorStatus, restore, signIn, signOut } from "./session.js";
 import { mountRemoteHostRoutes as mountRoutes } from "./routes.js";
+import { LEGACY_HOST_ID, legacyHostDocOf } from "./hostIdentity.js";
+import { readHostIdentityFile, writeHostIdentityFile } from "./hostIdentityFile.js";
+import { createHostIdentityResolver } from "./hostIdentityResolver.js";
 
-// Exported so the session-activity publisher (#439) can address this host's docs; it
-// writes from the hook path, outside the lifecycle this module owns.
-export const HOST_ID = "mulmoterminal";
+const SUFFIX_BYTES = 4;
+
+const identity = createHostIdentityResolver({
+  hostname: os.hostname,
+  readStored: () => readHostIdentityFile(),
+  writeStored: (identities) => writeHostIdentityFile(identities),
+  readLegacyDoc: async (uid) => {
+    const snapshot = await getDocFromServer(doc(currentFirestore(), "users", uid, "hosts", LEGACY_HOST_ID));
+    return snapshot.exists() ? legacyHostDocOf(snapshot.data()) : null;
+  },
+  newSuffix: () => randomBytes(SUFFIX_BYTES).toString("hex"),
+  newMachineId: randomUUID,
+});
+
+// Exported so the session-activity publisher (#439) and Web Push can address this
+// machine's docs; they write from the hook path, outside the lifecycle this module owns.
+export const currentHostId = (): string | null => identity.currentHostId(currentUid());
 const PREFIX = "[remote-host]";
 
 // Module-level singleton — one host runner per process. Null until initialized.
@@ -75,7 +96,8 @@ export function initRemoteHostBackend(deps: RemoteHostBackendDeps): void {
     notice(next);
   };
   lifecycle = createRemoteHost({
-    hostId: HOST_ID,
+    hostId: LEGACY_HOST_ID,
+    resolveHostId: identity.resolveHostId,
     signIn,
     restore,
     signOut,
@@ -86,7 +108,9 @@ export function initRemoteHostBackend(deps: RemoteHostBackendDeps): void {
     // drifted apart once already, and a host carrying its own copy cannot see that happen.
     startRunner: (channel, handlers, options) =>
       startResilientHostRunner({
-        start: (runnerOptions) => startHostRunner(currentFirestore(), channel, handlers, runnerOptions),
+        // The machine fields tell the phone which machine this channel is, and let the
+        // next machine to connect see that the legacy channel is already taken.
+        start: (runnerOptions) => startHostRunner(currentFirestore(), channel, handlers, { ...runnerOptions, machine: identity.currentMachine() ?? undefined }),
         options,
         onHealth,
         // Asks whether the phone can still see us, instead of waiting to be told otherwise:

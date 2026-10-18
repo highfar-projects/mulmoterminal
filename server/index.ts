@@ -59,7 +59,7 @@ import { createGrokSpawner } from "./session/spawn/agents/spawn-grok.js";
 import { createMuseSpawner } from "./session/spawn/agents/spawn-muse.js";
 import { createCopilotSpawner } from "./session/spawn/agents/spawn-copilot.js";
 import { createCursorSpawner } from "./session/spawn/agents/spawn-cursor.js";
-import { HOST_ID as REMOTE_HOST_ID } from "./backends/remoteHost/index.js";
+import { currentHostId as currentRemoteHostId } from "./backends/remoteHost/index.js";
 import { initRemoteHost } from "./backends/remoteHost/hostBindings.js";
 import { createSessionActivityPublisher, firestoreSessionActivityStore } from "./backends/remoteHost/sessionActivity.js";
 import { createWorkPhaseTracker } from "./session/activity/work-phase-tracker.js";
@@ -228,7 +228,7 @@ const { reattachPty, handleClientFrame, handleClientClose } = createConnectionHa
 // a no-op while the remote host is disconnected.
 const sessionActivityPublisher = createSessionActivityPublisher({
   uid: currentUid,
-  hostId: REMOTE_HOST_ID,
+  hostId: currentRemoteHostId,
   store: firestoreSessionActivityStore(currentFirestore),
   onError: (err) => console.warn("[remote-host] session activity publish failed:", err),
 });
