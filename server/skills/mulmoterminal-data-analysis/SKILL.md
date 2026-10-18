@@ -1,6 +1,6 @@
 ---
 name: mulmoterminal-data-analysis
-description: Analyse a CSV or TSV the user names and show the result in MulmoTerminal's Canvas, as a spreadsheet with live formulas (presentSpreadsheet) and charts (presentChart). Reads the file, checks its columns, computes summary statistics with Node, puts what the user may want to change in formulas and the rest in values, picks charts that fit the data, and says where everything was saved. Use when the user asks to analyse, summarise, explore or chart tabular data, or to read a spreadsheet again after editing it. The user writes no code. Works in whatever language the user writes in.
+description: Analyse a CSV or TSV the user names and show the result in MulmoTerminal's Canvas, as a spreadsheet with live formulas (presentSpreadsheet) and charts (presentChart). Reads the file, checks its columns, computes summary statistics with Node, puts what the user may want to change in formulas and the rest in values, picks charts that fit the data, and says where everything was saved. Use when the user asks to analyse, summarise, explore or chart tabular data, to read a spreadsheet again after editing it, or to keep an analysis as a skill of their own to run on the next file of the same kind. The user writes no code. Works in whatever language the user writes in.
 ---
 
 # Analyse a table of data
@@ -139,6 +139,53 @@ End by telling the user:
 - where the scripts are;
 - which figures are formulas and which are computed values;
 - which charts follow the sheet and which do not.
+
+## 6. Offer to keep the analysis as a skill
+
+When the user is happy with the result, ask once whether to keep this analysis as a skill of their
+own, so the next file of the same kind (next month's export, another store) gets the same
+spreadsheet and charts from one request. If they say yes:
+
+**Ask where it should live**, and say what each means:
+
+- for every terminal: the agent's user skills directory — for Claude Code `~/.claude/skills/`, or
+  `$CLAUDE_CONFIG_DIR/skills/` when that is set;
+- for this project only: `.claude/skills/` in the working directory.
+
+**Name it** after the data and the question, in lowercase words joined by hyphens
+(`cafe-sales-weekday-temperature`). Never start the name with `mulmoterminal-`: those names belong
+to the skills MulmoTerminal ships, and an update would overwrite a skill of that name. If the
+directory already exists, ask before replacing it.
+
+**Make the scripts reusable before copying them** into `<skill>/scripts/` with `package.json`:
+
+- the CSV path is an argument, never written into a script;
+- every range, row count and sheet size comes from the data (`Data!A1:G${rows.length + 1}`), never
+  from the file you analysed;
+- the spreadsheet path the charts point at is an argument (it changes on every run);
+- titles name the data kind, not this file's dates.
+
+**Write `<skill>/SKILL.md`**, in the user's language:
+
+- `name` and a `description` that says what data it is for, naming the columns it needs, so the
+  agent picks it for a file of that shape and not for any CSV;
+- the columns it expects, exactly as the header spells them. If a file lacks one, the skill stops
+  and says which, rather than guessing;
+- the steps to run it: copy `scripts/` into a fresh `mktemp -d`, `npm install`, run the scripts on
+  the file the user names, present the spreadsheet, then the charts from the reported spreadsheet
+  path;
+- what to tell the user afterwards: the same findings as this analysis, which figures are formulas
+  and which computed, which charts follow the sheet, and where everything was saved;
+- the date it was made and the file it was made from.
+
+Do not put a file named `schema.json` in the skill directory: MulmoTerminal reads a skill directory
+holding one as a collection.
+
+**Run it once before you hand it over**: follow the new SKILL.md yourself, from a fresh temporary
+directory, on the file you just analysed, and check the spreadsheet comes out the same. Fix the
+skill until it does. Then tell the user its name, where it is, and how to use it ("analyse
+next-month.csv with cafe-sales-weekday-temperature", or `/cafe-sales-weekday-temperature
+next-month.csv`). A new skill is picked up by sessions started after it was written.
 
 ## When the user edits the spreadsheet
 

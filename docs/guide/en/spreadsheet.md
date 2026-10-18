@@ -206,6 +206,31 @@ The scripts are kept so the analysis can be run again, for example on next month
 Nothing is written into your repository, and nothing is installed into your project: the agent
 works in a temporary directory of its own.
 
+### Keep the analysis as a skill {#analysis-keep-as-skill}
+
+When an analysis is what you wanted, the agent offers to keep it as a skill of your own, so the
+next file of the same kind gets the same spreadsheet and charts from one request:
+
+> Yes, keep it. Call it cafe-sales-check.
+
+It asks where the skill should live:
+
+- **for every terminal**: your user skills directory (`~/.claude/skills/` for Claude Code);
+- **for this project only**: `.claude/skills/` in the working directory.
+
+The skill holds the scripts, rewritten to take any file of that shape (the file name is an argument;
+row counts and ranges come from the data), and a description naming the columns it needs. The agent
+runs it once on the file you analysed and checks it gives the same result before handing it over.
+
+Next month, in a new session:
+
+> Analyse data/cafe-sales-august.csv with cafe-sales-check.
+
+or `/cafe-sales-check data/cafe-sales-august.csv`. If the file lacks a column the skill needs, it
+stops and says which, rather than guessing. A skill is read when a session starts, so start a new
+one after making it. Skill names never start with `mulmoterminal-`, which belongs to the skills
+MulmoTerminal ships.
+
 ## Where the files are
 
 | What | Where |
