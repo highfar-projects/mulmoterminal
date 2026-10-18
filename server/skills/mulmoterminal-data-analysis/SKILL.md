@@ -15,6 +15,8 @@ Canvas. Talk to them in their language, and in words about their data, not about
   was switched on before the session started. If you do not have them, say so and stop: tell the
   user to switch on Canvas in the launcher's MCP toggles and start a new session there.
 - Node. Scripts are Node only — not Python, not a shell pipeline doing arithmetic.
+- For a large file, `manageCollection` (the **Workspace data** tools). It is optional: without it a
+  large file is aggregated by a script instead (see *A large file* below).
 
 ## 1. Read the file
 
@@ -47,6 +49,85 @@ Before analysing anything, tell the user what you found:
 - how many values are empty or unreadable in each column.
 
 If a column's meaning is unclear (`amt`, `v2`), ask once, rather than guessing.
+
+### A large file
+
+Look at the file's size first. If it is more than a few hundred kilobytes, count its records with
+one streaming pass, not `wc -l` (a quoted field can hold a line break, so lines are not records).
+The same pass counts, for each column you will treat as a number, the values that are empty, the
+values that do not convert, and the values that convert only after you strip thousands separators;
+and, for each column that could be the key (step 4 below), its empty values and whether any value
+repeats:
+
+```js
+import { createReadStream } from "node:fs";
+import { parse } from "csv-parse";
+const parser = createReadStream(process.argv[2]).pipe(parse({ columns: true, skip_empty_lines: true, bom: true }));
+for await (const row of parser) { /* count the record; check each numeric column */ }
+```
+
+Up to about 5,000 records, read the file with a script as above and put every row on the Data
+sheet. **Above that, do not parse the whole file into memory and do not put its rows on a sheet.**
+Aggregate it instead, and put the aggregated table on the sheet.
+
+**With `manageCollection`**, make the file a read-only collection and aggregate it with DuckDB —
+but only when every value in the numeric columns you will aggregate converts as it stands. The
+collection drops a value it cannot read as a number from `sum` and `avg` without saying so, and
+`"1,200"` is such a value; `min` and `max` compare the values as they are written, so in such a
+column they compare text. If the streaming pass found any, aggregate with the script instead (below), and say how many values were empty or unreadable.
+
+1. The file must sit inside the root the collection lives in (the workspace, or the project). If
+   it is elsewhere, ask before copying it into `data/` there; never move the user's file. If
+   `data/` already holds a file of that name, do not overwrite it: copy under a name that does not
+   exist yet, and tell the user which.
+2. Pick the collection's slug: lowercase letters, digits and hyphens, named after the data
+   (`sales-2025`). Never start it with `mc-` (reserved for the presets, which are overwritten on
+   every start) or `mulmoterminal-`. A slug that is taken would be overwritten: check that
+   `manageCollection` `getSchema` answers "unknown collection" for it and that no skill directory
+   of that name exists, and pick another name if either does.
+3. Read how to define one: `manageCollection` with `action: "schemaDocs"` and the topic
+   ``External data (CSV) collections — `dataSource` ``. Follow it, including where it says to write
+   the files: a `SKILL.md` and a `schema.json` with `dataSource: { "type": "csv", "path": ... }`,
+   fields named exactly as the header, the key field declared `type: "string"`.
+4. The key: a column whose values are unique, when there is one. When none is (rows of orders,
+   readings, log lines), use a column without empty cells. `queryItems` still counts and sums every
+   row; only the collection's own list view shows one row per key value. If every column has empty
+   cells, use the one with fewest: the list view leaves out the rows whose key is empty, and
+   `queryItems` still counts them. Say which of these applies to the user.
+5. Aggregate with `manageCollection` `queryItems`, the parameters under `query`:
+
+   ```json
+   { "action": "queryItems", "slug": "sales-2025",
+     "query": { "groupBy": ["store"],
+                "aggregates": { "orders": { "op": "count" }, "sales": { "op": "sum", "column": "amount" } },
+                "orderBy": [{ "field": "sales", "dir": "desc" }], "limit": 10000 } }
+   ```
+
+   Ops are `count`, `sum`, `avg`, `min`, `max`; `where` filters with `eq`, `ne`, `in`, `gt`, `gte`,
+   `lt`, `lte`, `contains`. It scans the whole file. A result holds 1,000 rows unless you pass
+   `limit` (at most 10,000), and it does not say when it stopped: if the result has exactly as many
+   rows as the limit, treat it as possibly cut off. Then split the query with `where`, or aggregate with the
+   script. `groupBy` takes column names, not expressions, so for months run one query per month
+   with `where` (`date` `gte` the first day, `lt` the first day of the next month) unless the file
+   has a month column. Never compute a total from `getItems`: it stops at 5,000 rows.
+6. Check the overall `count` against the record count of the streaming pass before you go on.
+7. Put the aggregated rows on the Data sheet as values, labelled as aggregated from the file (for
+   example "Sales by month (aggregated from orders.csv)"). Statistics over the aggregated table
+   (growth, shares, correlation between the aggregated columns, quartiles of the monthly totals)
+   are formulas, as in step 3.
+8. Tell the user the collection's name: it also appears in Collections, and editing or replacing
+   the file updates it. A query result is a snapshot: to see changed data in the spreadsheet, ask
+   for the analysis again.
+
+**With the script**, when `manageCollection` is not there (a project cell where Workspace data was
+not switched on) or the numbers need cleaning: aggregate in the streaming pass above, converting
+each value as in *Read the file*, and keep only the per-group totals in memory. Put the aggregated
+table on the sheet the same way, labelled as aggregated. When `manageCollection` was missing, say
+that switching on Workspace data would let the file be aggregated as a collection.
+
+Statistics that need every row rather than a group's sum or count (the median of all orders, a
+percentile of individual values) cannot come from `queryItems`. Compute them in a streaming script,
+or say they are over the aggregated table.
 
 ## 2. Summary statistics
 
@@ -88,8 +169,8 @@ Put the result in `presentSpreadsheet`. Split each number by whether the user ma
   value does not change when the user edits the data.
 
 Use one sheet for the data and another for the summary, so a summary formula reads the data sheet
-(`=AVERAGE(Data!C2:C201)`). If the data is too large to show, summarise it in the script first:
-show it by month, by category, or the top rows. Say that you did.
+(`=AVERAGE(Data!C2:C201)`). A file above about 5,000 rows is aggregated first and its aggregated
+table goes on the Data sheet (see *A large file*). Say that you did.
 
 ## 4. Charts
 
@@ -188,6 +269,12 @@ outlives the conversation and can be shared; the data stays where the user keeps
 
 Do not put a file named `schema.json` in the skill directory: MulmoTerminal reads a skill directory
 holding one as a collection.
+
+When the analysis aggregated a large file through a collection, the skill does not carry that
+collection: it names the next file, not this one. Write the steps of *A large file* into its
+SKILL.md in full, since the kept skill cannot see this one: the streaming pass and when to fall back
+to the script, the slug check, defining a collection for the file it is given, and the
+`queryItems` queries with their `limit`, so the aggregation is the same on every run.
 
 **Run it once before you hand it over**: follow the new SKILL.md yourself, from a fresh temporary
 directory, on the file you just analysed, and check the spreadsheet comes out the same. Fix the
