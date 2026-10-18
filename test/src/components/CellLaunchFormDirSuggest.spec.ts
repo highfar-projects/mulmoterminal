@@ -210,6 +210,30 @@ describe("a Working directory that does not exist", () => {
     expect(w.emitted("start")).toEqual([["/srv/nope"]]);
   });
 
+  it("starts once when Enter is pressed again while the check is pending", async () => {
+    const pending: ((answer: DirSuggestResponse) => void)[] = [];
+    suggestAnswer = () => new Promise((resolve) => pending.push(resolve));
+    const w = await mountForm();
+    await typeInto(w, "/srv/alpha");
+    await input(w).trigger("keydown.enter");
+    await input(w).trigger("keydown.enter");
+    pending.forEach((resolve) => resolve({ exists: true, suggestions: [] }));
+    await flushPromises();
+    expect(w.emitted("start")).toEqual([["/srv/alpha"]]);
+  });
+
+  it("does not launch the old text when the field changed during the check", async () => {
+    let release: (answer: DirSuggestResponse) => void = () => {};
+    suggestAnswer = (typed) => (typed === "/srv/alpha" ? new Promise((resolve) => (release = resolve)) : fromTree(typed));
+    const w = await mountForm();
+    await typeInto(w, "/srv/alpha");
+    await input(w).trigger("keydown.enter");
+    await typeInto(w, "/srv/alps");
+    release({ exists: true, suggestions: [] });
+    await flushPromises();
+    expect(w.emitted("start")).toBeUndefined();
+  });
+
   it("does not ask about an empty field, which means the workspace", async () => {
     const w = await mountForm("");
     await input(w).trigger("keydown.enter");

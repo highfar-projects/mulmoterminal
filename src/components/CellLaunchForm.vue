@@ -236,11 +236,21 @@ const takenWorktreeAt = (dir: string | null): string | null => {
 const dirSuggest = useDirSuggest(() => props.dir);
 const { suggestions: dirSuggestions, missing: dirMissing } = dirSuggest;
 
+// The check opens a gap a synchronous launch never had: a second Enter during it would start a
+// second session, and text typed during it would be launched under the answer for the old text.
+const launchCheckPending = ref(false);
 const startHere = async (): Promise<void> => {
+  if (launchCheckPending.value) return;
+  const typed = props.dir;
   const path = targetDir.value;
   if (takenWorktreeAt(path)) return;
-  if (props.dir.trim() && !(await dirSuggest.confirmLaunchable(props.dir))) return;
-  startAt(path);
+  launchCheckPending.value = true;
+  try {
+    if (typed.trim() && !(await dirSuggest.confirmLaunchable(typed))) return;
+    if (props.dir === typed) startAt(path);
+  } finally {
+    launchCheckPending.value = false;
+  }
 };
 
 const dirSuggestListId = `cell-dir-suggestions-${useId()}`;
