@@ -62,6 +62,10 @@ reading:
 | two numeric columns | `sampleCorrelation`, `linearRegression`, `linearRegressionLine`, `rSquared` |
 | comparing two groups | `tTestTwoSample` |
 
+`quantile` interpolates the way Excel's `QUARTILE.INC` and `PERCENTILE.INC` do. Say so when you
+show quartiles, because other tools (Python's `statistics.quantiles` by default) give slightly
+different numbers.
+
 For a category column, count the rows in each category. For a date column, give its range and look
 for gaps.
 
@@ -123,8 +127,14 @@ holds what was typed, **formulas included and their results not**, so you see `=
 number. Work out the results in a script. Then:
 
 - recompute the computed values that depended on the edited cells;
+- call `presentSpreadsheet` again with the whole spreadsheet: the user's edits, the formulas, and
+  the new computed values;
 - draw the charts again;
 - say what changed most.
+
+**Never write the spreadsheet file yourself.** The open Canvas does not read it again, so it keeps
+showing the old values, and the user's next edit there saves the whole old sheet back over yours.
+The new `presentSpreadsheet` is a new file: tell the user to edit that one from now on.
 
 ## Do not
 

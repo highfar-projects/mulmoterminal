@@ -151,7 +151,8 @@ The bundled `mulmoterminal-data-analysis` skill carries the whole procedure:
 5. It tells you where the spreadsheet, the charts and its scripts were saved.
 
 The scripts go in `<workspace>/artifacts/analysis/`, never in your repository. You do not have to
-name the skill. Asking "analyse orders.csv" is usually enough.
+name the skill. Asking "analyse orders.csv" is usually enough. When you edit the sheet and ask it to
+read it again, the recalculated sheet comes back as a new spreadsheet: edit that one from then on.
 
 ### Your own repository
 
