@@ -14,7 +14,7 @@ No behaviour change. Each piece is a verbatim move of markup or script:
   still the button the row menu anchors on.
 - `FilesTreeSplitter.vue`: the tree's resize handle (listeners fall through the same way).
 - `FilesTabStrip.vue`: the tab strip. Tab keys are emitted; the pane still decides where focus
-  lands, asking the strip for its front tab through an exposed `focusFront()`.
+  lands, asking the strip for its front tab button through an exposed `frontTab()`.
 - `FilesRowMenuPanel.vue`: the teleported row menu; exposes its element for `useFilesRowMenu`.
 - `FilesUnpreviewable.vue`: the media view / "not text" block with its Open in OS button.
 - `FilesChangesButton.vue`, `FilesSaveButton.vue`: header buttons that are plain markup.
