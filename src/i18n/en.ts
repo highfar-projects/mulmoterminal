@@ -581,6 +581,8 @@ export const en = {
   },
 
   launch: {
+    dirMissing: "This folder does not exist, so nothing can be started in it.",
+    dirSuggestions: "Matching folders",
     mcpGroupsNextStart:
       "Takes effect for the next terminal started in this directory — a cell already open here keeps the tools it started with, so restart it.",
     agentUnavailable: {

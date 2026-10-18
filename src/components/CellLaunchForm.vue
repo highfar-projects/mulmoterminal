@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /* eslint-disable max-lines -- CellLaunchForm is ~600 lines, pre-existing (see #1423) */
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, useId, watch } from "vue";
 import { useDirColors, useDirIcons, useDirPriorities } from "../composables/useDirConfig";
 import DirIcon from "./DirIcon.vue";
 import { useResumableSessions, useDirScripts, useDirWorktrees, type ResumableSession, type Worktree } from "../composables/useDirLists";
@@ -37,6 +37,8 @@ import { useBusyAction } from "../composables/useBusyAction";
 import { useSessionStop } from "../composables/useSessionStop";
 import { worktreeRequestFailure } from "./cellChromeRules";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
+import { useDirSuggest } from "../composables/useDirSuggest";
+import { dirSuggestKeyAction, type DirSuggestKey } from "./dirSuggestKeys";
 
 // What an EMPTY grid cell shows: pick a directory, pick what to run in it, and start — or resume
 // a session that already exists there, run one of its scripts, or isolate the work in a worktree.
@@ -228,9 +230,62 @@ const takenWorktreeAt = (dir: string | null): string | null => {
   return t(session.attached ? "tips.launch.worktreeOpenElsewhere" : "tips.launch.worktreeHasSession");
 };
 
-const startHere = (): void => {
-  if (!takenWorktreeAt(targetDir.value)) startAt(targetDir.value);
+// An empty field is the workspace default and needs no asking. A typed path is checked even when
+// Enter beats the idle timer, so a mistyped directory is refused here rather than by the server
+// after a cell has already opened for it.
+const dirSuggest = useDirSuggest(() => props.dir);
+const { suggestions: dirSuggestions, missing: dirMissing } = dirSuggest;
+
+// The check opens a gap a synchronous launch never had: a second Enter during it would start a
+// second session, and text typed during it would be launched under the answer for the old text.
+const launchCheckPending = ref(false);
+const startHere = async (): Promise<void> => {
+  if (launchCheckPending.value) return;
+  const typed = props.dir;
+  const path = targetDir.value;
+  if (takenWorktreeAt(path)) return;
+  launchCheckPending.value = true;
+  try {
+    if (typed.trim() && !(await dirSuggest.confirmLaunchable(typed))) return;
+    if (props.dir === typed) startAt(path);
+  } finally {
+    launchCheckPending.value = false;
+  }
 };
+
+const dirSuggestListId = `cell-dir-suggestions-${useId()}`;
+const dirFieldFocused = ref(false);
+const highlightedSuggestion = ref(-1);
+watch(dirSuggestions, () => (highlightedSuggestion.value = -1));
+const suggestionsOpen = computed(() => dirFieldFocused.value && dirSuggestions.value.length > 0);
+const suggestionName = (suggestion: string): string => suggestion.slice(Math.max(suggestion.lastIndexOf("/"), suggestion.lastIndexOf("\\")) + 1);
+
+// The trailing separator is what makes the next level the thing being completed, so it is asked
+// for at once instead of after another idle second.
+function acceptSuggestion(index: number): void {
+  const picked = dirSuggestions.value[index];
+  if (picked === undefined) return;
+  const next = `${picked}/`;
+  emit("update:dir", next);
+  void dirSuggest.ask(next);
+}
+
+// The key arrives named by the template's modifier rather than read off `event.key`, whose
+// spelling differs between a browser and a synthetic event. stopPropagation on the keys the list
+// consumes: the launch panel closes on a window-level Escape, and closing the list must not close
+// the panel with it.
+function onDirKey(key: DirSuggestKey, event: KeyboardEvent): void {
+  if (event.isComposing) return;
+  const action = dirSuggestKeyAction(key, highlightedSuggestion.value, suggestionsOpen.value ? dirSuggestions.value.length : 0);
+  if (action.kind !== "none") {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  if (action.kind === "move") highlightedSuggestion.value = action.index;
+  else if (action.kind === "accept") acceptSuggestion(action.index);
+  else if (action.kind === "close") dirSuggest.dismiss();
+  else if (key === "Enter") void startHere();
+}
 
 const {
   dir: mcpGroupDir,
@@ -790,15 +845,54 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
     <label class="flex flex-col items-center gap-1.5" :class="LAUNCH_ROW">
       <span class="font-sans text-[11px] uppercase tracking-[0.05em] text-dim">Working directory</span>
       <span class="flex w-full items-stretch gap-1.5">
-        <input
-          v-model="dirField"
-          data-testid="cell-dir-input"
-          class="box-border w-full rounded-md border border-border bg-input px-2.5 py-[7px] font-mono text-[12px] text-fg focus:border-accent focus:outline-none min-w-0 flex-auto"
-          type="text"
-          placeholder="/path/to/project"
-          spellcheck="false"
-          @keydown.enter="startHere"
-        />
+        <span class="relative min-w-0 flex-auto">
+          <input
+            v-model="dirField"
+            data-testid="cell-dir-input"
+            class="box-border w-full rounded-md border border-border bg-input px-2.5 py-[7px] font-mono text-[12px] text-fg focus:border-accent focus:outline-none"
+            type="text"
+            placeholder="/path/to/project"
+            spellcheck="false"
+            autocomplete="off"
+            role="combobox"
+            aria-autocomplete="list"
+            :aria-expanded="suggestionsOpen"
+            :aria-controls="dirSuggestListId"
+            :aria-activedescendant="suggestionsOpen && highlightedSuggestion >= 0 ? `${dirSuggestListId}-${highlightedSuggestion}` : undefined"
+            @focus="dirFieldFocused = true"
+            @blur="dirFieldFocused = false"
+            @keydown.up="onDirKey('ArrowUp', $event)"
+            @keydown.down="onDirKey('ArrowDown', $event)"
+            @keydown.tab.exact="onDirKey('Tab', $event)"
+            @keydown.esc="onDirKey('Escape', $event)"
+            @keydown.enter="onDirKey('Enter', $event)"
+          />
+          <!-- mousedown, not click: a click would blur the field first, and the list closes on blur. -->
+          <ul
+            v-if="suggestionsOpen"
+            :id="dirSuggestListId"
+            data-testid="cell-dir-suggestions"
+            role="listbox"
+            :aria-label="t('launch.dirSuggestions')"
+            class="absolute left-0 right-0 top-full z-20 mt-1 max-h-60 overflow-y-auto rounded-md border border-border bg-elevated py-1 shadow-lg"
+          >
+            <li
+              v-for="(suggestion, index) in dirSuggestions"
+              :id="`${dirSuggestListId}-${index}`"
+              :key="suggestion"
+              data-testid="cell-dir-suggestion"
+              role="option"
+              :aria-selected="index === highlightedSuggestion"
+              :data-tip="suggestion"
+              class="cursor-pointer truncate px-2.5 py-[3px] text-left font-mono text-[12px]"
+              :class="index === highlightedSuggestion ? 'bg-hover text-fg' : 'text-secondary'"
+              @pointerenter="highlightedSuggestion = index"
+              @mousedown.prevent="acceptSuggestion(index)"
+            >
+              {{ `${suggestionName(suggestion)}/` }}
+            </li>
+          </ul>
+        </span>
         <button
           v-if="!remoteServer"
           type="button"
@@ -815,8 +909,8 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
           type="button"
           data-testid="cell-dir-go"
           class="inline-flex flex-none cursor-pointer items-center justify-center rounded-md border border-border bg-elevated px-2 text-secondary enabled:hover:border-accent enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-40"
-          :disabled="!dir.trim() || !!takenWorktreeAt(targetDir) || !!blockedAgent"
-          :data-tip="takenWorktreeAt(targetDir) ?? t('tips.launch.start')"
+          :disabled="!dir.trim() || !!takenWorktreeAt(targetDir) || !!blockedAgent || dirMissing"
+          :data-tip="takenWorktreeAt(targetDir) ?? (dirMissing ? t('launch.dirMissing') : t('tips.launch.start'))"
           :aria-label="t('tips.launch.startAria')"
           @click="startHere"
         >
@@ -827,6 +921,9 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
            launch the worktree row refuses. Saying why beats a play button that just does nothing. -->
       <span v-if="takenWorktreeAt(targetDir)" data-testid="cell-dir-busy" class="font-sans text-[11px] leading-snug text-amber">{{
         takenWorktreeAt(targetDir)
+      }}</span>
+      <span v-if="dirMissing" data-testid="cell-dir-missing" role="status" class="font-sans text-[11px] leading-snug text-amber">{{
+        t("launch.dirMissing")
       }}</span>
       <span v-if="pickError" data-testid="cell-dir-pick-error" role="alert" class="font-sans text-[11px] leading-snug text-amber">{{ pickError }}</span>
     </label>

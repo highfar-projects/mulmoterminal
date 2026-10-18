@@ -120,6 +120,7 @@ describe("an agent that can start", () => {
     const w = await mountForm("claude");
     expect(w.find('[data-testid="agent-unavailable"]').exists()).toBe(false);
     await w.get('[data-testid="cell-dir-input"]').trigger("keydown.enter");
+    await flushPromises();
     expect(w.emitted("start")).toEqual([["/repo"]]);
   });
 
@@ -132,6 +133,7 @@ describe("an agent that can start", () => {
     const w = await mountForm("muse");
     expect(w.find('[data-testid="agent-unavailable"]').exists()).toBe(false);
     await w.get('[data-testid="cell-dir-input"]').trigger("keydown.enter");
+    await flushPromises();
     expect(w.emitted("start")).toEqual([["/repo"]]);
   });
 });
