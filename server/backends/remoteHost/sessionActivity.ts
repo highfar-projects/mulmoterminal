@@ -75,7 +75,8 @@ export interface SessionActivityPublisherDeps {
   // that accessor THROWS when disconnected, unlike this one.
   uid: () => string | null;
   // Read per write: the channel is decided on connect and can differ per account.
-  hostId: () => string;
+  // Null until it is decided for the signed-in account; nothing is written then.
+  hostId: () => string | null;
   store: SessionActivityStore;
   onError: (error: unknown) => void;
 }
@@ -94,14 +95,15 @@ export function createSessionActivityPublisher(deps: SessionActivityPublisherDep
   // that did not change.
   const publish = (sessionId: string, activity: SessionActivityInput): void => {
     const uid = deps.uid();
-    if (!uid) return;
+    const hostId = deps.hostId();
+    if (!uid || !hostId) return;
     const key = stateKey(activity);
     if (published.get(sessionId) === key) return;
     published.set(sessionId, key);
     const rev = (revisions.get(sessionId) ?? 0) + 1;
     revisions.set(sessionId, rev);
     const payload = activityDoc(activity, rev);
-    deps.store.write(uid, deps.hostId(), sessionId, payload).catch((error: unknown) => {
+    deps.store.write(uid, hostId, sessionId, payload).catch((error: unknown) => {
       // The dedup entry is recorded optimistically, so a failed write would otherwise
       // swallow every later publish of the SAME state and leave the phone stale until
       // some different transition happened. Release it so the next one retries —
@@ -120,8 +122,9 @@ export function createSessionActivityPublisher(deps: SessionActivityPublisherDep
     revisions.delete(sessionId);
     published.delete(sessionId);
     const uid = deps.uid();
-    if (!uid) return;
-    deps.store.remove(uid, deps.hostId(), sessionId).catch(deps.onError);
+    const hostId = deps.hostId();
+    if (!uid || !hostId) return;
+    deps.store.remove(uid, hostId, sessionId).catch(deps.onError);
   };
 
   return { publish, forget };

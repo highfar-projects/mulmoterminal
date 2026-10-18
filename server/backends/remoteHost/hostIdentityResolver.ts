@@ -4,7 +4,7 @@
 // so the decision and its persistence are tested without Firebase or a home directory.
 import type { HostMachine } from "@mulmoclaude/core/remote-host";
 
-import { LEGACY_HOST_ID, machineLabel, newIdentity, parseHostIdentity, reusableIdentity, type HostIdentity, type LegacyHostDoc } from "./hostIdentity.js";
+import { machineLabel, newIdentity, parseHostIdentity, reusableIdentity, type HostIdentity, type LegacyHostDoc } from "./hostIdentity.js";
 
 export interface HostIdentityResolverDeps {
   hostname: () => string;
@@ -32,13 +32,14 @@ export const createHostIdentityResolver = (deps: HostIdentityResolverDeps) => {
   // A failure here rejects the connect, which leaves any running channel alone; the
   // next connect decides again. Guessing instead could put two machines on one channel.
   const resolveHostId = async (uid: string): Promise<string> => {
+    current = null;
     current = await decide(uid, deps.hostname());
     return current.hostId;
   };
 
-  // Before the first connect there is no decision; the legacy id is what this host
-  // used before machines were told apart.
-  const currentHostId = (): string => current?.hostId ?? LEGACY_HOST_ID;
+  // Only the channel decided for THIS account: after an account switch, or while a
+  // decision is pending or has failed, there is none, and a writer must not guess.
+  const currentHostId = (uid: string | null): string | null => (current && current.uid === uid ? current.hostId : null);
 
   const currentMachine = (): HostMachine | null => (current ? { machineId: current.machineId, label: machineLabel(current.hostname) } : null);
 

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -37,5 +37,22 @@ describe("host identity file", () => {
     await writeFile(file, "{not json");
     expect(await readHostIdentityFile(file)).toBeNull();
     expect(warn).toHaveBeenCalledOnce();
+  });
+
+  it("reads an oversized file as nothing, and says so", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const file = path.join(dir, "remote-host.json");
+    await writeFile(file, " ".repeat(64 * 1024 + 1));
+    expect(await readHostIdentityFile(file)).toBeNull();
+    expect(warn).toHaveBeenCalledOnce();
+  });
+
+  // Deciding again on an unreadable file would overwrite a channel the machine may still own.
+  it.skipIf(process.platform === "win32" || process.getuid?.() === 0)("rejects with the path when the file cannot be read", async () => {
+    const file = path.join(dir, "remote-host.json");
+    await writeHostIdentityFile(IDENTITY, file);
+    await chmod(file, 0o000);
+    await expect(readHostIdentityFile(file)).rejects.toThrow(file);
+    await chmod(file, 0o600);
   });
 });

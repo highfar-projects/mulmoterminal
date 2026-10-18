@@ -22,8 +22,14 @@ Design agreed on the issue: https://github.com/receptron/mulmoterminal/issues/30
 
 ## Writers outside the connect path
 
-The session-activity publisher and Web Push read `currentHostId()` per write instead of a constant.
+The session-activity publisher and Web Push read `currentHostId()` per write instead of a constant. It answers only for the account the channel was decided for, and is null while a decision is pending or after it failed. The publisher then writes nothing, and the push goes out without a host id, so the phone shows its picker.
+
+## Reading the stored file
+
+The file is read with a size bound. A missing file means "decide". An oversized or unparsable file is reported and decided again. Any other read error (permissions, I/O) fails the connect, because deciding again would overwrite a channel the machine may still own.
 
 ## Known limit (documented in the phone guide)
 
-Two machines that shared `mulmoterminal` before this change: while one of them still runs the old version, it rewrites the presence doc without `machineId`. The other machine can then also claim `mulmoterminal` when it upgrades. The guide says to delete `remote-host.json` on one of them and reconnect.
+Two machines that shared `mulmoterminal` before this change: while one of them still runs the old version, it rewrites the presence doc without `machineId`. The other machine can then also claim `mulmoterminal` when it upgrades. The guide says to delete `remote-host.json` on one of them and reconnect. The same fix covers two cases nothing here detects:
+- two legacy machines whose first connects after the upgrade land before either writes its `machineId`
+- a `~/.mulmoterminal` copied to a machine with the same hostname

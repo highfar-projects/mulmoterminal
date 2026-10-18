@@ -40,9 +40,10 @@ const resolverFor = (state: FakeWorld) =>
   });
 
 describe("createHostIdentityResolver", () => {
-  it("before any connect, the current channel is the legacy one and no machine is known", () => {
+  it("before any connect there is no current channel and no machine", () => {
     const resolver = resolverFor(world());
-    expect(resolver.currentHostId()).toBe("mulmoterminal");
+    expect(resolver.currentHostId("uid-1")).toBeNull();
+    expect(resolver.currentHostId(null)).toBeNull();
     expect(resolver.currentMachine()).toBeNull();
   });
 
@@ -66,7 +67,7 @@ describe("createHostIdentityResolver", () => {
     expect(await resolver.resolveHostId("uid-1")).toBe("mulmoterminal-abcdef01");
     expect(state.legacyReads).toEqual([]);
     expect(state.writes).toEqual([]);
-    expect(resolver.currentHostId()).toBe("mulmoterminal-abcdef01");
+    expect(resolver.currentHostId("uid-1")).toBe("mulmoterminal-abcdef01");
   });
 
   it("a record copied from another machine, or made for another account, is decided again", async () => {
@@ -87,6 +88,25 @@ describe("createHostIdentityResolver", () => {
     const resolver = resolverFor(state);
     await expect(resolver.resolveHostId("uid-1")).rejects.toThrow("offline");
     expect(state.writes).toEqual([]);
-    expect(resolver.currentHostId()).toBe("mulmoterminal");
+    expect(resolver.currentHostId("uid-1")).toBeNull();
+  });
+
+  it("answers only for the account the channel was decided for", async () => {
+    const state = world({ stored: { uid: "uid-1", hostId: "mulmoterminal-abcdef01", machineId: "m-1", hostname: "work-mac.local" } });
+    const resolver = resolverFor(state);
+    await resolver.resolveHostId("uid-1");
+    expect(resolver.currentHostId("uid-2")).toBeNull();
+    expect(resolver.currentHostId(null)).toBeNull();
+  });
+
+  it("a failed decision for a new account leaves no channel from the previous one", async () => {
+    const state = world({ stored: { uid: "uid-1", hostId: "mulmoterminal-abcdef01", machineId: "m-1", hostname: "work-mac.local" } });
+    const resolver = resolverFor(state);
+    await resolver.resolveHostId("uid-1");
+    state.failLegacyRead = true;
+    await expect(resolver.resolveHostId("uid-2")).rejects.toThrow("offline");
+    expect(resolver.currentHostId("uid-1")).toBeNull();
+    expect(resolver.currentHostId("uid-2")).toBeNull();
+    expect(resolver.currentMachine()).toBeNull();
   });
 });

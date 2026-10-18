@@ -57,7 +57,7 @@ const identity = createHostIdentityResolver({
 
 // Exported so the session-activity publisher (#439) and Web Push can address this
 // machine's docs; they write from the hook path, outside the lifecycle this module owns.
-export const currentHostId = identity.currentHostId;
+export const currentHostId = (): string | null => identity.currentHostId(currentUid());
 const PREFIX = "[remote-host]";
 
 // Module-level singleton — one host runner per process. Null until initialized.

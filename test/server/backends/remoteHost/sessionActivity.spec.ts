@@ -39,6 +39,17 @@ const publisher = (store: SessionActivityStore, uid: () => string | null = () =>
   createSessionActivityPublisher({ uid, hostId: () => HOST, store, onError });
 
 describe("createSessionActivityPublisher", () => {
+  // Signed in, but this machine's channel is not decided for the account yet (or the decision
+  // failed): writing anywhere would guess at a channel that may be another machine's (#3092).
+  it("writes and removes nothing while the channel is undecided", () => {
+    const { writes, removes, store } = recorder();
+    const undecided = createSessionActivityPublisher({ uid: () => UID, hostId: () => null, store, onError: vi.fn() });
+    undecided.publish("s1", { working: true, waiting: false });
+    undecided.forget("s1");
+    expect(writes).toEqual([]);
+    expect(removes).toEqual([]);
+  });
+
   it("writes a transition with the state that changed", () => {
     const { writes, store } = recorder();
     publisher(store).publish("s1", { working: true, waiting: false });
