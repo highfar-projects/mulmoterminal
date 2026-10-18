@@ -204,8 +204,16 @@ describe("mulmoterminal-config routes to skills that exist", () => {
     // `mulmoterminal-shared-app` builds the user's own app — it writes that repository's `app.json`
     // and its collections, never anything the router is a table of contents for. Routing to it
     // would put "make a survey" in a list of places to change fonts and keybindings, and the agent
-    // finds it the way it finds any skill: by what the user asked for.
-    const notSettings = ["mulmoterminal-config", "mulmoterminal-bug-report", "mulmoterminal-decisions", "mulmoterminal-shared-app", "mulmoterminal-help"];
+    // finds it the way it finds any skill: by what the user asked for. `mulmoterminal-data-analysis` is the
+    // same: it writes the user's spreadsheets and charts, not a setting.
+    const notSettings = [
+      "mulmoterminal-config",
+      "mulmoterminal-bug-report",
+      "mulmoterminal-decisions",
+      "mulmoterminal-shared-app",
+      "mulmoterminal-help",
+      "mulmoterminal-data-analysis",
+    ];
     const writers = BUNDLED_SKILL_NAMES.filter((name) => !notSettings.some((excluded) => excluded === name));
     expect(writers.filter((name) => !routed().includes(name))).toEqual([]);
   });
