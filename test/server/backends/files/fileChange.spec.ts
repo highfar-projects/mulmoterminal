@@ -107,13 +107,13 @@ describe("initFileChangePublisher", () => {
 
   // A chart that draws from a spreadsheet range redraws on the workbook's channel under the
   // chart scope (chart-plugin's `source`), so a saved workbook is announced there.
-  it("forwards a saved workbook to the chart plugin channel", async () => {
+  it("forwards a saved workbook to the chart and spreadsheet plugin channels", async () => {
     const rel = "artifacts/spreadsheets/2026/10/abc123.json";
     seedFile(rel, "[]");
 
     await publishFileChange(rel);
 
-    expect(published.map((entry) => entry.channel)).toEqual([`plugin:chart:file:${rel}`]);
+    expect(published.map((entry) => entry.channel)).toEqual([`plugin:chart:file:${rel}`, `plugin:spreadsheet:file:${rel}`]);
   });
 
   it("does not forward a .json outside artifacts/spreadsheets to the chart channel", async () => {
