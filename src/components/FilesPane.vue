@@ -9,7 +9,7 @@
 // calls `reload()` after a root change it has already cleared with the user.
 import { onBeforeUnmount, onMounted, ref, shallowRef, computed, nextTick, useTemplateRef, watch } from "vue";
 import type { FilesPanelSeed } from "../composables/filesPanelSeed";
-import { expandedPaths, restoreLevels } from "./filesTreeState";
+import { expandedPaths } from "./filesTreeState";
 import { ROOT_ROW, useFilesTree, type TreeNode } from "../composables/useFilesTree";
 import { openFileMedia, useOpenFile } from "../composables/useOpenFile";
 import { useFilesReveal } from "../composables/useFilesReveal";
@@ -23,18 +23,21 @@ import { withCanvasView } from "./filesTabs";
 import { nextTabIndex } from "./tabKeys";
 import { previewLinkTarget } from "./previewLinkTarget";
 import { previewFollowsAppTheme } from "./filePreviewKind";
-import FilesMediaView from "./FilesMediaView.vue";
-import { GIT_LETTER, gitDecorations } from "./filesGitDecorations";
-import type { FileGitState } from "../../common/fileGitStatus";
-import { useFilesGitStatus } from "../composables/useFilesGitStatus";
-import { useFileHeadText } from "../composables/useFileHeadText";
+import FilesUnpreviewable from "./FilesUnpreviewable.vue";
+import FilesTreeRow from "./FilesTreeRow.vue";
+import FilesTreeSplitter from "./FilesTreeSplitter.vue";
+import FilesTabStrip from "./FilesTabStrip.vue";
+import FilesRowMenuPanel from "./FilesRowMenuPanel.vue";
+import FilesChangesButton from "./FilesChangesButton.vue";
+import FilesSaveButton from "./FilesSaveButton.vue";
+import { useFilesPaneGit } from "../composables/useFilesPaneGit";
+import { restorePaneState } from "../composables/filesPaneRestore";
 import FileFinder from "./FileFinder.vue";
 import FilesTreeEmpty from "./FilesTreeEmpty.vue";
 import DirConfigSaveNote from "./DirConfigSaveNote.vue";
 import FileSearch from "./FileSearch.vue";
 import { useFileSearchPanel } from "../composables/useFileSearchPanel";
 import { useFileTreeWidth } from "../composables/useFileTreeWidth";
-import { clippedNameTip } from "./fileTreeWidth";
 import FilesToolbarButton from "./FilesToolbarButton.vue";
 import FilesEditorActions from "./FilesEditorActions.vue";
 import type { StoriesRoots } from "../composables/canvasOpenFile";
@@ -57,7 +60,6 @@ import { useFilesGallery } from "../composables/useFilesGallery";
 import { useFilesCanvasMode } from "../composables/useFilesCanvasMode";
 import { showFileWith } from "../composables/useShowFile";
 import { useSideBySide } from "../composables/useSideBySide";
-import { useFileHistory } from "../composables/useFileHistory";
 import { useRequestedOpen } from "../composables/useRequestedOpen";
 import { wantsNewTab } from "../composables/newTabModifier";
 import FilesHistoryMenu from "./FilesHistoryMenu.vue";
@@ -135,9 +137,9 @@ function openPreviewLink(href: string): void {
 watch(dirty, (value) => emit("dirty", value));
 
 // The row menu: right-click a tree row (or Shift+F10 / the Menu key on it) to put its path at
-// the terminal's cursor (#1859). Teleported and fixed-positioned for CockpitRowMenu's reason —
-// the tree scrolls inside an overflow container, which would clip a panel left in place.
-const rowMenuEl = useTemplateRef<HTMLElement>("rowMenuEl");
+// the terminal's cursor (#1859).
+const rowMenuPanel = useTemplateRef<InstanceType<typeof FilesRowMenuPanel>>("rowMenuPanel");
+const rowMenuEl = computed((): HTMLElement | null => rowMenuPanel.value?.el ?? null);
 const insertTerminal = computed(() => (props.insertTarget ? { cwd: props.insertTargetCwd ?? null } : null));
 
 /** What a row offers. Kept here rather than in the composable because it is the end that reads
@@ -202,19 +204,9 @@ const rootMenu = menuAttrsFor(rowMenuApi, ROOT_ROW);
 
 // Cmd/Ctrl+click asks for a tab of its own, as it asks a browser for one; a plain click replaces
 // the front tab, as it replaced the one open file before tabs.
-// The name as a tip only when the row cuts it off. Set on the row's own pointerover / focusin, which
-// run before the document listeners that read `data-tip`, so the tip sees the width as it is now.
-function tipIfClipped(name: string, event: Event): void {
-  const row = event.currentTarget;
-  if (!(row instanceof HTMLElement)) return;
-  const tip = clippedNameTip(row.querySelector<HTMLElement>("[data-row-name]"), name);
-  if (tip === null) row.removeAttribute("data-tip");
-  else row.setAttribute("data-tip", tip);
-}
-
 const openFile = (node: TreeNode, event: MouseEvent): Promise<void> => (node.dir ? tree.toggleDir(node) : tabs.open(node.path, wantsNewTab(event)));
 
-const stripEl = useTemplateRef<HTMLElement>("stripEl");
+const stripEl = useTemplateRef("stripEl");
 
 // Delete closes the focused tab, as the tab pattern suggests; the arrows move between tabs as they
 // do in the collection chat strip. Focus goes to whichever tab is in front once the move settles,
@@ -236,50 +228,15 @@ async function onTabKey(e: KeyboardEvent, index: number): Promise<void> {
  *  now on: its editor, or the tree when the editor is not what is showing. Never nothing, which
  *  would drop a keyboard user on the page body. */
 function focusAfterTabMove(): void {
-  const front = strip.value.tabs.findIndex((entry) => entry.path === strip.value.activePath);
-  const tab = stripEl.value?.querySelectorAll<HTMLElement>('[role="tab"]')[front];
+  const tab = stripEl.value?.frontTab();
   const editor = layout.value.editor ? editorHost.value?.querySelector<HTMLElement>('[contenteditable="true"]') : null;
   (tab ?? editor ?? treeEl.value?.querySelector<HTMLElement>("button"))?.focus();
 }
 
 const treeEl = useTemplateRef<HTMLElement>("treeEl");
 
-// What git sees under the root (#2496), read again whenever the open file's version moves — a save
-// or an outside change landing — as well as on its own period.
-const gitStatus = useFilesGitStatus(() => props.cwd);
-const git = computed(() => gitDecorations(gitStatus.files.value));
-watch(file.baseVersion, () => void gitStatus.refresh());
-
-// The open file's changes against HEAD, beside its lines (#2497): read again whenever the open file
-// is read, and whenever what git sees moves — an agent's commit changes HEAD without touching the file.
-const head = useFileHeadText({ cwd: () => props.cwd, openPath, unpreviewable, editor: file.editor });
-// The path as well as the version: two files with the same content share a version, and switching
-// between them moves only the path.
-watch([openPath, file.baseVersion], () => void head.refresh());
-watch(gitStatus.files, () => void head.refresh());
-// Removed lines shown in place, as a unified diff, rather than marks alone — the reader's choice
-// for the whole pane, kept as they move between files.
-const showChanges = ref(false);
-watch(showChanges, (on) => file.editor.value?.setShowChanges(on));
-// The file's earlier versions (#2574), compared through the same marks and restored as an edit.
-const history = useFileHistory({ cwd: () => props.cwd, openPath, editor: file.editor, head, showChanges, dirty, saving });
-// Preview hides the menu's button; the menu must not come back by itself on returning to Edit.
-watch(showPreview, () => history.close());
-// A table rather than a key built from the state, so every key is written out where it is used.
-const GIT_TIP: Record<FileGitState, string> = {
-  modified: "tips.panes.git.modified",
-  added: "tips.panes.git.added",
-  untracked: "tips.panes.git.untracked",
-  deleted: "tips.panes.git.deleted",
-  renamed: "tips.panes.git.renamed",
-};
-/** A changed row's mark: its letter, its words, and its colour — amber for a change, green for
- *  something new, as VS Code's explorer colours them. */
-const gitMark = (node: TreeNode): { letter: string; tip: string; tone: string } | null => {
-  const state = git.value.stateOf(node.path);
-  if (!state) return null;
-  return { letter: GIT_LETTER[state], tip: t(GIT_TIP[state]), tone: state === "modified" ? "text-amber" : "text-ok" };
-};
+// What git sees, the open file's changes against HEAD, and its earlier versions.
+const { gitStatus, git, head, showChanges, history } = useFilesPaneGit(() => props.cwd, file);
 
 async function reloadTree(): Promise<void> {
   void gitStatus.refresh();
@@ -392,35 +349,8 @@ async function start(): Promise<void> {
   if (props.requestedPath) void openRequested(props.requestedPath, props.requestedLocation ?? null);
 }
 
-/** Put a remembered tree back: open its directories parents-first (each fetches its children),
- *  then the file that was open. Anything since deleted simply isn't found and is skipped.
- *  `reqIdAtStart` is the read generation at the beginning of start() — restore only
- *  opens the remembered file when no competing request arrived during THIS startup cycle. */
-async function restore(state: FilesPaneState | null, reqIdAtStart: number): Promise<void> {
-  if (!state) return;
-  // One wait per DEPTH, not one per directory. A level can only be looked up once the level above
-  // it has its children, so the levels stay sequential — but siblings within a level are
-  // independent fetches into their own nodes, and awaiting them one at a time was the whole of the
-  // delay this pane was reported for (#2148).
-  for (const level of restoreLevels(state.expanded)) {
-    await Promise.all(
-      level.map(async (dirPath) => {
-        const node = tree.findNode(dirPath);
-        if (node?.dir && !node.expanded) await tree.toggleDir(node);
-      }),
-    );
-  }
-  // A pane opened FOR a file (#1979) starts on it as text, as it would with Preview: when an open got here
-  // first — landed or still in flight, so its path cannot be asked — no remembered Canvas view comes back.
-  if (file.generation() === reqIdAtStart) canvasMode.reset(state.tabs.filter((tab) => tab.showCanvas === true).map((tab) => tab.path));
-  await tabs.restore({ tabs: state.tabs, activePath: state.activePath }, () => file.generation() === reqIdAtStart);
-  // Last, and only after a tick: the rows have to exist before there is anything to scroll past,
-  // and the expansions above are what create them.
-  if (state.treeScrollTop !== undefined) {
-    await nextTick();
-    if (treeEl.value) treeEl.value.scrollTop = state.treeScrollTop;
-  }
-}
+const restore = (state: FilesPaneState | null, reqIdAtStart: number): Promise<void> =>
+  restorePaneState({ tree, file, canvasMode, tabs, treeEl: () => treeEl.value }, state, reqIdAtStart);
 
 // A second clicked path while the pane is already showing: nothing else changes, so
 // without this the file would never open.
@@ -496,18 +426,11 @@ defineExpose({
         @toggle-preview="carried.choose(() => file.togglePreview())"
         @toggle-side-by-side="sideBySide.toggle()"
       />
-      <button
+      <FilesChangesButton
         v-if="openPath && head.hasOriginal.value && layout.editor && !unpreviewable"
-        type="button"
-        data-testid="files-changes-btn"
-        class="h-[26px] cursor-pointer rounded-md border border-border px-2.5 py-1 text-[12px] hover:bg-hover hover:text-fg"
-        :class="showChanges ? 'bg-selected text-fg' : 'bg-base text-secondary'"
-        :aria-pressed="showChanges"
-        :data-tip="t('tips.panes.showChanges')"
-        @click="showChanges = !showChanges"
-      >
-        Changes
-      </button>
+        :pressed="showChanges"
+        @toggle="showChanges = !showChanges"
+      />
       <FilesOutlineMenu
         v-if="openPath && previewKind === 'markdown' && !unpreviewable && (layout.editor || layout.preview)"
         :key="`${openPath}:${showPreview}`"
@@ -526,15 +449,7 @@ defineExpose({
       <!-- Only in the right pane: this pane is also mounted full-screen by FilesOverlay, whose base
            is a query string, and the plugin views stay off that surface (docs/file-surfaces.md). -->
       <FilesCanvasButton v-if="canvasTarget && canvasOpenable" :active="showCanvas" :disabled="saving" @toggle="carried.choose(() => canvasMode.toggle())" />
-      <button
-        v-if="openPath"
-        type="button"
-        class="h-[26px] cursor-pointer rounded-md border border-accent bg-accent-bg px-2.5 py-1 text-[12px] text-on-accent enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-50"
-        :disabled="!dirty || saving"
-        @click="save"
-      >
-        {{ saving ? "Saving…" : "Save" }}
-      </button>
+      <FilesSaveButton v-if="openPath" :dirty="dirty" :saving="saving" @save="save" />
       <!-- Each panel's only entrance that needs no configuration: neither `files-find` nor
            `files-search` has a default binding, so without these the features are invisible to
            anyone who has not written a keymap. -->
@@ -550,56 +465,14 @@ defineExpose({
       <FilesToolbarButton icon="refresh" :label="t('tips.panes.reloadTree')" @click="reloadTree" />
       <FilesToolbarButton icon="right_panel_close" :label="t('tips.panes.closeFiles')" @click="requestClose" />
     </header>
-    <!-- The strip follows the collection chat's: a row under the header, small tabs, the front one
-         in the selected colour. Each tab and its close button are siblings inside one pill, because a
-         button cannot hold a button. -->
-    <div
+    <FilesTabStrip
       v-if="showStrip"
       ref="stripEl"
-      data-testid="files-tabs"
-      role="tablist"
-      class="flex flex-none items-center gap-1 overflow-x-auto border-b border-border px-2 py-1 font-sans text-[12px] text-dim"
-      :aria-label="t('tips.panes.fileTabs')"
-    >
-      <div
-        v-for="(tab, index) in strip.tabs"
-        :key="tab.path"
-        role="presentation"
-        class="flex flex-none items-center rounded"
-        :class="tab.path === strip.activePath ? 'bg-selected text-fg' : 'text-dim hover:text-fg'"
-        @mousedown.middle.prevent
-        @auxclick.middle="tabs.close(tab.path)"
-      >
-        <button
-          type="button"
-          role="tab"
-          data-testid="files-tab"
-          :data-path="tab.path"
-          :aria-selected="tab.path === strip.activePath"
-          :tabindex="tab.path === focusablePath ? 0 : -1"
-          :data-tip="tab.path"
-          class="flex cursor-pointer items-center gap-1 border-0 bg-transparent py-0.5 pl-2 pr-1 font-mono text-[12px] text-inherit"
-          @click="tabs.open(tab.path)"
-          @keydown="onTabKey($event, index)"
-        >
-          {{ labels[index]
-          }}<span v-if="tab.path === openPath && dirty" class="text-amber"
-            ><span aria-hidden="true">●</span><span class="sr-only">{{ t("tips.panes.unsaved") }}</span></span
-          >
-        </button>
-        <button
-          type="button"
-          tabindex="-1"
-          data-testid="files-tab-close"
-          class="mr-0.5 flex cursor-pointer items-center rounded border-0 bg-transparent p-0 text-[13px] leading-none text-inherit hover:bg-hover"
-          :data-tip="t('tips.panes.closeTab')"
-          :aria-label="t('tips.panes.closeTabNamed', { name: labels[index] })"
-          @click="tabs.close(tab.path)"
-        >
-          <span class="material-symbols-outlined" aria-hidden="true">close</span>
-        </button>
-      </div>
-    </div>
+      v-bind="{ strip, labels, focusablePath, openPath, dirty }"
+      @open="(path) => tabs.open(path)"
+      @close="(path) => tabs.close(path)"
+      @key="onTabKey"
+    />
     <!-- In the flow, not over the editor: it stays up for the whole comparison, and a bar laid over
          the text would hide line 1 — often the very change being compared. -->
     <FilesComparingBanner
@@ -614,63 +487,16 @@ defineExpose({
         <p v-if="tree.error.value" class="p-4 text-[13px] text-err">{{ tree.error.value }}</p>
         <p v-else-if="tree.roots.value === null" data-testid="files-tree-loading" class="p-4 text-[13px] text-muted">Loading…</p>
         <FilesTreeEmpty v-else-if="tree.roots.value.length === 0" :actions="rowActionsFor(ROOT_ROW)" @run="runRowAction" @menu="rootMenu.onContextmenu" />
-        <button
+        <FilesTreeRow
           v-for="{ node, depth } in tree.rows.value"
           :key="node.path"
-          type="button"
-          data-testid="files-row"
-          :data-path="node.path"
-          class="flex w-full cursor-pointer items-center gap-1 whitespace-nowrap border-0 px-2 py-[3px] text-left font-mono text-[12px]"
-          :class="
-            node.path === openPath ? 'bg-selected text-fg shadow-[inset_2px_0_0_var(--accent)]' : 'bg-transparent text-secondary hover:bg-hover hover:text-fg'
-          "
-          :aria-current="node.path === openPath ? 'true' : undefined"
-          :style="{ paddingLeft: `${8 + depth * 14}px` }"
+          v-bind="{ node, depth, git, active: node.path === openPath }"
           @click="openFile(node, $event)"
-          @pointerover="tipIfClipped(node.name, $event)"
-          @focusin="tipIfClipped(node.name, $event)"
           @contextmenu="rowMenuApi.open(node, $event)"
           @keydown="rowMenuApi.onRowKeydown(node, $event)"
-        >
-          <span class="w-3.5 flex-none text-dim">
-            <span v-if="node.dir" class="material-symbols-outlined" aria-hidden="true">{{ node.expanded ? "expand_more" : "chevron_right" }}</span>
-          </span>
-          <span class="material-symbols-outlined flex-none" aria-hidden="true">{{ node.dir ? "folder" : "description" }}</span>
-          <span class="truncate" data-row-name :class="gitMark(node)?.tone">{{ node.name }}</span>
-          <!-- What git sees, as VS Code's explorer shows it: a letter for a changed file, a dot for a
-               folder holding changes, so a collapsed tree still says where to look (#2496). -->
-          <span
-            v-if="gitMark(node)"
-            role="img"
-            class="ml-auto flex-none pl-2 text-[11px]"
-            :class="gitMark(node)?.tone"
-            :data-tip="gitMark(node)?.tip"
-            :aria-label="gitMark(node)?.tip"
-            >{{ gitMark(node)?.letter }}</span
-          >
-          <span
-            v-else-if="node.dir && git.holdsChanges(node.path)"
-            role="img"
-            class="ml-auto flex-none pl-2 text-[9px] text-amber"
-            :data-tip="t('tips.panes.git.holdsChanges')"
-            :aria-label="t('tips.panes.git.holdsChanges')"
-            >●</span
-          >
-        </button>
+        />
       </nav>
-      <div
-        data-testid="files-tree-splitter"
-        class="w-[5px] flex-none cursor-col-resize bg-border hover:bg-accent focus-visible:bg-accent"
-        role="separator"
-        aria-orientation="vertical"
-        :aria-label="t('tips.panes.fileTreeResize')"
-        :aria-valuenow="treeWidth"
-        :aria-valuemin="treeMin"
-        :aria-valuemax="treeMax"
-        tabindex="0"
-        @pointerdown.prevent="onTreeSplitterDown"
-        @keydown="onTreeSplitterKey"
-      />
+      <FilesTreeSplitter v-bind="{ width: treeWidth, min: treeMin, max: treeMax }" @pointerdown.prevent="onTreeSplitterDown" @keydown="onTreeSplitterKey" />
       <section class="relative flex min-w-0 flex-auto">
         <FilesConflictBanner v-if="conflict" @reload="discardAndReload" @overwrite="overwrite" />
         <!-- `role="alert"`, like the conflict banner above it: every message here lands AFTER an
@@ -682,27 +508,11 @@ defineExpose({
         <p v-if="!openPath" class="m-auto p-4 text-[13px] text-muted">Select a file to view or edit.</p>
         <!-- Not text. The editor is hidden rather than shown empty: an empty buffer over a file
              that has content is an invitation to save, and saving is what destroyed it (#2038). -->
-        <div
+        <FilesUnpreviewable
           v-else-if="unpreviewable"
-          class="flex flex-col items-center gap-2 p-4 text-center"
-          :class="mediaKind === 'pdf' ? 'min-h-0 flex-auto self-stretch' : 'm-auto'"
-          data-testid="files-unpreviewable"
-        >
-          <FilesMediaView v-if="mediaKind" :kind="mediaKind" :src="mediaSrc" :name="openName" />
-          <template v-else>
-            <span class="material-symbols-outlined text-[28px] text-muted" aria-hidden="true">draft</span>
-            <p class="text-[13px] text-muted">{{ unpreviewable }}</p>
-          </template>
-          <button
-            type="button"
-            class="mt-1 inline-flex cursor-pointer items-center gap-1 rounded-md border border-border bg-transparent px-3 py-1.5 text-[13px] text-fg hover:bg-hover"
-            data-testid="files-open-in-os"
-            @click="openInOs"
-          >
-            <span class="material-symbols-outlined text-[16px]" aria-hidden="true">open_in_new</span>
-            Open in OS
-          </button>
-        </div>
+          v-bind="{ kind: mediaKind, src: mediaSrc, name: openName, message: unpreviewable }"
+          @open-in-os="openInOs"
+        />
         <!-- `allow-scripts` and deliberately NOT `allow-same-origin`: the document renders a `.md`
              nothing sanitised, so it stays opaque-origin forever, and the server's own CSP lets a
              single nonce'd script run in it — the one that reports where the reader is (#2157).
@@ -738,29 +548,7 @@ defineExpose({
     </div>
     <FileFinder v-if="finderOpen" :cwd="cwd" :seed="finderSeed" @pick="onFinderPick" @close="closeFinder" />
     <FileSearch v-if="search.open.value" :cwd="cwd" :buffer="search.buffer.value" :seed="searchSeed" @pick="search.onPick" @close="search.close" />
-    <Teleport to="body">
-      <div
-        v-if="rowMenu"
-        ref="rowMenuEl"
-        data-testid="files-row-menu"
-        role="menu"
-        class="fixed z-[60] min-w-[200px] rounded-lg border border-border bg-panel p-1.5 text-fg shadow-xl"
-        :style="{ top: `${rowMenu.top}px`, left: `${rowMenu.left}px` }"
-        @keydown="rowMenuApi.onMenuNav"
-      >
-        <button
-          v-for="action in rowMenu.actions"
-          :key="action.id"
-          type="button"
-          role="menuitem"
-          :data-testid="`files-row-action-${action.id}`"
-          class="flex w-full cursor-pointer items-center gap-2 whitespace-nowrap rounded-md border-0 bg-transparent px-2.5 py-1.5 text-left text-[13px] text-secondary hover:bg-hover hover:text-fg"
-          @click="rowMenuApi.pick(action)"
-        >
-          <span class="material-symbols-outlined text-[15px]" aria-hidden="true">{{ action.icon }}</span> {{ t(action.labelKey) }}
-        </button>
-      </div>
-    </Teleport>
+    <FilesRowMenuPanel ref="rowMenuPanel" :menu="rowMenu" @nav="rowMenuApi.onMenuNav" @pick="rowMenuApi.pick" />
     <PreviewCodeBlockDialog v-if="previewScroll.codeBlock?.shown.value" :lookup="previewScroll.codeBlock.shown.value" @close="previewScroll.codeBlock.close" />
     <PreviewCopiedNotice v-if="previewScroll.codeBlock?.copied.value" :notice="previewScroll.codeBlock.copied.value" />
   </div>
