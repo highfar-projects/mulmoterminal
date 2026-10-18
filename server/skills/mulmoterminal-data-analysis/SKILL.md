@@ -55,7 +55,9 @@ If a column's meaning is unclear (`amt`, `v2`), ask once, rather than guessing.
 Look at the file's size first. If it is more than a few hundred kilobytes, count its records with
 one streaming pass, not `wc -l` (a quoted field can hold a line break, so lines are not records).
 The same pass counts, for each column you will treat as a number, the values that are empty, the
-values that do not convert, and the values that convert only after you strip thousands separators:
+values that do not convert, and the values that convert only after you strip thousands separators;
+and, for each column that could be the key (step 4 below), its empty values and whether any value
+repeats:
 
 ```js
 import { createReadStream } from "node:fs";
@@ -71,7 +73,7 @@ Aggregate it instead, and put the aggregated table on the sheet.
 **With `manageCollection`**, make the file a read-only collection and aggregate it with DuckDB —
 but only when every value in the columns you will sum or average converts as it stands. The
 collection drops a value it cannot read as a number from `sum`, `avg`, `min` and `max` without
-saying so, and `"1,200"` is such a value. If the streaming pass found any, aggregate with the script
+saying so, and `"1,200"` is such a value (`min` and `max` compare the values as they are written). If the streaming pass found any, aggregate with the script
 instead (below), and say how many values were empty or unreadable.
 
 1. The file must sit inside the root the collection lives in (the workspace, or the project). If
@@ -88,8 +90,10 @@ instead (below), and say how many values were empty or unreadable.
    the files: a `SKILL.md` and a `schema.json` with `dataSource: { "type": "csv", "path": ... }`,
    fields named exactly as the header, the key field declared `type: "string"`.
 4. The key: a column whose values are unique, when there is one. When none is (rows of orders,
-   readings, log lines), use any column without empty cells — `queryItems` still counts and sums
-   every row; only the collection's own list view shows one row per key value. Say so to the user.
+   readings, log lines), use a column without empty cells. `queryItems` still counts and sums every
+   row; only the collection's own list view shows one row per key value. If every column has empty
+   cells, use the one with fewest: the list view leaves out the rows whose key is empty, and
+   `queryItems` still counts them. Say which of these applies to the user.
 5. Aggregate with `manageCollection` `queryItems`, the parameters under `query`:
 
    ```json
@@ -102,7 +106,7 @@ instead (below), and say how many values were empty or unreadable.
    Ops are `count`, `sum`, `avg`, `min`, `max`; `where` filters with `eq`, `ne`, `in`, `gt`, `gte`,
    `lt`, `lte`, `contains`. It scans the whole file. A result holds 1,000 rows unless you pass
    `limit` (at most 10,000), and it does not say when it stopped: if the result has exactly as many
-   rows as the limit, it is cut off. Then split the query with `where`, or aggregate with the
+   rows as the limit, treat it as possibly cut off. Then split the query with `where`, or aggregate with the
    script. `groupBy` takes column names, not expressions, so for months run one query per month
    with `where` (`date` `gte` the first day, `lt` the first day of the next month) unless the file
    has a month column. Never compute a total from `getItems`: it stops at 5,000 rows.
