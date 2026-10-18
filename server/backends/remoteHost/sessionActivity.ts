@@ -97,7 +97,8 @@ export function createSessionActivityPublisher(deps: SessionActivityPublisherDep
     const uid = deps.uid();
     const hostId = deps.hostId();
     if (!uid || !hostId) return;
-    const key = stateKey(activity);
+    // The channel is part of the key: the same state is news to a channel that has not had it.
+    const key = `${uid}\0${hostId}\0${stateKey(activity)}`;
     if (published.get(sessionId) === key) return;
     published.set(sessionId, key);
     const rev = (revisions.get(sessionId) ?? 0) + 1;

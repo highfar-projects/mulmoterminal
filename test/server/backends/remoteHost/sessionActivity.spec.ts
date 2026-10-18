@@ -41,6 +41,16 @@ const publisher = (store: SessionActivityStore, uid: () => string | null = () =>
 describe("createSessionActivityPublisher", () => {
   // Signed in, but this machine's channel is not decided for the account yet (or the decision
   // failed): writing anywhere would guess at a channel that may be another machine's (#3092).
+  it("writes the current state again to a channel that has not had it", () => {
+    const { writes, store } = recorder();
+    let channel = "mulmoterminal";
+    const switching = createSessionActivityPublisher({ uid: () => UID, hostId: () => channel, store, onError: vi.fn() });
+    switching.publish("s1", { working: true, waiting: false });
+    channel = "mulmoterminal-0000ffff";
+    switching.publish("s1", { working: true, waiting: false });
+    expect(writes.map((write) => write.rev)).toEqual([1, 2]);
+  });
+
   it("writes and removes nothing while the channel is undecided", () => {
     const { writes, removes, store } = recorder();
     const undecided = createSessionActivityPublisher({ uid: () => UID, hostId: () => null, store, onError: vi.fn() });
