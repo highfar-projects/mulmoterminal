@@ -36,7 +36,7 @@ const recorder = () => {
 };
 
 const publisher = (store: SessionActivityStore, uid: () => string | null = () => UID, onError = vi.fn()) =>
-  createSessionActivityPublisher({ uid, hostId: HOST, store, onError });
+  createSessionActivityPublisher({ uid, hostId: () => HOST, store, onError });
 
 describe("createSessionActivityPublisher", () => {
   it("writes a transition with the state that changed", () => {

@@ -74,7 +74,8 @@ export interface SessionActivityPublisherDeps {
   // handles exist, which is what makes the store's currentFirestore() safe to call —
   // that accessor THROWS when disconnected, unlike this one.
   uid: () => string | null;
-  hostId: string;
+  // Read per write: the channel is decided on connect and can differ per account.
+  hostId: () => string;
   store: SessionActivityStore;
   onError: (error: unknown) => void;
 }
@@ -100,7 +101,7 @@ export function createSessionActivityPublisher(deps: SessionActivityPublisherDep
     const rev = (revisions.get(sessionId) ?? 0) + 1;
     revisions.set(sessionId, rev);
     const payload = activityDoc(activity, rev);
-    deps.store.write(uid, deps.hostId, sessionId, payload).catch((error: unknown) => {
+    deps.store.write(uid, deps.hostId(), sessionId, payload).catch((error: unknown) => {
       // The dedup entry is recorded optimistically, so a failed write would otherwise
       // swallow every later publish of the SAME state and leave the phone stale until
       // some different transition happened. Release it so the next one retries —
@@ -120,7 +121,7 @@ export function createSessionActivityPublisher(deps: SessionActivityPublisherDep
     published.delete(sessionId);
     const uid = deps.uid();
     if (!uid) return;
-    deps.store.remove(uid, deps.hostId, sessionId).catch(deps.onError);
+    deps.store.remove(uid, deps.hostId(), sessionId).catch(deps.onError);
   };
 
   return { publish, forget };
