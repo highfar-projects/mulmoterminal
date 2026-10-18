@@ -222,7 +222,12 @@ What changes from a small file:
 
 - The agent tells you the collection's name. It also appears in Collections, and it reads the
   file, so replacing the file updates it. The file has to be inside the workspace (or the project);
-  if it is elsewhere, the agent asks before copying it into `data/`.
+  if it is elsewhere, the agent asks before copying it into `data/`, and never overwrites a file
+  already there. It picks a collection name that is not taken.
+- Before trusting the collection's totals, the agent reads the file once in pieces to count its
+  records and the values that are empty or not plain numbers. A collection leaves a value such as
+  `1,200` (with a thousands separator) out of a sum, so when the file has any, the agent adds it up
+  with a script instead and tells you how many values it had to convert or skip.
 - The Data sheet is labelled as aggregated (for example "Store (aggregated from sales-2025.csv)").
   Its numbers are values: editing the CSV does not change them until you ask for the analysis
   again. Formulas over them (totals, shares, correlation between the aggregated columns) still
