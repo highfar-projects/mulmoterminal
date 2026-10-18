@@ -50,6 +50,8 @@ describe("absolutizeArtifactPaths — text it leaves alone", () => {
     ["the word without a slash", "The artifacts area is shared."],
     ["a bare prefix", "Look in artifacts/ for it."],
     ["a path climbing out with ..", "Saved to artifacts/../secret.json"],
+    ["a path climbing out with Windows separators", "Saved to artifacts/foo\\..\\..\\secret.json"],
+    ["a path holding any backslash", "Saved to artifacts/charts\\a.json"],
     ["a longer word ending in the prefix", "See myartifacts/a.json"],
   ])("%s", (_label, narration) => {
     expect(absolutizeArtifactPaths(narration, root)).toBe(narration);

@@ -29,7 +29,9 @@ function absolutize(rest: string, artifactsRoot: string): string | null {
   const relative = withoutTrailingPunctuation(rest);
   const trailing = rest.slice(relative.length);
   const segments = relative.split("/");
-  if (relative === "" || segments.includes("..")) return null;
+  // Plugins write artifact paths with `/` only. A `\` would be a separator to Windows' path.join,
+  // so `artifacts/a\..\..\x` would climb out of the root past the `..` check.
+  if (relative === "" || relative.includes("\\") || segments.includes("..")) return null;
   return path.join(artifactsRoot, ...segments) + trailing;
 }
 
