@@ -137,6 +137,22 @@ The agent reads the file, builds the sheet with formulas, and draws the chart. T
 page are this request. It works for any data the agent can read: CSV, JSON, a log, an export from
 another tool.
 
+### Analyse a CSV from start to finish
+
+> /mulmoterminal-data-analysis orders.csv
+
+The bundled `mulmoterminal-data-analysis` skill carries the whole procedure:
+
+1. It checks the columns and the empty values, and tells you what it found.
+2. It computes the summary statistics with a Node script.
+3. It puts figures you may want to change in formulas, and the statistics the sheet does not have
+   in as values marked as computed.
+4. It picks charts that fit the data.
+5. It tells you where the spreadsheet, the charts and its scripts were saved.
+
+The scripts go in `<workspace>/artifacts/analysis/`, never in your repository. You do not have to
+name the skill. Asking "analyse orders.csv" is usually enough.
+
 ### Your own repository
 
 > Count commits per week for the last three months from git log, by top-level directory, and show it

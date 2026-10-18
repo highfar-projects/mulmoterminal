@@ -299,7 +299,7 @@ so a slug naming nothing that ships is a type error rather than an agent that ca
 reports on how things are configured now. The writing skills are `mulmoterminal-dirs` (per-project
 colours, grid/launcher order, name, font size), `-theme` (custom global colour schemes), `-header`
 (buttons/chips), `-keys` (keymap, copy-on-select, Enter), `-model` (providers, custom agents, accounts), `-notify` (sounds,
-push). Plus `mulmoterminal-bug-report` and `mulmoterminal-decisions`.
+push). Plus `mulmoterminal-bug-report`, `mulmoterminal-decisions` and `mulmoterminal-data-analysis` (CSV to spreadsheet and charts).
 
 **A setting belongs to exactly one skill.** When you add or change a config key, update that
 skill — not the router, which must stay a table of contents. #1097 is the cautionary tale: it
