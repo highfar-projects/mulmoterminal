@@ -56,7 +56,7 @@ description: グリッドで複数の AI コーディングエージェント（
 | 部分 | 役割 |
 |---|---|
 | **Agent Picker**（**Claude / Codex / Antigravity / Grok / Muse / Copilot / Cursor / Shell**） | このセルで動かすものを選ぶ。**エージェント**か、**Shell**（OS 標準シェル `$SHELL`。インストールも設定も不要）。実際のエージェントセッションを起動するのはこのコントロールで、下の **launch commands** はユーザーが書いたコマンドをそのまま実行する。各エージェントに何が必要か・どう再開するか・GUI ツールにどう到達するかは → [どの coding agent を使うか](agents.html) |
-| **WORKING DIRECTORY** | 作業ディレクトリを入力（再生ボタンで起動）。よく使うディレクトリは *cwd presets* の**チップ**をクリックして入力（チップの再生ボタンで即起動）。チップは起動したディレクトリから自動で記録されますが、worktree は対象外です（1 タスク 1 ブランチの使い捨てで、またそこで起動する場所ではないため）。チップ列の先頭には **WORKSPACE** が常にあります（→ [どのディレクトリで起動するか](#launch-dir)） |
+| **WORKING DIRECTORY** | 作業ディレクトリを入力（再生ボタンで起動）。入力を 1 秒止めると、一致するサブフォルダが欄の下に出ます（↑↓ で選び、Tab かクリックで確定）。存在しないフォルダはそう表示され、起動できません。よく使うディレクトリは *cwd presets* の**チップ**をクリックして入力（チップの再生ボタンで即起動）。チップは起動したディレクトリから自動で記録されますが、worktree は対象外です（1 タスク 1 ブランチの使い捨てで、またそこで起動する場所ではないため）。チップ列の先頭には **WORKSPACE** が常にあります（→ [どのディレクトリで起動するか](#launch-dir)） |
 | **モデル選択**（Claude 選択時） | このセッションだけのバックエンド／モデルを選ぶ（→ [プロバイダ](providers.html)） |
 | **Canvas / Workspace data / External accounts** のトグル（エージェント選択時） | GUI ツール群（`render` / `data` / `media` / `external`）の MCP サーバを、**このセッションではなくディレクトリに**登録。**Claude / Codex / Copilot** を選んでいるときは、**ワークスペースを選んでいる間はトグルが消えます** — そこでは登録しなくても全部使えるからです。**Antigravity / Grok / Muse / Cursor** ではワークスペースでも残ります（登録がそれらの唯一の入手経路 → [Antigravity・Grok・Muse・Cursor はどこでも登録が要る](#antigravity-gui-tools)） |
 | **OR ISOLATE IN A WORKTREE** | git リポなら、タスク名を入れて **New worktree**。作業を隔離した worktree を作って起動。既存の worktree はその下に一覧表示 |
