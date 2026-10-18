@@ -19,6 +19,13 @@ import FilesViewModeButtonsSource from "../../../src/components/FilesViewModeBut
 import CheckCardSource from "../../../src/components/CheckCard.vue?raw";
 import FilesCanvasButtonSource from "../../../src/components/FilesCanvasButton.vue?raw";
 import FilesEditorActionsSource from "../../../src/components/FilesEditorActions.vue?raw";
+import FilesTreeRowSource from "../../../src/components/FilesTreeRow.vue?raw";
+import FilesTreeSplitterSource from "../../../src/components/FilesTreeSplitter.vue?raw";
+import FilesTabStripSource from "../../../src/components/FilesTabStrip.vue?raw";
+import FilesRowMenuPanelSource from "../../../src/components/FilesRowMenuPanel.vue?raw";
+import FilesUnpreviewableSource from "../../../src/components/FilesUnpreviewable.vue?raw";
+import FilesChangesButtonSource from "../../../src/components/FilesChangesButton.vue?raw";
+import FilesSaveButtonSource from "../../../src/components/FilesSaveButton.vue?raw";
 
 // The surface this section covers. A file added to the side panes belongs here too.
 describeTipSurface("panes", {
@@ -39,6 +46,13 @@ describeTipSurface("panes", {
   "CheckCard.vue": CheckCardSource,
   "FilesCanvasButton.vue": FilesCanvasButtonSource,
   "FilesEditorActions.vue": FilesEditorActionsSource,
+  "FilesTreeRow.vue": FilesTreeRowSource,
+  "FilesTreeSplitter.vue": FilesTreeSplitterSource,
+  "FilesTabStrip.vue": FilesTabStripSource,
+  "FilesRowMenuPanel.vue": FilesRowMenuPanelSource,
+  "FilesUnpreviewable.vue": FilesUnpreviewableSource,
+  "FilesChangesButton.vue": FilesChangesButtonSource,
+  "FilesSaveButton.vue": FilesSaveButtonSource,
 });
 
 // The six panes share one set of controls. Each pane words them as whole sentences, so a pane
