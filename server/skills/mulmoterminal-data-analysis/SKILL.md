@@ -72,9 +72,9 @@ Aggregate it instead, and put the aggregated table on the sheet.
 
 **With `manageCollection`**, make the file a read-only collection and aggregate it with DuckDB —
 but only when every value in the columns you will sum or average converts as it stands. The
-collection drops a value it cannot read as a number from `sum`, `avg`, `min` and `max` without
-saying so, and `"1,200"` is such a value (`min` and `max` compare the values as they are written). If the streaming pass found any, aggregate with the script
-instead (below), and say how many values were empty or unreadable.
+collection drops a value it cannot read as a number from `sum` and `avg` without saying so, and
+`"1,200"` is such a value; `min` and `max` compare the values as they are written, so in such a
+column they compare text. If the streaming pass found any, aggregate with the script instead (below), and say how many values were empty or unreadable.
 
 1. The file must sit inside the root the collection lives in (the workspace, or the project). If
    it is elsewhere, ask before copying it into `data/` there; never move the user's file. If
