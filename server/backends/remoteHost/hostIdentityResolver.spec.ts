@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { HostIdentity, LegacyHostDoc } from "./hostIdentity.js";
 import { createHostIdentityResolver } from "./hostIdentityResolver.js";
@@ -142,5 +142,30 @@ describe("createHostIdentityResolver", () => {
     await expect(slow).rejects.toThrow("superseded");
     expect(state.writes.map((identity) => identity.hostId)).toEqual(["mulmoterminal-00000001"]);
     expect(resolver.currentHostId("uid-1")).toBe("mulmoterminal-00000001");
+  });
+
+  it("a resolution overtaken while it is still writing the file does not take effect", async () => {
+    const pendingWrite: { finish: () => void } = { finish: () => undefined };
+    const counters = { writes: 0 };
+    const resolver = createHostIdentityResolver({
+      hostname: () => "work-mac.local",
+      readStored: async () => null,
+      writeStored: () => {
+        counters.writes += 1;
+        if (counters.writes > 1) return Promise.resolve();
+        return new Promise<void>((resolve) => {
+          pendingWrite.finish = resolve;
+        });
+      },
+      readLegacyDoc: async () => null,
+      newSuffix: () => `0000000${counters.writes + 1}`,
+      newMachineId: () => "m",
+    });
+    const slow = resolver.resolveHostId("uid-1");
+    await vi.waitFor(() => expect(counters.writes).toBe(1));
+    expect(await resolver.resolveHostId("uid-1")).toBe("mulmoterminal-00000002");
+    pendingWrite.finish();
+    await expect(slow).rejects.toThrow("superseded");
+    expect(resolver.currentHostId("uid-1")).toBe("mulmoterminal-00000002");
   });
 });

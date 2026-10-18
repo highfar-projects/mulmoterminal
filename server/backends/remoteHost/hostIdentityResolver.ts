@@ -30,6 +30,10 @@ export const createHostIdentityResolver = (deps: HostIdentityResolverDeps) => {
     return { identity: newIdentity({ uid, hostname, legacyDoc, suffix: deps.newSuffix(), machineId: deps.newMachineId() }), isNew: true };
   };
 
+  const assertLatest = (mine: number): void => {
+    if (mine !== latest) throw new Error("remote-host: a later connect superseded this channel decision");
+  };
+
   // A failure here rejects the connect; the next connect decides again. Guessing
   // instead could put two machines on one channel.
   const resolveHostId = async (uid: string): Promise<string> => {
@@ -37,8 +41,9 @@ export const createHostIdentityResolver = (deps: HostIdentityResolverDeps) => {
     const mine = latest;
     current = null;
     const { identity, isNew } = await decide(uid, deps.hostname());
-    if (mine !== latest) throw new Error("remote-host: a later connect superseded this channel decision");
+    assertLatest(mine);
     if (isNew) await deps.writeStored(identity);
+    assertLatest(mine);
     current = identity;
     return identity.hostId;
   };
