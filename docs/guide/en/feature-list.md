@@ -4,7 +4,7 @@ nav_title: Feature list
 layout: default
 parent: English
 nav_order: 6.5
-as_of: 10.8.0
+as_of: 10.9.0
 description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 9.1.0)."
 ---
 
@@ -142,6 +142,8 @@ More: [Phone](phone.html)
 
 More: [Feature reference](features.html)
 
+- Open as gallery on a folder shows its pictures, videos, sounds and PDFs together; videos and sounds play in their tile, and a click shows one large (v10.9.0)
+- Preview or Canvas carries to the next file opened in the right pane, remembered per session (v10.9.0)
 - A copy button in the Files header puts the whole open file on the clipboard, unsaved edits included (v10.7.0)
 - The open file is marked in the Files tree, and brought into view when the pane comes back (v10.7.0)
 - A Recently opened list in the Files header reopens a file whose tab was closed, kept per folder across reloads (v10.7.0)
@@ -288,8 +290,10 @@ More: [Configuration](config.html)
 
 ## Canvas, collections and decks
 
-More: [From a collection](from-collection.html) · [MulmoCast videos](mulmocast.html)
+More: [From a collection](from-collection.html) · [MulmoCast videos](mulmocast.html) · [Spreadsheets and charts](spreadsheet.html)
 
+- The agent puts a spreadsheet with live formulas on the Canvas; edited cells recalculate in place, and Excel downloads it (presentSpreadsheet) (v10.9.0)
+- The bundled /mulmoterminal-data-analysis skill turns a CSV or TSV into a spreadsheet and charts, with summary statistics (v10.9.0)
 - A MulmoScript open on the Canvas redraws when an editor, git or an agent changes the file (v10.5.0)
 - `init` reports whether MulmoCast's talking-avatar parts are installed, and the guide shows how to add them (v10.5.0)
 - MulmoScript sound effects include JingleScript 0.8's effects and `grandpiano`; beat previews draw `html_tailwind` beats in full (v10.5.0)
