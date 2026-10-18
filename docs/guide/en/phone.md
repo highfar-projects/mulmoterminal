@@ -35,6 +35,24 @@ The toolbar shows the link's state: **Online**, **Reconnecting…**, or **Offlin
 error. A laptop that slept or changed networks reconnects on its own; if it gives up, you get a
 bell notification so you find out before the phone does.
 
+### More than one machine {#several-machines}
+
+You can connect several machines with the same Google account — a work Mac and a home Linux box,
+say. Each one appears on the phone's host list as **MulmoTerminal — <machine name>**; tap the one
+you want. With a single machine the list looks exactly as before.
+
+Each machine picks its own channel the first time it connects and keeps it in
+`~/.mulmoterminal/remote-host.json`. The machine you were already using keeps the old channel, so
+nothing changes for it.
+
+- **Two machines already fighting over one channel** (you connected both before this existed):
+  the machine that connects first after upgrading keeps the channel, and the other moves to its own
+  on its next connect. If one still shows the other's sessions, delete
+  `~/.mulmoterminal/remote-host.json` on that machine and press **Connect** again.
+- **A machine you no longer use** disappears from the list after 30 days without connecting. To
+  remove it sooner, tap the bin icon next to it on the phone (offline machines only). It comes back
+  on its own if that machine connects again.
+
 ## What you see
 
 Picking a session shows its **live screen**, headed with what the grid cell on the desktop

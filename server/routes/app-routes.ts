@@ -45,6 +45,7 @@ import { mountDirConfigEntriesRoute } from "../routes/dir-config-entries-route.j
 import { mountGuiMcpRoutes } from "../routes/gui-mcp-routes.js";
 import { mountDropRoutes } from "../routes/drop-routes.js";
 import { mountOpenDirRoute } from "../files/open-dir.js";
+import { mountDirSuggestRoute } from "../files/dir-suggest-route.js";
 import { mountRevealRoute } from "../files/reveal.js";
 import { mountOpenFileRoute } from "../files/open-file.js";
 import { mountGitRemoteRoute } from "../git/gitRemote.js";
@@ -446,6 +447,8 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
   // Directory-scoped reads for a terminal cell: scripts, skills, dir config, git status,
   // PR phase, resolved header, custom sound. All keyed by ?cwd= (see routes/dir-routes.ts).
   mountDirRoutes(app);
+  // The launch form's Working directory field: is it there, and which subdirectories complete it.
+  mountDirSuggestRoute(app);
   mountPlayfulMediaRoutes(app);
   mountSkillCatalogRoutes(app);
   mountGuiMcpRoutes(app);

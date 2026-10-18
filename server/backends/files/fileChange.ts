@@ -16,6 +16,7 @@ import type { Publisher } from "../../infra/async/pubsub.js";
 import { MARKDOWN_FILE_SCOPE } from "../../../common/fileChannel.js";
 import { createDocumentWatchers, resolveWatchableDocument, type FileStamp, type WatchableScope } from "../../files/documentWatch.js";
 import { containForWatching } from "../../files/pathContainment.js";
+import { isWorkbookPath } from "../plugins/chartSources.js";
 
 type PubSub = Publisher;
 
@@ -59,12 +60,22 @@ function isShapeDoc(posixPath: string): boolean {
   return /\.shape$/i.test(posixPath);
 }
 
+// A chart that draws from a spreadsheet range follows the workbook it names (chart-plugin's
+// `source`), so its View subscribes to the workbook's channel under the chart scope.
+const CHART_FILE_SCOPE = "chart";
+// Matches the runtime scope src/plugins-registry.ts wraps the spreadsheet View in.
+const SPREADSHEET_FILE_SCOPE = "spreadsheet";
+
 // The scopes a write is forwarded to — and, because a watcher exists to make a publish land,
 // the same list decides which files are worth watching (files/documentWatch.ts).
 const PLUGIN_FILE_SCOPES: readonly WatchableScope[] = [
   { scope: MARKDOWN_FILE_SCOPE, matches: isMarkdownDoc },
   { scope: "html", matches: isHtmlDoc },
   { scope: "shapescript", matches: isShapeDoc },
+  { scope: CHART_FILE_SCOPE, matches: isWorkbookPath },
+  // The spreadsheet View follows its own workbook too, so a write from an agent or another View
+  // reaches it instead of being saved over by its next edit.
+  { scope: SPREADSHEET_FILE_SCOPE, matches: isWorkbookPath },
 ];
 
 /** Configure the shared publisher against MulmoTerminal's pubsub + workspace. Call

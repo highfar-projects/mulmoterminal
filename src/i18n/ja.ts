@@ -563,6 +563,8 @@ export const ja: Messages = {
   },
 
   launch: {
+    dirMissing: "このフォルダはありません。ここでは起動できません。",
+    dirSuggestions: "一致するフォルダ",
     mcpGroupsNextStart: "このフォルダで次に起動するターミナルから効きます。いま開いているセルは起動したときのツールのままなので、開き直してください。",
     agentUnavailable: {
       missing: "{agent} はこのマシンにインストールされていないため、ここでは起動できません。",

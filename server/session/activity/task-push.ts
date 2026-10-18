@@ -5,7 +5,7 @@
 
 import { getPushEnabled, getPushKinds } from "../../config/config-routes.js";
 import { sendWebPush } from "../../infra/http/web-push.js";
-import { HOST_ID as REMOTE_HOST_ID } from "../../backends/remoteHost/index.js";
+import { currentHostId as currentRemoteHostId } from "../../backends/remoteHost/index.js";
 import { buildPushText } from "./activity-hook.js";
 import type { PushKind } from "../../../common/pushKinds.js";
 import { asTerminalAgent } from "../../../common/sessionAgent.js";
@@ -96,5 +96,8 @@ export async function notifyTaskFinished(sessionId: string, kind: PushKind, hook
   // `port` is for a receiver running ON this machine, which can then open the local UI
   // directly (http://localhost:<port>). A phone cannot use it — its own localhost is the
   // phone — so the receiver has to treat it as optional and keep the existing routing.
-  void sendWebPush(title, body, { sessionId, hostId: REMOTE_HOST_ID, port: uiPort });
+  // No host id before this machine's channel is decided for the account: the tap then
+  // opens the phone's picker rather than a channel that may belong to another machine.
+  const hostId = currentRemoteHostId();
+  void sendWebPush(title, body, { sessionId, ...(hostId ? { hostId } : {}), port: uiPort });
 }
