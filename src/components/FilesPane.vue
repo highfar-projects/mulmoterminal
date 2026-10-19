@@ -42,6 +42,8 @@ import FilesToolbarButton from "./FilesToolbarButton.vue";
 import FilesEditorActions from "./FilesEditorActions.vue";
 import type { StoriesRoots } from "../composables/canvasOpenFile";
 import { filesRowActions, type FilesRowAction } from "./filesRowActions";
+import { seedCanvasCard } from "../composables/canvasOpenFile";
+import { csvSpreadsheetCard } from "../composables/csvSpreadsheetCard";
 import { menuAttrsFor, useFilesRowMenu } from "../composables/useFilesRowMenu";
 import { isTreeOpAction, useTreeFileOps } from "../composables/useTreeFileOps";
 import { focusTreeRow } from "./treeRowFocus";
@@ -86,7 +88,7 @@ const props = defineProps<{
   // (#3075). Absent where there is no cell — the full-screen view — and then every file opens on its editor.
   viewModeSession?: string | null;
 }>();
-const emit = defineEmits<{ close: []; dirty: [boolean]; "insert-text": [text: string] }>();
+const emit = defineEmits<{ close: []; dirty: [boolean]; "insert-text": [text: string]; "open-canvas": [] }>();
 
 // The tree is its own thing now (#2158): what has been read, what is expanded, what is on screen.
 // The markup for it stays here.
@@ -174,9 +176,30 @@ async function insertSelection(): Promise<boolean> {
   return text !== null;
 }
 
+/** "Open as a spreadsheet": a spreadsheet copy of the CSV / TSV, put on the Canvas of the cell
+ *  beside the pane — the same feed the agent's cards go to, so it is kept and comes back on reload. */
+async function openAsSpreadsheet(pathRel: string): Promise<void> {
+  const session = props.viewModeSession;
+  if (!session) {
+    fileError.value = t("filesRowMenu.spreadsheetNoCell");
+    return;
+  }
+  const result = await csvSpreadsheetCard(props.cwd, pathRel);
+  if (result.kind === "refused") {
+    fileError.value = t(result.refusal.key, result.refusal.values);
+    return;
+  }
+  if (!(await seedCanvasCard(session, result.card))) {
+    fileError.value = t("filesRowMenu.spreadsheetNotShown");
+    return;
+  }
+  emit("open-canvas");
+}
+
 /** What picking one does — the other end that belongs to this pane, because it emits. */
 function runRowAction(action: FilesRowAction): void {
   if (action.id === "open-canvas") void canvasMode.open(action.pathRel);
+  else if (action.id === "open-spreadsheet") void openAsSpreadsheet(action.pathRel);
   else if (action.id === "open-tab") void tabs.open(action.pathRel, true);
   else if (action.id === "open-gallery") void gallery.open(action.pathRel);
   // Not an emit: nothing above this pane takes part. The browser cannot open a file manager, so
