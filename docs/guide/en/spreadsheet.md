@@ -109,7 +109,7 @@ compute the numbers with a script, rather than in its head.
 
 ## Analysing data from start to finish {#analysing-data-from-start-to-finish}
 
-Hand the agent a CSV and say what you want to know. You write no code and do not reshape the data:
+Hand the agent a CSV, TSV or Excel file and say what you want to know. You write no code and do not reshape the data:
 the agent reads the file with a Node script, works out the statistics, and puts a live spreadsheet
 and charts on the Canvas. The bundled `mulmoterminal-data-analysis` skill carries the procedure.
 You do not have to name it.
@@ -126,13 +126,18 @@ Name the file and what you want to compare:
 
 > Look at survey.tsv: does satisfaction depend on age group?
 
+A plain question works too. The answer comes with the spreadsheet and charts behind it:
+
+> Can we say B did better than A in ab_test.csv?
+
 Some things that help:
 
 - **Say what you want to compare** (temperature against sales, weekdays against weekends). The agent
   picks the statistics and charts from that.
 - **Clear column names help.** If a column's meaning is unclear (`amt`, `v2`), the agent asks once
   rather than guessing. Answer in a word.
-- **Any delimited text works**: CSV, TSV, an export from another tool. A large file is fine. The
+- **Any delimited text works**: CSV, TSV, an export from another tool. So does an Excel file
+  (`.xlsx`); the agent says which worksheets it has and which one it read. A large file is fine. The
   agent reads only its first lines into the conversation and lets a script read the rest.
 
 ### What the agent does {#analysis-steps}
@@ -143,7 +148,8 @@ Some things that help:
 2. **Computes the statistics with a script** (`simple-statistics` in Node), so no number comes from
    the model reading the data.
 3. **Builds the spreadsheet** with the statistics as formulas (below), and checks each formula
-   against the script's number before showing it.
+   against the script's number before showing it. If the Canvas reports a formula that calculates to
+   an error, the agent fixes it before telling you the spreadsheet is ready.
 4. **Draws charts from the spreadsheet**, so they follow it.
 5. **Tells you what it found, and where everything is.**
 
@@ -225,10 +231,11 @@ works in a temporary directory of its own.
 
 Up to about 5,000 rows, every row goes onto the Data sheet. A larger file (a year of orders, a log)
 is **aggregated first**, and the sheet gets the aggregated table: sales per store, orders per
-month, and so on. Formulas and charts then work on that table exactly as above.
+month, and so on. Formulas and charts then work on that table exactly as above. A large Excel file
+is aggregated by a script.
 
-In the workspace, or in a project where **Workspace data** is switched on, the agent makes the file
-a read-only **collection** and lets the collection add it up. It reads the whole file, however
+In the workspace, or in a project where **Workspace data** is switched on, the agent makes a CSV or
+TSV a read-only **collection** and lets the collection add it up. It reads the whole file, however
 large, without loading it into the conversation:
 
 > Analyse data/sales-2025.csv. It has a row per order; I want sales by store and by month.
@@ -294,7 +301,7 @@ up or keep them in git like any other file.
 
 ## Functions you can use
 
-These are the functions the spreadsheet calculates, as of `@gui-chat-plugin/spreadsheet` 4.2.0. Any other
+These are the functions the spreadsheet calculates, as of `@gui-chat-plugin/spreadsheet` 4.2.2. Any other
 function shows `#NAME?` in its cell, unless the spreadsheet defines it itself (see
 [Functions of your own](#workbook-functions)).
 

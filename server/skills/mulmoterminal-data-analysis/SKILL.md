@@ -1,6 +1,6 @@
 ---
 name: mulmoterminal-data-analysis
-description: Analyse a CSV or TSV the user names and show the result in MulmoTerminal's Canvas, as a spreadsheet with live formulas (presentSpreadsheet) and charts (presentChart). Reads the file, checks its columns, computes summary statistics with Node, puts what the user may want to change in formulas and the rest in values, picks charts that fit the data, and says where everything was saved. Use when the user asks to analyse, summarise, explore or chart tabular data, to read a spreadsheet again after editing it, or to keep an analysis as a skill of their own to run on the next file of the same kind. The user writes no code. Works in whatever language the user writes in.
+description: Analyse a CSV, TSV or Excel file, or answer a question about one (is B better than A, what is unusual here, what comes next month, what drives sales, who is likely to cancel), and show the answer in MulmoTerminal's Canvas as a spreadsheet with live formulas (presentSpreadsheet) and charts (presentChart) behind it. Reads the file, checks its columns, computes summary statistics with Node, puts what the user may want to change in formulas and the rest in values, picks charts that fit the data, and says where everything was saved. Use when the user asks to analyse, summarise, explore or chart tabular data or asks such a question of it, to read a spreadsheet again after editing it, or to keep an analysis as a skill of their own to run on the next file of the same kind. The user writes no code. Works in whatever language the user writes in.
 ---
 
 # Analyse a table of data
@@ -42,6 +42,11 @@ const rows = parse(readFileSync(process.argv[2]), { columns: true, skip_empty_li
 yourself (strip thousands separators first: `"1,200"` is not a number to `Number`), and count the
 ones that do not convert rather than dropping them silently.
 
+Read an Excel file (`.xlsx`) with `exceljs`, installed in the same working directory
+(`cd "$work" && npm install exceljs`). Read one worksheet at a time, and
+say which worksheets it has and which you read. A cell there may hold a number, a date, a formula's
+cached result or text; check each column the same way.
+
 Before analysing anything, tell the user what you found:
 
 - the number of rows;
@@ -51,6 +56,10 @@ Before analysing anything, tell the user what you found:
 If a column's meaning is unclear (`amt`, `v2`), ask once, rather than guessing.
 
 ### A large file
+
+This section is for CSV and TSV. A large Excel file is read with `exceljs`'s streaming reader
+(`new ExcelJS.stream.xlsx.WorkbookReader(path)`) and aggregated in the script; a collection reads
+CSV only, so do not make one from it.
 
 Look at the file's size first. If it is more than a few hundred kilobytes, count its records with
 one streaming pass, not `wc -l` (a quoted field can hold a line break, so lines are not records).
@@ -89,6 +98,10 @@ column they compare text. If the streaming pass found any, aggregate with the sc
    ``External data (CSV) collections — `dataSource` ``. Follow it, including where it says to write
    the files: a `SKILL.md` and a `schema.json` with `dataSource: { "type": "csv", "path": ... }`,
    fields named exactly as the header, the key field declared `type: "string"`.
+   Then check that it was picked up: `manageCollection` `getSchema` for the slug. If it still
+   answers "unknown collection", the schema failed validation: read the files back against the
+   topic and fix them. If it is still unknown, aggregate with the script instead (below) and
+   remove the files you wrote.
 4. The key: a column whose values are unique, when there is one. When none is (rows of orders,
    readings, log lines), use a column without empty cells. `queryItems` still counts and sums every
    row; only the collection's own list view shows one row per key value. If every column has empty
@@ -195,7 +208,13 @@ Put the result in `presentSpreadsheet`. Split each number by whether the user ma
   "model fit (computed)"), because a value does not change when the user edits the data.
 
 Use one sheet for the data and another for the summary, so a summary formula reads the data sheet
-(`=AVERAGE(Data!C2:C201)`). A file above about 5,000 rows is aggregated first and its aggregated
+(`=AVERAGE(Data!C2:C201)`).
+
+`presentSpreadsheet` replies with how many formula cells calculate to an error, naming up to five.
+Fix them — the formula, the layout, or a value the script computes instead — and present again,
+until it reports none, or only errors you mean the user to see (a lookup that finds nothing), before
+you tell the user the spreadsheet is ready. The saved file holds formulas, not results, so that reply
+is the only place you see them. A file above about 5,000 rows is aggregated first and its aggregated
 table goes on the Data sheet (see *A large file*). Say that you did.
 
 ## 4. Charts
@@ -271,7 +290,8 @@ already exists, ask before replacing it.
 Every value that came from the file you analysed is recomputed from the input at run time, or it
 will silently describe the old file when the skill runs on the next one:
 
-- the CSV path is an argument, never written into a script;
+- the input file's path is an argument, never written into a script; for an Excel file the
+  worksheet's name is one too, and `exceljs` stays in `package.json`;
 - every range, row count and sheet size comes from the data (`Data!A1:G${rows.length + 1}`);
 - categories, dates, histogram bins, the points of a fitted line, lookup tables and anything else
   derived from the rows are computed by the script, not pasted in;
