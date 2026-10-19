@@ -159,14 +159,40 @@ Put the result in `presentSpreadsheet`. Split each number by whether the user ma
 
 - **Formulas** for everything the sheet can compute: totals, ratios, growth, the assumptions a
   what-if depends on, and the statistics. A formula recalculates when the user edits a cell. The
-  sheet has `AVERAGE`, `MEDIAN`, `STDEV` / `STDEVP`, `VAR` / `VARP`, `CORREL`, `SLOPE`,
-  `INTERCEPT`, `RSQ`, `PERCENTILE`, `QUARTILE`, `LARGE`, `SMALL`, `RANK`, `COUNTIF(S)`,
-  `SUMIF(S)` and `AVERAGEIF(S)`; `PERCENTILE` and `QUARTILE` interpolate like the script's
-  `quantile`. Check a formula against the script's number before you present it.
-- **Values** only for what no function gives (a t-test, a non-linear fit, anything that needs a
-  loop). A function the sheet lacks shows `#NAME?`. Compute these in the script and put the
-  result in as a number. Label them as computed (for example "t-test p (computed)"), because a
-  value does not change when the user edits the data.
+  sheet has, besides the arithmetic and lookup functions:
+  - spread and position: `AVERAGE`, `MEDIAN`, `MODE`, `STDEV` / `STDEVP`, `VAR` / `VARP`,
+    `PERCENTILE`, `QUARTILE`, `PERCENTRANK.INC`, `LARGE`, `SMALL`, `RANK`, `SKEW`, `KURT`,
+    `STANDARDIZE`, `GEOMEAN`, `HARMEAN`;
+  - two columns: `CORREL` / `PEARSON`, `SLOPE`, `INTERCEPT`, `RSQ`, `STEYX`, `COVARIANCE.S` /
+    `COVARIANCE.P`, `FORECAST.LINEAR`, `TREND`;
+  - tests and distributions: `T.TEST`, `T.DIST`, `T.INV`, `NORM.DIST`, `NORM.INV`,
+    `CONFIDENCE.T`, `CONFIDENCE.NORM` (and their `.2T` / `.RT` / `.S` forms);
+  - by group: `COUNTIF(S)`, `SUMIF(S)`, `AVERAGEIF(S)`, `MAXIFS`, `MINIFS`.
+
+  `PERCENTILE` and `QUARTILE` interpolate like the script's `quantile`; the current Excel names
+  (`PERCENTILE.INC`, `STDEV.S`, …) work too. Check a formula against the script's number before
+  you present it.
+- **A workbook function** for a method no built-in function has but the cells can compute: a
+  moving average, a weighted score, a custom index. Define it once in the sheet's `functions`
+  and call it from formulas like any function, so it too recalculates:
+
+  ```json
+  { "name": "Data", "data": [...],
+    "functions": [{ "name": "MOVING.AVG", "params": ["values", "n"],
+                    "body": "const xs = values.flat().filter((v) => typeof v === 'number'); const tail = xs.slice(-n); return tail.reduce((a, b) => a + b, 0) / tail.length;" }] }
+  ```
+
+  `=MOVING.AVG(B2:B100, 7)` then works on any sheet of that workbook. The body is JavaScript,
+  run sealed off (no files, network or timers) for at most 50 ms a call. A range arrives as rows
+  of cells, a blank cell as `null`; a single cell and any other argument as its value. Give a
+  range such as `A2:A500`, not a whole column (`A:A` is `#VALUE!`). Return a number, text or
+  true/false. A name is letters and digits joined by dots, and not a built-in's. If
+  `presentSpreadsheet`'s reply names a function it could not use, fix it and present again.
+  Check the function's result against the script's number, as with a formula.
+- **Values** only for what neither can do: a result that needs data outside the workbook, or a
+  computation too heavy for 50 ms a call. A function the sheet lacks shows `#NAME?`. Compute
+  these in the script and put the result in as a number. Label them as computed (for example
+  "model fit (computed)"), because a value does not change when the user edits the data.
 
 Use one sheet for the data and another for the summary, so a summary formula reads the data sheet
 (`=AVERAGE(Data!C2:C201)`). A file above about 5,000 rows is aggregated first and its aggregated
@@ -181,7 +207,7 @@ Use `presentChart`, and choose the chart from the shape of the data:
 | a value over time | line; bars if there are only a few periods |
 | comparing categories | bar, sorted, unless the categories have an order of their own |
 | parts of a whole (few parts) | stacked bar; pie only for a handful of parts |
-| two numeric columns | scatter, with the regression line when you computed one |
+| two numeric columns | scatter; for the regression line, a `TREND` or `FORECAST.LINEAR` column on the sheet drawn as a line |
 | the distribution of one column | histogram (bins counted in the script, passed inline) |
 | two categories crossed | heatmap |
 
@@ -201,8 +227,10 @@ so lay the summary sheet out that way: one row per category, one column per seri
 drawn from the calculated range, and drawn again whenever the sheet is saved. If `presentChart`
 says it cannot read the range, fix the range rather than falling back.
 
-Pass data inline in `option` only for what is not in the sheet: histogram bins, the points of a
-fitted line. Such a chart does **not** follow the sheet; say which charts do and which do not.
+Pass data inline in `option` only for what is not in the sheet: histogram bins (unless you counted
+them with `COUNTIFS` on the sheet), a non-linear fit. Such a chart does **not** follow the sheet;
+say which charts do and which do not. A straight fitted line can be on the sheet (`TREND`), and
+then it follows.
 
 ## 5. Say where everything is
 
@@ -218,7 +246,7 @@ End by telling the user:
 
 - the spreadsheet's path and the chart's path;
 - where the scripts are;
-- which figures are formulas and which are computed values;
+- which figures are formulas (workbook functions included, by name) and which are computed values;
 - which charts follow the sheet and which do not.
 
 ## 6. Offer to keep the analysis as a skill
@@ -248,7 +276,9 @@ will silently describe the old file when the skill runs on the next one:
 - categories, dates, histogram bins, the points of a fitted line, lookup tables and anything else
   derived from the rows are computed by the script, not pasted in;
 - the spreadsheet path the charts point at is an argument (it changes on every run);
-- titles name the data kind, not this file's dates.
+- titles name the data kind, not this file's dates;
+- workbook functions travel in the `functions` the scripts present, unchanged: they are the method,
+  not the data.
 
 Then read the scripts and the SKILL.md you are about to write as if for a stranger: no row of the
 data, no value copied out of it, no absolute path and nothing secret goes into the skill. A skill
@@ -293,8 +323,8 @@ If the sheet holds no computed values, and every chart follows it, that is all: 
 again. Otherwise the computed values and the inline charts are now stale. Then:
 
 - recompute the computed values that depended on the edited cells;
-- call `presentSpreadsheet` again with the whole spreadsheet: the user's edits, the formulas, and
-  the new computed values;
+- call `presentSpreadsheet` again with the whole spreadsheet: the user's edits, the formulas, each
+  sheet's `functions` as the file holds them, and the new computed values;
 - draw the charts again, with their `source` pointing at the **new** spreadsheet;
 - copy the scripts as in step 5, into the folder named after the **new** spreadsheet id;
 - say what changed most, and give the new spreadsheet's, chart's and scripts' paths.

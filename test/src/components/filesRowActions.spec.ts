@@ -336,3 +336,36 @@ describe("filesRowActions — words", () => {
     });
   });
 });
+
+// "Open as a spreadsheet" (CSV / TSV): a copy on the Canvas of the cell beside the pane, so it is
+// offered only where there is such a cell, and only on the files the table Preview reads.
+describe("filesRowActions — the spreadsheet entry", () => {
+  const inPane = { cwd: "/proj", terminal: { cwd: "/proj" }, canvas: { roots: { workspaces: ["/ws"], roots: [] } } };
+
+  it("is offered on a CSV and a TSV, after the Canvas entry would be", () => {
+    expect(ids({ ...inPane, pathRel: "data/sales.csv" })).toEqual(["open-spreadsheet", "reveal", "insert-relative", "insert-absolute"]);
+    expect(ids({ ...inPane, pathRel: "data/SALES.TSV" })[0]).toBe("open-spreadsheet");
+  });
+
+  it("carries the row's relative path", () => {
+    const action = call({ ...inPane, pathRel: "data/sales.csv" }).find((a) => a.id === "open-spreadsheet");
+    expect(action).toEqual({ id: "open-spreadsheet", labelKey: "filesRowMenu.openSpreadsheet", icon: "table_view", pathRel: "data/sales.csv" });
+  });
+
+  it("is not offered without a cell's Canvas, on a folder, or on another kind of file", () => {
+    expect(ids({ ...inPane, canvas: null, pathRel: "data/sales.csv" })).not.toContain("open-spreadsheet");
+    expect(call({ ...inPane, isDir: true, pathRel: "data.csv" }).map((a) => a.id)).not.toContain("open-spreadsheet");
+    expect(ids({ ...inPane, pathRel: "data/sales.json" })).not.toContain("open-spreadsheet");
+  });
+
+  it("is worded in every language", () => {
+    [filesTreeEn, filesTreeJa, filesTreeKo, filesTreeZhCN, filesTreeZhTW].forEach((messages) => {
+      const menu = messages.filesRowMenu;
+      [menu.openSpreadsheet, menu.spreadsheetEmpty, menu.spreadsheetTooLarge, menu.spreadsheetFailed, menu.spreadsheetNoCell, menu.spreadsheetNotShown].forEach(
+        (text) => expect(text).toBeTruthy(),
+      );
+      expect(menu.spreadsheetTooLarge).toContain("{max}");
+      expect(menu.spreadsheetFailed).toContain("{reason}");
+    });
+  });
+});

@@ -8,8 +8,8 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **10.9.0 is out.** Spreadsheets with live formulas on the Canvas, a skill that turns a CSV into a
-> spreadsheet and charts, and a folder as a gallery in the Files pane. [Setup guide](v10.9.0.html)
+> **10.10.0 is out.** Several machines under one Google account, picked from the phone; charts that
+> follow a spreadsheet; and a CSV opened as a spreadsheet from the Files pane. [Setup guide](v10.10.0.html)
 
 ## What is MulmoTerminal? {#what-is}
 

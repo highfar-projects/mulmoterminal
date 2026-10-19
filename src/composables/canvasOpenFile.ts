@@ -33,6 +33,8 @@ import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 export interface CanvasCard {
   toolName: string;
   data: Record<string, unknown>;
+  /** The heading a view shows over the card, where it has one (a spreadsheet's file name). */
+  title?: string;
 }
 
 /** What asking for a card ended in.

@@ -6,6 +6,7 @@
 // OTHER than where it was clicked — which is precisely what a DOM test would not catch.
 import { toInsertText } from "./dropPaths";
 import { absoluteUnder, canOpenInCanvas, type StoriesRoots } from "../composables/canvasOpenFile";
+import { filePreviewKind } from "./filePreviewKind";
 
 interface RowActionChrome {
   /** The i18n key of the item's words (`filesRowMenu.*`); the pane says them in the app's language. */
@@ -49,6 +50,11 @@ export type FilesRowAction =
       isDir: boolean;
     })
   | (RowActionChrome & {
+      /** A CSV / TSV as a new spreadsheet on the cell's Canvas — a copy; the file is not written. */
+      id: "open-spreadsheet";
+      pathRel: string;
+    })
+  | (RowActionChrome & {
       id: "open-canvas";
       /** RELATIVE to the tree's root, like the tab it is opened in — the Canvas view resolves it
        *  against the pane's cwd, so an absolute one would be resolved twice. */
@@ -84,6 +90,9 @@ const ICON = "attach_file";
 // Its own, because this is a different job from the two inserts — not the same job reached from
 // the tree. The Canvas panel's own icon.
 const CANVAS_ICON = "space_dashboard";
+
+// A grid: the file becomes a spreadsheet.
+const SPREADSHEET_ICON = "table_view";
 
 // The tab-strip glyph, for the one action that adds to the strip.
 const TAB_ICON = "tab";
@@ -152,6 +161,10 @@ function viewActions({ pathRel, isDir, cwd, terminal, canvas }: FilesRowTarget):
   // stories against the workspace alone (receptron/mulmoclaude#3014).
   if (canvas && canOpenInCanvas(absoluteUnder(cwd, pathRel), canvas.roots)) {
     actions.push({ id: "open-canvas", labelKey: "filesRowMenu.openCanvas", icon: CANVAS_ICON, pathRel });
+  }
+  // Only where there is a cell's Canvas to put it on, and only for what the table Preview reads.
+  if (canvas && !isDir && filePreviewKind(pathRel) === "table") {
+    actions.push({ id: "open-spreadsheet", labelKey: "filesRowMenu.openSpreadsheet", icon: SPREADSHEET_ICON, pathRel });
   }
   // Second: this is how a file LEAVES the app. Not for reading it — for dragging it into a mail
   // composer or an upload form, or for dropping a file too big to paste into a folder the agent

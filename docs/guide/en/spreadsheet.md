@@ -62,6 +62,21 @@ A chart the agent drew from numbers it passed directly (a histogram, a fitted li
 sheet; ask the agent to draw it again (see [Changing the numbers yourself](#changing-the-numbers-yourself)).
 [Analysing data from start to finish](#analysing-data-from-start-to-finish) shows it working.
 
+## Opening a CSV as a spreadsheet {#open-csv-as-spreadsheet}
+
+In the Files pane beside a cell, right-click a `.csv` or `.tsv` file and choose **Open as a
+spreadsheet (copy)**. The file becomes a spreadsheet on that cell's Canvas, without asking the agent:
+one sheet named `Data`, the file's rows as they are, its first row included.
+
+- It is a **copy**, saved under `artifacts/spreadsheets/`. Editing it never changes the CSV.
+- A field that is a plain number (`1200`, `-3.5`) becomes a number, so formulas and charts can use
+  it. Anything else stays the text the file holds, `1,200` and dates included.
+- A field that starts with `=` stays text, with a `'` in front, rather than running as a formula.
+- Up to 5,000 rows. A larger file is refused with a note: ask the agent to analyse it instead, and
+  it aggregates the file (see [A large file](#analysis-large-file)).
+- The pane's own Canvas button and the full-screen Files view do not offer it: the copy goes on the
+  Canvas of the cell beside the pane.
+
 ## Changing the numbers yourself
 
 ![The spreadsheet with cell C7 selected and changed to 260,000. Total, month-on-month change, average and standard deviation have recalculated. The edit bar at the bottom shows C7, String / Formula, the value, the format and Update](../images/spreadsheet-edit.png)
@@ -279,27 +294,46 @@ up or keep them in git like any other file.
 
 ## Functions you can use
 
-These are the functions the spreadsheet calculates, as of `@gui-chat-plugin/spreadsheet` 4.1.0. Any other
-function shows `#NAME?` in its cell.
+These are the functions the spreadsheet calculates, as of `@gui-chat-plugin/spreadsheet` 4.2.0. Any other
+function shows `#NAME?` in its cell, unless the spreadsheet defines it itself (see
+[Functions of your own](#workbook-functions)).
 
 | Kind | Functions |
 |---|---|
-| Totals and statistics | `SUM` `AVERAGE` `MIN` `MAX` `COUNT` `COUNTA` `MEDIAN` `MODE` `STDEV` `STDEVP` `VAR` `VARP` `COUNTIF` `COUNTIFS` `SUMIF` `SUMIFS` `AVERAGEIF` `AVERAGEIFS` |
-| Analysis | `CORREL` `SLOPE` `INTERCEPT` `RSQ` `PERCENTILE` `QUARTILE` `LARGE` `SMALL` `RANK` |
+| Totals and groups | `SUM` `AVERAGE` `MIN` `MAX` `COUNT` `COUNTA` `COUNTIF` `COUNTIFS` `SUMIF` `SUMIFS` `AVERAGEIF` `AVERAGEIFS` `MAXIFS` `MINIFS` |
+| Spread and position | `MEDIAN` `MODE` `STDEV` `STDEVP` `VAR` `VARP` `PERCENTILE` `QUARTILE` `PERCENTRANK` `LARGE` `SMALL` `RANK` `SKEW` `KURT` `STANDARDIZE` `GEOMEAN` `HARMEAN` |
+| Two columns | `CORREL` `PEARSON` `SLOPE` `INTERCEPT` `RSQ` `STEYX` `COVARIANCE.S` `COVARIANCE.P` `FORECAST` `FORECAST.LINEAR` `TREND` |
+| Tests and distributions | `T.TEST` `TTEST` `T.DIST` `T.DIST.2T` `T.DIST.RT` `T.INV` `T.INV.2T` `NORM.DIST` `NORM.S.DIST` `NORM.INV` `NORM.S.INV` `CONFIDENCE.T` `CONFIDENCE.NORM` |
 | Maths | `ROUND` `ROUNDUP` `ROUNDDOWN` `FLOOR` `CEILING` `INT` `TRUNC` `ABS` `SIGN` `POWER` `SQRT` `MOD` `PI` `EXP` `LN` `LOG` `LOG10` |
 | Logic | `IF` `IFS` `AND` `OR` `NOT` `IFERROR` `IFNA` `TRUE` `FALSE` |
 | Lookup | `VLOOKUP` `HLOOKUP` `XLOOKUP` `INDEX` `MATCH` |
 | Text | `CONCATENATE` `CONCAT` `LEFT` `RIGHT` `MID` `LEN` `UPPER` `LOWER` `PROPER` `TRIM` `SUBSTITUTE` `REPLACE` `FIND` `SEARCH` `TEXT` `VALUE` `EXACT` |
-| Dates and times | `TODAY` `NOW` `DATE` `TIME` `YEAR` `MONTH` `DAY` `HOUR` `MINUTE` `SECOND` `DATEDIF` |
+| Dates and times | `TODAY` `NOW` `DATE` `TIME` `YEAR` `MONTH` `DAY` `HOUR` `MINUTE` `SECOND` `WEEKDAY` `DAYS` `DATEDIF` `EDATE` `EOMONTH` `WORKDAY` `NETWORKDAYS` |
 | Finance | `PMT` `PV` `FV` `NPV` `IRR` `RATE` `NPER` `IPMT` `PPMT` |
 
-`STDEV` and `VAR` are the sample versions (divide by n-1); `STDEVP` and `VARP` divide by n. `PERCENTILE`
-and `QUARTILE` interpolate the way Excel's `PERCENTILE.INC` and `QUARTILE.INC` do.
+`STDEV` and `VAR` are the sample versions (divide by n-1); `STDEVP` and `VARP` divide by n. The current Excel
+names work too: `STDEV.S`, `STDEV.P`, `VAR.S`, `VAR.P`, `PERCENTILE.INC`, `QUARTILE.INC`, `PERCENTRANK.INC`,
+`RANK.EQ`. `PERCENTILE` and `QUARTILE` interpolate the way Excel's `.INC` versions do.
 
-**Not available**, though Excel has them: the `.INC` / `.EXC` spellings, working-day and month-end dates
-(`WORKDAY`, `NETWORKDAYS`, `EDATE`, `EOMONTH`), and anything that needs more than one formula, such as a
-t-test. For these, have the agent compute the result with a script and put it in as a value. See
-[Statistics the sheet does not have](#statistics-the-sheet-does-not-have).
+A formula with no number format shows a date only when its number comes from a date (a date function, or a
+date cell), so a total of 52,345 stays a number.
+
+**Not available**: the `.EXC` spellings, whole-column references such as `A:A` (give a range such as
+`A2:A500`), and functions that return several cells at once (`FREQUENCY`, `LINEST`).
+
+### Functions of your own {#workbook-functions}
+
+For a method no function above has (a moving average, a weighted score), the agent can define a function in
+the spreadsheet itself and use it in formulas like any other:
+
+> Add a 7-day moving average column, as a function of the spreadsheet so it updates.
+
+The agent writes `MOVING.AVG` into the spreadsheet and fills the column with `=MOVING.AVG(B$2:B8, 7)` and so
+on. Edit a sales figure and the average recalculates, as a formula does. The function is saved with the
+spreadsheet, so it is still there when the file is opened again, and charts drawn from the sheet use it too.
+
+It runs sealed off: it sees only the cells it is given, with no access to files, the network or the screen,
+and a call that runs longer than 50 ms stops with `#NUM!`. A mistake in it shows `#VALUE!` in the cell.
 
 ## What to ask for
 
@@ -345,12 +379,13 @@ like, ask:
 
 ### Statistics the sheet does not have
 
-> Test whether weekday and weekend sales differ, with a script, and put the result in the spreadsheet.
+> Fit a curve to these sales and put the fitted parameters in the spreadsheet.
 
-Correlation, a linear trend, percentiles and ranks are formulas now (see
-[Functions you can use](#functions-you-can-use)). For what no function gives, such as a t-test or a
-non-linear fit, the agent works it out in Python or Node in the terminal, where nothing limits which
-functions it can use. Values that come from a script do not recalculate when you edit the sheet;
+Correlation, regression, t-tests, distributions, percentiles and ranks are formulas now (see
+[Functions you can use](#functions-you-can-use)), and a method none of them gives can be a
+[function of the spreadsheet's own](#workbook-functions). What is left — a result that needs data
+outside the spreadsheet, or a computation too heavy for a cell — the agent works out with a script in
+the terminal and puts in as a value. Values from a script do not recalculate when you edit the sheet;
 formulas do.
 
 ### Have the numbers checked
