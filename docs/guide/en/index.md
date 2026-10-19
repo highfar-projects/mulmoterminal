@@ -8,8 +8,8 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **10.10.0 is out.** Several machines under one Google account, picked from the phone; charts that
-> follow a spreadsheet; and a CSV opened as a spreadsheet from the Files pane. [Setup guide](v10.10.0.html)
+> **11.0.0 is out.** Ask a CSV, TSV or Excel file a question and get the answer with a spreadsheet and
+> charts behind it; spreadsheets read months and text correctly. [Setup guide](v11.0.0.html)
 
 ## What is MulmoTerminal? {#what-is}
 
