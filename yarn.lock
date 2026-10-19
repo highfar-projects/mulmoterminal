@@ -1302,10 +1302,10 @@
     three-bvh-csg "^0.0.18"
     three-mesh-bvh "0.9.15"
 
-"@gui-chat-plugin/spreadsheet@^4.2.4":
-  version "4.2.4"
-  resolved "https://registry.yarnpkg.com/@gui-chat-plugin/spreadsheet/-/spreadsheet-4.2.4.tgz#3fdd4033bc30705331e6260f727b23ffbcfdfca2"
-  integrity sha512-tZUZ6UnI8/9bR3zzuoB0AGZ+lvGJZ/LxnzH27WeMwBATQGQSsQQ4xUUyQLAPzCa2LQJEkziE2GKVTiWyIweJ1w==
+"@gui-chat-plugin/spreadsheet@^4.2.5":
+  version "4.2.5"
+  resolved "https://registry.yarnpkg.com/@gui-chat-plugin/spreadsheet/-/spreadsheet-4.2.5.tgz#a7bab21c0456e49b372039dbdd78ab5f0c1a940b"
+  integrity sha512-yIt0/mawA8P7JJ6H9B0BCPINsu8qWb/rPXued6c+ZQRlFKvCHuQjQL8YZ/cr4KpJvpuZMJ0pbTOA+TbaQUAl7w==
   dependencies:
     "@jitl/quickjs-singlefile-mjs-release-sync" "^0.32.0"
     quickjs-emscripten-core "^0.32.0"
