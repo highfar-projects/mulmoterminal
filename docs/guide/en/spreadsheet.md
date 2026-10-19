@@ -71,6 +71,8 @@ one sheet named `Data`, the file's rows as they are, its first row included.
 - It is a **copy**, saved under `artifacts/spreadsheets/`. Editing it never changes the CSV.
 - A field that is a plain number (`1200`, `-3.5`) becomes a number, so formulas and charts can use
   it. Anything else stays the text the file holds, `1,200` and dates included.
+- A date stays text too, but date functions (`YEAR(A2)`, `DATEDIF`, `EOMONTH`) read `2025-01-15`,
+  `2025-01`, `Jan 2025` and `2025年1月` as dates. A month alone is its first day.
 - A field that starts with `=` stays text, with a `'` in front, rather than running as a formula.
 - Up to 5,000 rows. A larger file is refused with a note: ask the agent to analyse it instead, and
   it aggregates the file (see [A large file](#analysis-large-file)).
@@ -301,7 +303,7 @@ up or keep them in git like any other file.
 
 ## Functions you can use
 
-These are the functions the spreadsheet calculates, as of `@gui-chat-plugin/spreadsheet` 4.2.3. Any other
+These are the functions the spreadsheet calculates, as of `@gui-chat-plugin/spreadsheet` 4.2.4. Any other
 function shows `#NAME?` in its cell, unless the spreadsheet defines it itself (see
 [Functions of your own](#workbook-functions)).
 
