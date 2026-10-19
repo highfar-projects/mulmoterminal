@@ -262,7 +262,7 @@ Workspace data が無いプロジェクトのセルでは、ファイルを少�
 
 ## 使える関数 {#functions-you-can-use}
 
-表が計算できる関数は次のとおりです（`@gui-chat-plugin/spreadsheet` 4.2.0 時点）。これ以外の関数は、表が自分で定義していない限り、
+表が計算できる関数は次のとおりです（`@gui-chat-plugin/spreadsheet` 4.2.2 時点）。これ以外の関数は、表が自分で定義していない限り、
 セルに `#NAME?` と出ます（[表の関数を作る](#workbook-functions)）。
 
 | 種類 | 関数 |
