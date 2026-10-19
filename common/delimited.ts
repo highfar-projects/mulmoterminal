@@ -2,6 +2,8 @@
 // the Files preview and the browser turns the same file into a spreadsheet; one parser means the
 // two never disagree about where a field ends.
 
+const BYTE_ORDER_MARK = "\uFEFF";
+
 /** The delimiter a separated-values file uses, from its extension. */
 export const delimiterForExtension = (ext: string): string => (ext.toLowerCase() === ".tsv" ? "\t" : ",");
 
@@ -13,7 +15,10 @@ export const delimiterForExtension = (ext: string): string => (ext.toLowerCase()
  * failure mode of a loose one is a table that silently splits a field in half — which is
  * worse than not rendering at all, and invisible without the cases below.
  */
-export function parseDelimited(text: string, delimiter: string): string[][] {
+export function parseDelimited(source: string, delimiter: string): string[][] {
+  // A byte-order mark is how many exporters (Excel's "CSV UTF-8" among them) begin the file; it is
+  // not part of the first field.
+  const text = source.startsWith(BYTE_ORDER_MARK) ? source.slice(BYTE_ORDER_MARK.length) : source;
   const rows: string[][] = [];
   let row: string[] = [];
   let field = "";

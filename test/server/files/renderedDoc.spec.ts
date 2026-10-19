@@ -70,6 +70,13 @@ describe("delimiterForExtension", () => {
 });
 
 describe("parseDelimited", () => {
+  it("drops a leading byte-order mark", () => {
+    expect(parseDelimited("\uFEFFa,b\n1,2", ",")).toEqual([
+      ["a", "b"],
+      ["1", "2"],
+    ]);
+  });
+
   it("splits plain rows and fields", () => {
     expect(parseDelimited("a,b\n1,2", ",")).toEqual([
       ["a", "b"],

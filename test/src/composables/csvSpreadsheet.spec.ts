@@ -77,3 +77,10 @@ describe("cellFromField — what is not a plain number", () => {
     expect(cellFromField(" 42 ")).toEqual({ v: 42 });
   });
 });
+
+describe("csvSpreadsheet — a byte-order mark", () => {
+  it("is not part of the first header", () => {
+    const result = csvSpreadsheet("\uFEFFstore,sales\nShibuya,1200", "bom.csv");
+    expect(result.kind === "sheet" && result.args.sheets[0]?.data[0]).toEqual([{ v: "store" }, { v: "sales" }]);
+  });
+});

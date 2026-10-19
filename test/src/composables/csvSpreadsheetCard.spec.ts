@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { csvSpreadsheetCard } from "../../../src/composables/csvSpreadsheetCard";
+import { csvSpreadsheetCard, openCsvAsSpreadsheet } from "../../../src/composables/csvSpreadsheetCard";
 import { MAX_SPREADSHEET_ROWS } from "../../../src/composables/csvSpreadsheet";
 
 const json = (status: number, body: unknown): Response => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -82,5 +82,37 @@ describe("csvSpreadsheetCard", () => {
       kind: "refused",
       refusal: { key: "filesRowMenu.spreadsheetFailed", values: { reason: "offline" } },
     });
+  });
+});
+
+describe("openCsvAsSpreadsheet", () => {
+  const card = { toolName: "presentSpreadsheet", data: { sheets: "artifacts/spreadsheets/2026/10/x.json" } };
+  const built = async () => ({ kind: "card" as const, card });
+
+  it("seeds the card and reports it shown while the pane stays put", async () => {
+    const seed = vi.fn(async () => true);
+    expect(await openCsvAsSpreadsheet({ stillAsked: () => true, buildCard: built, seed })).toEqual({ kind: "shown" });
+    expect(seed).toHaveBeenCalledWith(card);
+  });
+
+  it("drops the copy without seeding when the pane moved while it was being made", async () => {
+    const seed = vi.fn(async () => true);
+    expect(await openCsvAsSpreadsheet({ stillAsked: () => false, buildCard: built, seed })).toEqual({ kind: "dropped" });
+    expect(seed).not.toHaveBeenCalled();
+  });
+
+  it("does not report a seed for a pane that moved while it was being seeded", async () => {
+    const answers = [true, false];
+    const stillAsked = () => answers.shift() ?? false;
+    expect(await openCsvAsSpreadsheet({ stillAsked, buildCard: built, seed: async () => true })).toEqual({ kind: "dropped" });
+  });
+
+  it("passes a refusal on, and says when the Canvas did not take the card", async () => {
+    const refusal = { key: "filesRowMenu.spreadsheetEmpty" as const, values: {} };
+    expect(await openCsvAsSpreadsheet({ stillAsked: () => true, buildCard: async () => ({ kind: "refused", refusal }), seed: async () => true })).toEqual({
+      kind: "refused",
+      refusal,
+    });
+    expect(await openCsvAsSpreadsheet({ stillAsked: () => true, buildCard: built, seed: async () => false })).toEqual({ kind: "notShown" });
   });
 });

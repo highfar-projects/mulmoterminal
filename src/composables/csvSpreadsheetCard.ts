@@ -62,3 +62,25 @@ export async function csvSpreadsheetCard(cwd: string | null, pathRel: string): P
     return refused("filesRowMenu.spreadsheetFailed", { reason: err instanceof Error ? err.message : String(err) });
   }
 }
+
+/** What "Open as a spreadsheet" ended in: on the Canvas, refused (with the words to show), or
+ *  dropped because the pane was moved to another cell or directory while it ran. */
+export type OpenCsvOutcome = { kind: "shown" } | { kind: "refused"; refusal: CsvRefusal } | { kind: "notShown" } | { kind: "dropped" };
+
+export interface OpenCsvDeps {
+  /** Whether the pane is still beside the cell, and on the directory, it was asked from. */
+  stillAsked: () => boolean;
+  buildCard: () => Promise<CsvCardResult>;
+  seed: (card: CanvasCard) => Promise<boolean>;
+}
+
+/** Build the copy and put it on the Canvas, re-asking after each await: the copy belongs to the
+ *  cell it was asked from, and must not land on one the pane has since moved to. */
+export async function openCsvAsSpreadsheet(deps: OpenCsvDeps): Promise<OpenCsvOutcome> {
+  const result = await deps.buildCard();
+  if (!deps.stillAsked()) return { kind: "dropped" };
+  if (result.kind === "refused") return result;
+  const seeded = await deps.seed(result.card);
+  if (!deps.stillAsked()) return { kind: "dropped" };
+  return seeded ? { kind: "shown" } : { kind: "notShown" };
+}

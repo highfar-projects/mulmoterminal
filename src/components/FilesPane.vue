@@ -43,7 +43,7 @@ import FilesEditorActions from "./FilesEditorActions.vue";
 import type { StoriesRoots } from "../composables/canvasOpenFile";
 import { filesRowActions, type FilesRowAction } from "./filesRowActions";
 import { seedCanvasCard } from "../composables/canvasOpenFile";
-import { csvSpreadsheetCard } from "../composables/csvSpreadsheetCard";
+import { csvSpreadsheetCard, openCsvAsSpreadsheet } from "../composables/csvSpreadsheetCard";
 import { menuAttrsFor, useFilesRowMenu } from "../composables/useFilesRowMenu";
 import { isTreeOpAction, useTreeFileOps } from "../composables/useTreeFileOps";
 import { focusTreeRow } from "./treeRowFocus";
@@ -180,20 +180,19 @@ async function insertSelection(): Promise<boolean> {
  *  beside the pane — the same feed the agent's cards go to, so it is kept and comes back on reload. */
 async function openAsSpreadsheet(pathRel: string): Promise<void> {
   const session = props.viewModeSession;
+  const cwd = props.cwd;
   if (!session) {
     fileError.value = t("filesRowMenu.spreadsheetNoCell");
     return;
   }
-  const result = await csvSpreadsheetCard(props.cwd, pathRel);
-  if (result.kind === "refused") {
-    fileError.value = t(result.refusal.key, result.refusal.values);
-    return;
-  }
-  if (!(await seedCanvasCard(session, result.card))) {
-    fileError.value = t("filesRowMenu.spreadsheetNotShown");
-    return;
-  }
-  emit("open-canvas");
+  const outcome = await openCsvAsSpreadsheet({
+    stillAsked: () => props.viewModeSession === session && props.cwd === cwd,
+    buildCard: () => csvSpreadsheetCard(cwd, pathRel),
+    seed: (card) => seedCanvasCard(session, card),
+  });
+  if (outcome.kind === "shown") emit("open-canvas");
+  else if (outcome.kind === "refused") fileError.value = t(outcome.refusal.key, outcome.refusal.values);
+  else if (outcome.kind === "notShown") fileError.value = t("filesRowMenu.spreadsheetNotShown");
 }
 
 /** What picking one does — the other end that belongs to this pane, because it emits. */
