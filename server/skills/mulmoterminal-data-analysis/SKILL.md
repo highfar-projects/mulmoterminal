@@ -57,6 +57,10 @@ If a column's meaning is unclear (`amt`, `v2`), ask once, rather than guessing.
 
 ### A large file
 
+This section is for CSV and TSV. A large Excel file is read with `exceljs`'s streaming reader
+(`new ExcelJS.stream.xlsx.WorkbookReader(path)`) and aggregated in the script; a collection reads
+CSV only, so do not make one from it.
+
 Look at the file's size first. If it is more than a few hundred kilobytes, count its records with
 one streaming pass, not `wc -l` (a quoted field can hold a line break, so lines are not records).
 The same pass counts, for each column you will treat as a number, the values that are empty, the
@@ -285,7 +289,8 @@ already exists, ask before replacing it.
 Every value that came from the file you analysed is recomputed from the input at run time, or it
 will silently describe the old file when the skill runs on the next one:
 
-- the CSV path is an argument, never written into a script;
+- the input file's path is an argument, never written into a script; for an Excel file the
+  worksheet's name is one too, and `exceljs` stays in `package.json`;
 - every range, row count and sheet size comes from the data (`Data!A1:G${rows.length + 1}`);
 - categories, dates, histogram bins, the points of a fitted line, lookup tables and anything else
   derived from the rows are computed by the script, not pasted in;

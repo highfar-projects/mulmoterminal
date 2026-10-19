@@ -231,10 +231,11 @@ works in a temporary directory of its own.
 
 Up to about 5,000 rows, every row goes onto the Data sheet. A larger file (a year of orders, a log)
 is **aggregated first**, and the sheet gets the aggregated table: sales per store, orders per
-month, and so on. Formulas and charts then work on that table exactly as above.
+month, and so on. Formulas and charts then work on that table exactly as above. A large Excel file
+is aggregated by a script.
 
-In the workspace, or in a project where **Workspace data** is switched on, the agent makes the file
-a read-only **collection** and lets the collection add it up. It reads the whole file, however
+In the workspace, or in a project where **Workspace data** is switched on, the agent makes a CSV or
+TSV a read-only **collection** and lets the collection add it up. It reads the whole file, however
 large, without loading it into the conversation:
 
 > Analyse data/sales-2025.csv. It has a row per order; I want sales by store and by month.
