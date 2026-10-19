@@ -80,7 +80,7 @@
     "@google/genai": "^2.30.0",
     "@gui-chat-plugin/jinglescript": "^0.8.0",
     "@gui-chat-plugin/shapescript": "^8.2.2",
-    "@gui-chat-plugin/spreadsheet": "^4.2.3",
+    "@gui-chat-plugin/spreadsheet": "^4.2.4",
     "@lezer/highlight": "^1.2.3",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "@mulmobridge/web-push": "^1.1.0",
