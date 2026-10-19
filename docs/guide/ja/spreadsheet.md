@@ -262,7 +262,7 @@ Workspace data が無いプロジェクトのセルでは、ファイルを少�
 
 ## 使える関数 {#functions-you-can-use}
 
-表が計算できる関数は次のとおりです（`@gui-chat-plugin/spreadsheet` 4.2.2 時点）。これ以外の関数は、表が自分で定義していない限り、
+表が計算できる関数は次のとおりです（`@gui-chat-plugin/spreadsheet` 4.2.3 時点）。これ以外の関数は、表が自分で定義していない限り、
 セルに `#NAME?` と出ます（[表の関数を作る](#workbook-functions)）。
 
 | 種類 | 関数 |
@@ -273,7 +273,7 @@ Workspace data が無いプロジェクトのセルでは、ファイルを少�
 | 検定・分布 | `T.TEST` `TTEST` `T.DIST` `T.DIST.2T` `T.DIST.RT` `T.INV` `T.INV.2T` `NORM.DIST` `NORM.S.DIST` `NORM.INV` `NORM.S.INV` `CONFIDENCE.T` `CONFIDENCE.NORM` |
 | 数学 | `ROUND` `ROUNDUP` `ROUNDDOWN` `FLOOR` `CEILING` `INT` `TRUNC` `ABS` `SIGN` `POWER` `SQRT` `MOD` `PI` `EXP` `LN` `LOG` `LOG10` |
 | 論理 | `IF` `IFS` `AND` `OR` `NOT` `IFERROR` `IFNA` `TRUE` `FALSE` |
-| 検索 | `VLOOKUP` `HLOOKUP` `XLOOKUP` `INDEX` `MATCH` |
+| 検索 | `VLOOKUP` `HLOOKUP` `XLOOKUP` `INDEX` `MATCH` `ROW` `COLUMN` `ROWS` `COLUMNS` |
 | 文字列 | `CONCATENATE` `CONCAT` `LEFT` `RIGHT` `MID` `LEN` `UPPER` `LOWER` `PROPER` `TRIM` `SUBSTITUTE` `REPLACE` `FIND` `SEARCH` `TEXT` `VALUE` `EXACT` |
 | 日付・時刻 | `TODAY` `NOW` `DATE` `TIME` `YEAR` `MONTH` `DAY` `HOUR` `MINUTE` `SECOND` `WEEKDAY` `DAYS` `DATEDIF` `EDATE` `EOMONTH` `WORKDAY` `NETWORKDAYS` |
 | 財務 | `PMT` `PV` `FV` `NPV` `IRR` `RATE` `NPER` `IPMT` `PPMT` |
