@@ -210,9 +210,10 @@ Put the result in `presentSpreadsheet`. Split each number by whether the user ma
 Use one sheet for the data and another for the summary, so a summary formula reads the data sheet
 (`=AVERAGE(Data!C2:C201)`).
 
-`presentSpreadsheet` replies with the formula cells that calculate to an error, if any. Fix them —
-the formula, the layout, or a value the script computes instead — and present again before you
-tell the user the spreadsheet is ready. The saved file holds formulas, not results, so that reply
+`presentSpreadsheet` replies with how many formula cells calculate to an error, naming up to five.
+Fix them — the formula, the layout, or a value the script computes instead — and present again,
+until it reports none, or only errors you mean the user to see (a lookup that finds nothing), before
+you tell the user the spreadsheet is ready. The saved file holds formulas, not results, so that reply
 is the only place you see them. A file above about 5,000 rows is aggregated first and its aggregated
 table goes on the Data sheet (see *A large file*). Say that you did.
 
