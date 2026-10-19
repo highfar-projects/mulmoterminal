@@ -1302,11 +1302,13 @@
     three-bvh-csg "^0.0.18"
     three-mesh-bvh "0.9.15"
 
-"@gui-chat-plugin/spreadsheet@^4.1.0":
-  version "4.1.0"
-  resolved "https://registry.yarnpkg.com/@gui-chat-plugin/spreadsheet/-/spreadsheet-4.1.0.tgz#e28edc35cae136f64ae2a060d0d96a220a7218ac"
-  integrity sha512-U6lpAbE8JSfGGdUcDVK8sXRMP4HqjsWFKe02/NiCZRjYCnkADpT5xO9w1FGUulC4qU5etfDWDpYVaVjsfbje9Q==
+"@gui-chat-plugin/spreadsheet@^4.2.0":
+  version "4.2.0"
+  resolved "https://registry.yarnpkg.com/@gui-chat-plugin/spreadsheet/-/spreadsheet-4.2.0.tgz#58fe0af84698d8cb5791d9cfcc29d3e7632883c5"
+  integrity sha512-/1jj6gdeYEFSW5zZ2fVLgRh/dIz3k7SY7eIK7CMisUCrxoC5ijYNa7NVk78zfmwG5oWWPgX1B77cN+8G7DUK1Q==
   dependencies:
+    "@jitl/quickjs-singlefile-mjs-release-sync" "^0.32.0"
+    quickjs-emscripten-core "^0.32.0"
     xlsx "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
 
 "@hono/node-server@^1.19.9 || ^2.0.5":
@@ -1632,6 +1634,18 @@
   version "11.4.16"
   resolved "https://registry.yarnpkg.com/@intlify/shared/-/shared-11.4.16.tgz#b06ea77ebf991d327d5d1f82d4af73a6235dc569"
   integrity sha512-xehmkbEgbbNh/V+d8r3hFup0ViaN29YTJSAfRr28C54rxjyZEO0RNQKqW7VVajj16gLdglotNjiq+sIVNtHGzw==
+
+"@jitl/quickjs-ffi-types@0.32.0":
+  version "0.32.0"
+  resolved "https://registry.yarnpkg.com/@jitl/quickjs-ffi-types/-/quickjs-ffi-types-0.32.0.tgz#43664daea79b1c42d69c262d80ebe743da25dc7d"
+  integrity sha512-v9T+GQpmk43VDJ7d72sf0Nexhk+ArvtUihW27dy7lqAl0zBObFKtSBBIm5RBjwIhE8VwsPPm9PNuvPvNqLWUEg==
+
+"@jitl/quickjs-singlefile-mjs-release-sync@^0.32.0":
+  version "0.32.0"
+  resolved "https://registry.yarnpkg.com/@jitl/quickjs-singlefile-mjs-release-sync/-/quickjs-singlefile-mjs-release-sync-0.32.0.tgz#81b97a6d8111c7badf6a792bf545306bdd9a52e3"
+  integrity sha512-h9g2Dri6WxKNjX6a1+sFAafOVxj1n5YIA1GAzMoSdIqK1M8cG07tz3GxKVC3Gbdutz14uQ3oc3Q2lll8otInhA==
+  dependencies:
+    "@jitl/quickjs-ffi-types" "0.32.0"
 
 "@jridgewell/gen-mapping@^0.3.5":
   version "0.3.13"
@@ -7280,6 +7294,13 @@ quansync@^0.2.11:
   version "0.2.11"
   resolved "https://registry.yarnpkg.com/quansync/-/quansync-0.2.11.tgz#f9c3adda2e1272e4f8cf3f1457b04cbdb4ee692a"
   integrity sha512-AifT7QEbW9Nri4tAwR5M/uzpBuqfZf+zwaEM/QkzEjj7NBuFD2rBuy0K3dE+8wltbezDV7JMA0WfnCPYRSYbXA==
+
+quickjs-emscripten-core@^0.32.0:
+  version "0.32.0"
+  resolved "https://registry.yarnpkg.com/quickjs-emscripten-core/-/quickjs-emscripten-core-0.32.0.tgz#a7b1c923fb57538c2ee543c70a6755df52533b3f"
+  integrity sha512-QFnPfjFey8EqknSrSxe1hZrf1/8z7/6s1QzGOmKo6++02r7QRRX7ZoyNaZh7JuVjWsVW87KnQrbZqnHkOAzUyg==
+  dependencies:
+    "@jitl/quickjs-ffi-types" "0.32.0"
 
 railroad-diagrams@^1.0.0:
   version "1.0.0"
