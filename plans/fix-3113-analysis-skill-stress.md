@@ -14,7 +14,7 @@ were in the workbooks handed over and in when the skill was used at all.
 | `VLOOKUP` / `HLOOKUP` / `INDEX` over `$` ranges gave errors | plugin #133 (4.2.1) |
 | Questions ("is B better than A", "what comes next month") did not trigger the skill | skill description |
 | An `.xlsx` task was handled, but the skill named only CSV / TSV | skill: Excel via `exceljs` |
-| A collection written to the wrong place was never picked up, and the agent did not notice | skill: check with `getSchema`, then fall back |
+| A collection that was never picked up went unnoticed | skill: check with `getSchema`, validate against `schemaDocs`, else aggregate with the script |
 
 ## Change here
 

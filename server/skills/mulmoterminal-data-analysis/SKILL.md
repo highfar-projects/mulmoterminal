@@ -42,7 +42,8 @@ const rows = parse(readFileSync(process.argv[2]), { columns: true, skip_empty_li
 yourself (strip thousands separators first: `"1,200"` is not a number to `Number`), and count the
 ones that do not convert rather than dropping them silently.
 
-Read an Excel file (`.xlsx`) with `exceljs` (`npm install exceljs`), one worksheet at a time, and
+Read an Excel file (`.xlsx`) with `exceljs`, installed in the same working directory
+(`cd "$work" && npm install exceljs`). Read one worksheet at a time, and
 say which worksheets it has and which you read. A cell there may hold a number, a date, a formula's
 cached result or text; check each column the same way.
 
@@ -94,9 +95,9 @@ column they compare text. If the streaming pass found any, aggregate with the sc
    the files: a `SKILL.md` and a `schema.json` with `dataSource: { "type": "csv", "path": ... }`,
    fields named exactly as the header, the key field declared `type: "string"`.
    Then check that it was picked up: `manageCollection` `getSchema` for the slug. If it still
-   answers "unknown collection", the files are not where this host reads collections from; follow
-   the topic's other placement (`.claude/skills/<slug>/` in the root) and check again. If it is
-   still unknown, aggregate with the script instead (below) and remove the files you wrote.
+   answers "unknown collection", the schema failed validation: read the files back against the
+   topic and fix them. If it is still unknown, aggregate with the script instead (below) and
+   remove the files you wrote.
 4. The key: a column whose values are unique, when there is one. When none is (rows of orders,
    readings, log lines), use a column without empty cells. `queryItems` still counts and sums every
    row; only the collection's own list view shows one row per key value. If every column has empty
