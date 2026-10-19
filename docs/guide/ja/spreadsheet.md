@@ -255,25 +255,42 @@ Workspace data が無いプロジェクトのセルでは、ファイルを少�
 
 ## 使える関数 {#functions-you-can-use}
 
-表が計算できる関数は次のとおりです（`@gui-chat-plugin/spreadsheet` 4.1.0 時点）。これ以外の関数は、セルに `#NAME?` と出ます。
+表が計算できる関数は次のとおりです（`@gui-chat-plugin/spreadsheet` 4.2.0 時点）。これ以外の関数は、表が自分で定義していない限り、
+セルに `#NAME?` と出ます（[表の関数を作る](#workbook-functions)）。
 
 | 種類 | 関数 |
 |---|---|
-| 集計・統計 | `SUM` `AVERAGE` `MIN` `MAX` `COUNT` `COUNTA` `MEDIAN` `MODE` `STDEV` `STDEVP` `VAR` `VARP` `COUNTIF` `COUNTIFS` `SUMIF` `SUMIFS` `AVERAGEIF` `AVERAGEIFS` |
-| 分析 | `CORREL` `SLOPE` `INTERCEPT` `RSQ` `PERCENTILE` `QUARTILE` `LARGE` `SMALL` `RANK` |
+| 集計・グループ | `SUM` `AVERAGE` `MIN` `MAX` `COUNT` `COUNTA` `COUNTIF` `COUNTIFS` `SUMIF` `SUMIFS` `AVERAGEIF` `AVERAGEIFS` `MAXIFS` `MINIFS` |
+| ばらつき・位置 | `MEDIAN` `MODE` `STDEV` `STDEVP` `VAR` `VARP` `PERCENTILE` `QUARTILE` `PERCENTRANK` `LARGE` `SMALL` `RANK` `SKEW` `KURT` `STANDARDIZE` `GEOMEAN` `HARMEAN` |
+| 2 つの列 | `CORREL` `PEARSON` `SLOPE` `INTERCEPT` `RSQ` `STEYX` `COVARIANCE.S` `COVARIANCE.P` `FORECAST` `FORECAST.LINEAR` `TREND` |
+| 検定・分布 | `T.TEST` `TTEST` `T.DIST` `T.DIST.2T` `T.DIST.RT` `T.INV` `T.INV.2T` `NORM.DIST` `NORM.S.DIST` `NORM.INV` `NORM.S.INV` `CONFIDENCE.T` `CONFIDENCE.NORM` |
 | 数学 | `ROUND` `ROUNDUP` `ROUNDDOWN` `FLOOR` `CEILING` `INT` `TRUNC` `ABS` `SIGN` `POWER` `SQRT` `MOD` `PI` `EXP` `LN` `LOG` `LOG10` |
 | 論理 | `IF` `IFS` `AND` `OR` `NOT` `IFERROR` `IFNA` `TRUE` `FALSE` |
 | 検索 | `VLOOKUP` `HLOOKUP` `XLOOKUP` `INDEX` `MATCH` |
 | 文字列 | `CONCATENATE` `CONCAT` `LEFT` `RIGHT` `MID` `LEN` `UPPER` `LOWER` `PROPER` `TRIM` `SUBSTITUTE` `REPLACE` `FIND` `SEARCH` `TEXT` `VALUE` `EXACT` |
-| 日付・時刻 | `TODAY` `NOW` `DATE` `TIME` `YEAR` `MONTH` `DAY` `HOUR` `MINUTE` `SECOND` `DATEDIF` |
+| 日付・時刻 | `TODAY` `NOW` `DATE` `TIME` `YEAR` `MONTH` `DAY` `HOUR` `MINUTE` `SECOND` `WEEKDAY` `DAYS` `DATEDIF` `EDATE` `EOMONTH` `WORKDAY` `NETWORKDAYS` |
 | 財務 | `PMT` `PV` `FV` `NPV` `IRR` `RATE` `NPER` `IPMT` `PPMT` |
 
-`STDEV` と `VAR` は標本の値です（n-1 で割る）。`STDEVP` と `VARP` は n で割ります。`PERCENTILE` と `QUARTILE` は、
-Excel の `PERCENTILE.INC` と `QUARTILE.INC` と同じ補間をします。
+`STDEV` と `VAR` は標本の値です（n-1 で割る）。`STDEVP` と `VARP` は n で割ります。今の Excel の名前（`STDEV.S`、`STDEV.P`、
+`VAR.S`、`VAR.P`、`PERCENTILE.INC`、`QUARTILE.INC`、`PERCENTRANK.INC`、`RANK.EQ`）も使えます。`PERCENTILE` と `QUARTILE` は、
+Excel の `.INC` と同じ補間をします。
 
-Excel にはあっても、**ここでは使えない**もの：`.INC` / `.EXC` の付いた名前、営業日や月末の日付（`WORKDAY`、`NETWORKDAYS`、
-`EDATE`、`EOMONTH`）、それに t 検定のように一つの式では書けないもの。これらはエージェントにスクリプトで計算してもらい、
-値として入れてもらいます。[表にない統計](#statistics-the-sheet-does-not-have)を見てください。
+書式の無い計算式が日付として出るのは、その数が日付から来たとき（日付の関数か、日付のセル）だけです。合計が 52,345 なら数のままです。
+
+**使えない**もの：`.EXC` の付いた名前、`A:A` のような列全体の参照（`A2:A500` のような範囲にしてください）、
+複数のセルを一度に返す関数（`FREQUENCY`、`LINEST`）。
+
+### 表の関数を作る {#workbook-functions}
+
+上の関数に無い手法（移動平均、重み付きの点数など）は、エージェントが表そのものに関数を作り、ほかの関数と同じように計算式で使えます。
+
+> 7 日の移動平均の列を足して。表の関数にして、数字を直したら変わるように。
+
+エージェントは表に `MOVING.AVG` を書き、列を `=MOVING.AVG(B$2:B8, 7)` などで埋めます。売上を直すと、計算式と同じように平均も計算し直されます。
+関数は表と一緒に保存されるので、開き直してもあり、表から描いたグラフもそれを使います。
+
+関数は閉じた場所で動きます。渡されたセルしか見えず、ファイル・ネットワーク・画面には触れません。50ms より長くかかると `#NUM!` で止まり、
+関数の中の誤りはセルに `#VALUE!` と出ます。
 
 ## 頼み方 {#what-to-ask-for}
 
@@ -311,11 +328,11 @@ CSV、JSON、ログ、ほかの道具から書き出したものなど、エー�
 
 ### 表にない統計 {#statistics-the-sheet-does-not-have}
 
-> 平日と週末で売上に差があるか、スクリプトで検定して、結果を表に入れて。
+> この売上に曲線を当てはめて、当てはめた値を表に入れて。
 
-相関、直線の傾向、パーセンタイル、順位は、今は計算式で書けます（[使える関数](#functions-you-can-use)）。
-t 検定や曲線の当てはめのように関数で書けないものは、エージェントが端末で Python や Node を使って計算します。
-使える関数に制限はありません。スクリプトで計算した値は、表を直しても計算し直されません。計算し直されるのは計算式だけです。
+相関、回帰、t 検定、分布、パーセンタイル、順位は、今は計算式で書けます（[使える関数](#functions-you-can-use)）。
+どの関数にも無い手法は、[表の関数](#workbook-functions)にできます。残るもの（表の外のデータが要る結果や、セルで計算するには重いもの）は、
+エージェントが端末のスクリプトで計算し、値として入れます。スクリプトで計算した値は、表を直しても計算し直されません。計算し直されるのは計算式だけです。
 
 ### 数字を確認する
 
