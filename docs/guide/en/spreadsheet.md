@@ -62,6 +62,21 @@ A chart the agent drew from numbers it passed directly (a histogram, a fitted li
 sheet; ask the agent to draw it again (see [Changing the numbers yourself](#changing-the-numbers-yourself)).
 [Analysing data from start to finish](#analysing-data-from-start-to-finish) shows it working.
 
+## Opening a CSV as a spreadsheet {#open-csv-as-spreadsheet}
+
+In the Files pane beside a cell, right-click a `.csv` or `.tsv` file and choose **Open as a
+spreadsheet (copy)**. The file becomes a spreadsheet on that cell's Canvas, without asking the agent:
+one sheet named `Data`, the file's rows as they are, its first row included.
+
+- It is a **copy**, saved under `artifacts/spreadsheets/`. Editing it never changes the CSV.
+- A field that is a plain number (`1200`, `-3.5`) becomes a number, so formulas and charts can use
+  it. Anything else stays the text the file holds, `1,200` and dates included.
+- A field that starts with `=` stays text, with a `'` in front, rather than running as a formula.
+- Up to 5,000 rows. A larger file is refused with a note: ask the agent to analyse it instead, and
+  it aggregates the file (see [A large file](#analysis-large-file)).
+- The pane's own Canvas button and the full-screen Files view do not offer it: the copy goes on the
+  Canvas of the cell beside the pane.
+
 ## Changing the numbers yourself
 
 ![The spreadsheet with cell C7 selected and changed to 260,000. Total, month-on-month change, average and standard deviation have recalculated. The edit bar at the bottom shows C7, String / Formula, the value, the format and Update](../images/spreadsheet-edit.png)

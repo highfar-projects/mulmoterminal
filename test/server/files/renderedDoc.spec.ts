@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { escapeHtml, htmlDoc, jsonHtmlDoc, tableHtmlDoc, parseDelimited, delimiterForExtension, themeStyle } from "../../../server/files/renderedDoc";
+import { escapeHtml, htmlDoc, jsonHtmlDoc, tableHtmlDoc, themeStyle } from "../../../server/files/renderedDoc";
+import { parseDelimited, delimiterForExtension } from "../../../common/delimited";
 
 describe("escapeHtml", () => {
   it("escapes everything that can break out of text or an attribute", () => {
@@ -69,6 +70,13 @@ describe("delimiterForExtension", () => {
 });
 
 describe("parseDelimited", () => {
+  it("drops a leading byte-order mark", () => {
+    expect(parseDelimited("\uFEFFa,b\n1,2", ",")).toEqual([
+      ["a", "b"],
+      ["1", "2"],
+    ]);
+  });
+
   it("splits plain rows and fields", () => {
     expect(parseDelimited("a,b\n1,2", ",")).toEqual([
       ["a", "b"],

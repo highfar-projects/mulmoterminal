@@ -441,15 +441,24 @@ function setRightPane(pane: RightPane | null, uid: number | null): void {
 // below means the cell asked for is never the one already enlarged, so the toggle cannot collapse
 // the zoom out from under a drawing. It reaches a single-terminal grid too — that used to be
 // refused (#374), which made the pane unreachable there; see toggleExpand in gridTabs.ts.
+/** The Canvas of the cell the files pane is beside, after the pane put a card on it. */
+function openPaneCellCanvas(): void {
+  if (paneCellUid.value !== null) void openCanvasFor(paneCellUid.value);
+}
+
 async function openCanvasFor(uid: number, enlarge = true, stillWanted?: () => boolean): Promise<void> {
   if (filesOpen.value && (await filesPane.value?.flush()) === false) return;
   if (stillWanted && !stillWanted()) return;
   if (props.expandedUid !== uid) {
     if (!enlarge) return;
     emit("toggle-expand", uid);
-    // Nothing to re-ask: the enlargement re-runs the watch that takes `canvasHasCard` in the
-    // first place.
-  } else if (mayHaveGainedACard()) await adoptStoredCard();
+  }
+  // Asked even after an enlargement: the watch that takes `canvasHasCard` re-runs only when the
+  // pane's cell CHANGES, and a files pane already beside this tile makes it the same cell before
+  // and after — so a card the pane just seeded was never seen, and the Canvas said "not enabled".
+  // `setRightPane` below names `uid`, so a zoom that walks while this is asked records the Canvas
+  // for the cell asked about, never for the one the user walked to.
+  if (mayHaveGainedACard()) await adoptStoredCard();
   // Named rather than left to default: the enlargement above is the PARENT's to apply, so
   // `expandedUid` is still the previous cell when this runs.
   setRightPane("canvas", uid);
@@ -1793,6 +1802,7 @@ function onRosterDragLeave(event: DragEvent) {
           class="border-l border-border bg-deep"
           @close="setFilesOpen(false)"
           @insert-text="insertIntoPaneCell"
+          @open-canvas="openPaneCellCanvas"
         >
           <!-- Which directory the tree is actually rooted at. It normally follows the enlarged
                cell, but declining a re-root leaves it behind — and then this is the only thing

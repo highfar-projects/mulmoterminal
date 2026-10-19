@@ -30,7 +30,7 @@ vi.mock("../../../src/components/FilesPane.vue", () => ({
   default: {
     name: "FilesPane",
     props: ["cwd", "requestedPath", "initialState", "canvasTarget", "viewModeSession"],
-    emits: ["close", "dirty"],
+    emits: ["close", "dirty", "open-canvas"],
     setup: (_p: unknown, { expose, slots }: { expose: (e: Record<string, unknown>) => void; slots: { title?: () => VNode[] } }) => {
       expose({ reload: paneStub.reload, flush: paneStub.flush, snapshot: paneStub.snapshot });
       return () => h("div", { class: "stub-files-pane" }, slots.title?.());
@@ -1514,6 +1514,55 @@ describe("a card seeded for the enlarged cell", () => {
     await flushPromises();
 
     expect(w.findComponent({ name: "GuiPanel" }).props("unavailable")).toBeNull();
+  });
+
+  // The files pane's "Open as a spreadsheet" seeds a card for the cell it is beside and asks for
+  // that Canvas. Beside a TILE, the enlargement leaves the pane on the same cell, so the watch that
+  // takes `canvasHasCard` does not re-run and only openCanvasFor's own ask can see the card.
+  it("shows a card the files pane seeded for the tile it is beside", async () => {
+    let stored: unknown[] = [];
+    globalThis.fetch = vi.fn((url: RequestInfo | URL) => {
+      const u = String(url);
+      if (u.includes("/api/agent/toolResults/")) return Promise.resolve(ok({ toolResults: stored }));
+      if (u.includes("/api/tools")) return Promise.resolve(ok({ groups: [] }));
+      return Promise.resolve(ok({}));
+    }) as unknown as typeof fetch;
+
+    const w = mountGrid([cell(1, "s-one", "/work/a")], null);
+    await w.findComponent({ name: "TerminalCell" }).vm.$emit("open-files");
+    await flushPromises();
+    stored = [{ uuid: "u-1", toolName: "presentSpreadsheet" }];
+    w.findComponent({ name: "FilesPane" }).vm.$emit("open-canvas");
+    await flushPromises();
+    await w.setProps({ expandedUid: 1 });
+    await flushPromises();
+
+    expect(w.findComponent({ name: "GuiPanel" }).props("unavailable")).toBeNull();
+  });
+
+  // The ask is a round trip; if the zoom walks to another cell before it answers, the Canvas is
+  // recorded for the cell that asked, and does not open over the cell walked to.
+  it("does not open the Canvas over a cell the zoom walked to while it was asking", async () => {
+    let answer: (r: Response) => void = () => {};
+    globalThis.fetch = vi.fn((url: RequestInfo | URL) => {
+      const u = String(url);
+      if (u.includes("/api/agent/toolResults/s-one")) return new Promise<Response>((resolve) => (answer = resolve));
+      if (u.includes("/api/agent/toolResults/")) return Promise.resolve(ok({ toolResults: [] }));
+      if (u.includes("/api/tools")) return Promise.resolve(ok({ groups: [] }));
+      return Promise.resolve(ok({}));
+    }) as unknown as typeof fetch;
+
+    const w = mountGrid([cell(1, "s-one", "/work/a"), cell(2, "s-two", "/work/b")], null);
+    await w.findAllComponents({ name: "TerminalCell" })[0]?.vm.$emit("open-files");
+    await flushPromises();
+    w.findComponent({ name: "FilesPane" }).vm.$emit("open-canvas");
+    await flushPromises();
+    await w.setProps({ expandedUid: 2 });
+    await flushPromises();
+    answer(ok({ toolResults: [{ uuid: "u-1", toolName: "presentSpreadsheet" }] }));
+    await flushPromises();
+
+    expect(w.findComponent({ name: "GuiPanel" }).exists()).toBe(false);
   });
 });
 
