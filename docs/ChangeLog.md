@@ -8,6 +8,52 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@10.10.0 — 2026-10-19
+
+> **Setup guide:** [10.10.0 — Several machines on one phone, and charts that follow a spreadsheet](https://receptron.github.io/mulmoterminal/guide/en/v10.10.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.10.0.html))
+
+### Several machines under one Google account (#3106, #3092)
+
+- Each machine now has its own remote-host channel instead of every machine sharing `mulmoterminal`. The channel is decided once per account on that account's first connect and kept in `~/.mulmoterminal/remote-host.json`, one record per account, reused only when the uid and the hostname both match (`server/backends/remoteHost/hostIdentity.ts`, pure; `hostIdentityResolver.ts`, `hostIdentityFile.ts`).
+- A machine whose `users/{uid}/hosts/mulmoterminal` doc predates machine ids keeps `mulmoterminal`, so a one-machine user's phone pick and notification links are unchanged. Every other machine, a new account's first included, takes `mulmoterminal-<8 hex>`.
+- A resolution superseded by a newer one neither writes nor applies; writes are queued and merge with what is on disk; the file read is bounded and a read error other than "missing" refuses rather than minting a new id.
+- `currentHostId()` is per account and empty until decided: the session-activity publisher skips while it is empty and tears down every location it wrote for the account, and Web Push omits the host id.
+- Needs `@mulmoclaude/core` 5.12.0 (`resolveHostId`, `HostRunnerOptions.machine`). The phone's host list, the delete button and the 30-day cleanup ship in MulmoServer. The phone guide has a "More than one machine" section, including how to fix two machines already sharing one channel.
+
+### Charts follow a spreadsheet; the spreadsheet follows its file (#3099, #3096; #3105)
+
+- `@mulmoclaude/chart-plugin` 4.1.0 lets `presentChart` take a `source` range. `server/backends/plugins/chartSources.ts` implements its `sources.read` with the spreadsheet plugin's `readCalculatedRange`, accepting a workspace-absolute path as well as `artifacts/…`; `executeContextFor` passes `sources` to `presentChart` only.
+- `server/backends/files/fileChange.ts` watches workbook files under scope `chart` (#3099) and scope `spreadsheet` (#3105), and the chart view is wrapped in a runtime scope, so an open chart redraws and an open spreadsheet (plugin 4.2.0) re-reads when the file changes.
+- The data-analysis skill writes statistics as formulas and draws sheet data with `source`.
+
+### Workbook functions in the data-analysis flow (#3112, #3097)
+
+- `@gui-chat-plugin/spreadsheet` `^4.2.0`: workbook functions (JavaScript in the sheet's `functions`, run in QuickJS with no files, network or DOM, in a lazily loaded chunk) and new statistics functions.
+- The skill lists the 4.2.0 functions, prefers a workbook function over a pasted value for a method no built-in has, draws a regression line from a `TREND` / `FORECAST.LINEAR` column, and carries `functions` through re-presenting and keeping a skill. Guides gain "Functions of your own".
+
+### Open a CSV / TSV as a spreadsheet from the Files pane (#3111, #3110)
+
+- **Open as a spreadsheet (copy)** on a `.csv` / `.tsv` row reads the file through the pane's contained route, converts it to one `Data` sheet (`src/composables/csvSpreadsheet.ts`, pure: plain decimals become numbers, other text is kept, a leading `=` gets a `'`, over 5,000 rows is refused) and saves it with `presentSpreadsheet` onto the cell's Canvas. The CSV is never written.
+- `parseDelimited` / `delimiterForExtension` moved to `common/delimited.ts`; `CanvasCard` gains an optional `title`. `TerminalGrid.openCanvasFor` re-checks for a card after an enlargement, which had shown "Canvas is not enabled" for a just-seeded card.
+
+### The launch form suggests folders and refuses a missing one (#3102, #3098)
+
+- The Working directory field lists subdirectories after a one-second pause (Up/Down, Tab or click to take, Esc to close), from a new `GET /api/dir-suggest?path=` (`common/dirSuggest.ts`, `server/files/dirSuggestion.ts`, `server/files/dir-suggest-route.ts`).
+- A directory that does not exist disables the play button and Enter, using the same rule as the server's existing refusal; when the check cannot answer, the launch proceeds and the server decides as before.
+
+### Large CSVs are aggregated through a collection (#3109, #3104)
+
+- Above about 5,000 rows the data-analysis skill makes the CSV a read-only collection and aggregates it with `manageCollection queryItems` (DuckDB over the whole file); without `manageCollection`, a script streams the file. The guides gain "A large file".
+
+### Keep an analysis as your own skill (#3108, #3107)
+
+- The skill's new step 6 offers to save a satisfying analysis as a user skill (`~/.claude/skills/` or the project's `.claude/skills/`), generalised to any file of the same shape and checked against the original file before handing over. Names avoid the `mulmoterminal-` prefix and the skill never writes a `schema.json`.
+
+### Docs and dependencies
+
+- The spreadsheet guide walks through a full analysis with screenshots (#3103, #3101).
+- Dependency update (#3100): `jsdom` 30 (tests only), `@gui-chat-plugin/spreadsheet` 4.1.0, `@mulmochat-plugin/generate-image` 2.1.0, `@mulmoclaude/chart-plugin` 4.1.0, `@mulmoclaude/core` 5.11.4 (now 5.12.0 via #3106), `vue-i18n`, `eslint`, `knip`, `typescript` `^6.0.3`.
+
 ## mulmoterminal@10.9.0 — 2026-10-19
 
 > **Setup guide:** [10.9.0 — Spreadsheets on the Canvas, and a folder as a gallery](https://receptron.github.io/mulmoterminal/guide/en/v10.9.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.9.0.html))

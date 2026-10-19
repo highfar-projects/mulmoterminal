@@ -4,7 +4,7 @@ nav_title: Feature list
 layout: default
 parent: English
 nav_order: 6.5
-as_of: 10.9.0
+as_of: 10.10.0
 description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 9.1.0)."
 ---
 
@@ -20,6 +20,7 @@ Every capability MulmoTerminal has as of 9.1.0, one line each, grouped by area. 
 
 More: [Basics](basics.html)
 
+- The launch form's Working directory suggests subdirectories once typing pauses, and refuses a directory that does not exist (v10.10.0)
 - A cell whose agent ends on its own (`/exit`, Ctrl+C, a crash) closes itself and is listed under Reopen; a launch failure, a lost connection and a worktree cell keep it (v10.5.0)
 - A tile's History and Tools menus open their pane to the right of the tiled grid, without enlarging the cell (v10.4.0)
 - The launch directory may start with `~` (v8.5.0)
@@ -116,6 +117,7 @@ More: [Conversations](conversation.html)
 
 More: [Phone](phone.html)
 
+- Several machines under one Google account, each picked on the phone; offline ones can be removed there, and unused ones go after 30 days; the phone screen comes with a MulmoServer update (v10.10.0)
 - From a terminal on the phone, list every earlier session of its directory (every agent) and read one as a conversation, paged back on request; the phone screen comes with a MulmoServer update (v10.0.0)
 - A terminal on the phone opens its project's shared files with one button, and comes back from them (v9.1.0)
 - A project chooses which of its files (md / html / pdf / pictures) the phone may list and open, under `mobileFiles` in `.mulmoterminal.json`; the phone screen comes with a MulmoServer update (v9.0.0)
@@ -142,6 +144,7 @@ More: [Phone](phone.html)
 
 More: [Feature reference](features.html)
 
+- Open as a spreadsheet (copy) on a CSV or TSV puts a copy of it on the Canvas as a spreadsheet; the file is not changed (v10.10.0)
 - Open as gallery on a folder shows its pictures, videos, sounds and PDFs together; videos and sounds play in their tile, and a click shows one large (v10.9.0)
 - Preview or Canvas carries to the next file opened in the right pane, remembered per session (v10.9.0)
 - A copy button in the Files header puts the whole open file on the clipboard, unsaved edits included (v10.7.0)
@@ -292,6 +295,10 @@ More: [Configuration](config.html)
 
 More: [From a collection](from-collection.html) · [MulmoCast videos](mulmocast.html) · [Spreadsheets and charts](spreadsheet.html)
 
+- A chart can draw from a spreadsheet range and redraws when the sheet changes (presentChart `source`) (v10.10.0)
+- An open spreadsheet reads its file again when the agent or another program changes it (v10.10.0)
+- A workbook can carry functions of its own, written in JavaScript and run sealed off in the browser (v10.10.0)
+- /mulmoterminal-data-analysis writes statistics as formulas, aggregates a large CSV through a collection first, and can keep an analysis as your own skill (v10.10.0)
 - The agent puts a spreadsheet with live formulas on the Canvas; edited cells recalculate in place, and Excel downloads it (presentSpreadsheet) (v10.9.0)
 - The bundled /mulmoterminal-data-analysis skill turns a CSV or TSV into a spreadsheet and charts, with summary statistics (v10.9.0)
 - A MulmoScript open on the Canvas redraws when an editor, git or an agent changes the file (v10.5.0)
