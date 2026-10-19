@@ -456,6 +456,8 @@ async function openCanvasFor(uid: number, enlarge = true, stillWanted?: () => bo
   // Asked even after an enlargement: the watch that takes `canvasHasCard` re-runs only when the
   // pane's cell CHANGES, and a files pane already beside this tile makes it the same cell before
   // and after — so a card the pane just seeded was never seen, and the Canvas said "not enabled".
+  // `setRightPane` below names `uid`, so a zoom that walks while this is asked records the Canvas
+  // for the cell asked about, never for the one the user walked to.
   if (mayHaveGainedACard()) await adoptStoredCard();
   // Named rather than left to default: the enlargement above is the PARENT's to apply, so
   // `expandedUid` is still the previous cell when this runs.
