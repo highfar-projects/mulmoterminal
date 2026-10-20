@@ -55,6 +55,8 @@ export interface XtermTermState {
   /** How many terminals the manager has constructed for this state. The rebuild (#846) is
    *  otherwise invisible from outside: it swaps `c.term` for a fresh one behind the slot key. */
   constructed: number;
+  /** `term.unicode`, shared by every terminal built on this state: which width table is active. */
+  unicode: { activeVersion: string };
 }
 
 export function createXtermState(): { termState: XtermTermState; keyState: XtermKeyState } {
@@ -77,6 +79,7 @@ export function createXtermState(): { termState: XtermTermState; keyState: Xterm
       bufferCursorY: 0,
       onBufferChange: null,
       constructed: 0,
+      unicode: { activeVersion: "6" },
     },
     keyState: { handler: () => true },
   };
@@ -115,9 +118,8 @@ export function xtermModule(termState: XtermTermState, keyState: XtermKeyState) 
       // ensure() registers the mouse-tracking guards through this (#729); the guards' own behaviour
       // is covered against a REAL terminal in mouseTrackingGuard.spec.ts.
       parser = { registerCsiHandler: (...args: unknown[]) => termState.csiHandlers.push(args) };
+      unicode = termState.unicode;
       loadAddon() {}
-      // buildTerminal() switches the width table to Unicode 11 after loading its addon.
-      unicode = { activeVersion: "6" };
       registerLinkProvider() {}
       // Real xterm puts a hidden helper textarea inside the host, and the clipboard fallback finds
       // the copy target through it — a double that skipped it would let that path "pass" untested.

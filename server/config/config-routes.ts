@@ -32,7 +32,8 @@ import type { PlayfulEffects } from "../../common/playfulEffects.js";
 import type { PlayfulMedia } from "../../common/playfulMedia.js";
 import { systemTaskSettingsChanged } from "./system-task-settings.js";
 import { setAccountsProvider } from "../session/session-home.js";
-import { setTmuxPrefix } from "../infra/process/tmux.js";
+import { setTmuxPrefix, tmuxIsPsmux } from "../infra/process/tmux.js";
+import { terminalUnicodeVersionFor } from "../../common/terminalUnicode.js";
 import type { TokenRotation } from "../../common/tokenRotation.js";
 import { installBundledSkills } from "../infra/fs/install-bundled-skills.js";
 import type { SystemTaskSwitches } from "../backends/scheduler/system-tasks.js";
@@ -536,26 +537,40 @@ export function effectiveConfigResponse(config: AppConfig, cwd: string, argvAgen
   return { cwd, ...toPublicAppConfig(config), defaultAgent: argvAgent ?? config.defaultAgent };
 }
 
+// What GET /api/config carries beside the config: facts about THIS server, not settings.
+//
+// `worktreesRoot` rides along with `home`: a runtime fact about THIS server rather than
+// anything the user configured, and the browser cannot work it out — MULMOTERMINAL_HOME can
+// move it. Without it the launcher cannot tell a worktree we created from a directory that
+// merely looks like one, and it must not record ours as a working-directory preset (#1542).
+//
+// CANONICAL, like the one `worktree-env.ts` compares against: the browser can only match this
+// lexically, and the cwd it matches it to came from `git worktree list` — i.e. realpathed. A
+// MULMOTERMINAL_HOME behind a symlink would otherwise never match, and the feature would
+// silently do nothing.
+// `storiesRoots` rides along for the same reason as `worktreesRoot`: a runtime fact about THIS
+// server that the browser cannot work out. Read from the backend rather than derived here —
+// the id is what the plugin REGISTERED, and re-deriving it would answer differently once a
+// workspace symlink is retargeted, handing out a root nothing serves (CodeRabbit on #1934).
+// Its `path` is canonical for the other half of the same problem: the browser compares
+// lexically (`dirPathKey`), so a symlinked spelling would never match the file tree.
+// `terminalUnicodeVersion` is the same kind of fact: which width table the browser's xterm must
+// count with to agree with the tmux on this server (see common/terminalUnicode.ts). Read from
+// the cache tmuxAvailable() filled at boot, so a request never spawns `tmux -V`.
+function serverFacts() {
+  return {
+    home: os.homedir(),
+    worktreesRoot: canonicalPath(worktreesRootDir()),
+    storiesRoots: registeredStoriesRoots(),
+    terminalUnicodeVersion: terminalUnicodeVersionFor(tmuxIsPsmux()),
+  };
+}
+
 export function mountConfigRoutes(app: Express, claudeCwd: string, onCwdPresetsChanged?: CwdPresetsChanged): void {
   const configResponse = () => effectiveConfigResponse(config, claudeCwd);
 
   app.get("/api/config", (_req, res) => {
-    // `worktreesRoot` rides along with `home`: a runtime fact about THIS server rather than
-    // anything the user configured, and the browser cannot work it out — MULMOTERMINAL_HOME can
-    // move it. Without it the launcher cannot tell a worktree we created from a directory that
-    // merely looks like one, and it must not record ours as a working-directory preset (#1542).
-    //
-    // CANONICAL, like the one `worktree-env.ts` compares against: the browser can only match this
-    // lexically, and the cwd it matches it to came from `git worktree list` — i.e. realpathed. A
-    // MULMOTERMINAL_HOME behind a symlink would otherwise never match, and the feature would
-    // silently do nothing.
-    // `storiesRoots` rides along for the same reason as `worktreesRoot`: a runtime fact about THIS
-    // server that the browser cannot work out. Read from the backend rather than derived here —
-    // the id is what the plugin REGISTERED, and re-deriving it would answer differently once a
-    // workspace symlink is retargeted, handing out a root nothing serves (CodeRabbit on #1934).
-    // Its `path` is canonical for the other half of the same problem: the browser compares
-    // lexically (`dirPathKey`), so a symlinked spelling would never match the file tree.
-    res.json({ ...configResponse(), home: os.homedir(), worktreesRoot: canonicalPath(worktreesRootDir()), storiesRoots: registeredStoriesRoots() });
+    res.json({ ...configResponse(), ...serverFacts() });
   });
 
   // The update notice for the header's "update available" badge, from the check the server runs

@@ -35,6 +35,7 @@ import { ClipboardAddon, type IClipboardProvider } from "@xterm/addon-clipboard"
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { guardMouseClicks, guardMouseTracking, type WheelScrollControl } from "./terminalMouseInput";
 import { getTerminalScrollSpeed } from "./useTerminalScrollSpeed";
+import { getTerminalUnicodeVersion } from "./terminalUnicodeVersion";
 import { scrollsToBottomOnSubmit } from "./useScrollToBottomOnSubmit";
 import { isTypedInput } from "./terminalUserInput";
 import { bufferIsShort, readBufferShape } from "./terminalBufferHealth";
@@ -420,13 +421,10 @@ function buildTerminal(swallowedMouseModes: Set<number>, font: TerminalFont): Te
   // OSC 52 clipboard: Claude Code auto-copies the selection via OSC 52 — without this
   // addon xterm ignores it, so the copy silently never reaches the browser clipboard.
   term.loadAddon(new ClipboardAddon(undefined, clipboardProvider));
-  // Count an emoji (`✅`, `👉`) two cells wide, as Claude Code and tmux/psmux do. xterm's default
-  // Unicode 6 table counts it as one, so any repaint that skips cells it thinks are unchanged lands
-  // one column off per emoji. On psmux every scroll repaints that way, and a checklist of emoji
-  // lines broke apart into a staircase. The server's headless emulators use the same table
-  // (server/session/unicodeWidth.ts). Ambiguous-width characters stay one cell in both tables.
+  // Loading the addon only registers the "11" table; which one is active is the server's answer
+  // (see common/terminalUnicode.ts), and stays xterm's default "6" unless it says otherwise.
   term.loadAddon(new Unicode11Addon());
-  term.unicode.activeVersion = "11";
+  term.unicode.activeVersion = getTerminalUnicodeVersion();
   const host = document.createElement("div");
   host.style.width = "100%";
   host.style.height = "100%";
@@ -995,3 +993,11 @@ export function setScrollSpeed(speed: number) {
 // a per-component watch would run the same global update once per open terminal. This manager
 // outlives every component, which is exactly the lifetime the watch wants.
 watch(getTerminalScrollSpeed, setScrollSpeed);
+
+// Watched at module scope for the scroll speed's reason: one value for every terminal. The config
+// usually arrives after the first terminals are built.
+watch(getTerminalUnicodeVersion, (version) => {
+  conns.forEach((c) => {
+    c.term.unicode.activeVersion = version;
+  });
+});

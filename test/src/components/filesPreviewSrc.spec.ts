@@ -135,6 +135,20 @@ describe("previewSrcFor", () => {
     expect(src).not.toContain("token-1");
   });
 
+  // #3137. JSON through its own route, themed and versioned as a table is, with no token either.
+  it("renders a JSON file through the json route, themed and versioned", () => {
+    const theme = { bg: "#1a1a2e", fg: "#e6e6f0", muted: "#a0a0b8", subtle: "#232342", border: "#33335a", link: "#4a8cff" };
+    const src = previewSrcFor("json", "/proj", "data/x.json", "v1", theme, "token-1");
+    const [route, query] = src.split("?");
+    expect(route).toBe("/api/files/browse/json");
+    const params = new URLSearchParams(query);
+    expect(params.get("path")).toBe("data/x.json");
+    expect(params.get("v")).toBe("v1");
+    expect(params.get("bg")).toBe("#1a1a2e");
+    expect(src).not.toContain("embed");
+    expect(src).not.toContain("token-1");
+  });
+
   it("changes a table's src when the file does", () => {
     expect(previewSrcFor("table", "/proj", "a.csv", "v1", null)).not.toBe(previewSrcFor("table", "/proj", "a.csv", "v2", null));
     expect(previewSrcFor("table", "/proj", "a.csv", null, null)).toBe("/api/files/browse/table?cwd=%2Fproj&path=a.csv");

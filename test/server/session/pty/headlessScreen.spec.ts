@@ -1,11 +1,12 @@
 // @vitest-environment node
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 import { renderScreen, type HeadlessScreenInput } from "../../../../server/session/pty/headlessScreen.js";
 import { rowsToScreen } from "../../../../server/session/pty/screen-rows.js";
+import * as tmux from "../../../../server/infra/process/tmux.js";
 
 const ESC = String.fromCharCode(0x1b);
 
@@ -114,12 +115,22 @@ describe("renderScreen", () => {
     expect(rows[0].full).toBe(false);
   });
 
-  // Claude Code and tmux/psmux count an emoji two cells wide, and a repaint addresses the cells
-  // after it by that count. psmux repaints only the cells it thinks changed, so "z" is placed at
-  // column 3 to replace "b". On xterm's default Unicode 6 table the emoji is one cell and the row
-  // would read "👉abz".
-  it("counts an emoji two cells wide, as the program that drew it does", async () => {
+  // Behind psmux, Claude Code and psmux count an emoji two cells wide, and a repaint addresses the
+  // cells after it by that count: psmux repaints only the cells it thinks changed, so "z" is placed
+  // at column 3 to replace "b". The browser counts the same way there (common/terminalUnicode.ts),
+  // and so must this screen. On a real tmux both keep xterm's default Unicode 6 table, where the
+  // emoji is one cell and the row reads "👉abz".
+  it("counts an emoji two cells wide behind psmux, as the program that drew it does", async () => {
+    const psmux = vi.spyOn(tmux, "tmuxIsPsmux").mockReturnValue(true);
     const buffer = `👉ab${ESC}[1;4Hz`;
     expect(await screenOf({ buffer, cols: 20, rows: 2 })).toBe("👉az");
+    psmux.mockRestore();
+  });
+
+  it("keeps the browser's default width table on a real tmux", async () => {
+    const psmux = vi.spyOn(tmux, "tmuxIsPsmux").mockReturnValue(false);
+    const buffer = `👉ab${ESC}[1;4Hz`;
+    expect(await screenOf({ buffer, cols: 20, rows: 2 })).toBe("👉abz");
+    psmux.mockRestore();
   });
 });

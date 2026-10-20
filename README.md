@@ -324,27 +324,28 @@ npx github:highfar-projects/mulmoterminal#main     # the same, pinned to the new
 
 ### Windows: persistent sessions with psmux
 
-[psmux](https://github.com/psmux/psmux) is a native Windows tmux. It installs itself as `tmux.exe`,
-so MulmoTerminal finds it on `PATH` and uses it with no configuration:
+Upstream now runs on psmux itself — install it, the 3.4.0+ requirement, the `PSMUX_VT_INPUT` route,
+emoji widths and Volta's marker are in [psmux on Windows](#psmux-on-windows):
 
 ```powershell
-winget install psmux
+winget install -e --id marlocarlo.psmux
 ```
 
-Restart MulmoTerminal; the startup log says `[tmux] persistence on`, and sessions now survive a
-server restart. Measured on psmux 3.3.8, and still being tried out:
+**What this fork adds on top of upstream's psmux support**, measured from psmux 3.3.8 on:
 
-- **What this fork adjusts for psmux**: it does not drop surviving panes into copy-mode on start,
-  reads psmux's `list-clients` output and its one-row-short window, leaves out the `terminal-features`
-  line psmux rejects, sends `・` and `①` (characters with no key of their own) as key events psmux
-  passes on, and keeps Volta's `_VOLTA_TOOL_RECURSION` out of cells, where it stopped every `node` —
-  a Claude session's stdio MCP servers included.
-- **Scrolling over Claude Code**: the wheel can arrive as arrow keys and walk the prompt history
-  ([psmux#657](https://github.com/psmux/psmux/issues/657), fixed after 3.3.8). Until a release with
-  the fix: press `Ctrl+B` then `[` to enter psmux's copy-mode, scroll with the wheel or PageUp /
-  PageDown, and `q` (or the banner's button) to return.
-- **Not available on psmux**: restoring a pane's mouse modes after a long reattach replay, and
-  repainting one client on demand. psmux also leaves each cell's bottom row blank.
+- does not drop surviving panes into copy-mode on start, and restores a pane's mouse modes on
+  reattach so the wheel keeps scrolling;
+- reads psmux's `list-clients` output and its one-row-short window, and leaves out the
+  `terminal-features` line psmux rejects;
+- sends Escape, `・` and `①` (characters with no key of their own) as key events psmux passes on,
+  and, on a psmux older than 3.4.0 (no VT input route), waits for psmux to hand over a paste
+  before an auto-run Enter;
+- traces what the server does to psmux sessions (`server/infra/tmux-trace.ts`), to find who ends one.
+
+**Scrolling over Claude Code**: the wheel can arrive as arrow keys and walk the prompt history
+([psmux#657](https://github.com/psmux/psmux/issues/657), fixed after 3.3.8). Until a release with the
+fix: press `Ctrl+B` then `[` to enter psmux's copy-mode, scroll with the wheel or PageUp / PageDown,
+and `q` (or the banner's button) to return. psmux also leaves each cell's bottom row blank.
 
 Without psmux, Windows runs every session on a plain PTY, as upstream does.
 
@@ -386,7 +387,7 @@ Needs **Node ≥ 22.12**, plus these CLIs — on your `PATH`, or named by the ma
 | **Required** | `git` | [worktree isolation](#git-worktrees--pull-requests), each cell's branch / unsaved-dot / diff readout, the PR footer | `brew install git` · `sudo apt install git` · `sudo dnf install git` · Windows: [git-scm.com](https://git-scm.com/download/win) |
 | **Required** | `gh` | the cross-repo **PRs & Issues** view and one-click PR creation — it uses your `gh` login, so no token is stored | [cli.github.com](https://cli.github.com), then `gh auth login` |
 | Optional | `glab` | the same for **GitLab** projects (#981) — gitlab.com, and a self-hosted instance you declare in `gitlabHosts` (#1332). Same arrangement: the CLI holds the credentials, this app stores no token | `brew install glab`, then `glab auth login` (self-hosted: `glab auth login --hostname gitlab.example.com`) |
-| Recommended | `tmux` — the **latest release** (3.8 as of 2026-10-10); older ones are not supported | [session persistence](#session-persistence-tmux) — terminals survive a server restart | `brew install tmux` · `sudo apt install tmux` · `sudo dnf install tmux` · Windows: `winget install psmux` on this fork ([This fork](#windows-persistent-sessions-with-psmux)); without it, plain PTYs |
+| Recommended | `tmux` — the **latest release** (3.8 as of 2026-10-10); older ones are not supported | [session persistence](#session-persistence-tmux) — terminals survive a server restart | `brew install tmux` · `sudo apt install tmux` · `sudo dnf install tmux` · Windows: `winget install -e --id marlocarlo.psmux` (3.4.0+, see [psmux on Windows](#psmux-on-windows)) |
 | Optional | any other agent CLI | a cell can run **Codex**, **Antigravity** (`agy`), **Grok**, **Muse**, **GitHub Copilot CLI** or **Cursor CLI** instead of Claude — install only the ones you use, and a missing one simply fails to start that cell. What each can do is [the capability matrix](docs/agent-capability-matrix.md); how to install and pick one is the [agents guide](https://receptron.github.io/mulmoterminal/guide/en/agents.html) | e.g. `npm i -g @openai/codex` |
 | Optional | `ffmpeg` | video rendering from the [mulmo-script panel](#wiki-collections--the-gui-panel) (its plugin ships enabled) | `brew install ffmpeg` · `sudo apt install ffmpeg` · `sudo dnf install ffmpeg` |
 | Optional | `remotion` packages | MulmoCast's `remotion` beats, where Claude Code writes each scene as a Remotion component (mulmocast 2.13.0). Not a dependency of this app: install them yourself, into your home directory so an `npx` upgrade does not lose them — `init` reports whether mulmocast can see them | [Remotion scenes](https://receptron.github.io/mulmoterminal/guide/en/mulmocast.html#remotion) · [日本語](https://receptron.github.io/mulmoterminal/guide/ja/mulmocast.html#remotion) |
@@ -802,10 +803,36 @@ things MulmoTerminal asks tmux for, such as restoring bracketed paste after a re
 newer. A distribution's package is often older, so check `tmux -V` and take a newer build from
 [tmux releases](https://github.com/tmux/tmux/releases) when it is.
 
-On Windows there's no native tmux, so sessions use the non-persistent fallback — on this fork,
-install **psmux** ([This fork](#windows-persistent-sessions-with-psmux)) or run the server under
-**WSL** if you want persistence. Nothing else is required: MulmoTerminal
-detects `tmux` on `PATH` at startup and uses it automatically when present.
+Nothing else is required: MulmoTerminal detects `tmux` on `PATH` at startup and uses it
+automatically when present.
+
+#### psmux on Windows
+
+Windows has no native tmux. [psmux](https://github.com/psmux/psmux), a native Windows
+tmux, gives the same persistence — sessions survive a server restart, a crash and **Quit**, and
+come back on the next start:
+
+```powershell
+winget install -e --id marlocarlo.psmux   # installs itself as tmux.exe
+tmux -V                              # second line: psmux 3.4.0 or newer
+```
+
+Then restart MulmoTerminal; the server log says `[tmux] running on psmux <version>`. Use **psmux
+3.4.0 or newer**: older releases drop an auto-run prompt's Enter into the paste (the prompt is
+typed but never sent) and lose a double Esc, and the server warns at startup when it finds one.
+What MulmoTerminal does differently behind psmux, and only there:
+
+- starts each psmux client with `PSMUX_VT_INPUT=1`, so a paste keeps its markers and the Enter
+  after it is not taken into it. `PSMUX_VT_INPUT=0` in the server's environment turns this off;
+- counts emoji two cells wide in the browser (Unicode 11), as Claude Code and psmux do — otherwise
+  each emoji shifts the rest of its row by one column;
+- keeps Volta's `_VOLTA_TOOL_RECURSION` out of psmux's environment, so `node` in a cell resolves through
+  Volta's shim again.
+
+psmux imitates tmux 3.4, so the few things that need tmux 3.7+ (such as restoring bracketed paste
+after a reload) are not available on it. A Windows restart still ends every session, as a reboot
+does with tmux. Without psmux nothing changes: sessions use the non-persistent fallback, or run the
+server under **WSL**.
 
 ---
 
@@ -1408,7 +1435,9 @@ tree; clicking a file opens it in a **CodeMirror** editor (Markdown / JS-TS / JS
 highlighting, everything else as plain text). Markdown files get a **Preview** toggle
 that renders via the server's sandboxed `…/md` HTML, with a ` ```mermaid ` fence drawn as a diagram
 (its code block stays under it, folded, so the copy button is still there); a `.csv` / `.tsv` previews as a table (the
-same `…/table` document a clicked path opens, in the app's colours), and an `.html` / `.svg` as the
+same `…/table` document a clicked path opens, in the app's colours), a `.json` as indented JSON (the
+`…/json` document, likewise; only a `.json` whose top level has a `$mulmocast` key is offered the
+**Canvas** view as a MulmoScript), and an `.html` / `.svg` as the
 page or picture it is. **Save** (or ⌘/Ctrl-S) writes back. **History** lists the versions the pane
 kept of the file (in `~/.mulmoterminal/backups`, taken when it is opened or reloaded here and before a save
 here replaces it — the newest few), to compare with the buffer or restore as an undoable edit (unsaved edits

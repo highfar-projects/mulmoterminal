@@ -51,14 +51,20 @@ as a number it worked out. Change a value and everything that depends on it chan
 
 **A chart.** `presentChart` draws charts with ECharts: line, bar, area, scatter, pie, heatmap,
 candlestick, sankey and more. Several charts can be shown together. **PNG** on each chart downloads it as
-an image.
+an image. As of chart plugin 4.2.0 the agent also knows how to write the charts an analysis asks for:
+boxplots, Pareto charts, two value axes, waterfalls, a fitted line over a scatter, average lines and
+calendar heatmaps among them. From 4.3.0 it can also fit a curve or bin a histogram from a sheet's raw
+columns, so those charts follow the sheet too. From 4.4.0 it can group points into clusters, box each
+column of a sheet, and colour a map of Japan or the world (prefecture and country names in Japanese
+work too). Cards follow a dark theme, can sit side by side, and also download as **SVG** and **CSV**.
+If a chart cannot be drawn, the agent is told why and fixes it before anything is shown.
 
 ![The chart card: monthly coffee and pastry sales as lines, with the monthly total as bars](../images/spreadsheet-chart.png)
 
 **A chart can follow the spreadsheet.** When the agent draws a chart from a range of the sheet, the
 chart shows that range calculated, and draws itself again when the sheet is saved: change a number and
 the chart moves with it. The card says which range it comes from ("From the spreadsheet: Summary!A1:C13").
-A chart the agent drew from numbers it passed directly (a histogram, a fitted line) does not follow the
+A chart the agent drew from numbers it passed directly (a curve its script worked out, say) does not follow the
 sheet; ask the agent to draw it again (see [Changing the numbers yourself](#changing-the-numbers-yourself)).
 [Analysing data from start to finish](#analysing-data-from-start-to-finish) shows it working.
 
@@ -71,6 +77,8 @@ one sheet named `Data`, the file's rows as they are, its first row included.
 - It is a **copy**, saved under `artifacts/spreadsheets/`. Editing it never changes the CSV.
 - A field that is a plain number (`1200`, `-3.5`) becomes a number, so formulas and charts can use
   it. Anything else stays the text the file holds, `1,200` and dates included.
+- A date stays text too, but date functions (`YEAR(A2)`, `DATEDIF`, `EOMONTH`) read `2025-01-15`,
+  `2025-01`, `Jan 2025` and `2025年1月` as dates. A month alone is its first day.
 - A field that starts with `=` stays text, with a `'` in front, rather than running as a formula.
 - Up to 5,000 rows. A larger file is refused with a note: ask the agent to analyse it instead, and
   it aggregates the file (see [A large file](#analysis-large-file)).
@@ -109,7 +117,7 @@ compute the numbers with a script, rather than in its head.
 
 ## Analysing data from start to finish {#analysing-data-from-start-to-finish}
 
-Hand the agent a CSV and say what you want to know. You write no code and do not reshape the data:
+Hand the agent a CSV, TSV or Excel file and say what you want to know. You write no code and do not reshape the data:
 the agent reads the file with a Node script, works out the statistics, and puts a live spreadsheet
 and charts on the Canvas. The bundled `mulmoterminal-data-analysis` skill carries the procedure.
 You do not have to name it.
@@ -126,13 +134,18 @@ Name the file and what you want to compare:
 
 > Look at survey.tsv: does satisfaction depend on age group?
 
+A plain question works too. The answer comes with the spreadsheet and charts behind it:
+
+> Can we say B did better than A in ab_test.csv?
+
 Some things that help:
 
 - **Say what you want to compare** (temperature against sales, weekdays against weekends). The agent
   picks the statistics and charts from that.
 - **Clear column names help.** If a column's meaning is unclear (`amt`, `v2`), the agent asks once
   rather than guessing. Answer in a word.
-- **Any delimited text works**: CSV, TSV, an export from another tool. A large file is fine. The
+- **Any delimited text works**: CSV, TSV, an export from another tool. So does an Excel file
+  (`.xlsx`); the agent says which worksheets it has and which one it read. A large file is fine. The
   agent reads only its first lines into the conversation and lets a script read the rest.
 
 ### What the agent does {#analysis-steps}
@@ -143,7 +156,8 @@ Some things that help:
 2. **Computes the statistics with a script** (`simple-statistics` in Node), so no number comes from
    the model reading the data.
 3. **Builds the spreadsheet** with the statistics as formulas (below), and checks each formula
-   against the script's number before showing it.
+   against the script's number before showing it. If the Canvas reports a formula that calculates to
+   an error, the agent fixes it before telling you the spreadsheet is ready.
 4. **Draws charts from the spreadsheet**, so they follow it.
 5. **Tells you what it found, and where everything is.**
 
@@ -169,7 +183,7 @@ The agent tells you which ones they are.
 
 The series names come from the range's header row, and the categories from its first column. In the
 example, the regression line is drawn from a column of predicted values that is itself a formula,
-so the line moves with the data too. A chart that is not drawn from the sheet (a histogram's bins, say) has no
+so the line moves with the data too. A chart that is not drawn from the sheet (a curve its script worked out, say) has no
 "From the spreadsheet" line, and the agent tells you it does not follow the sheet.
 
 ### Change the data and watch {#analysis-change-and-watch}
@@ -225,10 +239,11 @@ works in a temporary directory of its own.
 
 Up to about 5,000 rows, every row goes onto the Data sheet. A larger file (a year of orders, a log)
 is **aggregated first**, and the sheet gets the aggregated table: sales per store, orders per
-month, and so on. Formulas and charts then work on that table exactly as above.
+month, and so on. Formulas and charts then work on that table exactly as above. A large Excel file
+is aggregated by a script.
 
-In the workspace, or in a project where **Workspace data** is switched on, the agent makes the file
-a read-only **collection** and lets the collection add it up. It reads the whole file, however
+In the workspace, or in a project where **Workspace data** is switched on, the agent makes a CSV or
+TSV a read-only **collection** and lets the collection add it up. It reads the whole file, however
 large, without loading it into the conversation:
 
 > Analyse data/sales-2025.csv. It has a row per order; I want sales by store and by month.
@@ -294,7 +309,7 @@ up or keep them in git like any other file.
 
 ## Functions you can use
 
-These are the functions the spreadsheet calculates, as of `@gui-chat-plugin/spreadsheet` 4.2.0. Any other
+These are the functions the spreadsheet calculates, as of `@gui-chat-plugin/spreadsheet` 4.2.5. Any other
 function shows `#NAME?` in its cell, unless the spreadsheet defines it itself (see
 [Functions of your own](#workbook-functions)).
 
@@ -306,7 +321,7 @@ function shows `#NAME?` in its cell, unless the spreadsheet defines it itself (s
 | Tests and distributions | `T.TEST` `TTEST` `T.DIST` `T.DIST.2T` `T.DIST.RT` `T.INV` `T.INV.2T` `NORM.DIST` `NORM.S.DIST` `NORM.INV` `NORM.S.INV` `CONFIDENCE.T` `CONFIDENCE.NORM` |
 | Maths | `ROUND` `ROUNDUP` `ROUNDDOWN` `FLOOR` `CEILING` `INT` `TRUNC` `ABS` `SIGN` `POWER` `SQRT` `MOD` `PI` `EXP` `LN` `LOG` `LOG10` |
 | Logic | `IF` `IFS` `AND` `OR` `NOT` `IFERROR` `IFNA` `TRUE` `FALSE` |
-| Lookup | `VLOOKUP` `HLOOKUP` `XLOOKUP` `INDEX` `MATCH` |
+| Lookup | `VLOOKUP` `HLOOKUP` `XLOOKUP` `INDEX` `MATCH` `ROW` `COLUMN` `ROWS` `COLUMNS` |
 | Text | `CONCATENATE` `CONCAT` `LEFT` `RIGHT` `MID` `LEN` `UPPER` `LOWER` `PROPER` `TRIM` `SUBSTITUTE` `REPLACE` `FIND` `SEARCH` `TEXT` `VALUE` `EXACT` |
 | Dates and times | `TODAY` `NOW` `DATE` `TIME` `YEAR` `MONTH` `DAY` `HOUR` `MINUTE` `SECOND` `WEEKDAY` `DAYS` `DATEDIF` `EDATE` `EOMONTH` `WORKDAY` `NETWORKDAYS` |
 | Finance | `PMT` `PV` `FV` `NPV` `IRR` `RATE` `NPER` `IPMT` `PPMT` |
@@ -317,6 +332,10 @@ names work too: `STDEV.S`, `STDEV.P`, `VAR.S`, `VAR.P`, `PERCENTILE.INC`, `QUART
 
 A formula with no number format shows a date only when its number comes from a date (a date function, or a
 date cell), so a total of 52,345 stays a number.
+
+Date formats are read the way Excel reads them, both in a cell's format and in `TEXT`: `yyyy-mm-dd`,
+`yyyy"年"m"月"d"日"`, `h:mm AM/PM` and the like, in either case. `TEXT(A2,"yyyy-mm")` gives `2025-01` for a date, and
+also for a date written as text.
 
 **Not available**: the `.EXC` spellings, whole-column references such as `A:A` (give a range such as
 `A2:A500`), and functions that return several cells at once (`FREQUENCY`, `LINEST`).

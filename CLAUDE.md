@@ -61,6 +61,25 @@ GitHub's own Octicons through `GithubIcon.vue` (path data in `githubIcons.ts`), 
 - Compact status **notation** stays text, not icons: `⎇ main ●3 ↑2`, `●` unsaved dots, `−12` diff
   counts. Icons there are bigger and slower to scan.
 
+## Never stop a tmux server you did not name by absolute path
+You are almost certainly running INSIDE a MulmoTerminal cell, so the maintainer's live tmux server
+(`-L mulmoterminal`) holds your own session and every other cell they have open. Killing it does
+not crash the app: every cell drops back to its not-started screen, which reads as a MulmoTerminal
+bug and has been chased as one.
+
+When cleaning up a test server, only `tmux -S <absolute socket path> kill-server` (or
+`kill-session`) is safe. Each of these has hit the live server:
+
+- **`tmux kill-server` with no `-L`/`-S`** — inside a cell `$TMUX` names the live socket, and tmux
+  uses it. `HOME=… tmux …` changes nothing: only MulmoTerminal derives its socket from HOME
+  (`server/config/home-scope.ts`), the bare tmux client does not.
+- **`TMUX_TMPDIR=<dir> tmux -L mulmoterminal …`** — when `<dir>` does not exist, tmux silently falls
+  back to `/tmp/tmux-<uid>/`, where the live socket is.
+- **`tmux -L mulmoterminal …`** in any form — that IS the live server's name.
+
+To run a test server, start it with a scratch `HOME`; it then uses `-L mulmoterminal-<hash>`, and
+you take the socket path for cleanup from what it actually created under `/tmp/tmux-<uid>/`.
+
 ## Layout
 - `server/` — backend (PTY sessions, config, agents, backends). Ships user-facing skills in `server/skills/`.
 - `src/` — Vue web UI (App.vue, components, composables, router).

@@ -1302,10 +1302,10 @@
     three-bvh-csg "^0.0.18"
     three-mesh-bvh "0.9.15"
 
-"@gui-chat-plugin/spreadsheet@^4.2.0":
-  version "4.2.0"
-  resolved "https://registry.yarnpkg.com/@gui-chat-plugin/spreadsheet/-/spreadsheet-4.2.0.tgz#58fe0af84698d8cb5791d9cfcc29d3e7632883c5"
-  integrity sha512-/1jj6gdeYEFSW5zZ2fVLgRh/dIz3k7SY7eIK7CMisUCrxoC5ijYNa7NVk78zfmwG5oWWPgX1B77cN+8G7DUK1Q==
+"@gui-chat-plugin/spreadsheet@^4.2.5":
+  version "4.2.5"
+  resolved "https://registry.yarnpkg.com/@gui-chat-plugin/spreadsheet/-/spreadsheet-4.2.5.tgz#a7bab21c0456e49b372039dbdd78ab5f0c1a940b"
+  integrity sha512-yIt0/mawA8P7JJ6H9B0BCPINsu8qWb/rPXued6c+ZQRlFKvCHuQjQL8YZ/cr4KpJvpuZMJ0pbTOA+TbaQUAl7w==
   dependencies:
     "@jitl/quickjs-singlefile-mjs-release-sync" "^0.32.0"
     quickjs-emscripten-core "^0.32.0"
@@ -1960,10 +1960,13 @@
   resolved "https://registry.yarnpkg.com/@mulmoclaude/accounting-plugin/-/accounting-plugin-4.0.2.tgz#5631f35c4bcff34c86e3eff7831f2a0d21ec39d5"
   integrity sha512-We3HhS2OfYDfPwT9DbX4NSw2m+UYFcYHb6KfKZp4yQwgh7tYaTo1H8z7AMNVnfPOJn6ABv/O9VjSnLXeQ+xTlw==
 
-"@mulmoclaude/chart-plugin@^4.1.0":
-  version "4.1.0"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/chart-plugin/-/chart-plugin-4.1.0.tgz#26072f2b7a00b473f4de7e9336dfb07eeaf43bab"
-  integrity sha512-b04HxzdWAp0OUHG0AfPJBTeLQDASLa/T+nFARwDfp65PCkKJeS3GI1SiM9u48+PJcpT3UTUJypWwxgCa4nxGZQ==
+"@mulmoclaude/chart-plugin@^4.4.0":
+  version "4.4.0"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/chart-plugin/-/chart-plugin-4.4.0.tgz#f0ccdd1f48d271d0b7bcc01dc51bf5a745ba0a64"
+  integrity sha512-k9auXA55BQMvVM7iAi0eoPJhsDngPSDCAcnAyz/jTpGiXrJzfGAOOWAtkUox5gacJaUg6IQRGUzYB/LtsxhAyw==
+  dependencies:
+    echarts-gl "^2.1.0"
+    echarts-stat "^1.2.0"
 
 "@mulmoclaude/collection-plugin@^5.5.0":
   version "5.5.0"
@@ -3810,6 +3813,11 @@ chromium-bidi@157.0.8090-0:
     mitt "^3.0.1"
     zod "^4.6.5"
 
+claygl@^1.2.1:
+  version "1.3.0"
+  resolved "https://registry.yarnpkg.com/claygl/-/claygl-1.3.0.tgz#7a6e2903210519ac358848f5d78070ed211685f3"
+  integrity sha512-+gGtJjT6SSHD2l2yC3MCubW/sCV40tZuSs5opdtn79vFSGUgp/lH139RNEQ6Jy078/L0aV8odCw8RSrUcMfLaQ==
+
 cli-cursor@^5.0.0:
   version "5.0.0"
   resolved "https://registry.yarnpkg.com/cli-cursor/-/cli-cursor-5.0.0.tgz#24a4831ecf5a6b01ddeb32fb71a4b2088b0dce38"
@@ -4581,6 +4589,19 @@ ecdsa-sig-formatter@1.0.11, ecdsa-sig-formatter@^1.0.11:
   integrity sha512-nagl3RYrbNv6kQkeJIpt6NJZy8twLB/2vtz6yN9Z4vRKHN4/QZJIEbqohALSgwKdnksuY3k5Addp5lg8sVoVcQ==
   dependencies:
     safe-buffer "^5.0.1"
+
+echarts-gl@^2.1.0:
+  version "2.1.0"
+  resolved "https://registry.yarnpkg.com/echarts-gl/-/echarts-gl-2.1.0.tgz#612731b74f0d6c452b9be77644cf2116430e23fb"
+  integrity sha512-GxzAPTYJyOANbu7InkdGV7QLLpVyuQWNvN1yyEEIiqgM11ilAO2OkvPNgRdf854R9ZPt/C1HAgjO8Udrj61lOQ==
+  dependencies:
+    claygl "^1.2.1"
+    zrender "^5.1.1 || ^6.0.0"
+
+echarts-stat@^1.2.0:
+  version "1.2.0"
+  resolved "https://registry.yarnpkg.com/echarts-stat/-/echarts-stat-1.2.0.tgz#d1e7a05d1827724c5cde81f76ee1d75a901746a2"
+  integrity sha512-zLd7Kgs+tuTSeaK0VQEMNmnMivEkhvHIk1gpBtLzpRerfcIQ+Bd5XudOMmtwpaTc1WDZbA7d1V//iiBccR46Qg==
 
 echarts@^6.0.0:
   version "6.1.0"
@@ -8738,7 +8759,7 @@ zod-to-json-schema@^3.25.1:
   resolved "https://registry.yarnpkg.com/zod/-/zod-4.6.7.tgz#e806cf64a7f4e37635ce9f2f52c04c3766f75e5b"
   integrity sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==
 
-zrender@6.1.0:
+zrender@6.1.0, "zrender@^5.1.1 || ^6.0.0":
   version "6.1.0"
   resolved "https://registry.npmjs.org/zrender/-/zrender-6.1.0.tgz#c3ef06e6426d5c28865b7183035680d685e00136"
   integrity sha512-oEGMDB6pOP2S6OwRR4PdVv610zrjnA3Bh+JnSG12fYJlBKjtNAoEb5fSUoCOOINlH96I2fU38/A2UpRKs67xYQ==

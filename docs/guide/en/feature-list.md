@@ -4,7 +4,7 @@ nav_title: Feature list
 layout: default
 parent: English
 nav_order: 6.5
-as_of: 10.10.0
+as_of: 11.0.0
 description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 9.1.0)."
 ---
 
@@ -298,6 +298,7 @@ More: [From a collection](from-collection.html) · [MulmoCast videos](mulmocast.
 - A chart can draw from a spreadsheet range and redraws when the sheet changes (presentChart `source`) (v10.10.0)
 - An open spreadsheet reads its file again when the agent or another program changes it (v10.10.0)
 - A workbook can carry functions of its own, written in JavaScript and run sealed off in the browser (v10.10.0)
+- Analysis questions get an answer with a spreadsheet and charts behind it, and Excel files are read too (v11.0.0)
 - /mulmoterminal-data-analysis writes statistics as formulas, aggregates a large CSV through a collection first, and can keep an analysis as your own skill (v10.10.0)
 - The agent puts a spreadsheet with live formulas on the Canvas; edited cells recalculate in place, and Excel downloads it (presentSpreadsheet) (v10.9.0)
 - The bundled /mulmoterminal-data-analysis skill turns a CSV or TSV into a spreadsheet and charts, with summary statistics (v10.9.0)

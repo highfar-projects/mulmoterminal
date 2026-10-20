@@ -8,6 +8,30 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@11.0.0 — 2026-10-19
+
+> **Setup guide:** [11.0.0 — Ask your data a question](https://receptron.github.io/mulmoterminal/guide/en/v11.0.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v11.0.0.html))
+
+Analysis by conversation (#3090) is complete: a CSV, TSV or Excel file goes into a spreadsheet, is analysed with Node or with the sheet's own functions, is drawn as charts that follow the sheet, and a good analysis is kept as a skill. This release closes what a stress test of fifteen analysis requests found (#3113).
+
+### The data-analysis skill after the stress test (#3114, #3113)
+
+- The skill is chosen for a question a data file answers ("is B better than A", "what comes next month"), not only for "analyse this file"; the answer comes with the spreadsheet and charts behind it.
+- An Excel file (`.xlsx`) is read with `exceljs` in the analysis's own working directory; a large one is aggregated with its streaming reader, never made a collection (collections read CSV / TSV).
+- After writing a collection the agent checks it with `getSchema` and, if it is unknown, validates the schema against `schemaDocs` before falling back to a script.
+- `presentSpreadsheet` now replies with the formula cells that calculate to an error (below); the agent fixes them and presents again until none are left that it did not mean.
+- A kept skill takes the input path (and worksheet) as arguments and keeps `exceljs` in its `package.json`.
+
+### Spreadsheet engine 4.2.1 – 4.2.3 (#3114, #3116)
+
+`@gui-chat-plugin/spreadsheet` `^4.2.3`:
+
+- **Text cells are text** (GUIChatPluginSpreadsheet#141): `2025-01` was read as 2025, so a `SUMIFS` over a month column put the whole year's total in every month, with no error showing; `Tokyo, Japan` read as 0. A number is read only when the whole text is one as typed (`1,200`, `25%`, `$1,000`).
+- **`presentSpreadsheet` reports formula errors** (GUIChatPluginSpreadsheet#131): the reply names the cells that calculate to an error, since the saved file holds formulas, not results.
+- **Sheets that read each other** calculate each cell once (GUIChatPluginSpreadsheet#134); a workbook function that ran out of time no longer takes later calculations down (GUIChatPluginSpreadsheet#131).
+- **`ROW`, `COLUMN`, `ROWS`, `COLUMNS`** (GUIChatPluginSpreadsheet#139); **unquoted sheet names in any script** such as `=基準!B1` (GUIChatPluginSpreadsheet#138); **`VLOOKUP` / `HLOOKUP` / `INDEX` over `$` ranges** (GUIChatPluginSpreadsheet#133); parentheses and text in arithmetic (GUIChatPluginSpreadsheet#135); and eight more calculation fixes in 4.2.1.
+- The guides' function list is as of 4.2.3.
+
 ## mulmoterminal@10.10.0 — 2026-10-19
 
 > **Setup guide:** [10.10.0 — Several machines on one phone, and charts that follow a spreadsheet](https://receptron.github.io/mulmoterminal/guide/en/v10.10.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v10.10.0.html))

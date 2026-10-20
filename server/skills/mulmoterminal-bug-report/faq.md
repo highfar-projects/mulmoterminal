@@ -113,5 +113,6 @@ gitlab.com or the user DECLARED it. Read the declaration from the global config
 (`~/.mulmoterminal/config.json`) and what a declaration may look like from `common/gitlabHosts.ts` —
 a spelling that fails its rule is dropped on load, which looks exactly like never having written it.
 Then check the two things outside this app: `glab auth status` must name that host, and a config
-edited by hand is only read at start-up. Pure git features (branch, diff, worktree, status) never
+edited by hand is read only on **Reload config file** in Settings or a restart (a save from
+Settings → GitHub and GitLab applies at once). Pure git features (branch, diff, worktree, status) never
 depended on the host, so their working is not evidence that the declaration took.

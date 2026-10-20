@@ -17,6 +17,7 @@ import { isLauncherEnvVar } from "./pty-env.js";
 import { spawnCapture, spawnCaptureAsync } from "./spawnCapture.js";
 import { splitLines } from "../fs/split-lines.js";
 import { callerFrames, traceTmux } from "../tmux-trace.js";
+import { PSMUX_SCRUBBED_NAMES, isPsmuxVersion, psmuxVersionOf, psmuxVtInputFor, type PsmuxVersion } from "./psmux.js";
 import { writeFileAtomicSync } from "../../files/atomic-write.js";
 import { TMUX_PREFIX_DEFAULT, staleSendPrefixKeys, tmuxPrefixCommands } from "../../../common/tmuxPrefix.js";
 
@@ -30,50 +31,7 @@ const tmuxAsync = (args: string[]) => spawnCaptureAsync("tmux", ["-L", SERVER_SO
 
 let cachedAvailable: boolean | null = null;
 let cachedPsmux = false;
-let cachedPsmuxVersion: readonly [number, number, number] | null = null;
-
-/** Whether `tmux -V` came from psmux, the native Windows tmux that installs itself as `tmux.exe`.
- *  It answers `tmux 3.3.8` on the first line and names itself only on the second. */
-export function isPsmuxVersion(stdout: string): boolean {
-  return /\bpsmux\b/i.test(stdout);
-}
-
-type Version = readonly [number, number, number];
-
-/** psmux's own version, from the second line of its `-V` answer (`psmux 3.4.0 (abc1234 …)`). The first
- *  line's `tmux 3.3.8` is the tmux it imitates, not the release. Null when it cannot be read. */
-export function psmuxVersionOf(stdout: string): Version | null {
-  const m = /\bpsmux\s+(\d+)\.(\d+)\.(\d+)/i.exec(stdout);
-  return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
-}
-
-// The first release with PSMUX_VT_INPUT (psmux#766, e39b9fe5).
-const PSMUX_VT_INPUT_SINCE: Version = [3, 4, 0];
-
-function atLeast(v: Version, min: Version): boolean {
-  for (const [i, part] of v.entries()) {
-    const floor = min[i] ?? 0;
-    if (part !== floor) return part > floor;
-  }
-  return true;
-}
-
-/** Whether a psmux client should be started on the VT input route (`PSMUX_VT_INPUT=1`).
- *
- *  By default a psmux client inside a pseudoconsole (node-pty) gets key records from the console
- *  host, which strips the bracketed-paste markers, so psmux has to guess a paste by timing. A CR
- *  written soon after it then lands INSIDE the paste, and two ESCs written together arrive as one.
- *  The VT route keeps the markers. Measured on psmux master before 3.4.0 (10 runs a case): a CR
- *  20-1000 ms after a paste was right 10/10 at every delay, two ESCs arrived as two, the paste reached
- *  the pane in ~10 ms instead of ~310 ms, and the key-event form psmuxInput writes still decoded.
- *
- *  Opt-in in psmux because Windows Terminal's keys only decode on the default route, which does not
- *  apply to a node-pty client. `PSMUX_VT_INPUT=0` in this server's environment keeps the old route,
- *  as a way back if a release misbehaves. */
-export function psmuxVtInputFor(version: Version | null, envValue: string | undefined): boolean {
-  if (envValue === "0") return false;
-  return version !== null && atLeast(version, PSMUX_VT_INPUT_SINCE);
-}
+let cachedPsmuxVersion: PsmuxVersion | null = null;
 
 // Set from config before the first tmuxAvailable() when the config is read at boot, and again when
 // the user saves a different one. Its commands go in the conf file (a fresh server) and are run live
@@ -90,16 +48,28 @@ export function setTmuxPrefix(prefix: string): void {
 // detection the isolated config is written so `new-session` picks it up via `-f`.
 export function tmuxAvailable(): boolean {
   if (cachedAvailable === null) {
-    const r = spawnCapture("tmux", ["-V"]);
-    cachedAvailable = r.status === 0;
-    cachedPsmux = cachedAvailable && isPsmuxVersion(r.stdout);
-    cachedPsmuxVersion = cachedPsmux ? psmuxVersionOf(r.stdout) : null;
+    const version = spawnCapture("tmux", ["-V"]);
+    cachedAvailable = version.status === 0;
+    cachedPsmux = cachedAvailable && isPsmuxVersion(version.stdout);
+    cachedPsmuxVersion = cachedPsmux ? psmuxVersionOf(version.stdout) : null;
     // Once per server life, so the trace reads as one run after another.
     traceTmux(cachedPsmux, "server-start", { ppid: process.ppid, version: cachedPsmuxVersion?.join("."), vtInput: tmuxPsmuxVtInput() });
     if (cachedAvailable) ensureConf();
   }
   return cachedAvailable;
 }
+
+/** Whether the tmux on PATH is psmux. False until tmuxAvailable() has run. */
+export const tmuxIsPsmux = (): boolean => cachedPsmux;
+
+/** psmux's own release, or null for a real tmux. */
+export const tmuxPsmuxVersion = (): PsmuxVersion | null => cachedPsmuxVersion;
+
+/** Whether tmux clients are started with `PSMUX_VT_INPUT=1`. Always false for a real tmux. */
+export const tmuxPsmuxVtInput = (): boolean => cachedPsmux && psmuxVtInputFor(cachedPsmuxVersion, process.env.PSMUX_VT_INPUT);
+
+/** Names kept off a psmux client and out of a running psmux server. Empty for a real tmux. */
+export const tmuxPsmuxScrubbedNames = (): readonly string[] => (cachedPsmux ? PSMUX_SCRUBBED_NAMES : []);
 
 // The terminfo `Ms` capability (OSC 52 clipboard write). tmux only forwards a program's
 // OSC 52 to the OUTER terminal when it knows the outer terminal supports it — our web
@@ -321,8 +291,8 @@ export function isOwnBindPort(value: string | undefined, boundPort: string): boo
 }
 
 /** Must this entry go from a RUNNING tmux server's global environment? */
-export function isScrubbedGlobalEnvEntry(name: string, value: string, boundPort: string): boolean {
-  if (isLauncherEnvVar(name) || SCRUBBED_NAMES.has(name)) return true;
+export function isScrubbedGlobalEnvEntry(name: string, value: string, boundPort: string, extraNames: readonly string[] = []): boolean {
+  if (isLauncherEnvVar(name) || SCRUBBED_NAMES.has(name) || extraNames.includes(name)) return true;
   return name === "PORT" && isOwnBindPort(value, boundPort);
 }
 
@@ -342,8 +312,9 @@ function scrubGlobalEnvironment(): void {
   const r = tmux(["show-environment", "-g"]);
   if (r.status !== 0) return;
   const boundPort = ownBindPort();
+  const extraNames = tmuxPsmuxScrubbedNames();
   for (const [name, value] of parseTmuxEnvironment(r.stdout)) {
-    if (isScrubbedGlobalEnvEntry(name, value, boundPort)) tmux(["set-environment", "-g", "-r", name]);
+    if (isScrubbedGlobalEnvEntry(name, value, boundPort, extraNames)) tmux(["set-environment", "-g", "-r", name]);
   }
 }
 
@@ -573,12 +544,6 @@ export async function tmuxWindowSize(id: string): Promise<{ cols: number; rows: 
   const size = r.status === 0 ? parseTmuxWindowSize(r.stdout) : null;
   return size && clientSizeOfWindow(size, cachedPsmux);
 }
-
-/** Whether the tmux on PATH is psmux. Only meaningful once tmuxAvailable() has run. */
-export const tmuxIsPsmux = (): boolean => cachedPsmux;
-
-/** Whether psmux clients are started on the VT input route. Only meaningful once tmuxAvailable() has run. */
-export const tmuxPsmuxVtInput = (): boolean => cachedPsmux && psmuxVtInputFor(cachedPsmuxVersion, process.env.PSMUX_VT_INPUT);
 
 // One or more Escape key presses and nothing else — what xterm.js sends for the Esc key.
 const isOnlyEscapeKeys = (data: string): boolean => data !== "" && data === "\x1b".repeat(data.length);

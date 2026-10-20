@@ -1,8 +1,9 @@
 // The Files pane's Canvas mode (#3008): the open file drawn by the plugin view the Canvas uses,
 // inside the pane, so the tree stays beside it. The card is built and held here and never written
 // to the session's Canvas — every view saves to the file itself, which stays the only truth.
-import { computed, ref, shallowRef, watch } from "vue";
+import { computed, ref, shallowRef, watch, type ComputedRef } from "vue";
 import { absoluteUnder, buildCanvasCard, canOpenInCanvas, type CanvasCard, type StoriesRoots } from "./canvasOpenFile";
+import { canvasNeedsMulmoScript, isMulmoScriptText } from "./mulmoScriptText";
 import type { OpenFile } from "./useOpenFile";
 import type { FilesTabs } from "./useFilesTabs";
 
@@ -15,7 +16,7 @@ export interface FilesCanvasModeDeps {
   /** `savedInPlace` saves the buffer first, since a view reads the file from disk — the same-file
    *  save Preview uses, so a lost race keeps the conflict banner rather than banking the buffer the
    *  way leaving a file does. A refusal to build the card is the server's sentence, on the error line. */
-  file: Pick<OpenFile, "openPath" | "savedInPlace" | "fileError">;
+  file: Pick<OpenFile, "openPath" | "savedInPlace" | "fileError" | "editor" | "baseVersion">;
   /** `open` may decline to bring a file forward, over unsaved edits it could not save. */
   tabs: Pick<FilesTabs, "open">;
 }
@@ -33,16 +34,36 @@ const withPath = (paths: ReadonlySet<string>, path: string, on: boolean): Set<st
   return next;
 };
 
+/** Whether the open file may have a view at all (`contentAllows`), and whether a plugin has one for it
+ *  (`openable`). A `.json` may only when it is a MulmoScript (#3137), judged on the text as it was read
+ *  from or saved to disk — what the view reads — so a keystroke does not parse the file again. */
+function canvasGates(deps: FilesCanvasModeDeps): { contentAllows: ComputedRef<boolean>; openable: ComputedRef<boolean> } {
+  const { file } = deps;
+  const scriptOnDisk = ref(false);
+  watch(
+    [file.openPath, file.baseVersion],
+    ([path]) => {
+      scriptOnDisk.value = path !== null && isMulmoScriptText(file.editor.value?.getDoc() ?? "");
+    },
+    { immediate: true },
+  );
+  const contentAllows = computed(() => file.openPath.value === null || !canvasNeedsMulmoScript(file.openPath.value) || scriptOnDisk.value);
+  // A plugin's own gates decide, on the path the CARD will carry: under a directory with a dot segment
+  // `p.html` passes alone and fails joined, which would be a button that does nothing when pressed.
+  const openable = computed(() => {
+    const path = file.openPath.value;
+    return contentAllows.value && canOpenInCanvas(path ? absoluteUnder(deps.cwd(), path) : null, deps.storiesRoots());
+  });
+  return { contentAllows, openable };
+}
+
 export function useFilesCanvasMode(deps: FilesCanvasModeDeps) {
   const { openPath } = deps.file;
   // Per path, so a tab switched away from and back to comes back as it was left.
   const canvasPaths = ref(new Set<string>());
   const card = shallowRef<FilesCanvasResult | null>(null);
-  const active = computed(() => deps.enabled() && openPath.value !== null && canvasPaths.value.has(openPath.value));
-  // Whether a plugin has a view for the open file — its own gates decide, on the path the CARD will
-  // carry: under a directory with a dot segment `p.html` passes alone and fails joined, which would
-  // be a button that does nothing when pressed.
-  const openable = computed(() => canOpenInCanvas(openPath.value ? absoluteUnder(deps.cwd(), openPath.value) : null, deps.storiesRoots()));
+  const { contentAllows, openable } = canvasGates(deps);
+  const active = computed(() => deps.enabled() && openPath.value !== null && canvasPaths.value.has(openPath.value) && contentAllows.value);
 
   const setMode = (path: string, on: boolean): void => {
     canvasPaths.value = withPath(canvasPaths.value, path, on);

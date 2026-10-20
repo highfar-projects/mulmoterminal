@@ -25,14 +25,12 @@ import {
   parseTmuxPaneCwds,
   isScrubbedGlobalEnvEntry,
   tmuxClientUnsetNames,
-  isPsmuxVersion,
-  psmuxVersionOf,
-  psmuxVtInputFor,
   liveWheelCommand,
   tmuxConfLinesFor,
   clientSizeOfWindow,
   psmuxInput,
 } from "../../../../server/infra/process/tmux";
+import { isPsmuxVersion, psmuxVersionOf, psmuxVtInputFor } from "../../../../server/infra/process/psmux";
 
 describe("tmuxSessionName", () => {
   it("prefixes the session id", () => {
@@ -364,6 +362,12 @@ describe("isScrubbedGlobalEnvEntry", () => {
   // are not on cannot cost us our address, and nothing tells it from a value the user set.
   it("leaves a stale value that names some other port", () => {
     expect(isScrubbedGlobalEnvEntry("PORT", "34567", BOUND)).toBe(false);
+  });
+
+  // A psmux server started before Volta's marker was kept off its client still carries it.
+  it("takes the extra names it is given, and only those", () => {
+    expect(isScrubbedGlobalEnvEntry("_VOLTA_TOOL_RECURSION", "1", BOUND, ["_VOLTA_TOOL_RECURSION"])).toBe(true);
+    expect(isScrubbedGlobalEnvEntry("_VOLTA_TOOL_RECURSION", "1", BOUND)).toBe(false);
   });
 });
 

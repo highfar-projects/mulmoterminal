@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import FilesPane from "../../../src/components/FilesPane.vue";
 import { fakeCmEditor } from "../../helpers/cmEditorDouble";
@@ -25,6 +25,11 @@ const writeCalls = () => (globalThis.fetch as unknown as ReturnType<typeof vi.fn
 const CANVAS_STUB = { stubs: { FilesCanvasView: true } };
 
 describe("the Canvas button", () => {
+  // A story is a MulmoScript only by what it holds (#3137), and the editor double answers one text
+  // for every file; these say which.
+  const holdsScript = () => fakeEditor.getDoc.mockReturnValue('{"$mulmocast":{"version":"1.1"},"beats":[]}');
+  afterEach(() => fakeEditor.getDoc.mockReturnValue("edited text"));
+
   const withEntry = (name: string) => {
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -286,6 +291,7 @@ describe("the Canvas button", () => {
 
   // A story is built by the server, which can refuse with a sentence of its own (#1941).
   it("shows the server's refusal and stays on the editor", async () => {
+    holdsScript();
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes("/list")) return { ok: true, json: async () => ({ entries: [{ name: "tale.json", dir: false, size: 10 }] }) };
@@ -308,6 +314,12 @@ describe("the Canvas button", () => {
     expect(btn(w).attributes("aria-pressed")).toBe("false");
   });
 
+  // #3137: most JSON is not a MulmoScript, and offering its view only led to the plugin's refusal.
+  it("is not offered for a .json that is not a MulmoScript", async () => {
+    fakeEditor.getDoc.mockReturnValue('{"name":"x"}');
+    expect(btn(await openRow("tale.json", "/work/ws/artifacts/stories", true, "/work/ws")).exists()).toBe(false);
+  });
+
   it("is not offered for a file no plugin renders", async () => {
     expect(btn(await openRow("notes.txt", "/work/proj")).exists()).toBe(false);
   });
@@ -324,6 +336,7 @@ describe("the Canvas button", () => {
   // unopenable; it opens by path now, and the card is the same card as the workspace one when it
   // IS the same file.
   it("is offered for a story in the workspace and for one outside it", async () => {
+    holdsScript();
     expect(btn(await openRow("tale.json", "/work/ws/artifacts/stories", true, "/work/ws")).exists()).toBe(true);
     expect(btn(await openRow("tale.json", "/work/other/artifacts/stories", true, "/work/ws")).exists()).toBe(true);
   });
@@ -333,6 +346,7 @@ describe("the Canvas button", () => {
   // `filePath` would name the DEFAULT stories root's file of that name instead (CodeRabbit on
   // #1992). The pane shows `(default workspace)` in its header in that state.
   it("is withheld for a deck when the pane has no directory to resolve the row against", async () => {
+    holdsScript();
     expect(btn(await openRow("keynote.json", "/work/proj")).exists()).toBe(true);
     expect(btn(await openRow("keynote.json", null)).exists()).toBe(false);
   });

@@ -90,4 +90,82 @@ describe("FilesGallery", () => {
     await w.vm.$nextTick();
     expect(document.activeElement).toBe(w.get('[data-testid="files-gallery"]').element);
   });
+
+  // #3120: the gallery drawn in the empty file area has nothing to close back to.
+  describe("embedded (closable: false)", () => {
+    const mountEmbedded = (items: GalleryItem[], dir = "shots") =>
+      mount(FilesGallery, {
+        props: { cwd: "/proj", dir, items, error: null, closable: false },
+        slots: { controls: '<button data-testid="extra">x</button>' },
+        global: { plugins: [i18n] },
+        attachTo: document.body,
+      });
+
+    it("draws no close button and its own controls instead, and Esc in the grid closes nothing", async () => {
+      const w = mountEmbedded(ITEMS);
+      expect(w.find('[data-testid="files-gallery-close"]').exists()).toBe(false);
+      expect(w.find('[data-testid="extra"]').exists()).toBe(true);
+      await w.get('[data-testid="files-gallery"]').trigger("keydown", { key: "Escape" });
+      expect(w.emitted("close")).toBeUndefined();
+    });
+
+    it("leaves the keyboard where it is when it appears", () => {
+      const outside = document.createElement("button");
+      document.body.append(outside);
+      outside.focus();
+      mountEmbedded(ITEMS);
+      expect(document.activeElement).toBe(outside);
+    });
+
+    it("heads each subfolder's tiles, and the arrows walk across them", async () => {
+      const w = mountEmbedded([item("a.png", "image"), { pathRel: "shots/sub/b.png", name: "b.png", kind: "image" }]);
+      expect(w.findAll('[data-testid="files-gallery-heading"]').map((h) => h.text())).toEqual(["sub/"]);
+      await w.findAll('[data-testid="files-gallery-tile"]')[0]?.find("button").trigger("click");
+      await w.get('[data-testid="files-gallery"]').trigger("keydown", { key: "ArrowRight" });
+      expect(w.get('[data-testid="files-gallery-name"]').text()).toBe("b.png");
+    });
+
+    it("leaves Esc and the keyboard alone in the grid, having nothing to close", () => {
+      const w = mountEmbedded(ITEMS);
+      const name = w.findAll<HTMLElement>('[data-testid="files-gallery-tile"] button').at(-1);
+      name?.element.focus();
+      const esc = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+      name?.element.dispatchEvent(esc);
+      expect(esc.defaultPrevented).toBe(false);
+      expect(document.activeElement).toBe(name?.element);
+    });
+
+    it("keeps the large view on its file when the items are read again", async () => {
+      const w = mountEmbedded([item("b.png", "image"), item("c.png", "image")]);
+      await w.findAll('[data-testid="files-gallery-tile"]')[0]?.find("button").trigger("click");
+      await w.setProps({ items: null });
+      await w.setProps({ items: [item("a.png", "image"), item("b.png", "image"), item("c.png", "image")] });
+      expect(w.get('[data-testid="files-gallery-name"]').text()).toBe("b.png");
+    });
+
+    it("goes back to the grid when the file shown large is gone, and the arrows open nothing there", async () => {
+      const w = mountEmbedded([item("a.png", "image"), item("b.png", "image"), { pathRel: "shots/sub/c.png", name: "c.png", kind: "image" }]);
+      await w.findAll('[data-testid="files-gallery-tile"]')[2]?.find("button").trigger("click");
+      await w.setProps({ items: [item("a.png", "image"), item("b.png", "image")] });
+      expect(w.find('[data-testid="files-gallery-large"]').exists()).toBe(false);
+      await w.get('[data-testid="files-gallery"]').trigger("keydown", { key: "ArrowRight" });
+      expect(w.find('[data-testid="files-gallery-large"]').exists()).toBe(false);
+    });
+
+    it("starts over on a new root, though its folder is the root of both", async () => {
+      const w = mountEmbedded([item("a.png", "image")], "");
+      await w.findAll('[data-testid="files-gallery-tile"]')[0]?.find("button").trigger("click");
+      await w.setProps({ cwd: "/other" });
+      expect(w.find('[data-testid="files-gallery-large"]').exists()).toBe(false);
+    });
+
+    it("lies in the file area rather than over the pane, so the header's menus stay above it", () => {
+      expect(mountEmbedded(ITEMS).get('[data-testid="files-gallery"]').classes()).not.toContain("absolute");
+      expect(mountGallery().get('[data-testid="files-gallery"]').classes()).toContain("absolute");
+    });
+  });
+
+  it("draws no headings over a single folder's own files", () => {
+    expect(mountGallery().find('[data-testid="files-gallery-heading"]').exists()).toBe(false);
+  });
 });

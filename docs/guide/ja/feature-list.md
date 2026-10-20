@@ -4,7 +4,7 @@ nav_title: 全機能リスト
 layout: default
 parent: 日本語
 nav_order: 6.5
-as_of: 10.10.0
+as_of: 11.0.0
 description: MulmoTerminal のいまある機能を、入った版つきで領域ごとに一行ずつ並べた一覧（9.1.0 時点）。
 ---
 
@@ -297,6 +297,7 @@ description: MulmoTerminal のいまある機能を、入った版つきで領�
 - グラフが表の範囲から描け、表を直すと描き直される（presentChart の `source`） (v10.10.0)
 - 開いている表が、エージェントやほかのプログラムがファイルを変えると読み直す (v10.10.0)
 - 表に自分の関数を JavaScript で持たせられ、ブラウザの中で閉じ込めて動く (v10.10.0)
+- データについての質問にも、裏付けの表とグラフ付きで答え、Excel のファイルも読む (v11.0.0)
 - /mulmoterminal-data-analysis が統計を計算式で書き、大きな CSV はコレクションで集計してから扱い、分析を自分のスキルとして残せる (v10.10.0)
 - エージェントが計算式の入った表を Canvas に出す。セルを直すとその場で計算し直し、Excel で保存できる (presentSpreadsheet) (v10.9.0)
 - 同梱の /mulmoterminal-data-analysis スキルが、CSV や TSV を要約の統計つきの表とグラフにする (v10.9.0)

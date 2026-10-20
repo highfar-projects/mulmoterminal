@@ -1,6 +1,6 @@
 ---
 name: mulmoterminal-data-analysis
-description: Analyse a CSV or TSV the user names and show the result in MulmoTerminal's Canvas, as a spreadsheet with live formulas (presentSpreadsheet) and charts (presentChart). Reads the file, checks its columns, computes summary statistics with Node, puts what the user may want to change in formulas and the rest in values, picks charts that fit the data, and says where everything was saved. Use when the user asks to analyse, summarise, explore or chart tabular data, to read a spreadsheet again after editing it, or to keep an analysis as a skill of their own to run on the next file of the same kind. The user writes no code. Works in whatever language the user writes in.
+description: Analyse a CSV, TSV or Excel file, or answer a question about one (is B better than A, what is unusual here, what comes next month, what drives sales, who is likely to cancel), and show the answer in MulmoTerminal's Canvas as a spreadsheet with live formulas (presentSpreadsheet) and charts (presentChart) behind it. Reads the file, checks its columns, computes summary statistics with Node, puts what the user may want to change in formulas and the rest in values, picks charts that fit the data, and says where everything was saved. Use when the user asks to analyse, summarise, explore or chart tabular data or asks such a question of it, to read a spreadsheet again after editing it, or to keep an analysis as a skill of their own to run on the next file of the same kind. The user writes no code. Works in whatever language the user writes in.
 ---
 
 # Analyse a table of data
@@ -42,6 +42,11 @@ const rows = parse(readFileSync(process.argv[2]), { columns: true, skip_empty_li
 yourself (strip thousands separators first: `"1,200"` is not a number to `Number`), and count the
 ones that do not convert rather than dropping them silently.
 
+Read an Excel file (`.xlsx`) with `exceljs`, installed in the same working directory
+(`cd "$work" && npm install exceljs`). Read one worksheet at a time, and
+say which worksheets it has and which you read. A cell there may hold a number, a date, a formula's
+cached result or text; check each column the same way.
+
 Before analysing anything, tell the user what you found:
 
 - the number of rows;
@@ -51,6 +56,10 @@ Before analysing anything, tell the user what you found:
 If a column's meaning is unclear (`amt`, `v2`), ask once, rather than guessing.
 
 ### A large file
+
+This section is for CSV and TSV. A large Excel file is read with `exceljs`'s streaming reader
+(`new ExcelJS.stream.xlsx.WorkbookReader(path)`) and aggregated in the script; a collection reads
+CSV only, so do not make one from it.
 
 Look at the file's size first. If it is more than a few hundred kilobytes, count its records with
 one streaming pass, not `wc -l` (a quoted field can hold a line break, so lines are not records).
@@ -89,6 +98,10 @@ column they compare text. If the streaming pass found any, aggregate with the sc
    ``External data (CSV) collections — `dataSource` ``. Follow it, including where it says to write
    the files: a `SKILL.md` and a `schema.json` with `dataSource: { "type": "csv", "path": ... }`,
    fields named exactly as the header, the key field declared `type: "string"`.
+   Then check that it was picked up: `manageCollection` `getSchema` for the slug. If it still
+   answers "unknown collection", the schema failed validation: read the files back against the
+   topic and fix them. If it is still unknown, aggregate with the script instead (below) and
+   remove the files you wrote.
 4. The key: a column whose values are unique, when there is one. When none is (rows of orders,
    readings, log lines), use a column without empty cells. `queryItems` still counts and sums every
    row; only the collection's own list view shows one row per key value. If every column has empty
@@ -165,8 +178,8 @@ Put the result in `presentSpreadsheet`. Split each number by whether the user ma
     `STANDARDIZE`, `GEOMEAN`, `HARMEAN`;
   - two columns: `CORREL` / `PEARSON`, `SLOPE`, `INTERCEPT`, `RSQ`, `STEYX`, `COVARIANCE.S` /
     `COVARIANCE.P`, `FORECAST.LINEAR`, `TREND`;
-  - tests and distributions: `T.TEST`, `T.DIST`, `T.INV`, `NORM.DIST`, `NORM.INV`,
-    `CONFIDENCE.T`, `CONFIDENCE.NORM` (and their `.2T` / `.RT` / `.S` forms);
+  - tests and distributions: `T.TEST`, `T.DIST`, `T.DIST.2T`, `T.DIST.RT`, `T.INV`, `T.INV.2T`,
+    `NORM.DIST`, `NORM.S.DIST`, `NORM.INV`, `NORM.S.INV`, `CONFIDENCE.T`, `CONFIDENCE.NORM`;
   - by group: `COUNTIF(S)`, `SUMIF(S)`, `AVERAGEIF(S)`, `MAXIFS`, `MINIFS`.
 
   `PERCENTILE` and `QUARTILE` interpolate like the script's `quantile`; the current Excel names
@@ -195,7 +208,13 @@ Put the result in `presentSpreadsheet`. Split each number by whether the user ma
   "model fit (computed)"), because a value does not change when the user edits the data.
 
 Use one sheet for the data and another for the summary, so a summary formula reads the data sheet
-(`=AVERAGE(Data!C2:C201)`). A file above about 5,000 rows is aggregated first and its aggregated
+(`=AVERAGE(Data!C2:C201)`).
+
+`presentSpreadsheet` replies with how many formula cells calculate to an error, naming up to five.
+Fix them — the formula, the layout, or a value the script computes instead — and present again,
+until it reports none, or only errors you mean the user to see (a lookup that finds nothing), before
+you tell the user the spreadsheet is ready. The saved file holds formulas, not results, so that reply
+is the only place you see them. A file above about 5,000 rows is aggregated first and its aggregated
 table goes on the Data sheet (see *A large file*). Say that you did.
 
 ## 4. Charts
@@ -204,14 +223,76 @@ Use `presentChart`, and choose the chart from the shape of the data:
 
 | Data | Chart |
 |---|---|
-| a value over time | line; bars if there are only a few periods |
+| a value over time | line; bars if there are only a few periods; a time axis when the dates are uneven; sampling and zoom for thousands of points |
 | comparing categories | bar, sorted, unless the categories have an order of their own |
 | parts of a whole (few parts) | stacked bar; pie only for a handful of parts |
-| two numeric columns | scatter; for the regression line, a `TREND` or `FORECAST.LINEAR` column on the sheet drawn as a line |
-| the distribution of one column | histogram (bins counted in the script, passed inline) |
+| two numeric columns | scatter; for the regression line, a `TREND` or `FORECAST.LINEAR` column on the sheet drawn as a line; for a curve (exponential, logarithmic, polynomial), `ecStat:regression` |
+| the distribution of one column | histogram; a boxplot per group to compare groups (`mulmo:boxplotColumns` when each group is a column) |
+| two measures of different size (sales and growth) | two value axes |
+| which few causes make up most of a total | Pareto |
+| how a total got from start to end | waterfall |
+| how several numeric columns move together | correlation matrix (a heatmap of `CORREL` for each pair) |
+| which rows are alike (customers by income and visits) | clusters (`mulmo:clustering`) on a scatter |
+| a value per prefecture or country | map |
+| values spanning several orders of magnitude | log scale |
 | two categories crossed | heatmap |
 
-Give each chart a title saying what it shows. Give each axis a name, with its unit.
+Give each chart a title saying what it shows. Give each axis a name, with its unit. Mark what the
+user should look at: an average line, the highest point, a shaded span.
+
+**`presentChart`'s `option` description has a recipe for each of these.** Start from the recipe and
+lay the sheet out the way it says: a recipe drawn from a range names the header that range needs,
+and its series pick their columns by those names (`encode`). The option is JSON, so it holds no
+functions; format labels with template strings (`{value} %`) or a format object
+(`{ "kind": "currency", "currency": "JPY" }`, `percent`, `number`, `date`). Compute on the sheet
+whatever the chart needs, so the chart follows edits:
+
+- **histogram**: when the user does not need particular bins, `ecStat:histogram` counts the data
+  column itself, and `config.method` picks the bins. When the user wants bins of their own, or the
+  counts on the sheet, put the bins' edges in columns of their own beside the chart's range, and
+  each count a `COUNTIFS` on the data (`=COUNTIFS(Data!B2:B201,">="&C2,Data!B2:B201,"<"&D2)`; the
+  last bin `"<="`).
+- **boxplot**: when each group is a column of its own (Store A, Store B), `mulmo:boxplotColumns`
+  boxes those columns straight from the data range. When the groups are values in one column, put
+  the five numbers per group on the sheet with `MIN`, `QUARTILE(…,1)`, `MEDIAN`, `QUARTILE(…,3)` and
+  `MAX`. The sheet cannot filter a range by group, so sort the data sheet by group and point each
+  row at its group's block.
+- **Pareto**: the recipe says to sort on the sheet, but the sheet has no sort function, so the
+  script orders the causes, largest first, and the sheet counts them. The cumulative share is a
+  number from 0 to 100 (`=SUM($B$2:B2)/SUM($B$2:$B$9)*100`), not a fraction formatted as a
+  percentage, since the axis runs to 100.
+- **waterfall**: the change and the running total in columns beside the range; the drawn columns
+  are `Base = MIN(total before, total after)`, `Up = MAX(change, 0)` and `Down = MAX(-change, 0)`,
+  all non-negative.
+- **correlation matrix**: a cross table with the column names along the top row and down the first
+  column, a `CORREL` in each cell, drawn with `"layout": "matrix"` in the chart's `source`, which
+  turns it into the `X | Y | Value` rows the heatmap recipe reads. Leave out a column that does not
+  vary: its `CORREL` (and `STANDARDIZE` below) is `#DIV/0!`.
+- **clusters**: `mulmo:clustering` groups rows by the columns in `config.dimensions`, and gives the
+  same groups on every redraw. It measures distance in the columns' own units, so a column of
+  incomes outweighs a column of visit counts: when the scales differ, add a standardised column for
+  each (`=STANDARDIZE(B2,AVERAGE(B$2:B$201),STDEV(B$2:B$201))`) and cluster on those, while the
+  scatter still shows the original columns.
+- **map**: one row per region, its name exactly as the map has it: `japan-ja` and `world-ja` take
+  Japanese names (東京都), `japan` and `world` English ones. No other map is available.
+
+**A fitted curve, a histogram, clusters or a box per column straight from the data** uses the
+recipe's transform (`ecStat:regression`, `ecStat:histogram`, `mulmo:clustering`,
+`mulmo:boxplotColumns`): the chart's `source` is the data sheet's range, header row included
+(`Data!B1:C201`), and the transform's `dimensions` name the columns by that header exactly. The
+transform recomputes whenever the sheet is saved, so the chart follows edits. A blank cell, or text
+that is not a number, is left out: the whole row from a fit, a histogram or clusters, only that
+value from a box per column. What it computes is not on the sheet: if the user wants a curve's
+coefficients or each row's cluster as numbers, compute them in the script as computed values.
+
+**Long data needs no summary sheet to draw one line per group.** A data sheet of `Date | Region |
+Sales` rows can be the source as it is, with `"groupBy": { "column": "Region" }`: it is drawn with
+one column per region, and rows meeting in one cell are added up. Several ranges go in `sources`
+instead of `source`, the i-th as `dataset[i]`.
+
+Any order the script sets, such as the sorted bars, the Pareto causes and the groups' blocks behind
+a grouped boxplot, is a computed value: the numbers follow edits, and the order and which rows
+belong to a group do not. Say so, and see *When the user edits the spreadsheet*.
 
 **Draw a chart of sheet data from the sheet**, so it follows the user's edits. Give the chart a
 `source` and leave the data out of `option`:
@@ -225,12 +306,15 @@ Give each chart a title saying what it shows. Give each axis a name, with its un
 The range's first row is the header (it names the series) and its first column the categories,
 so lay the summary sheet out that way: one row per category, one column per series. The chart is
 drawn from the calculated range, and drawn again whenever the sheet is saved. If `presentChart`
-says it cannot read the range, fix the range rather than falling back.
+says it cannot read the range, fix the range rather than falling back. If it says a chart could not
+be drawn, nothing was saved: fix that chart's option as the reply says and call it again.
 
-Pass data inline in `option` only for what is not in the sheet: histogram bins (unless you counted
-them with `COUNTIFS` on the sheet), a non-linear fit. Such a chart does **not** follow the sheet;
-say which charts do and which do not. A straight fitted line can be on the sheet (`TREND`), and
-then it follows.
+Several charts of one analysis go in one `presentChart` call: `document.columns` (1–4) sets them
+side by side, and `height` on a chart (160–1200 pixels) makes it taller or shorter.
+
+Pass data inline in `option` only for what neither the sheet nor a transform can draw, such as a fit
+of a form `ecStat:regression` does not have. Such a chart does **not** follow the sheet; say which
+charts do and which do not.
 
 ## 5. Say where everything is
 
@@ -271,10 +355,13 @@ already exists, ask before replacing it.
 Every value that came from the file you analysed is recomputed from the input at run time, or it
 will silently describe the old file when the skill runs on the next one:
 
-- the CSV path is an argument, never written into a script;
+- the input file's path is an argument, never written into a script; for an Excel file the
+  worksheet's name is one too, and `exceljs` stays in `package.json`;
 - every range, row count and sheet size comes from the data (`Data!A1:G${rows.length + 1}`);
-- categories, dates, histogram bins, the points of a fitted line, lookup tables and anything else
-  derived from the rows are computed by the script, not pasted in;
+- categories, dates, the edges of bins the user chose, lookup tables and anything else derived
+  from the rows are computed by the script, not pasted in;
+- a fitted curve, an automatic histogram, clusters and a box per column stay transforms over the
+  data range, as in *4. Charts*, never their output as it came out on this file;
 - the spreadsheet path the charts point at is an argument (it changes on every run);
 - titles name the data kind, not this file's dates;
 - workbook functions travel in the `functions` the scripts present, unchanged: they are the method,
@@ -322,7 +409,9 @@ number. Work out the results in a script, and say what changed most.
 If the sheet holds no computed values, and every chart follows it, that is all: do not present it
 again. Otherwise the computed values and the inline charts are now stale. Then:
 
-- recompute the computed values that depended on the edited cells;
+- recompute the computed values that depended on the edited cells, including any order the script
+  set (sorted bars, a Pareto chart's causes, a grouped boxplot's blocks) that the new data no
+  longer follows;
 - call `presentSpreadsheet` again with the whole spreadsheet: the user's edits, the formulas, each
   sheet's `functions` as the file holds them, and the new computed values;
 - draw the charts again, with their `source` pointing at the **new** spreadsheet;
