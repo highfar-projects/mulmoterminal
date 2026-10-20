@@ -23,6 +23,24 @@ const settle = async () => {
   for (let i = 0; i < 10; i++) await new Promise((resolve) => setTimeout(resolve, 0));
 };
 
+/** `serve`, but every answer waits for `release()`: a read can be caught between its batches. */
+function serveHeld(tree: Tree) {
+  const asked: string[] = [];
+  const waiting: Array<() => void> = [];
+  globalThis.fetch = vi.fn((url: string) => {
+    const pathRel = new URLSearchParams(url.slice(url.indexOf("?") + 1)).get("path") ?? "";
+    asked.push(pathRel);
+    const entries = tree[pathRel];
+    const answer = entries ? { ok: true, status: 200, json: async () => ({ entries }) } : { ok: false, status: 404, json: async () => ({}) };
+    return new Promise((resolve) => waiting.push(() => resolve(answer)));
+  }) as unknown as typeof fetch;
+  const release = async () => {
+    waiting.splice(0).forEach((answer) => answer());
+    await settle();
+  };
+  return { asked, release };
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
   localStorage.clear();
@@ -198,6 +216,59 @@ describe("useFolderView", () => {
     view.show("b");
     await settle();
     expect(view.dir.value).toBe("b");
+  });
+
+  it("stops a subfolder walk when the view is hidden partway, and reads the folder again when seen", async () => {
+    const wide = Array.from({ length: FOLDER_VIEW_READS_AT_ONCE * 3 }, (_, i) => d(`d${i}`));
+    const tree: Tree = { "": wide };
+    wide.forEach((entry) => (tree[entry.name] = []));
+    const { asked, release } = serveHeld(tree);
+    const seen = ref(true);
+    const view = useFolderView(
+      () => "/proj",
+      () => seen.value,
+    );
+    view.withSubfolders.value = true;
+    await nextTick();
+    await release(); // the root
+    await release(); // the first batch of subfolders
+    const askedBeforeHiding = asked.length;
+    seen.value = false;
+    await nextTick();
+    await release();
+    await release();
+    expect(asked).toHaveLength(askedBeforeHiding);
+    expect(view.groups.value).toBeNull();
+    seen.value = true;
+    await nextTick();
+    for (let round = 0; round < 6; round++) await release();
+    expect(view.groups.value).toHaveLength(wide.length + 1);
+  });
+
+  it("still falls back to the root when the view is hidden in the middle of a recheck", async () => {
+    const tree: Tree = { "": [d("a")], a: [] };
+    const { release } = serveHeld(tree);
+    const seen = ref(true);
+    const view = useFolderView(
+      () => "/proj",
+      () => seen.value,
+    );
+    view.show("a");
+    await nextTick();
+    await release();
+    delete tree.a;
+    const rechecking = view.afterTreeOp({ id: "trash", pathRel: "a" });
+    seen.value = false;
+    await nextTick();
+    await release();
+    await rechecking;
+    expect(view.dir.value).toBe("a");
+    seen.value = true;
+    await nextTick();
+    await release();
+    await release();
+    expect(view.dir.value).toBe("");
+    expect(view.error.value).toBeNull();
   });
 
   it("remembers the mode per browser, and survives storage that throws", () => {

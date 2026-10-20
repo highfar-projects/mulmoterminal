@@ -91,7 +91,7 @@ function folderReads(cwd: () => string | null, dir: Ref<string>, withSubfolders:
   /** Neither read nor being read, so the view needs a read once it is seen. */
   const unread = (): boolean => !reading && groups.value === null && error.value === null;
 
-  return { groups, error, load, overtake, forget, unread };
+  return { groups, error, load, overtake, forget, unread, inFlight: (): boolean => reading };
 }
 
 export function useFolderView(cwd: () => string | null, visible: () => boolean) {
@@ -100,7 +100,7 @@ export function useFolderView(cwd: () => string | null, visible: () => boolean) 
   const mode = ref<FolderViewMode>(parseFolderViewMode(readStored(MODE_KEY)));
   /** Counts re-roots, so the root is read again through the watch below even when already on show. */
   const rootChanges = ref(0);
-  const { groups, error, load, overtake, forget, unread } = folderReads(cwd, dir, withSubfolders);
+  const { groups, error, load, overtake, forget, unread, inFlight } = folderReads(cwd, dir, withSubfolders);
 
   /** Read again if it is seen; otherwise forget what was read, so it is read when it is. */
   function reload(keepShown = false): void {
@@ -121,10 +121,16 @@ export function useFolderView(cwd: () => string | null, visible: () => boolean) 
    *  view spends no request on it and a gone folder still falls back to the root rather than an error. */
   let recheckWhenSeen: string | null = null;
 
+  /** The folder a recheck is reading now, so hiding the view mid-recheck can leave it marked. */
+  let rechecking: string | null = null;
+
   async function recheck(): Promise<void> {
     const shown = dir.value;
     recheckWhenSeen = null;
+    rechecking = shown;
     await load(true);
+    if (rechecking !== shown) return;
+    rechecking = null;
     if (error.value !== null && dir.value === shown) dir.value = "";
   }
 
@@ -153,8 +159,16 @@ export function useFolderView(cwd: () => string | null, visible: () => boolean) 
   watch([dir, withSubfolders, rootChanges, visible], ([shownDir, subfolders, roots, seen], [wasDir, wasSubfolders, wasRoots]) => {
     if (shownDir !== wasDir || subfolders !== wasSubfolders || roots !== wasRoots) {
       recheckWhenSeen = null;
+      rechecking = null;
       reload();
     } else if (seen && unread()) void (recheckWhenSeen === shownDir ? recheck() : load());
+    // Hidden mid-read (a file opened during a subfolder walk): the walk stops, and what was on screen
+    // goes with it, since a re-read it was waiting on would otherwise never finish.
+    else if (!seen && inFlight()) {
+      recheckWhenSeen = rechecking ?? recheckWhenSeen;
+      rechecking = null;
+      forget();
+    }
   });
   if (visible()) void load();
 
