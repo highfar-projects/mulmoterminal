@@ -16,6 +16,7 @@ import { HOME_SCOPE_SUFFIX, PORT } from "../../config/env.js";
 import { isLauncherEnvVar } from "./pty-env.js";
 import { spawnCapture, spawnCaptureAsync } from "./spawnCapture.js";
 import { splitLines } from "../fs/split-lines.js";
+import { PSMUX_SCRUBBED_NAMES, isPsmuxVersion, psmuxVersionOf, psmuxVtInputFor, type PsmuxVersion } from "./psmux.js";
 import { writeFileAtomicSync } from "../../files/atomic-write.js";
 import { TMUX_PREFIX_DEFAULT, staleSendPrefixKeys, tmuxPrefixCommands } from "../../../common/tmuxPrefix.js";
 
@@ -28,6 +29,8 @@ const tmux = (args: string[]) => spawnCapture("tmux", ["-L", SERVER_SOCKET, ...a
 const tmuxAsync = (args: string[]) => spawnCaptureAsync("tmux", ["-L", SERVER_SOCKET, ...args]);
 
 let cachedAvailable: boolean | null = null;
+let cachedPsmux = false;
+let cachedPsmuxVersion: PsmuxVersion | null = null;
 
 // Set from config before the first tmuxAvailable() when the config is read at boot, and again when
 // the user saves a different one. Its commands go in the conf file (a fresh server) and are run live
@@ -44,11 +47,26 @@ export function setTmuxPrefix(prefix: string): void {
 // detection the isolated config is written so `new-session` picks it up via `-f`.
 export function tmuxAvailable(): boolean {
   if (cachedAvailable === null) {
-    cachedAvailable = spawnCapture("tmux", ["-V"]).status === 0;
+    const version = spawnCapture("tmux", ["-V"]);
+    cachedAvailable = version.status === 0;
+    cachedPsmux = cachedAvailable && isPsmuxVersion(version.stdout);
+    cachedPsmuxVersion = cachedPsmux ? psmuxVersionOf(version.stdout) : null;
     if (cachedAvailable) ensureConf();
   }
   return cachedAvailable;
 }
+
+/** Whether the tmux on PATH is psmux. False until tmuxAvailable() has run. */
+export const tmuxIsPsmux = (): boolean => cachedPsmux;
+
+/** psmux's own release, or null for a real tmux. */
+export const tmuxPsmuxVersion = (): PsmuxVersion | null => cachedPsmuxVersion;
+
+/** Whether tmux clients are started with `PSMUX_VT_INPUT=1`. Always false for a real tmux. */
+export const tmuxPsmuxVtInput = (): boolean => cachedPsmux && psmuxVtInputFor(cachedPsmuxVersion, process.env.PSMUX_VT_INPUT);
+
+/** Names kept off a psmux client and out of a running psmux server. Empty for a real tmux. */
+export const tmuxPsmuxScrubbedNames = (): readonly string[] => (cachedPsmux ? PSMUX_SCRUBBED_NAMES : []);
 
 // The terminfo `Ms` capability (OSC 52 clipboard write). tmux only forwards a program's
 // OSC 52 to the OUTER terminal when it knows the outer terminal supports it — our web
@@ -249,8 +267,8 @@ export function isOwnBindPort(value: string | undefined, boundPort: string): boo
 }
 
 /** Must this entry go from a RUNNING tmux server's global environment? */
-export function isScrubbedGlobalEnvEntry(name: string, value: string, boundPort: string): boolean {
-  if (isLauncherEnvVar(name) || SCRUBBED_NAMES.has(name)) return true;
+export function isScrubbedGlobalEnvEntry(name: string, value: string, boundPort: string, extraNames: readonly string[] = []): boolean {
+  if (isLauncherEnvVar(name) || SCRUBBED_NAMES.has(name) || extraNames.includes(name)) return true;
   return name === "PORT" && isOwnBindPort(value, boundPort);
 }
 
@@ -270,8 +288,9 @@ function scrubGlobalEnvironment(): void {
   const r = tmux(["show-environment", "-g"]);
   if (r.status !== 0) return;
   const boundPort = ownBindPort();
+  const extraNames = tmuxPsmuxScrubbedNames();
   for (const [name, value] of parseTmuxEnvironment(r.stdout)) {
-    if (isScrubbedGlobalEnvEntry(name, value, boundPort)) tmux(["set-environment", "-g", "-r", name]);
+    if (isScrubbedGlobalEnvEntry(name, value, boundPort, extraNames)) tmux(["set-environment", "-g", "-r", name]);
   }
 }
 

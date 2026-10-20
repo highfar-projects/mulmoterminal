@@ -15,6 +15,8 @@ const scrub = vi.fn();
 vi.mock("../../../../server/infra/process/tmux.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../../server/infra/process/tmux.js")>()),
   tmuxAvailable: () => tmuxOn,
+  tmuxPsmuxVtInput: () => psmuxVtInput,
+  tmuxPsmuxScrubbedNames: () => (psmuxOn ? ["_VOLTA_TOOL_RECURSION"] : []),
   tmuxHasSession: (id: string) => liveTmuxSessions.has(id),
   // The real one turns `env` into `-e KEY=VALUE` pairs, which is the only way a variable
   // reaches a tmux PANE — so the fake has to carry it or the #1367 assertions below prove nothing.
@@ -30,6 +32,8 @@ vi.mock("../../../../server/infra/process/tmux.js", async (importOriginal) => ({
 vi.mock("../../../../server/config/worktree/worktree-env.js", () => ({ reservedWorktreeEnv: () => reserved }));
 
 let tmuxOn = false;
+let psmuxVtInput = false;
+let psmuxOn = false;
 // What ptySpawn handed tmuxNewSessionArgs as the PANE's directory (the `-c` the real one builds).
 let newSessionCwd = "";
 let reserved: Record<string, string> = {};
@@ -56,6 +60,8 @@ beforeEach(() => {
   spawn.mockClear();
   scrub.mockClear();
   tmuxOn = false;
+  psmuxVtInput = false;
+  psmuxOn = false;
   reserved = {};
   liveTmuxSessions.clear();
   process.env.ANTHROPIC_API_KEY = "sk-ant-leftover";
@@ -290,6 +296,58 @@ describe("ptySpawn — the directory the process itself is started from", () => 
     tmuxOn = false;
     ptySpawn(S1, "claude", [], CELL_CWD, true);
     expect(cwdOf()).toBe(CELL_CWD);
+  });
+});
+
+// The psmux client's VT input route keeps a paste's markers, so the Enter after it is not taken
+// into the paste. Only the tmux CLIENT gets it, and only behind a psmux that has the route.
+describe("ptySpawn — the psmux VT input route", () => {
+  // The documented opt-out is a variable in the server's environment; one in the runner's must not
+  // decide these assertions.
+  beforeEach(() => vi.stubEnv("PSMUX_VT_INPUT", undefined));
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("starts the client with PSMUX_VT_INPUT=1 behind a psmux that has the route", () => {
+    tmuxOn = true;
+    psmuxVtInput = true;
+    ptySpawn(S1, "claude", [], EXISTING_CWD, true);
+    expect(envOf().PSMUX_VT_INPUT).toBe("1");
+  });
+
+  it("adds nothing for a real tmux", () => {
+    tmuxOn = true;
+    ptySpawn(S1, "claude", [], EXISTING_CWD, true);
+    expect(envOf()).not.toHaveProperty("PSMUX_VT_INPUT");
+  });
+
+  it("adds nothing to a spawn without tmux", () => {
+    psmuxVtInput = true;
+    ptySpawn(S1, "claude", [], EXISTING_CWD, true);
+    expect(envOf()).not.toHaveProperty("PSMUX_VT_INPUT");
+  });
+});
+
+describe("ptySpawn — Volta's marker on a psmux client", () => {
+  beforeEach(() => vi.stubEnv("_VOLTA_TOOL_RECURSION", "1"));
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("keeps it off a psmux client", () => {
+    tmuxOn = true;
+    psmuxOn = true;
+    ptySpawn(S1, "claude", [], EXISTING_CWD, true);
+    expect(envOf()).not.toHaveProperty("_VOLTA_TOOL_RECURSION");
+  });
+
+  it("leaves it on a real tmux client", () => {
+    tmuxOn = true;
+    ptySpawn(S1, "claude", [], EXISTING_CWD, true);
+    expect(envOf()._VOLTA_TOOL_RECURSION).toBe("1");
+  });
+
+  it("leaves it on a spawn without tmux", () => {
+    psmuxOn = true;
+    ptySpawn(S1, "claude", [], EXISTING_CWD, true);
+    expect(envOf()._VOLTA_TOOL_RECURSION).toBe("1");
   });
 });
 
