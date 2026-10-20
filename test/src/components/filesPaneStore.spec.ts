@@ -70,6 +70,14 @@ describe("parsePaneStore", () => {
     expect(parsePaneStore(raw)[0].state.tabs[0].showCanvas).toBeUndefined();
   });
 
+  // #3122. The pane's switch, not a tab's, and a whitelist field like the one above.
+  it("carries the side-by-side switch back with the pane, and reads anything but true as off", () => {
+    const store = rememberPane([], "/proj", { tabs: [{ path: "a.md" }], activePath: "a.md", expanded: [], sideBySide: true });
+    expect(parsePaneStore(JSON.stringify(store))[0].state.sideBySide).toBe(true);
+    const stored = (value: string) => `[{"cwd":"/proj","state":{"tabs":[{"path":"a.md"}],"activePath":"a.md","expanded":[],"sideBySide":${value}}}]`;
+    ["false", '"true"', "1", "null"].forEach((value) => expect(parsePaneStore(stored(value))[0].state).not.toHaveProperty("sideBySide"));
+  });
+
   it("keeps the good entries and drops only the bad one", () => {
     const raw = JSON.stringify([{ cwd: "/a", state: state("x.ts") }, { nonsense: true }, { cwd: "/b", state: state(null) }]);
     expect(parsePaneStore(raw).map((e) => e.cwd)).toEqual(["/a", "/b"]);

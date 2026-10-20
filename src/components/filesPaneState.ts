@@ -40,6 +40,9 @@ export interface FilesPaneState {
   /** How far down the tree was scrolled. The expanded directories are remembered already, so the
    *  same rows come back — this is which of them were on screen. */
   treeScrollTop?: number;
+  /** The side-by-side switch (#2577, #3122). The PANE's, not a tab's: it stays on across tabs, and is
+   *  on while a non-Markdown file or the Preview alone is in front. Absent is off. */
+  sideBySide?: boolean;
 }
 
 /** The tab in front, or null when nothing is open or the front names a tab that is not there. */

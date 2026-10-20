@@ -356,6 +356,9 @@ function teardown(): void {
 let started: Promise<void> = Promise.resolve();
 
 async function start(): Promise<void> {
+  // The pane's switch, not a file's, so a file opened for this start keeps it as an open pane would.
+  // Before any await: a start that a reload has since replaced must not reach it (#3122).
+  sideBySide.switchedOn.value = props.initialState?.sideBySide === true;
   const reqIdAtStart = file.generation();
   const startedAt = startEpoch();
   await nextTick();
@@ -399,6 +402,7 @@ defineExpose({
     ...withCanvasView(tabs.current(), canvasMode.has),
     expanded: expandedPaths(tree.roots.value ?? []),
     treeScrollTop: treeEl.value?.scrollTop ?? 0,
+    ...(sideBySide.switchedOn.value ? { sideBySide: true } : {}),
   }),
   reload: async () => {
     teardown();
