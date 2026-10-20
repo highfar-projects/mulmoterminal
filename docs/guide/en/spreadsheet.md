@@ -51,7 +51,9 @@ as a number it worked out. Change a value and everything that depends on it chan
 
 **A chart.** `presentChart` draws charts with ECharts: line, bar, area, scatter, pie, heatmap,
 candlestick, sankey and more. Several charts can be shown together. **PNG** on each chart downloads it as
-an image.
+an image. As of chart plugin 4.2.0 the agent also knows how to write the charts an analysis asks for:
+boxplots, Pareto charts, two value axes, waterfalls, a fitted line over a scatter, average lines and
+calendar heatmaps among them.
 
 ![The chart card: monthly coffee and pastry sales as lines, with the monthly total as bars](../images/spreadsheet-chart.png)
 
