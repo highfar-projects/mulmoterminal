@@ -1960,10 +1960,10 @@
   resolved "https://registry.yarnpkg.com/@mulmoclaude/accounting-plugin/-/accounting-plugin-4.0.2.tgz#5631f35c4bcff34c86e3eff7831f2a0d21ec39d5"
   integrity sha512-We3HhS2OfYDfPwT9DbX4NSw2m+UYFcYHb6KfKZp4yQwgh7tYaTo1H8z7AMNVnfPOJn6ABv/O9VjSnLXeQ+xTlw==
 
-"@mulmoclaude/chart-plugin@^4.1.0":
-  version "4.1.0"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/chart-plugin/-/chart-plugin-4.1.0.tgz#26072f2b7a00b473f4de7e9336dfb07eeaf43bab"
-  integrity sha512-b04HxzdWAp0OUHG0AfPJBTeLQDASLa/T+nFARwDfp65PCkKJeS3GI1SiM9u48+PJcpT3UTUJypWwxgCa4nxGZQ==
+"@mulmoclaude/chart-plugin@^4.2.0":
+  version "4.2.0"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/chart-plugin/-/chart-plugin-4.2.0.tgz#05d7b005d0fc3bcd41fd3aa308ff6f1e0ace11d4"
+  integrity sha512-UpGH3m4CcCwzHn89k0DFUkzcSaJutzArX3Z0KbiAvf0pxTATQ/QD0Ytla4MiS9tlS1nKYtS1VUoJlaM/1xmNog==
 
 "@mulmoclaude/collection-plugin@^5.5.0":
   version "5.5.0"
