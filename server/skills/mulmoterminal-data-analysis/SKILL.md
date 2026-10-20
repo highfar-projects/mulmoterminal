@@ -332,9 +332,10 @@ will silently describe the old file when the skill runs on the next one:
 - the input file's path is an argument, never written into a script; for an Excel file the
   worksheet's name is one too, and `exceljs` stays in `package.json`;
 - every range, row count and sheet size comes from the data (`Data!A1:G${rows.length + 1}`);
-- categories, dates, histogram bins counted in the script, the points of a fitted line passed
-  inline, lookup tables and anything else derived from the rows are computed by the script, not
-  pasted in;
+- categories, dates, the edges of bins the user chose, lookup tables and anything else derived
+  from the rows are computed by the script, not pasted in;
+- a fitted curve and an automatic histogram stay `ecStat` transforms over the data range, as in
+  *4. Charts*, never their points as they came out on this file;
 - the spreadsheet path the charts point at is an argument (it changes on every run);
 - titles name the data kind, not this file's dates;
 - workbook functions travel in the `functions` the scripts present, unchanged: they are the method,
