@@ -90,5 +90,7 @@ describe("unknownForgeReason", () => {
     expect(reason).toContain("gitea.example.com");
     expect(reason).toContain("gitlabHosts");
     expect(reason).toContain("~/.mulmoterminal/config.json");
+    expect(reason).toContain("Settings → GitHub and GitLab");
+    expect(reason).not.toContain("restart");
   });
 });
