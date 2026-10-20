@@ -390,7 +390,7 @@ outlives the conversation and can be shared; the data stays where the user keeps
 - the steps to run it: copy `scripts/` into a fresh `mktemp -d`, `npm install`, run the scripts on
   the file the user names, present the spreadsheet, then the charts from the reported spreadsheet
   path;
-- what to tell the user afterwards: the same findings as this analysis, which figures are formulas
+- what to tell the user afterwards: the same findings as this analysis, which values are formulas
   and which computed, which charts follow the sheet, and where everything was saved;
 - the date it was made, and the file it was made from by its name only (not its full path).
 
