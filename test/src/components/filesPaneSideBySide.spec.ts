@@ -60,14 +60,16 @@ describe("FilesPane remembering side by side", () => {
     expect(sideBySidePressed(after)).toBe("true");
   });
 
-  // The other way round: two cells that both show files keep ONE pane, which reloads in place.
-  it("drops the switch when it reloads onto a cell that did not have it on", async () => {
+  // The other way round: two cells that both show files keep ONE pane, which reloads in place — here
+  // onto a cell with nothing remembered, where no restore runs to say "off".
+  it("drops the switch when it reloads onto a cell with nothing remembered", async () => {
     const w = await mountOn(oneFile("README.md"));
     await w.get('[data-testid="files-side-by-side"]').trigger("click");
     await flushPromises();
-    await w.setProps({ initialState: oneFile("README.md") });
+    await w.setProps({ initialState: null });
     await callExposed(w, "reload");
     await flushPromises();
-    expect(sideBySidePressed(w)).toBe("false");
+    // No file is open, so there is no button to read; the snapshot is what the next cell inherits.
+    expect(await callExposed(w, "snapshot")).not.toHaveProperty("sideBySide");
   });
 });

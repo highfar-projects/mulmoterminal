@@ -16,9 +16,10 @@ instance and was in nothing the pane hands its host. So:
   The issue suggested putting it on the tab next to `showPreview`; a per-tab value would invent a
   per-tab behaviour the pane does not have.
 - `useSideBySide` exposes the switch as `switchedOn`, read by the snapshot and written by the restore.
-- `restorePaneState` turns the switch off first, whatever is remembered (the in-place reload case), and
-  back on from the state at the same point the Canvas view is restored — so a pane opened FOR a file
-  (#1979) starts without it, as it does without a Canvas view.
+- The pane's `teardown()` turns the switch off before every start (the in-place reload case), next to
+  the Canvas view's reset. `restorePaneState` only sets it from the state, under the same generation
+  check as the Canvas view — so a pane opened FOR a file (#1979) starts without it, and a restore
+  left over from an earlier start cannot touch a newer one's switch (Codex round 1).
 - `filesPaneStore.asPaneState` passes `sideBySide: true` through its whitelist, so a reload keeps it.
 
 Not touched: the session's "open the next file as …" memory (`filesViewMode.ts`, #3075) — that is about
@@ -27,7 +28,7 @@ files not yet open.
 ## Tests
 
 - `test/src/composables/filesPaneRestore.spec.ts` — the restore rule, including the generation check
-  having to come before the remembered file's own load.
+  having to come before the remembered file's own load, and a stale restore leaving the switch alone.
 - `test/src/components/filesPaneSideBySide.spec.ts` — snapshot, unmount, remount comes back side by
-  side; an in-place reload onto a state without it drops it. Both fail on the code before this change.
+  side; an in-place reload onto a cell with nothing remembered drops it. Both fail on the code before this change.
 - `test/src/components/filesPaneStore.spec.ts` — the whitelist round trip.

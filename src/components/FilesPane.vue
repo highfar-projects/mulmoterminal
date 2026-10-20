@@ -332,6 +332,8 @@ function teardown(): void {
   file.teardown();
   tabs.reset();
   canvasMode.reset();
+  // Here and not in the restore: a restore left over from an earlier start would clear a newer one's.
+  sideBySide.switchedOn.value = false;
   // And the search, for the finder's reason: the root is changing, and a panel left open goes on
   // showing the OLD project's matches. Clicking one then reveals that relative path under the NEW
   // root — opening a different file where the same path exists, and nothing where it does not.

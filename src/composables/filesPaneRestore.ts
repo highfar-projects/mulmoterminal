@@ -23,9 +23,6 @@ export interface PaneRestoreDeps {
  *  generation at the beginning of the pane's start — the remembered file is opened only when no
  *  competing request arrived during THIS startup cycle. */
 export async function restorePaneState(deps: PaneRestoreDeps, state: FilesPaneState | null, reqIdAtStart: number): Promise<void> {
-  // First, and whatever was remembered: a pane that moves between two cells showing files is the
-  // same instance, and would otherwise carry the last cell's switch onto this cell's file (#3122).
-  deps.sideBySide.switchedOn.value = false;
   if (!state) return;
   const { tree, file, canvasMode, tabs } = deps;
   // One wait per DEPTH, not one per directory. A level can only be looked up once the level above

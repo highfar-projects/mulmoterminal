@@ -3,12 +3,11 @@ import { ref } from "vue";
 import { restorePaneState, type PaneRestoreDeps } from "../../../src/composables/filesPaneRestore";
 import type { FilesPaneState } from "../../../src/components/filesPaneState";
 
-// #3122. The side-by-side switch comes back with the pane — and goes when this cell had none, since
-// a pane moving between two cells that both show files is the same instance and still holds it.
-function deps(opts: { openDuringRestore?: boolean } = {}) {
+// #3122. The side-by-side switch comes back with the pane. The pane's teardown clears it before every
+// start, so the restore only ever turns it on — and never once its own start has gone stale.
+function deps(opts: { openDuringRestore?: boolean; switchedOn?: boolean } = {}) {
   let generation = 0;
-  // Starts on, as a pane arriving from a cell that had it on does.
-  const switchedOn = ref(true);
+  const switchedOn = ref(opts.switchedOn ?? false);
   const restoreDeps: PaneRestoreDeps = {
     tree: { findNode: () => null, toggleDir: async () => {} },
     file: { generation: () => generation },
@@ -33,13 +32,13 @@ describe("restorePaneState and the side-by-side switch", () => {
     expect(switchAfter()).toBe(true);
   });
 
-  it("turns it off when the cell's pane was left with it off", async () => {
+  it("leaves it off when the cell's pane was left with it off", async () => {
     const { restoreDeps, switchAfter } = deps();
     await restorePaneState(restoreDeps, pane(), 0);
     expect(switchAfter()).toBe(false);
   });
 
-  it("turns it off when nothing is remembered for the cell", async () => {
+  it("leaves it off when nothing is remembered for the cell", async () => {
     const { restoreDeps, switchAfter } = deps();
     await restorePaneState(restoreDeps, null, 0);
     expect(switchAfter()).toBe(false);
@@ -57,6 +56,14 @@ describe("restorePaneState and the side-by-side switch", () => {
   it("decides before opening the remembered file, whose own load moves the generation", async () => {
     const { restoreDeps, switchAfter } = deps({ openDuringRestore: true });
     await restorePaneState(restoreDeps, pane({ sideBySide: true }), 0);
+    expect(switchAfter()).toBe(true);
+  });
+
+  // A newer start tore the pane down (moving the generation) and put its own cell's switch on; the
+  // older start's restore, finishing late, must not reach it either way.
+  it("leaves a newer start's switch alone when its own start has gone stale", async () => {
+    const { restoreDeps, switchAfter } = deps({ switchedOn: true });
+    await restorePaneState(restoreDeps, pane(), -1);
     expect(switchAfter()).toBe(true);
   });
 });
