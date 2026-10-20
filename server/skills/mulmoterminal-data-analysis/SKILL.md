@@ -249,16 +249,18 @@ chart needs, so the chart follows edits:
 - **boxplot**: the five numbers per group with `MIN`, `QUARTILE(…,1)`, `MEDIAN`, `QUARTILE(…,3)` and
   `MAX`. The sheet cannot filter a range by group, so sort the data sheet by group and point each
   row at its group's block, or give each group a column of its own.
-- **Pareto**: the sheet cannot sort, so the script orders the causes, largest first, and the sheet
-  counts them. The cumulative share is a number from 0 to 100 (`=SUM($B$2:B2)/SUM($B$2:$B$9)*100`),
-  not a fraction formatted as a percentage, since the axis runs to 100. The counts follow edits and
-  the order does not: say so, and treat the order as a computed value (see *When the user edits the
-  spreadsheet*).
+- **Pareto**: the recipe says to sort on the sheet, but the sheet has no sort function, so the
+  script orders the causes, largest first, and the sheet counts them. The cumulative share is a
+  number from 0 to 100 (`=SUM($B$2:B2)/SUM($B$2:$B$9)*100`), not a fraction formatted as a
+  percentage, since the axis runs to 100.
 - **waterfall**: the change and the running total in columns beside the range; the drawn columns
   are `Base = MIN(total before, total after)`, `Up = MAX(change, 0)` and `Down = MAX(-change, 0)`,
   all non-negative.
 - **correlation matrix**: one row per cell, `X | Y | Value`, with `Value` a `CORREL` of the two
   columns: every ordered pair, both directions and the diagonal, so `n` columns make `n²` rows.
+
+Any order the script sets, such as the sorted bars and the Pareto causes, is a computed value: the
+numbers follow edits and the order does not. Say so, and see *When the user edits the spreadsheet*.
 
 **Draw a chart of sheet data from the sheet**, so it follows the user's edits. Give the chart a
 `source` and leave the data out of `option`:
@@ -368,8 +370,8 @@ number. Work out the results in a script, and say what changed most.
 If the sheet holds no computed values, and every chart follows it, that is all: do not present it
 again. Otherwise the computed values and the inline charts are now stale. Then:
 
-- recompute the computed values that depended on the edited cells, including an order the script
-  set (a Pareto chart's causes) that the new counts no longer follow;
+- recompute the computed values that depended on the edited cells, including any order the script
+  set (sorted bars, a Pareto chart's causes) that the new numbers no longer follow;
 - call `presentSpreadsheet` again with the whole spreadsheet: the user's edits, the formulas, each
   sheet's `functions` as the file holds them, and the new computed values;
 - draw the charts again, with their `source` pointing at the **new** spreadsheet;
