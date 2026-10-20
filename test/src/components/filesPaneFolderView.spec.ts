@@ -24,7 +24,8 @@ beforeEach(() => {
   listings.length = 0;
   disk.clear();
   disk.set("", [{ name: "shots", dir: true, size: 0 }, file("notes.md"), file("a.png")]);
-  disk.set("shots", [file("b.png")]);
+  disk.set("shots", [{ name: "old", dir: true, size: 0 }, file("b.png")]);
+  disk.set("shots/old", [file("c.png")]);
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
     const url = new URL(String(input), window.location.href);
     if (url.pathname.endsWith("/list")) {
@@ -94,5 +95,19 @@ describe("FilesPane — the folder in the empty file area (#3120)", () => {
     await flushPromises();
     expect(fakeEditor.setDoc).toHaveBeenLastCalledWith("# hi", "notes.md");
     expect(document.activeElement).not.toBe(document.body);
+  });
+
+  it("opens the tree down to a folder the view moves to, and leaves it open going up (#3134)", async () => {
+    const w = mount(FilesPane, { props: { cwd: "/proj" }, attachTo: document.body });
+    await flushPromises();
+    await w.get('[data-testid="files-folder-row"][data-path="shots"]').trigger("click");
+    await flushPromises();
+    await w.get('[data-testid="files-folder-row"][data-path="shots/old"]').trigger("click");
+    await flushPromises();
+    expect(treeRow(w, "c.png")).toBeDefined();
+    await w.get('[data-testid="files-folder-up"]').trigger("click");
+    await flushPromises();
+    expect(folderRows(w)).toContain("shots/old");
+    expect(treeRow(w, "c.png")).toBeDefined();
   });
 });

@@ -304,6 +304,7 @@ const {
   closeFinder,
   onFinderPick,
   revealPath,
+  showFolderInTree,
   followFrontTab,
   startEpoch,
   reset: resetReveal,
@@ -319,6 +320,12 @@ const {
 // "Search in files" (#2140) — the finder's companion, and its own panel for the reason its own
 // header says: the rows are a file heading with matching lines under it, not one row per path.
 // The editor is passed as a GETTER because the pane replaces it when the host element remounts.
+// A move made in the folder view opens the tree down to that folder, so both sides show one place.
+function showFromFolderView(dirRel: string): void {
+  folder.show(dirRel);
+  void showFolderInTree(dirRel);
+}
+
 const search = useFileSearchPanel({ dirty, openPath, editSeq, editor: () => file.editor.value, revealPath });
 
 // The text a panel opens on: the palette's `/` or `#`, or nothing. A new object every time, so the
@@ -575,7 +582,7 @@ defineExpose({
               mode: folder.mode.value,
               withSubfolders: folder.withSubfolders.value,
             }"
-            @show="folder.show"
+            @show="showFromFolderView"
             @open="openFromFolder"
             @mode="folder.setMode"
             @subfolders="(on) => (folder.withSubfolders.value = on)"

@@ -303,4 +303,34 @@ describe("following the tab in front", () => {
     expect(h.scrolled).toEqual([]);
     expect(h.reveal.followFrontTab(h.reveal.startEpoch())).toBe(true);
   });
+
+  describe("a folder the folder view moved to (#3134)", () => {
+    it("opens its ancestors and the folder itself, outermost first, and scrolls to its row", async () => {
+      const h = harness();
+      h.treeEl.value = rowsHost(["src", "src/deep"], h.scrolled);
+      await h.reveal.showFolderInTree("src/deep");
+      expect(h.opened).toEqual(["src", "src/deep"]);
+      expect(h.scrolled).toEqual(["src/deep"]);
+      expect(h.reads).toEqual([]);
+    });
+
+    it("leaves the tree as it is for the root, which has no row", async () => {
+      const h = harness();
+      await h.reveal.showFolderInTree("");
+      expect(h.opened).toEqual([]);
+      expect(h.scrolled).toEqual([]);
+    });
+
+    it("gives way to a later move made while it was still opening folders", async () => {
+      let release = (): void => {};
+      const holdDir = new Promise<void>((resolve) => (release = resolve));
+      const h = harness({ holdDir });
+      h.treeEl.value = rowsHost(["src", "src/deep"], h.scrolled);
+      const first = h.reveal.showFolderInTree("src/deep"); // parks inside the first expansion
+      const second = h.reveal.showFolderInTree("src");
+      release();
+      await Promise.all([first, second]);
+      expect(h.scrolled).toEqual(["src"]);
+    });
+  });
 });
