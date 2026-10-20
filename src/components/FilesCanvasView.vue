@@ -37,7 +37,7 @@ const noConversation = (): boolean => false;
 <template>
   <div ref="box" data-testid="files-canvas-view" class="min-w-0 flex-auto overflow-y-auto p-3">
     <p v-if="!card" data-testid="files-canvas-loading" class="p-4 text-[13px] text-muted">Loading…</p>
-    <PluginFrame v-else-if="plugin" :key="card.uuid" :css="plugin.css" :height="plugin.height">
+    <PluginFrame v-else-if="plugin" :key="card.uuid" :css="plugin.css" :height="plugin.height" :follows-appearance="plugin.followsAppearance">
       <component
         :is="plugin.viewComponent"
         :selected-result="card"

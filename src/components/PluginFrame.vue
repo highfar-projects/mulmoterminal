@@ -77,7 +77,7 @@ import { ref, onMounted } from "vue";
 // StackView, which wraps such tools in a fixed-height box. When set, the host
 // + shadow mount become that height so the plugin's `h-full` chain resolves; when
 // omitted, the frame flows naturally (chart/form/markdown).
-const props = defineProps<{ css?: string | undefined; height?: string | undefined }>();
+const props = defineProps<{ css?: string | undefined; height?: string | undefined; followsAppearance?: boolean | undefined }>();
 
 const hostEl = ref<HTMLDivElement>();
 const target = ref<HTMLDivElement | null>(null);
@@ -100,10 +100,13 @@ onMounted(() => {
   // These plugins are authored for MulmoClaude's light surface (e.g. text-gray-900
   // on white). MulmoTerminal's panel is dark, so give the isolated frame a light
   // surface — otherwise the plugin's dark-on-light styling is unreadable. This is
-  // the plugin "card" look, matching how it renders in MulmoClaude.
+  // the plugin "card" look, matching how it renders in MulmoClaude. A plugin that follows
+  // `data-appearance` draws its own surface, and a white one under its dark cards would frame them.
   const mount = document.createElement("div");
-  mount.style.background = "#ffffff";
-  mount.style.color = "#111827";
+  if (!props.followsAppearance) {
+    mount.style.background = "#ffffff";
+    mount.style.color = "#111827";
+  }
   mount.style.borderRadius = "8px";
   mount.style.overflow = "hidden";
   // Carry the fixed height into the shadow so the plugin's internal h-full resolves
