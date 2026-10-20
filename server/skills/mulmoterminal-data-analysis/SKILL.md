@@ -202,8 +202,9 @@ Put the result in `presentSpreadsheet`. Split each number by whether the user ma
   true/false. A name is letters and digits joined by dots, and not a built-in's. If
   `presentSpreadsheet`'s reply names a function it could not use, fix it and present again.
   Check the function's result against the script's number, as with a formula.
-- **Values** only for what neither can do: a result that needs data outside the workbook, or a
-  computation too heavy for 50 ms a call. A function the sheet lacks shows `#NAME?`. Compute
+- **Values** only for what neither can do: a result that needs data outside the workbook, a
+  computation too heavy for 50 ms a call, or what a chart transform works out that the user wants
+  as data (each row's cluster, a curve's coefficients; see *4. Charts*). A function the sheet lacks shows `#NAME?`. Compute
   these in the script and put the result in as a number. Label them as computed (for example
   "model fit (computed)"), because a value does not change when the user edits the data.
 
@@ -282,8 +283,8 @@ whatever the chart needs, so the chart follows edits:
 - **map**: one row per region, its name exactly as the map has it: `japan-ja` and `world-ja` take
   Japanese names (東京都), `japan` and `world` English ones. No other map is available.
 
-**A fitted curve, a histogram, clusters or a box per column straight from the data** uses the
-recipe's transform (`ecStat:regression`, `ecStat:histogram`, `mulmo:clustering`,
+**A fitted curve, a histogram, clusters (when the sheet holds no group column, see *clusters*) or a
+box per column straight from the data** uses the recipe's transform (`ecStat:regression`, `ecStat:histogram`, `mulmo:clustering`,
 `mulmo:boxplotColumns`): the chart's `source` is the data sheet's range, header row included
 (`Data!B1:C201`), and the transform's `dimensions` name the columns by that header exactly. The
 transform recomputes whenever the sheet is saved, so the chart follows edits. A blank cell, or text
@@ -368,7 +369,8 @@ will silently describe the old file when the skill runs on the next one:
 - categories, dates, the edges of bins the user chose, lookup tables and anything else derived
   from the rows are computed by the script, not pasted in;
 - a fitted curve, an automatic histogram, clusters and a box per column stay transforms over the
-  data range, as in *4. Charts*, never their output as it came out on this file;
+  data range, as in *4. Charts*, never their output as it came out on this file; a group column the
+  user asked for is computed by the script on each run, and the chart is coloured by it;
 - the spreadsheet path the charts point at is an argument (it changes on every run);
 - titles name the data kind, not this file's dates;
 - workbook functions travel in the `functions` the scripts present, unchanged: they are the method,
