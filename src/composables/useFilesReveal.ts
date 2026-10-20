@@ -33,6 +33,13 @@ export interface FilesReveal {
   /** Put the tree on a file that is already open — the tab in front changed (#2495). Expands its
    *  folders and scrolls its row into view; opens nothing. */
   showInTree: (pathRel: string) => Promise<void>;
+  /** Put the tree on a folder the folder view moved to: the folder opens too, so the tree shows
+   *  what the view does. It goes on only while `stillShown` — a file opened, the view moved on, or the
+   *  pane re-rooted, by whatever route, ends it. The root has no row: a move still under way stops. */
+  showFolderInTree: (dirRel: string, stillShown: () => boolean) => Promise<void>;
+  /** A click in the tree itself: a folder-view move still under way stops, even one into the very
+   *  folder clicked, which `stillShown` cannot tell from the move. */
+  stopShowing: () => void;
   /** The remembered pane is back: from now on the tree follows the tab in front, and it is put on
    *  that tab's row at once — the remembered scroll may have left the row off screen (#3058).
    *  False, and nothing done, for a startup a reset has since made stale. */
@@ -84,6 +91,16 @@ function followsFrontTab(
   };
 }
 
+/** Expand `dirs` in order, stopping if `current` says a later call took over. */
+async function expandAll(tree: FilesTree, dirs: readonly string[], current: () => boolean): Promise<boolean> {
+  for (const dirPath of dirs) {
+    const node = tree.findNode(dirPath);
+    if (node?.dir && !node.expanded) await tree.toggleDir(node);
+    if (!current()) return false;
+  }
+  return true;
+}
+
 export function useFilesReveal(deps: FilesRevealDeps): FilesReveal {
   // "Open by name" (#2099). Its own state rather than a route or a prop: the finder belongs to
   // whichever pane the user is in, and BOTH mounts of the pane have one — the pane beside a zoomed
@@ -103,16 +120,6 @@ export function useFilesReveal(deps: FilesRevealDeps): FilesReveal {
   // would make every reveal cancel itself the moment its file came to the front.
   let showId = 0;
 
-  /** Expand `pathRel`'s folders outermost first, stopping if `current` says a later call took over. */
-  async function expandTo(pathRel: string, current: () => boolean): Promise<boolean> {
-    for (const dirPath of ancestorDirs(pathRel)) {
-      const node = deps.tree.findNode(dirPath);
-      if (node?.dir && !node.expanded) await deps.tree.toggleDir(node);
-      if (!current()) return false;
-    }
-    return true;
-  }
-
   /** Open `pathRel` and put the tree on it. The ancestors are expanded OUTERMOST FIRST because each
    *  expansion fetches that directory's children — a child cannot be opened before its parent has
    *  been (the rule `restoreLevels` exists for). */
@@ -121,7 +128,7 @@ export function useFilesReveal(deps: FilesRevealDeps): FilesReveal {
     await deps.started(); // the tree may still be loading — expanding into an unread `roots` finds nothing
     if (id !== revealId) return false;
     // A later pick may take over while this one is fetching.
-    if (!(await expandTo(pathRel, () => id === revealId))) return false;
+    if (!(await expandAll(deps.tree, ancestorDirs(pathRel), () => id === revealId))) return false;
     await deps.open(pathRel);
     await nextTick(); // the row only exists once the expansions above have rendered
     if (id !== revealId) return false;
@@ -134,13 +141,23 @@ export function useFilesReveal(deps: FilesRevealDeps): FilesReveal {
     return deps.openPath.value === pathRel;
   }
 
-  async function showInTree(pathRel: string): Promise<void> {
+  /** Expand `dirs` outermost first and scroll to `rowPath`, giving way to a later call or to `wanted`
+   *  turning false. */
+  async function showRow(dirs: readonly string[], rowPath: string, wanted: () => boolean = () => true): Promise<void> {
     const id = ++showId;
-    const current = (): boolean => id === showId;
+    const current = (): boolean => id === showId && wanted();
     await deps.started();
-    if (!current() || !(await expandTo(pathRel, current))) return;
+    if (!current() || !(await expandAll(deps.tree, dirs, current))) return;
     await nextTick();
-    if (current()) scrollToRow(pathRel);
+    if (current()) scrollToRow(rowPath);
+  }
+  const showInTree = (pathRel: string): Promise<void> => showRow(ancestorDirs(pathRel), pathRel);
+  const showFolderInTree = async (dirRel: string, stillShown: () => boolean): Promise<void> => {
+    if (dirRel) return showRow([...ancestorDirs(dirRel), dirRel], dirRel, stillShown);
+    stopShowing(); // the root has no row, but a move to it still overtakes one under way
+  };
+  function stopShowing(): void {
+    showId += 1;
   }
   // `nearest`: a row already on screen — the one just clicked — does not move.
   const scrollToRow = (pathRel: string): void => rowElementFor(deps.treeEl.value, pathRel)?.scrollIntoView({ block: "nearest" });
@@ -160,6 +177,8 @@ export function useFilesReveal(deps: FilesRevealDeps): FilesReveal {
     onFinderPick,
     revealPath,
     showInTree,
+    showFolderInTree,
+    stopShowing,
     followFrontTab: front.start,
     startEpoch: front.epoch,
     reset: () => {
