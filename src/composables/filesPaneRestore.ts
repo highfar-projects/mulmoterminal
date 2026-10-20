@@ -6,7 +6,6 @@ import { restoreLevels } from "../components/filesTreeState";
 import type { useFilesCanvasMode } from "./useFilesCanvasMode";
 import type { FilesTabs } from "./useFilesTabs";
 import type { FilesTree } from "./useFilesTree";
-import type { SideBySide } from "./useSideBySide";
 import type { OpenFile } from "./useOpenFile";
 
 export interface PaneRestoreDeps {
@@ -14,7 +13,6 @@ export interface PaneRestoreDeps {
   file: Pick<OpenFile, "generation">;
   canvasMode: Pick<ReturnType<typeof useFilesCanvasMode>, "reset">;
   tabs: Pick<FilesTabs, "restore">;
-  sideBySide: Pick<SideBySide, "switchedOn">;
   treeEl: () => HTMLElement | null;
 }
 
@@ -38,11 +36,8 @@ export async function restorePaneState(deps: PaneRestoreDeps, state: FilesPaneSt
     );
   }
   // A pane opened FOR a file (#1979) starts on it as text, as it would with Preview: when an open got here
-  // first — landed or still in flight, so its path cannot be asked — no remembered Canvas view or split comes back.
-  if (file.generation() === reqIdAtStart) {
-    canvasMode.reset(state.tabs.filter((tab) => tab.showCanvas === true).map((tab) => tab.path));
-    deps.sideBySide.switchedOn.value = state.sideBySide === true;
-  }
+  // first — landed or still in flight, so its path cannot be asked — no remembered Canvas view comes back.
+  if (file.generation() === reqIdAtStart) canvasMode.reset(state.tabs.filter((tab) => tab.showCanvas === true).map((tab) => tab.path));
   await tabs.restore({ tabs: state.tabs, activePath: state.activePath }, () => file.generation() === reqIdAtStart);
   // Last, and only after a tick: the rows have to exist before there is anything to scroll past,
   // and the expansions above are what create them.

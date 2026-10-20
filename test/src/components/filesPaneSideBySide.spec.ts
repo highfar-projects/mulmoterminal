@@ -72,4 +72,38 @@ describe("FilesPane remembering side by side", () => {
     // No file is open, so there is no button to read; the snapshot is what the next cell inherits.
     expect(await callExposed(w, "snapshot")).not.toHaveProperty("sideBySide");
   });
+
+  // Two reloads in quick succession — the zoom walked on before the first one's tree arrived, and it
+  // arrives last. The first start must not put its cell's switch on the second cell's pane.
+  it("does not let a start that a later reload replaced turn the switch on", async () => {
+    const w = await mountOn(oneFile("README.md"));
+    let releaseList: () => void = () => {};
+    const listGate = new Promise<void>((resolve) => (releaseList = resolve));
+    const served = vi.mocked(globalThis.fetch).getMockImplementation();
+    let gated = false;
+    vi.mocked(globalThis.fetch).mockImplementation(async (input, init) => {
+      // Only the FIRST start's tree read is held, so it lands after the second start has finished.
+      if (String(input).includes("/list") && !gated) {
+        gated = true;
+        await listGate;
+      }
+      return served ? served(input, init) : Promise.reject(new Error("no fetch"));
+    });
+    await w.setProps({ initialState: { ...oneFile("README.md"), sideBySide: true } });
+    const stale = callExposed(w, "reload");
+    await w.setProps({ initialState: null });
+    await callExposed(w, "reload");
+    releaseList();
+    await stale;
+    await flushPromises();
+    expect(await callExposed(w, "snapshot")).not.toHaveProperty("sideBySide");
+  });
+
+  // The switch is the pane's: a file opened FOR this start (a clicked path) keeps it, as it would in
+  // a pane that had stayed open. Unlike the Canvas view (#1979), which belongs to a file.
+  it("keeps the remembered switch for a file the pane was opened for", async () => {
+    const w = mount(FilesPane, { props: { cwd: "/proj", initialState: { ...oneFile(null), sideBySide: true }, requestedPath: "README.md" } });
+    await flushPromises();
+    expect(sideBySidePressed(w)).toBe("true");
+  });
 });

@@ -332,8 +332,6 @@ function teardown(): void {
   file.teardown();
   tabs.reset();
   canvasMode.reset();
-  // Here and not in the restore: a restore left over from an earlier start would clear a newer one's.
-  sideBySide.switchedOn.value = false;
   // And the search, for the finder's reason: the root is changing, and a panel left open goes on
   // showing the OLD project's matches. Clicking one then reveals that relative path under the NEW
   // root — opening a different file where the same path exists, and nothing where it does not.
@@ -358,6 +356,9 @@ function teardown(): void {
 let started: Promise<void> = Promise.resolve();
 
 async function start(): Promise<void> {
+  // The pane's switch, not a file's, so a file opened for this start keeps it as an open pane would.
+  // Before any await: a start that a reload has since replaced must not reach it (#3122).
+  sideBySide.switchedOn.value = props.initialState?.sideBySide === true;
   const reqIdAtStart = file.generation();
   const startedAt = startEpoch();
   await nextTick();
@@ -374,7 +375,7 @@ async function start(): Promise<void> {
 }
 
 const restore = (state: FilesPaneState | null, reqIdAtStart: number): Promise<void> =>
-  restorePaneState({ tree, file, canvasMode, tabs, sideBySide, treeEl: () => treeEl.value }, state, reqIdAtStart);
+  restorePaneState({ tree, file, canvasMode, tabs, treeEl: () => treeEl.value }, state, reqIdAtStart);
 
 // A second clicked path while the pane is already showing: nothing else changes, so
 // without this the file would never open.

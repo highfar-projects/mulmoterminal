@@ -76,8 +76,9 @@ export function useSideBySide(deps: SideBySideDeps): SideBySide {
       on.value = false;
       return;
     }
-    if (file.showPreview.value) await file.togglePreview();
+    // Before the await, so a pane started over in the meantime (#3122) is not switched back on.
     on.value = true;
+    if (file.showPreview.value) await file.togglePreview();
   }
 
   // Both halves just came up, or the Preview document loaded another file and answered with the
