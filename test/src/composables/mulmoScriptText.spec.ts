@@ -3,12 +3,14 @@ import { canvasNeedsMulmoScript, isMulmoScriptText } from "../../../src/composab
 
 // #3137. What makes a .json a MulmoScript for the Files pane's Canvas button.
 describe("isMulmoScriptText", () => {
-  it.each([['{"$mulmocast":{"version":"1.1"},"beats":[]}'], ['  {\n  "title": "t",\n  "$mulmocast": {"version": "1.1"}\n}\n'], ['{"$mulmocast":null}']])(
-    "takes %j as a MulmoScript",
-    (text) => {
-      expect(isMulmoScriptText(text)).toBe(true);
-    },
-  );
+  it.each([
+    ['{"$mulmocast":{"version":"1.1"},"beats":[]}'],
+    ['  {\n  "title": "t",\n  "$mulmocast": {"version": "1.1"}\n}\n'],
+    ['{"$mulmocast":null}'],
+    ['{"\\u0024mulmocast":{"version":"1.1"}}'],
+  ])("takes %j as a MulmoScript", (text) => {
+    expect(isMulmoScriptText(text)).toBe(true);
+  });
 
   it.each([
     [""],

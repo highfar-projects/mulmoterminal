@@ -7,8 +7,6 @@ const MULMOCAST_KEY = "$mulmocast";
 const JSON_FILE_NAME = /\.json$/i;
 
 export function isMulmoScriptText(text: string): boolean {
-  // Most JSON never mentions the key, and is then not parsed at all.
-  if (!text.includes(MULMOCAST_KEY)) return false;
   try {
     const parsed: unknown = JSON.parse(text);
     return isRecord(parsed) && Object.hasOwn(parsed, MULMOCAST_KEY);
