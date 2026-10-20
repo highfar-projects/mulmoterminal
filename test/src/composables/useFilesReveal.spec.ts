@@ -321,6 +321,20 @@ describe("following the tab in front", () => {
       expect(h.scrolled).toEqual([]);
     });
 
+    it("is overtaken by a move back to the root, which scrolls nowhere", async () => {
+      let release = (): void => {};
+      const holdDir = new Promise<void>((resolve) => (release = resolve));
+      const h = harness({ holdDir });
+      h.treeEl.value = rowsHost(["src", "src/deep"], h.scrolled);
+      const first = h.reveal.showFolderInTree("src/deep");
+      await flushPromises(); // now parked inside the first expansion
+      await h.reveal.showFolderInTree("");
+      release();
+      await first;
+      expect(h.opened).toEqual(["src"]);
+      expect(h.scrolled).toEqual([]);
+    });
+
     it("gives way to a later move made while it was still opening folders", async () => {
       let release = (): void => {};
       const holdDir = new Promise<void>((resolve) => (release = resolve));

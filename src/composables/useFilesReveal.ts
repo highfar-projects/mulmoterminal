@@ -34,7 +34,7 @@ export interface FilesReveal {
    *  folders and scrolls its row into view; opens nothing. */
   showInTree: (pathRel: string) => Promise<void>;
   /** Put the tree on a folder the folder view moved to: the folder opens too, so the tree shows
-   *  what the view does. The root has no row and leaves the tree as it is. */
+   *  what the view does. The root has no row: the tree stays as it is, and a move still under way stops. */
   showFolderInTree: (dirRel: string) => Promise<void>;
   /** The remembered pane is back: from now on the tree follows the tab in front, and it is put on
    *  that tab's row at once — the remembered scroll may have left the row off screen (#3058).
@@ -148,7 +148,8 @@ export function useFilesReveal(deps: FilesRevealDeps): FilesReveal {
   }
   const showInTree = (pathRel: string): Promise<void> => showRow(ancestorDirs(pathRel), pathRel);
   const showFolderInTree = async (dirRel: string): Promise<void> => {
-    if (dirRel) await showRow([...ancestorDirs(dirRel), dirRel], dirRel);
+    if (dirRel) return showRow([...ancestorDirs(dirRel), dirRel], dirRel);
+    showId += 1; // the root has no row, but a move to it still overtakes one under way
   };
   // `nearest`: a row already on screen — the one just clicked — does not move.
   const scrollToRow = (pathRel: string): void => rowElementFor(deps.treeEl.value, pathRel)?.scrollIntoView({ block: "nearest" });
