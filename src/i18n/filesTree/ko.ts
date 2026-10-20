@@ -35,4 +35,11 @@ export const filesTreeKo = {
     empty: "이 폴더에는 이미지, 동영상, 소리, PDF가 없습니다.",
     showMore: "{count}개 더 보기",
   },
+  filesFolderView: {
+    list: "목록",
+    gallery: "갤러리",
+    withSubfolders: "하위 폴더 포함",
+    up: "상위 폴더로",
+    empty: "이 폴더는 비어 있습니다.",
+  },
 };

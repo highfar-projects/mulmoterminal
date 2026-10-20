@@ -44,9 +44,9 @@ export function useFilesGallery(cwd: () => string | null) {
   /** The tree operations' `changed` listener: `alsoOnChange` (the pane's own reaction to a change on
    *  disk), then the gallery following what the operation did to its folder. */
   const treeOpListener =
-    (alsoOnChange: () => void) =>
+    (alsoOnChange: (op: TreeOp) => void) =>
     (op: TreeOp): void => {
-      alsoOnChange();
+      alsoOnChange(op);
       void afterTreeOp(op);
     };
 

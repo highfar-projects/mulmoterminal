@@ -35,4 +35,11 @@ export const filesTreeEn = {
     empty: "No pictures, videos, sounds or PDFs in this folder.",
     showMore: "Show {count} more",
   },
+  filesFolderView: {
+    list: "List",
+    gallery: "Gallery",
+    withSubfolders: "Include subfolders",
+    up: "Up one folder",
+    empty: "This folder is empty.",
+  },
 };

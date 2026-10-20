@@ -57,8 +57,10 @@ import FilesViewModeButtons from "./FilesViewModeButtons.vue";
 import FilesCanvasView from "./FilesCanvasView.vue";
 import FilesCanvasButton from "./FilesCanvasButton.vue";
 import FilesGallery from "./FilesGallery.vue";
+import FilesFolderView from "./FilesFolderView.vue";
 import FilesConflictBanner from "./FilesConflictBanner.vue";
 import { useFilesGallery } from "../composables/useFilesGallery";
+import { useFolderView } from "../composables/useFolderView";
 import { useFilesCanvasMode } from "../composables/useFilesCanvasMode";
 import { showFileWith } from "../composables/useShowFile";
 import { useSideBySide } from "../composables/useSideBySide";
@@ -105,6 +107,12 @@ const carried = useCarriedView({ props, file, canvas: () => canvasMode });
 // A folder shown as a gallery over the file area (#3079); any file opened, or a re-root, puts the files back.
 const tabs = useFilesTabs(file, carried.inherit, () => gallery.close());
 const gallery = useFilesGallery(() => props.cwd);
+// The folder the empty file area shows (#3120): the last one clicked in the tree, read only while no
+// file is open and no gallery covers it.
+const folder = useFolderView(
+  () => props.cwd,
+  () => !openPath.value && gallery.dir.value === null,
+);
 const { openRequested, openFromTerminal } = useRequestedOpen(tabs, file, (pathRel) => canvasMode.hide(pathRel));
 const strip = tabs.strip;
 const { showStrip, focusablePath, labels } = tabStripView(strip, openPath);
@@ -217,7 +225,10 @@ const fileOps = useTreeFileOps({
   file,
   t,
   focusRow,
-  changed: gallery.treeOpListener(() => void gitStatus.refresh()),
+  changed: gallery.treeOpListener((op) => {
+    void gitStatus.refresh();
+    void folder.afterTreeOp(op);
+  }),
 });
 
 const { menu: rowMenu, ...rowMenuApi } = useFilesRowMenu<TreeNode>({ menuEl: rowMenuEl, actionsFor: rowActionsFor, run: runRowAction });
@@ -226,7 +237,12 @@ const rootMenu = menuAttrsFor(rowMenuApi, ROOT_ROW);
 
 // Cmd/Ctrl+click asks for a tab of its own, as it asks a browser for one; a plain click replaces
 // the front tab, as it replaced the one open file before tabs.
-const openFile = (node: TreeNode, event: MouseEvent): Promise<void> => (node.dir ? tree.toggleDir(node) : tabs.open(node.path, wantsNewTab(event)));
+// A folder is also the one the empty file area shows (#3120), remembered while a file is open.
+function openFile(node: TreeNode, event: MouseEvent): Promise<void> {
+  if (!node.dir) return tabs.open(node.path, wantsNewTab(event));
+  folder.show(node.path);
+  return tree.toggleDir(node);
+}
 
 const stripEl = useTemplateRef("stripEl");
 
@@ -341,6 +357,7 @@ function teardown(): void {
   // here: that tree is still this root's, and swapping the result in beats replacing a correct tree
   // with "Loading…".
   tree.reset();
+  folder.reset();
   // The element OUTLIVES the root — a re-root happens in place — so the scrollbar would still be
   // where the last directory left it, and a directory with nothing remembered would open
   // mid-scroll. `restore` puts a remembered offset back after this (Codex on #2156).
@@ -527,7 +544,21 @@ defineExpose({
              the same dead-button silence #1941 removed for everyone else. -->
         <p v-if="fileError" role="alert" data-testid="files-error" class="p-4 text-[13px] text-err">{{ fileError }}</p>
         <DirConfigSaveNote v-if="dirConfigReport && openPath" :report="dirConfigReport" @dismiss="dirConfigReport = null" />
-        <p v-if="!openPath" class="m-auto p-4 text-[13px] text-muted">Select a file to view or edit.</p>
+        <FilesFolderView
+          v-if="!openPath"
+          v-bind="{
+            cwd,
+            dir: folder.dir.value,
+            groups: folder.groups.value,
+            error: folder.error.value,
+            mode: folder.mode.value,
+            withSubfolders: folder.withSubfolders.value,
+          }"
+          @show="folder.show"
+          @open="(path, newTab) => tabs.open(path, newTab)"
+          @mode="folder.setMode"
+          @subfolders="(on) => (folder.withSubfolders.value = on)"
+        />
         <!-- Not text. The editor is hidden rather than shown empty: an empty buffer over a file
              that has content is an invitation to save, and saving is what destroyed it (#2038). -->
         <FilesUnpreviewable
