@@ -32,6 +32,9 @@ export interface SideBySide {
   offered: ComputedRef<boolean>;
   /** What is on screen — the one place "is the editor showing" is decided (`filesViewLayout.ts`). */
   layout: ComputedRef<FilesViewLayout>;
+  /** The switch itself, which `active` is not: it stays on under the Preview alone. Written by a host
+   *  putting back what it remembered for a cell (#3122). */
+  switchedOn: Ref<boolean>;
 }
 
 export function useSideBySide(deps: SideBySideDeps): SideBySide {
@@ -111,5 +114,5 @@ export function useSideBySide(deps: SideBySideDeps): SideBySide {
   // squeeze in a narrow pane out of the editor alone.
   const previewClass = computed(() => (active.value ? "min-w-0 basis-0 border-l border-border" : ""));
   const layout = computed(() => viewLayout({ showPreview: file.showPreview.value, showCanvas: deps.showCanvas.value, split: active.value }));
-  return { active, toggle, editorClass, previewClass, layout, offered: computed(available) };
+  return { active, toggle, editorClass, previewClass, layout, offered: computed(available), switchedOn: on };
 }

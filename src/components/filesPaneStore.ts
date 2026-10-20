@@ -106,6 +106,7 @@ const asPaneState = (value: unknown): FilesPaneState | null => {
     activePath: storedActivePath(value, kept),
     expanded: expanded.slice(0, MAX_EXPANDED_PATHS),
     ...(treeScrollTop === undefined ? {} : { treeScrollTop }),
+    ...(value.sideBySide === true ? { sideBySide: true } : {}),
   };
 };
 

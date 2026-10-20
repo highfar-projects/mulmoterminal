@@ -6,6 +6,7 @@ import { restoreLevels } from "../components/filesTreeState";
 import type { useFilesCanvasMode } from "./useFilesCanvasMode";
 import type { FilesTabs } from "./useFilesTabs";
 import type { FilesTree } from "./useFilesTree";
+import type { SideBySide } from "./useSideBySide";
 import type { OpenFile } from "./useOpenFile";
 
 export interface PaneRestoreDeps {
@@ -13,6 +14,7 @@ export interface PaneRestoreDeps {
   file: Pick<OpenFile, "generation">;
   canvasMode: Pick<ReturnType<typeof useFilesCanvasMode>, "reset">;
   tabs: Pick<FilesTabs, "restore">;
+  sideBySide: Pick<SideBySide, "switchedOn">;
   treeEl: () => HTMLElement | null;
 }
 
@@ -21,6 +23,9 @@ export interface PaneRestoreDeps {
  *  generation at the beginning of the pane's start — the remembered file is opened only when no
  *  competing request arrived during THIS startup cycle. */
 export async function restorePaneState(deps: PaneRestoreDeps, state: FilesPaneState | null, reqIdAtStart: number): Promise<void> {
+  // First, and whatever was remembered: a pane that moves between two cells showing files is the
+  // same instance, and would otherwise carry the last cell's switch onto this cell's file (#3122).
+  deps.sideBySide.switchedOn.value = false;
   if (!state) return;
   const { tree, file, canvasMode, tabs } = deps;
   // One wait per DEPTH, not one per directory. A level can only be looked up once the level above
@@ -36,8 +41,11 @@ export async function restorePaneState(deps: PaneRestoreDeps, state: FilesPaneSt
     );
   }
   // A pane opened FOR a file (#1979) starts on it as text, as it would with Preview: when an open got here
-  // first — landed or still in flight, so its path cannot be asked — no remembered Canvas view comes back.
-  if (file.generation() === reqIdAtStart) canvasMode.reset(state.tabs.filter((tab) => tab.showCanvas === true).map((tab) => tab.path));
+  // first — landed or still in flight, so its path cannot be asked — no remembered Canvas view or split comes back.
+  if (file.generation() === reqIdAtStart) {
+    canvasMode.reset(state.tabs.filter((tab) => tab.showCanvas === true).map((tab) => tab.path));
+    deps.sideBySide.switchedOn.value = state.sideBySide === true;
+  }
   await tabs.restore({ tabs: state.tabs, activePath: state.activePath }, () => file.generation() === reqIdAtStart);
   // Last, and only after a tick: the rows have to exist before there is anything to scroll past,
   // and the expansions above are what create them.

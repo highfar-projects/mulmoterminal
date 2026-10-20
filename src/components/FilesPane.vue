@@ -372,7 +372,7 @@ async function start(): Promise<void> {
 }
 
 const restore = (state: FilesPaneState | null, reqIdAtStart: number): Promise<void> =>
-  restorePaneState({ tree, file, canvasMode, tabs, treeEl: () => treeEl.value }, state, reqIdAtStart);
+  restorePaneState({ tree, file, canvasMode, tabs, sideBySide, treeEl: () => treeEl.value }, state, reqIdAtStart);
 
 // A second clicked path while the pane is already showing: nothing else changes, so
 // without this the file would never open.
@@ -399,6 +399,7 @@ defineExpose({
     ...withCanvasView(tabs.current(), canvasMode.has),
     expanded: expandedPaths(tree.roots.value ?? []),
     treeScrollTop: treeEl.value?.scrollTop ?? 0,
+    ...(sideBySide.switchedOn.value ? { sideBySide: true } : {}),
   }),
   reload: async () => {
     teardown();
