@@ -276,8 +276,9 @@ whatever the chart needs, so the chart follows edits:
   give the transform's groups or numbers, so never put both in one analysis. To show the groups,
   use the transform and put no group column on the sheet. When the user wants each row's group as
   data (to count or filter), compute it in the script into a computed column, and colour the
-  scatter by that column (`visualMap` with `"dimension"` naming it) with no transform, so the sheet
-  and the chart show the same groups.
+  scatter by that column with no transform, so the sheet and the chart show the same groups:
+  `"visualMap": { "type": "piecewise", "dimension": "Group", "categories": [every group's name],
+  "inRange": { "color": [one per group] } }`.
 - **map**: one row per region, its name exactly as the map has it: `japan-ja` and `world-ja` take
   Japanese names (東京都), `japan` and `world` English ones. No other map is available.
 
