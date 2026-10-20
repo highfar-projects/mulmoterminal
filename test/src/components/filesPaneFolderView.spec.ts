@@ -137,4 +137,21 @@ describe("FilesPane — the folder in the empty file area (#3120)", () => {
     await flushPromises();
     expect(scrolledTo).not.toContain("shots");
   });
+
+  it("does not scroll to a folder clicked in the tree to collapse it while a move into it was opening it (#3134)", async () => {
+    const scrolledTo: string[] = [];
+    vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(function (this: Element) {
+      if (this instanceof HTMLElement && this.dataset.path) scrolledTo.push(this.dataset.path);
+    });
+    let release = (): void => {};
+    held.set("shots", new Promise<void>((resolve) => (release = resolve)));
+    const w = mount(FilesPane, { props: { cwd: "/proj" }, attachTo: document.body });
+    await flushPromises();
+    await w.get('[data-testid="files-folder-row"][data-path="shots"]').trigger("click");
+    await flushPromises(); // the tree's read of shots is held
+    await treeRow(w, "shots")?.trigger("click");
+    release();
+    await flushPromises();
+    expect(scrolledTo).not.toContain("shots");
+  });
 });
