@@ -240,7 +240,6 @@ const rootMenu = menuAttrsFor(rowMenuApi, ROOT_ROW);
 // the front tab, as it replaced the one open file before tabs.
 // A folder is also the one the empty file area shows (#3120), remembered while a file is open.
 function openFile(node: TreeNode, event: MouseEvent): Promise<void> {
-  stopShowing();
   if (!node.dir) return tabs.open(node.path, wantsNewTab(event));
   folder.show(node.path);
   return tree.toggleDir(node);
@@ -306,7 +305,6 @@ const {
   onFinderPick,
   revealPath,
   showFolderInTree,
-  stopShowing,
   followFrontTab,
   startEpoch,
   reset: resetReveal,
@@ -325,7 +323,7 @@ const {
 // A move made in the folder view opens the tree down to that folder, so both sides show one place.
 function showFromFolderView(dirRel: string): void {
   folder.show(dirRel);
-  void showFolderInTree(dirRel);
+  void showFolderInTree(dirRel, () => folderShown.value && folder.dir.value === dirRel);
 }
 
 const search = useFileSearchPanel({ dirty, openPath, editSeq, editor: () => file.editor.value, revealPath });

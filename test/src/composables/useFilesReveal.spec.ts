@@ -305,10 +305,12 @@ describe("following the tab in front", () => {
   });
 
   describe("a folder the folder view moved to (#3134)", () => {
+    const shown = (): boolean => true;
+
     it("opens its ancestors and the folder itself, outermost first, and scrolls to its row", async () => {
       const h = harness();
       h.treeEl.value = rowsHost(["src", "src/deep"], h.scrolled);
-      await h.reveal.showFolderInTree("src/deep");
+      await h.reveal.showFolderInTree("src/deep", shown);
       expect(h.opened).toEqual(["src", "src/deep"]);
       expect(h.scrolled).toEqual(["src/deep"]);
       expect(h.reads).toEqual([]);
@@ -316,7 +318,7 @@ describe("following the tab in front", () => {
 
     it("leaves the tree as it is for the root, which has no row", async () => {
       const h = harness();
-      await h.reveal.showFolderInTree("");
+      await h.reveal.showFolderInTree("", shown);
       expect(h.opened).toEqual([]);
       expect(h.scrolled).toEqual([]);
     });
@@ -326,39 +328,41 @@ describe("following the tab in front", () => {
       const holdDir = new Promise<void>((resolve) => (release = resolve));
       const h = harness({ holdDir });
       h.treeEl.value = rowsHost(["src", "src/deep"], h.scrolled);
-      const first = h.reveal.showFolderInTree("src/deep");
+      const first = h.reveal.showFolderInTree("src/deep", shown);
       await flushPromises(); // now parked inside the first expansion
-      await h.reveal.showFolderInTree("");
+      await h.reveal.showFolderInTree("", shown);
       release();
       await first;
       expect(h.opened).toEqual(["src"]);
       expect(h.scrolled).toEqual([]);
     });
 
-    it("is overtaken by a reveal, so the tree stays on the file that opened", async () => {
-      let release = (): void => {};
-      const holdDir = new Promise<void>((resolve) => (release = resolve));
-      const h = harness({ holdDir });
-      h.treeEl.value = rowsHost(["src", "src/deep", "README.md"], h.scrolled);
-      const move = h.reveal.showFolderInTree("src/deep");
-      await flushPromises(); // parked inside the first expansion
-      await h.reveal.revealPath("README.md");
-      release();
-      await move;
-      expect(h.scrolled).toEqual(["README.md"]);
-    });
-
-    it("stops when the tree itself is clicked", async () => {
+    it("stops once the view no longer shows the folder, however that came about", async () => {
       let release = (): void => {};
       const holdDir = new Promise<void>((resolve) => (release = resolve));
       const h = harness({ holdDir });
       h.treeEl.value = rowsHost(["src", "src/deep"], h.scrolled);
-      const move = h.reveal.showFolderInTree("src/deep");
-      await flushPromises();
-      h.reveal.stopShowing();
+      let stillShown = true;
+      const move = h.reveal.showFolderInTree("src/deep", () => stillShown);
+      await flushPromises(); // parked inside the first expansion
+      stillShown = false; // a file opened, by any route
       release();
       await move;
       expect(h.opened).toEqual(["src"]);
+      expect(h.scrolled).toEqual([]);
+    });
+
+    it("stops while still waiting for the startup, if the view stopped showing the folder meanwhile", async () => {
+      let release = (): void => {};
+      const startup = new Promise<void>((resolve) => (release = resolve));
+      const h = harness({ startup });
+      h.treeEl.value = rowsHost(["src", "src/deep"], h.scrolled);
+      let stillShown = true;
+      const move = h.reveal.showFolderInTree("src/deep", () => stillShown);
+      stillShown = false;
+      release();
+      await move;
+      expect(h.opened).toEqual([]);
       expect(h.scrolled).toEqual([]);
     });
 
@@ -367,8 +371,8 @@ describe("following the tab in front", () => {
       const holdDir = new Promise<void>((resolve) => (release = resolve));
       const h = harness({ holdDir });
       h.treeEl.value = rowsHost(["src", "src/deep"], h.scrolled);
-      const first = h.reveal.showFolderInTree("src/deep"); // parks inside the first expansion
-      const second = h.reveal.showFolderInTree("src");
+      const first = h.reveal.showFolderInTree("src/deep", shown); // parks inside the first expansion
+      const second = h.reveal.showFolderInTree("src", shown);
       release();
       await Promise.all([first, second]);
       expect(h.scrolled).toEqual(["src"]);

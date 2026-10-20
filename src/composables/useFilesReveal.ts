@@ -34,11 +34,9 @@ export interface FilesReveal {
    *  folders and scrolls its row into view; opens nothing. */
   showInTree: (pathRel: string) => Promise<void>;
   /** Put the tree on a folder the folder view moved to: the folder opens too, so the tree shows
-   *  what the view does. The root has no row: the tree stays as it is, and a move still under way stops. */
-  showFolderInTree: (dirRel: string) => Promise<void>;
-  /** A place chosen in the tree itself: a folder-view move still opening folders stops, so it cannot
-   *  scroll the tree away from what was just clicked. */
-  stopShowing: () => void;
+   *  what the view does. It goes on only while `stillShown` — a file opened, the view moved on, or the
+   *  pane re-rooted, by whatever route, ends it. The root has no row: a move still under way stops. */
+  showFolderInTree: (dirRel: string, stillShown: () => boolean) => Promise<void>;
   /** The remembered pane is back: from now on the tree follows the tab in front, and it is put on
    *  that tab's row at once — the remembered scroll may have left the row off screen (#3058).
    *  False, and nothing done, for a startup a reset has since made stale. */
@@ -124,7 +122,6 @@ export function useFilesReveal(deps: FilesRevealDeps): FilesReveal {
    *  been (the rule `restoreLevels` exists for). */
   async function revealPath(pathRel: string): Promise<boolean> {
     const id = ++revealId;
-    stopShowing(); // a folder-view move must not scroll the tree off the file once it is open
     await deps.started(); // the tree may still be loading — expanding into an unread `roots` finds nothing
     if (id !== revealId) return false;
     // A later pick may take over while this one is fetching.
@@ -141,22 +138,20 @@ export function useFilesReveal(deps: FilesRevealDeps): FilesReveal {
     return deps.openPath.value === pathRel;
   }
 
-  const stopShowing = (): void => {
-    showId += 1;
-  };
-  /** Expand `dirs` outermost first and scroll to `rowPath`, giving way to a later call. */
-  async function showRow(dirs: readonly string[], rowPath: string): Promise<void> {
+  /** Expand `dirs` outermost first and scroll to `rowPath`, giving way to a later call or to `wanted`
+   *  turning false. */
+  async function showRow(dirs: readonly string[], rowPath: string, wanted: () => boolean = () => true): Promise<void> {
     const id = ++showId;
-    const current = (): boolean => id === showId;
+    const current = (): boolean => id === showId && wanted();
     await deps.started();
     if (!current() || !(await expandAll(deps.tree, dirs, current))) return;
     await nextTick();
     if (current()) scrollToRow(rowPath);
   }
   const showInTree = (pathRel: string): Promise<void> => showRow(ancestorDirs(pathRel), pathRel);
-  const showFolderInTree = async (dirRel: string): Promise<void> => {
-    if (dirRel) return showRow([...ancestorDirs(dirRel), dirRel], dirRel);
-    stopShowing(); // the root has no row, but a move to it still overtakes one under way
+  const showFolderInTree = async (dirRel: string, stillShown: () => boolean): Promise<void> => {
+    if (dirRel) return showRow([...ancestorDirs(dirRel), dirRel], dirRel, stillShown);
+    showId += 1; // the root has no row, but a move to it still overtakes one under way
   };
   // `nearest`: a row already on screen — the one just clicked — does not move.
   const scrollToRow = (pathRel: string): void => rowElementFor(deps.treeEl.value, pathRel)?.scrollIntoView({ block: "nearest" });
@@ -177,7 +172,6 @@ export function useFilesReveal(deps: FilesRevealDeps): FilesReveal {
     revealPath,
     showInTree,
     showFolderInTree,
-    stopShowing,
     followFrontTab: front.start,
     startEpoch: front.epoch,
     reset: () => {
