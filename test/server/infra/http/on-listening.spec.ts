@@ -37,7 +37,12 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../../../../server/infra/http/announce-listening.js", () => ({ announceListening: mocks.announceListening }));
 vi.mock("../../../../server/infra/http/allowed-origin.js", () => ({ bindSecurityWarning: mocks.bindSecurityWarning }));
 vi.mock("../../../../server/infra/http/loopback.js", () => ({ boundAddress: mocks.boundAddress, isLoopbackBinding: mocks.isLoopbackBinding }));
-vi.mock("../../../../server/infra/process/tmux.js", () => ({ tmuxAvailable: mocks.tmuxAvailable, tmuxListSessionIds: mocks.tmuxListSessionIds }));
+vi.mock("../../../../server/infra/process/tmux.js", () => ({
+  tmuxAvailable: mocks.tmuxAvailable,
+  tmuxListSessionIds: mocks.tmuxListSessionIds,
+  tmuxIsPsmux: () => false,
+  tmuxPsmuxVersion: () => null,
+}));
 vi.mock("../../../../server/session/reaping/reap-schedule.js", () => ({
   startReapSchedule: mocks.startReapSchedule,
   rearmReapSchedule: mocks.rearmReapSchedule,

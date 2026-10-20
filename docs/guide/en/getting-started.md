@@ -237,8 +237,10 @@ MulmoTerminal **uses that `gh` login as-is** — no access token is stored anywh
 
 - **macOS** — `brew install tmux`
 - **Linux** — `sudo apt install tmux`
-- **Windows** — no native build. Everything still works; sessions just don't survive a
-  server restart.
+- **Windows** — `winget install -e --id marlocarlo.psmux`. [psmux](https://github.com/psmux/psmux) is a native
+  Windows tmux that installs itself as `tmux.exe`; use **3.4.0 or newer** (`tmux -V` shows the
+  psmux version on its second line). Without it everything still works; sessions just don't
+  survive a server restart. Details: [psmux on Windows](https://github.com/receptron/mulmoterminal#psmux-on-windows)
 
 Use the **latest tmux** (3.8 as of 2026-10-10); older versions are not supported. Some things
 MulmoTerminal asks tmux for, such as restoring bracketed paste after a reload, need 3.7 or newer. A
@@ -327,8 +329,9 @@ It is also the fastest way to find out why a start failed.
 | `Port 34567 is already in use.` | It is probably already running — try `http://localhost:34567` first. To really run a second one, `--port <number>` |
 | It asks `MulmoTerminal is already running` | Two at once is **not supported** — they share `~/.mulmoterminal` and can overwrite each other's session state. Answer `N` and use the one that's running |
 | The browser never opens | Open `http://localhost:34567` by hand; it's the same thing |
+| Windows: an auto-run prompt is typed but never sent, or pressing Esc twice does nothing | psmux older than 3.4.0 — the server log warns about it. `winget upgrade -e --id marlocarlo.psmux` |
 | The UI loads but a cell won't start | Check the directory exists, and that [Step 2](#step2)'s login went through |
-| Windows says there's no tmux | Expected. It runs without persistence |
+| Windows says there's no tmux | Expected — it runs without persistence. For persistence, install psmux (see [Step 3](#step3)) |
 
 If none of that explains it, type **`/mulmoterminal-bug-report`** in any session. The bundled
 skill hears the symptom out, checks your real config and version to see whether it is
@@ -421,7 +424,7 @@ costs you that one feature.
 | **Required** | `git` | [worktree isolation](features.html), each cell's branch / unsaved-dot / diff readout, the PR footer | [Step 3](#step3) |
 | **Required** | `gh` | the [cross-repo PRs & Issues view](github.html) and one-click PR creation | [Step 3](#step3) |
 | Optional | `glab` | the same for **gitlab.com** projects — list, start work on an issue, open a merge request | `brew install glab`, then `glab auth login` |
-| Recommended | `tmux` (the latest release, 3.8 as of 2026-10-10) | [session persistence](features.html) — terminals survive a server restart | `brew install tmux` · `sudo apt install tmux` · no native Windows build (plain terminals instead) |
+| Recommended | `tmux` (the latest release, 3.8 as of 2026-10-10) | [session persistence](features.html) — terminals survive a server restart | `brew install tmux` · `sudo apt install tmux` · Windows: `winget install -e --id marlocarlo.psmux` (3.4.0+) |
 | Optional | `codex` | [Codex sessions](basics.html#claude-and-codex) in a cell, alongside Claude | `npm i -g @openai/codex` |
 | Optional | `ffmpeg` | video rendering from the [GUI panel](features.html)'s mulmo-script plugin | `brew install ffmpeg` · `sudo apt install ffmpeg` |
 | Optional | `ollama` | [claude-ollama](claude-ollama.html) — Claude Code against a fully local model | [ollama.com/download](https://ollama.com/download) |

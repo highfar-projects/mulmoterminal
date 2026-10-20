@@ -14,10 +14,20 @@ import { withoutUnset } from "../spawn/setup/provider-env.js";
 import { trackPtyExit } from "./pty-kill.js";
 import { PORT, SESSION_ID_RE } from "../../config/env.js";
 import { reservedWorktreeEnv } from "../../config/worktree/worktree-env.js";
-import { ownBindPort, tmuxAvailable, tmuxClientUnsetNames, tmuxHasSession, tmuxNewSessionArgs, tmuxScrubEnvNames } from "../../infra/process/tmux.js";
+import {
+  ownBindPort,
+  tmuxAvailable,
+  tmuxClientUnsetNames,
+  tmuxHasSession,
+  tmuxNewSessionArgs,
+  tmuxPsmuxScrubbedNames,
+  tmuxPsmuxVtInput,
+  tmuxScrubEnvNames,
+} from "../../infra/process/tmux.js";
 
 const PTY_COLS = 120;
 const PTY_ROWS = 30;
+const PSMUX_VT_INPUT_ENV: Readonly<Record<string, string>> = { PSMUX_VT_INPUT: "1" };
 
 /** Where the tmux CLIENT process itself is started from. The home directory because it is the one
  *  place this app never deletes; see the tmux branch of `ptySpawn` for why that matters. */
@@ -245,11 +255,18 @@ export function ptySpawn(
     // this client CREATES one, and the new server keeps whatever environment it was started with for
     // its whole life — so our own bind port would reach every pane it ever opens (#1919). A PORT that
     // is NOT ours (`PORT=3000 mulmoterminal --port 34601`) is the user's and still travels (#1873).
+    //
+    // A psmux client is started on its VT input route, so a bracketed paste keeps its markers and
+    // the Enter after it is not taken into the paste (see psmuxVtInputFor), and without the names in
+    // PSMUX_SCRUBBED_NAMES (a running psmux server loses them in ensureConf). A real tmux gets neither.
     return {
-      term: spawnPty("tmux", tmuxNewSessionArgs(sessionId, file, args, cwd, env), TMUX_CLIENT_CWD, [
-        ...unset,
-        ...tmuxClientUnsetNames(process.env.PORT, ownBindPort()),
-      ]),
+      term: spawnPty(
+        "tmux",
+        tmuxNewSessionArgs(sessionId, file, args, cwd, env),
+        TMUX_CLIENT_CWD,
+        [...unset, ...tmuxClientUnsetNames(process.env.PORT, ownBindPort()), ...tmuxPsmuxScrubbedNames()],
+        tmuxPsmuxVtInput() ? PSMUX_VT_INPUT_ENV : {},
+      ),
       tmux: true,
       reattached,
     };

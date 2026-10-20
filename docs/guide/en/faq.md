@@ -116,7 +116,7 @@ CI runs Linux and macOS on every PR, and Windows nightly. There are Windows-spec
 
 - **Node.js 22.12+**
 - `claude` or `codex` on your `PATH`
-- optional: `tmux`, for session persistence
+- optional: `tmux`, for session persistence (on Windows, [psmux](https://github.com/psmux/psmux) 3.4.0+)
 
 ```bash
 npx mulmoterminal@latest
