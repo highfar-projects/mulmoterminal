@@ -203,10 +203,11 @@ Put the result in `presentSpreadsheet`. Split each number by whether the user ma
   `presentSpreadsheet`'s reply names a function it could not use, fix it and present again.
   Check the function's result against the script's number, as with a formula.
 - **Values** only for what neither can do: a result that needs data outside the workbook, a
-  computation too heavy for 50 ms a call, or what a chart transform works out that the user wants
-  as data (each row's cluster, a curve's coefficients; see *4. Charts*). A function the sheet lacks shows `#NAME?`. Compute
-  these in the script and put the result in as a number. Label them as computed (for example
-  "model fit (computed)"), because a value does not change when the user edits the data.
+  computation too heavy for 50 ms a call, or what a chart transform works out that the user wants as
+  data (each row's cluster, a curve's coefficients; see *4. Charts*). A function the sheet lacks
+  shows `#NAME?`. Compute these in the script and put the result in as a value (a number, or text
+  such as a group's name). Label them as computed (for example "model fit (computed)"), because a
+  value does not change when the user edits the data.
 
 Use one sheet for the data and another for the summary, so a summary formula reads the data sheet
 (`=AVERAGE(Data!C2:C201)`).
@@ -338,7 +339,7 @@ End by telling the user:
 
 - the spreadsheet's path and the chart's path;
 - where the scripts are;
-- which figures are formulas (workbook functions included, by name) and which are computed values;
+- which values are formulas (workbook functions included, by name) and which are computed;
 - which charts follow the sheet and which do not.
 
 ## 6. Offer to keep the analysis as a skill
