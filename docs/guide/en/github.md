@@ -21,9 +21,41 @@ You choose which repos show up by **registering** them (just a list of `owner/re
 - Shows **both open PRs and Issues**, grouped **per repository**.
 - Data comes through the **GitHub CLI (`gh`)** — it **uses your `gh` login**, so no token is stored in the app.
 
+The **▶** on an issue row goes one step further: it creates a worktree for that issue and starts an
+agent in it, in one click.
+
+![The GitHub view: open PRs grouped by repository on top, Issues below, and a ▶ button at the right end of each issue row (Japanese UI)](../images/github-view-ja.png)
+
+## Reading the screen
+
+From the top of the screenshot down:
+
+| Where | What it is |
+|---|---|
+| **Top line** | The title "GitHub pull requests & issues" and the **↻ (reload)** button. The **✕** at the far right closes the view (so does Esc) |
+| **Start issues in** | The agent (Claude, Codex, …) that **▶** starts. Picking anything but Claude puts an amber warning under it ([why](#start-from-issue)) |
+| **PR list** | One heading per registered repository (`owner/repo` and a count), with its open PRs below. A repo with none says "No open PRs" |
+| **ISSUES** | The same, for open issues |
+| **● at the left of a row** | The PR's CI state (green = passing / red = failing / amber = running / dim = no checks) |
+| **Right side of a row** | Author and last update (e.g. `isamu · 5h ago`) |
+| **▶ on an issue row** | Start work on this issue: make a worktree and start an agent in it as a grid cell |
+
+Clicking the row itself (its number or title) **opens it on GitHub in a new browser tab**.
+
+## Getting started in three steps
+
+1. **Run `gh auth login` on the machine running the server** — the view runs the GitHub CLI (`gh`)
+   behind the scenes. The app holds no token; it uses your `gh` login as it is.
+2. **Register the repositories you want to see** — type an `owner/repo` into
+   **Settings → Pull request repos** and add it. [Details](#register)
+3. **Click the GitHub mark (Pull requests) in the grid's toolbar** — the button appears once at least
+   one repository is registered, among the grid's own controls shown while the grid is on screen.
+
+From there, [the ▶ on an issue row](#start-from-issue) starts the work.
+
 ---
 
-## 1. Register the repos you want to see
+## 1. Register the repos you want to see {#register}
 
 Only the repos you **register** appear (nothing is auto-added from worktrees or sessions). Two ways,
 both effective **immediately** (no restart).
@@ -46,6 +78,72 @@ Add to **`prRepos`** (an array of `"owner/repo"` strings) in `~/.mulmoterminal/c
   "prRepos": ["acme/web", "acme/api"]
 }
 ```
+
+GitLab projects can be listed too. → [Using GitLab](#gitlab)
+
+→ See [Configuration](config.html) for the full key list.
+
+## 2. Open the view and read it {#read-the-view}
+
+- A **Pull requests** section on top, an **Issues** section below. Both are grouped **per repository**
+  (an `owner/repo` heading with a count).
+- Only **open** items are shown. Order is your registration order (repos) and whatever `gh` returns (items).
+- **Clicking a row opens it on GitHub in a new tab** (nothing opens in-app).
+- **↻ (Reload)** at the top re-fetches. **There is no auto-refresh** — it loads once when you open the
+  view, then only on Reload.
+
+### What a PR row shows
+
+| Element | Meaning |
+|---|---|
+| **● CI dot** | green = checks passing / red = failing / amber = running / dim = no checks |
+| **#number · title** | the PR number and title |
+| **draft** | shown for draft PRs |
+| **approved / changes requested / review required** | review state |
+| **author · relative time** | e.g. `alice · 2h ago` (last updated) |
+
+An Issue row shows **#number · title · author · relative time**, plus a **▶ start** button on the
+right — see below.
+
+> Up to **100 PRs / 20 Issues per repo**. Beyond that, a "there are more" note appears with a link to GitHub.
+
+## 3. Start work on an issue from its row {#start-from-issue}
+
+The **▶** button at the end of an issue row does the whole setup in one click:
+
+1. reads the issue (title and body),
+2. creates a **`issue/<number>-<slug>` worktree** in your clone of that repo, forked from a freshly
+   fetched `origin/<base>`,
+3. starts **Claude** in that worktree as a grid cell, with the issue **already typed into the input
+   box** — and **not sent**. You read it, edit it if you like, and press Enter yourself.
+
+**Choosing the agent.** The **Start issues in** menu above the list picks which agent that is — Claude
+by default (or your `defaultAgent`), remembered in this browser. For Claude or Codex with
+[accounts](config.html#accounts) configured, an **Account** menu beside it picks the login. An agent that is
+not installed here is listed but disabled. **Every agent but Claude runs the issue text as soon as it
+starts** — it has no input box to leave a draft in — and all but Codex also approve their own tools,
+so the view keeps a warning on screen while one of them is picked. An issue that already has a
+session resumes it as the agent and login it was started with, whatever the menu says.
+
+Because the branch carries the issue number, everything downstream follows without being told again:
+the ⧉ Open PR button writes `Fixes #<number>` into the PR body, and the header's work-item chip, the
+issue work comment and the merge-time auto-close all read the same number.
+
+**If you keep several clones of one repo**, the button asks which one the first time and remembers
+your answer (`repoDirs` in the config); after that it is one click. **If you have no clone of that
+repo**, the button is disabled and says so — register the directory in Settings → directory presets
+to enable it.
+
+**Pressing it again for the same issue does not make a second worktree.** One issue has one
+worktree: the existing one opens, along with the session left in it if there is one. If that
+session is still open in another terminal, nothing happens and the button says so — the same
+[one-session-per-worktree rule](worktree.html#one-session) as everywhere else.
+
+> The issue body is text written by whoever opened the issue, which is often not you. That is why it
+> is left in the input box rather than sent: the Enter is yours. A **resumed** session gets nothing
+> typed into it — it already has a conversation of its own.
+
+## Using GitLab {#gitlab}
 
 An entry may also name its host — `"gitlab.com/group/project"`. **GitLab projects are read too**,
 with `glab` in the same role `gh` plays for GitHub: the list, starting work from an issue, work
@@ -85,79 +183,7 @@ work comments, and opening a merge request. Two things it needs:
 Until the host is declared, its row says so and names the key to add. Not covered yet: a port in
 the host name (`gitlab.example.com:8443`), an http-only instance, and GitHub Enterprise.
 
-→ See [Configuration](config.html) for the full key list.
-
-## 2. Open the view and read it
-
-Click **Pull requests** (the GitHub mark) in the toolbar (among the grid's own controls, shown while
-the grid is on screen). The button appears once Settings → **Pull request repos** lists at
-least one repository; with none, there is nothing for the view to show.
-
-- A **Pull requests** section on top, an **Issues** section below. Both are grouped **per repository**
-  (an `owner/repo` heading with a count).
-- Only **open** items are shown. Order is your registration order (repos) and whatever `gh` returns (items).
-- **Clicking a row opens it on GitHub in a new tab** (nothing opens in-app).
-- **↻ (Reload)** at the top re-fetches. **There is no auto-refresh** — it loads once when you open the
-  view, then only on Reload.
-
-### What a PR row shows
-
-| Element | Meaning |
-|---|---|
-| **● CI dot** | green = checks passing / red = failing / amber = running / dim = no checks |
-| **#number · title** | the PR number and title |
-| **draft** | shown for draft PRs |
-| **approved / changes requested / review required** | review state |
-| **author · relative time** | e.g. `alice · 2h ago` (last updated) |
-
-An Issue row shows **#number · title · author · relative time**, plus a **▶ start** button on the
-right — see below.
-
-> Up to **100 PRs / 20 Issues per repo**. Beyond that, a "there are more" note appears with a link to GitHub.
-
-## 3. Start work on an issue from its row
-
-The **▶** button at the end of an issue row does the whole setup in one click:
-
-1. reads the issue (title and body),
-2. creates a **`issue/<number>-<slug>` worktree** in your clone of that repo, forked from a freshly
-   fetched `origin/<base>`,
-3. starts **Claude** in that worktree as a grid cell, with the issue **already typed into the input
-   box** — and **not sent**. You read it, edit it if you like, and press Enter yourself.
-
-**Choosing the agent.** The **Start issues in** menu above the list picks which agent that is — Claude
-by default (or your `defaultAgent`), remembered in this browser. For Claude or Codex with
-[accounts](config.html#accounts) configured, an **Account** menu beside it picks the login. An agent that is
-not installed here is listed but disabled. **Every agent but Claude runs the issue text as soon as it
-starts** — it has no input box to leave a draft in — and all but Codex also approve their own tools,
-so the view keeps a warning on screen while one of them is picked. An issue that already has a
-session resumes it as the agent and login it was started with, whatever the menu says.
-
-Because the branch carries the issue number, everything downstream follows without being told again:
-the ⧉ Open PR button writes `Fixes #<number>` into the PR body, and the header's work-item chip, the
-issue work comment and the merge-time auto-close all read the same number.
-
-**If you keep several clones of one repo**, the button asks which one the first time and remembers
-your answer (`repoDirs` in the config); after that it is one click. **If you have no clone of that
-repo**, the button is disabled and says so — register the directory in Settings → directory presets
-to enable it.
-
-**Pressing it again for the same issue does not make a second worktree.** One issue has one
-worktree: the existing one opens, along with the session left in it if there is one. If that
-session is still open in another terminal, nothing happens and the button says so — the same
-[one-session-per-worktree rule](worktree.html#one-session) as everywhere else.
-
-> The issue body is text written by whoever opened the issue, which is often not you. That is why it
-> is left in the input box rather than sent: the Enter is yours. A **resumed** session gets nothing
-> typed into it — it already has a conversation of its own.
-
-## Prerequisite: sign in to the GitHub CLI
-
-The view runs the **`gh`** command behind the scenes. On the machine running the server:
-
-```bash
-gh auth login
-```
+## Behind the scenes
 
 - The app stores/reads no token — it works with **your `gh` login**.
 - Repos always come from **server-side config** (never from the request).
@@ -165,6 +191,7 @@ gh auth login
 
 ## If nothing shows up
 
+- **No GitHub mark in the toolbar** → no repository is registered yet, or a view other than the grid is on screen.
 - **"No repositories configured…"** → nothing registered yet. Add `owner/repo` under **Settings → Pull request repos**.
 - **"gh not found…"** → install the GitHub CLI and run `gh auth login`.
 - **One repo errors** → check the spelling (`owner/repo`) and your **`gh` access** to it (private repos need permission).
