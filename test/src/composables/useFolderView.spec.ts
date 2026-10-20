@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { nextTick, ref } from "vue";
+import { effectScope, nextTick, ref } from "vue";
 import { useFolderView } from "../../../src/composables/useFolderView";
-import { FOLDER_VIEW_MAX_DIRS } from "../../../src/components/folderView";
+import { FOLDER_VIEW_MAX_DIRS, FOLDER_VIEW_READS_AT_ONCE } from "../../../src/components/folderView";
 
 type Tree = Record<string, Array<{ name: string; dir: boolean; size: number }>>;
 const d = (name: string) => ({ name, dir: true, size: 0 });
@@ -183,5 +183,128 @@ describe("useFolderView", () => {
     expect(blocked.mode.value).toBe("list");
     blocked.setMode("gallery");
     expect(blocked.mode.value).toBe("gallery");
+  });
+
+  // The pane's teardown resets the view on unmount too, and Vue stops its watchers right after.
+  it("reads nothing when reset as its pane unmounts", async () => {
+    const asked = serve({ "": [] });
+    const scope = effectScope();
+    const view = scope.run(() =>
+      useFolderView(
+        () => "/proj",
+        () => true,
+      ),
+    );
+    await settle();
+    asked.length = 0;
+    view?.reset();
+    scope.stop();
+    await settle();
+    expect(asked).toEqual([]);
+  });
+
+  it("reads a re-rooted view once, though it comes into sight in the same tick", async () => {
+    const asked = serve({ "": [] });
+    const seen = ref(false);
+    const view = useFolderView(
+      () => "/proj",
+      () => seen.value,
+    );
+    seen.value = true;
+    view.reset();
+    await settle();
+    expect(asked).toEqual([""]);
+  });
+
+  it("re-reads on refresh with the listing left on screen, and only forgets it while hidden", async () => {
+    const tree: Tree = { "": [f("a.png")] };
+    const asked = serve(tree);
+    const seen = ref(true);
+    const view = useFolderView(
+      () => "/proj",
+      () => seen.value,
+    );
+    await settle();
+    tree[""] = [f("a.png"), f("b.png")];
+    view.refresh();
+    expect(view.groups.value?.[0]?.entries.map((e) => e.name)).toEqual(["a.png"]);
+    await settle();
+    expect(view.groups.value?.[0]?.entries.map((e) => e.name)).toEqual(["a.png", "b.png"]);
+    seen.value = false;
+    await nextTick();
+    asked.length = 0;
+    view.refresh();
+    await settle();
+    expect(asked).toEqual([]);
+    expect(view.groups.value).toBeNull();
+  });
+
+  it("tries a folder that could not be read again on refresh", async () => {
+    const tree: Tree = {};
+    serve(tree);
+    const view = useFolderView(
+      () => "/proj",
+      () => true,
+    );
+    await settle();
+    expect(view.error.value).toBe(".: HTTP 404");
+    tree[""] = [f("x.png")];
+    view.refresh();
+    await settle();
+    expect(view.error.value).toBeNull();
+    expect(view.groups.value?.[0]?.entries.map((e) => e.name)).toEqual(["x.png"]);
+  });
+
+  it("leaves the view be for a tree operation in a folder it does not draw, and re-reads in place for one it does", async () => {
+    const asked = serve({ "": [d("src"), f("a.png")], src: [] });
+    const view = useFolderView(
+      () => "/proj",
+      () => true,
+    );
+    await settle();
+    asked.length = 0;
+    await view.afterTreeOp({ id: "trash", pathRel: "src/deep/x.ts" });
+    await settle();
+    expect(asked).toEqual([]);
+    void view.afterTreeOp({ id: "new-file", dirRel: "" });
+    expect(view.groups.value).not.toBeNull();
+    await settle();
+    expect(asked).toEqual([""]);
+  });
+
+  it("stops reading the subfolders of a folder it has moved on from", async () => {
+    const wide = Array.from({ length: FOLDER_VIEW_READS_AT_ONCE * 3 }, (_, i) => d(`s${i}`));
+    const tree: Tree = { "": [], a: wide, b: [] };
+    wide.forEach((entry) => (tree[`a/${entry.name}`] = []));
+    const asked = serve(tree);
+    const view = useFolderView(
+      () => "/proj",
+      () => true,
+    );
+    view.withSubfolders.value = true;
+    await settle();
+    asked.length = 0;
+    view.show("a");
+    await nextTick();
+    view.show("b");
+    await settle();
+    expect(asked.filter((pathRel) => pathRel.startsWith("a/")).length).toBeLessThanOrEqual(FOLDER_VIEW_READS_AT_ONCE);
+    expect(view.groups.value?.map((g) => g.dirRel)).toEqual(["b"]);
+  });
+
+  it("counts a subfolder that cannot be read against the cap", async () => {
+    const top = Array.from({ length: FOLDER_VIEW_MAX_DIRS }, (_, i) => d(`d${i}`));
+    const tree: Tree = { "": top };
+    top.forEach((entry, i) => {
+      if (i % 2 === 0) tree[entry.name] = [d("inner")];
+    });
+    const asked = serve(tree);
+    const view = useFolderView(
+      () => "/proj",
+      () => true,
+    );
+    view.withSubfolders.value = true;
+    await settle();
+    expect(new Set(asked).size).toBe(FOLDER_VIEW_MAX_DIRS);
   });
 });

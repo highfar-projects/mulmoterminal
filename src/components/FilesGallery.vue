@@ -17,7 +17,13 @@ const emit = defineEmits<{ close: [] }>();
 const { t } = useI18n();
 
 const shown = ref(GALLERY_PAGE_SIZE);
-const enlarged = ref<number | null>(null);
+// The file shown large is held by its path, not its place: the items can be read again under the same
+// folder (a refresh, subfolders switched on or off), and a place would then name another file, or none.
+const enlargedPath = ref<string | null>(null);
+const enlarged = computed<number | null>(() => {
+  const index = enlargedPath.value === null ? -1 : (props.items ?? []).findIndex((item) => item.pathRel === enlargedPath.value);
+  return index === -1 ? null : index;
+});
 const root = useTemplateRef<HTMLElement>("root");
 const visible = computed(() => withGroupHeadings((props.items ?? []).slice(0, shown.value), props.dir));
 const more = computed(() => Math.max(0, (props.items?.length ?? 0) - shown.value));
@@ -29,12 +35,18 @@ const title = computed(() => folderTitle(props.cwd, props.dir));
 // arrows are this view's own. Not in the empty file area, which changes as the tree is walked and
 // would take the keyboard from it at every folder.
 onMounted(() => props.closable && root.value?.focus());
+// A new root as well as a new folder: the empty file area's gallery lives through a re-root, and "" is
+// the root of both.
+watch([() => props.cwd, () => props.dir], () => {
+  shown.value = GALLERY_PAGE_SIZE;
+  enlargedPath.value = null;
+  if (props.closable) root.value?.focus();
+});
+// Gone from a fresh read: back to the grid, rather than coming back large if the file ever does.
 watch(
-  () => props.dir,
-  () => {
-    shown.value = GALLERY_PAGE_SIZE;
-    enlarged.value = null;
-    if (props.closable) root.value?.focus();
+  () => props.items,
+  (items) => {
+    if (items && enlarged.value === null) enlargedPath.value = null;
   },
 );
 
@@ -49,22 +61,25 @@ function onlyThisPlays(event: Event): void {
 // Both ways in and out of the large view take the keyboard back to the gallery: the button that was
 // pressed is gone once the view changes, and the arrows and Esc are read here.
 async function show(index: number | null): Promise<void> {
-  enlarged.value = index;
+  enlargedPath.value = index === null ? null : (props.items?.[index]?.pathRel ?? null);
   await nextTick();
   root.value?.focus();
 }
 
 function step(by: 1 | -1): void {
-  if (enlarged.value !== null) enlarged.value = steppedIndex(enlarged.value, by, props.items?.length ?? 0);
+  const items = props.items;
+  if (enlarged.value === null || !items) return;
+  enlargedPath.value = items[steppedIndex(enlarged.value, by, items.length)]?.pathRel ?? null;
 }
 
 const STEP_KEYS: Record<string, 1 | -1> = { ArrowLeft: -1, ArrowRight: 1 };
 
 function onKey(event: KeyboardEvent): void {
   const by = STEP_KEYS[event.key];
-  if (event.key === "Escape") {
+  // Esc in the empty file area's grid has nothing to close, so it leaves the key and the focus alone.
+  if (event.key === "Escape" && (enlargedPath.value !== null || props.closable)) {
     event.preventDefault();
-    if (enlarged.value === null && props.closable) emit("close");
+    if (enlargedPath.value === null) emit("close");
     else void show(null);
   } else if (by !== undefined && enlarged.value !== null) {
     event.preventDefault();
@@ -81,13 +96,14 @@ const BUTTON =
     ref="root"
     tabindex="-1"
     data-testid="files-gallery"
-    class="absolute inset-0 z-20 flex min-h-0 flex-col bg-deep outline-none"
+    class="flex min-h-0 flex-col bg-deep outline-none"
+    :class="closable ? 'absolute inset-0 z-20' : 'min-w-0 flex-auto'"
     @keydown="onKey"
     @play.capture="onlyThisPlays"
   >
-    <header class="flex flex-none items-center gap-2 border-b border-border px-3 py-1.5">
+    <header class="flex flex-none flex-wrap items-center gap-x-2 gap-y-1 border-b border-border px-3 py-1.5">
       <span class="material-symbols-outlined text-[16px] text-muted" aria-hidden="true">photo_library</span>
-      <span class="min-w-0 flex-auto truncate font-mono text-[12px] text-secondary" :data-tip="dir">{{ title }}</span>
+      <span class="min-w-0 flex-1 truncate font-mono text-[12px] text-secondary" :data-tip="dir">{{ title }}</span>
       <template v-if="current && enlarged !== null">
         <span class="flex-none whitespace-nowrap text-[11px] text-muted">{{ enlarged + 1 }} / {{ items?.length }}</span>
         <button

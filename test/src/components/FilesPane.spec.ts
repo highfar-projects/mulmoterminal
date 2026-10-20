@@ -60,7 +60,7 @@ describe("FilesPane", () => {
   it("browses and opens a file from nothing but a cwd prop", async () => {
     const w = mount(FilesPane, { props: { cwd: "/proj" } });
     await flushPromises();
-    expect(w.text()).toContain("README.md");
+    expect(w.get('[data-testid="files-tree"]').text()).toContain("README.md");
 
     await w.findAll('[data-testid="files-row"]')[0].trigger("click");
     await flushPromises();

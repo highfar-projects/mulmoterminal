@@ -86,6 +86,29 @@ describe("FilesFolderView", () => {
     expect(w.find('[data-testid="files-folder-mode-list"]').exists()).toBe(true);
   });
 
+  it("keeps the keyboard on the pressed mode's button when the header is swapped", async () => {
+    const w = mountView();
+    w.get<HTMLElement>('[data-testid="files-folder-mode-gallery"]').element.focus();
+    await w.setProps({ mode: "gallery" });
+    expect(document.activeElement).toBe(w.get('[data-testid="files-folder-mode-gallery"]').element);
+  });
+
+  it("keeps the keyboard in the view when the rows it was on go", async () => {
+    const w = mountView();
+    w.get<HTMLElement>('[data-testid="files-folder-row"]').element.focus();
+    await w.setProps({ dir: "shots/sub", groups: null });
+    expect(document.activeElement).toBe(w.get('[data-testid="files-folder-view"]').element);
+  });
+
+  it("leaves the keyboard alone when it was not in the view", async () => {
+    const outside = document.createElement("button");
+    document.body.append(outside);
+    const w = mountView();
+    outside.focus();
+    await w.setProps({ mode: "gallery" });
+    expect(document.activeElement).toBe(outside);
+  });
+
   it("says when the folder is being read, is empty, or could not be read", () => {
     expect(mountView({ groups: null }).text()).toContain("Reading the folder");
     expect(
