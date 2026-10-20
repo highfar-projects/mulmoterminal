@@ -156,6 +156,50 @@ describe("useFolderView", () => {
     expect(view.dir.value).toBe("");
   });
 
+  it("spends no request rechecking a folder while hidden, and rechecks it when seen", async () => {
+    const tree: Tree = { "": [d("a"), d("b")], a: [], b: [] };
+    const asked = serve(tree);
+    const seen = ref(true);
+    const view = useFolderView(
+      () => "/proj",
+      () => seen.value,
+    );
+    view.show("a");
+    await settle();
+    seen.value = false;
+    await nextTick();
+    asked.length = 0;
+    delete tree.a;
+    await view.afterTreeOp({ id: "trash", pathRel: "a" });
+    await settle();
+    expect(asked).toEqual([]);
+    expect(view.dir.value).toBe("a");
+    seen.value = true;
+    await nextTick();
+    await settle();
+    expect(view.dir.value).toBe("");
+    expect(view.error.value).toBeNull();
+  });
+
+  it("keeps a hidden folder that is still there after its recheck, and drops the recheck on leaving it", async () => {
+    const asked = serve({ "": [], a: [], b: [] });
+    const seen = ref(false);
+    const view = useFolderView(
+      () => "/proj",
+      () => seen.value,
+    );
+    view.show("a");
+    await view.afterTreeOp({ id: "rename", pathRel: "a" });
+    expect(asked).toEqual([]);
+    seen.value = true;
+    await nextTick();
+    await settle();
+    expect(view.dir.value).toBe("a");
+    view.show("b");
+    await settle();
+    expect(view.dir.value).toBe("b");
+  });
+
   it("remembers the mode per browser, and survives storage that throws", () => {
     serve({ "": [] });
     const view = useFolderView(

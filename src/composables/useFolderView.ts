@@ -117,15 +117,26 @@ export function useFolderView(cwd: () => string | null, visible: () => boolean) 
     writeStored(MODE_KEY, next);
   }
 
-  /** A tree operation that landed. A folder that may be gone is read again at once, seen or not, and
-   *  if it is gone the view falls back to the root rather than keeping an error for later. */
+  /** A folder renamed or trashed while the view was hidden: rechecked when it is next seen, so a hidden
+   *  view spends no request on it and a gone folder still falls back to the root rather than an error. */
+  let recheckWhenSeen: string | null = null;
+
+  async function recheck(): Promise<void> {
+    const shown = dir.value;
+    recheckWhenSeen = null;
+    await load(true);
+    if (error.value !== null && dir.value === shown) dir.value = "";
+  }
+
+  /** A tree operation that landed. A folder that may be gone is read again, and if it is gone the view
+   *  falls back to the root rather than keeping an error. */
   async function afterTreeOp(op: TreeOp): Promise<void> {
     const outcome = folderAfterTreeOp(dir.value, op, groups.value?.map((group) => group.dirRel) ?? null);
     if (outcome === "keep") return;
     if (outcome === "refresh") return reload(true);
-    const shown = dir.value;
-    await load(true);
-    if (error.value !== null && dir.value === shown) dir.value = "";
+    if (visible()) return recheck();
+    recheckWhenSeen = dir.value;
+    forget();
   }
 
   /** A re-root: the folder on show is relative to a root the pane has left. Called by the pane's own
@@ -140,8 +151,10 @@ export function useFolderView(cwd: () => string | null, visible: () => boolean) 
   // One watch for both reasons to read, so a new folder and the view coming into sight in the same
   // tick read once.
   watch([dir, withSubfolders, rootChanges, visible], ([shownDir, subfolders, roots, seen], [wasDir, wasSubfolders, wasRoots]) => {
-    if (shownDir !== wasDir || subfolders !== wasSubfolders || roots !== wasRoots) reload();
-    else if (seen && unread()) void load();
+    if (shownDir !== wasDir || subfolders !== wasSubfolders || roots !== wasRoots) {
+      recheckWhenSeen = null;
+      reload();
+    } else if (seen && unread()) void (recheckWhenSeen === shownDir ? recheck() : load());
   });
   if (visible()) void load();
 
