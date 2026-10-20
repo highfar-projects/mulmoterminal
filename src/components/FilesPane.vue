@@ -114,6 +114,9 @@ const folder = useFolderView(
   () => props.cwd,
   () => folderShown.value,
 );
+// The tree row for what the right side shows: the open file, else the folder on show (#3136). The
+// root has no row, so nothing is marked while it is shown.
+const currentRowPath = computed(() => openPath.value ?? (folderShown.value && folder.dir.value ? folder.dir.value : null));
 const { openRequested, openFromTerminal } = useRequestedOpen(tabs, file, (pathRel) => canvasMode.hide(pathRel));
 const strip = tabs.strip;
 const { showStrip, focusablePath, labels } = tabStripView(strip, openPath);
@@ -558,7 +561,7 @@ defineExpose({
         <FilesTreeRow
           v-for="{ node, depth } in tree.rows.value"
           :key="node.path"
-          v-bind="{ node, depth, git, active: node.path === openPath }"
+          v-bind="{ node, depth, git, active: node.path === currentRowPath }"
           @click="openFile(node, $event)"
           @contextmenu="rowMenuApi.open(node, $event)"
           @keydown="rowMenuApi.onRowKeydown(node, $event)"

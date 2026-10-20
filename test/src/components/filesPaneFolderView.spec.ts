@@ -154,4 +154,17 @@ describe("FilesPane — the folder in the empty file area (#3120)", () => {
     await flushPromises();
     expect(scrolledTo).not.toContain("shots");
   });
+
+  it("marks the folder on show in the tree, and the open file instead once one opens (#3136)", async () => {
+    const current = (w: VueWrapper) => w.findAll('[data-testid="files-row"][aria-current="true"]').map((row) => row.attributes("data-path"));
+    const w = mount(FilesPane, { props: { cwd: "/proj" }, attachTo: document.body });
+    await flushPromises();
+    expect(current(w)).toEqual([]); // the root has no row
+    await w.get('[data-testid="files-folder-row"][data-path="shots"]').trigger("click");
+    await flushPromises();
+    expect(current(w)).toEqual(["shots"]);
+    await w.get('[data-testid="files-folder-row"][data-path="shots/b.png"]').trigger("click");
+    await flushPromises();
+    expect(current(w)).toEqual(["shots/b.png"]);
+  });
 });
