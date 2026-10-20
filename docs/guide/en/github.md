@@ -57,8 +57,8 @@ From there, [the ▶ on an issue row](#start-from-issue) starts the work.
 
 ## 1. Register the repos you want to see {#register}
 
-Only the repos you **register** appear (nothing is auto-added from worktrees or sessions). Two ways,
-both effective **immediately** (no restart).
+Only the repos you **register** appear (nothing is auto-added from worktrees or sessions). Two ways;
+a repo added in Settings takes effect **immediately** (no restart).
 
 ### From the Settings modal (recommended)
 
@@ -78,6 +78,8 @@ Add to **`prRepos`** (an array of `"owner/repo"` strings) in `~/.mulmoterminal/c
   "prRepos": ["acme/web", "acme/api"]
 }
 ```
+
+After a hand edit, press **Settings → Reload config file** or restart the server to apply it.
 
 GitLab projects can be listed too. → [Using GitLab](#gitlab)
 

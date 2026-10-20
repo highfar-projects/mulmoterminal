@@ -68,4 +68,4 @@ export const isGitlabHost = (host: string, declared: readonly string[]): boolean
  *  feature was coming, or what to try — so the reason has to carry the fix.
  */
 export const unknownForgeReason = (host: string): string =>
-  `${host} is not supported yet — MulmoTerminal reads github.com and gitlab.com; if ${host} is a self-hosted GitLab, add it to "gitlabHosts" in ~/.mulmoterminal/config.json and restart`;
+  `${host} is not supported yet — MulmoTerminal reads github.com and gitlab.com; if ${host} is a self-hosted GitLab, add it in Settings → GitHub and GitLab, or to "gitlabHosts" in ~/.mulmoterminal/config.json and press Reload config file`;

@@ -223,14 +223,44 @@ Use `presentChart`, and choose the chart from the shape of the data:
 
 | Data | Chart |
 |---|---|
-| a value over time | line; bars if there are only a few periods |
+| a value over time | line; bars if there are only a few periods; a time axis when the dates are uneven; sampling and zoom for thousands of points |
 | comparing categories | bar, sorted, unless the categories have an order of their own |
 | parts of a whole (few parts) | stacked bar; pie only for a handful of parts |
 | two numeric columns | scatter; for the regression line, a `TREND` or `FORECAST.LINEAR` column on the sheet drawn as a line |
-| the distribution of one column | histogram (bins counted in the script, passed inline) |
+| the distribution of one column | histogram; a boxplot per group to compare groups |
+| two measures of different size (sales and growth) | two value axes |
+| which few causes make up most of a total | Pareto |
+| how a total got from start to end | waterfall |
+| how several numeric columns move together | correlation matrix (a heatmap of `CORREL` for each pair) |
+| values spanning several orders of magnitude | log scale |
 | two categories crossed | heatmap |
 
-Give each chart a title saying what it shows. Give each axis a name, with its unit.
+Give each chart a title saying what it shows. Give each axis a name, with its unit. Mark what the
+user should look at: an average line, the highest point, a shaded span.
+
+**`presentChart`'s `option` description has a recipe for each of these.** Start from the recipe and
+lay the sheet out the way it says: a recipe drawn from a range names the header that range needs,
+and its series pick their columns by those names (`encode`). The option is JSON, so it holds no
+functions; format labels with template strings (`{value} %`). Compute on the sheet whatever the
+chart needs, so the chart follows edits:
+
+- **histogram**: the bins' edges in columns of their own beside the chart's range, and each count a
+  `COUNTIFS` on the data (`=COUNTIFS(Data!B2:B201,">="&C2,Data!B2:B201,"<"&D2)`; the last bin `"<="`).
+- **boxplot**: the five numbers per group with `MIN`, `QUARTILE(…,1)`, `MEDIAN`, `QUARTILE(…,3)` and
+  `MAX`. The sheet cannot filter a range by group, so sort the data sheet by group and point each
+  row at its group's block, or give each group a column of its own.
+- **Pareto**: the recipe says to sort on the sheet, but the sheet has no sort function, so the
+  script orders the causes, largest first, and the sheet counts them. The cumulative share is a
+  number from 0 to 100 (`=SUM($B$2:B2)/SUM($B$2:$B$9)*100`), not a fraction formatted as a
+  percentage, since the axis runs to 100.
+- **waterfall**: the change and the running total in columns beside the range; the drawn columns
+  are `Base = MIN(total before, total after)`, `Up = MAX(change, 0)` and `Down = MAX(-change, 0)`,
+  all non-negative.
+- **correlation matrix**: one row per cell, `X | Y | Value`, with `Value` a `CORREL` of the two
+  columns: every ordered pair, both directions and the diagonal, so `n` columns make `n²` rows.
+
+Any order the script sets, such as the sorted bars and the Pareto causes, is a computed value: the
+numbers follow edits and the order does not. Say so, and see *When the user edits the spreadsheet*.
 
 **Draw a chart of sheet data from the sheet**, so it follows the user's edits. Give the chart a
 `source` and leave the data out of `option`:
@@ -246,10 +276,8 @@ so lay the summary sheet out that way: one row per category, one column per seri
 drawn from the calculated range, and drawn again whenever the sheet is saved. If `presentChart`
 says it cannot read the range, fix the range rather than falling back.
 
-Pass data inline in `option` only for what is not in the sheet: histogram bins (unless you counted
-them with `COUNTIFS` on the sheet), a non-linear fit. Such a chart does **not** follow the sheet;
-say which charts do and which do not. A straight fitted line can be on the sheet (`TREND`), and
-then it follows.
+Pass data inline in `option` only for what the sheet cannot hold, such as a non-linear fit. Such a
+chart does **not** follow the sheet; say which charts do and which do not.
 
 ## 5. Say where everything is
 
@@ -342,7 +370,8 @@ number. Work out the results in a script, and say what changed most.
 If the sheet holds no computed values, and every chart follows it, that is all: do not present it
 again. Otherwise the computed values and the inline charts are now stale. Then:
 
-- recompute the computed values that depended on the edited cells;
+- recompute the computed values that depended on the edited cells, including any order the script
+  set (sorted bars, a Pareto chart's causes) that the new numbers no longer follow;
 - call `presentSpreadsheet` again with the whole spreadsheet: the user's edits, the formulas, each
   sheet's `functions` as the file holds them, and the new computed values;
 - draw the charts again, with their `source` pointing at the **new** spreadsheet;

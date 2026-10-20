@@ -51,14 +51,16 @@ as a number it worked out. Change a value and everything that depends on it chan
 
 **A chart.** `presentChart` draws charts with ECharts: line, bar, area, scatter, pie, heatmap,
 candlestick, sankey and more. Several charts can be shown together. **PNG** on each chart downloads it as
-an image.
+an image. As of chart plugin 4.2.0 the agent also knows how to write the charts an analysis asks for:
+boxplots, Pareto charts, two value axes, waterfalls, a fitted line over a scatter, average lines and
+calendar heatmaps among them.
 
 ![The chart card: monthly coffee and pastry sales as lines, with the monthly total as bars](../images/spreadsheet-chart.png)
 
 **A chart can follow the spreadsheet.** When the agent draws a chart from a range of the sheet, the
 chart shows that range calculated, and draws itself again when the sheet is saved: change a number and
 the chart moves with it. The card says which range it comes from ("From the spreadsheet: Summary!A1:C13").
-A chart the agent drew from numbers it passed directly (a histogram, a fitted line) does not follow the
+A chart the agent drew from numbers it passed directly (a fitted curve, say) does not follow the
 sheet; ask the agent to draw it again (see [Changing the numbers yourself](#changing-the-numbers-yourself)).
 [Analysing data from start to finish](#analysing-data-from-start-to-finish) shows it working.
 
@@ -177,7 +179,7 @@ The agent tells you which ones they are.
 
 The series names come from the range's header row, and the categories from its first column. In the
 example, the regression line is drawn from a column of predicted values that is itself a formula,
-so the line moves with the data too. A chart that is not drawn from the sheet (a histogram's bins, say) has no
+so the line moves with the data too. A chart that is not drawn from the sheet (a fitted curve, say) has no
 "From the spreadsheet" line, and the agent tells you it does not follow the sheet.
 
 ### Change the data and watch {#analysis-change-and-watch}
