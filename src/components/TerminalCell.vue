@@ -102,6 +102,7 @@ import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 import { shouldCloseEndedCell } from "../../common/endedCellClose";
+import { beginDevcontainerOp, settleDevcontainerOp, devcontainerOpFor, onDevcontainerOpSettled } from "../composables/devcontainerExitHold";
 import type { SessionExit } from "../composables/serverMessage";
 
 // How long a handoff failure stays on the cell before it clears itself.
@@ -321,7 +322,11 @@ async function runDevcontainerBuild(rebuild: boolean, onDone: (ok: boolean) => v
   devcontainerBuilding.value = true;
   devcontainerBuildElapsed.value = 0;
   devcontainerBuildTimer = setInterval(() => (devcontainerBuildElapsed.value += 1), 1000);
+  // Only a rebuild removes a container a session may be running in; the first build leaves this
+  // session on the host where it started.
+  if (rebuild) beginDevcontainerOp(dir);
   const result = await buildDevcontainer(dir, { rebuild });
+  if (rebuild) settleDevcontainerOp(dir, result.ok);
   devcontainerBuilding.value = false;
   if (devcontainerBuildTimer) {
     clearInterval(devcontainerBuildTimer);
@@ -346,30 +351,30 @@ async function buildDevcontainerNow(): Promise<void> {
 // Confirmed, unlike the initial build above: `--remove-existing-container` (server/config/
 // devcontainer-flag.ts) deletes the CURRENT container first, so anything already running inside
 // it — including, often, this very session — is what the confirm is warning about, not a
-// hypothetical. Points at Terminal.vue's own reconnect button rather than "close and restart":
-// a session killed this way is a normal exit as far as the server is concerned (nothing detects
-// "the container disappeared" specially), so its transcript is still on disk and reconnecting —
-// not relaunching — is what actually resumes it inside the fresh container.
+// hypothetical. A session killed this way is a normal exit as far as the server is concerned
+// (nothing detects "the container disappeared" specially), so its transcript is still on disk:
+// the cell is kept rather than auto-closed, and reconnected — not relaunched — once the rebuild
+// succeeded, which resumes it inside the fresh container (devcontainerExitHold.ts).
 async function rebuildDevcontainerNow(): Promise<void> {
   if (!devcontainerInfo.value?.enabled || devcontainerBusy.value) return;
   if (
     !window.confirm(
-      "Rebuild this directory's devcontainer?\n\nThe existing container is removed and rebuilt. Any session already running inside it — including this one — will disconnect, and can be resumed afterward with that terminal's own Reconnect button.",
+      "Rebuild this directory's devcontainer?\n\nThe existing container is removed and rebuilt. Any session already running inside it — including this one — stops while it rebuilds, and resumes in the fresh container once the rebuild succeeds.",
     )
   ) {
     return;
   }
   await runDevcontainerBuild(true, () =>
     window.alert(
-      "Devcontainer rebuilt.\n\nAny session that was running inside it (including this one) disconnected — use its Reconnect button to resume it in the fresh container.",
+      "Devcontainer rebuilt.\n\nSessions that were running inside it resume in the fresh container. One that does not can be resumed with its Reconnect button.",
     ),
   );
 }
 // The way back to the host: stops the real container (server/config/devcontainer-flag.ts
 // stopDevcontainer, found by the same devcontainer.local_folder label runningDevcontainerName
 // uses) and marks the directory disabled on success, so the NEXT spawn here runs on the host —
-// this session, like a rebuild, disconnects rather than migrating live (spawn-claude.ts only
-// reads the flag at spawn time). Unlike the badge/rebuild pair, there is no "build" half to
+// this session, like a rebuild, ends rather than migrating live (spawn-claude.ts only reads the
+// flag at spawn time), and is resumed on the host once the stop succeeded (devcontainerExitHold.ts). Unlike the badge/rebuild pair, there is no "build" half to
 // share code with: stopping has nothing to poll a build log for, so it sets its own flag directly
 // rather than going through runDevcontainerBuild.
 async function stopDevcontainerNow(): Promise<void> {
@@ -377,13 +382,15 @@ async function stopDevcontainerNow(): Promise<void> {
   if (!dir || !devcontainerInfo.value?.enabled || devcontainerBusy.value) return;
   if (
     !window.confirm(
-      "Stop this directory's devcontainer?\n\nThe container is stopped, and new terminals here run on the host until it is built again. Any session already running inside it — including this one — will disconnect, and can be resumed afterward with that terminal's own Reconnect button.",
+      "Stop this directory's devcontainer?\n\nThe container is stopped, and new terminals here run on the host until it is built again. Any session already running inside it — including this one — resumes on the host once the container has stopped.",
     )
   ) {
     return;
   }
   devcontainerStopping.value = true;
+  beginDevcontainerOp(dir);
   const result = await stopDevcontainer(dir);
+  settleDevcontainerOp(dir, result.ok);
   devcontainerStopping.value = false;
   await refreshDevcontainerInfo(cwd.value);
   if (!result.ok) window.alert(`Could not stop the devcontainer.\n\n${result.message}`);
@@ -1179,9 +1186,41 @@ defineExpose({ close });
 
 // An agent that ended on its own (`/exit`, Ctrl+C, a crash) takes its cell with it (#3049), through
 // the same teardown as the close button so the cell lands in the reopen list.
+//
+// DIVERGES FROM UPSTREAM (fork-only): not when the session ended because a devcontainer rebuild or
+// stop removed its container (devcontainerExitHold.ts) — that ending was asked for from a cell, and
+// the cell is kept and resumed in place once the operation succeeded.
 function onTerminalExit(_exitCode: number | null, session: SessionExit) {
+  if (session.sessionEnded && holdForDevcontainerOp()) return;
   if (shouldCloseEndedCell({ ...session, worktreeCell: isWorktreeCell.value })) teardown();
 }
+
+// The session id this cell is waiting to resume once its directory's devcontainer operation
+// settles, or null. Remembered as the id, so a cell closed and reused in between resumes nothing.
+let resumeAfterDevcontainerOp: string | null = null;
+function holdForDevcontainerOp(): boolean {
+  const op = devcontainerOpFor(cwd.value);
+  if (op === null) return false;
+  if (op === "succeeded") resumeHeldSession(sessionId.value);
+  else if (op === "running") resumeAfterDevcontainerOp = sessionId.value;
+  // "failed": kept, with the session-ended banner and Terminal.vue's Reconnect button.
+  return true;
+}
+function resumeHeldSession(id: string | null): void {
+  resumeAfterDevcontainerOp = null;
+  if (!id || !launched.value || sessionId.value !== id) return;
+  // The same retarget the restart uses: nothing is live, so the server spawns and resumes.
+  working.value = false;
+  waiting.value = false;
+  activityEvent.value = null;
+  connectKey.value++;
+}
+const stopDevcontainerOpListener = onDevcontainerOpSettled((dir, ok) => {
+  if (resumeAfterDevcontainerOp === null || dir !== cwd.value) return;
+  if (ok) resumeHeldSession(resumeAfterDevcontainerOp);
+  else resumeAfterDevcontainerOp = null;
+});
+onUnmounted(stopDevcontainerOpListener);
 
 // Nothing dismisses the confirmation once the removal has started. The pty is terminated before the
 // route is even called, so a dialog that closes here would claim the worktree was kept while it is
