@@ -1,3 +1,4 @@
+// @vitest-environment node
 // The json route as the Files pane's Preview uses it (#3137). Its own file: files-browse.spec.ts is at
 // the line limit.
 import { describe, it, expect } from "vitest";
