@@ -120,9 +120,10 @@ export function htmlDoc(bodyHtml: string, title: string, extraStyle = ""): strin
 }
 
 /** A JSON file, indented. Unparseable text is shown AS IT IS rather than replaced by an
- *  error: a file that fails to parse is exactly when someone needs to look at it. */
-export function jsonHtmlDoc(text: string, title: string): string {
-  return htmlDoc(`<pre><code>${escapeHtml(prettyJson(text))}</code></pre>`, title);
+ *  error: a file that fails to parse is exactly when someone needs to look at it. With a theme —
+ *  the Files pane's Preview (#3137) — it takes the app's colours, as a table does. */
+export function jsonHtmlDoc(text: string, title: string, theme: PreviewTheme | null = null): string {
+  return htmlDoc(`<pre><code>${escapeHtml(prettyJson(text))}</code></pre>`, title, theme ? themeStyle(theme) : "");
 }
 
 function prettyJson(text: string): string {

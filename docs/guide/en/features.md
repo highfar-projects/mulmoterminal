@@ -185,12 +185,12 @@ itself (sandboxed: its scripts run but cannot fetch; images beside it load, a re
 script does not); an `.svg` previews as its picture; a PNG, JPEG, GIF or WebP shows as the image; a PDF shows in a frame, and a video or audio file plays
 with the browser's controls (seeking works whatever its size). A text file too large to edit still
 offers **Open in OS**.
-A `.csv` or `.tsv` previews as a table in the app's colours. Clicking such a path in a terminal
+A `.csv` or `.tsv` previews as a table in the app's colours, and a `.json` as indented JSON. Clicking such a path in a terminal
 opens it here, drawn, when the pane is up.
 
 **Hand the selected lines to the agent.** The **@** button in the header (or the `files-insert-selection` key) puts the selected lines at the prompt of the terminal beside the pane as `@src/a.ts#L10-20` — the form Claude Code's IDE integration uses. Nothing is sent, so you can go on to say what to do with them. With nothing selected — or in Preview — it inserts the file alone. Unsaved edits are saved first, so the line numbers match the file the agent reads. It is Claude Code's form; another agent sees it as plain text.
 
-**Canvas shows the open file inside the pane.** For a Markdown, HTML, MulmoScript or ShapeScript (`.shape`) file, **Canvas** in the pane's header (or **Open in the Canvas** on a row) switches the file to the view the Canvas draws it with, with the tree still beside it; press **Canvas** again to go back to the editor. Unsaved edits are saved first. Nothing is added to the cell's own Canvas. Only in the pane beside a cell — the full-screen file view keeps Preview.
+**Canvas shows the open file inside the pane.** For a Markdown, HTML, MulmoScript or ShapeScript (`.shape`) file, **Canvas** in the pane's header (or **Open in the Canvas** on a row) switches the file to the view the Canvas draws it with, with the tree still beside it (a `.json` counts as a MulmoScript only when its top level has a `$mulmocast` key; any other JSON keeps the editor and its Preview); press **Canvas** again to go back to the editor. Unsaved edits are saved first. Nothing is added to the cell's own Canvas. Only in the pane beside a cell — the full-screen file view keeps Preview.
 
 **A folder as a gallery.** Right-click a folder and choose **Open as gallery** to see its pictures (SVG too), videos, sounds and PDFs at once, in name order. Only that folder's own files are shown, not its subfolders, and a large folder shows a page at a time with **Show more**. Videos and sounds play inside their tile, one at a time. Click a tile (or its name) to see it large: **←** / **→** move through the folder, **Esc** goes back to the grid and **Esc** again closes the gallery. Opening a file closes it too.
 

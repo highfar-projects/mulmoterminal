@@ -518,7 +518,7 @@ export function mountFilesBrowseRoutes(app: Express, deps: BrowseDeps): void {
   const serveRendered = (routePath: string, render: RenderDoc, embed?: EmbedDoc) => mountRenderedRoute(app, routePath, defaultCwd, render, embed);
 
   serveRendered("/api/files/browse/md", renderMd, embedMdWith(mountMermaidAssetRoute(app, installedMermaid())));
-  serveRendered("/api/files/browse/json", (text, title) => jsonHtmlDoc(text, title));
+  serveRendered("/api/files/browse/json", (text, title, _doc, theme) => jsonHtmlDoc(text, title, theme));
   // The delimiter comes from the file's own extension, so one route serves .csv and .tsv.
   serveRendered("/api/files/browse/table", (text, title, _doc, theme) => tableHtmlDoc(text, title, delimiterForExtension(path.extname(title)), theme));
 

@@ -49,6 +49,14 @@ describe("jsonHtmlDoc", () => {
     expect(jsonHtmlDoc('{"a": oops,,}', "x.json")).toContain("{&quot;a&quot;: oops,,}");
   });
 
+  // #3137. In the Files pane it takes the app's colours; a clicked .json in a terminal stays on the
+  // reader's system ones.
+  it("takes the app's theme when given one, and only then", () => {
+    const dark = { bg: "#1a1a2e", fg: "#e6e6f0", muted: "#a0a0b8", subtle: "#232342", border: "#33335a", link: "#4a8cff" };
+    expect(jsonHtmlDoc("{}", "x.json", dark)).toContain(themeStyle(dark));
+    expect(jsonHtmlDoc("{}", "x.json")).not.toContain(themeStyle(dark));
+  });
+
   it("escapes values rather than emitting them as markup", () => {
     const doc = jsonHtmlDoc('{"a":"<img onerror=1>"}', "x.json");
     expect(doc).not.toContain("<img");
