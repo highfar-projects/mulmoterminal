@@ -227,11 +227,13 @@ Use `presentChart`, and choose the chart from the shape of the data:
 | comparing categories | bar, sorted, unless the categories have an order of their own |
 | parts of a whole (few parts) | stacked bar; pie only for a handful of parts |
 | two numeric columns | scatter; for the regression line, a `TREND` or `FORECAST.LINEAR` column on the sheet drawn as a line; for a curve (exponential, logarithmic, polynomial), `ecStat:regression` |
-| the distribution of one column | histogram; a boxplot per group to compare groups |
+| the distribution of one column | histogram; a boxplot per group to compare groups (`mulmo:boxplotColumns` when each group is a column) |
 | two measures of different size (sales and growth) | two value axes |
 | which few causes make up most of a total | Pareto |
 | how a total got from start to end | waterfall |
 | how several numeric columns move together | correlation matrix (a heatmap of `CORREL` for each pair) |
+| which rows are alike (customers by income and visits) | clusters (`mulmo:clustering`) on a scatter |
+| a value per prefecture or country | map |
 | values spanning several orders of magnitude | log scale |
 | two categories crossed | heatmap |
 
@@ -241,17 +243,20 @@ user should look at: an average line, the highest point, a shaded span.
 **`presentChart`'s `option` description has a recipe for each of these.** Start from the recipe and
 lay the sheet out the way it says: a recipe drawn from a range names the header that range needs,
 and its series pick their columns by those names (`encode`). The option is JSON, so it holds no
-functions; format labels with template strings (`{value} %`). Compute on the sheet whatever the
-chart needs, so the chart follows edits:
+functions; format labels with template strings (`{value} %`) or a format object
+(`{ "kind": "currency", "currency": "JPY" }`, `percent`, `number`, `date`). Compute on the sheet
+whatever the chart needs, so the chart follows edits:
 
 - **histogram**: when the user does not need particular bins, `ecStat:histogram` counts the data
   column itself, and `config.method` picks the bins. When the user wants bins of their own, or the
   counts on the sheet, put the bins' edges in columns of their own beside the chart's range, and
   each count a `COUNTIFS` on the data (`=COUNTIFS(Data!B2:B201,">="&C2,Data!B2:B201,"<"&D2)`; the
   last bin `"<="`).
-- **boxplot**: the five numbers per group with `MIN`, `QUARTILE(…,1)`, `MEDIAN`, `QUARTILE(…,3)` and
+- **boxplot**: when each group is a column of its own (Store A, Store B), `mulmo:boxplotColumns`
+  boxes those columns straight from the data range. When the groups are values in one column, put
+  the five numbers per group on the sheet with `MIN`, `QUARTILE(…,1)`, `MEDIAN`, `QUARTILE(…,3)` and
   `MAX`. The sheet cannot filter a range by group, so sort the data sheet by group and point each
-  row at its group's block, or give each group a column of its own.
+  row at its group's block.
 - **Pareto**: the recipe says to sort on the sheet, but the sheet has no sort function, so the
   script orders the causes, largest first, and the sheet counts them. The cumulative share is a
   number from 0 to 100 (`=SUM($B$2:B2)/SUM($B$2:$B$9)*100`), not a fraction formatted as a
@@ -259,15 +264,29 @@ chart needs, so the chart follows edits:
 - **waterfall**: the change and the running total in columns beside the range; the drawn columns
   are `Base = MIN(total before, total after)`, `Up = MAX(change, 0)` and `Down = MAX(-change, 0)`,
   all non-negative.
-- **correlation matrix**: one row per cell, `X | Y | Value`, with `Value` a `CORREL` of the two
-  columns: every ordered pair, both directions and the diagonal, so `n` columns make `n²` rows.
+- **correlation matrix**: a cross table with the column names along the top row and down the first
+  column, a `CORREL` in each cell, drawn with `"layout": "matrix"` in the chart's `source`, which
+  turns it into the `X | Y | Value` rows the heatmap recipe reads.
+- **clusters**: `mulmo:clustering` groups rows by the columns in `config.dimensions`, and gives the
+  same groups on every redraw. It measures distance in the columns' own units, so a column of
+  incomes outweighs a column of visit counts: when the scales differ, add a standardised column for
+  each (`=STANDARDIZE(B2,AVERAGE(B$2:B$201),STDEV(B$2:B$201))`) and cluster on those, while the
+  scatter still shows the original columns.
+- **map**: one row per region, its name exactly as the map has it: `japan-ja` and `world-ja` take
+  Japanese names (東京都), `japan` and `world` English ones. No other map is available.
 
-**A fitted curve or a histogram straight from the data** uses the recipe's `ecStat:regression` or
-`ecStat:histogram`: the chart's `source` is the data sheet's range, header row included
+**A fitted curve, a histogram, clusters or a box per column straight from the data** uses the
+recipe's transform (`ecStat:regression`, `ecStat:histogram`, `mulmo:clustering`,
+`mulmo:boxplotColumns`): the chart's `source` is the data sheet's range, header row included
 (`Data!B1:C201`), and the transform's `dimensions` name the columns by that header exactly. The
 transform recomputes whenever the sheet is saved, so the chart follows edits; rows with a blank or
-text cell are left out of a fit. The curve's equation is not on the sheet: if the user wants its
-coefficients, compute them in the script as a computed value.
+text cell are left out. What it computes is not on the sheet: if the user wants a curve's
+coefficients or each row's cluster as numbers, compute them in the script as computed values.
+
+**Long data needs no summary sheet to draw one line per group.** A data sheet of `Date | Region |
+Sales` rows can be the source as it is, with `"groupBy": { "column": "Region" }`: it is drawn with
+one column per region, and rows meeting in one cell are added up. Several ranges go in `sources`
+instead of `source`, the i-th as `dataset[i]`.
 
 Any order the script sets, such as the sorted bars and the Pareto causes, is a computed value: the
 numbers follow edits and the order does not. Say so, and see *When the user edits the spreadsheet*.
@@ -284,7 +303,11 @@ numbers follow edits and the order does not. Say so, and see *When the user edit
 The range's first row is the header (it names the series) and its first column the categories,
 so lay the summary sheet out that way: one row per category, one column per series. The chart is
 drawn from the calculated range, and drawn again whenever the sheet is saved. If `presentChart`
-says it cannot read the range, fix the range rather than falling back.
+says it cannot read the range, fix the range rather than falling back. If it says a chart could not
+be drawn, nothing was saved: fix that chart's option as the reply says and call it again.
+
+Several charts of one analysis go in one `presentChart` call: `document.columns` (1–4) sets them
+side by side, and `height` on a chart (160–1200 pixels) makes it taller or shorter.
 
 Pass data inline in `option` only for what neither the sheet nor a transform can draw, such as a fit
 of a form `ecStat:regression` does not have. Such a chart does **not** follow the sheet; say which
@@ -334,8 +357,8 @@ will silently describe the old file when the skill runs on the next one:
 - every range, row count and sheet size comes from the data (`Data!A1:G${rows.length + 1}`);
 - categories, dates, the edges of bins the user chose, lookup tables and anything else derived
   from the rows are computed by the script, not pasted in;
-- a fitted curve and an automatic histogram stay `ecStat` transforms over the data range, as in
-  *4. Charts*, never their points as they came out on this file;
+- a fitted curve, an automatic histogram, clusters and a box per column stay transforms over the
+  data range, as in *4. Charts*, never their output as it came out on this file;
 - the spreadsheet path the charts point at is an argument (it changes on every run);
 - titles name the data kind, not this file's dates;
 - workbook functions travel in the `functions` the scripts present, unchanged: they are the method,
