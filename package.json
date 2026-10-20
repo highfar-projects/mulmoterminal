@@ -90,7 +90,7 @@
     "@mulmochat-plugin/generate-image": "^2.1.0",
     "@mulmochat-plugin/ui-image": "^0.4.1",
     "@mulmoclaude/accounting-plugin": "^4.0.2",
-    "@mulmoclaude/chart-plugin": "^4.2.0",
+    "@mulmoclaude/chart-plugin": "^4.3.0",
     "@mulmoclaude/collection-plugin": "^5.5.0",
     "@mulmoclaude/core": "^5.12.0",
     "@mulmoclaude/form-plugin": "^2.2.0",
