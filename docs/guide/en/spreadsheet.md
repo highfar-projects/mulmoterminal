@@ -54,7 +54,10 @@ candlestick, sankey and more. Several charts can be shown together. **PNG** on e
 an image. As of chart plugin 4.2.0 the agent also knows how to write the charts an analysis asks for:
 boxplots, Pareto charts, two value axes, waterfalls, a fitted line over a scatter, average lines and
 calendar heatmaps among them. From 4.3.0 it can also fit a curve or bin a histogram from a sheet's raw
-columns, so those charts follow the sheet too.
+columns, so those charts follow the sheet too. From 4.4.0 it can group points into clusters, box each
+column of a sheet, and colour a map of Japan or the world (prefecture and country names in Japanese
+work too). Cards follow a dark theme, can sit side by side, and also download as **SVG** and **CSV**.
+If a chart cannot be drawn, the agent is told why and fixes it before anything is shown.
 
 ![The chart card: monthly coffee and pastry sales as lines, with the monthly total as bars](../images/spreadsheet-chart.png)
 
