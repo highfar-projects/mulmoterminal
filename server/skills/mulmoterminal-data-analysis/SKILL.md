@@ -266,7 +266,8 @@ whatever the chart needs, so the chart follows edits:
   all non-negative.
 - **correlation matrix**: a cross table with the column names along the top row and down the first
   column, a `CORREL` in each cell, drawn with `"layout": "matrix"` in the chart's `source`, which
-  turns it into the `X | Y | Value` rows the heatmap recipe reads.
+  turns it into the `X | Y | Value` rows the heatmap recipe reads. Leave out a column that does not
+  vary: its `CORREL` (and `STANDARDIZE` below) is `#DIV/0!`.
 - **clusters**: `mulmo:clustering` groups rows by the columns in `config.dimensions`, and gives the
   same groups on every redraw. It measures distance in the columns' own units, so a column of
   incomes outweighs a column of visit counts: when the scales differ, add a standardised column for
@@ -279,8 +280,9 @@ whatever the chart needs, so the chart follows edits:
 recipe's transform (`ecStat:regression`, `ecStat:histogram`, `mulmo:clustering`,
 `mulmo:boxplotColumns`): the chart's `source` is the data sheet's range, header row included
 (`Data!B1:C201`), and the transform's `dimensions` name the columns by that header exactly. The
-transform recomputes whenever the sheet is saved, so the chart follows edits; rows with a blank or
-text cell are left out. What it computes is not on the sheet: if the user wants a curve's
+transform recomputes whenever the sheet is saved, so the chart follows edits. A blank or text cell
+is left out: the whole row from a fit, a histogram or clusters, only that value from a box per
+column. What it computes is not on the sheet: if the user wants a curve's
 coefficients or each row's cluster as numbers, compute them in the script as computed values.
 
 **Long data needs no summary sheet to draw one line per group.** A data sheet of `Date | Region |
@@ -288,8 +290,9 @@ Sales` rows can be the source as it is, with `"groupBy": { "column": "Region" }`
 one column per region, and rows meeting in one cell are added up. Several ranges go in `sources`
 instead of `source`, the i-th as `dataset[i]`.
 
-Any order the script sets, such as the sorted bars and the Pareto causes, is a computed value: the
-numbers follow edits and the order does not. Say so, and see *When the user edits the spreadsheet*.
+Any order the script sets, such as the sorted bars, the Pareto causes and the groups' blocks behind
+a grouped boxplot, is a computed value: the numbers follow edits, and the order and which rows
+belong to a group do not. Say so, and see *When the user edits the spreadsheet*.
 
 **Draw a chart of sheet data from the sheet**, so it follows the user's edits. Give the chart a
 `source` and leave the data out of `option`:
@@ -407,7 +410,8 @@ If the sheet holds no computed values, and every chart follows it, that is all: 
 again. Otherwise the computed values and the inline charts are now stale. Then:
 
 - recompute the computed values that depended on the edited cells, including any order the script
-  set (sorted bars, a Pareto chart's causes) that the new numbers no longer follow;
+  set (sorted bars, a Pareto chart's causes, a grouped boxplot's blocks) that the new data no
+  longer follows;
 - call `presentSpreadsheet` again with the whole spreadsheet: the user's edits, the formulas, each
   sheet's `functions` as the file holds them, and the new computed values;
 - draw the charts again, with their `source` pointing at the **new** spreadsheet;
