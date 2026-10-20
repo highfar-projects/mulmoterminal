@@ -16,6 +16,7 @@ import { HOME_SCOPE_SUFFIX, PORT } from "../../config/env.js";
 import { isLauncherEnvVar } from "./pty-env.js";
 import { spawnCapture, spawnCaptureAsync } from "./spawnCapture.js";
 import { splitLines } from "../fs/split-lines.js";
+import { isPsmuxVersion, psmuxVersionOf, psmuxVtInputFor, type PsmuxVersion } from "./psmux.js";
 import { writeFileAtomicSync } from "../../files/atomic-write.js";
 import { TMUX_PREFIX_DEFAULT, staleSendPrefixKeys, tmuxPrefixCommands } from "../../../common/tmuxPrefix.js";
 
@@ -28,6 +29,8 @@ const tmux = (args: string[]) => spawnCapture("tmux", ["-L", SERVER_SOCKET, ...a
 const tmuxAsync = (args: string[]) => spawnCaptureAsync("tmux", ["-L", SERVER_SOCKET, ...args]);
 
 let cachedAvailable: boolean | null = null;
+let cachedPsmux = false;
+let cachedPsmuxVersion: PsmuxVersion | null = null;
 
 // Set from config before the first tmuxAvailable() when the config is read at boot, and again when
 // the user saves a different one. Its commands go in the conf file (a fresh server) and are run live
@@ -44,11 +47,23 @@ export function setTmuxPrefix(prefix: string): void {
 // detection the isolated config is written so `new-session` picks it up via `-f`.
 export function tmuxAvailable(): boolean {
   if (cachedAvailable === null) {
-    cachedAvailable = spawnCapture("tmux", ["-V"]).status === 0;
+    const version = spawnCapture("tmux", ["-V"]);
+    cachedAvailable = version.status === 0;
+    cachedPsmux = cachedAvailable && isPsmuxVersion(version.stdout);
+    cachedPsmuxVersion = cachedPsmux ? psmuxVersionOf(version.stdout) : null;
     if (cachedAvailable) ensureConf();
   }
   return cachedAvailable;
 }
+
+/** Whether the tmux on PATH is psmux. False until tmuxAvailable() has run. */
+export const tmuxIsPsmux = (): boolean => cachedPsmux;
+
+/** psmux's own release, or null for a real tmux. */
+export const tmuxPsmuxVersion = (): PsmuxVersion | null => cachedPsmuxVersion;
+
+/** Whether tmux clients are started with `PSMUX_VT_INPUT=1`. Always false for a real tmux. */
+export const tmuxPsmuxVtInput = (): boolean => cachedPsmux && psmuxVtInputFor(cachedPsmuxVersion, process.env.PSMUX_VT_INPUT);
 
 // The terminfo `Ms` capability (OSC 52 clipboard write). tmux only forwards a program's
 // OSC 52 to the OUTER terminal when it knows the outer terminal supports it — our web

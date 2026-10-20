@@ -149,7 +149,7 @@ const PATH_TOOLS = [
     why: "the PRs & Issues view for gitlab.com projects",
     hint: "brew install glab  (then: glab auth login)",
   },
-  { cmd: "tmux", required: false, why: "sessions survive a restart", hint: "brew install tmux  ·  apt install tmux" },
+  { cmd: "tmux", required: false, why: "sessions survive a restart", hint: "brew install tmux  ·  apt install tmux  ·  Windows: winget install psmux" },
   { cmd: "codex", required: false, why: "run OpenAI Codex as an agent", hint: "npm install -g @openai/codex" },
   {
     cmd: "ffmpeg",

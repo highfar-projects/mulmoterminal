@@ -15,6 +15,7 @@ const scrub = vi.fn();
 vi.mock("../../../../server/infra/process/tmux.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../../server/infra/process/tmux.js")>()),
   tmuxAvailable: () => tmuxOn,
+  tmuxPsmuxVtInput: () => psmuxVtInput,
   tmuxHasSession: (id: string) => liveTmuxSessions.has(id),
   // The real one turns `env` into `-e KEY=VALUE` pairs, which is the only way a variable
   // reaches a tmux PANE — so the fake has to carry it or the #1367 assertions below prove nothing.
@@ -30,6 +31,7 @@ vi.mock("../../../../server/infra/process/tmux.js", async (importOriginal) => ({
 vi.mock("../../../../server/config/worktree/worktree-env.js", () => ({ reservedWorktreeEnv: () => reserved }));
 
 let tmuxOn = false;
+let psmuxVtInput = false;
 // What ptySpawn handed tmuxNewSessionArgs as the PANE's directory (the `-c` the real one builds).
 let newSessionCwd = "";
 let reserved: Record<string, string> = {};
@@ -56,6 +58,7 @@ beforeEach(() => {
   spawn.mockClear();
   scrub.mockClear();
   tmuxOn = false;
+  psmuxVtInput = false;
   reserved = {};
   liveTmuxSessions.clear();
   process.env.ANTHROPIC_API_KEY = "sk-ant-leftover";
@@ -296,6 +299,29 @@ describe("ptySpawn — the directory the process itself is started from", () => 
 // Stripping our own copy is not enough: a pane inherits the tmux SERVER's environment,
 // and a server created by an earlier non-provider session already carries the key. The
 // scrub in ensureConf only covers a server that predates this process.
+// The psmux client's VT input route keeps a paste's markers, so the Enter after it is not taken
+// into the paste. Only the tmux CLIENT gets it, and only behind a psmux that has the route.
+describe("ptySpawn — the psmux VT input route", () => {
+  it("starts the client with PSMUX_VT_INPUT=1 behind a psmux that has the route", () => {
+    tmuxOn = true;
+    psmuxVtInput = true;
+    ptySpawn(S1, "claude", [], EXISTING_CWD, true);
+    expect(envOf().PSMUX_VT_INPUT).toBe("1");
+  });
+
+  it("adds nothing for a real tmux", () => {
+    tmuxOn = true;
+    ptySpawn(S1, "claude", [], EXISTING_CWD, true);
+    expect(envOf()).not.toHaveProperty("PSMUX_VT_INPUT");
+  });
+
+  it("adds nothing to a spawn without tmux", () => {
+    psmuxVtInput = true;
+    ptySpawn(S1, "claude", [], EXISTING_CWD, true);
+    expect(envOf()).not.toHaveProperty("PSMUX_VT_INPUT");
+  });
+});
+
 describe("ptySpawn — the tmux server's own environment", () => {
   it("scrubs the names from the running server before a provider spawn", () => {
     tmuxOn = true;
