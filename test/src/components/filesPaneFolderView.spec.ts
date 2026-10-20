@@ -17,11 +17,14 @@ type Entry = { name: string; dir: boolean; size: number };
 const file = (name: string): Entry => ({ name, dir: false, size: 10 });
 const disk = new Map<string, Entry[]>();
 const listings: string[] = [];
+/** Listings that answer only once their promise settles, to hold a read mid-flight. */
+const held = new Map<string, Promise<void>>();
 
 beforeEach(() => {
   // A tree operation puts the keyboard on a row by its escaped path; jsdom has no CSS.escape.
   vi.stubGlobal("CSS", { escape: (value: string) => value });
   listings.length = 0;
+  held.clear();
   disk.clear();
   disk.set("", [{ name: "shots", dir: true, size: 0 }, file("notes.md"), file("a.png")]);
   disk.set("shots", [{ name: "old", dir: true, size: 0 }, file("b.png")]);
@@ -31,6 +34,7 @@ beforeEach(() => {
     if (url.pathname.endsWith("/list")) {
       const pathRel = url.searchParams.get("path") ?? "";
       listings.push(pathRel);
+      await held.get(pathRel);
       const entries = disk.get(pathRel);
       return entries ? { ok: true, json: async () => ({ entries }) } : { ok: false, status: 404, json: async () => ({}) };
     }
@@ -42,6 +46,7 @@ afterEach(() => {
   document.body.innerHTML = "";
   localStorage.clear();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 const folderRows = (w: VueWrapper) => w.findAll('[data-testid="files-folder-row"]').map((row) => row.attributes("data-path"));
@@ -109,5 +114,27 @@ describe("FilesPane — the folder in the empty file area (#3120)", () => {
     await flushPromises();
     expect(folderRows(w)).toContain("shots/old");
     expect(treeRow(w, "c.png")).toBeDefined();
+  });
+
+  // A folder, not a file: opening a file brings a tab forward, which the tree follows and which
+  // would overtake the move by itself.
+  it("does not scroll the tree off a folder clicked in it while a move was still opening folders (#3134)", async () => {
+    const scrolledTo: string[] = [];
+    vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(function (this: Element) {
+      if (this instanceof HTMLElement && this.dataset.path) scrolledTo.push(this.dataset.path);
+    });
+    let release = (): void => {};
+    held.set("shots", new Promise<void>((resolve) => (release = resolve)));
+    disk.set("", [...(disk.get("") ?? []), { name: "docs", dir: true, size: 0 }]);
+    disk.set("docs", [file("d.md")]);
+    const w = mount(FilesPane, { props: { cwd: "/proj" }, attachTo: document.body });
+    await flushPromises();
+    await w.get('[data-testid="files-folder-row"][data-path="shots"]').trigger("click");
+    await flushPromises(); // the tree's read of shots is held
+    await treeRow(w, "docs")?.trigger("click");
+    await flushPromises();
+    release();
+    await flushPromises();
+    expect(scrolledTo).not.toContain("shots");
   });
 });
