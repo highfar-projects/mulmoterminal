@@ -18,7 +18,7 @@ chart follows edits.
   highest point or a span.
 - The sheet layout for the five that need computing: histogram counts with `COUNTIFS`, boxplot
   five numbers with `MIN` / `QUARTILE` / `MEDIAN` / `MAX`, Pareto cumulative share as 0–100,
-  waterfall Base / Up / Down, correlation pairs with `CORREL`.
+  waterfall Base / Up / Down, a correlation matrix with one `CORREL` row per cell.
 - Inline data is left for what the sheet cannot hold (a non-linear fit). The guide's examples of a
   chart that does not follow the sheet change from a histogram to a fitted curve.
 
@@ -26,6 +26,8 @@ chart follows edits.
 
 - The sheet has no way to filter a range by group, so per-group quartiles need the data sorted by
   group (or a column per group).
+- The sheet cannot sort, so a Pareto chart's order is set by the script and is a computed value:
+  the counts follow edits, the order does not.
 - The Pareto recipe's second axis runs to 100: a cumulative share formatted as a percentage is
   stored as a fraction, which a chart reads as its number, so the share must be 0–100.
 - ECharts' `boxplot` transform reads rows, not columns, so it cannot box a sheet's columns; the issue's
