@@ -226,7 +226,7 @@ Use `presentChart`, and choose the chart from the shape of the data:
 | a value over time | line; bars if there are only a few periods; a time axis when the dates are uneven; sampling and zoom for thousands of points |
 | comparing categories | bar, sorted, unless the categories have an order of their own |
 | parts of a whole (few parts) | stacked bar; pie only for a handful of parts |
-| two numeric columns | scatter; for the regression line, a `TREND` or `FORECAST.LINEAR` column on the sheet drawn as a line |
+| two numeric columns | scatter; for the regression line, a `TREND` or `FORECAST.LINEAR` column on the sheet drawn as a line; for a curve (exponential, logarithmic, polynomial), `ecStat:regression` |
 | the distribution of one column | histogram; a boxplot per group to compare groups |
 | two measures of different size (sales and growth) | two value axes |
 | which few causes make up most of a total | Pareto |
@@ -244,8 +244,11 @@ and its series pick their columns by those names (`encode`). The option is JSON,
 functions; format labels with template strings (`{value} %`). Compute on the sheet whatever the
 chart needs, so the chart follows edits:
 
-- **histogram**: the bins' edges in columns of their own beside the chart's range, and each count a
-  `COUNTIFS` on the data (`=COUNTIFS(Data!B2:B201,">="&C2,Data!B2:B201,"<"&D2)`; the last bin `"<="`).
+- **histogram**: when the user does not need particular bins, `ecStat:histogram` counts the data
+  column itself, and `config.method` picks the bins. When the user wants bins of their own, or the
+  counts on the sheet, put the bins' edges in columns of their own beside the chart's range, and
+  each count a `COUNTIFS` on the data (`=COUNTIFS(Data!B2:B201,">="&C2,Data!B2:B201,"<"&D2)`; the
+  last bin `"<="`).
 - **boxplot**: the five numbers per group with `MIN`, `QUARTILE(…,1)`, `MEDIAN`, `QUARTILE(…,3)` and
   `MAX`. The sheet cannot filter a range by group, so sort the data sheet by group and point each
   row at its group's block, or give each group a column of its own.
@@ -258,6 +261,13 @@ chart needs, so the chart follows edits:
   all non-negative.
 - **correlation matrix**: one row per cell, `X | Y | Value`, with `Value` a `CORREL` of the two
   columns: every ordered pair, both directions and the diagonal, so `n` columns make `n²` rows.
+
+**A fitted curve or a histogram straight from the data** uses the recipe's `ecStat:regression` or
+`ecStat:histogram`: the chart's `source` is the data sheet's range, header row included
+(`Data!B1:C201`), and the transform's `dimensions` name the columns by that header exactly. The
+transform recomputes whenever the sheet is saved, so the chart follows edits; rows with a blank or
+text cell are left out of a fit. The curve's equation is not on the sheet: if the user wants its
+coefficients, compute them in the script as a computed value.
 
 Any order the script sets, such as the sorted bars and the Pareto causes, is a computed value: the
 numbers follow edits and the order does not. Say so, and see *When the user edits the spreadsheet*.
@@ -276,8 +286,9 @@ so lay the summary sheet out that way: one row per category, one column per seri
 drawn from the calculated range, and drawn again whenever the sheet is saved. If `presentChart`
 says it cannot read the range, fix the range rather than falling back.
 
-Pass data inline in `option` only for what the sheet cannot hold, such as a non-linear fit. Such a
-chart does **not** follow the sheet; say which charts do and which do not.
+Pass data inline in `option` only for what neither the sheet nor a transform can draw, such as a fit
+of a form `ecStat:regression` does not have. Such a chart does **not** follow the sheet; say which
+charts do and which do not.
 
 ## 5. Say where everything is
 
@@ -321,8 +332,9 @@ will silently describe the old file when the skill runs on the next one:
 - the input file's path is an argument, never written into a script; for an Excel file the
   worksheet's name is one too, and `exceljs` stays in `package.json`;
 - every range, row count and sheet size comes from the data (`Data!A1:G${rows.length + 1}`);
-- categories, dates, histogram bins, the points of a fitted line, lookup tables and anything else
-  derived from the rows are computed by the script, not pasted in;
+- categories, dates, histogram bins counted in the script, the points of a fitted line passed
+  inline, lookup tables and anything else derived from the rows are computed by the script, not
+  pasted in;
 - the spreadsheet path the charts point at is an argument (it changes on every run);
 - titles name the data kind, not this file's dates;
 - workbook functions travel in the `functions` the scripts present, unchanged: they are the method,
