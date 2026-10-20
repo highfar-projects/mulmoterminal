@@ -1960,10 +1960,12 @@
   resolved "https://registry.yarnpkg.com/@mulmoclaude/accounting-plugin/-/accounting-plugin-4.0.2.tgz#5631f35c4bcff34c86e3eff7831f2a0d21ec39d5"
   integrity sha512-We3HhS2OfYDfPwT9DbX4NSw2m+UYFcYHb6KfKZp4yQwgh7tYaTo1H8z7AMNVnfPOJn6ABv/O9VjSnLXeQ+xTlw==
 
-"@mulmoclaude/chart-plugin@^4.2.0":
-  version "4.2.0"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/chart-plugin/-/chart-plugin-4.2.0.tgz#05d7b005d0fc3bcd41fd3aa308ff6f1e0ace11d4"
-  integrity sha512-UpGH3m4CcCwzHn89k0DFUkzcSaJutzArX3Z0KbiAvf0pxTATQ/QD0Ytla4MiS9tlS1nKYtS1VUoJlaM/1xmNog==
+"@mulmoclaude/chart-plugin@^4.3.0":
+  version "4.3.0"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/chart-plugin/-/chart-plugin-4.3.0.tgz#9853ffc7e0d231a2e884417a4e93ddbd778070e7"
+  integrity sha512-rXUgYqRH+Ir3rfeIgZGlhqHEHL1ov14WiOTdIejIp/4xft3oyiNQZGGWxOvQSLMWEoqW7Y+DzFUmbt/Kz1y5Yw==
+  dependencies:
+    echarts-stat "^1.2.0"
 
 "@mulmoclaude/collection-plugin@^5.5.0":
   version "5.5.0"
@@ -4576,6 +4578,11 @@ ecdsa-sig-formatter@1.0.11, ecdsa-sig-formatter@^1.0.11:
   integrity sha512-nagl3RYrbNv6kQkeJIpt6NJZy8twLB/2vtz6yN9Z4vRKHN4/QZJIEbqohALSgwKdnksuY3k5Addp5lg8sVoVcQ==
   dependencies:
     safe-buffer "^5.0.1"
+
+echarts-stat@^1.2.0:
+  version "1.2.0"
+  resolved "https://registry.yarnpkg.com/echarts-stat/-/echarts-stat-1.2.0.tgz#d1e7a05d1827724c5cde81f76ee1d75a901746a2"
+  integrity sha512-zLd7Kgs+tuTSeaK0VQEMNmnMivEkhvHIk1gpBtLzpRerfcIQ+Bd5XudOMmtwpaTc1WDZbA7d1V//iiBccR46Qg==
 
 echarts@^6.0.0:
   version "6.1.0"
