@@ -35,4 +35,11 @@ export const filesTreeZhCN = {
     empty: "此文件夹中没有图片、视频、音频或 PDF。",
     showMore: "再显示 {count} 个",
   },
+  filesFolderView: {
+    list: "列表",
+    gallery: "图库",
+    withSubfolders: "包含子文件夹",
+    up: "上一级文件夹",
+    empty: "此文件夹为空。",
+  },
 };

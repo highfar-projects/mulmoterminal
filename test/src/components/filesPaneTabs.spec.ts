@@ -411,7 +411,7 @@ describe("the Files pane's tabs (#2267)", () => {
     await pane.closeFrontTab();
     await flushPromises();
     expect(snapshotOf(w)).toMatchObject({ tabs: [], activePath: null });
-    expect(w.text()).toContain("Select a file to view or edit.");
+    expect(w.find('[data-testid="files-folder-view"]').exists()).toBe(true);
   });
 
   it("steps between tabs from the key, going round at the ends", async () => {

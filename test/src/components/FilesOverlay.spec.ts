@@ -103,9 +103,9 @@ describe("FilesOverlay", () => {
   it("loads the root tree, opens a file, edits, and saves", async () => {
     const w = mountOverlay();
     await flushPromises();
-    // Root entries rendered (directories first).
-    expect(w.text()).toContain("src");
-    expect(w.text()).toContain("README.md");
+    // Root entries rendered (directories first). Asked of the tree: the empty file area lists them too.
+    expect(w.get('[data-testid="files-tree"]').text()).toContain("src");
+    expect(w.get('[data-testid="files-tree"]').text()).toContain("README.md");
 
     // Open the markdown file → text fetched and pushed into the editor.
     const readmeRow = must(
@@ -213,14 +213,14 @@ describe("FilesOverlay", () => {
     );
     await srcRow.trigger("click");
     await flushPromises();
-    expect(w.text()).toContain("app.ts"); // child loaded
+    expect(w.get('[data-testid="files-tree"]').text()).toContain("app.ts"); // child loaded — in the tree, not the folder view beside it
   });
 
   it("surfaces a tree load error", async () => {
     globalThis.fetch = vi.fn(async () => ({ ok: false, status: 500, json: async () => ({}) })) as unknown as typeof fetch;
     const w = mountOverlay();
     await flushPromises();
-    expect(w.text()).toContain("HTTP 500");
+    expect(w.get('[data-testid="files-tree"]').text()).toContain("HTTP 500");
   });
 
   // ?path= — the file a clicked source path in terminal output asks for (#808).

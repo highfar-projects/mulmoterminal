@@ -60,7 +60,7 @@ describe("FilesPane", () => {
   it("browses and opens a file from nothing but a cwd prop", async () => {
     const w = mount(FilesPane, { props: { cwd: "/proj" } });
     await flushPromises();
-    expect(w.text()).toContain("README.md");
+    expect(w.get('[data-testid="files-tree"]').text()).toContain("README.md");
 
     await w.findAll('[data-testid="files-row"]')[0].trigger("click");
     await flushPromises();
@@ -167,16 +167,21 @@ describe("FilesPane", () => {
     const w = mount(FilesPane, { props: { cwd: "/proj" } });
     await flushPromises();
     const listCalls = () => (globalThis.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.filter((c) => String(c[0]).includes("/list"));
-    expect(listCalls()).toHaveLength(1);
+    // Each read is two listings of the root: the tree's, and the empty file area's folder view (#3120).
+    expect(listCalls()).toHaveLength(2);
 
     await w.setProps({ cwd: "/other" });
     await flushPromises();
-    expect(listCalls()).toHaveLength(1);
+    expect(listCalls()).toHaveLength(2);
 
     await (w.vm as unknown as { reload: () => Promise<void> }).reload();
     await flushPromises();
-    expect(listCalls()).toHaveLength(2);
-    expect(String(listCalls()[1][0])).toContain(encodeURIComponent("/other"));
+    expect(listCalls()).toHaveLength(4);
+    expect(
+      listCalls()
+        .slice(2)
+        .every((call) => String(call[0]).includes(encodeURIComponent("/other"))),
+    ).toBe(true);
   });
 });
 

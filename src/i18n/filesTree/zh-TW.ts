@@ -35,4 +35,11 @@ export const filesTreeZhTW = {
     empty: "此資料夾中沒有圖片、影片、音訊或 PDF。",
     showMore: "再顯示 {count} 個",
   },
+  filesFolderView: {
+    list: "清單",
+    gallery: "圖庫",
+    withSubfolders: "包含子資料夾",
+    up: "上一層資料夾",
+    empty: "此資料夾是空的。",
+  },
 };
