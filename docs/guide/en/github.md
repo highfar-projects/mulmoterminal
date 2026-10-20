@@ -177,8 +177,8 @@ work comments, and opening a merge request. Two things it needs:
 
 1. **`glab` logged in to that host** — `glab auth login --hostname gitlab.example.com`. This app
    stores no token of its own; it runs your `glab`, the same arrangement as `gh`.
-2. **A server restart** after editing `config.json` by hand — the same as `prRepos` written by
-   hand, since the file is read at start-up. (Adding the host in Settings needs none.)
+2. **Reload config file** in Settings, or a server restart, after editing `config.json` by hand —
+   the same as `prRepos` written by hand. (Adding the host in Settings needs neither.)
 
 Until the host is declared, its row says so and names the key to add. Not covered yet: a port in
 the host name (`gitlab.example.com:8443`), an http-only instance, and GitHub Enterprise.
