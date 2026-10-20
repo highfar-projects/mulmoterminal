@@ -23,7 +23,7 @@ takes the branch it takes today.
 |---|---|
 | 1, 2: Enter after a paste lands inside it; two Esc arrive as one | the psmux client is spawned with `PSMUX_VT_INPUT=1` (psmux 3.4.0+, psmux#766). `PSMUX_VT_INPUT=0` in the server's env opts out |
 | 4: emoji width | `/api/config` carries `terminalUnicodeVersion` (`"11"` on psmux, `"6"` otherwise); the browser's xterm loads `@xterm/addon-unicode11` and activates the version it is told. A real tmux keeps `"6"`, i.e. xterm's default |
-| 5: Volta's `_VOLTA_TOOL_RECURSION` | removed from every spawned environment, like the npm_* launcher variables. A fresh shell never has it |
+| 5: Volta's `_VOLTA_TOOL_RECURSION` | kept off the psmux client only (`PSMUX_CLIENT_UNSET_NAMES`), so a new psmux server and its panes never carry it. Real tmux and direct spawns keep it, as before |
 
 A psmux older than 3.4.0 gets a startup warning naming the version to upgrade to; no workaround for
 3.3.x is carried (the fork's 3.3.8 fixes — key-event input encoding, 1000 ms submit delay, wheel

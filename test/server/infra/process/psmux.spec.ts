@@ -66,7 +66,7 @@ describe("psmuxStartupNote", () => {
   });
 
   it("tells an older psmux to upgrade", () => {
-    expect(psmuxStartupNote([3, 3, 8])).toMatch(/psmux 3\.3\.8 is older than 3\.4\.0.*winget upgrade psmux/);
+    expect(psmuxStartupNote([3, 3, 8])).toMatch(/psmux 3\.3\.8 is older than 3\.4\.0.*winget upgrade -e --id marlocarlo\.psmux/);
   });
 
   it("says when the version could not be read", () => {

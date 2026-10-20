@@ -241,7 +241,7 @@ MulmoTerminal は**この `gh` のログインをそのまま使います**。�
 
 - **macOS** — `brew install tmux`
 - **Linux** — `sudo apt install tmux`
-- **Windows** — `winget install psmux`。[psmux](https://github.com/psmux/psmux) は Windows ネイティブの
+- **Windows** — `winget install -e --id marlocarlo.psmux`。[psmux](https://github.com/psmux/psmux) は Windows ネイティブの
   tmux 互換実装で、`tmux.exe` として入ります。**3.4.0 以降**を使ってください（`tmux -V` の 2 行目に psmux の版が出ます）。
   入れなくても動きますが、サーバを再起動するとセッションは残りません。詳しくは
   [psmux on Windows](https://github.com/receptron/mulmoterminal#psmux-on-windows)
@@ -331,7 +331,7 @@ npx mulmoterminal@latest init
 | `Port 34567 is already in use.` | すでに起動しています。まず `http://localhost:34567` を開いてみてください。本当に別で動かすなら `--port <番号>` |
 | `MulmoTerminal is already running` と聞かれる | 2 つ同時に動かすのは**非対応**です（`~/.mulmoterminal` を共有してしまうため）。基本は `N` で止めて、動いている方を使ってください |
 | ブラウザが開かない | 手で `http://localhost:34567` を開けば同じです |
-| Windows で自動実行のプロンプトが入力されたまま送信されない、Esc が効かない | psmux が 3.4.0 より古い（サーバのログに警告が出ます）。`winget upgrade psmux` |
+| Windows で自動実行のプロンプトが入力されたまま送信されない、Esc が効かない | psmux が 3.4.0 より古い（サーバのログに警告が出ます）。`winget upgrade -e --id marlocarlo.psmux` |
 | 画面は出るがセルが起動しない | そのディレクトリが存在するか、[ステップ 2](#step2) のログインが済んでいるかを確認 |
 | Windows で tmux が無いと言われる | 仕様です。永続化なしで動きます。永続化したいときは psmux を入れてください（[ステップ 3](#step3)） |
 
@@ -424,7 +424,7 @@ MulmoTerminal は普段の開発ツールを操縦するコックピットなの
 | **必須** | `git` | [worktree 分離](features.html)、セルのブランチ / 未保存ドット / 差分表示、PR フッター | [ステップ 3](#step3) |
 | **必須** | `gh` | [PR / Issue 横断ビュー](github.html)とワンクリック PR 作成 | [ステップ 3](#step3) |
 | 任意 | `glab` | 同じことを **gitlab.com** のプロジェクトでも — 一覧・issue から着手・MR 作成 | `brew install glab` のあと `glab auth login` |
-| 推奨 | `tmux`（最新版。2026-10-10 時点で 3.8） | [セッション永続化](features.html) — サーバ再起動でもターミナルが生き残る | `brew install tmux` · `sudo apt install tmux` · Windows: `winget install psmux`（3.4.0 以降） |
+| 推奨 | `tmux`（最新版。2026-10-10 時点で 3.8） | [セッション永続化](features.html) — サーバ再起動でもターミナルが生き残る | `brew install tmux` · `sudo apt install tmux` · Windows: `winget install -e --id marlocarlo.psmux`（3.4.0 以降） |
 | 任意 | `codex` | セルで [Codex セッション](basics.html#claude-and-codex)を Claude と並べて動かす | `npm i -g @openai/codex` |
 | 任意 | `ffmpeg` | [GUI パネル](features.html)の mulmo-script プラグインからの動画生成 | `brew install ffmpeg` · `sudo apt install ffmpeg` |
 | 任意 | `ollama` | [claude-ollama](claude-ollama.html) — 完全ローカルのモデルで Claude Code を動かす | [ollama.com/download](https://ollama.com/download) |

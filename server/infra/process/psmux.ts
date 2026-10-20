@@ -8,6 +8,11 @@ export type PsmuxVersion = readonly [number, number, number];
 // The first release with PSMUX_VT_INPUT (psmux#766).
 export const PSMUX_VT_INPUT_SINCE: PsmuxVersion = [3, 4, 0];
 
+// Volta marks the node it launches so a `node` beneath it skips the shim and runs whatever PATH
+// names. A psmux pane rebuilds PATH but keeps this, so `node` in the cell — stdio MCP servers
+// included — was not found. Kept off the client, since a new psmux server inherits its environment.
+export const PSMUX_CLIENT_UNSET_NAMES: readonly string[] = ["_VOLTA_TOOL_RECURSION"];
+
 /** Whether `tmux -V` came from psmux. It answers `tmux 3.x` on the first line, like a real tmux, and
  *  names itself only on the second. */
 export function isPsmuxVersion(versionStdout: string): boolean {
@@ -44,5 +49,5 @@ export function psmuxStartupNote(version: PsmuxVersion | null): string {
   if (version === null) return `[tmux] psmux detected, but its version could not be read — ${wanted} or newer is required`;
   const found = version.join(".");
   if (isAtLeast(version, PSMUX_VT_INPUT_SINCE)) return `[tmux] running on psmux ${found}`;
-  return `[tmux] psmux ${found} is older than ${wanted}: an auto-run prompt may stay unsent and Esc may be dropped — upgrade with \`winget upgrade psmux\``;
+  return `[tmux] psmux ${found} is older than ${wanted}: an auto-run prompt may stay unsent and Esc may be dropped — upgrade with \`winget upgrade -e --id marlocarlo.psmux\``;
 }

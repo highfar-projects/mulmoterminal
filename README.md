@@ -293,7 +293,7 @@ Needs **Node ≥ 22.12**, plus these CLIs — on your `PATH`, or named by the ma
 | **Required** | `git` | [worktree isolation](#git-worktrees--pull-requests), each cell's branch / unsaved-dot / diff readout, the PR footer | `brew install git` · `sudo apt install git` · `sudo dnf install git` · Windows: [git-scm.com](https://git-scm.com/download/win) |
 | **Required** | `gh` | the cross-repo **PRs & Issues** view and one-click PR creation — it uses your `gh` login, so no token is stored | [cli.github.com](https://cli.github.com), then `gh auth login` |
 | Optional | `glab` | the same for **GitLab** projects (#981) — gitlab.com, and a self-hosted instance you declare in `gitlabHosts` (#1332). Same arrangement: the CLI holds the credentials, this app stores no token | `brew install glab`, then `glab auth login` (self-hosted: `glab auth login --hostname gitlab.example.com`) |
-| Recommended | `tmux` — the **latest release** (3.8 as of 2026-10-10); older ones are not supported | [session persistence](#session-persistence-tmux) — terminals survive a server restart | `brew install tmux` · `sudo apt install tmux` · `sudo dnf install tmux` · Windows: `winget install psmux` (3.4.0+, see [psmux on Windows](#psmux-on-windows)) |
+| Recommended | `tmux` — the **latest release** (3.8 as of 2026-10-10); older ones are not supported | [session persistence](#session-persistence-tmux) — terminals survive a server restart | `brew install tmux` · `sudo apt install tmux` · `sudo dnf install tmux` · Windows: `winget install -e --id marlocarlo.psmux` (3.4.0+, see [psmux on Windows](#psmux-on-windows)) |
 | Optional | any other agent CLI | a cell can run **Codex**, **Antigravity** (`agy`), **Grok**, **Muse**, **GitHub Copilot CLI** or **Cursor CLI** instead of Claude — install only the ones you use, and a missing one simply fails to start that cell. What each can do is [the capability matrix](docs/agent-capability-matrix.md); how to install and pick one is the [agents guide](https://receptron.github.io/mulmoterminal/guide/en/agents.html) | e.g. `npm i -g @openai/codex` |
 | Optional | `ffmpeg` | video rendering from the [mulmo-script panel](#wiki-collections--the-gui-panel) (its plugin ships enabled) | `brew install ffmpeg` · `sudo apt install ffmpeg` · `sudo dnf install ffmpeg` |
 | Optional | `remotion` packages | MulmoCast's `remotion` beats, where Claude Code writes each scene as a Remotion component (mulmocast 2.13.0). Not a dependency of this app: install them yourself, into your home directory so an `npx` upgrade does not lose them — `init` reports whether mulmocast can see them | [Remotion scenes](https://receptron.github.io/mulmoterminal/guide/en/mulmocast.html#remotion) · [日本語](https://receptron.github.io/mulmoterminal/guide/ja/mulmocast.html#remotion) |
@@ -718,8 +718,8 @@ tmux, gives the same persistence — sessions survive a server restart, a crash 
 come back on the next start:
 
 ```powershell
-winget install psmux         # installs itself as tmux.exe
-tmux -V                      # second line: psmux 3.4.0 or newer
+winget install -e --id marlocarlo.psmux   # installs itself as tmux.exe
+tmux -V                              # second line: psmux 3.4.0 or newer
 ```
 
 Then restart MulmoTerminal; the server log says `[tmux] running on psmux <version>`. Use **psmux
@@ -730,7 +730,9 @@ What MulmoTerminal does differently behind psmux, and only there:
 - starts each psmux client with `PSMUX_VT_INPUT=1`, so a paste keeps its markers and the Enter
   after it is not taken into it. `PSMUX_VT_INPUT=0` in the server's environment turns this off;
 - counts emoji two cells wide in the browser (Unicode 11), as Claude Code and psmux do — otherwise
-  each emoji shifts the rest of its row by one column.
+  each emoji shifts the rest of its row by one column;
+- keeps Volta's `_VOLTA_TOOL_RECURSION` off the psmux client, so `node` in a cell resolves through
+  Volta's shim again.
 
 psmux imitates tmux 3.4, so the few things that need tmux 3.7+ (such as restoring bracketed paste
 after a reload) are not available on it. A Windows restart still ends every session, as a reboot

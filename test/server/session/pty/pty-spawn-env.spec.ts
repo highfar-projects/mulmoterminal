@@ -16,6 +16,7 @@ vi.mock("../../../../server/infra/process/tmux.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../../server/infra/process/tmux.js")>()),
   tmuxAvailable: () => tmuxOn,
   tmuxPsmuxVtInput: () => psmuxVtInput,
+  tmuxPsmuxClientUnsetNames: () => (psmuxOn ? ["_VOLTA_TOOL_RECURSION"] : []),
   tmuxHasSession: (id: string) => liveTmuxSessions.has(id),
   // The real one turns `env` into `-e KEY=VALUE` pairs, which is the only way a variable
   // reaches a tmux PANE — so the fake has to carry it or the #1367 assertions below prove nothing.
@@ -32,6 +33,7 @@ vi.mock("../../../../server/config/worktree/worktree-env.js", () => ({ reservedW
 
 let tmuxOn = false;
 let psmuxVtInput = false;
+let psmuxOn = false;
 // What ptySpawn handed tmuxNewSessionArgs as the PANE's directory (the `-c` the real one builds).
 let newSessionCwd = "";
 let reserved: Record<string, string> = {};
@@ -59,6 +61,7 @@ beforeEach(() => {
   scrub.mockClear();
   tmuxOn = false;
   psmuxVtInput = false;
+  psmuxOn = false;
   reserved = {};
   liveTmuxSessions.clear();
   process.env.ANTHROPIC_API_KEY = "sk-ant-leftover";
@@ -296,12 +299,14 @@ describe("ptySpawn — the directory the process itself is started from", () => 
   });
 });
 
-// Stripping our own copy is not enough: a pane inherits the tmux SERVER's environment,
-// and a server created by an earlier non-provider session already carries the key. The
-// scrub in ensureConf only covers a server that predates this process.
 // The psmux client's VT input route keeps a paste's markers, so the Enter after it is not taken
 // into the paste. Only the tmux CLIENT gets it, and only behind a psmux that has the route.
 describe("ptySpawn — the psmux VT input route", () => {
+  // The documented opt-out is a variable in the server's environment; one in the runner's must not
+  // decide these assertions.
+  beforeEach(() => vi.stubEnv("PSMUX_VT_INPUT", undefined));
+  afterEach(() => vi.unstubAllEnvs());
+
   it("starts the client with PSMUX_VT_INPUT=1 behind a psmux that has the route", () => {
     tmuxOn = true;
     psmuxVtInput = true;
@@ -322,6 +327,33 @@ describe("ptySpawn — the psmux VT input route", () => {
   });
 });
 
+describe("ptySpawn — Volta's marker on a psmux client", () => {
+  beforeEach(() => vi.stubEnv("_VOLTA_TOOL_RECURSION", "1"));
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("keeps it off a psmux client", () => {
+    tmuxOn = true;
+    psmuxOn = true;
+    ptySpawn(S1, "claude", [], EXISTING_CWD, true);
+    expect(envOf()).not.toHaveProperty("_VOLTA_TOOL_RECURSION");
+  });
+
+  it("leaves it on a real tmux client", () => {
+    tmuxOn = true;
+    ptySpawn(S1, "claude", [], EXISTING_CWD, true);
+    expect(envOf()._VOLTA_TOOL_RECURSION).toBe("1");
+  });
+
+  it("leaves it on a spawn without tmux", () => {
+    psmuxOn = true;
+    ptySpawn(S1, "claude", [], EXISTING_CWD, true);
+    expect(envOf()._VOLTA_TOOL_RECURSION).toBe("1");
+  });
+});
+
+// Stripping our own copy is not enough: a pane inherits the tmux SERVER's environment,
+// and a server created by an earlier non-provider session already carries the key. The
+// scrub in ensureConf only covers a server that predates this process.
 describe("ptySpawn — the tmux server's own environment", () => {
   it("scrubs the names from the running server before a provider spawn", () => {
     tmuxOn = true;

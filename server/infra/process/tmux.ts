@@ -16,7 +16,7 @@ import { HOME_SCOPE_SUFFIX, PORT } from "../../config/env.js";
 import { isLauncherEnvVar } from "./pty-env.js";
 import { spawnCapture, spawnCaptureAsync } from "./spawnCapture.js";
 import { splitLines } from "../fs/split-lines.js";
-import { isPsmuxVersion, psmuxVersionOf, psmuxVtInputFor, type PsmuxVersion } from "./psmux.js";
+import { PSMUX_CLIENT_UNSET_NAMES, isPsmuxVersion, psmuxVersionOf, psmuxVtInputFor, type PsmuxVersion } from "./psmux.js";
 import { writeFileAtomicSync } from "../../files/atomic-write.js";
 import { TMUX_PREFIX_DEFAULT, staleSendPrefixKeys, tmuxPrefixCommands } from "../../../common/tmuxPrefix.js";
 
@@ -64,6 +64,9 @@ export const tmuxPsmuxVersion = (): PsmuxVersion | null => cachedPsmuxVersion;
 
 /** Whether tmux clients are started with `PSMUX_VT_INPUT=1`. Always false for a real tmux. */
 export const tmuxPsmuxVtInput = (): boolean => cachedPsmux && psmuxVtInputFor(cachedPsmuxVersion, process.env.PSMUX_VT_INPUT);
+
+/** Names kept off a psmux client's environment. Empty for a real tmux. */
+export const tmuxPsmuxClientUnsetNames = (): readonly string[] => (cachedPsmux ? PSMUX_CLIENT_UNSET_NAMES : []);
 
 // The terminfo `Ms` capability (OSC 52 clipboard write). tmux only forwards a program's
 // OSC 52 to the OUTER terminal when it knows the outer terminal supports it — our web
