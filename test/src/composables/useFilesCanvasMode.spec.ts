@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { effectScope, nextTick, ref } from "vue";
+import { effectScope, nextTick, ref, shallowRef } from "vue";
 import { flushPromises } from "@vue/test-utils";
 import type { CanvasCardResult } from "../../../src/composables/canvasOpenFile";
+import type { CmEditor } from "../../../src/components/cmEditor";
+import { fakeCmEditor } from "../../helpers/cmEditorDouble";
 
 // The card builder is the one thing this composable waits on; each call is handed out to the test,
 // so the order the answers land in is the test's to choose.
@@ -18,8 +20,11 @@ const { useFilesCanvasMode } = await import("../../../src/composables/useFilesCa
 
 const cardFor = (docPath: string): CanvasCardResult => ({ kind: "card", card: { toolName: "presentDocument", data: { markdown: "", docPath } } });
 
-function setup(saveResult = true, declineSwitch = false, enabled = true) {
-  const openPath = ref<string | null>("a.md");
+function setup(saveResult = true, declineSwitch = false, enabled = true, firstPath = "a.md", text = "") {
+  const openPath = ref<string | null>(firstPath);
+  const baseVersion = ref<string | null>("v1");
+  const doc = fakeCmEditor(text);
+  const editor = shallowRef<CmEditor | null>(doc);
   const fileError = ref<string | null>(null);
   const savedInPlace = vi.fn(async () => saveResult);
   // A front-tab switch that lands, unless the test says the pane declined it.
@@ -31,12 +36,12 @@ function setup(saveResult = true, declineSwitch = false, enabled = true) {
     enabled: () => enabled,
     cwd: () => "/proj",
     storiesRoots: () => ({ workspaces: [], roots: [] }),
-    file: { openPath, savedInPlace, fileError },
+    file: { openPath, savedInPlace, fileError, editor, baseVersion },
     tabs: { open },
   };
   const mode = scope.run(() => useFilesCanvasMode(deps));
   if (!mode) throw new Error("no composable");
-  return { mode, openPath, fileError, savedInPlace };
+  return { mode, openPath, fileError, savedInPlace, doc, baseVersion };
 }
 
 describe("useFilesCanvasMode", () => {
@@ -218,5 +223,39 @@ describe("useFilesCanvasMode", () => {
     expect(await showing).toBe(false);
     expect(mode.has("a.md")).toBe(false);
     expect(mode.active.value).toBe(false);
+  });
+
+  // #3137: a `.json` is a story only when its root holds `$mulmocast`; any other JSON has no view.
+  describe("a .json", () => {
+    const SCRIPT = JSON.stringify({ $mulmocast: { version: "1.1" }, beats: [] });
+
+    it("is offered when the file on disk is a MulmoScript", () => {
+      const { mode } = setup(true, false, true, "stories/s.json", SCRIPT);
+      expect(mode.openable.value).toBe(true);
+    });
+
+    it("is not offered, nor drawn when remembered, when it is ordinary JSON", async () => {
+      const { mode } = setup(true, false, true, "data.json", '{"name":"x"}');
+      expect(mode.openable.value).toBe(false);
+      mode.reset(["data.json"]);
+      await nextTick();
+      expect(mode.active.value).toBe(false);
+      expect(pending.calls).toHaveLength(0);
+    });
+
+    it("is judged again when the file is saved, not on every keystroke", async () => {
+      const { mode, doc, baseVersion } = setup(true, false, true, "data.json", '{"name":"x"}');
+      doc.getDoc.mockReturnValue(SCRIPT);
+      await nextTick();
+      expect(mode.openable.value).toBe(false);
+      baseVersion.value = "v2";
+      await nextTick();
+      expect(mode.openable.value).toBe(true);
+    });
+
+    it("leaves a file that is not JSON to the plugin's own gates", () => {
+      const { mode } = setup(true, false, true, "a.md", "");
+      expect(mode.openable.value).toBe(true);
+    });
   });
 });

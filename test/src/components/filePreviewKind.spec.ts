@@ -12,11 +12,13 @@ describe("filePreviewKind", () => {
     ["rows.csv", "table"],
     ["rows.tsv", "table"],
     ["ROWS.CSV", "table"],
+    ["data.json", "json"],
+    ["DATA.JSON", "json"],
   ])("previews %s as %s", (name, kind) => {
     expect(filePreviewKind(name)).toBe(kind);
   });
 
-  it.each([["index.ts"], ["chart.png"], ["data.json"], ["notes.txt"], ["html"], ["rows.csv.bak"], ["csv"], [""]])("gives %j no Preview", (name) => {
+  it.each([["index.ts"], ["chart.png"], ["data.json.bak"], ["notes.txt"], ["html"], ["rows.csv.bak"], ["csv"], [""]])("gives %j no Preview", (name) => {
     expect(filePreviewKind(name)).toBeNull();
   });
 });
@@ -50,7 +52,7 @@ describe("fileMediaKind", () => {
 
 // #2559. The documents the server renders take the app's colours; a page or an SVG is the file's own.
 describe("previewFollowsAppTheme", () => {
-  it.each([["markdown"], ["table"]] as const)("draws a %s Preview in the app's colours", (kind) => {
+  it.each([["markdown"], ["table"], ["json"]] as const)("draws a %s Preview in the app's colours", (kind) => {
     expect(previewFollowsAppTheme(kind)).toBe(true);
   });
 
