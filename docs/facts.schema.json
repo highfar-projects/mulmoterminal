@@ -103,6 +103,27 @@
       "items": { "type": "string" },
       "description": "Things people reasonably expect and will not find here. Kept so a comparison does not credit the product with them."
     },
+    "alternatives": {
+      "type": "object",
+      "description": "Other tools in the same space. The guide page is the source of truth; the names are here so a reader that only parses this file knows which ones the comparison covers.",
+      "required": ["page", "tools", "checked"],
+      "additionalProperties": false,
+      "properties": {
+        "page": { "type": "string", "format": "uri" },
+        "note": { "type": "string" },
+        "tools": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Product names as the guide page spells them, rather than URLs — the page holds the detail."
+        },
+        "checked": {
+          "type": "string",
+          "format": "date",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "description": "This list moves faster than the rest of the file, so it carries its own date."
+        }
+      }
+    },
     "maintainers": {
       "type": "object",
       "required": ["org", "url"],

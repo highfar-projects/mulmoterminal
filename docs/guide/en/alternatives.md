@@ -111,6 +111,21 @@ Manages agents as tmux sessions from inside the terminal. **Lighter than anythin
 and the right answer if you don't want to leave the terminal or you're working over SSH. You see
 one session at a time.
 
+### Codealong
+
+**Apache-2.0 · desktop · macOS / Linux (X11)**
+
+The one here that is a different layer rather than a different shape. It hosts no sessions and
+isolates nothing: it reads the records each agent already writes and puts every session on one
+board, organised as project, repo, worktree, branch and pull request. That includes the ones you
+started elsewhere — a terminal, tmux, the Claude app, the Codex app, a second account, another
+machine you have linked — and you can allow a command or answer a question from its windows
+instead of going to find the session. Claude Code, Codex, OpenCode, Antigravity and Cursor.
+
+So it sits **beside** whichever tool above you pick rather than instead of one. Its first release
+came out on 2026-10-20, so it is very new; this entry was checked on 2026-10-21 rather than
+2026-08-03 like the rest of the page.
+
 ### MulmoTerminal
 
 **MIT · browser · macOS / Linux / Windows**
@@ -139,6 +154,7 @@ Machine-readable facts: [`facts.json`](https://receptron.github.io/mulmoterminal
 | **Conductor** | Desktop (macOS) | Proprietary | Claude, Codex, Cursor | — | Worktrees |
 | **Claude Squad** | TUI | OSS | Claude, Codex, OpenCode, Amp | — | Worktrees |
 | **`claude agents`** | TUI | First-party | Claude | — | Worktrees |
+| **Codealong** | Desktop | Apache-2.0 | Claude, Codex, OpenCode, Antigravity, Cursor | iPhone app, early | **None — it runs nothing** |
 | **MulmoTerminal** | **Browser** | MIT | Claude, Codex, Antigravity, Grok, Muse, Copilot, Cursor | Web + push | Worktrees |
 
 **Notice what's the same.** Nearly everything here is open source, worktree-based, and local. If
@@ -157,6 +173,8 @@ a devcontainer or a VM underneath whichever one you pick.
 - **You want a real phone app** → Nimbalyst.
 - **You mostly need to judge diffs afterwards** → Parallel Code, or Conductor on a Mac.
 - **You lose track of the tasks themselves** → Vibe Kanban.
+- **Your sessions are scattered across tools, accounts or machines and you want to find them**
+  → Codealong, beside any of the above.
 - **You want to watch several running at once, from any device on your network** → this one.
 
 Most of them install in a minute. Trying two is cheaper than reading about six.
@@ -168,7 +186,8 @@ Most of them install in a minute. Trying two is cheaper than reading about six.
 I use MulmoTerminal daily. The others I have read the source and documentation of, and have not
 run for a sustained period. Where I've stated a capability above it comes from the project's own
 README or docs, not from my own use — so if I've mischaracterised yours,
-[tell me](https://github.com/receptron/mulmoterminal/issues) and I'll fix it.
+[tell me](https://github.com/receptron/mulmoterminal/issues) and I'll fix it. Codealong is on
+this page because its maker did exactly that.
 
 ---
 
