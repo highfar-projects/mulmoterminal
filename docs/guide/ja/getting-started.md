@@ -331,7 +331,7 @@ npx mulmoterminal@latest init
 | `Port 34567 is already in use.` | すでに起動しています。まず `http://localhost:34567` を開いてみてください。本当に別で動かすなら `--port <番号>` |
 | `MulmoTerminal is already running` と聞かれる | 2 つ同時に動かすのは**非対応**です（`~/.mulmoterminal` を共有してしまうため）。基本は `N` で止めて、動いている方を使ってください |
 | ブラウザが開かない | 手で `http://localhost:34567` を開けば同じです |
-| Windows で自動実行のプロンプトが入力されたまま送信されない、Esc が効かない | psmux が 3.4.0 より古い（サーバのログに警告が出ます）。`winget upgrade -e --id marlocarlo.psmux` |
+| Windows で自動実行のプロンプトが入力されたまま送信されない、Esc を 2 回続けて押しても効かない | psmux が 3.4.0 より古い（サーバのログに警告が出ます）。`winget upgrade -e --id marlocarlo.psmux` |
 | 画面は出るがセルが起動しない | そのディレクトリが存在するか、[ステップ 2](#step2) のログインが済んでいるかを確認 |
 | Windows で tmux が無いと言われる | 仕様です。永続化なしで動きます。永続化したいときは psmux を入れてください（[ステップ 3](#step3)） |
 

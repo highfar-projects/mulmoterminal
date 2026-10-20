@@ -11,7 +11,17 @@ describe("isPsmuxVersion", () => {
     expect(isPsmuxVersion(PSMUX_338)).toBe(true);
   });
 
-  it.each(["tmux 3.8\n", "tmux 3.7a\n", "tmux next-3.9\n", "", "psmuxer 1.0.0"])("does not take %j for psmux", (stdout) => {
+  it.each([
+    "tmux 3.8\n",
+    "tmux 3.7a\n",
+    "tmux next-3.9\n",
+    "",
+    "tmux 3.4\npsmuxer 1.0.0",
+    "psmux 3.4.0 (x)\n",
+    "tmux 3.8 psmux\n",
+    "tmux 3.8\nbuilt by a psmux fan\n",
+    "tmux 3.8\n\npsmux 3.4.0 (x)\n",
+  ])("does not take %j for psmux", (stdout) => {
     expect(isPsmuxVersion(stdout)).toBe(false);
   });
 });
@@ -20,12 +30,15 @@ describe("psmuxVersionOf", () => {
   it("reads psmux's own release, not the tmux it imitates", () => {
     expect(psmuxVersionOf("tmux 3.3.8\npsmux 3.4.0 (x)")).toEqual([3, 4, 0]);
     expect(psmuxVersionOf(PSMUX_338)).toEqual([3, 3, 8]);
-    expect(psmuxVersionOf("PSMUX 10.0.12")).toEqual([10, 0, 12]);
+    expect(psmuxVersionOf("tmux 3.4\nPSMUX 10.0.12")).toEqual([10, 0, 12]);
   });
 
-  it.each(["tmux 3.8", "psmux", "psmux 3.4", "psmux v3.4.0", ""])("is null for %j", (stdout) => {
-    expect(psmuxVersionOf(stdout)).toBeNull();
-  });
+  it.each(["tmux 3.8", "tmux 3.4\npsmux", "tmux 3.4\npsmux 3.4", "tmux 3.4\npsmux v3.4.0", "", "psmux 3.4.0", "tmux 3.8\n\npsmux 3.4.0"])(
+    "is null for %j",
+    (stdout) => {
+      expect(psmuxVersionOf(stdout)).toBeNull();
+    },
+  );
 });
 
 describe("isAtLeast", () => {

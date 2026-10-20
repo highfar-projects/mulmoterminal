@@ -329,7 +329,7 @@ It is also the fastest way to find out why a start failed.
 | `Port 34567 is already in use.` | It is probably already running — try `http://localhost:34567` first. To really run a second one, `--port <number>` |
 | It asks `MulmoTerminal is already running` | Two at once is **not supported** — they share `~/.mulmoterminal` and can overwrite each other's session state. Answer `N` and use the one that's running |
 | The browser never opens | Open `http://localhost:34567` by hand; it's the same thing |
-| Windows: an auto-run prompt is typed but never sent, or Esc does nothing | psmux older than 3.4.0 — the server log warns about it. `winget upgrade -e --id marlocarlo.psmux` |
+| Windows: an auto-run prompt is typed but never sent, or pressing Esc twice does nothing | psmux older than 3.4.0 — the server log warns about it. `winget upgrade -e --id marlocarlo.psmux` |
 | The UI loads but a cell won't start | Check the directory exists, and that [Step 2](#step2)'s login went through |
 | Windows says there's no tmux | Expected — it runs without persistence. For persistence, install psmux (see [Step 3](#step3)) |
 
