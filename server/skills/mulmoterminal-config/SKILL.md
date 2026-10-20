@@ -247,8 +247,8 @@ which forge runs there — so it is declared:
   `glab auth status` — this app holds no token of its own.
 - **Hostnames only.** A project path, a port, or a value that is not a hostname is dropped on load,
   which looks exactly like never having written it — audit with `/api/config` rather than assuming.
-- Global only, and it takes effect on the **next server start** either way — a hand edit and the
-  Settings control are the same write.
+- Global only. A save from the Settings control takes effect **at once** — the next `glab` call
+  reads it. A hand edit applies on **Reload config file** in Settings, or a restart.
 - Until a host is declared, its row in the view says so and names this key.
 
 ### `issueWorkComments` — telling an issue you are on it

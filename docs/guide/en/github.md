@@ -21,9 +21,41 @@ You choose which repos show up by **registering** them (just a list of `owner/re
 - Shows **both open PRs and Issues**, grouped **per repository**.
 - Data comes through the **GitHub CLI (`gh`)** — it **uses your `gh` login**, so no token is stored in the app.
 
+The **▶** on an issue row goes one step further: it creates a worktree for that issue and starts an
+agent in it, in one click.
+
+![The GitHub view: open PRs grouped by repository on top, Issues below, and a ▶ button at the right end of each issue row (Japanese UI)](../images/github-view-ja.png)
+
+## Reading the screen
+
+From the top of the screenshot down:
+
+| Where | What it is |
+|---|---|
+| **Top line** | The title "GitHub pull requests & issues" and the **↻ (reload)** button. The **✕** at the far right closes the view (so does Esc) |
+| **Start issues in** | The agent (Claude, Codex, …) that **▶** starts. Picking anything but Claude puts an amber warning under it ([why](#start-from-issue)) |
+| **PR list** | One heading per registered repository (`owner/repo` and a count), with its open PRs below. A repo with none says "No open PRs" |
+| **ISSUES** | The same, for open issues |
+| **● at the left of a row** | The PR's CI state (green = passing / red = failing / amber = running / dim = no checks) |
+| **Right side of a row** | Author and last update (e.g. `isamu · 5h ago`) |
+| **▶ on an issue row** | Start work on this issue: make a worktree and start an agent in it as a grid cell |
+
+Clicking the row itself (its number or title) **opens it on GitHub in a new browser tab**.
+
+## Getting started in three steps
+
+1. **Run `gh auth login` on the machine running the server** — the view runs the GitHub CLI (`gh`)
+   behind the scenes. The app holds no token; it uses your `gh` login as it is.
+2. **Register the repositories you want to see** — type an `owner/repo` into
+   **Settings → Pull request repos** and add it. [Details](#register)
+3. **Click the GitHub mark (Pull requests) in the grid's toolbar** — the button appears once at least
+   one repository is registered, among the grid's own controls shown while the grid is on screen.
+
+From there, [the ▶ on an issue row](#start-from-issue) starts the work.
+
 ---
 
-## 1. Register the repos you want to see
+## 1. Register the repos you want to see {#register}
 
 Only the repos you **register** appear (nothing is auto-added from worktrees or sessions). Two ways,
 both effective **immediately** (no restart).
@@ -47,51 +79,11 @@ Add to **`prRepos`** (an array of `"owner/repo"` strings) in `~/.mulmoterminal/c
 }
 ```
 
-An entry may also name its host — `"gitlab.com/group/project"`. **GitLab projects are read too**,
-with `glab` in the same role `gh` plays for GitHub: the list, starting work from an issue, work
-comments, and opening a merge request all work. GitLab groups nest, so
-`gitlab.com/group/sub/project` is fine. A bare `owner/repo` still means github.com, so nothing you
-already have changes.
-
-An entry on any OTHER host shows a row naming that host, rather than silently contributing nothing.
-
-One difference worth knowing: a GitLab row's CI dot is usually blank, because GitLab's
-merge-request list carries no pipeline status and reading it costs one call per merge request. A
-cell watching a single branch does read it, so the phase pill in the cockpit is accurate.
-
-### A GitLab of your own (self-hosted)
-
-`gitlab.example.com` cannot be recognised from its address — nothing in the name says whether that
-host runs GitLab, Gitea or a wiki. So you say so once, in the same file:
-
-```json
-{
-  "gitlabHosts": ["gitlab.example.com"],
-  "prRepos": ["gitlab.example.com/group/project"]
-}
-```
-
-You can also add the host without editing the file: **Settings → GitHub and GitLab → Self-hosted GitLab**,
-which takes effect at once, with no restart.
-
-A declared host then behaves **exactly like gitlab.com**: the list, starting work from an issue,
-work comments, and opening a merge request. Two things it needs:
-
-1. **`glab` logged in to that host** — `glab auth login --hostname gitlab.example.com`. This app
-   stores no token of its own; it runs your `glab`, the same arrangement as `gh`.
-2. **A server restart** after editing `config.json` by hand — the same as `prRepos` written by
-   hand, since the file is read at start-up. (Adding the host in Settings needs none.)
-
-Until the host is declared, its row says so and names the key to add. Not covered yet: a port in
-the host name (`gitlab.example.com:8443`), an http-only instance, and GitHub Enterprise.
+GitLab projects can be listed too. → [Using GitLab](#gitlab)
 
 → See [Configuration](config.html) for the full key list.
 
-## 2. Open the view and read it
-
-Click **Pull requests** (the GitHub mark) in the toolbar (among the grid's own controls, shown while
-the grid is on screen). The button appears once Settings → **Pull request repos** lists at
-least one repository; with none, there is nothing for the view to show.
+## 2. Open the view and read it {#read-the-view}
 
 - A **Pull requests** section on top, an **Issues** section below. Both are grouped **per repository**
   (an `owner/repo` heading with a count).
@@ -115,7 +107,7 @@ right — see below.
 
 > Up to **100 PRs / 20 Issues per repo**. Beyond that, a "there are more" note appears with a link to GitHub.
 
-## 3. Start work on an issue from its row
+## 3. Start work on an issue from its row {#start-from-issue}
 
 The **▶** button at the end of an issue row does the whole setup in one click:
 
@@ -151,13 +143,47 @@ session is still open in another terminal, nothing happens and the button says s
 > is left in the input box rather than sent: the Enter is yours. A **resumed** session gets nothing
 > typed into it — it already has a conversation of its own.
 
-## Prerequisite: sign in to the GitHub CLI
+## Using GitLab {#gitlab}
 
-The view runs the **`gh`** command behind the scenes. On the machine running the server:
+An entry may also name its host — `"gitlab.com/group/project"`. **GitLab projects are read too**,
+with `glab` in the same role `gh` plays for GitHub: the list, starting work from an issue, work
+comments, and opening a merge request all work. GitLab groups nest, so
+`gitlab.com/group/sub/project` is fine. A bare `owner/repo` still means github.com, so nothing you
+already have changes.
 
-```bash
-gh auth login
+An entry on any OTHER host shows a row naming that host, rather than silently contributing nothing.
+
+One difference worth knowing: a GitLab row's CI dot is usually blank, because GitLab's
+merge-request list carries no pipeline status and reading it costs one call per merge request. A
+cell watching a single branch does read it, so the phase pill in the cockpit is accurate.
+
+### A GitLab of your own (self-hosted)
+
+`gitlab.example.com` cannot be recognised from its address — nothing in the name says whether that
+host runs GitLab, Gitea or a wiki. So you say so once, in the same file:
+
+```json
+{
+  "gitlabHosts": ["gitlab.example.com"],
+  "prRepos": ["gitlab.example.com/group/project"]
+}
 ```
+
+You can also add the host without editing the file: **Settings → GitHub and GitLab → Self-hosted GitLab**,
+which takes effect at once, with no restart.
+
+A declared host then behaves **exactly like gitlab.com**: the list, starting work from an issue,
+work comments, and opening a merge request. Two things it needs:
+
+1. **`glab` logged in to that host** — `glab auth login --hostname gitlab.example.com`. This app
+   stores no token of its own; it runs your `glab`, the same arrangement as `gh`.
+2. **Reload config file** in Settings, or a server restart, after editing `config.json` by hand —
+   the same as `prRepos` written by hand. (Adding the host in Settings needs neither.)
+
+Until the host is declared, its row says so and names the key to add. Not covered yet: a port in
+the host name (`gitlab.example.com:8443`), an http-only instance, and GitHub Enterprise.
+
+## Behind the scenes
 
 - The app stores/reads no token — it works with **your `gh` login**.
 - Repos always come from **server-side config** (never from the request).
@@ -165,6 +191,7 @@ gh auth login
 
 ## If nothing shows up
 
+- **No GitHub mark in the toolbar** → no repository is registered yet, or a view other than the grid is on screen.
 - **"No repositories configured…"** → nothing registered yet. Add `owner/repo` under **Settings → Pull request repos**.
 - **"gh not found…"** → install the GitHub CLI and run `gh auth login`.
 - **One repo errors** → check the spelling (`owner/repo`) and your **`gh` access** to it (private repos need permission).

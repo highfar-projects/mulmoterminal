@@ -303,7 +303,7 @@ up or keep them in git like any other file.
 
 ## Functions you can use
 
-These are the functions the spreadsheet calculates, as of `@gui-chat-plugin/spreadsheet` 4.2.4. Any other
+These are the functions the spreadsheet calculates, as of `@gui-chat-plugin/spreadsheet` 4.2.5. Any other
 function shows `#NAME?` in its cell, unless the spreadsheet defines it itself (see
 [Functions of your own](#workbook-functions)).
 
@@ -326,6 +326,10 @@ names work too: `STDEV.S`, `STDEV.P`, `VAR.S`, `VAR.P`, `PERCENTILE.INC`, `QUART
 
 A formula with no number format shows a date only when its number comes from a date (a date function, or a
 date cell), so a total of 52,345 stays a number.
+
+Date formats are read the way Excel reads them, both in a cell's format and in `TEXT`: `yyyy-mm-dd`,
+`yyyy"年"m"月"d"日"`, `h:mm AM/PM` and the like, in either case. `TEXT(A2,"yyyy-mm")` gives `2025-01` for a date, and
+also for a date written as text.
 
 **Not available**: the `.EXC` spellings, whole-column references such as `A:A` (give a range such as
 `A2:A500`), and functions that return several cells at once (`FREQUENCY`, `LINEST`).
