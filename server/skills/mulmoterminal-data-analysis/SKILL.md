@@ -178,8 +178,8 @@ Put the result in `presentSpreadsheet`. Split each number by whether the user ma
     `STANDARDIZE`, `GEOMEAN`, `HARMEAN`;
   - two columns: `CORREL` / `PEARSON`, `SLOPE`, `INTERCEPT`, `RSQ`, `STEYX`, `COVARIANCE.S` /
     `COVARIANCE.P`, `FORECAST.LINEAR`, `TREND`;
-  - tests and distributions: `T.TEST`, `T.DIST`, `T.INV`, `NORM.DIST`, `NORM.INV`,
-    `CONFIDENCE.T`, `CONFIDENCE.NORM` (and their `.2T` / `.RT` / `.S` forms);
+  - tests and distributions: `T.TEST`, `T.DIST`, `T.DIST.2T`, `T.DIST.RT`, `T.INV`, `T.INV.2T`,
+    `NORM.DIST`, `NORM.S.DIST`, `NORM.INV`, `NORM.S.INV`, `CONFIDENCE.T`, `CONFIDENCE.NORM`;
   - by group: `COUNTIF(S)`, `SUMIF(S)`, `AVERAGEIF(S)`, `MAXIFS`, `MINIFS`.
 
   `PERCENTILE` and `QUARTILE` interpolate like the script's `quantile`; the current Excel names
@@ -280,9 +280,9 @@ whatever the chart needs, so the chart follows edits:
 recipe's transform (`ecStat:regression`, `ecStat:histogram`, `mulmo:clustering`,
 `mulmo:boxplotColumns`): the chart's `source` is the data sheet's range, header row included
 (`Data!B1:C201`), and the transform's `dimensions` name the columns by that header exactly. The
-transform recomputes whenever the sheet is saved, so the chart follows edits. A blank or text cell
-is left out: the whole row from a fit, a histogram or clusters, only that value from a box per
-column. What it computes is not on the sheet: if the user wants a curve's
+transform recomputes whenever the sheet is saved, so the chart follows edits. A blank cell, or text
+that is not a number, is left out: the whole row from a fit, a histogram or clusters, only that
+value from a box per column. What it computes is not on the sheet: if the user wants a curve's
 coefficients or each row's cluster as numbers, compute them in the script as computed values.
 
 **Long data needs no summary sheet to draw one line per group.** A data sheet of `Date | Region |
