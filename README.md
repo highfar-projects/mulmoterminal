@@ -50,6 +50,13 @@ That is the whole install.
 
 </details>
 
+[![MulmoTerminal, the complete guide - a chaptered walkthrough on YouTube](https://img.youtube.com/vi/Ce8XvlLRpQ4/maxresdefault.jpg)](https://www.youtube.com/watch?v=Ce8XvlLRpQ4)
+
+*The complete guide, Parts 1-5 — getting started, making it your workspace, agents that hand you
+a screen, power features (seven agents at once, several subscriptions, shortcuts), and going
+further into cells that talk to each other, git worktrees and the command palette. Chaptered, so
+you can jump to the part you need.*
+
 MulmoTerminal turns [Claude Code](https://claude.com/claude-code) — and six other agent CLIs —
 into a parallel, observable workspace: many agent sessions at once in a grid, each one
 color-coded so you see at a glance which are **working**, which **need you**, and which are
