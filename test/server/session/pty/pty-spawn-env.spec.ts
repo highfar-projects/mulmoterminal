@@ -16,7 +16,7 @@ vi.mock("../../../../server/infra/process/tmux.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../../server/infra/process/tmux.js")>()),
   tmuxAvailable: () => tmuxOn,
   tmuxPsmuxVtInput: () => psmuxVtInput,
-  tmuxPsmuxClientUnsetNames: () => (psmuxOn ? ["_VOLTA_TOOL_RECURSION"] : []),
+  tmuxPsmuxScrubbedNames: () => (psmuxOn ? ["_VOLTA_TOOL_RECURSION"] : []),
   tmuxHasSession: (id: string) => liveTmuxSessions.has(id),
   // The real one turns `env` into `-e KEY=VALUE` pairs, which is the only way a variable
   // reaches a tmux PANE — so the fake has to carry it or the #1367 assertions below prove nothing.

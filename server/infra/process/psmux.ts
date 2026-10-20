@@ -10,8 +10,9 @@ export const PSMUX_VT_INPUT_SINCE: PsmuxVersion = [3, 4, 0];
 
 // Volta marks the node it launches so a `node` beneath it skips the shim and runs whatever PATH
 // names. A psmux pane rebuilds PATH but keeps this, so `node` in the cell — stdio MCP servers
-// included — was not found. Kept off the client, since a new psmux server inherits its environment.
-export const PSMUX_CLIENT_UNSET_NAMES: readonly string[] = ["_VOLTA_TOOL_RECURSION"];
+// included — was not found. Kept off the client, which a new psmux server inherits from, and
+// scrubbed from a psmux server that was already running.
+export const PSMUX_SCRUBBED_NAMES: readonly string[] = ["_VOLTA_TOOL_RECURSION"];
 
 /** Whether `tmux -V` came from psmux. It answers `tmux 3.x` on the first line, like a real tmux, and
  *  names itself only on the second. */

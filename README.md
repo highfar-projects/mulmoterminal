@@ -731,7 +731,7 @@ What MulmoTerminal does differently behind psmux, and only there:
   after it is not taken into it. `PSMUX_VT_INPUT=0` in the server's environment turns this off;
 - counts emoji two cells wide in the browser (Unicode 11), as Claude Code and psmux do — otherwise
   each emoji shifts the rest of its row by one column;
-- keeps Volta's `_VOLTA_TOOL_RECURSION` off the psmux client, so `node` in a cell resolves through
+- keeps Volta's `_VOLTA_TOOL_RECURSION` out of psmux's environment, so `node` in a cell resolves through
   Volta's shim again.
 
 psmux imitates tmux 3.4, so the few things that need tmux 3.7+ (such as restoring bracketed paste

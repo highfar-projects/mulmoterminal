@@ -358,6 +358,12 @@ describe("isScrubbedGlobalEnvEntry", () => {
   it("leaves a stale value that names some other port", () => {
     expect(isScrubbedGlobalEnvEntry("PORT", "34567", BOUND)).toBe(false);
   });
+
+  // A psmux server started before Volta's marker was kept off its client still carries it.
+  it("takes the extra names it is given, and only those", () => {
+    expect(isScrubbedGlobalEnvEntry("_VOLTA_TOOL_RECURSION", "1", BOUND, ["_VOLTA_TOOL_RECURSION"])).toBe(true);
+    expect(isScrubbedGlobalEnvEntry("_VOLTA_TOOL_RECURSION", "1", BOUND)).toBe(false);
+  });
 });
 
 // A running server can be scrubbed; one that does not exist yet cannot. `new-session` starts it and
