@@ -60,7 +60,7 @@ calendar heatmaps among them.
 **A chart can follow the spreadsheet.** When the agent draws a chart from a range of the sheet, the
 chart shows that range calculated, and draws itself again when the sheet is saved: change a number and
 the chart moves with it. The card says which range it comes from ("From the spreadsheet: Summary!A1:C13").
-A chart the agent drew from numbers it passed directly (a histogram, a fitted line) does not follow the
+A chart the agent drew from numbers it passed directly (a fitted curve, say) does not follow the
 sheet; ask the agent to draw it again (see [Changing the numbers yourself](#changing-the-numbers-yourself)).
 [Analysing data from start to finish](#analysing-data-from-start-to-finish) shows it working.
 
@@ -179,7 +179,7 @@ The agent tells you which ones they are.
 
 The series names come from the range's header row, and the categories from its first column. In the
 example, the regression line is drawn from a column of predicted values that is itself a formula,
-so the line moves with the data too. A chart that is not drawn from the sheet (a histogram's bins, say) has no
+so the line moves with the data too. A chart that is not drawn from the sheet (a fitted curve, say) has no
 "From the spreadsheet" line, and the agent tells you it does not follow the sheet.
 
 ### Change the data and watch {#analysis-change-and-watch}
