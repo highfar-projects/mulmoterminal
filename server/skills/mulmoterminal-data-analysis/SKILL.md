@@ -202,10 +202,12 @@ Put the result in `presentSpreadsheet`. Split each number by whether the user ma
   true/false. A name is letters and digits joined by dots, and not a built-in's. If
   `presentSpreadsheet`'s reply names a function it could not use, fix it and present again.
   Check the function's result against the script's number, as with a formula.
-- **Values** only for what neither can do: a result that needs data outside the workbook, or a
-  computation too heavy for 50 ms a call. A function the sheet lacks shows `#NAME?`. Compute
-  these in the script and put the result in as a number. Label them as computed (for example
-  "model fit (computed)"), because a value does not change when the user edits the data.
+- **Values** only for what neither can do: a result that needs data outside the workbook, a
+  computation too heavy for 50 ms a call, or what a chart transform works out that the user wants as
+  data (each row's cluster, a curve's coefficients; see *4. Charts*). A function the sheet lacks
+  shows `#NAME?`. Compute these in the script and put the result in as a value (a number, or text
+  such as a group's name). Label them as computed (for example "model fit (computed)"), because a
+  value does not change when the user edits the data.
 
 Use one sheet for the data and another for the summary, so a summary formula reads the data sheet
 (`=AVERAGE(Data!C2:C201)`).
@@ -272,18 +274,25 @@ whatever the chart needs, so the chart follows edits:
   same groups on every redraw. It measures distance in the columns' own units, so a column of
   incomes outweighs a column of visit counts: when the scales differ, add a standardised column for
   each (`=STANDARDIZE(B2,AVERAGE(B$2:B$201),STDEV(B$2:B$201))`) and cluster on those, while the
-  scatter still shows the original columns.
+  scatter still shows the original columns. Group the rows **once**: a script's own k-means does not
+  give the transform's groups or numbers, so never put both in one analysis. To show the groups,
+  use the transform and put no group column on the sheet. When the user wants each row's group as
+  data (to count or filter), compute it in the script into a computed column, and colour the
+  scatter by that column with no transform, so the sheet and the chart show the same groups:
+  `"visualMap": { "type": "piecewise", "dimension": "Group", "categories": [every group's name],
+  "inRange": { "color": [one per group] } }`.
 - **map**: one row per region, its name exactly as the map has it: `japan-ja` and `world-ja` take
   Japanese names (東京都), `japan` and `world` English ones. No other map is available.
 
-**A fitted curve, a histogram, clusters or a box per column straight from the data** uses the
-recipe's transform (`ecStat:regression`, `ecStat:histogram`, `mulmo:clustering`,
+**A fitted curve, a histogram, clusters (when the sheet holds no group column, see *clusters*) or a
+box per column straight from the data** uses the recipe's transform (`ecStat:regression`, `ecStat:histogram`, `mulmo:clustering`,
 `mulmo:boxplotColumns`): the chart's `source` is the data sheet's range, header row included
 (`Data!B1:C201`), and the transform's `dimensions` name the columns by that header exactly. The
 transform recomputes whenever the sheet is saved, so the chart follows edits. A blank cell, or text
 that is not a number, is left out: the whole row from a fit, a histogram or clusters, only that
 value from a box per column. What it computes is not on the sheet: if the user wants a curve's
-coefficients or each row's cluster as numbers, compute them in the script as computed values.
+coefficients, compute them in the script as computed values; for each row's cluster, see
+*clusters* above.
 
 **Long data needs no summary sheet to draw one line per group.** A data sheet of `Date | Region |
 Sales` rows can be the source as it is, with `"groupBy": { "column": "Region" }`: it is drawn with
@@ -330,7 +339,7 @@ End by telling the user:
 
 - the spreadsheet's path and the chart's path;
 - where the scripts are;
-- which figures are formulas (workbook functions included, by name) and which are computed values;
+- which values are formulas (workbook functions included, by name) and which are computed;
 - which charts follow the sheet and which do not.
 
 ## 6. Offer to keep the analysis as a skill
@@ -361,7 +370,8 @@ will silently describe the old file when the skill runs on the next one:
 - categories, dates, the edges of bins the user chose, lookup tables and anything else derived
   from the rows are computed by the script, not pasted in;
 - a fitted curve, an automatic histogram, clusters and a box per column stay transforms over the
-  data range, as in *4. Charts*, never their output as it came out on this file;
+  data range, as in *4. Charts*, never their output as it came out on this file; a group column the
+  user asked for is computed by the script on each run, and the chart is coloured by it;
 - the spreadsheet path the charts point at is an argument (it changes on every run);
 - titles name the data kind, not this file's dates;
 - workbook functions travel in the `functions` the scripts present, unchanged: they are the method,
@@ -380,7 +390,7 @@ outlives the conversation and can be shared; the data stays where the user keeps
 - the steps to run it: copy `scripts/` into a fresh `mktemp -d`, `npm install`, run the scripts on
   the file the user names, present the spreadsheet, then the charts from the reported spreadsheet
   path;
-- what to tell the user afterwards: the same findings as this analysis, which figures are formulas
+- what to tell the user afterwards: the same findings as this analysis, which values are formulas
   and which computed, which charts follow the sheet, and where everything was saved;
 - the date it was made, and the file it was made from by its name only (not its full path).
 
@@ -410,8 +420,8 @@ If the sheet holds no computed values, and every chart follows it, that is all: 
 again. Otherwise the computed values and the inline charts are now stale. Then:
 
 - recompute the computed values that depended on the edited cells, including any order the script
-  set (sorted bars, a Pareto chart's causes, a grouped boxplot's blocks) that the new data no
-  longer follows;
+  set (sorted bars, a Pareto chart's causes, a grouped boxplot's blocks, a group column computed
+  in the script) that the new data no longer follows;
 - call `presentSpreadsheet` again with the whole spreadsheet: the user's edits, the formulas, each
   sheet's `functions` as the file holds them, and the new computed values;
 - draw the charts again, with their `source` pointing at the **new** spreadsheet;
