@@ -115,16 +115,17 @@ one session at a time.
 
 **Apache-2.0 · desktop · macOS / Linux (X11)**
 
-The one here that is a different layer rather than a different shape. It hosts no sessions and
-isolates nothing: it reads the records each agent already writes and puts every session on one
-board, organised as project, repo, worktree, branch and pull request. That includes the ones you
-started elsewhere — a terminal, tmux, the Claude app, the Codex app, a second account, another
-machine you have linked — and you can allow a command or answer a question from its windows
+A different layer rather than a different shape. It reads the records each agent already writes,
+so the board shows sessions it never started — in a terminal, in tmux, in the Claude app or the
+Codex app, on a second account, on another machine you have linked — organised as project, repo,
+worktree, branch and pull request. You can allow a command or answer a question from its windows
 instead of going to find the session. Claude Code, Codex, OpenCode, Antigravity and Cursor.
 
-So it sits **beside** whichever tool above you pick rather than instead of one. Its first release
-came out on 2026-10-20, so it is very new; this entry was checked on 2026-10-21 rather than
-2026-08-03 like the rest of the page.
+It starts work as well, in your terminal or the agent's own app, and in its own panel over the
+Agent Client Protocol if you ask for that. What it does not do is isolate: the worktrees are the
+agent's, and it otherwise reads git rather than writing it. So it sits **beside** whichever tool
+above you pick rather than instead of one. Its first release came out on 2026-10-20, so it is very
+new; this entry was checked on 2026-10-21 rather than 2026-08-03 like the rest of the page.
 
 ### MulmoTerminal
 
@@ -154,7 +155,7 @@ Machine-readable facts: [`facts.json`](https://receptron.github.io/mulmoterminal
 | **Conductor** | Desktop (macOS) | Proprietary | Claude, Codex, Cursor | — | Worktrees |
 | **Claude Squad** | TUI | OSS | Claude, Codex, OpenCode, Amp | — | Worktrees |
 | **`claude agents`** | TUI | First-party | Claude | — | Worktrees |
-| **Codealong** | Desktop | Apache-2.0 | Claude, Codex, OpenCode, Antigravity, Cursor | iPhone app, early | **None — it runs nothing** |
+| **Codealong** | Desktop | Apache-2.0 | Claude, Codex, OpenCode, Antigravity, Cursor | iPhone app, early | **None of its own** |
 | **MulmoTerminal** | **Browser** | MIT | Claude, Codex, Antigravity, Grok, Muse, Copilot, Cursor | Web + push | Worktrees |
 
 **Notice what's the same.** Nearly everything here is open source, worktree-based, and local. If

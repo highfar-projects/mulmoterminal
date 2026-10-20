@@ -23,10 +23,18 @@ gh api repos/codealong/codealong/releases --jq '.[] | {tag:.tag_name, published:
 gh api -H "Accept: application/vnd.github.raw" repos/codealong/codealong/readme
 ```
 
-Apache-2.0、初回リリース v0.3.0 は 2026-10-20。セッションを自分で走らせず（各エージェントが
-書いている記録を読む）、隔離もしない。worktree を作るのはエージェント側で、git は読み取りのみ。
-対応は Claude Code / Codex / OpenCode / Antigravity / Cursor。macOS 13 以降と Linux（X11、
-ソースからビルド）。iPhone 版のリポジトリは公開されているが自分でビルドする段階。
+Apache-2.0、初回リリース v0.3.0 は 2026-10-20。各エージェントが書いている記録を読むので、
+自分が立てていないセッションも見える。**立てることもできる** —— 立てたものはこちらのターミナルや
+エージェント自身のアプリで動き、頼めば Codealong 自身の画面でも動く（Agent Client Protocol 経由。
+README と v0.3.0 のリリースノートの両方に書かれている）。やらないのは隔離で、worktree を作るのは
+エージェント側、git は基本的に読むだけ。対応は Claude Code / Codex / OpenCode / Antigravity /
+Cursor。macOS 13 以降と Linux（X11、ソースからビルド）。iPhone 版のリポジトリは公開されているが
+自分でビルドする段階。
+
+**最初は「セッションを自分で走らせない」と書いていた。** 作者本人が issue にそう書いていたので
+そのまま受けたが、CodeRabbit の指摘で README とリリースノートを読み直したら、tmux で立てる経路と
+ACP で自分の画面に持つ経路があった。**効いているのは「走らせない」ではなく「自分が立てていない
+セッションも読める」**なので、そちらを書く。
 
 ページの数字は 2026-08-03 時点なので、この節だけ確認日を書いて区別した。
 
