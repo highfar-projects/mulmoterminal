@@ -101,7 +101,7 @@ describe("FilesPane painting from its last listing", () => {
     const w = mount(FilesPane, { props: { cwd: "/proj" } });
     await flushPromises();
 
-    expect(w.text()).toContain("HTTP 500");
+    expect(w.get('[data-testid="files-tree"]').text()).toContain("HTTP 500");
     expect(rowPaths(w)).toEqual([]);
   });
 

@@ -250,7 +250,7 @@ describe("the Files pane's finder", () => {
     // The pane is back on a fresh tree with nothing open — not showing the file it was reading
     // for the project it has left.
     expect(w.find('[data-testid="files-row"]').exists()).toBe(true);
-    expect(w.text()).toContain("Select a file to view or edit.");
+    expect(w.find('[data-testid="files-folder-view"]').exists()).toBe(true);
   });
 
   // A pane that re-roots teardown()s and starts again. A finder left open over it would be

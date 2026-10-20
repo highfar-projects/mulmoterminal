@@ -20,7 +20,7 @@ export function galleryKind(name: string): FileMediaKind | null {
   return fileMediaKind(name) ?? (rawContentType(name) === "image/svg+xml" ? "image" : null);
 }
 
-const byName = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+export const byName = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
 /** The folder's own files that a gallery draws, in name order with numbers counted as numbers
  *  (`2.png` before `10.png`), as a file manager lists them. Subfolders are not looked into. */
@@ -48,8 +48,8 @@ export type GalleryAfterOp = "recheck" | "refresh" | "keep";
 
 export type TreeOp = { id: "new-file" | "new-folder"; dirRel: string } | { id: "rename" | "trash"; pathRel: string };
 
-const parentOf = (pathRel: string): string => pathRel.slice(0, Math.max(0, pathRel.lastIndexOf("/")));
-const isAtOrAbove = (pathRel: string, dir: string): boolean => dir === pathRel || dir.startsWith(`${pathRel}/`);
+export const parentOf = (pathRel: string): string => pathRel.slice(0, Math.max(0, pathRel.lastIndexOf("/")));
+export const isAtOrAbove = (pathRel: string, dir: string): boolean => dir === pathRel || dir.startsWith(`${pathRel}/`);
 
 export function galleryAfterTreeOp(dir: string, op: TreeOp): GalleryAfterOp {
   if ("dirRel" in op) return op.dirRel === dir ? "refresh" : "keep";

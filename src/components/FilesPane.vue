@@ -57,8 +57,10 @@ import FilesViewModeButtons from "./FilesViewModeButtons.vue";
 import FilesCanvasView from "./FilesCanvasView.vue";
 import FilesCanvasButton from "./FilesCanvasButton.vue";
 import FilesGallery from "./FilesGallery.vue";
+import FilesFolderView from "./FilesFolderView.vue";
 import FilesConflictBanner from "./FilesConflictBanner.vue";
 import { useFilesGallery } from "../composables/useFilesGallery";
+import { useFolderView } from "../composables/useFolderView";
 import { useFilesCanvasMode } from "../composables/useFilesCanvasMode";
 import { showFileWith } from "../composables/useShowFile";
 import { useSideBySide } from "../composables/useSideBySide";
@@ -105,6 +107,13 @@ const carried = useCarriedView({ props, file, canvas: () => canvasMode });
 // A folder shown as a gallery over the file area (#3079); any file opened, or a re-root, puts the files back.
 const tabs = useFilesTabs(file, carried.inherit, () => gallery.close());
 const gallery = useFilesGallery(() => props.cwd);
+// The folder the empty file area shows (#3120): the last one clicked in the tree. Read only while no
+// file is open and no gallery covers it — and only drawn then, so its tiles never play unseen.
+const folderShown = computed(() => !openPath.value && gallery.dir.value === null);
+const folder = useFolderView(
+  () => props.cwd,
+  () => folderShown.value,
+);
 const { openRequested, openFromTerminal } = useRequestedOpen(tabs, file, (pathRel) => canvasMode.hide(pathRel));
 const strip = tabs.strip;
 const { showStrip, focusablePath, labels } = tabStripView(strip, openPath);
@@ -217,7 +226,10 @@ const fileOps = useTreeFileOps({
   file,
   t,
   focusRow,
-  changed: gallery.treeOpListener(() => void gitStatus.refresh()),
+  changed: gallery.treeOpListener((op) => {
+    void gitStatus.refresh();
+    void folder.afterTreeOp(op);
+  }),
 });
 
 const { menu: rowMenu, ...rowMenuApi } = useFilesRowMenu<TreeNode>({ menuEl: rowMenuEl, actionsFor: rowActionsFor, run: runRowAction });
@@ -226,7 +238,12 @@ const rootMenu = menuAttrsFor(rowMenuApi, ROOT_ROW);
 
 // Cmd/Ctrl+click asks for a tab of its own, as it asks a browser for one; a plain click replaces
 // the front tab, as it replaced the one open file before tabs.
-const openFile = (node: TreeNode, event: MouseEvent): Promise<void> => (node.dir ? tree.toggleDir(node) : tabs.open(node.path, wantsNewTab(event)));
+// A folder is also the one the empty file area shows (#3120), remembered while a file is open.
+function openFile(node: TreeNode, event: MouseEvent): Promise<void> {
+  if (!node.dir) return tabs.open(node.path, wantsNewTab(event));
+  folder.show(node.path);
+  return tree.toggleDir(node);
+}
 
 const stripEl = useTemplateRef("stripEl");
 
@@ -262,7 +279,15 @@ const { gitStatus, git, head, showChanges, history } = useFilesPaneGit(() => pro
 
 async function reloadTree(): Promise<void> {
   void gitStatus.refresh();
+  folder.refresh();
   await tree.loadRoot();
+}
+
+/** A file opened from the folder view, whose row goes with the view: the keyboard follows the file. */
+async function openFromFolder(path: string, newTab: boolean): Promise<void> {
+  await tabs.open(path, newTab);
+  await nextTick();
+  if (document.activeElement === document.body) focusAfterTabMove();
 }
 const {
   shownWidth: treeWidth,
@@ -341,6 +366,7 @@ function teardown(): void {
   // here: that tree is still this root's, and swapping the result in beats replacing a correct tree
   // with "Loading…".
   tree.reset();
+  folder.reset();
   // The element OUTLIVES the root — a re-root happens in place — so the scrollbar would still be
   // where the last directory left it, and a directory with nothing remembered would open
   // mid-scroll. `restore` puts a remembered offset back after this (Codex on #2156).
@@ -356,6 +382,9 @@ function teardown(): void {
 let started: Promise<void> = Promise.resolve();
 
 async function start(): Promise<void> {
+  // The pane's switch, not a file's, so a file opened for this start keeps it as an open pane would.
+  // Before any await: a start that a reload has since replaced must not reach it (#3122).
+  sideBySide.switchedOn.value = props.initialState?.sideBySide === true;
   const reqIdAtStart = file.generation();
   const startedAt = startEpoch();
   await nextTick();
@@ -399,6 +428,7 @@ defineExpose({
     ...withCanvasView(tabs.current(), canvasMode.has),
     expanded: expandedPaths(tree.roots.value ?? []),
     treeScrollTop: treeEl.value?.scrollTop ?? 0,
+    ...(sideBySide.switchedOn.value ? { sideBySide: true } : {}),
   }),
   reload: async () => {
     teardown();
@@ -505,7 +535,14 @@ defineExpose({
       @stop="head.stopComparing()"
     />
     <div class="flex min-h-0 flex-auto">
-      <nav ref="treeEl" class="shrink-0 grow-0 overflow-auto py-1.5" :style="treeStyle()" :aria-label="t('tips.panes.fileTree')" v-bind="rootMenu">
+      <nav
+        ref="treeEl"
+        class="shrink-0 grow-0 overflow-auto py-1.5"
+        :style="treeStyle()"
+        :aria-label="t('tips.panes.fileTree')"
+        data-testid="files-tree"
+        v-bind="rootMenu"
+      >
         <p v-if="tree.error.value" class="p-4 text-[13px] text-err">{{ tree.error.value }}</p>
         <p v-else-if="tree.roots.value === null" data-testid="files-tree-loading" class="p-4 text-[13px] text-muted">Loading…</p>
         <FilesTreeEmpty v-else-if="tree.roots.value.length === 0" :actions="rowActionsFor(ROOT_ROW)" @run="runRowAction" @menu="rootMenu.onContextmenu" />
@@ -527,7 +564,23 @@ defineExpose({
              the same dead-button silence #1941 removed for everyone else. -->
         <p v-if="fileError" role="alert" data-testid="files-error" class="p-4 text-[13px] text-err">{{ fileError }}</p>
         <DirConfigSaveNote v-if="dirConfigReport && openPath" :report="dirConfigReport" @dismiss="dirConfigReport = null" />
-        <p v-if="!openPath" class="m-auto p-4 text-[13px] text-muted">Select a file to view or edit.</p>
+        <template v-if="!openPath">
+          <FilesFolderView
+            v-if="folderShown"
+            v-bind="{
+              cwd,
+              dir: folder.dir.value,
+              groups: folder.groups.value,
+              error: folder.error.value,
+              mode: folder.mode.value,
+              withSubfolders: folder.withSubfolders.value,
+            }"
+            @show="folder.show"
+            @open="openFromFolder"
+            @mode="folder.setMode"
+            @subfolders="(on) => (folder.withSubfolders.value = on)"
+          />
+        </template>
         <!-- Not text. The editor is hidden rather than shown empty: an empty buffer over a file
              that has content is an invitation to save, and saving is what destroyed it (#2038). -->
         <FilesUnpreviewable

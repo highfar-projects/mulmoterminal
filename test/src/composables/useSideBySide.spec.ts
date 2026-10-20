@@ -99,6 +99,19 @@ describe("useSideBySide", () => {
     expect(side.active.value).toBe(true);
   });
 
+  // #3122: the pane can be started over (the switch set from another cell) while the press waits on
+  // leaving the Preview, and that start's answer is the one that must stand.
+  it("does not switch back on a pane that was started over while the press was leaving the Preview", async () => {
+    const { side, togglePreview } = setup({ preview: true });
+    let leave: () => void = () => {};
+    togglePreview.mockImplementationOnce(() => new Promise<void>((resolve) => (leave = resolve)));
+    const press = side.toggle();
+    side.switchedOn.value = false;
+    leave();
+    await press;
+    expect(side.switchedOn.value).toBe(false);
+  });
+
   // The Preview chosen alone keeps the switch on; the button shows it off, so one press must bring
   // both halves back — and send the heading, since the Preview was wherever the reader left it.
   it("comes back side by side in one press after the Preview was shown alone", async () => {

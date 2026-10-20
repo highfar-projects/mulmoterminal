@@ -35,4 +35,11 @@ export const filesTreeJa = {
     empty: "このフォルダには画像・動画・音声・PDF がありません。",
     showMore: "あと {count} 件を表示",
   },
+  filesFolderView: {
+    list: "一覧",
+    gallery: "ギャラリー",
+    withSubfolders: "サブフォルダも含める",
+    up: "一つ上のフォルダへ",
+    empty: "このフォルダは空です。",
+  },
 };

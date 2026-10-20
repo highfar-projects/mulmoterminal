@@ -71,7 +71,7 @@ describe("FilesPane while the tree is still being read", () => {
 
     expect(loading(w)).toBe(false);
     expect(empty(w)).toBe(false);
-    expect(w.text()).toContain("README.md");
+    expect(w.get('[data-testid="files-tree"]').text()).toContain("README.md");
   });
 
   it("reports a failed listing as the error, not as an empty directory", async () => {
@@ -82,7 +82,7 @@ describe("FilesPane while the tree is still being read", () => {
     const w = mount(FilesPane, { props: { cwd: "/proj" } });
     await flushPromises();
 
-    expect(w.text()).toContain("HTTP 500");
+    expect(w.get('[data-testid="files-tree"]').text()).toContain("HTTP 500");
     expect(empty(w)).toBe(false);
     expect(loading(w)).toBe(false);
   });
@@ -107,6 +107,6 @@ describe("FilesPane while the tree is still being read", () => {
 
     openSecond();
     await flushPromises();
-    expect(w.text()).toContain("other.md");
+    expect(w.get('[data-testid="files-tree"]').text()).toContain("other.md");
   });
 });
