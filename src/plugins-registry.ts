@@ -126,6 +126,9 @@ interface Registration {
   // Optional fixed frame height for views that rely on an internal h-full layout
   // (vs flowing at natural content height). See PluginFrame's `height` prop.
   height?: string;
+  // The View draws its own surface for `data-appearance` on <html>, so PluginFrame must not
+  // force its light one under it. See PluginFrame's `followsAppearance` prop.
+  followsAppearance?: boolean;
 }
 
 // Statically-known packages, keyed by package name; the config gates which load.
@@ -181,6 +184,8 @@ const PACKAGES: Record<string, Registration> = {
     // needs none of it. Its style.css is self-contained Tailwind.
     viewComponent: wrapWithPluginRuntime("chart", chartPlugin.toolDefinition.name, viewOf("@mulmoclaude/chart-plugin", chartPlugin.viewComponent)),
     css: chartCss,
+    // From 4.4.0 its cards turn dark under a dark theme.
+    followsAppearance: true,
   },
   "@gui-chat-plugin/shapescript": {
     toolName: shapeScriptPlugin.toolDefinition.name,

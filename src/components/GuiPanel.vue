@@ -429,7 +429,12 @@ const hasTools = computed(() => toolSections.value.some((section) => section.too
       <!-- Guarded as well as cleared on session change: a stale view rendered under an
            "unavailable" heading would contradict it. -->
       <template v-for="{ result, plugin } in unavailable ? [] : drawableCards" :key="cardKey(result)">
-        <PluginFrame class="[&+&]:mt-4 [&+&]:border-t [&+&]:border-border [&+&]:pt-4" :css="plugin.css" :height="plugin.height">
+        <PluginFrame
+          class="[&+&]:mt-4 [&+&]:border-t [&+&]:border-border [&+&]:pt-4"
+          :css="plugin.css"
+          :height="plugin.height"
+          :follows-appearance="plugin.followsAppearance"
+        >
           <component
             :is="plugin.viewComponent"
             :selected-result="result"
