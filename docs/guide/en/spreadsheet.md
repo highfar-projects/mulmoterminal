@@ -309,8 +309,9 @@ up or keep them in git like any other file.
 
 ## Functions you can use
 
-These are the functions the spreadsheet calculates, as of `@gui-chat-plugin/spreadsheet` 4.2.5. Any other
-function shows `#NAME?` in its cell, unless the spreadsheet defines it itself (see
+These are the functions you will reach for most, as of `@gui-chat-plugin/spreadsheet` 5.0.0; the package's
+[README](https://www.npmjs.com/package/@gui-chat-plugin/spreadsheet) has the complete list. A function on neither
+shows `#NAME?` in its cell, unless the spreadsheet defines it itself (see
 [Functions of your own](#workbook-functions)).
 
 | Kind | Functions |
@@ -318,17 +319,21 @@ function shows `#NAME?` in its cell, unless the spreadsheet defines it itself (s
 | Totals and groups | `SUM` `AVERAGE` `MIN` `MAX` `COUNT` `COUNTA` `COUNTIF` `COUNTIFS` `SUMIF` `SUMIFS` `AVERAGEIF` `AVERAGEIFS` `MAXIFS` `MINIFS` |
 | Spread and position | `MEDIAN` `MODE` `STDEV` `STDEVP` `VAR` `VARP` `PERCENTILE` `QUARTILE` `PERCENTRANK` `LARGE` `SMALL` `RANK` `SKEW` `KURT` `STANDARDIZE` `GEOMEAN` `HARMEAN` |
 | Two columns | `CORREL` `PEARSON` `SLOPE` `INTERCEPT` `RSQ` `STEYX` `COVARIANCE.S` `COVARIANCE.P` `FORECAST` `FORECAST.LINEAR` `TREND` |
-| Tests and distributions | `T.TEST` `TTEST` `T.DIST` `T.DIST.2T` `T.DIST.RT` `T.INV` `T.INV.2T` `NORM.DIST` `NORM.S.DIST` `NORM.INV` `NORM.S.INV` `CONFIDENCE.T` `CONFIDENCE.NORM` |
-| Maths | `ROUND` `ROUNDUP` `ROUNDDOWN` `FLOOR` `CEILING` `INT` `TRUNC` `ABS` `SIGN` `POWER` `SQRT` `MOD` `PI` `EXP` `LN` `LOG` `LOG10` |
+| Tests and distributions | `T.TEST` `TTEST` `T.DIST` `T.DIST.2T` `T.DIST.RT` `T.INV` `T.INV.2T` `NORM.DIST` `NORM.S.DIST` `NORM.INV` `NORM.S.INV` `CONFIDENCE.T` `CONFIDENCE.NORM` `CHISQ.TEST` `F.TEST` `Z.TEST` `ANOVA.TEST` `MANNWHITNEY.TEST` `WILCOXON.TEST` `KS.TEST` `SHAPIRO.TEST` `SPEARMAN` `KENDALL` |
+| Fits and time series | `LINEST` `LOGEST` `GROWTH` `FREQUENCY` `FORECAST.ETS` `EMA` `DECOMPOSE` `AUTOCORREL` |
+| Maths | `ROUND` `ROUNDUP` `ROUNDDOWN` `FLOOR` `CEILING` `INT` `TRUNC` `ABS` `SIGN` `POWER` `SQRT` `MOD` `PI` `EXP` `LN` `LOG` `LOG10` `SUMPRODUCT` `MMULT` `MINVERSE` `RAND` `RANDBETWEEN` `RANDARRAY` |
 | Logic | `IF` `IFS` `AND` `OR` `NOT` `IFERROR` `IFNA` `TRUE` `FALSE` |
-| Lookup | `VLOOKUP` `HLOOKUP` `XLOOKUP` `INDEX` `MATCH` `ROW` `COLUMN` `ROWS` `COLUMNS` |
+| Names and LAMBDA | `LET` `LAMBDA` `MAP` `BYROW` `BYCOL` `REDUCE` |
+| Lookup | `VLOOKUP` `HLOOKUP` `XLOOKUP` `XMATCH` `INDEX` `MATCH` `ROW` `COLUMN` `ROWS` `COLUMNS` |
+| Tables from a formula | `FILTER` `SORT` `SORTBY` `UNIQUE` `GROUPBY` `PIVOTBY` `TAKE` `DROP` `CHOOSECOLS` `CHOOSEROWS` `HSTACK` `VSTACK` `TRANSPOSE` `SEQUENCE` |
 | Text | `CONCATENATE` `CONCAT` `LEFT` `RIGHT` `MID` `LEN` `UPPER` `LOWER` `PROPER` `TRIM` `SUBSTITUTE` `REPLACE` `FIND` `SEARCH` `TEXT` `VALUE` `EXACT` |
 | Dates and times | `TODAY` `NOW` `DATE` `TIME` `YEAR` `MONTH` `DAY` `HOUR` `MINUTE` `SECOND` `WEEKDAY` `DAYS` `DATEDIF` `EDATE` `EOMONTH` `WORKDAY` `NETWORKDAYS` |
 | Finance | `PMT` `PV` `FV` `NPV` `IRR` `RATE` `NPER` `IPMT` `PPMT` |
 
 `STDEV` and `VAR` are the sample versions (divide by n-1); `STDEVP` and `VARP` divide by n. The current Excel
 names work too: `STDEV.S`, `STDEV.P`, `VAR.S`, `VAR.P`, `PERCENTILE.INC`, `QUARTILE.INC`, `PERCENTRANK.INC`,
-`RANK.EQ`. `PERCENTILE` and `QUARTILE` interpolate the way Excel's `.INC` versions do.
+`RANK.EQ`. `PERCENTILE` and `QUARTILE` interpolate the way Excel's `.INC` versions do, and the `.EXC` versions
+are there too.
 
 A formula with no number format shows a date only when its number comes from a date (a date function, or a
 date cell), so a total of 52,345 stays a number.
@@ -337,8 +342,13 @@ Date formats are read the way Excel reads them, both in a cell's format and in `
 `yyyy"年"m"月"d"日"`, `h:mm AM/PM` and the like, in either case. `TEXT(A2,"yyyy-mm")` gives `2025-01` for a date, and
 also for a date written as text.
 
-**Not available**: the `.EXC` spellings, whole-column references such as `A:A` (give a range such as
-`A2:A500`), and functions that return several cells at once (`FREQUENCY`, `LINEST`).
+**A formula can answer a table.** `=SORT(UNIQUE(A2:A100))`, `=GROUPBY(A2:A100,B2:B100,SUM)` or plain
+`=Data!A1:C10` fills the cells to the right and below it, as in Excel 365; if one of them already holds
+something, the formula shows `#SPILL!`. Other formulas, and charts drawn from the sheet, read those cells like
+any others. Only the formula is saved. A whole column such as `A:A` works as a range.
+
+`RAND`, `RANDBETWEEN` and `RANDARRAY` give the same numbers every time the sheet is calculated, unlike Excel, so
+the agent and you see the same table.
 
 ### Functions of your own {#workbook-functions}
 
