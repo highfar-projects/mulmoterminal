@@ -404,7 +404,7 @@ export const zhCN: Messages = {
     },
 
     gridHeader: {
-      intro: "网格上方那条栏一眼能告诉你什么，就在它已经带着的 Claude 和 Codex 用量窗口旁边。",
+      intro: "网格上方那条栏一眼能告诉你什么。",
       loadAverage: "显示这台机器的 load average",
       loadAverageTitle: "Load average",
       loadAverageHint:

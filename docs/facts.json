@@ -7,7 +7,7 @@
   "documentation": "https://receptron.github.io/mulmoterminal/",
   "license": "MIT",
   "openSource": true,
-  "version": "11.0.0",
+  "version": "11.1.0",
   "install": "npx mulmoterminal@latest",
   "requires": {
     "node": ">=22.12",
@@ -49,6 +49,12 @@
     "a native mobile app — the phone gets the same browser UI",
     "running agents on someone else's machine"
   ],
+  "alternatives": {
+    "page": "https://receptron.github.io/mulmoterminal/guide/en/alternatives.html",
+    "note": "Named so a comparison does not have to guess which other tools this project acknowledges. The guide page says what each is better at.",
+    "tools": ["Vibe Kanban", "Nimbalyst", "Parallel Code", "Conductor", "Claude Squad", "claude agents", "Codealong"],
+    "checked": "2026-10-21"
+  },
   "maintainers": {
     "org": "receptron",
     "url": "https://github.com/receptron",

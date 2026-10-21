@@ -2,7 +2,7 @@
 //
 // Both sweeps are about a feature that is GONE, so neither belongs in the boot sequence's prose:
 // what a reader of index.ts needs is that they happen before anything listens, not why.
-import { sweepLegacyProbeTranscriptsOnce } from "../../agents/probe/probe-transcript.js";
+import { removeStrayProbeTranscripts, sweepLegacyProbeTranscriptsOnce } from "../../agents/probe/probe-transcript.js";
 import { removeLegacySandboxCredentials, removeLegacySandboxContainers } from "./fs-cleanup.js";
 import { CLAUDE_CWD, MULMOTERMINAL_HOME } from "../../config/env.js";
 
@@ -14,6 +14,9 @@ export function runLegacyCleanupsOnce(): void {
   // the window in which that matters is closed rather than reopened on every boot (Codex review on
   // #1030). It also means a 500MB transcript directory is read once, not once per `yarn dev` save.
   void sweepLegacyProbeTranscriptsOnce(CLAUDE_CWD, MULMOTERMINAL_HOME).catch(() => {});
+  // Probes with an id of ours whose removal looked in the wrong directory — a symlinked workspace
+  // (#3152) — or never ran (a server stopped mid-probe). Named by an id only a probe carries.
+  void removeStrayProbeTranscripts(CLAUDE_CWD, Date.now()).catch(() => {});
   // The removed Docker sandbox left two things behind when a server was killed or upgraded
   // mid-session: a per-session export of the Keychain credential on disk, and a container still
   // running with the workspace and ~/.claude mounted. Both deleters went with the feature.

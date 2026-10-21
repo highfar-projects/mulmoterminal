@@ -4,7 +4,7 @@ nav_title: Feature list
 layout: default
 parent: English
 nav_order: 6.5
-as_of: 11.0.0
+as_of: 11.1.0
 description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 9.1.0)."
 ---
 
@@ -144,6 +144,8 @@ More: [Phone](phone.html)
 
 More: [Feature reference](features.html)
 
+- With no file open, the Files pane shows a folder as a list or a gallery, and the tree follows it (v11.1.0)
+- A .json previews as indented JSON, and is offered the Canvas only when it is a MulmoScript (v11.1.0)
 - Open as a spreadsheet (copy) on a CSV or TSV puts a copy of it on the Canvas as a spreadsheet; the file is not changed (v10.10.0)
 - Open as gallery on a folder shows its pictures, videos, sounds and PDFs together; videos and sounds play in their tile, and a click shows one large (v10.9.0)
 - Preview or Canvas carries to the next file opened in the right pane, remembered per session (v10.9.0)
@@ -295,6 +297,7 @@ More: [Configuration](config.html)
 
 More: [From a collection](from-collection.html) · [MulmoCast videos](mulmocast.html) · [Spreadsheets and charts](spreadsheet.html)
 
+- Charts add maps of Japan and the world, clusters, a box per column, fitted curves and histograms that follow the sheet, word clouds, 3D, SVG and CSV export, and cards side by side (v11.1.0)
 - A chart can draw from a spreadsheet range and redraws when the sheet changes (presentChart `source`) (v10.10.0)
 - An open spreadsheet reads its file again when the agent or another program changes it (v10.10.0)
 - A workbook can carry functions of its own, written in JavaScript and run sealed off in the browser (v10.10.0)
@@ -414,6 +417,7 @@ More: [Blueprints](blueprints.html)
 
 More: [Feature reference](features.html)
 
+- The usage gauge can be switched off, and how often it measures Claude set in minutes (v11.1.0)
 - More features → Processes shows each session's processes (with End) and the worktrees that can be removed (v8.6.0)
 - Each account's 5h and 7d usage windows show in the toolbar, named (v5.8.0)
 - Cursor cells show the input/output token badge, counted since the last restart (v4.23.0)
@@ -427,6 +431,7 @@ More: [Feature reference](features.html)
 
 More: [Getting started](getting-started.html)
 
+- On Windows, psmux keeps cells alive across a server restart (v11.1.0)
 - Settings → Release notes lists every version up to the running one with its dated guide (v8.0.0)
 - Experimental: run the server on another machine over an SSH tunnel, with remoteServer mode and a Settings box (v7.2.0)
 - After an upgrade, a What's new dialog shows each new version's dated setup guide in your language (v7.2.0)

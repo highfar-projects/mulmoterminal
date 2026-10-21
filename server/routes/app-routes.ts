@@ -22,7 +22,7 @@ import { noteMovedFrom, takeMovedFrom } from "../session/credentials/rotation-no
 import { rotationLoginLabel } from "../../common/tokenRotation.js";
 import { survivingSessions } from "../session/reaping/surviving-sessions.js";
 import { armedReapIntervalHours } from "../session/reaping/reap-schedule.js";
-import { getSessionIdleReapDays, getQuestionPaneEnabled, getTokenRotation } from "../config/config-routes.js";
+import { getSessionIdleReapDays, getQuestionPaneEnabled, getTokenRotation, getUsageGauge } from "../config/config-routes.js";
 import { sweepIdleSessions } from "../session/reaping/reap-idle-sessions.js";
 import { mountHookRoute } from "../routes/hook-routes.js";
 import { mountPluginRoutes } from "../routes/plugin-routes.js";
@@ -128,7 +128,8 @@ export interface AppRouteDeps extends SessionActivityDeps {
   /** Which agents could be started, as checked once at server start (#2229). */
   agentAvailability: readonly AgentAvailability[];
   clientDir: string;
-  rateLimits: RateLimitRouteDeps;
+  /** The config's usage-gauge settings are added here, read from the file on every refresh (#3153). */
+  rateLimits: Omit<RateLimitRouteDeps, "usageGauge">;
   /** A rotated session's turn ended on a usage limit: move it to another credential (#2919). */
   onRateLimited?: (sessionId: string) => void;
   /** A live session's turn ended: move it if its credential is at the switch line (#2919). */
@@ -487,7 +488,7 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
   mountCommandSummaryRoute(app, { isAllowedOrigin: deps.isAllowedOrigin });
 
   // The 5h / 7d rate-limit gauge (#387): where the probe reports and where the header reads.
-  mountRateLimitRoutes(app, deps.rateLimits);
+  mountRateLimitRoutes(app, { ...deps.rateLimits, usageGauge: getUsageGauge });
 
   // GET /api/load — this machine's load average, drawn beside those gauges (#1786).
   mountLoadRoute(app);

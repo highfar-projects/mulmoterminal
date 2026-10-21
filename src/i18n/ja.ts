@@ -416,7 +416,7 @@ export const ja: Messages = {
     },
 
     gridHeader: {
-      intro: "グリッドの上のバーが一目で伝えること。Claude / Codex の使用量ウィンドウの隣に並びます。",
+      intro: "グリッドの上のバーが一目で伝えること。",
       loadAverage: "このマシンの load average を表示する",
       loadAverageTitle: "Load average",
       loadAverageHint:

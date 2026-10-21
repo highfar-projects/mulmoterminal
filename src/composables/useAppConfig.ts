@@ -29,6 +29,7 @@ import { setQuestionPaneEnabled } from "./questionPane";
 import { setIssueWorkComments } from "./issueWorkComments";
 import { setShowLoadAverage } from "./showLoadAverage";
 import { setPaletteSearchBox } from "./paletteSearchBox";
+import { setUsageGauge, setUsageProbeIntervalMinutes } from "./usageGauge";
 import { setRemoteServer } from "./remoteServer";
 import { setPlayfulEffects } from "./playfulEffects";
 import { loadPlayfulMedia } from "./playfulMedia";
@@ -489,6 +490,9 @@ function applyGlobalSettings(c: Record<string, unknown>, pinsMark: number): void
   setIssueWorkComments(c.issueWorkComments);
   // Whether the grid header carries this machine's load average (#1786). On unless opted out.
   setShowLoadAverage(c.showLoadAverage);
+  // The usage gauge and its probe's interval (#3153). On, every ten minutes, unless configured.
+  setUsageGauge(c.usageGauge);
+  setUsageProbeIntervalMinutes(c.usageProbeIntervalMinutes);
   setPaletteSearchBox(c.paletteSearchBox);
   setRemoteServer(c.remoteServer);
   setPlayfulEffects(c.playfulEffects);

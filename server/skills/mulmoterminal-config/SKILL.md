@@ -1,6 +1,6 @@
 ---
 name: mulmoterminal-config
-description: The way into configuring MulmoTerminal, and the way to find out how it is configured now. Use for a broad or unsure request — "configure MulmoTerminal", "set this up", "customize this", "what can I change?", first-run setup — and route to the skill that owns the area. Also answers "how is this set up right now?", "why isn't my setting working?", "did that take effect?" by reading the live config — the global `~/.mulmoterminal/config.json`, each project's `.mulmoterminal.json`, and what the app ACTUALLY parsed from them — including keys it dropped in validation, which is the difference between a setting you never made and one that silently never applied. Owns the global settings that have no skill of their own — work comments on an issue (issueWorkComments), the PR clone footer (prWorkdirFooter), the closing summary (appendSystemPrompt), the decision digest (decisionDigest), the periodic dev-work log (worklogEnabled), roster row length (cockpitLines), the grid header's load read-out (showLoadAverage), a search box in the middle of the top bar (paletteSearchBox), an experimental switch for a server on another machine (remoteServer), the occasional terminal theatre (playfulEffects), confetti and when it falls (confetti), pinned collections on the toolbar (toolbarPins), a self-hosted GitLab (gitlabHosts), a project's Skill menu (skills), a project's Mulmo menu (decks), and the files a project shows on the phone (mobileFiles). When the request names another area, go straight to that skill instead — mulmoterminal-dirs (colours, grid order, project names, font size), mulmoterminal-theme (your own colour scheme), mulmoterminal-header (buttons and chips), mulmoterminal-keys (shortcuts, copy-on-select, Enter behaviour), mulmoterminal-model (other models and backends, and your own command for starting Claude Code), mulmoterminal-notify (sounds and push).
+description: The way into configuring MulmoTerminal, and the way to find out how it is configured now. Use for a broad or unsure request — "configure MulmoTerminal", "set this up", "customize this", "what can I change?", first-run setup — and route to the skill that owns the area. Also answers "how is this set up right now?", "why isn't my setting working?", "did that take effect?" by reading the live config — the global `~/.mulmoterminal/config.json`, each project's `.mulmoterminal.json`, and what the app ACTUALLY parsed from them — including keys it dropped in validation, which is the difference between a setting you never made and one that silently never applied. Owns the global settings that have no skill of their own — work comments on an issue (issueWorkComments), the PR clone footer (prWorkdirFooter), the closing summary (appendSystemPrompt), the decision digest (decisionDigest), the periodic dev-work log (worklogEnabled), roster row length (cockpitLines), the grid header's usage gauge and how often it measures Claude (usageGauge, usageProbeIntervalMinutes), the grid header's load read-out (showLoadAverage), a search box in the middle of the top bar (paletteSearchBox), an experimental switch for a server on another machine (remoteServer), the occasional terminal theatre (playfulEffects), confetti and when it falls (confetti), pinned collections on the toolbar (toolbarPins), a self-hosted GitLab (gitlabHosts), a project's Skill menu (skills), a project's Mulmo menu (decks), and the files a project shows on the phone (mobileFiles). When the request names another area, go straight to that skill instead — mulmoterminal-dirs (colours, grid order, project names, font size), mulmoterminal-theme (your own colour scheme), mulmoterminal-header (buttons and chips), mulmoterminal-keys (shortcuts, copy-on-select, Enter behaviour), mulmoterminal-model (other models and backends, and your own command for starting Claude Code), mulmoterminal-notify (sounds and push).
 ---
 
 # Configuring MulmoTerminal — start here
@@ -406,6 +406,28 @@ clamps. Defaults to 2 / 2 / 3.
 - Each is clamped to 1–20, **per field**, so one bad value cannot discard the two set correctly.
 - Raising these trades how many sessions fit on screen for reading a long one in place. It is a
   trade the user makes — do not "fix" a clamped row by raising it unasked.
+
+### `usageGauge` and `usageProbeIntervalMinutes` — the usage gauge, and how often it measures
+
+The grid header's 5h / 7d windows for Claude and Codex. Codex is read from its own files at no cost;
+Claude is measured by starting a hidden `claude` that makes one API call, and **that call counts
+against the windows it measures**. It also loads the user's hooks, CLAUDE.md, MCP servers and skills,
+so it can cost more than it looks.
+
+```json
+{ "usageGauge": true, "usageProbeIntervalMinutes": 30 }
+```
+
+- `usageGauge` — **on unless set to `false`.** Off hides the gauge and measures nothing: no Claude
+  probe and no Codex read, for the default login, accounts and rotation tokens alike. A tab opened
+  before the switch is refused by the server too. The usage page (`/usage`) then shows the last
+  readings without measuring again.
+- `usageProbeIntervalMinutes` — how old Claude's reading may get before a probe is spent on a new
+  one. Whole minutes, **default 10**, clamped to 2–60: the browser asks every two minutes, and the
+  gauge stops drawing a reading an hour old. A probe still runs only while someone has the gauge or
+  the usage page open.
+- Both are read on every refresh, so a change applies without a restart. In Settings, under **Grid
+  header read-outs**.
 
 ### `showLoadAverage` — the machine's load in the grid header
 

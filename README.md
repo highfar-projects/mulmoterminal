@@ -56,6 +56,13 @@ That is the whole install.
 
 </details>
 
+[![MulmoTerminal, the complete guide - a chaptered walkthrough on YouTube](https://img.youtube.com/vi/Ce8XvlLRpQ4/maxresdefault.jpg)](https://www.youtube.com/watch?v=Ce8XvlLRpQ4)
+
+*The complete guide, Parts 1-5 — getting started, making it your workspace, agents that hand you
+a screen, power features (seven agents at once, several subscriptions, shortcuts), and going
+further into cells that talk to each other, git worktrees and the command palette. Chaptered, so
+you can jump to the part you need.*
+
 MulmoTerminal turns [Claude Code](https://claude.com/claude-code) — and six other agent CLIs —
 into a parallel, observable workspace: many agent sessions at once in a grid, each one
 color-coded so you see at a glance which are **working**, which **need you**, and which are
@@ -969,6 +976,8 @@ The Settings modal (the gear button) persists per-user UI choices to `~/.mulmote
 | `appendSystemPrompt` | Whether a spawned Claude session is asked to end a reply with a **closing summary** — what was asked, what was achieved, what was not (see [Closing summary](#closing-summary)). **On by default**; set `false` to opt out, and a directory's `.mulmoterminal.json` outranks this. Settings → **Sessions and background tasks** has the switch. Read per spawn, so no restart is needed, though a session already running keeps what it was launched with. `true` / `false` only. |
 | `autoDirIcon` | Whether a project that sets no `icon` shows the favicon its repository already ships (`public/favicon.svg`, `apple-touch-icon.png`, a web manifest — first hit wins, ordered by how the image survives at 14px). **On by default**; Settings → **Directory appearance** has the switch. A single project opts out with `"icon": false` in its own `.mulmoterminal.json`, which this does not override. A key that was written and got it wrong shows nothing rather than falling back — a broken setting has to look broken. `true` / `false` only. |
 | `cockpitLines` | `{ summary, prompt, response }` — how many lines each **cockpit-roster** row shows before it clamps (default `2` / `2` / `3`, each clamped to `1`–`20`). Raising them trades how many sessions fit on screen for reading a long one in place. Three steppers in Settings → **Waiting rows**. |
+| `usageGauge` | Whether the grid header draws the 5h / 7d **usage gauge** for Claude and Codex. Claude is measured by a hidden `claude` making one API call, which counts against those windows. **On by default**; `false` hides the gauge and measures nothing. Settings → **Grid header read-outs** has the switch. |
+| `usageProbeIntervalMinutes` | How many minutes Claude's reading may age before the gauge measures it again. **Default `10`**, whole minutes from 2 to 60. Settings → **Grid header read-outs** has the stepper. |
 | `showLoadAverage` | Whether the grid header draws this machine's **load average** beside the 5h / 7d usage windows, as a percentage of its cores (`load 334%` = a 20-core machine with 66.8 runnable processes). **On by default**; amber at 100%, red at 200%, hover for the raw 1 / 5 / 15-minute figures. Settings → **Grid header read-outs** has the switch. A host that keeps no load average (Windows) shows nothing rather than `0%`, whatever this says. `true` / `false` only. |
 | `remoteServer` | **Experimental.** The server runs on another machine than your browser (an SSH tunnel — [guide](https://receptron.github.io/mulmoterminal/guide/en/remote.html)): the actions that would act on the server's screen (the file dialog, the file manager, the OS app) are hidden or say why, and a dropped file is always uploaded. **Off unless `true`**; Settings → **Sessions and background tasks** has the box (or set it in the server's config). |
 | `fontFamily` | The **terminal font** every session renders in — a CSS font-family stack, e.g. `"'Cica', 'MS Gothic', monospace"`. Set it in Settings → **Terminal font**, applied at once; editing the file instead needs a **restart** (this config is read once at startup). Unset uses the built-in stack (JetBrains Mono / Fira Code / Menlo / Consolas, then CJK faces for Japanese, Korean and Chinese). Unlike the per-browser font **size**, this is one value for the whole host — it names fonts, and which fonts exist is a property of the machine. A directory can override it. See the [Configuration guide](https://receptron.github.io/mulmoterminal/guide/en/config.html#font-family). |

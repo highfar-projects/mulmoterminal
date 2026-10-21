@@ -1,4 +1,11 @@
 export const settingsControlsZhCN = {
+  usageGauge: {
+    field: "显示 Claude 和 Codex 用量仪表",
+    title: "用量仪表",
+    hint: "Claude 和 Codex 套餐的 5 小时与 7 天用量窗口。Codex 从其自身文件读取；Claude 由一个隐藏的 claude 会话调用一次 API 来测量，这次调用同样计入这些窗口。关闭后仪表隐藏，不再测量任何内容。",
+    interval: "Claude 的读数旧到多久后重新测量",
+    stepper: "Claude 测量间隔",
+  },
   tmuxPrefix: {
     title: "tmux 前缀键",
     hint: '每个单元格下方的终端复用器用来等待命令的按键。MulmoTerminal 不使用它，而默认的 Ctrl+B 在 shell 和 Claude Code 中也是"向左一个字符"，因此默认关闭，所有按键都会传给智能体。只有在你自己用 tmux 连接会话时才需要修改。',

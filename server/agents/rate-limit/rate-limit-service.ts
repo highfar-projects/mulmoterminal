@@ -76,12 +76,12 @@ export function startHomeProbe(
 }
 
 /** What index.ts takes: the routes' deps, and the choice of credential for a new session (#2919). */
-export type RateLimitService = RateLimitRouteDeps & Omit<TokenRotationRuntime, "meters">;
+export type RateLimitService = Omit<RateLimitRouteDeps, "usageGauge"> & Omit<TokenRotationRuntime, "meters">;
 
 /** The accounts' meters and the rotation tokens' meters, as the one list the routes read. A probe's
  *  report key is minted by the meter that started it, so at most one of the two knows it. */
 const combinedMeters = (parts: readonly LoginRateLimits[]): LoginRateLimits => ({
-  refresh: (now_ms) => parts.forEach((part) => part.refresh(now_ms)),
+  refresh: (now_ms, staleAfter_ms) => parts.forEach((part) => part.refresh(now_ms, staleAfter_ms)),
   reportClaudeStatus: (key, status, now_ms) => parts.forEach((part) => part.reportClaudeStatus(key, status, now_ms)),
   readings: (now_ms): AccountRateLimitReading[] => parts.flatMap((part) => part.readings(now_ms)),
 });

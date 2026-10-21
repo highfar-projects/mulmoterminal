@@ -6,6 +6,7 @@ import NotificationBell from "./NotificationBell.vue";
 import RateLimitGauge from "./RateLimitGauge.vue";
 import MachineLoadGauge from "./MachineLoadGauge.vue";
 import { showLoadAverage } from "../composables/showLoadAverage";
+import { usageGauge } from "../composables/usageGauge";
 import { paletteSearchBox } from "../composables/paletteSearchBox";
 import PaletteSearchBox from "./PaletteSearchBox.vue";
 import RemoteHostControl from "./RemoteHostControl.vue";
@@ -301,7 +302,7 @@ const FEATURE_ACTIONS: Record<FeatureMenuEntry, () => void> = {
           <span class="h-2 w-2 rounded-full bg-current" />{{ statusCounts.working }}
         </span>
       </span>
-      <RateLimitGauge v-if="onGridRoute" />
+      <RateLimitGauge v-if="onGridRoute && usageGauge" />
       <MachineLoadGauge v-if="onGridRoute && showLoadAverage" />
     </nav>
     <!-- The free middle of the bar, and the only part of it that gives way: at a narrow width the
