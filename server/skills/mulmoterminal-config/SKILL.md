@@ -415,8 +415,7 @@ against the windows it measures**. It also loads the user's hooks, CLAUDE.md, MC
 so it can cost more than it looks.
 
 ```json
-{ "usageGauge": false }
-{ "usageProbeIntervalMinutes": 30 }
+{ "usageGauge": true, "usageProbeIntervalMinutes": 30 }
 ```
 
 - `usageGauge` — **on unless set to `false`.** Off hides the gauge and measures nothing: no Claude
