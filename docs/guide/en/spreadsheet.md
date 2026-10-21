@@ -61,6 +61,32 @@ If a chart cannot be drawn, the agent is told why and fixes it before anything i
 
 ![The chart card: monthly coffee and pastry sales as lines, with the monthly total as bars](../images/spreadsheet-chart.png)
 
+**What it looks like.** These cards were drawn from one spreadsheet of made-up store sales, after
+requests like these:
+
+> Show sales by prefecture on a map of Japan, and by region.
+>
+> How does advertising spend relate to sales? Draw the fitted line, and show how the satisfaction
+> scores are spread.
+>
+> Which stores are alike? Box each store's weekly sales, make a word cloud of the words in the reviews,
+> and a funnel from visit to purchase.
+
+![Four chart cards side by side: a map of Japan coloured by sales, sales by region as bars, advertising spend against sales with a fitted line, and a histogram of satisfaction scores](../images/spreadsheet-charts-gallery-1.png)
+
+![Four more cards: stores grouped into two clusters by visitors and sales, a box per store of its weekly sales with one outlier, a word cloud of review words, and a funnel from visit to purchase](../images/spreadsheet-charts-gallery-2.png)
+
+The Canvas was enlarged with the button at its top right, which is what puts the cards two to a row.
+**From the spreadsheet:** under a title names the range a card is drawn from; edit the sheet and the
+card is drawn again. The map here was drawn from values the agent wrote into the chart: a map drawn
+from a sheet range does not colour its regions by value yet.
+
+The totals behind those cards are formulas that answer a table: `=GROUPBY(Data!B2:B41, Data!E2:E41, SUM, 0, 0)`
+fills one row per prefecture, `LINEST` puts the slope and intercept of the fit beside them, and `T.TEST`
+compares the east with the west (see [Functions you can use](#functions-you-can-use)).
+
+![The Summary tab: sales per prefecture and per region, each filled in by one GROUPBY formula, with the fit's slope and intercept and a t-test p value beside them](../images/spreadsheet-spill-summary.png)
+
 **A chart can follow the spreadsheet.** When the agent draws a chart from a range of the sheet, the
 chart shows that range calculated, and draws itself again when the sheet is saved: change a number and
 the chart moves with it. The card says which range it comes from ("From the spreadsheet: Summary!A1:C13").
