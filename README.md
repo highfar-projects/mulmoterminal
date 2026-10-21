@@ -807,7 +807,7 @@ the `claude` / `codex` sessions themselves.
 | `MULMOTERMINAL_HOME` | `~/.mulmoterminal` | Root for managed **git worktrees**. |
 | `CLAUDE_CONFIG_DIR` | `~/.claude` | Claude Code's own config directory. MulmoTerminal reads Claude's transcripts (`projects/`), prompt history (`history.jsonl`) and user skills (`skills/`) from it, and `.claude.json` from **inside** it (unset: `~/.claude.json`), which is how the per-project GUI MCP registration is checked (`server/session/project-dir.ts`). Set it in the environment MulmoTerminal starts from, so it matches the one Claude runs under. |
 | `MULMOCLAUDE_WORKSPACE_PATH` | `~/mulmoclaude` | Where the managed MulmoClaude workspace lives. MulmoTerminal seeds presets/helps **only** into this directory, so launching in an arbitrary project never writes them there (`server/backends/workspaceSetup.ts`), and it is what decides where MulmoTerminal's own runtime state goes — see the note under the table. Set it to the same value MulmoClaude uses. |
-| `MULMOTERMINAL_NO_SKILL_INSTALL` | unset | Set to any value to skip installing the bundled skills (`mulmoterminal-config` and the `-dirs` / `-theme` / `-header` / `-keys` / `-model` / `-notify` / `-bug-report` / `-decisions` / `-help` family) into Claude's skills root (`~/.claude/skills/`, and `$CLAUDE_CONFIG_DIR/skills/` as well when that is set) and the Codex skills root on startup. |
+| `MULMOTERMINAL_NO_SKILL_INSTALL` | unset | Set to any value to skip installing the bundled skills (`mulmoterminal-config` and the `-dirs` / `-theme` / `-header` / `-keys` / `-model` / `-notify` / `-bug-report` / `-decisions` / `-help` / `-shared-app` / `-data-analysis` / `-video-edit` family) into Claude's skills root (`~/.claude/skills/`, and `$CLAUDE_CONFIG_DIR/skills/` as well when that is set) and the Codex skills root on startup. |
 | `GEMINI_IMAGE_MODEL` | `gemini-3.1-flash-image-preview` | Model used for image generation (needs `GEMINI_API_KEY`). The default is a **preview** model Google schedules for retirement around mid-2026, so pin a stable one here (e.g. `gemini-2.5-flash-image`) rather than waiting for a code change. |
 | `WAIT_REAP_GRACE_MS` | `1800000` | How long a **waiting** background session is kept before it's auto-reaped (`0` or negative = never). |
 
@@ -2544,7 +2544,8 @@ server/
   backends/       wiki, collections, feeds, accounting, notifier,
                   translation, whisper, remote-host, html, files
   skills/         bundled skills: mulmoterminal-config (entry point + audit), -dirs, -theme,
-                  -header, -keys, -model, -notify, -bug-report, -decisions, -help
+                  -header, -keys, -model, -notify, -bug-report, -decisions, -help,
+                  -shared-app, -data-analysis, -video-edit
   fix-pty-perms.js              postinstall: fixes node-pty binary permissions
 src/
   App.vue                       Layout; owns the grid, the overlays and the tab favicon

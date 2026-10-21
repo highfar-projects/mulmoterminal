@@ -24,6 +24,7 @@ unless they ask.
   ls "${CLAUDE_CWD:-$HOME/mulmoclaude}/models"/ggml-*.bin
   ```
 
+  Use the file you find (prefer `ggml-large-v3-turbo.bin` when there are several) as `$model` below.
   If there is none, ask before downloading one, and say how big it is: `ggml-large-v3-turbo.bin`
   (about 1.6 GB, the most accurate) or `ggml-small.bin` (about 490 MB, faster, less accurate).
   Then put it in that folder, so voice input finds it too:
@@ -32,6 +33,8 @@ unless they ask.
   models="${CLAUDE_CWD:-$HOME/mulmoclaude}/models" && mkdir -p "$models" &&
   curl -L -o "$models/ggml-large-v3-turbo.bin" https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin
   ```
+
+  (`ggml-small.bin` the same way.) Then `$model` is the file you downloaded.
 
 - `showInPane`, to open the result beside the terminal. In a project directory it exists only when
   **Canvas** was switched on before the session started. Without it, give the user the file's path.
@@ -129,7 +132,7 @@ Ask before cropping: it cuts off the sides.
    not know:
 
    ```sh
-   whisper-cli -m "$models/ggml-large-v3-turbo.bin" -l ja -f "$work/audio.wav" -osrt -of "$work/raw"
+   whisper-cli -m "$model" -l ja -f "$work/audio.wav" -osrt -of "$work/raw"
    ```
 
    This writes `$work/raw.srt`.
