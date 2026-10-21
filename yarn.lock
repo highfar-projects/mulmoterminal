@@ -349,10 +349,10 @@
     "@codemirror/view" "^6.42.0"
     crelt "^1.0.5"
 
-"@codemirror/merge@^6.12.2":
-  version "6.12.2"
-  resolved "https://registry.yarnpkg.com/@codemirror/merge/-/merge-6.12.2.tgz#00870b0451b555189e6dd91317d1ff218f28b414"
-  integrity sha512-V8JvyAPjHbPupqP7BeMcsdsYCbyPij74jxIbaIJDORI+VZzW44zFmon8bF+oxGWvOKhcRmkiUMXd8MxHr3YA2w==
+"@codemirror/merge@^6.12.3":
+  version "6.12.3"
+  resolved "https://registry.yarnpkg.com/@codemirror/merge/-/merge-6.12.3.tgz#09ad9a6f24813dca7d580f0c315323be39358dd6"
+  integrity sha512-Wq9wXrp41cW/nIpi1CQPyNwD+36kg8KIX676ym0Hyfn3Dpr+XQHNAIsZYVNlaivuVB4SAASbreG3V0VXinbqZA==
   dependencies:
     "@codemirror/language" "^6.0.0"
     "@codemirror/state" "^6.0.0"
@@ -1302,10 +1302,10 @@
     three-bvh-csg "^0.0.18"
     three-mesh-bvh "0.9.15"
 
-"@gui-chat-plugin/spreadsheet@^4.2.5":
-  version "4.2.5"
-  resolved "https://registry.yarnpkg.com/@gui-chat-plugin/spreadsheet/-/spreadsheet-4.2.5.tgz#a7bab21c0456e49b372039dbdd78ab5f0c1a940b"
-  integrity sha512-yIt0/mawA8P7JJ6H9B0BCPINsu8qWb/rPXued6c+ZQRlFKvCHuQjQL8YZ/cr4KpJvpuZMJ0pbTOA+TbaQUAl7w==
+"@gui-chat-plugin/spreadsheet@^5.0.0":
+  version "5.0.0"
+  resolved "https://registry.yarnpkg.com/@gui-chat-plugin/spreadsheet/-/spreadsheet-5.0.0.tgz#ce6b1ee68ea575ca7212548474e626cb8fbbe7cf"
+  integrity sha512-nZc0OCKpeMujTZ6PoOshsY9nZwqRLwTCVMrmYt6IN4y+XlQuOJVu1amVxo+qsur1mkA0LkwKaGON9kNLr7TkSQ==
   dependencies:
     "@jitl/quickjs-singlefile-mjs-release-sync" "^0.32.0"
     quickjs-emscripten-core "^0.32.0"
