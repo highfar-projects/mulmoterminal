@@ -707,7 +707,14 @@ describe("tmuxConfLinesFor", () => {
     expect(lines.some((l) => /terminal-(features|overrides)/.test(l))).toBe(false);
     expect(lines).toContain("set -g status off");
     expect(lines).toContain("set -g mouse on");
-    expect(lines).toHaveLength(TMUX_CONF_LINES.length - 2);
+    expect(lines.filter((l) => TMUX_CONF_LINES.includes(l))).toHaveLength(TMUX_CONF_LINES.length - 2);
+  });
+
+  // Every `new-session` passes `-e`, which skips psmux's warm pool, so its spare shells are never
+  // claimed — they only cost memory, and are restarted on every client resize.
+  it("turns psmux's warm pool off, and asks a real tmux for no such option", () => {
+    expect(tmuxConfLinesFor(true)).toContain("set -g warm off");
+    expect(tmuxConfLinesFor(false).some((l) => /\bwarm\b/.test(l))).toBe(false);
   });
 });
 

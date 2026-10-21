@@ -154,11 +154,21 @@ export const TMUX_CONF_LINES: readonly string[] = [
   ...WHEEL_SCROLL_BINDINGS,
 ];
 
+// Fork-only: psmux's warm pool keeps three spare shells per session server, and a `__warm__`
+// standby server besides, so the next `new-session` starts instantly. We never claim one: a spawn
+// with `-e` skips the pool, and every cell's `new-session` carries `-e` (MULMOTERMINAL_SESSION_ID
+// at least). Every client resize also kills the spares and starts three more at the new size
+// (measured on psmux 3.4.0 with PSMUX_WARM_TRACE). Five cells held 18 spare pwsh, about 1.9 GB,
+// and each refill cost 1.5-5 s of CPU per shell. Off, there are no spares and no `__warm__` server.
+// The option exists from psmux 3.3.4; real tmux has no such option and would reject it.
+const PSMUX_CONF_LINES = ["set -g warm off"] as const;
+
 /** The conf a given tmux is handed. psmux rejects `terminal-features` and prints the rejection as
  *  a "config warning" into the first pane a new server opens — and it needs neither declaration,
  *  since it forwards OSC 8 and OSC 52 on its own (see applyLiveTmuxOptions). */
 export function tmuxConfLinesFor(psmux: boolean): readonly string[] {
-  return psmux ? TMUX_CONF_LINES.filter((line) => !/terminal-(features|overrides)/.test(line)) : TMUX_CONF_LINES;
+  if (!psmux) return TMUX_CONF_LINES;
+  return [...TMUX_CONF_LINES.filter((line) => !/terminal-(features|overrides)/.test(line)), ...PSMUX_CONF_LINES];
 }
 
 export type MsOverridePlan = { kind: "ok" } | { kind: "append" } | { kind: "replace"; index: number };
