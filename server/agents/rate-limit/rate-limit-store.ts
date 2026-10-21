@@ -20,9 +20,13 @@ export interface AgentRateLimits {
 
 export type RateLimitSnapshot = Partial<Record<RateLimitAgent, AgentRateLimits>>;
 
-// How old a reading may be before asking is worth another query. The 5h window moves over hours,
-// so a minute of lag costs the reader nothing while a tighter loop would spend real budget.
+// How old a reading may be before asking is worth another query, unless the config sets its own
+// (`usageProbeIntervalMinutes`, #3153). The 5h window moves over hours, so a minute of lag costs the
+// reader nothing while a tighter loop would spend real budget.
 export const RATE_LIMIT_STALE_MS = 10 * 60_000;
+// How recently a browser must have asked for a probe to run at all. Not the interval above: this
+// one is about someone looking, and stays put whatever the reading's age is allowed to reach.
+export const ASKED_RECENTLY_MS = 10 * 60_000;
 
 // How old a reading may be and still be DRAWN. A different question from the one above — that one
 // decides when to spend a query, this one decides whether the number is still a fact — and the gap
@@ -99,6 +103,8 @@ export interface ProbeGate {
    *  and the staleness test alone re-fired it forever (#1011). */
   lastProbeAt_ms: number | null;
   state: ProbeState;
+  /** How old the reading may be before a probe is spent on it. */
+  staleAfter_ms: number;
 }
 
 export function shouldProbe(now_ms: number, gate: ProbeGate): boolean {
@@ -106,10 +112,10 @@ export function shouldProbe(now_ms: number, gate: ProbeGate): boolean {
   // Nothing to gain from spawning: the binary is not there. Cleared the moment one appears,
   // because the check that sets this runs before every probe and costs a PATH lookup.
   if (gate.state.kind === "no-claude") return false;
-  if (gate.lastAskedAt_ms === null || now_ms - gate.lastAskedAt_ms > RATE_LIMIT_STALE_MS) return false;
+  if (gate.lastAskedAt_ms === null || now_ms - gate.lastAskedAt_ms > ASKED_RECENTLY_MS) return false;
   const delay = retryDelayFor(gate.state);
   if (delay > 0 && gate.lastProbeAt_ms !== null && now_ms - gate.lastProbeAt_ms < delay) return false;
-  return gate.reportedAt_ms === null || now_ms - gate.reportedAt_ms > RATE_LIMIT_STALE_MS;
+  return gate.reportedAt_ms === null || now_ms - gate.reportedAt_ms > gate.staleAfter_ms;
 }
 
 /** What one Claude status line proves about the probe, or null when it proves nothing.
@@ -214,8 +220,9 @@ export function createRateLimitStore(initial: RateLimitSnapshot = {}, onChange: 
     noteAsked(now_ms: number): void {
       lastAskedAt_ms = now_ms;
     },
-    wantsProbe(now_ms: number): boolean {
+    wantsProbe(now_ms: number, staleAfter_ms: number = RATE_LIMIT_STALE_MS): boolean {
       return shouldProbe(now_ms, {
+        staleAfter_ms,
         reportedAt_ms: byAgent.claude?.reportedAt_ms ?? null,
         lastAskedAt_ms,
         probeInFlight,

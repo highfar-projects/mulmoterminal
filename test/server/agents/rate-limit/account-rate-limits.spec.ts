@@ -8,7 +8,7 @@ import type { AgentAccount } from "../../../../common/agentAccounts.js";
 import { isRecord } from "../../../../common/isRecord.js";
 import type { RateLimits } from "../../../../common/rateLimits.js";
 import { createAccountRateLimits, type AccountRateLimitDeps } from "../../../../server/agents/rate-limit/account-rate-limits.js";
-import { CLAUDE_READING_MAX_AGE_MS, createRateLimitStore } from "../../../../server/agents/rate-limit/rate-limit-store.js";
+import { CLAUDE_READING_MAX_AGE_MS, RATE_LIMIT_STALE_MS, createRateLimitStore } from "../../../../server/agents/rate-limit/rate-limit-store.js";
 import { mountRateLimitRoutes } from "../../../../server/agents/rate-limit/rate-limit-routes.js";
 import { rateLimitCacheFile } from "../../../../server/agents/rate-limit/rate-limit-persist.js";
 import { statusLineCommand } from "../../../../server/agents/statusline.js";
@@ -50,20 +50,20 @@ const meters = (accounts: AgentAccount[], over: Partial<AccountRateLimitDeps> = 
 describe("createAccountRateLimits (#2215)", () => {
   it("reports nothing with no accounts — the route's body is then unchanged", () => {
     const m = meters([]);
-    m.refresh(NOW);
+    m.refresh(NOW, RATE_LIMIT_STALE_MS);
     expect(m.readings(NOW)).toEqual([]);
   });
 
   it("reads a codex account from ITS home's rollouts", () => {
     const m = meters([CW]);
-    m.refresh(NOW);
+    m.refresh(NOW, RATE_LIMIT_STALE_MS);
     expect(codexHomesRead).toEqual(["/h/codex-work"]);
     expect(m.readings(NOW)).toMatchObject([{ id: "cw", agent: "codex", limits: LIMITS }]);
   });
 
   it("probes a claude account under its home, and files its report under it", () => {
     const m = meters([WORK]);
-    m.refresh(NOW);
+    m.refresh(NOW, RATE_LIMIT_STALE_MS);
     expect(probes.map((p) => p.home)).toEqual(["/h/claude-work"]);
     expect(probes[0]?.key).toMatch(/^[0-9a-f]{16}$/);
     expect(m.readings(NOW)).toMatchObject([{ id: "work", probing: true, limits: null }]);
@@ -74,7 +74,7 @@ describe("createAccountRateLimits (#2215)", () => {
   it("follows the LOGIN, not the id: an id moved to another home does not keep the old reading", () => {
     let accounts = [WORK];
     const m = meters([], { accounts: () => accounts });
-    m.refresh(NOW);
+    m.refresh(NOW, RATE_LIMIT_STALE_MS);
     m.reportClaudeStatus(probes[0]?.key ?? "", { limits: LIMITS, afterApiResponse: true }, NOW);
     expect(m.readings(NOW)[0]?.limits).toEqual(LIMITS);
     accounts = [{ ...WORK, home: "/h/claude-other" }];
@@ -85,7 +85,7 @@ describe("createAccountRateLimits (#2215)", () => {
   it("files a probe's report under the login it probed, even after its id is repointed", () => {
     let accounts = [WORK];
     const m = meters([], { accounts: () => accounts });
-    m.refresh(NOW);
+    m.refresh(NOW, RATE_LIMIT_STALE_MS);
     accounts = [{ ...WORK, home: "/h/claude-other" }];
     m.reportClaudeStatus(probes[0]?.key ?? "", { limits: LIMITS, afterApiResponse: true }, NOW);
     expect(m.readings(NOW)[0]?.limits).toBeNull();
@@ -97,7 +97,7 @@ describe("createAccountRateLimits (#2215)", () => {
     const m = meters([WORK, CW]);
     m.reportClaudeStatus("work", { limits: LIMITS, afterApiResponse: true }, NOW);
     m.reportClaudeStatus("0123456789abcdef", { limits: LIMITS, afterApiResponse: true }, NOW);
-    m.refresh(NOW);
+    m.refresh(NOW, RATE_LIMIT_STALE_MS);
     const key = probes[0]?.key ?? "";
     probes[0]?.settle("unknown");
     m.reportClaudeStatus(key, { limits: LIMITS, afterApiResponse: true }, NOW);
@@ -107,7 +107,7 @@ describe("createAccountRateLimits (#2215)", () => {
   // On the real clock: a settled probe is stamped with Date.now(), as in production.
   it("sends a claude login's last windows only once they are too old to vouch for", () => {
     const m = meters([WORK]);
-    m.refresh(NOW);
+    m.refresh(NOW, RATE_LIMIT_STALE_MS);
     m.reportClaudeStatus(probes[0]?.key ?? "", { limits: LIMITS, afterApiResponse: true }, NOW);
     expect(m.readings(NOW)[0]).not.toHaveProperty("lastLimits");
     const later = NOW + CLAUDE_READING_MAX_AGE_MS + 1;
@@ -117,10 +117,10 @@ describe("createAccountRateLimits (#2215)", () => {
   it("counts a probe that never answered as a failure, and backs off", () => {
     const m = meters([WORK]);
     const start = Date.now();
-    m.refresh(start);
+    m.refresh(start, RATE_LIMIT_STALE_MS);
     probes[0]?.settle("trust-prompt");
     expect(m.readings(start)).toMatchObject([{ probing: false, probe: "no-report", probeStall: "trust-prompt" }]);
-    m.refresh(start + 1_000);
+    m.refresh(start + 1_000, RATE_LIMIT_STALE_MS);
     expect(probes).toHaveLength(1);
   });
 
@@ -148,27 +148,34 @@ describe("createAccountRateLimits (#2215)", () => {
       },
     });
     const start = Date.now();
-    m.refresh(start);
+    m.refresh(start, RATE_LIMIT_STALE_MS);
     expect(m.readings(start)).toMatchObject([{ probing: false, probe: "no-report" }]);
-    m.refresh(start + 1_000);
+    m.refresh(start + 1_000, RATE_LIMIT_STALE_MS);
     expect(attempts).toBe(1);
   });
 });
 
 describe("the route and an account's probe", () => {
-  const app = (accounts: ReturnType<typeof meters> | undefined) => {
+  const ON = { enabled: true, probeIntervalMinutes: 10 };
+  const app = (accounts: ReturnType<typeof meters> | undefined, usageGauge = ON, now_ms = NOW) => {
+    const calls = { codex: 0, probe: 0 };
     const store = createRateLimitStore();
     const server = express();
     server.use(express.json());
     mountRateLimitRoutes(server, {
       store,
-      refreshCodex: () => {},
-      startProbe: () => {},
-      claudeAvailable: () => false,
-      now_ms: () => NOW,
+      refreshCodex: () => {
+        calls.codex++;
+      },
+      startProbe: () => {
+        calls.probe++;
+      },
+      claudeAvailable: () => true,
+      now_ms: () => now_ms,
+      usageGauge: () => usageGauge,
       ...(accounts ? { accounts } : {}),
     });
-    return { server, store };
+    return { server, store, calls };
   };
   const post = async (server: express.Express, url: string) => {
     const listener = server.listen(0);
@@ -188,7 +195,7 @@ describe("the route and an account's probe", () => {
   it("files an account's statusLine under the account and leaves the default store alone", async () => {
     const m = meters([WORK]);
     const { server, store } = app(m);
-    m.refresh(NOW);
+    m.refresh(NOW, RATE_LIMIT_STALE_MS);
     await post(server, `/api/rate-limits?probe=${probes[0]?.key ?? ""}`);
     expect(m.readings(NOW)[0]?.limits).not.toBeNull();
     expect(store.snapshot().claude).toBeUndefined();
@@ -207,6 +214,36 @@ describe("the route and an account's probe", () => {
     };
     expect(Object.keys(await body([]))).not.toContain("accounts");
     expect((await body([CW])).accounts).toMatchObject([{ id: "cw", label: "Codex work", agent: "codex" }]);
+  });
+
+  // Switched off (#3153): a tab that still polls must not be what keeps spending the budget.
+  it("measures nothing while the gauge is switched off, and still answers", async () => {
+    const m = meters([WORK]);
+    const { server, calls } = app(m, { enabled: false, probeIntervalMinutes: 10 });
+    const res = await post(server, "/api/rate-limits/refresh");
+    expect(res.ok).toBe(true);
+    expect(calls).toEqual({ codex: 0, probe: 0 });
+    expect(probes).toEqual([]);
+  });
+
+  it("probes the default login and an account when the gauge is on and nothing is held", async () => {
+    const { server, calls } = app(meters([WORK]));
+    await post(server, "/api/rate-limits/refresh");
+    expect(calls).toEqual({ codex: 1, probe: 1 });
+    expect(probes.map((probe) => probe.home)).toEqual([WORK.home]);
+  });
+
+  // The interval reaches the accounts' meters too, not only the default login's store.
+  it("lets an account's reading age to the configured interval before probing it again", async () => {
+    const m = meters([WORK]);
+    m.refresh(NOW, RATE_LIMIT_STALE_MS);
+    m.reportClaudeStatus(probes[0]?.key ?? "", { limits: LIMITS, afterApiResponse: true }, NOW);
+    probes[0]?.settle("unknown");
+    const twentyMinutesLater = NOW + 20 * 60_000;
+    await post(app(m, { enabled: true, probeIntervalMinutes: 30 }, twentyMinutesLater).server, "/api/rate-limits/refresh");
+    expect(probes).toHaveLength(1);
+    await post(app(m, { enabled: true, probeIntervalMinutes: 5 }, twentyMinutesLater).server, "/api/rate-limits/refresh");
+    expect(probes).toHaveLength(2);
   });
 
   it("points the probe's statusLine at its key, and the default's at nothing new", () => {

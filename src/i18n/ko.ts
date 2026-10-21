@@ -412,7 +412,7 @@ export const ko: Messages = {
     },
 
     gridHeader: {
-      intro: "그리드 위의 막대가 한눈에 무엇을 알려 주는지. 이미 달고 있는 Claude와 Codex 사용량 창 옆입니다.",
+      intro: "그리드 위의 막대가 한눈에 무엇을 알려 주는지.",
       loadAverage: "이 기기의 load average 표시",
       loadAverageTitle: "Load average",
       loadAverageHint:

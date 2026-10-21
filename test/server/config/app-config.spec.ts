@@ -429,6 +429,8 @@ describe("loadAppConfig / saveAppConfig", () => {
     appendSystemPrompt: true,
     autoDirIcon: true,
     showLoadAverage: true,
+    usageGauge: true,
+    usageProbeIntervalMinutes: 10,
     paletteSearchBox: false,
     remoteServer: false,
     playfulEffects: PLAYFUL_EFFECTS_DEFAULT,
@@ -486,6 +488,8 @@ describe("loadAppConfig / saveAppConfig", () => {
       appendSystemPrompt: false, // same opt-out shape: defaults ON, so only `false` proves it persisted
       autoDirIcon: false, // same again (#1428): defaults ON, so only `false` proves it persisted
       showLoadAverage: false, // the same opt-out shape (#1786): only `false` proves it persisted
+      usageGauge: false, // the same opt-out shape (#3153)
+      usageProbeIntervalMinutes: 30, // not the default, so a dropped key would show
       paletteSearchBox: true, // opt-in (#2569): only `true` proves it persisted
       remoteServer: true, // experimental opt-in (#2669): only `true` proves it persisted
       playfulEffects: "off" as const, // defaults on, so only the opt-out proves it persisted
@@ -573,6 +577,8 @@ describe("loadAppConfig / saveAppConfig", () => {
       appendSystemPrompt: true, // absent from the file — every config predating #1062 stays enabled
       autoDirIcon: true, // same: a config predating #1428 picks up the repo's own favicon
       showLoadAverage: true, // same: a config predating #1786 gets the load read-out
+      usageGauge: true, // a config predating #3153 keeps the gauge
+      usageProbeIntervalMinutes: 10,
       paletteSearchBox: false,
       remoteServer: false,
       playfulEffects: PLAYFUL_EFFECTS_DEFAULT, // same: absent means on
@@ -703,6 +709,8 @@ describe("#741 corrupt config is not silently wiped by a partial update", () => 
     appendSystemPrompt: true,
     autoDirIcon: true,
     showLoadAverage: true,
+    usageGauge: true,
+    usageProbeIntervalMinutes: 10,
     paletteSearchBox: false,
     remoteServer: false,
     playfulEffects: PLAYFUL_EFFECTS_DEFAULT,
@@ -800,6 +808,8 @@ describe("mergeConfigUpdate", () => {
     appendSystemPrompt: true,
     autoDirIcon: true,
     showLoadAverage: true,
+    usageGauge: true,
+    usageProbeIntervalMinutes: 10,
     paletteSearchBox: false,
     remoteServer: false,
     playfulEffects: PLAYFUL_EFFECTS_DEFAULT,

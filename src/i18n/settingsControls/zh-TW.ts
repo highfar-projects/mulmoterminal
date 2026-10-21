@@ -1,4 +1,11 @@
 export const settingsControlsZhTW = {
+  usageGauge: {
+    field: "顯示 Claude 與 Codex 用量儀表",
+    title: "用量儀表",
+    hint: "Claude 與 Codex 方案的 5 小時與 7 天用量視窗。Codex 從其自身檔案讀取；Claude 由一個隱藏的 claude 工作階段呼叫一次 API 來測量，這次呼叫同樣計入這些視窗。關閉後儀表隱藏，不再測量任何內容。",
+    interval: "Claude 的讀數舊到多久後重新測量",
+    stepper: "Claude 測量間隔",
+  },
   tmuxPrefix: {
     title: "tmux 前綴鍵",
     hint: "每個儲存格下方的終端多工器用來等待命令的按鍵。MulmoTerminal 不使用它，而預設的 Ctrl+B 在 shell 與 Claude Code 中也是「向左一個字元」，因此預設關閉，所有按鍵都會傳給代理程式。只有在你自己用 tmux 連線工作階段時才需要修改。",

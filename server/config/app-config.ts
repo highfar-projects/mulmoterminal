@@ -6,6 +6,7 @@ import { existsSync, copyFileSync } from "node:fs";
 import path from "node:path";
 import { isRecord } from "../../common/isRecord.js";
 import { SHOW_LOAD_AVERAGE_DEFAULT, sanitizeShowLoadAverage } from "../../common/showLoadAverage.js";
+import { DEFAULT_USAGE_PROBE_INTERVAL_MINUTES, USAGE_GAUGE_DEFAULT, sanitizeUsageGauge, sanitizeUsageProbeIntervalMinutes } from "../../common/usageGauge.js";
 import { PALETTE_SEARCH_BOX_DEFAULT, sanitizePaletteSearchBox } from "../../common/paletteSearchBox.js";
 import { REMOTE_SERVER_DEFAULT, sanitizeRemoteServer } from "../../common/remoteServer.js";
 import { CONFETTI_DEFAULT, sanitizeConfetti, type Confetti } from "../../common/confetti.js";
@@ -165,6 +166,11 @@ export interface AppConfig {
   // question the grid screen poses and could not answer. A host that keeps no load average
   // (Windows) draws nothing whatever this says.
   showLoadAverage: boolean;
+  // The 5h / 7d usage gauge, and how often its hidden Claude probe may run (#3153). The probe spends
+  // the budget it measures, so a user who never reads the gauge can switch it off, and one who reads
+  // it now and then can measure less often. See common/usageGauge.ts.
+  usageGauge: boolean;
+  usageProbeIntervalMinutes: number;
   // A search box in the middle of the top bar that opens the command palette (#2569). Off by default.
   paletteSearchBox: boolean;
   // Experimental: the browser is on another machine (an SSH tunnel), so actions that act on this
@@ -586,6 +592,8 @@ export const emptyConfig = (): AppConfig => ({
   appendSystemPrompt: true,
   autoDirIcon: true,
   showLoadAverage: SHOW_LOAD_AVERAGE_DEFAULT,
+  usageGauge: USAGE_GAUGE_DEFAULT,
+  usageProbeIntervalMinutes: DEFAULT_USAGE_PROBE_INTERVAL_MINUTES,
   paletteSearchBox: PALETTE_SEARCH_BOX_DEFAULT,
   remoteServer: REMOTE_SERVER_DEFAULT,
   playfulEffects: PLAYFUL_EFFECTS_DEFAULT,
@@ -697,6 +705,8 @@ function sanitizeAppConfig(raw: unknown): AppConfig {
     appendSystemPrompt: sanitizeAppendSystemPrompt(o.appendSystemPrompt),
     autoDirIcon: sanitizeAutoDirIcon(o.autoDirIcon),
     showLoadAverage: sanitizeShowLoadAverage(o.showLoadAverage),
+    usageGauge: sanitizeUsageGauge(o.usageGauge),
+    usageProbeIntervalMinutes: sanitizeUsageProbeIntervalMinutes(o.usageProbeIntervalMinutes),
     paletteSearchBox: sanitizePaletteSearchBox(o.paletteSearchBox),
     remoteServer: sanitizeRemoteServer(o.remoteServer),
     playfulEffects: sanitizePlayfulEffects(o.playfulEffects),
@@ -832,6 +842,8 @@ export function mergeConfigUpdate(base: AppConfig, body: Record<string, unknown>
     appendSystemPrompt: updated("appendSystemPrompt", sanitizeAppendSystemPrompt, base.appendSystemPrompt),
     autoDirIcon: updated("autoDirIcon", sanitizeAutoDirIcon, base.autoDirIcon),
     showLoadAverage: updated("showLoadAverage", sanitizeShowLoadAverage, base.showLoadAverage),
+    usageGauge: updated("usageGauge", sanitizeUsageGauge, base.usageGauge),
+    usageProbeIntervalMinutes: updated("usageProbeIntervalMinutes", sanitizeUsageProbeIntervalMinutes, base.usageProbeIntervalMinutes),
     paletteSearchBox: updated("paletteSearchBox", sanitizePaletteSearchBox, base.paletteSearchBox),
     remoteServer: updated("remoteServer", sanitizeRemoteServer, base.remoteServer),
     playfulEffects: updated("playfulEffects", sanitizePlayfulEffects, base.playfulEffects),
@@ -888,6 +900,8 @@ export function toPublicAppConfig(config: AppConfig): AppConfig {
     appendSystemPrompt: config.appendSystemPrompt,
     autoDirIcon: config.autoDirIcon,
     showLoadAverage: config.showLoadAverage,
+    usageGauge: config.usageGauge,
+    usageProbeIntervalMinutes: config.usageProbeIntervalMinutes,
     paletteSearchBox: config.paletteSearchBox,
     remoteServer: config.remoteServer,
     playfulEffects: config.playfulEffects,
