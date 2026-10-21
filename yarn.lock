@@ -1960,10 +1960,10 @@
   resolved "https://registry.yarnpkg.com/@mulmoclaude/accounting-plugin/-/accounting-plugin-4.0.2.tgz#5631f35c4bcff34c86e3eff7831f2a0d21ec39d5"
   integrity sha512-We3HhS2OfYDfPwT9DbX4NSw2m+UYFcYHb6KfKZp4yQwgh7tYaTo1H8z7AMNVnfPOJn6ABv/O9VjSnLXeQ+xTlw==
 
-"@mulmoclaude/chart-plugin@^4.4.0":
-  version "4.4.0"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/chart-plugin/-/chart-plugin-4.4.0.tgz#f0ccdd1f48d271d0b7bcc01dc51bf5a745ba0a64"
-  integrity sha512-k9auXA55BQMvVM7iAi0eoPJhsDngPSDCAcnAyz/jTpGiXrJzfGAOOWAtkUox5gacJaUg6IQRGUzYB/LtsxhAyw==
+"@mulmoclaude/chart-plugin@^4.4.1":
+  version "4.4.1"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/chart-plugin/-/chart-plugin-4.4.1.tgz#5347daf063eced693eacf1ccd0b26854b22f063a"
+  integrity sha512-Y5Md6vlQmCjwC4o0+X7a7G/j4lmIJo9oq/hzKnsPgkFJ/HRP7Yo9vhyCgYNWDVyfmc/vmJNxLu//Ux65mI5r4Q==
   dependencies:
     echarts-gl "^2.1.0"
     echarts-stat "^1.2.0"
