@@ -8,6 +8,22 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@11.2.0 — 2026-10-22
+
+> **Setup guide:** [11.2.0 — Formulas that answer a table](https://receptron.github.io/mulmoterminal/guide/en/v11.2.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v11.2.0.html))
+
+### Spreadsheet engine 5.0.0: formulas that answer a table (#3157)
+
+`@gui-chat-plugin/spreadsheet` goes from 4.2.5 to 5.0.0. A formula can now answer a table that spills into the cells to its right and below, as dynamic arrays do in Excel 365: `SORT`, `SORTBY`, `FILTER`, `UNIQUE`, `GROUPBY`, `PIVOTBY`, `TAKE`, `DROP`, `HSTACK`, `VSTACK`, `TRANSPOSE`, `SEQUENCE`, or a bare range such as `=Data!A1:C10`. A blocked spill shows `#SPILL!`; other formulas and charts drawn from the sheet (presentChart `source`) read the spilled cells like any others. Only the formula is saved.
+
+Also new: `LET`, `LAMBDA`, `MAP`, `BYROW`, `BYCOL`, `REDUCE`; `LINEST`, `LOGEST`, `GROWTH`, `FREQUENCY`; `FORECAST.ETS`, `EMA`, `DECOMPOSE`, `AUTOCORREL`; chi-squared, F, z, ANOVA, Mann-Whitney, Wilcoxon, Kolmogorov-Smirnov and Shapiro-Wilk tests, Spearman and Kendall correlation, and many distributions; the `.EXC` names; `SUMPRODUCT`, `MMULT`, `MINVERSE`; and `RAND`, `RANDBETWEEN`, `RANDARRAY`, which give the same numbers on every calculation so the agent and the page agree. The engine needs an ES2023 runtime (Node 22+), which MulmoTerminal already requires.
+
+The spreadsheet guide's "Functions you can use" is updated for 5.0.0 (it had also said whole-column ranges such as `A:A` were unavailable; they already worked), and the data-analysis skill no longer tells the agent that a workbook function cannot take a whole column.
+
+### Dependencies (#3157, #3158)
+
+`@codemirror/merge` 6.12.3, `@mulmoclaude/core` 5.12.1, `material-symbols` 0.48.1, `puppeteer` 25.15.0, `vite` 8.3.5, `typescript-eslint` 8.72.0, `knip` 6.42.1, and a lockfile refresh.
+
 ## mulmoterminal@11.1.0 — 2026-10-21
 
 > **Setup guide:** [11.1.0 — Folders at a glance, more charts, and a quieter usage gauge](https://receptron.github.io/mulmoterminal/guide/en/v11.1.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v11.1.0.html))
