@@ -423,7 +423,7 @@ export const en = {
     },
 
     gridHeader: {
-      intro: "What the bar above the grid tells you at a glance, beside the Claude and Codex usage windows it already carries.",
+      intro: "What the bar above the grid tells you at a glance.",
       loadAverage: "Show this machine's load average",
       loadAverageTitle: "Load average",
       loadAverageHint:

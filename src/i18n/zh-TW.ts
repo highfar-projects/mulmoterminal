@@ -407,7 +407,7 @@ export const zhTW: Messages = {
     },
 
     gridHeader: {
-      intro: "網格上方那條列一眼能告訴你什麼，就在它已經帶著的 Claude 和 Codex 用量視窗旁邊。",
+      intro: "網格上方那條列一眼能告訴你什麼。",
       loadAverage: "顯示這台機器的 load average",
       loadAverageTitle: "Load average",
       loadAverageHint:

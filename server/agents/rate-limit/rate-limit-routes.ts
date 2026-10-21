@@ -25,6 +25,9 @@ export interface RateLimitRouteDeps {
    *  poll so the "not installed" state can clear itself when one appears (#1019). */
   claudeAvailable: () => boolean;
   now_ms: () => number;
+  /** The config's `usageGauge` and `usageProbeIntervalMinutes` (#3153), asked on every refresh so a
+   *  change applies without a restart. */
+  usageGauge: () => UsageGaugeSettings;
   /** Each account's meter (#2215). Absent in the specs that predate accounts; with no accounts
    *  configured it reports nothing, and the response is exactly what it always was. */
   accounts?: LoginRateLimits;
@@ -32,6 +35,13 @@ export interface RateLimitRouteDeps {
 
 /** What the routes ask of a set of per-login meters — the accounts', and the rotation tokens' (#2919). */
 export type LoginRateLimits = Pick<AccountRateLimits, "refresh" | "reportClaudeStatus" | "readings">;
+
+export interface UsageGaugeSettings {
+  enabled: boolean;
+  probeIntervalMinutes: number;
+}
+
+const MS_PER_MINUTE = 60_000;
 
 export function mountRateLimitRoutes(app: Express, deps: RateLimitRouteDeps): void {
   // Written by the statusLine given to the probe, which pipes Claude Code's status payload here.
@@ -45,13 +55,22 @@ export function mountRateLimitRoutes(app: Express, deps: RateLimitRouteDeps): vo
   });
 
   // The browser says "I am looking at this". That permission is what lets a probe run at all.
+  //
+  // Switched off, nothing is measured: a tab opened before the switch still polls, and it must not be
+  // the thing that keeps spending the budget the user turned the gauge off to save (#3153).
   app.post("/api/rate-limits/refresh", (_req, res) => {
     const now = deps.now_ms();
+    const usageGauge = deps.usageGauge();
+    if (!usageGauge.enabled) {
+      res.json(responseBody(deps, now));
+      return;
+    }
+    const staleAfter_ms = usageGauge.probeIntervalMinutes * MS_PER_MINUTE;
     deps.store.noteAsked(now);
     deps.refreshCodex();
-    deps.accounts?.refresh(now);
+    deps.accounts?.refresh(now, staleAfter_ms);
     deps.store.setClaudeAvailable(deps.claudeAvailable());
-    if (deps.store.wantsProbe(now)) {
+    if (deps.store.wantsProbe(now, staleAfter_ms)) {
       deps.store.setProbeInFlight(true);
       // Belt and braces. `startRateLimitProbe` reports its own setup failures rather than
       // throwing, but the flag it would strand is set HERE — so this route does not get to

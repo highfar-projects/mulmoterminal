@@ -1,4 +1,11 @@
 export const settingsControlsJa = {
+  usageGauge: {
+    field: "Claude と Codex の使用量ゲージを表示する",
+    title: "使用量ゲージ",
+    hint: "Claude と Codex のプランの 5 時間・7 日の使用枠。Codex は自身のファイルから読みます。Claude は隠れた claude を起動して API を 1 回呼んで測るので、その分も同じ枠を使います。オフにするとゲージは消え、何も測りません。",
+    interval: "Claude の値をどれだけ古くなったら測り直すか",
+    stepper: "Claude を測る間隔",
+  },
   tmuxPrefix: {
     title: "tmux の prefix キー",
     hint: "各セルの下で動く端末多重化ソフトが、コマンドを待ち受けるキーです。MulmoTerminal はこれを使いません。標準の Ctrl+B はシェルや Claude Code でも「1文字左」なので、既定では無効にして、すべてのキーをエージェントへ渡します。tmux に自分で接続して使う場合だけ変えてください。",

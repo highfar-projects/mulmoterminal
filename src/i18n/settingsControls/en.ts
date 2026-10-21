@@ -1,4 +1,11 @@
 export const settingsControlsEn = {
+  usageGauge: {
+    field: "Show the Claude and Codex usage gauge",
+    title: "Usage gauge",
+    hint: "the 5h and 7d windows of your Claude and Codex plans. Codex is read from its own files; Claude is measured by a hidden claude session that makes one API call, which counts against the same windows. Off, the gauge is hidden and nothing is measured.",
+    interval: "How old Claude's reading may get before it is measured again",
+    stepper: "Claude measurement interval",
+  },
   tmuxPrefix: {
     title: "tmux prefix key",
     hint: 'the key that makes the terminal multiplexer under each cell wait for a command. MulmoTerminal never uses it, and the usual Ctrl+B is also "one character left" in the shell and in Claude Code, so it is off by default and every key reaches the agent. Change it only if you attach to the sessions yourself with tmux.',

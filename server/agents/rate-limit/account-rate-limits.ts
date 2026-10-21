@@ -139,7 +139,7 @@ export function createAccountRateLimits<T extends MeteredLogin = AgentAccount>(d
     }
   };
 
-  const refreshOne = (account: T, now_ms: number): void => {
+  const refreshOne = (account: T, now_ms: number, staleAfter_ms: number): void => {
     const meter = meterFor(account);
     meter.store.noteAsked(now_ms);
     if (account.agent === "codex") {
@@ -147,13 +147,14 @@ export function createAccountRateLimits<T extends MeteredLogin = AgentAccount>(d
       return;
     }
     meter.store.setClaudeAvailable(deps.claudeAvailable());
-    if (meter.store.wantsProbe(now_ms)) startProbe(account, meter, now_ms);
+    if (meter.store.wantsProbe(now_ms, staleAfter_ms)) startProbe(account, meter, now_ms);
   };
 
   return {
-    /** A poll: read every codex account, and probe every claude account that is due. */
-    refresh(now_ms: number): void {
-      deps.accounts().forEach((account) => refreshOne(account, now_ms));
+    /** A poll: read every codex account, and probe every claude account whose reading is older
+     *  than `staleAfter_ms`. */
+    refresh(now_ms: number, staleAfter_ms: number): void {
+      deps.accounts().forEach((account) => refreshOne(account, now_ms, staleAfter_ms));
     },
     /** One Claude status line from an account's probe, filed under the login that probe measured.
      *  A key no running probe holds is dropped: nothing else could have asked for it. */

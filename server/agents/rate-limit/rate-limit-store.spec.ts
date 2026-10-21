@@ -10,6 +10,7 @@ import {
   PROBE_RETRY_BASE_MS,
   PROBE_RETRY_MAX_MS,
   RATE_LIMIT_STALE_MS,
+  ASKED_RECENTLY_MS,
 } from "./rate-limit-store";
 import type { ProbeState } from "./rate-limit-store";
 
@@ -33,6 +34,7 @@ const gate = (over: Partial<Parameters<typeof shouldProbe>[1]> = {}) => ({
   probeInFlight: false,
   lastProbeAt_ms: null,
   state: { kind: "ok" } as ProbeState,
+  staleAfter_ms: RATE_LIMIT_STALE_MS,
   ...over,
 });
 
@@ -72,6 +74,19 @@ describe("shouldProbe", () => {
 
   it("does NOT probe while what we hold is still fresh", () => {
     expect(shouldProbe(NOW, gate({ reportedAt_ms: fresh }))).toBe(false);
+  });
+
+  // The configured interval (#3153) decides the reading's age, in both directions.
+  it("measures the reading's age against the configured interval", () => {
+    const thirtyMinutes_ms = 30 * 60_000;
+    expect(shouldProbe(NOW, gate({ reportedAt_ms: NOW - 20 * 60_000, staleAfter_ms: thirtyMinutes_ms }))).toBe(false);
+    expect(shouldProbe(NOW, gate({ reportedAt_ms: NOW - thirtyMinutes_ms - 1, staleAfter_ms: thirtyMinutes_ms }))).toBe(true);
+    expect(shouldProbe(NOW, gate({ reportedAt_ms: NOW - 3 * 60_000, staleAfter_ms: 2 * 60_000 }))).toBe(true);
+  });
+
+  // A long interval must not stretch "someone is looking": that window is about the browser.
+  it("still needs a recent ask when the interval is long", () => {
+    expect(shouldProbe(NOW, gate({ reportedAt_ms: null, lastAskedAt_ms: NOW - ASKED_RECENTLY_MS - 1, staleAfter_ms: 60 * 60_000 }))).toBe(false);
   });
 
   // A probe takes a session spawn and an API round trip. Without this, every poll during that

@@ -320,6 +320,14 @@ export function getQuestionPaneEnabled(): boolean {
   return loadAppConfig(CONFIG_FILE).questionPaneEnabled;
 }
 
+// Whether the usage gauge measures at all, and how often its Claude probe may run (#3153). Read per
+// refresh, like the switches above: the browser asks every two minutes, and a user who has just
+// switched the gauge off expects the probe to stop now rather than at the next server start.
+export function getUsageGauge(): { enabled: boolean; probeIntervalMinutes: number } {
+  const config = loadAppConfig(CONFIG_FILE);
+  return { enabled: config.usageGauge, probeIntervalMinutes: config.usageProbeIntervalMinutes };
+}
+
 /** Called after a config write that CHANGED the saved directories. Injected rather than imported,
  *  so this module stays config-shaped and does not reach into a backend: the collection watchers
  *  are the caller's concern, not the config route's. */

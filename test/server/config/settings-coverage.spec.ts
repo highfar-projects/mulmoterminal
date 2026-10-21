@@ -86,6 +86,9 @@ const REACHABLE_BY: Record<string, Reachable> = {
   headerStatusColors: { ui: true, skill: "mulmoterminal-dirs" },
   headerStatusTint: { ui: true, skill: "mulmoterminal-dirs" },
   cockpitLines: { ui: true, skill: CONFIG_SKILL },
+  // Settings → Grid header read-outs, above the load average (#3153).
+  usageGauge: { ui: true, skill: CONFIG_SKILL },
+  usageProbeIntervalMinutes: { ui: true, skill: CONFIG_SKILL },
   showLoadAverage: { ui: true, skill: CONFIG_SKILL },
   // Beside the load average in Settings → Grid header read-outs (#2569).
   paletteSearchBox: { ui: true, skill: CONFIG_SKILL },

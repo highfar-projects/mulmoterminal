@@ -1,4 +1,11 @@
 export const settingsControlsKo = {
+  usageGauge: {
+    field: "Claude와 Codex 사용량 게이지 표시",
+    title: "사용량 게이지",
+    hint: "Claude와 Codex 플랜의 5시간·7일 사용 한도. Codex는 자체 파일에서 읽고, Claude는 숨겨진 claude 세션이 API를 한 번 호출해 측정하므로 그만큼 같은 한도를 사용합니다. 끄면 게이지가 사라지고 아무것도 측정하지 않습니다.",
+    interval: "Claude 값이 얼마나 오래되면 다시 측정할지",
+    stepper: "Claude 측정 간격",
+  },
   tmuxPrefix: {
     title: "tmux prefix 키",
     hint: '각 셀 아래의 터미널 멀티플렉서가 명령을 기다리게 하는 키입니다. MulmoTerminal은 사용하지 않으며, 기본 Ctrl+B는 셸과 Claude Code에서도 "한 글자 왼쪽"이므로 기본적으로 꺼 두고 모든 키를 에이전트에 전달합니다. tmux에 직접 접속해 쓸 때만 바꾸세요.',
