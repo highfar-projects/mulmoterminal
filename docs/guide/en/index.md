@@ -8,8 +8,8 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **11.0.0 is out.** Ask a CSV, TSV or Excel file a question and get the answer with a spreadsheet and
-> charts behind it; spreadsheets read months and text correctly. [Setup guide](v11.0.0.html)
+> **11.1.0 is out.** The Files pane shows a folder as a list or a gallery, charts add maps, clusters and
+> word clouds, and the usage gauge can be switched off or measure less often. [Setup guide](v11.1.0.html)
 
 ## What is MulmoTerminal? {#what-is}
 

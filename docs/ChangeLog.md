@@ -8,6 +8,69 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@11.1.0 — 2026-10-21
+
+> **Setup guide:** [11.1.0 — Folders at a glance, more charts, and a quieter usage gauge](https://receptron.github.io/mulmoterminal/guide/en/v11.1.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v11.1.0.html))
+
+### The usage gauge can be switched off, and measures as often as you say (#3155, #3153)
+
+The 5h / 7d gauge measures Claude by starting a hidden `claude` that makes one API call, and that call counts against the windows it measures. Two global settings, both in Settings → **Grid header read-outs** and in `~/.mulmoterminal/config.json`:
+
+- `usageGauge` (on unless `false`): off hides the gauge and measures nothing. The refresh route refuses to measure too, so a tab opened before the switch cannot keep the probe running.
+- `usageProbeIntervalMinutes` (whole minutes, default 10, 2–60): how old Claude's reading may get before it is measured again, for the default login, accounts and rotation tokens alike.
+
+Both are read on every refresh, so a change applies without a restart.
+
+### A symlinked workspace no longer piles up probe conversations (#3156, #3152)
+
+Claude names a project's transcript folder after the real path of its working directory, while MulmoTerminal looked under the path as given. With a symlinked workspace (`CLAUDE_CWD` / `~/mulmoclaude`), the usage probe's transcript was never found to delete, and a `reply with the single character: .` conversation was added to `claude --resume` with every probe. The folder is now worked out from the real path (`realpathSync.native`, which also takes the case the disk spells), so the same fix reaches `--resume`, the roster and the cost views. Probe transcripts already left behind are removed at start-up when the name, the content and their age (ten minutes) all say probe.
+
+### psmux: cells survive a server restart on Windows (#3133, #3117)
+
+[psmux](https://github.com/psmux/psmux), the native Windows tmux (`winget install -e --id marlocarlo.psmux`), is detected from `tmux -V` and used like tmux. On psmux 3.4.0 or later the client gets `PSMUX_VT_INPUT=1`, so Enter after a paste and a double Esc work; terminals use Unicode 11 widths so emoji line up; Volta's recursion guard is kept off the psmux server. An older psmux is warned about at start-up, and the CLI doctor suggests psmux when tmux is missing. Real tmux behaves as before.
+
+### Files pane: a folder in the file area (#3131, #3120; #3135, #3134; #3139, #3136)
+
+- With no file open, the file area shows a folder: the pane's own at first, then the one last clicked in the tree. **List** shows folders first with sizes; **Gallery** shows pictures, videos, sounds and PDFs as tiles. **Include subfolders** reads a few levels below, each folder under its own heading. The choice of list or gallery is kept per browser.
+- Moving in the folder view opens the tree down to that folder, and the tree highlights the folder on show.
+
+### Files pane: JSON (#3141, #3137)
+
+A `.json` is offered the Canvas (MulmoScript) view only when its root has `$mulmocast`; an ordinary JSON file no longer opens there as "not a valid MulmoScript". `.json` gets a Preview of its own, indented in the app's colours.
+
+### The side-by-side view survives a trip to another cell (#3132, #3122)
+
+The Files pane's side-by-side switch is part of the pane's saved state, so it is still on when you come back from a cell whose right pane is not files, and one cell's switch no longer carries over to the next cell's file.
+
+### Charts: chart plugin 4.2.0 – 4.5.0 (#3128, #3140, #3145, #3151, #3154)
+
+`@mulmoclaude/chart-plugin` `^4.5.0`:
+
+- **4.2.0**: the agent knows how to write the charts an analysis asks for (boxplot, Pareto, two value axes, waterfall, fitted line, average line and span, correlation matrix, calendar heatmap and more); a chart redraws when its card's width changes.
+- **4.3.0**: `ecStat:regression` and `ecStat:histogram`, so a fitted curve and a histogram are drawn from a sheet's raw columns and follow it.
+- **4.4.0**: a chart that cannot be drawn is refused with its reason before anything is shown; number and date formats; clustering and a box per column; cross tables, long tables and several ranges as a source; chart height and cards side by side; dark cards, SVG and CSV export; Japan and world maps; 3D. Cards follow the app's dark theme (`PluginFrame` no longer puts a white surface under the chart).
+- **4.4.1**: `columns` is the most cards per row, so a narrow Canvas shows fewer, down to one.
+- **4.5.0**: word clouds.
+
+### The data-analysis skill uses them (#3129, #3121; #3143, #3142; #3147, #3146; #3150, #3149)
+
+`mulmoterminal-data-analysis` lays the sheet out so each of these charts follows edits (`COUNTIFS` histograms, quartile blocks, `CORREL` cross tables with `layout: "matrix"`), fits curves and bins histograms with the transforms, clusters on standardised columns, names map regions as the map has them, uses `groupBy`, `sources`, formats, `columns` and `height`, fixes and presents again a chart that was refused, and groups rows once: with the clustering transform, or with a group column the script computes when you want each row's group as data.
+
+### Spreadsheet engine 4.2.4 – 4.2.5 (#3118, #3119)
+
+`@gui-chat-plugin/spreadsheet` `^4.2.5`: date functions (`YEAR`, `DATEDIF`, `EOMONTH`, …) read date-like text (`2025-01-15`, `2025-01`, `Jan 2025`, `2025年1月`) as a date while the cell stays text; the cell editor keeps a typed date; `TEXT(A2,"yyyy-mm")` formats a date; lowercase and Japanese date formats in a cell display correctly.
+
+### Self-hosted GitLab and prRepos: when a change applies (#3126, #3127, #3130)
+
+The guides, the config skill and the unknown-host message now say what the code does: a change saved in Settings applies at once, and a hand edit of `gitlabHosts` or `prRepos` applies on **Reload config file** (or a restart). The unknown-host message names Settings → GitHub and GitLab instead of "restart".
+
+### Documentation (#3124, #3125, #3138, #3148)
+
+- The GitHub guide gains a screenshot, a "Reading the screen" walk-through and a three-step start, with GitLab in its own section.
+- The README's Demo section links the chaptered complete guide video.
+- The alternatives pages and `facts.json` include Codealong.
+- CLAUDE.md: never stop a tmux server not named by absolute path.
+
 ## mulmoterminal@11.0.0 — 2026-10-19
 
 > **Setup guide:** [11.0.0 — Ask your data a question](https://receptron.github.io/mulmoterminal/guide/en/v11.0.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v11.0.0.html))
