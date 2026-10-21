@@ -326,15 +326,15 @@ describe("removeStrayProbeTranscripts (#3152)", () => {
     rmSync(home, { recursive: true, force: true });
   });
 
-  const writeAged = (name: string, age_ms: number) => {
+  const writeAged = (name: string, age_ms: number, body: string = probe()) => {
     const file = path.join(projectSessionsDir(cwd), name);
-    writeFileSync(file, "anything");
+    writeFileSync(file, body);
     const at_sec = (NOW - age_ms) / 1000;
     utimesSync(file, at_sec, at_sec);
   };
   const remains = () => readdirSync(projectSessionsDir(cwd)).sort();
 
-  it("removes old transcripts named by a probe's id, whatever they hold", async () => {
+  it("removes old transcripts named by a probe's id that hold a probe", async () => {
     const stale = newProbeSessionId();
     writeAged(`${stale}.jsonl`, STRAY_PROBE_MIN_AGE_MS + 1000);
     expect(await removeStrayProbeTranscripts(cwd, NOW)).toBe(1);
@@ -356,6 +356,14 @@ describe("removeStrayProbeTranscripts (#3152)", () => {
     writeAged(`${newProbeSessionId()}.txt`, old_ms);
     expect(await removeStrayProbeTranscripts(cwd, NOW)).toBe(0);
     expect(remains()).toHaveLength(3);
+  });
+
+  // The name alone is not enough: a conversation that carries the prefix is still somebody's work.
+  it("keeps a probe-named file whose content is not a probe's", async () => {
+    const named = newProbeSessionId();
+    writeAged(`${named}.jsonl`, STRAY_PROBE_MIN_AGE_MS * 10, [userLine("real work"), userLine("more")].join("\n"));
+    expect(await removeStrayProbeTranscripts(cwd, NOW)).toBe(0);
+    expect(remains()).toEqual([`${named}.jsonl`]);
   });
 
   it("returns 0 when the project has no transcripts yet", async () => {

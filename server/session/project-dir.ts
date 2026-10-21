@@ -45,13 +45,18 @@ export const REALPATH_MEMO_MS = 30_000;
 
 export function memoizeRealpath(realpath: (absolutePath: string) => string, now_ms: () => number = Date.now, memo_ms: number = REALPATH_MEMO_MS) {
   const resolved = new Map<string, { realPath: string; at_ms: number }>();
-  return (absolutePath: string): string => {
+  const resolve = (absolutePath: string): string => {
     const held = resolved.get(absolutePath);
     if (held && now_ms() - held.at_ms < memo_ms) return held.realPath;
     const realPath = realpath(absolutePath);
+    // Expired entries go whenever one is added, so the map holds only the paths asked for lately.
+    resolved.forEach((entry, key) => {
+      if (now_ms() - entry.at_ms >= memo_ms) resolved.delete(key);
+    });
     resolved.set(absolutePath, { realPath, at_ms: now_ms() });
     return realPath;
   };
+  return Object.assign(resolve, { size: (): number => resolved.size });
 }
 
 const memoizedRealpath = memoizeRealpath(realpathSync.native);

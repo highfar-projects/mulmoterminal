@@ -196,6 +196,20 @@ describe("memoizeRealpath", () => {
     expect(asked).toHaveLength(2);
   });
 
+  it("lets go of paths not asked for within the window", () => {
+    let now_ms = 0;
+    const resolve = memoizeRealpath(
+      (p) => p,
+      () => now_ms,
+    );
+    resolve("/ws/a");
+    resolve("/ws/b");
+    expect(resolve.size()).toBe(2);
+    now_ms = REALPATH_MEMO_MS;
+    resolve("/ws/c");
+    expect(resolve.size()).toBe(1);
+  });
+
   it("does not keep a failure, so a directory that appears later is resolved", () => {
     let exists = false;
     const { asked, realpath } = counting((p) => {

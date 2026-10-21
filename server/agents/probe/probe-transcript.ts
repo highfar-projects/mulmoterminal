@@ -124,9 +124,9 @@ export async function removeProbeTranscript(cwd: string, sessionId: string, clau
 // server sharing this workspace may have one running while this one boots.
 export const STRAY_PROBE_MIN_AGE_MS = 10 * 60_000;
 
-/** Remove probe transcripts that a removal never found (#3152), with every boot. Addressed by NAME,
- *  which only a probe's own id can match, so unlike the sweep below this is not a guess and does not
- *  need to run only once. Returns how many went. */
+/** Remove probe transcripts that a removal never found (#3152), with every boot. A file goes only when
+ *  its NAME is a probe's own id AND its content is a probe's, so a session that somehow carries the
+ *  prefix is still somebody's work and stays. Returns how many went. */
 export async function removeStrayProbeTranscripts(cwd: string, now_ms: number): Promise<number> {
   const dir = projectSessionsDir(cwd);
   let names: string[];
@@ -137,16 +137,15 @@ export async function removeStrayProbeTranscripts(cwd: string, now_ms: number): 
   }
   let removed = 0;
   for (const name of names) {
-    if (await removeIfOlder(path.join(dir, name), now_ms - STRAY_PROBE_MIN_AGE_MS)) removed++;
+    const file = path.join(dir, name);
+    if ((await isOlderThan(file, now_ms - STRAY_PROBE_MIN_AGE_MS)) && (await removeIfProbe(file))) removed++;
   }
   return removed;
 }
 
-const removeIfOlder = async (file: string, cutoff_ms: number): Promise<boolean> => {
+const isOlderThan = async (file: string, cutoff_ms: number): Promise<boolean> => {
   try {
-    if ((await stat(file)).mtimeMs > cutoff_ms) return false;
-    await rm(file);
-    return true;
+    return (await stat(file)).mtimeMs <= cutoff_ms;
   } catch {
     return false;
   }

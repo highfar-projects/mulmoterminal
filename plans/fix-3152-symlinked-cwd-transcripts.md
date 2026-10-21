@@ -25,9 +25,12 @@ what `fs.realpathSync.native` returns and plain `fs.realpathSync` does not, so `
 - The legacy sweep's marker is named the same way, so a symlinked workspace's REAL directory gets
   its one sweep.
 - `removeStrayProbeTranscripts`, run at every boot: removes files in the workspace's transcript
-  directory whose name is a probe's id and that are older than ten minutes. The name is one only a
-  probe carries, so this is not a guess like the legacy sweep; the age keeps it off a probe another
-  server sharing the workspace is running. This removes what has already piled up.
+  directory whose name is a probe's id, whose content is a probe's (the legacy sweep's test), and
+  that are older than ten minutes. The age keeps it off a probe another server sharing the workspace
+  is running. This removes what has already piled up.
+- The resolved path is kept for 30 seconds (`memoizeRealpath`), because a cell's session poll
+  reaches it every few seconds and the workspace may be on a network share. Failures are not kept,
+  and expired entries are dropped whenever one is added.
 
 ## Out of scope
 
