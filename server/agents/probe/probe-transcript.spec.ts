@@ -2,13 +2,15 @@
 // Nothing here touches a DOM — it is fs and this module's predicates — and the default jsdom
 // environment cost this file 624ms of setup per run for nothing (2.24s -> 1.06s without it).
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync, readdirSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync, readdirSync, symlinkSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import os from "node:os";
 import {
   isProbeTranscript,
   removeProbeTranscript,
+  removeStrayProbeTranscripts,
+  STRAY_PROBE_MIN_AGE_MS,
   sweepLegacyProbeTranscripts,
   sweepLegacyProbeTranscriptsOnce,
   probeSweepMarker,
@@ -122,6 +124,21 @@ describe("probe transcript removal", () => {
 
     expect(await removeProbeTranscript(cwd, escape)).toBe(false);
     expect(existsSync(outside)).toBe(true);
+  });
+
+  // #3152: claude names the directory after the real path, so a symlinked workspace's probe was
+  // looked for under the link's name and never removed.
+  it("removes a probe's transcript when the workspace is a symlink", async () => {
+    const real = path.join(home, "real-project");
+    mkdirSync(real);
+    const link = path.join(home, "linked-project");
+    symlinkSync(real, link, "junction");
+    const id = newProbeSessionId();
+    mkdirSync(projectSessionsDir(real), { recursive: true });
+    writeFileSync(path.join(projectSessionsDir(real), `${id}.jsonl`), userLine(PROBE_PROMPT));
+
+    expect(await removeProbeTranscript(link, id)).toBe(true);
+    expect(readdirSync(projectSessionsDir(real))).toEqual([]);
   });
 
   it("says so rather than throwing when there is nothing to remove", async () => {
@@ -288,5 +305,60 @@ describe("the one-time sweep", () => {
     // …and still only once each.
     expect(await sweepLegacyProbeTranscriptsOnce(cwd, stateDir)).toBeNull();
     expect(await sweepLegacyProbeTranscriptsOnce(other, stateDir)).toBeNull();
+  });
+});
+
+describe("removeStrayProbeTranscripts (#3152)", () => {
+  const realHome = os.homedir();
+  const NOW = Date.now();
+  let home: string;
+  let cwd: string;
+
+  beforeEach(() => {
+    home = mkdtempSync(path.join(tmpdir(), "mt-stray-probe-"));
+    Object.defineProperty(os, "homedir", { value: () => home, configurable: true });
+    cwd = path.join(home, "project");
+    mkdirSync(projectSessionsDir(cwd), { recursive: true });
+  });
+
+  afterEach(() => {
+    Object.defineProperty(os, "homedir", { value: () => realHome, configurable: true });
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  const writeAged = (name: string, age_ms: number) => {
+    const file = path.join(projectSessionsDir(cwd), name);
+    writeFileSync(file, "anything");
+    const at_sec = (NOW - age_ms) / 1000;
+    utimesSync(file, at_sec, at_sec);
+  };
+  const remains = () => readdirSync(projectSessionsDir(cwd)).sort();
+
+  it("removes old transcripts named by a probe's id, whatever they hold", async () => {
+    const stale = newProbeSessionId();
+    writeAged(`${stale}.jsonl`, STRAY_PROBE_MIN_AGE_MS + 1000);
+    expect(await removeStrayProbeTranscripts(cwd, NOW)).toBe(1);
+    expect(remains()).toEqual([]);
+  });
+
+  // Another server sharing the workspace may be running a probe right now.
+  it("leaves a probe transcript young enough to still be in use", async () => {
+    const live = newProbeSessionId();
+    writeAged(`${live}.jsonl`, STRAY_PROBE_MIN_AGE_MS - 1000);
+    expect(await removeStrayProbeTranscripts(cwd, NOW)).toBe(0);
+    expect(remains()).toEqual([`${live}.jsonl`]);
+  });
+
+  it("never touches a file whose name is not a probe's id", async () => {
+    const old_ms = STRAY_PROBE_MIN_AGE_MS * 10;
+    writeAged("3f2504e0-4f89-41d3-9a0c-0305e82c3301.jsonl", old_ms);
+    writeAged(`${PROBE_SESSION_PREFIX}not-an-id.jsonl`, old_ms);
+    writeAged(`${newProbeSessionId()}.txt`, old_ms);
+    expect(await removeStrayProbeTranscripts(cwd, NOW)).toBe(0);
+    expect(remains()).toHaveLength(3);
+  });
+
+  it("returns 0 when the project has no transcripts yet", async () => {
+    expect(await removeStrayProbeTranscripts(path.join(home, "never-used"), NOW)).toBe(0);
   });
 });

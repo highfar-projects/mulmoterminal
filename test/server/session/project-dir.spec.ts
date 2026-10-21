@@ -1,8 +1,9 @@
 // @vitest-environment node
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { encodeProjectDirName, projectSessionsDir } from "../../../server/session/project-dir.js";
+import { claudeProjectPath, encodeProjectDirName, projectSessionsDir } from "../../../server/session/project-dir.js";
 
 // Claude owns this encoding — we only mirror it to find the directory it already wrote.
 // Pinned because a mismatch is silent: the wrong path just reads as "no sessions yet".
@@ -106,5 +107,54 @@ describe("projectSessionsDir", () => {
     const encoded = projectSessionsDir("/ws/a/b.c").slice(projects.length + 1);
     expect(encoded).not.toContain(path.sep);
     expect(encoded).toBe(path.basename(projectSessionsDir("/ws/a/b.c")));
+  });
+});
+
+// #3152. Claude names the directory after the REAL path, so a symlinked workspace mapped to the
+// link's name: the probe's transcripts were never found to delete, and piled up.
+describe("claudeProjectPath", () => {
+  let root = "";
+  beforeAll(() => {
+    // realpathSync because the temp dir is itself behind a symlink on macOS (/var -> /private/var).
+    root = realpathSync.native(mkdtempSync(path.join(os.tmpdir(), "mt-project-dir-")));
+    mkdirSync(path.join(root, "Real"));
+  });
+  afterAll(() => rmSync(root, { recursive: true, force: true }));
+
+  it("resolves a symlinked workspace to the directory it points at", () => {
+    const link = path.join(root, "link");
+    // "junction" is ignored off Windows, and there it needs no privilege.
+    symlinkSync(path.join(root, "Real"), link, "junction");
+    expect(claudeProjectPath(link)).toBe(path.join(root, "Real"));
+    expect(projectSessionsDir(link)).toBe(projectSessionsDir(path.join(root, "Real")));
+  });
+
+  // Only observable where the disk ignores case (macOS and Windows by default; not a Linux runner).
+  it("takes the case the disk spells, as claude does", ({ skip }) => {
+    const typed = path.join(root, "real");
+    if (!existsSync(typed)) skip();
+    expect(claudeProjectPath(typed)).toBe(path.join(root, "Real"));
+  });
+
+  it("leaves a path that is already real as it is", () => {
+    expect(claudeProjectPath(path.join(root, "Real"))).toBe(path.join(root, "Real"));
+  });
+
+  it("falls back to the absolute path when it cannot be resolved", () => {
+    expect(
+      claudeProjectPath("/ws/sub/../app", () => {
+        throw new Error("ENOENT");
+      }),
+    ).toBe(path.resolve("/ws/app"));
+    expect(claudeProjectPath(path.join(root, "missing"))).toBe(path.join(root, "missing"));
+  });
+
+  it("hands the resolver an absolute path", () => {
+    const asked: string[] = [];
+    claudeProjectPath("relative/dir", (p) => {
+      asked.push(p);
+      return p;
+    });
+    expect(asked).toEqual([path.resolve("relative/dir")]);
   });
 });

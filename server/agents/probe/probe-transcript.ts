@@ -23,7 +23,7 @@
 import { mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { forEachJsonlLine } from "../../infra/fs/jsonl-file.js";
-import { encodeProjectDirName, projectSessionsDir } from "../../session/project-dir.js";
+import { claudeProjectPath, encodeProjectDirName, projectSessionsDir } from "../../session/project-dir.js";
 import { isProbeSessionId } from "./probe-session.js";
 import { PROBE_PROMPT } from "../rate-limit/rate-limit-probe.js";
 import { isRecord } from "../../../common/isRecord.js";
@@ -120,6 +120,38 @@ export async function removeProbeTranscript(cwd: string, sessionId: string, clau
   }
 }
 
+// Old enough that no probe can still be writing it: a probe is stopped at 90 seconds, and another
+// server sharing this workspace may have one running while this one boots.
+export const STRAY_PROBE_MIN_AGE_MS = 10 * 60_000;
+
+/** Remove probe transcripts that a removal never found (#3152), with every boot. Addressed by NAME,
+ *  which only a probe's own id can match, so unlike the sweep below this is not a guess and does not
+ *  need to run only once. Returns how many went. */
+export async function removeStrayProbeTranscripts(cwd: string, now_ms: number): Promise<number> {
+  const dir = projectSessionsDir(cwd);
+  let names: string[];
+  try {
+    names = (await readdir(dir)).filter((name) => name.endsWith(".jsonl") && isProbeSessionId(name.slice(0, -".jsonl".length)));
+  } catch {
+    return 0; // no transcripts for this project yet
+  }
+  let removed = 0;
+  for (const name of names) {
+    if (await removeIfOlder(path.join(dir, name), now_ms - STRAY_PROBE_MIN_AGE_MS)) removed++;
+  }
+  return removed;
+}
+
+const removeIfOlder = async (file: string, cutoff_ms: number): Promise<boolean> => {
+  try {
+    if ((await stat(file)).mtimeMs > cutoff_ms) return false;
+    await rm(file);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 /** Sweep transcripts left by probes that ran before ids identified them. Returns how many went.
  *
  *  Scoped to ONE project directory because that is where a probe can have written — widening the
@@ -147,7 +179,8 @@ export async function sweepLegacyProbeTranscripts(cwd: string): Promise<number> 
  *  the sweep's scope is a project directory, so the record of having done it has to be per
  *  directory too. A single machine-wide marker would let the FIRST workspace claim it and leave a
  *  second `CLAUDE_CWD` holding its legacy probes forever — half of #1010, silently. */
-export const probeSweepMarker = (stateDir: string, cwd: string): string => path.join(stateDir, `probe-sweep-${encodeProjectDirName(path.resolve(cwd))}.json`);
+export const probeSweepMarker = (stateDir: string, cwd: string): string =>
+  path.join(stateDir, `probe-sweep-${encodeProjectDirName(claudeProjectPath(cwd))}.json`);
 
 /** The sweep, run at most once per workspace — see the note at the top of this file. Returns the
  *  count, or null when the right to run could not be claimed (already swept, or another process

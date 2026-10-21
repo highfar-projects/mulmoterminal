@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { agentHome } from "../agents/agent-homes.js";
@@ -37,9 +38,22 @@ export function claudeProjectsRoot(home: string = agentHome("claude")): string {
   return path.join(home, "projects");
 }
 
-/** Where claude keeps `cwd`'s session transcripts: ~/.claude/projects/<encoded-cwd>/ */
+/** The path claude names `cwd`'s transcript directory after: the real one. Claude resolves symlinks
+ *  first, and takes the case the disk spells (a cwd typed `casedir` lands under `CaseDir`), which is
+ *  what `realpathSync.native` returns and plain `realpathSync` does not. A path that cannot be
+ *  resolved (gone, unreadable) falls back to the absolute form, the name it would have had before. */
+export function claudeProjectPath(cwd: string, realpath: (absolutePath: string) => string = realpathSync.native): string {
+  const absolutePath = path.resolve(cwd);
+  try {
+    return realpath(absolutePath);
+  } catch {
+    return absolutePath;
+  }
+}
+
+/** Where claude keeps `cwd`'s session transcripts: ~/.claude/projects/<encoded-real-cwd>/ */
 export function projectSessionsDir(cwd: string, home: string = agentHome("claude")): string {
-  return path.join(claudeProjectsRoot(home), encodeProjectDirName(path.resolve(cwd)));
+  return path.join(claudeProjectsRoot(home), encodeProjectDirName(claudeProjectPath(cwd)));
 }
 
 /** Claude's own log of what a PERSON typed at the prompt — one line per submission, carrying
