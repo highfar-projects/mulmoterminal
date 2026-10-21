@@ -3,7 +3,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { claudeProjectPath, encodeProjectDirName, projectSessionsDir } from "../../../server/session/project-dir.js";
+import { claudeProjectPath, encodeProjectDirName, memoizeRealpath, projectSessionsDir, REALPATH_MEMO_MS } from "../../../server/session/project-dir.js";
 
 // Claude owns this encoding — we only mirror it to find the directory it already wrote.
 // Pinned because a mismatch is silent: the wrong path just reads as "no sessions yet".
@@ -156,5 +156,56 @@ describe("claudeProjectPath", () => {
       return p;
     });
     expect(asked).toEqual([path.resolve("relative/dir")]);
+  });
+});
+
+// A cell's poll reaches the resolver every few seconds, and the workspace may be on a network share.
+describe("memoizeRealpath", () => {
+  const counting = (answer: (p: string) => string) => {
+    const asked: string[] = [];
+    return {
+      asked,
+      realpath: (p: string) => {
+        asked.push(p);
+        return answer(p);
+      },
+    };
+  };
+
+  it("asks once per path within the window", () => {
+    let now_ms = 0;
+    const { asked, realpath } = counting((p) => `${p}-real`);
+    const resolve = memoizeRealpath(realpath, () => now_ms);
+    expect(resolve("/ws/a")).toBe("/ws/a-real");
+    now_ms = REALPATH_MEMO_MS - 1;
+    expect(resolve("/ws/a")).toBe("/ws/a-real");
+    expect(resolve("/ws/b")).toBe("/ws/b-real");
+    expect(asked).toEqual(["/ws/a", "/ws/b"]);
+  });
+
+  // A symlink pointed somewhere else is followed once the window has passed.
+  it("asks again once the window has passed", () => {
+    let now_ms = 0;
+    let target = "/one";
+    const { asked, realpath } = counting(() => target);
+    const resolve = memoizeRealpath(realpath, () => now_ms);
+    expect(resolve("/ws/link")).toBe("/one");
+    target = "/two";
+    now_ms = REALPATH_MEMO_MS;
+    expect(resolve("/ws/link")).toBe("/two");
+    expect(asked).toHaveLength(2);
+  });
+
+  it("does not keep a failure, so a directory that appears later is resolved", () => {
+    let exists = false;
+    const { asked, realpath } = counting((p) => {
+      if (!exists) throw new Error("ENOENT");
+      return `${p}-real`;
+    });
+    const resolve = memoizeRealpath(realpath, () => 0);
+    expect(() => resolve("/ws/new")).toThrow();
+    exists = true;
+    expect(resolve("/ws/new")).toBe("/ws/new-real");
+    expect(asked).toHaveLength(2);
   });
 });

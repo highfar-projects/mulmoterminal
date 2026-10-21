@@ -38,11 +38,29 @@ export function claudeProjectsRoot(home: string = agentHome("claude")): string {
   return path.join(home, "projects");
 }
 
+// A cell polls a path that reaches this every few seconds, and the workspace may be on a network
+// share, so a resolved path is kept for a short while: one system call per path per window, and a
+// symlink pointed somewhere else is still followed within it. A failure is not kept.
+export const REALPATH_MEMO_MS = 30_000;
+
+export function memoizeRealpath(realpath: (absolutePath: string) => string, now_ms: () => number = Date.now, memo_ms: number = REALPATH_MEMO_MS) {
+  const resolved = new Map<string, { realPath: string; at_ms: number }>();
+  return (absolutePath: string): string => {
+    const held = resolved.get(absolutePath);
+    if (held && now_ms() - held.at_ms < memo_ms) return held.realPath;
+    const realPath = realpath(absolutePath);
+    resolved.set(absolutePath, { realPath, at_ms: now_ms() });
+    return realPath;
+  };
+}
+
+const memoizedRealpath = memoizeRealpath(realpathSync.native);
+
 /** The path claude names `cwd`'s transcript directory after: the real one. Claude resolves symlinks
  *  first, and takes the case the disk spells (a cwd typed `casedir` lands under `CaseDir`), which is
  *  what `realpathSync.native` returns and plain `realpathSync` does not. A path that cannot be
  *  resolved (gone, unreadable) falls back to the absolute form, the name it would have had before. */
-export function claudeProjectPath(cwd: string, realpath: (absolutePath: string) => string = realpathSync.native): string {
+export function claudeProjectPath(cwd: string, realpath: (absolutePath: string) => string = memoizedRealpath): string {
   const absolutePath = path.resolve(cwd);
   try {
     return realpath(absolutePath);
