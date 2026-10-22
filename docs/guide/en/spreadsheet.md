@@ -56,10 +56,36 @@ boxplots, Pareto charts, two value axes, waterfalls, a fitted line over a scatte
 calendar heatmaps among them. From 4.3.0 it can also fit a curve or bin a histogram from a sheet's raw
 columns, so those charts follow the sheet too. From 4.4.0 it can group points into clusters, box each
 column of a sheet, and colour a map of Japan or the world (prefecture and country names in Japanese
-work too). From 4.5.0 it can draw a word cloud, each word sized by its value. Cards follow a dark theme, can sit side by side, and also download as **SVG** and **CSV**.
+work too). From 4.5.0 it can draw a word cloud, each word sized by its value. Cards follow a dark theme, can sit side by side, and also download as **SVG** and **CSV** (a word cloud as PNG and CSV, a 3D chart as PNG).
 If a chart cannot be drawn, the agent is told why and fixes it before anything is shown.
 
 ![The chart card: monthly coffee and pastry sales as lines, with the monthly total as bars](../images/spreadsheet-chart.png)
+
+**What it looks like.** These cards were drawn from one spreadsheet of made-up store sales, after
+requests like these:
+
+> Show sales by prefecture on a map of Japan, and by region.
+>
+> How does advertising spend relate to sales? Draw the fitted line, and show how the satisfaction
+> scores are spread.
+>
+> Which stores are alike? Box each store's weekly sales, make a word cloud of the words in the reviews,
+> and a funnel from visit to purchase.
+
+![Four chart cards side by side: a map of Japan coloured by sales, sales by region as bars, advertising spend against sales with a fitted line, and a histogram of satisfaction scores](../images/spreadsheet-charts-gallery-1.png)
+
+![Four more cards: stores grouped into two clusters by visitors and sales, a box per store of its weekly sales with one outlier, a word cloud of review words, and a funnel from visit to purchase](../images/spreadsheet-charts-gallery-2.png)
+
+The Canvas was enlarged with the button at its top right, which is what puts the cards two to a row.
+**From the spreadsheet:** under a title names the range a card is drawn from; edit the sheet and the
+card is drawn again. A region with no row in the range, such as a prefecture with no stores, is left
+empty on the map rather than coloured.
+
+The totals behind those cards are formulas that answer a table: `=GROUPBY(Data!B2:B41, Data!E2:E41, SUM, 0, 0)`
+fills one row per prefecture, `LINEST` puts the slope and intercept of the fit beside them, and `T.TEST`
+compares the east with the west (see [Functions you can use](#functions-you-can-use)).
+
+![The Summary tab: sales per prefecture and per region, each filled in by one GROUPBY formula, with the fit's slope and intercept and a t-test p value beside them](../images/spreadsheet-spill-summary.png)
 
 **A chart can follow the spreadsheet.** When the agent draws a chart from a range of the sheet, the
 chart shows that range calculated, and draws itself again when the sheet is saved: change a number and
@@ -309,8 +335,9 @@ up or keep them in git like any other file.
 
 ## Functions you can use
 
-These are the functions the spreadsheet calculates, as of `@gui-chat-plugin/spreadsheet` 4.2.5. Any other
-function shows `#NAME?` in its cell, unless the spreadsheet defines it itself (see
+These are the functions you will reach for most, as of `@gui-chat-plugin/spreadsheet` 5.0.0; the package's
+[README](https://www.npmjs.com/package/@gui-chat-plugin/spreadsheet) has the complete list. A function on neither
+shows `#NAME?` in its cell, unless the spreadsheet defines it itself (see
 [Functions of your own](#workbook-functions)).
 
 | Kind | Functions |
@@ -318,17 +345,21 @@ function shows `#NAME?` in its cell, unless the spreadsheet defines it itself (s
 | Totals and groups | `SUM` `AVERAGE` `MIN` `MAX` `COUNT` `COUNTA` `COUNTIF` `COUNTIFS` `SUMIF` `SUMIFS` `AVERAGEIF` `AVERAGEIFS` `MAXIFS` `MINIFS` |
 | Spread and position | `MEDIAN` `MODE` `STDEV` `STDEVP` `VAR` `VARP` `PERCENTILE` `QUARTILE` `PERCENTRANK` `LARGE` `SMALL` `RANK` `SKEW` `KURT` `STANDARDIZE` `GEOMEAN` `HARMEAN` |
 | Two columns | `CORREL` `PEARSON` `SLOPE` `INTERCEPT` `RSQ` `STEYX` `COVARIANCE.S` `COVARIANCE.P` `FORECAST` `FORECAST.LINEAR` `TREND` |
-| Tests and distributions | `T.TEST` `TTEST` `T.DIST` `T.DIST.2T` `T.DIST.RT` `T.INV` `T.INV.2T` `NORM.DIST` `NORM.S.DIST` `NORM.INV` `NORM.S.INV` `CONFIDENCE.T` `CONFIDENCE.NORM` |
-| Maths | `ROUND` `ROUNDUP` `ROUNDDOWN` `FLOOR` `CEILING` `INT` `TRUNC` `ABS` `SIGN` `POWER` `SQRT` `MOD` `PI` `EXP` `LN` `LOG` `LOG10` |
+| Tests and distributions | `T.TEST` `TTEST` `T.DIST` `T.DIST.2T` `T.DIST.RT` `T.INV` `T.INV.2T` `NORM.DIST` `NORM.S.DIST` `NORM.INV` `NORM.S.INV` `CONFIDENCE.T` `CONFIDENCE.NORM` `CHISQ.TEST` `F.TEST` `Z.TEST` `ANOVA.TEST` `MANNWHITNEY.TEST` `WILCOXON.TEST` `KS.TEST` `SHAPIRO.TEST` `SPEARMAN` `KENDALL` |
+| Fits and time series | `LINEST` `LOGEST` `GROWTH` `FREQUENCY` `FORECAST.ETS` `EMA` `DECOMPOSE` `AUTOCORREL` |
+| Maths | `ROUND` `ROUNDUP` `ROUNDDOWN` `FLOOR` `CEILING` `INT` `TRUNC` `ABS` `SIGN` `POWER` `SQRT` `MOD` `PI` `EXP` `LN` `LOG` `LOG10` `SUMPRODUCT` `MMULT` `MINVERSE` `RAND` `RANDBETWEEN` `RANDARRAY` |
 | Logic | `IF` `IFS` `AND` `OR` `NOT` `IFERROR` `IFNA` `TRUE` `FALSE` |
-| Lookup | `VLOOKUP` `HLOOKUP` `XLOOKUP` `INDEX` `MATCH` `ROW` `COLUMN` `ROWS` `COLUMNS` |
+| Names and LAMBDA | `LET` `LAMBDA` `MAP` `BYROW` `BYCOL` `REDUCE` |
+| Lookup | `VLOOKUP` `HLOOKUP` `XLOOKUP` `XMATCH` `INDEX` `MATCH` `ROW` `COLUMN` `ROWS` `COLUMNS` |
+| Tables from a formula | `FILTER` `SORT` `SORTBY` `UNIQUE` `GROUPBY` `PIVOTBY` `TAKE` `DROP` `CHOOSECOLS` `CHOOSEROWS` `HSTACK` `VSTACK` `TRANSPOSE` `SEQUENCE` |
 | Text | `CONCATENATE` `CONCAT` `LEFT` `RIGHT` `MID` `LEN` `UPPER` `LOWER` `PROPER` `TRIM` `SUBSTITUTE` `REPLACE` `FIND` `SEARCH` `TEXT` `VALUE` `EXACT` |
 | Dates and times | `TODAY` `NOW` `DATE` `TIME` `YEAR` `MONTH` `DAY` `HOUR` `MINUTE` `SECOND` `WEEKDAY` `DAYS` `DATEDIF` `EDATE` `EOMONTH` `WORKDAY` `NETWORKDAYS` |
 | Finance | `PMT` `PV` `FV` `NPV` `IRR` `RATE` `NPER` `IPMT` `PPMT` |
 
 `STDEV` and `VAR` are the sample versions (divide by n-1); `STDEVP` and `VARP` divide by n. The current Excel
 names work too: `STDEV.S`, `STDEV.P`, `VAR.S`, `VAR.P`, `PERCENTILE.INC`, `QUARTILE.INC`, `PERCENTRANK.INC`,
-`RANK.EQ`. `PERCENTILE` and `QUARTILE` interpolate the way Excel's `.INC` versions do.
+`RANK.EQ`. `PERCENTILE` and `QUARTILE` interpolate the way Excel's `.INC` versions do, and the `.EXC` versions
+are there too.
 
 A formula with no number format shows a date only when its number comes from a date (a date function, or a
 date cell), so a total of 52,345 stays a number.
@@ -337,8 +368,13 @@ Date formats are read the way Excel reads them, both in a cell's format and in `
 `yyyy"年"m"月"d"日"`, `h:mm AM/PM` and the like, in either case. `TEXT(A2,"yyyy-mm")` gives `2025-01` for a date, and
 also for a date written as text.
 
-**Not available**: the `.EXC` spellings, whole-column references such as `A:A` (give a range such as
-`A2:A500`), and functions that return several cells at once (`FREQUENCY`, `LINEST`).
+**A formula can answer a table.** `=SORT(UNIQUE(A2:A100))`, `=GROUPBY(A2:A100,B2:B100,SUM)` or plain
+`=Data!A1:C10` fills the cells to the right and below it, as in Excel 365; if one of them already holds
+something, the formula shows `#SPILL!`. Other formulas, and charts drawn from the sheet, read those cells like
+any others. Only the formula is saved. A whole column such as `A:A` works as a range.
+
+`RAND`, `RANDBETWEEN` and `RANDARRAY` give the same numbers every time the sheet is calculated, unlike Excel, so
+the agent and you see the same table.
 
 ### Functions of your own {#workbook-functions}
 

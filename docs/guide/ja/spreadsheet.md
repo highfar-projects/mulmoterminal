@@ -52,10 +52,30 @@ description: エージェントが端末の横の Canvas に、計算式の入�
 4.3.0 からは、表の元の列から曲線を当てはめたり、ヒストグラムの区間を数えたりもできるので、そうしたグラフも表を追いかけます。
 4.4.0 からは、点をまとまりに分ける、表の列ごとに箱ひげ図を描く、日本や世界の地図を塗り分ける（都道府県名や国名は日本語でも通ります）こともできます。
 4.5.0 からは、値の大きさで文字の大きさを変えるワードクラウドも描けます。
-カードは暗いテーマに合わせて表示され、横に並べることもでき、**SVG** と **CSV** でも保存できます。
+カードは暗いテーマに合わせて表示され、横に並べることもでき、**SVG** と **CSV** でも保存できます（ワードクラウドは PNG と CSV、3D は PNG だけ）。
 描けないグラフがあると、その理由がエージェントに返り、表示する前に直します。
 
 ![グラフのカード。コーヒーとペストリーの月別売上を折れ線、月の合計を棒で表示](../images/spreadsheet-chart.png)
+
+**こんなふうに見えます。** 次のカードは、架空の店舗の売上を入れた一つの表から、次のように頼んで描かせたものです。
+
+> 都道府県別の売上を日本地図に、地域別の売上も出して。
+>
+> 広告費と売上の関係は？　回帰の線を引いて。満足度の散らばりも見せて。
+>
+> 似ている店はどれ？　店ごとの週の売上を箱ひげに、口コミに出た言葉をワードクラウドに、来店から購入までを漏斗に。
+
+![四つのグラフのカードが横に並ぶ。売上で塗り分けた日本地図、地域別の売上の棒、広告費と売上の散布図と回帰の線、満足度のヒストグラム](../images/spreadsheet-charts-gallery-1.png)
+
+![さらに四つのカード。来客と売上で二つにまとめた店、店ごとの週の売上の箱ひげ（外れ値が一つ）、口コミの言葉のワードクラウド、来店から購入までの漏斗](../images/spreadsheet-charts-gallery-2.png)
+
+カードが二列に並んでいるのは、Canvas を右上のボタンで大きくしたからです。題名の下の **From the spreadsheet:** は、
+そのカードを描いた表の範囲です。表を直すと描き直されます。地図では、範囲に行の無い地域（店の無い県など）は塗らずに残します。
+
+これらのカードのもとになる集計は、表を返す計算式です。`=GROUPBY(Data!B2:B41, Data!E2:E41, SUM, 0, 0)` 一つで都道府県ごとの行が埋まり、
+その横に `LINEST` が回帰の傾きと切片を、`T.TEST` が東と西の比較を出します（[使える関数](#functions-you-can-use)）。
+
+![Summary タブ。都道府県別と地域別の売上が、それぞれ一つの GROUPBY の式で埋まっている。横に回帰の傾きと切片、t 検定の p 値](../images/spreadsheet-spill-summary.png)
 
 **グラフは表を追いかけられます。** エージェントが表の範囲からグラフを描くと、グラフはその範囲を計算した値で描かれ、
 表が保存されるたびに描き直されます。数字を直せば、グラフも動きます。カードには、どの範囲から描いたかが出ます
@@ -270,7 +290,8 @@ Workspace data が無いプロジェクトのセルでは、ファイルを少�
 
 ## 使える関数 {#functions-you-can-use}
 
-表が計算できる関数は次のとおりです（`@gui-chat-plugin/spreadsheet` 4.2.5 時点）。これ以外の関数は、表が自分で定義していない限り、
+よく使う関数は次のとおりです（`@gui-chat-plugin/spreadsheet` 5.0.0 時点）。全部の一覧はパッケージの
+[README](https://www.npmjs.com/package/@gui-chat-plugin/spreadsheet) にあります。どちらにも無い関数は、表が自分で定義していない限り、
 セルに `#NAME?` と出ます（[表の関数を作る](#workbook-functions)）。
 
 | 種類 | 関数 |
@@ -278,25 +299,32 @@ Workspace data が無いプロジェクトのセルでは、ファイルを少�
 | 集計・グループ | `SUM` `AVERAGE` `MIN` `MAX` `COUNT` `COUNTA` `COUNTIF` `COUNTIFS` `SUMIF` `SUMIFS` `AVERAGEIF` `AVERAGEIFS` `MAXIFS` `MINIFS` |
 | ばらつき・位置 | `MEDIAN` `MODE` `STDEV` `STDEVP` `VAR` `VARP` `PERCENTILE` `QUARTILE` `PERCENTRANK` `LARGE` `SMALL` `RANK` `SKEW` `KURT` `STANDARDIZE` `GEOMEAN` `HARMEAN` |
 | 2 つの列 | `CORREL` `PEARSON` `SLOPE` `INTERCEPT` `RSQ` `STEYX` `COVARIANCE.S` `COVARIANCE.P` `FORECAST` `FORECAST.LINEAR` `TREND` |
-| 検定・分布 | `T.TEST` `TTEST` `T.DIST` `T.DIST.2T` `T.DIST.RT` `T.INV` `T.INV.2T` `NORM.DIST` `NORM.S.DIST` `NORM.INV` `NORM.S.INV` `CONFIDENCE.T` `CONFIDENCE.NORM` |
-| 数学 | `ROUND` `ROUNDUP` `ROUNDDOWN` `FLOOR` `CEILING` `INT` `TRUNC` `ABS` `SIGN` `POWER` `SQRT` `MOD` `PI` `EXP` `LN` `LOG` `LOG10` |
+| 検定・分布 | `T.TEST` `TTEST` `T.DIST` `T.DIST.2T` `T.DIST.RT` `T.INV` `T.INV.2T` `NORM.DIST` `NORM.S.DIST` `NORM.INV` `NORM.S.INV` `CONFIDENCE.T` `CONFIDENCE.NORM` `CHISQ.TEST` `F.TEST` `Z.TEST` `ANOVA.TEST` `MANNWHITNEY.TEST` `WILCOXON.TEST` `KS.TEST` `SHAPIRO.TEST` `SPEARMAN` `KENDALL` |
+| 当てはめ・時系列 | `LINEST` `LOGEST` `GROWTH` `FREQUENCY` `FORECAST.ETS` `EMA` `DECOMPOSE` `AUTOCORREL` |
+| 数学 | `ROUND` `ROUNDUP` `ROUNDDOWN` `FLOOR` `CEILING` `INT` `TRUNC` `ABS` `SIGN` `POWER` `SQRT` `MOD` `PI` `EXP` `LN` `LOG` `LOG10` `SUMPRODUCT` `MMULT` `MINVERSE` `RAND` `RANDBETWEEN` `RANDARRAY` |
 | 論理 | `IF` `IFS` `AND` `OR` `NOT` `IFERROR` `IFNA` `TRUE` `FALSE` |
-| 検索 | `VLOOKUP` `HLOOKUP` `XLOOKUP` `INDEX` `MATCH` `ROW` `COLUMN` `ROWS` `COLUMNS` |
+| 名前と LAMBDA | `LET` `LAMBDA` `MAP` `BYROW` `BYCOL` `REDUCE` |
+| 検索 | `VLOOKUP` `HLOOKUP` `XLOOKUP` `XMATCH` `INDEX` `MATCH` `ROW` `COLUMN` `ROWS` `COLUMNS` |
+| 表を返す | `FILTER` `SORT` `SORTBY` `UNIQUE` `GROUPBY` `PIVOTBY` `TAKE` `DROP` `CHOOSECOLS` `CHOOSEROWS` `HSTACK` `VSTACK` `TRANSPOSE` `SEQUENCE` |
 | 文字列 | `CONCATENATE` `CONCAT` `LEFT` `RIGHT` `MID` `LEN` `UPPER` `LOWER` `PROPER` `TRIM` `SUBSTITUTE` `REPLACE` `FIND` `SEARCH` `TEXT` `VALUE` `EXACT` |
 | 日付・時刻 | `TODAY` `NOW` `DATE` `TIME` `YEAR` `MONTH` `DAY` `HOUR` `MINUTE` `SECOND` `WEEKDAY` `DAYS` `DATEDIF` `EDATE` `EOMONTH` `WORKDAY` `NETWORKDAYS` |
 | 財務 | `PMT` `PV` `FV` `NPV` `IRR` `RATE` `NPER` `IPMT` `PPMT` |
 
 `STDEV` と `VAR` は標本の値です（n-1 で割る）。`STDEVP` と `VARP` は n で割ります。今の Excel の名前（`STDEV.S`、`STDEV.P`、
 `VAR.S`、`VAR.P`、`PERCENTILE.INC`、`QUARTILE.INC`、`PERCENTRANK.INC`、`RANK.EQ`）も使えます。`PERCENTILE` と `QUARTILE` は、
-Excel の `.INC` と同じ補間をします。
+Excel の `.INC` と同じ補間をします。`.EXC` の付いた名前も使えます。
 
 書式の無い計算式が日付として出るのは、その数が日付から来たとき（日付の関数か、日付のセル）だけです。合計が 52,345 なら数のままです。
 
 日付の書式は、セルの書式でも `TEXT` でも Excel と同じに読みます。`yyyy-mm-dd`、`yyyy"年"m"月"d"日"`、`h:mm AM/PM` などで、
 大文字でも小文字でも構いません。`TEXT(A2,"yyyy-mm")` は、日付でも文字で書いた日付でも `2025-01` になります。
 
-**使えない**もの：`.EXC` の付いた名前、`A:A` のような列全体の参照（`A2:A500` のような範囲にしてください）、
-複数のセルを一度に返す関数（`FREQUENCY`、`LINEST`）。
+**計算式が表を返せます。** `=SORT(UNIQUE(A2:A100))`、`=GROUPBY(A2:A100,B2:B100,SUM)`、あるいは `=Data!A1:C10` だけの式は、
+Excel 365 と同じように、その右と下のセルまで埋めます。そのどれかに何か入っていると、式は `#SPILL!` になります。
+埋まったセルは、ほかの計算式からも、表から描いたグラフからも、ふつうのセルと同じに読めます。保存されるのは式だけです。
+`A:A` のような列全体も範囲として使えます。
+
+`RAND`、`RANDBETWEEN`、`RANDARRAY` は、Excel と違って計算し直すたびに同じ数を返します。エージェントとあなたが同じ表を見るためです。
 
 ### 表の関数を作る {#workbook-functions}
 

@@ -197,8 +197,7 @@ Put the result in `presentSpreadsheet`. Split each number by whether the user ma
 
   `=MOVING.AVG(B2:B100, 7)` then works on any sheet of that workbook. The body is JavaScript,
   run sealed off (no files, network or timers) for at most 50 ms a call. A range arrives as rows
-  of cells, a blank cell as `null`; a single cell and any other argument as its value. Give a
-  range such as `A2:A500`, not a whole column (`A:A` is `#VALUE!`). Return a number, text or
+  of cells, a blank cell as `null`; a single cell and any other argument as its value. Return a number, text or
   true/false. A name is letters and digits joined by dots, and not a built-in's. If
   `presentSpreadsheet`'s reply names a function it could not use, fix it and present again.
   Check the function's result against the script's number, as with a formula.

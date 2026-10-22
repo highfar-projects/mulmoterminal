@@ -4,7 +4,7 @@ nav_title: Feature list
 layout: default
 parent: English
 nav_order: 6.5
-as_of: 11.1.0
+as_of: 11.2.0
 description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 9.1.0)."
 ---
 
@@ -297,6 +297,7 @@ More: [Configuration](config.html)
 
 More: [From a collection](from-collection.html) · [MulmoCast videos](mulmocast.html) · [Spreadsheets and charts](spreadsheet.html)
 
+- Spreadsheet formulas can answer a table that fills the cells beside them (SORT, FILTER, UNIQUE, GROUPBY, PIVOTBY), and add LET and LAMBDA, LINEST, FREQUENCY, FORECAST.ETS and more tests (v11.2.0)
 - Charts add maps of Japan and the world, clusters, a box per column, fitted curves and histograms that follow the sheet, word clouds, 3D, SVG and CSV export, and cards side by side (v11.1.0)
 - A chart can draw from a spreadsheet range and redraws when the sheet changes (presentChart `source`) (v10.10.0)
 - An open spreadsheet reads its file again when the agent or another program changes it (v10.10.0)
