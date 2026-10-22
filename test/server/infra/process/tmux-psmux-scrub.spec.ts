@@ -19,6 +19,8 @@ const scratch = await vi.hoisted(async () => {
 
 const calls: string[][] = [];
 let versionStdout = "";
+let asyncListFailures = 0;
+let asyncSetFailures = 0;
 vi.mock("../../../../server/infra/process/spawnCapture.js", () => ({
   spawnCapture: (_bin: string, args: string[]) => {
     calls.push(args);
@@ -29,7 +31,15 @@ vi.mock("../../../../server/infra/process/spawnCapture.js", () => ({
   },
   spawnCaptureAsync: async (_bin: string, args: string[]) => {
     calls.push(args);
+    if (args[2] === "list-sessions" && asyncListFailures > 0) {
+      asyncListFailures -= 1;
+      return { status: null, stdout: "", stderr: "timed out" };
+    }
     if (args[2] === "list-sessions") return { status: 0, stdout: "mt-abc\nmt-def\n", stderr: "" };
+    if (args[2] === "set-option" && asyncSetFailures > 0) {
+      asyncSetFailures -= 1;
+      return { status: 1, stdout: "", stderr: "no server" };
+    }
     return { status: 0, stdout: "", stderr: "" };
   },
 }));
@@ -37,6 +47,8 @@ vi.mock("../../../../server/infra/process/spawnCapture.js", () => ({
 afterAll(() => rmSync(scratch.home, { recursive: true, force: true }));
 beforeEach(() => {
   calls.splice(0);
+  asyncListFailures = 0;
+  asyncSetFailures = 0;
   vi.resetModules();
 });
 
@@ -88,6 +100,27 @@ describe("psmux's warm pool", () => {
     setTmuxPrefix("C-a");
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(liveWarm()).toHaveLength(2);
+  });
+
+  it("is tried again on the next conf write when the sessions could not be listed", async () => {
+    asyncListFailures = 1;
+    await startWith("tmux 3.4\npsmux 3.4.0 (abc)\n");
+    await vi.waitFor(() => expect(asyncListFailures).toBe(0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(liveWarm()).toEqual([]);
+    const { setTmuxPrefix } = await import("../../../../server/infra/process/tmux.js");
+    setTmuxPrefix("C-a");
+    await vi.waitFor(() => expect(liveWarm()).toHaveLength(2));
+  });
+
+  it("is tried again on the next conf write when a session refused it", async () => {
+    asyncSetFailures = 1;
+    await startWith("tmux 3.4\npsmux 3.4.0 (abc)\n");
+    await vi.waitFor(() => expect(liveWarm()).toHaveLength(2));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const { setTmuxPrefix } = await import("../../../../server/infra/process/tmux.js");
+    setTmuxPrefix("C-a");
+    await vi.waitFor(() => expect(liveWarm()).toHaveLength(4));
   });
 
   it("is never asked of a real tmux", async () => {

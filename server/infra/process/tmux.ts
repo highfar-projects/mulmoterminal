@@ -203,24 +203,31 @@ function applyLiveTmuxOptions(): void {
   const plan = planMsOverride(tmux(["show", "-g", "terminal-overrides"]).stdout);
   if (plan.kind === "append") tmux(["set", "-ag", "terminal-overrides", OSC52_MS_OVERRIDE]);
   if (plan.kind === "replace") tmux(["set", "-g", `terminal-overrides[${plan.index}]`, MS_OVERRIDE_ENTRY]);
-  if (!livePsmuxOptionsSent) {
-    livePsmuxOptionsSent = true;
-    applyLivePsmuxGlobalOptions().catch(() => {});
-  }
+  if (livePsmuxOptions === "unsent") void sendLivePsmuxGlobalOptions();
 }
 
-// Once per process: the options do not depend on anything a later ensureConf changes, and a server
-// started after this reads them from CONF_FILE.
-let livePsmuxOptionsSent = false;
+// Sent once per process: the options do not depend on anything a later ensureConf changes, and a
+// server started after this reads them from CONF_FILE. A failed attempt goes back to "unsent", so
+// the next ensureConf tries again rather than leaving the running servers as they were.
+let livePsmuxOptions: "unsent" | "sending" | "sent" = "unsent";
+
+async function sendLivePsmuxGlobalOptions(): Promise<void> {
+  livePsmuxOptions = "sending";
+  const delivered = await applyLivePsmuxGlobalOptions().catch(() => false);
+  livePsmuxOptions = delivered ? "sent" : "unsent";
+}
 
 // psmux runs one server per session, so a `-g` set reaches only the server its target names. Async,
 // because one call per session would hold the event loop for a timeout per unresponsive server.
-async function applyLivePsmuxGlobalOptions(): Promise<void> {
+// True only when every running session was listed and took every option.
+async function applyLivePsmuxGlobalOptions(): Promise<boolean> {
   const options = tmuxPsmuxGlobalOptions();
-  if (options.length === 0) return;
-  const ids = (await tmuxHeldSessionIdsAsync()) ?? [];
+  if (options.length === 0) return true;
+  const ids = await tmuxHeldSessionIdsAsync();
+  if (ids === null) return false;
   const sets = ids.flatMap((id) => options.map(({ name, value }) => tmuxAsync(["set-option", "-t", tmuxSessionTarget(id), "-g", name, value])));
-  await Promise.all(sets);
+  const results = await Promise.all(sets);
+  return results.every((result) => result.status === 0);
 }
 
 // The two line shapes `show-environment` emits. Anything else continues the
