@@ -4,7 +4,7 @@ nav_title: Feature list
 layout: default
 parent: English
 nav_order: 6.5
-as_of: 11.2.0
+as_of: 11.3.0
 description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 9.1.0)."
 ---
 
@@ -144,6 +144,7 @@ More: [Phone](phone.html)
 
 More: [Feature reference](features.html)
 
+- The bundled /mulmoterminal-video-edit skill cuts, joins, speeds up, re-sounds, makes vertical, subtitles from speech and puts text on a video with ffmpeg, writing a new file beside the original (v11.3.0)
 - With no file open, the Files pane shows a folder as a list or a gallery, and the tree follows it (v11.1.0)
 - A .json previews as indented JSON, and is offered the Canvas only when it is a MulmoScript (v11.1.0)
 - Open as a spreadsheet (copy) on a CSV or TSV puts a copy of it on the Canvas as a spreadsheet; the file is not changed (v10.10.0)
@@ -297,6 +298,7 @@ More: [Configuration](config.html)
 
 More: [From a collection](from-collection.html) · [MulmoCast videos](mulmocast.html) · [Spreadsheets and charts](spreadsheet.html)
 
+- The bundled /mulmoterminal-html-plan skill lays a plan out as a page in the Canvas, with each open choice as mockups or controls, and its button hands the decisions back as your next message (v11.3.0)
 - Spreadsheet formulas can answer a table that fills the cells beside them (SORT, FILTER, UNIQUE, GROUPBY, PIVOTBY), and add LET and LAMBDA, LINEST, FREQUENCY, FORECAST.ETS and more tests (v11.2.0)
 - Charts add maps of Japan and the world, clusters, a box per column, fitted curves and histograms that follow the sheet, word clouds, 3D, SVG and CSV export, and cards side by side (v11.1.0)
 - A chart can draw from a spreadsheet range and redraws when the sheet changes (presentChart `source`) (v10.10.0)

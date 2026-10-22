@@ -8,8 +8,8 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **11.2.0 is out.** Spreadsheet formulas can answer a whole table (sort, filter, group and total), with
-> many more statistics functions. [Setup guide](v11.2.0.html)
+> **11.3.0 is out.** Ask for a plan you can look at, choose between mockups on a page, and press its
+> button to hand the decisions back to the agent. [Setup guide](v11.3.0.html)
 
 ## What is MulmoTerminal? {#what-is}
 
