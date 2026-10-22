@@ -1906,6 +1906,11 @@
     zod "^3.25 || ^4.0"
     zod-to-json-schema "^3.25.1"
 
+"@modernized/echarts-wordcloud@^4.0.1":
+  version "4.0.1"
+  resolved "https://registry.yarnpkg.com/@modernized/echarts-wordcloud/-/echarts-wordcloud-4.0.1.tgz#4314d6d12df95b2c6d524850811f5eb673577e9d"
+  integrity sha512-5JExyLGeP01dBTB2dYTpGGHJiUyzxtlkOUyyuoE/W/SuUoJt6qim8QEkWoBTOAei+3yZtqpxxpfqaXYIAOjciw==
+
 "@modernized/fluent-ffmpeg@^1.0.3":
   version "1.0.3"
   resolved "https://registry.yarnpkg.com/@modernized/fluent-ffmpeg/-/fluent-ffmpeg-1.0.3.tgz#427fe10a6a0b496223edf54b3b4d15e2ad8e0068"
@@ -1960,11 +1965,12 @@
   resolved "https://registry.yarnpkg.com/@mulmoclaude/accounting-plugin/-/accounting-plugin-4.0.2.tgz#5631f35c4bcff34c86e3eff7831f2a0d21ec39d5"
   integrity sha512-We3HhS2OfYDfPwT9DbX4NSw2m+UYFcYHb6KfKZp4yQwgh7tYaTo1H8z7AMNVnfPOJn6ABv/O9VjSnLXeQ+xTlw==
 
-"@mulmoclaude/chart-plugin@^4.5.0":
-  version "4.5.0"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/chart-plugin/-/chart-plugin-4.5.0.tgz#4c2beac1e9798e2005b78a22fdf8301cbb6c5ae8"
-  integrity sha512-ZCv8Sg6/kMvJ00dfRV5DbbKZhEkkXkkYjCi/8HgsKfV4g66dOZp4/BqHH825BGlJRoY4ttZ4xUAR5A1mn525Yg==
+"@mulmoclaude/chart-plugin@^4.6.1":
+  version "4.6.1"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/chart-plugin/-/chart-plugin-4.6.1.tgz#458ebe365f08cb15efbdadc952ebde1f3c6b737f"
+  integrity sha512-RCSwnt9pn8IaQ4mTL2Vv7aZxLo+7VI9ybHrKP4pvOKDxFFukUCJXvGHgYLscdofXbo0ahXKsu0UMwF967EiA/A==
   dependencies:
+    "@modernized/echarts-wordcloud" "^4.0.1"
     echarts-gl "^2.1.0"
     echarts-stat "^1.2.0"
 
@@ -6696,7 +6702,7 @@ mute-stream@^3.0.0:
   resolved "https://registry.yarnpkg.com/mute-stream/-/mute-stream-3.0.0.tgz#cd8014dd2acb72e1e91bb67c74f0019e620ba2d1"
   integrity sha512-dkEJPVvun4FryqBmZ5KhDo0K9iDXAwn08tMLDinNdRBNPcYEDiWYysLcc6k3mjTMlbP9KyylvRpd4wFtwrT9rw==
 
-nanoid@^3.3.19, nanoid@^3.3.20:
+nanoid@^3.3.20:
   version "3.3.20"
   resolved "https://registry.yarnpkg.com/nanoid/-/nanoid-3.3.20.tgz#dfd4444d85aa10111ef66ba85ed72e08ba0855d8"
   integrity sha512-uKdg2G3GNCKQn9byYOpxbGqrT2fGO5KRt5J/8b3pok8rT6qxGWF6hxMyJiEYtAf+FVyYuD9hRaDqX5uPFYJ4ZQ==
@@ -7281,18 +7287,6 @@ punycode@^2.1.0, punycode@^2.3.1:
   version "2.3.1"
   resolved "https://registry.yarnpkg.com/punycode/-/punycode-2.3.1.tgz#027422e2faec0b25e1549c3e1bd8309b9133b6e5"
   integrity sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg==
-
-puppeteer-core@25.14.0:
-  version "25.14.0"
-  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-25.14.0.tgz#b2527058cf024eda8749c74ace5a9f0916c9c2d8"
-  integrity sha512-LQitnes3tBeVbdZ7V/4iwJPLZGgkl9uBVK0W7YYMh68j/3Y9eNuvj4yl+Fdo7zN0SuajOMrhd7aPj3DifK8k6A==
-  dependencies:
-    "@puppeteer/browsers" "3.2.5"
-    chromium-bidi "157.0.8090-0"
-    devtools-protocol "0.0.1696802"
-    typed-query-selector "^2.12.3"
-    webdriver-bidi-protocol "1.0.1"
-    ws "^8.22.0"
 
 puppeteer-core@25.15.0:
   version "25.15.0"

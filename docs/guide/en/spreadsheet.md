@@ -56,7 +56,7 @@ boxplots, Pareto charts, two value axes, waterfalls, a fitted line over a scatte
 calendar heatmaps among them. From 4.3.0 it can also fit a curve or bin a histogram from a sheet's raw
 columns, so those charts follow the sheet too. From 4.4.0 it can group points into clusters, box each
 column of a sheet, and colour a map of Japan or the world (prefecture and country names in Japanese
-work too). From 4.5.0 it can draw a word cloud, each word sized by its value. Cards follow a dark theme, can sit side by side, and also download as **SVG** and **CSV**.
+work too). From 4.5.0 it can draw a word cloud, each word sized by its value. Cards follow a dark theme, can sit side by side, and also download as **SVG** and **CSV** (a word cloud as PNG and CSV, a 3D chart as PNG).
 If a chart cannot be drawn, the agent is told why and fixes it before anything is shown.
 
 ![The chart card: monthly coffee and pastry sales as lines, with the monthly total as bars](../images/spreadsheet-chart.png)
@@ -78,8 +78,8 @@ requests like these:
 
 The Canvas was enlarged with the button at its top right, which is what puts the cards two to a row.
 **From the spreadsheet:** under a title names the range a card is drawn from; edit the sheet and the
-card is drawn again. The map here was drawn from values the agent wrote into the chart: a map drawn
-from a sheet range does not colour its regions by value yet.
+card is drawn again. A region with no row in the range, such as a prefecture with no stores, is left
+empty on the map rather than coloured.
 
 The totals behind those cards are formulas that answer a table: `=GROUPBY(Data!B2:B41, Data!E2:E41, SUM, 0, 0)`
 fills one row per prefecture, `LINEST` puts the slope and intercept of the fit beside them, and `T.TEST`
