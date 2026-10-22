@@ -11,6 +11,7 @@ vi.mock("../../../src/composables/usePubSub", () => ({ usePubSub: () => ({ subsc
 import { makeBrowserPluginRuntime } from "../../../src/composables/pluginRuntime";
 import { PLUGIN_DISPATCH_TIMEOUT_MS } from "../../../src/composables/pluginDispatchDeadline";
 import { SLOW_COMMAND_TIMEOUT_MS } from "../../../src/utils/fetchWithTimeout";
+import { i18n } from "../../../src/i18n";
 
 // Stand in for the socket: remember the channel the runtime subscribed to and hand
 // back a way to push a raw frame down it, as usePubSub's callback would.
@@ -180,5 +181,34 @@ describe("makeBrowserPluginRuntime subscribe", () => {
     expect(seen).toEqual(["ok.md"]);
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
+  });
+});
+
+describe("makeBrowserPluginRuntime locale", () => {
+  afterEach(() => {
+    i18n.global.locale.value = "en";
+  });
+
+  it("follows the app's display language, in the codes the plugins' tables use", () => {
+    const { locale } = runtime();
+    const cases = [
+      ["ja", "ja"],
+      ["zh-CN", "zh"],
+      ["zh-TW", "zh"],
+      ["ko", "ko"],
+      ["en", "en"],
+    ] as const;
+    cases.forEach(([uiLocale, pluginLocale]) => {
+      i18n.global.locale.value = uiLocale;
+      expect(locale.value).toBe(pluginLocale);
+    });
+  });
+
+  it("does not let a plugin change the app's language", () => {
+    const { locale } = runtime();
+    i18n.global.locale.value = "ja";
+    locale.value = "de";
+    expect(i18n.global.locale.value).toBe("ja");
+    expect(locale.value).toBe("ja");
   });
 });

@@ -51,7 +51,8 @@ import {
 } from "./useCollectionBrowse";
 import PinToggle from "../components/PinToggle.vue";
 import { startCollectionChat } from "./useChatLauncher";
-import { browserLocale } from "../utils/browserLocale";
+import { i18n } from "../i18n";
+import { pluginLocaleFor } from "../utils/pluginLocale";
 import { isRecord } from "../../common/isRecord";
 import { withProject } from "./collectionProject";
 import { activeCollectionNavSurface, activeCollectionProjectId } from "./collectionSurface";
@@ -108,9 +109,8 @@ const PROJECT_INDEPENDENT: Pick<
   | "navigateToRecord"
 > = {
   confirm: (options) => Promise.resolve(window.confirm(options.message)),
-  // MulmoTerminal has no host i18n; the plugin runs its own. Pick the browser's
-  // base language, defaulting to English.
-  localeTag: () => browserLocale(),
+  // The plugin runs its own i18n; it follows the app's display language, in its codes.
+  localeTag: () => pluginLocaleFor(i18n.global.locale.value),
   generalRoleId: "general",
   personalRoleId: "personal",
   pinToggle: PinToggle,
