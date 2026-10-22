@@ -78,6 +78,7 @@ const TARGET_BUILDER_FOR: Record<string, string> = {
   "capture-pane": "tmuxPaneTarget",
   "display-message": "tmuxPaneTarget",
   "send-keys": "tmuxPaneTarget",
+  "set-option": "tmuxPsmuxSessionTarget",
 };
 
 // `refresh-client -t` names a CLIENT: a tty path tmux itself just handed back, never a session name.
