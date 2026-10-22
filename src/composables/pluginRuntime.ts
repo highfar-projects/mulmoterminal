@@ -9,12 +9,13 @@
 //   - pubsub    → the existing socket.io usePubSub, on `plugin:<scope>:<event>`
 //                 channels (the server forwards file changes to
 //                 plugin:markdown:file:<path> — see server/backends/plugins/markdown.js).
-//   - locale    → a fixed "en" ref (MulmoTerminal has no locale picker; the
-//                 package's bundled i18n falls back to English).
+//   - locale    → the display language, as the plugins' table key (pluginLocale.ts).
 //   - openUrl   → scheme-allowlisted window.open.
-import { defineComponent, h, markRaw, provide, ref, type Component, type Ref } from "vue";
+import { computed, defineComponent, h, markRaw, provide, type Component, type Ref } from "vue";
 import { PLUGIN_RUNTIME_KEY, type BrowserPluginRuntime, type SubscribeOptions } from "gui-chat-protocol/vue";
 import { usePubSub } from "./usePubSub";
+import { i18n } from "../i18n";
+import { pluginLocaleFor } from "../utils/pluginLocale";
 import { isOpenablePluginUrl } from "./pluginUrlPolicy";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { PLUGIN_DISPATCH_TIMEOUT_MS, pluginDispatchError } from "./pluginDispatchDeadline";
@@ -104,8 +105,12 @@ function makeSubscribe(scope: string, onChannel: (channel: string, handler: (dat
   return subscribe;
 }
 
-// Shared "en" locale — MulmoTerminal has no locale switcher.
-const sharedLocale: Ref<string> = ref("en");
+// The app's display language, in the plugins' codes, following the picker. Writable because the
+// protocol types it so; a plugin cannot change the app's language from here, so a write is dropped.
+const sharedLocale: Ref<string> = computed({
+  get: () => pluginLocaleFor(i18n.global.locale.value),
+  set: () => {},
+});
 
 interface MakeRuntimeDeps {
   /** Channel namespace for pubsub (e.g. "markdown"); matches the server forward. */

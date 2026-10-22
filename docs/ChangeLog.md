@@ -8,6 +8,26 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@11.3.0 — 2026-10-22
+
+> **Setup guide:** [11.3.0 — Decide a plan on a page](https://receptron.github.io/mulmoterminal/guide/en/v11.3.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v11.3.0.html))
+
+### A plan as a page you decide on (#3163, #3168)
+
+New bundled skill `mulmoterminal-html-plan`. Asked for a plan, the agent lays it out as a page in the Canvas — what is settled, what it assumed, and each open choice as mockups or controls side by side — and the page's button hands the decisions back as the user's next message. The page is presented with `presentHtml`'s `submit: "direct"` (from `@mulmoclaude/html-plugin` 5.2.0, receptron/mulmoclaude#3592) and its button carries the key the host puts in the page's URL, so the decisions arrive without a confirmation step. A page the agent did not write for this — one opened by `path` — a post without the key, or a second press within a few seconds shows the confirmation bar first (from 5.1.0, receptron/mulmoclaude#3583). When the terminal cannot take the text, it stays in the bar with the reason. #3168 also takes `@mulmoclaude/core` 5.13.0, which html-plugin 5.2.0 requires.
+
+### Edit a video by asking (#3160)
+
+New bundled skill `mulmoterminal-video-edit`: cut, join, speed, sound (even out, replace, mix), vertical 9:16, a still, subtitles made from speech (`whisper-cli`, reusing voice input's model) and on-screen text (ASS), all with ffmpeg. The original is never changed; the result is a new file beside it, opened in the pane with `showInPane`, with the `.srt` and `.ass` kept beside it to edit and draw again.
+
+### Charts (#3164, #3165)
+
+`@mulmoclaude/chart-plugin` 4.6.2. Word clouds are drawn by `@modernized/echarts-wordcloud` and take its `shape`; they export to PNG but no longer to SVG, and keep one colour per word. A map drawn from a sheet range no longer paints its no-data regions as the largest, and 3D axis labels read on the dark theme. The spreadsheet guide's word-cloud picture is retaken.
+
+### Docs (#3161)
+
+The spreadsheet guide (en/ja) shows what the charts and the table-answering formulas look like, with the requests that produced them.
+
 ## mulmoterminal@11.2.0 — 2026-10-22
 
 > **Setup guide:** [11.2.0 — Formulas that answer a table](https://receptron.github.io/mulmoterminal/guide/en/v11.2.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v11.2.0.html))

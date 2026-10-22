@@ -17,7 +17,16 @@ import { isLauncherEnvVar } from "./pty-env.js";
 import { spawnCapture, spawnCaptureAsync } from "./spawnCapture.js";
 import { splitLines } from "../fs/split-lines.js";
 import { callerFrames, traceTmux } from "../tmux-trace.js";
-import { PSMUX_SCRUBBED_NAMES, isPsmuxVersion, psmuxVersionOf, psmuxVtInputFor, type PsmuxVersion } from "./psmux.js";
+import {
+  PSMUX_SCRUBBED_NAMES,
+  isPsmuxVersion,
+  psmuxConfLine,
+  psmuxGlobalOptions,
+  psmuxVersionOf,
+  psmuxVtInputFor,
+  type PsmuxGlobalOption,
+  type PsmuxVersion,
+} from "./psmux.js";
 import { writeFileAtomicSync } from "../../files/atomic-write.js";
 import { TMUX_PREFIX_DEFAULT, staleSendPrefixKeys, tmuxPrefixCommands } from "../../../common/tmuxPrefix.js";
 
@@ -70,6 +79,9 @@ export const tmuxPsmuxVtInput = (): boolean => cachedPsmux && psmuxVtInputFor(ca
 
 /** Names kept off a psmux client and out of a running psmux server. Empty for a real tmux. */
 export const tmuxPsmuxScrubbedNames = (): readonly string[] => (cachedPsmux ? PSMUX_SCRUBBED_NAMES : []);
+
+/** Global options for psmux alone. Empty for a real tmux, which has no such options and rejects them. */
+const tmuxPsmuxGlobalOptions = (): readonly PsmuxGlobalOption[] => (cachedPsmux ? psmuxGlobalOptions(cachedPsmuxVersion) : []);
 
 // The terminfo `Ms` capability (OSC 52 clipboard write). tmux only forwards a program's
 // OSC 52 to the OUTER terminal when it knows the outer terminal supports it — our web
@@ -154,21 +166,11 @@ export const TMUX_CONF_LINES: readonly string[] = [
   ...WHEEL_SCROLL_BINDINGS,
 ];
 
-// Fork-only: psmux's warm pool keeps three spare shells per session server, and a `__warm__`
-// standby server besides, so the next `new-session` starts instantly. We never claim one: a spawn
-// with `-e` skips the pool, and every cell's `new-session` carries `-e` (MULMOTERMINAL_SESSION_ID
-// at least). Every client resize also kills the spares and starts three more at the new size
-// (measured on psmux 3.4.0 with PSMUX_WARM_TRACE). Five cells held 18 spare pwsh, about 1.9 GB,
-// and each refill cost 1.5-5 s of CPU per shell. Off, there are no spares and no `__warm__` server.
-// The option exists from psmux 3.3.4; real tmux has no such option and would reject it.
-const PSMUX_CONF_LINES = ["set -g warm off"] as const;
-
 /** The conf a given tmux is handed. psmux rejects `terminal-features` and prints the rejection as
  *  a "config warning" into the first pane a new server opens — and it needs neither declaration,
  *  since it forwards OSC 8 and OSC 52 on its own (see applyLiveTmuxOptions). */
 export function tmuxConfLinesFor(psmux: boolean): readonly string[] {
-  if (!psmux) return TMUX_CONF_LINES;
-  return [...TMUX_CONF_LINES.filter((line) => !/terminal-(features|overrides)/.test(line)), ...PSMUX_CONF_LINES];
+  return psmux ? TMUX_CONF_LINES.filter((line) => !/terminal-(features|overrides)/.test(line)) : TMUX_CONF_LINES;
 }
 
 export type MsOverridePlan = { kind: "ok" } | { kind: "append" } | { kind: "replace"; index: number };
@@ -213,6 +215,8 @@ function applyLiveTmuxOptions(): void {
   for (const table of WHEEL_SCROLL_TABLES) {
     for (const { key, command } of WHEEL_SCROLL_KEYS) tmux(["bind-key", "-T", table, key, liveWheelCommand(command, cachedPsmux)]);
   }
+  // Before the psmux return below: these options exist only on psmux (empty for a real tmux).
+  applyLivePsmuxGlobalOptions().catch(() => {});
   // psmux forwards OSC 8 and OSC 52 to its client with no declaration at all (measured on 3.3.8),
   // and has neither the `-s` that `set -as` needs nor a readable terminal-overrides — the two
   // calls below would only fail, and the Ms plan would re-append on every start.
@@ -225,6 +229,17 @@ function applyLiveTmuxOptions(): void {
   const plan = planMsOverride(tmux(["show", "-g", "terminal-overrides"]).stdout);
   if (plan.kind === "append") tmux(["set", "-ag", "terminal-overrides", OSC52_MS_OVERRIDE]);
   if (plan.kind === "replace") tmux(["set", "-g", `terminal-overrides[${plan.index}]`, MS_OVERRIDE_ENTRY]);
+}
+
+// psmux runs one server per session, so a `-g` set reaches only the server its target names. Async,
+// because one call per session would hold the event loop for a timeout per unresponsive server.
+// Best effort like every other live option here: idempotent, so each ensureConf simply sends it again.
+async function applyLivePsmuxGlobalOptions(): Promise<void> {
+  const options = tmuxPsmuxGlobalOptions();
+  if (options.length === 0) return;
+  const ids = (await tmuxHeldSessionIdsAsync()) ?? [];
+  const sets = ids.flatMap((id) => options.map(({ name, value }) => tmuxAsync(["set-option", "-t", tmuxPsmuxSessionTarget(id), "-g", name, value])));
+  await Promise.all(sets);
 }
 
 // The two line shapes `show-environment` emits. Anything else continues the
@@ -346,7 +361,10 @@ function ensureConf(): void {
   try {
     mkdirSync(path.dirname(CONF_FILE), { recursive: true });
     // Atomic: a sibling mulmoterminal may start the tmux server with `-f` while a saved setting rewrites this.
-    writeFileAtomicSync(CONF_FILE, [...tmuxConfLinesFor(cachedPsmux), ...tmuxPrefixCommands(tmuxPrefix)].join("\n") + "\n");
+    writeFileAtomicSync(
+      CONF_FILE,
+      [...tmuxConfLinesFor(cachedPsmux), ...tmuxPsmuxGlobalOptions().map(psmuxConfLine), ...tmuxPrefixCommands(tmuxPrefix)].join("\n") + "\n",
+    );
     if (tmux(["list-sessions"]).status === 0) {
       applyLiveTmuxOptions();
       scrubGlobalEnvironment();
@@ -372,6 +390,11 @@ export const tmuxSessionName = (id: string): string => `${SESSION_PREFIX}${id}`;
 
 /** For a subcommand taking a target-SESSION: `has-session`, `kill-session`, `list-clients`. */
 export const tmuxSessionTarget = (id: string): string => `=${tmuxSessionName(id)}`;
+
+/** For a command sent to psmux ONLY. psmux matches a session name exactly, and before 3.3.8 it did
+ *  not strip `=`, so `tmuxSessionTarget` routed to a session literally named `=mt-…`. Never for a
+ *  real tmux, where the bare name prefix-matches. */
+export const tmuxPsmuxSessionTarget = (id: string): string => tmuxSessionName(id);
 
 /** For a subcommand taking a target-PANE: `capture-pane`, `display-message`. The trailing `:` is
  *  what makes it a pane spec — without it the target resolves to nothing at all. */

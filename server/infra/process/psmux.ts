@@ -9,6 +9,24 @@ export type PsmuxVersion = readonly [number, number, number];
 // The first release with PSMUX_VT_INPUT (psmux#766).
 export const PSMUX_VT_INPUT_SINCE: PsmuxVersion = [3, 4, 0];
 
+// The first release with the `warm` option (psmux#120); 3.3.0 does not know it.
+export const PSMUX_WARM_OPTION_SINCE: PsmuxVersion = [3, 3, 1];
+
+export type PsmuxGlobalOption = { readonly name: string; readonly value: string };
+
+// psmux keeps spare shells in every server, plus a `__warm__` standby server, for the next
+// creation to claim. A spawn with `-e` never claims one, and every cell's `new-session` carries
+// `-e`, so the spares only cost memory — and every client resize restarts them at the new size.
+const PSMUX_WARM_OFF: PsmuxGlobalOption = { name: "warm", value: "off" };
+
+/** The global options only a psmux is set, on top of the shared conf. Empty for a psmux too old to
+ *  know them, which would print the rejection into the first pane a new server opens. */
+export function psmuxGlobalOptions(version: PsmuxVersion | null): readonly PsmuxGlobalOption[] {
+  return version !== null && isAtLeast(version, PSMUX_WARM_OPTION_SINCE) ? [PSMUX_WARM_OFF] : [];
+}
+
+export const psmuxConfLine = ({ name, value }: PsmuxGlobalOption): string => `set -g ${name} ${value}`;
+
 // Volta marks the node it launches so a `node` beneath it skips the shim and runs whatever PATH
 // names. A psmux pane rebuilds PATH but keeps this, so `node` in the cell — stdio MCP servers
 // included — was not found. Kept off the client, which a new psmux server inherits from, and

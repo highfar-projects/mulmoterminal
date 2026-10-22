@@ -57,8 +57,11 @@ Do not invent timelines, percentages or status badges the plan does not support.
 
 ## 3. End with a Send button
 
-The button posts the summary to the host. The host shows it to the user in a confirmation bar
-above the page; they can edit it, and it reaches you only when they press Send there.
+The button posts the summary to the host. Presented as in step 4 — written with `html` and passed
+`submit: "direct"` — and carrying the key the host put in the page's own URL, it reaches you as soon
+as the user presses the button. Anything else (no key, a page opened by `path`, a second press
+within a few seconds) is shown to the user in a confirmation bar above the page first, and reaches
+you when they press Send there.
 
 ```html
 <button id="send">Send these decisions</button>
@@ -70,12 +73,16 @@ above the page; they can edit it, and it reaches you only when they press Send t
     lines.push(`Notes: ${document.getElementById("notes").value || "(none)"}`);
     return lines.join("\n");
   }
+  // The host puts a fresh key in this page's URL; a page the frame moves to later does not have it.
+  const key = new URLSearchParams(location.hash.slice(1)).get("mulmo-submit-key");
   document.getElementById("send").onclick = () =>
-    window.parent.postMessage({ type: "mulmo-html-submit", text: summary() }, "*");
+    window.parent.postMessage({ type: "mulmo-html-submit", text: summary(), key }, "*");
 </script>
 ```
 
 - `text` is plain text, at most 20,000 characters. Longer is refused, not shortened.
+- Send only from the button. Never post on load or on every change: with `submit: "direct"` each post
+  reaches the conversation as the user's message.
 - Write each line so it stands on its own when it arrives in the terminal: name the decision and
   the option chosen, include anything typed into a free-text box, and mark an assumption the user
   overturned.
@@ -83,9 +90,11 @@ above the page; they can edit it, and it reaches you only when they press Send t
 
 ## 4. Present it and stop
 
-Call `presentHtml` with the page as `html` and a short `title`. If the user wants the plan kept in
-the project (for example beside other plans), write the file there and present it with `path`
-instead, so their edits in the view stay in that one file.
+Call `presentHtml` with the page as `html`, a short `title`, and `submit: "direct"`. Pass that flag
+only for a page you wrote just now for this — never for a page whose script you did not write. If
+the user wants the plan kept in the project (for example beside other plans), write the file there
+and present it with `path` instead; the flag does not apply to `path`, so their Send then goes
+through the confirmation bar.
 
 Then **finish your turn.** Do not wait, poll or ask in the terminal whether they are done. Tell them
 in a sentence what to decide on the page and that Send hands it back.
@@ -96,8 +105,8 @@ They come in as the user's next message, in the shape your `summary()` produced.
 
 1. Read every line back against the plan. If a choice contradicts something settled, or leaves a
    question that blocks the work, ask about that one thing — do not re-send the page.
-2. If the decisions change the plan materially, update the page (same file, `path`) so it matches
-   what was decided, and say what changed.
+2. If the decisions change the plan materially, present an updated page — with `html` and
+   `submit: "direct"` again if they need to choose again — and say what changed.
 3. Otherwise go ahead with the work, in the order the plan's steps give.
 
 If the user edits the page itself or asks for another option, rewrite it and present it again; a

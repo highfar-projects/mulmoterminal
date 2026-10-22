@@ -5,13 +5,12 @@
 //   · no global `style.css` import: PluginFrame injects the package CSS into each
 //     view's own shadow root via the `?inline` string in plugins-registry.ts, so it
 //     can't leak the package's Tailwind preflight into MulmoTerminal's own UI.
-//   · locale is the browser's base language (MulmoTerminal has no locale picker); the
-//     package's self-contained i18n falls back to English for anything else.
+//   · locale is the display language (see localeTag below).
 import { configureAccountingHost } from "@mulmoclaude/accounting-plugin/vue";
 import type { ApiResult } from "@mulmoclaude/accounting-plugin/vue";
 import { fetchJson } from "../utils/fetchJson";
 import { usePubSub } from "./usePubSub";
-import { browserLocale } from "../utils/browserLocale";
+import { i18n } from "../i18n";
 
 const { subscribe } = usePubSub();
 
@@ -40,5 +39,7 @@ configureAccountingHost({
   // Raw `accounting:<bookId>` / `accounting:books` channels: the engine publishes
   // book changes (server/backends/plugins/accounting.ts) and the View live-refreshes.
   subscribe,
-  localeTag: () => browserLocale(),
+  // The display language as a full tag, not pluginLocaleFor's table key: the plugin's own vue-i18n
+  // falls back zh-TW to zh, and it reads the region off the tag to guess the book's country.
+  localeTag: () => i18n.global.locale.value,
 });

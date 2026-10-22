@@ -4,7 +4,7 @@ nav_title: 全機能リスト
 layout: default
 parent: 日本語
 nav_order: 6.5
-as_of: 11.2.0
+as_of: 11.3.0
 description: MulmoTerminal のいまある機能を、入った版つきで領域ごとに一行ずつ並べた一覧（9.1.0 時点）。
 ---
 
@@ -144,6 +144,7 @@ description: MulmoTerminal のいまある機能を、入った版つきで領�
 
 詳しく: [機能リファレンス](features.html)
 
+- 同梱スキル /mulmoterminal-video-edit で、動画の切り出し・つなぎ・速さ・音・縦長・話からの字幕・画面の文字を ffmpeg で編集する。元の隣に新しいファイルを書き出す (v11.3.0)
 - ファイルを開いていないとき、ファイル画面がフォルダを一覧かギャラリーで見せ、ツリーもついてくる (v11.1.0)
 - .json は字下げした JSON でプレビューし、Canvas で開く選択肢は MulmoScript のときだけ出す (v11.1.0)
 - CSV や TSV の「表計算で開く（コピー）」で、そのコピーを表として Canvas に出す。元のファイルは変わらない (v10.10.0)
@@ -296,6 +297,7 @@ description: MulmoTerminal のいまある機能を、入った版つきで領�
 
 詳しく: [コレクションから作る](from-collection.html) · [MulmoCast の動画](mulmocast.html) · [表計算とグラフ](spreadsheet.html)
 
+- 同梱スキル /mulmoterminal-html-plan が、計画を Canvas のページにし、未決の選択肢をモックや操作できる部品で並べる。ページのボタンで、決めた内容があなたの次のメッセージとして届く (v11.3.0)
 - 表の計算式が、隣のセルまで埋める表を返せる（SORT、FILTER、UNIQUE、GROUPBY、PIVOTBY）。LET と LAMBDA、LINEST、FREQUENCY、FORECAST.ETS、検定も増える (v11.2.0)
 - グラフに日本地図・世界地図、まとまり分け、列ごとの箱ひげ図、表を追いかける曲線とヒストグラム、ワードクラウド、3D、SVG・CSV での保存、カードの横並びが加わる (v11.1.0)
 - グラフが表の範囲から描け、表を直すと描き直される（presentChart の `source`） (v10.10.0)

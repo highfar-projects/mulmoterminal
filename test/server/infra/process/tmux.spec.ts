@@ -83,6 +83,7 @@ const TARGET_BUILDER_FOR: Record<string, string> = {
   "capture-pane": "tmuxPaneTarget",
   "display-message": "tmuxPaneTarget",
   "send-keys": "tmuxPaneTarget",
+  "set-option": "tmuxPsmuxSessionTarget",
 };
 
 // `refresh-client -t` names a CLIENT: a tty path tmux itself just handed back, never a session name.
@@ -708,13 +709,6 @@ describe("tmuxConfLinesFor", () => {
     expect(lines).toContain("set -g status off");
     expect(lines).toContain("set -g mouse on");
     expect(lines.filter((l) => TMUX_CONF_LINES.includes(l))).toHaveLength(TMUX_CONF_LINES.length - 2);
-  });
-
-  // Every `new-session` passes `-e`, which skips psmux's warm pool, so its spare shells are never
-  // claimed — they only cost memory, and are restarted on every client resize.
-  it("turns psmux's warm pool off, and asks a real tmux for no such option", () => {
-    expect(tmuxConfLinesFor(true)).toContain("set -g warm off");
-    expect(tmuxConfLinesFor(false).some((l) => /\bwarm\b/.test(l))).toBe(false);
   });
 });
 

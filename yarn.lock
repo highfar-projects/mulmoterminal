@@ -1965,10 +1965,10 @@
   resolved "https://registry.yarnpkg.com/@mulmoclaude/accounting-plugin/-/accounting-plugin-4.0.2.tgz#5631f35c4bcff34c86e3eff7831f2a0d21ec39d5"
   integrity sha512-We3HhS2OfYDfPwT9DbX4NSw2m+UYFcYHb6KfKZp4yQwgh7tYaTo1H8z7AMNVnfPOJn6ABv/O9VjSnLXeQ+xTlw==
 
-"@mulmoclaude/chart-plugin@^4.6.1":
-  version "4.6.1"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/chart-plugin/-/chart-plugin-4.6.1.tgz#458ebe365f08cb15efbdadc952ebde1f3c6b737f"
-  integrity sha512-RCSwnt9pn8IaQ4mTL2Vv7aZxLo+7VI9ybHrKP4pvOKDxFFukUCJXvGHgYLscdofXbo0ahXKsu0UMwF967EiA/A==
+"@mulmoclaude/chart-plugin@^4.6.2":
+  version "4.6.2"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/chart-plugin/-/chart-plugin-4.6.2.tgz#0b95dbc4ef05aef96370a0855795db9483f1b16d"
+  integrity sha512-WHbXbpgWGt40A+1ulfW+ZEbHrGUKX0rBqdP9Y2Ww4Vl8CiatDSbK9pmjzoU+rVeF0CcdCjd2AdZVGqr96EF7Sg==
   dependencies:
     "@modernized/echarts-wordcloud" "^4.0.1"
     echarts-gl "^2.1.0"
@@ -1987,10 +1987,10 @@
   resolved "https://registry.yarnpkg.com/@mulmoclaude/common/-/common-1.5.0.tgz#d4362c31b68ca19e1b60c78d2b7d93c0cba93cc1"
   integrity sha512-IgeY1HcUVvEkiQWYn8suQ/fwRqAMrL0RaKRPpZPwjmS6XVyHrBOuNpKyrAk5Ux8qMpDXoio2JMQfxz3jCtIAbg==
 
-"@mulmoclaude/core@^5.12.1":
-  version "5.12.1"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/core/-/core-5.12.1.tgz#ccb975ccfa2fb418470d1b30c7cceda443a177c7"
-  integrity sha512-/OdDlE8yGhjAY0Zs9sRE393sCvWhz18FnfVGrZfUEdoO4TNVUaMpdyS9x9jpOipVP3OpYbt1/0w6yk98xus92g==
+"@mulmoclaude/core@^5.13.0":
+  version "5.13.0"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/core/-/core-5.13.0.tgz#c1a1adb33fd18db9cfabca51463072d98566baa4"
+  integrity sha512-R8zvW70/h7N6pyQ2ejmW6Gz7dbJCd7JwQcraBdMMK+SYm6d9w0oy2bWCn9xSal6CJNNQ/pJIpKf0Ll/7T8KDig==
   dependencies:
     "@duckdb/node-api" "^1.5.6-r.1"
     "@gui-chat-plugin/common" "^0.1.0"
@@ -2013,10 +2013,10 @@
   resolved "https://registry.yarnpkg.com/@mulmoclaude/google-plugin/-/google-plugin-4.1.0.tgz#601e331758ec5146af038fbfed04de3a42cb2b11"
   integrity sha512-gHexYCO4srcTS3mfwj/RffiI++sq3OVfkWtdJLYo2VXfzR+IXHMVB3WeSt1iOrNDy2B7emv5udPH9abhsO0l9w==
 
-"@mulmoclaude/html-plugin@^5.1.0":
-  version "5.1.0"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/html-plugin/-/html-plugin-5.1.0.tgz#73a1571b21a77f27e907170838f026e591012b11"
-  integrity sha512-X8VaOjTi/EeItNwW/EZ+ytRj6O6nKJZk0JfNkyJQrQ20A0EaOYzZxqa3c3UpL8TNNFH/Ko2jTGrGu41VvBLdTw==
+"@mulmoclaude/html-plugin@^5.2.0":
+  version "5.2.0"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/html-plugin/-/html-plugin-5.2.0.tgz#52dbc80fcf16b3f3e40553d0538b4f9b9ba86efd"
+  integrity sha512-xnsuosXhLsRBaV+ryR2hbp3g+mYPu/13QVGnMIuGQ8a+EtMckQPA6hAKfiVByUQmPu7YIsXWUeTx0ctv5SK5og==
 
 "@mulmoclaude/markdown-plugin@^5.2.0":
   version "5.2.0"
