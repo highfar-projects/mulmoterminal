@@ -1965,10 +1965,10 @@
   resolved "https://registry.yarnpkg.com/@mulmoclaude/accounting-plugin/-/accounting-plugin-4.0.2.tgz#5631f35c4bcff34c86e3eff7831f2a0d21ec39d5"
   integrity sha512-We3HhS2OfYDfPwT9DbX4NSw2m+UYFcYHb6KfKZp4yQwgh7tYaTo1H8z7AMNVnfPOJn6ABv/O9VjSnLXeQ+xTlw==
 
-"@mulmoclaude/chart-plugin@^4.6.1":
-  version "4.6.1"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/chart-plugin/-/chart-plugin-4.6.1.tgz#458ebe365f08cb15efbdadc952ebde1f3c6b737f"
-  integrity sha512-RCSwnt9pn8IaQ4mTL2Vv7aZxLo+7VI9ybHrKP4pvOKDxFFukUCJXvGHgYLscdofXbo0ahXKsu0UMwF967EiA/A==
+"@mulmoclaude/chart-plugin@^4.6.2":
+  version "4.6.2"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/chart-plugin/-/chart-plugin-4.6.2.tgz#0b95dbc4ef05aef96370a0855795db9483f1b16d"
+  integrity sha512-WHbXbpgWGt40A+1ulfW+ZEbHrGUKX0rBqdP9Y2Ww4Vl8CiatDSbK9pmjzoU+rVeF0CcdCjd2AdZVGqr96EF7Sg==
   dependencies:
     "@modernized/echarts-wordcloud" "^4.0.1"
     echarts-gl "^2.1.0"
