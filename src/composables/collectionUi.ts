@@ -1,8 +1,8 @@
 // Wire @mulmoclaude/collection-plugin/vue to MulmoTerminal. Imported for its side
 // effect from main.ts so the package's View layer can resolve data before any
 // presentCollection card mounts. MulmoTerminal's counterpart to MulmoClaude's
-// src/composables/collections/uiHost.ts — a leaner host (no router, no vue-i18n host
-// instance, no confirm/notifier stores).
+// src/composables/collections/uiHost.ts — a leaner host (no router, no confirm/notifier
+// stores).
 //
 // Wired: data fetch (detail/list), record CRUD, custom views (read-only desktop +
 // read/write mobile phone-frame preview via fetchRemoteView/mutateRemoteView), actions
@@ -51,7 +51,8 @@ import {
 } from "./useCollectionBrowse";
 import PinToggle from "../components/PinToggle.vue";
 import { startCollectionChat } from "./useChatLauncher";
-import { browserLocale } from "../utils/browserLocale";
+import { i18n } from "../i18n";
+import { pluginLocaleFor } from "../utils/pluginLocale";
 import { isRecord } from "../../common/isRecord";
 import { withProject } from "./collectionProject";
 import { activeCollectionNavSurface, activeCollectionProjectId } from "./collectionSurface";
@@ -108,9 +109,9 @@ const PROJECT_INDEPENDENT: Pick<
   | "navigateToRecord"
 > = {
   confirm: (options) => Promise.resolve(window.confirm(options.message)),
-  // MulmoTerminal has no host i18n; the plugin runs its own. Pick the browser's
-  // base language, defaulting to English.
-  localeTag: () => browserLocale(),
+  // The table key, not the full tag: the same value goes to the server's custom-view translation
+  // route, which looks the language up by exact key, so zh-TW would find no strings there.
+  localeTag: () => pluginLocaleFor(i18n.global.locale.value),
   generalRoleId: "general",
   personalRoleId: "personal",
   pinToggle: PinToggle,
