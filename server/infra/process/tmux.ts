@@ -213,7 +213,7 @@ async function applyLivePsmuxGlobalOptions(): Promise<void> {
   const options = tmuxPsmuxGlobalOptions();
   if (options.length === 0) return;
   const ids = (await tmuxHeldSessionIdsAsync()) ?? [];
-  const sets = ids.flatMap((id) => options.map(({ name, value }) => tmuxAsync(["set-option", "-t", tmuxSessionTarget(id), "-g", name, value])));
+  const sets = ids.flatMap((id) => options.map(({ name, value }) => tmuxAsync(["set-option", "-t", tmuxPsmuxSessionTarget(id), "-g", name, value])));
   await Promise.all(sets);
 }
 
@@ -362,6 +362,11 @@ export const tmuxSessionName = (id: string): string => `${SESSION_PREFIX}${id}`;
 
 /** For a subcommand taking a target-SESSION: `has-session`, `kill-session`, `list-clients`. */
 export const tmuxSessionTarget = (id: string): string => `=${tmuxSessionName(id)}`;
+
+/** For a command sent to psmux ONLY. psmux matches a session name exactly, and before 3.3.8 it did
+ *  not strip `=`, so `tmuxSessionTarget` routed to a session literally named `=mt-…`. Never for a
+ *  real tmux, where the bare name prefix-matches. */
+export const tmuxPsmuxSessionTarget = (id: string): string => tmuxSessionName(id);
 
 /** For a subcommand taking a target-PANE: `capture-pane`, `display-message`. The trailing `:` is
  *  what makes it a pane spec — without it the target resolves to nothing at all. */

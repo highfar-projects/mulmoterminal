@@ -76,8 +76,8 @@ describe("psmux's warm pool", () => {
     expect(conf()).toContain("set -g warm off");
     await vi.waitFor(() => expect(liveWarm()).toHaveLength(2));
     expect(liveWarm()).toEqual([
-      ["set-option", "-t", "=mt-abc", "-g", "warm", "off"],
-      ["set-option", "-t", "=mt-def", "-g", "warm", "off"],
+      ["set-option", "-t", "mt-abc", "-g", "warm", "off"],
+      ["set-option", "-t", "mt-def", "-g", "warm", "off"],
     ]);
   });
 
