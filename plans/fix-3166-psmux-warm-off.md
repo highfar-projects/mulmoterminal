@@ -11,11 +11,12 @@ reporter's `PSMUX_WARM_TRACE` shows every client resize kills and restarts them.
 ## Fix
 
 - `server/infra/process/psmux.ts`: `psmuxGlobalOptions(version)` returns `warm off` for psmux
-  3.3.4+ (the first release with the option) and nothing for an older one or an unreadable version,
+  3.3.1+ (the first release with the option, psmux#120) and nothing for an older one or an unreadable version,
   since an unknown option would print a config warning into the first pane.
 - `server/infra/process/tmux.ts`:
   - `ensureConf` appends those options to the conf on psmux only. A real tmux has no `warm` option.
-  - `applyLiveTmuxOptions` sends `set-option -t =mt-<id> -g warm off` to every running session.
+  - `applyLiveTmuxOptions` sends `set-option -t =mt-<id> -g warm off` to every running session,
+    asynchronously and once per process, so an unresponsive server cannot hold startup.
     psmux runs one server per session and routes by `-t`, so one bare `set -g` would reach only
     one of them. Setting `warm off` at runtime also kills the `__warm__` server (psmux
     `src/server/options.rs`).

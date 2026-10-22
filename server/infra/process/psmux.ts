@@ -9,8 +9,8 @@ export type PsmuxVersion = readonly [number, number, number];
 // The first release with PSMUX_VT_INPUT (psmux#766).
 export const PSMUX_VT_INPUT_SINCE: PsmuxVersion = [3, 4, 0];
 
-// The first release with the `warm` option (psmux docs/warm-sessions.md).
-export const PSMUX_WARM_OPTION_SINCE: PsmuxVersion = [3, 3, 4];
+// The first release with the `warm` option (psmux#120); 3.3.0 does not know it.
+export const PSMUX_WARM_OPTION_SINCE: PsmuxVersion = [3, 3, 1];
 
 export type PsmuxGlobalOption = { readonly name: string; readonly value: string };
 

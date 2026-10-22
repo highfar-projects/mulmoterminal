@@ -27,7 +27,11 @@ vi.mock("../../../../server/infra/process/spawnCapture.js", () => ({
     if (args[2] === "show-environment") return { status: 0, stdout: "_VOLTA_TOOL_RECURSION=1\nHOME=/h\n", stderr: "" };
     return { status: 0, stdout: "", stderr: "" };
   },
-  spawnCaptureAsync: async () => ({ status: 0, stdout: "", stderr: "" }),
+  spawnCaptureAsync: async (_bin: string, args: string[]) => {
+    calls.push(args);
+    if (args[2] === "list-sessions") return { status: 0, stdout: "mt-abc\nmt-def\n", stderr: "" };
+    return { status: 0, stdout: "", stderr: "" };
+  },
 }));
 
 afterAll(() => rmSync(scratch.home, { recursive: true, force: true }));
@@ -64,13 +68,26 @@ describe("psmux's warm pool", () => {
   it("is turned off in the conf and on each running psmux session", async () => {
     await startWith("tmux 3.4\npsmux 3.4.0 (abc)\n");
     expect(conf()).toContain("set -g warm off");
-    expect(liveWarm()).toEqual([["set-option", "-t", "=mt-abc", "-g", "warm", "off"]]);
+    await vi.waitFor(() => expect(liveWarm()).toHaveLength(2));
+    expect(liveWarm()).toEqual([
+      ["set-option", "-t", "=mt-abc", "-g", "warm", "off"],
+      ["set-option", "-t", "=mt-def", "-g", "warm", "off"],
+    ]);
   });
 
   it("is left alone on a psmux too old to know the option", async () => {
-    await startWith("tmux 3.3\npsmux 3.3.3 (abc)\n");
+    await startWith("tmux 3.3\npsmux 3.3.0 (abc)\n");
     expect(conf()).not.toContain("warm");
     expect(liveWarm()).toEqual([]);
+  });
+
+  it("is sent to running sessions once, not again when the prefix changes", async () => {
+    await startWith("tmux 3.4\npsmux 3.4.0 (abc)\n");
+    await vi.waitFor(() => expect(liveWarm()).toHaveLength(2));
+    const { setTmuxPrefix } = await import("../../../../server/infra/process/tmux.js");
+    setTmuxPrefix("C-a");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(liveWarm()).toHaveLength(2);
   });
 
   it("is never asked of a real tmux", async () => {

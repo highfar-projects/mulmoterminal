@@ -203,15 +203,24 @@ function applyLiveTmuxOptions(): void {
   const plan = planMsOverride(tmux(["show", "-g", "terminal-overrides"]).stdout);
   if (plan.kind === "append") tmux(["set", "-ag", "terminal-overrides", OSC52_MS_OVERRIDE]);
   if (plan.kind === "replace") tmux(["set", "-g", `terminal-overrides[${plan.index}]`, MS_OVERRIDE_ENTRY]);
-  applyLivePsmuxGlobalOptions();
+  if (!livePsmuxOptionsSent) {
+    livePsmuxOptionsSent = true;
+    applyLivePsmuxGlobalOptions().catch(() => {});
+  }
 }
 
-// psmux runs one server per session, so a `-g` set reaches only the server its target names.
-function applyLivePsmuxGlobalOptions(): void {
+// Once per process: the options do not depend on anything a later ensureConf changes, and a server
+// started after this reads them from CONF_FILE.
+let livePsmuxOptionsSent = false;
+
+// psmux runs one server per session, so a `-g` set reaches only the server its target names. Async,
+// because one call per session would hold the event loop for a timeout per unresponsive server.
+async function applyLivePsmuxGlobalOptions(): Promise<void> {
   const options = tmuxPsmuxGlobalOptions();
   if (options.length === 0) return;
-  const ids = tmuxHeldSessionIds() ?? [];
-  ids.forEach((id) => options.forEach(({ name, value }) => tmux(["set-option", "-t", tmuxSessionTarget(id), "-g", name, value])));
+  const ids = (await tmuxHeldSessionIdsAsync()) ?? [];
+  const sets = ids.flatMap((id) => options.map(({ name, value }) => tmuxAsync(["set-option", "-t", tmuxSessionTarget(id), "-g", name, value])));
+  await Promise.all(sets);
 }
 
 // The two line shapes `show-environment` emits. Anything else continues the

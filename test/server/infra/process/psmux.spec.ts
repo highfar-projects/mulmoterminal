@@ -97,10 +97,10 @@ describe("psmuxStartupNote", () => {
 
 describe("psmuxGlobalOptions", () => {
   it.each([
-    [[3, 3, 4], ["set -g warm off"]],
+    [[3, 3, 1], ["set -g warm off"]],
     [[3, 4, 0], ["set -g warm off"]],
     [[4, 0, 0], ["set -g warm off"]],
-    [[3, 3, 3], []],
+    [[3, 3, 0], []],
     [[2, 9, 9], []],
     [null, []],
   ] as const)("%j sets %j", (version, expected) => {
