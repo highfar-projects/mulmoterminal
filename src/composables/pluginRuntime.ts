@@ -9,8 +9,7 @@
 //   - pubsub    → the existing socket.io usePubSub, on `plugin:<scope>:<event>`
 //                 channels (the server forwards file changes to
 //                 plugin:markdown:file:<path> — see server/backends/plugins/markdown.js).
-//   - locale    → a fixed "en" ref (MulmoTerminal has no locale picker; the
-//                 package's bundled i18n falls back to English).
+//   - locale    → the display language, as the plugins' table key (pluginLocale.ts).
 //   - openUrl   → scheme-allowlisted window.open.
 import { computed, defineComponent, h, markRaw, provide, type Component, type Ref } from "vue";
 import { PLUGIN_RUNTIME_KEY, type BrowserPluginRuntime, type SubscribeOptions } from "gui-chat-protocol/vue";

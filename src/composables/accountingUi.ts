@@ -5,8 +5,7 @@
 //   · no global `style.css` import: PluginFrame injects the package CSS into each
 //     view's own shadow root via the `?inline` string in plugins-registry.ts, so it
 //     can't leak the package's Tailwind preflight into MulmoTerminal's own UI.
-//   · locale is the browser's base language (MulmoTerminal has no locale picker); the
-//     package's self-contained i18n falls back to English for anything else.
+//   · locale is the display language (see localeTag below).
 import { configureAccountingHost } from "@mulmoclaude/accounting-plugin/vue";
 import type { ApiResult } from "@mulmoclaude/accounting-plugin/vue";
 import { fetchJson } from "../utils/fetchJson";

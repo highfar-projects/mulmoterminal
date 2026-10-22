@@ -1,8 +1,8 @@
 // Wire @mulmoclaude/collection-plugin/vue to MulmoTerminal. Imported for its side
 // effect from main.ts so the package's View layer can resolve data before any
 // presentCollection card mounts. MulmoTerminal's counterpart to MulmoClaude's
-// src/composables/collections/uiHost.ts — a leaner host (no router, no vue-i18n host
-// instance, no confirm/notifier stores).
+// src/composables/collections/uiHost.ts — a leaner host (no router, no confirm/notifier
+// stores).
 //
 // Wired: data fetch (detail/list), record CRUD, custom views (read-only desktop +
 // read/write mobile phone-frame preview via fetchRemoteView/mutateRemoteView), actions
