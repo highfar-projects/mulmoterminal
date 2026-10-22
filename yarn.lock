@@ -2013,10 +2013,10 @@
   resolved "https://registry.yarnpkg.com/@mulmoclaude/google-plugin/-/google-plugin-4.1.0.tgz#601e331758ec5146af038fbfed04de3a42cb2b11"
   integrity sha512-gHexYCO4srcTS3mfwj/RffiI++sq3OVfkWtdJLYo2VXfzR+IXHMVB3WeSt1iOrNDy2B7emv5udPH9abhsO0l9w==
 
-"@mulmoclaude/html-plugin@^5.0.1":
-  version "5.0.1"
-  resolved "https://registry.yarnpkg.com/@mulmoclaude/html-plugin/-/html-plugin-5.0.1.tgz#2d2baba5b3bf8c59aa8c5203b3a210c28a10b250"
-  integrity sha512-hlA9oC0JD43jrsb534xSJDifBG0Im7kIEkwzl/WG9FVuD6PMvzLh5c1UsM3r1f8RqaFagnfaZ9SPmy0vHYoJbg==
+"@mulmoclaude/html-plugin@^5.1.0":
+  version "5.1.0"
+  resolved "https://registry.yarnpkg.com/@mulmoclaude/html-plugin/-/html-plugin-5.1.0.tgz#73a1571b21a77f27e907170838f026e591012b11"
+  integrity sha512-X8VaOjTi/EeItNwW/EZ+ytRj6O6nKJZk0JfNkyJQrQ20A0EaOYzZxqa3c3UpL8TNNFH/Ko2jTGrGu41VvBLdTw==
 
 "@mulmoclaude/markdown-plugin@^5.2.0":
   version "5.2.0"

@@ -26,6 +26,7 @@ export const BUNDLED_SKILL_NAMES = [
   "mulmoterminal-help",
   "mulmoterminal-data-analysis",
   "mulmoterminal-video-edit",
+  "mulmoterminal-html-plan",
 ] as const;
 
 export type BundledSkillName = (typeof BUNDLED_SKILL_NAMES)[number];
