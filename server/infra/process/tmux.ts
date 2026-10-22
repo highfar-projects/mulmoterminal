@@ -16,7 +16,16 @@ import { HOME_SCOPE_SUFFIX, PORT } from "../../config/env.js";
 import { isLauncherEnvVar } from "./pty-env.js";
 import { spawnCapture, spawnCaptureAsync } from "./spawnCapture.js";
 import { splitLines } from "../fs/split-lines.js";
-import { PSMUX_SCRUBBED_NAMES, isPsmuxVersion, psmuxVersionOf, psmuxVtInputFor, type PsmuxVersion } from "./psmux.js";
+import {
+  PSMUX_SCRUBBED_NAMES,
+  isPsmuxVersion,
+  psmuxConfLine,
+  psmuxGlobalOptions,
+  psmuxVersionOf,
+  psmuxVtInputFor,
+  type PsmuxGlobalOption,
+  type PsmuxVersion,
+} from "./psmux.js";
 import { writeFileAtomicSync } from "../../files/atomic-write.js";
 import { TMUX_PREFIX_DEFAULT, staleSendPrefixKeys, tmuxPrefixCommands } from "../../../common/tmuxPrefix.js";
 
@@ -67,6 +76,9 @@ export const tmuxPsmuxVtInput = (): boolean => cachedPsmux && psmuxVtInputFor(ca
 
 /** Names kept off a psmux client and out of a running psmux server. Empty for a real tmux. */
 export const tmuxPsmuxScrubbedNames = (): readonly string[] => (cachedPsmux ? PSMUX_SCRUBBED_NAMES : []);
+
+/** Global options for psmux alone. Empty for a real tmux, which has no such options and rejects them. */
+const tmuxPsmuxGlobalOptions = (): readonly PsmuxGlobalOption[] => (cachedPsmux ? psmuxGlobalOptions(cachedPsmuxVersion) : []);
 
 // The terminfo `Ms` capability (OSC 52 clipboard write). tmux only forwards a program's
 // OSC 52 to the OUTER terminal when it knows the outer terminal supports it — our web
@@ -191,6 +203,15 @@ function applyLiveTmuxOptions(): void {
   const plan = planMsOverride(tmux(["show", "-g", "terminal-overrides"]).stdout);
   if (plan.kind === "append") tmux(["set", "-ag", "terminal-overrides", OSC52_MS_OVERRIDE]);
   if (plan.kind === "replace") tmux(["set", "-g", `terminal-overrides[${plan.index}]`, MS_OVERRIDE_ENTRY]);
+  applyLivePsmuxGlobalOptions();
+}
+
+// psmux runs one server per session, so a `-g` set reaches only the server its target names.
+function applyLivePsmuxGlobalOptions(): void {
+  const options = tmuxPsmuxGlobalOptions();
+  if (options.length === 0) return;
+  const ids = tmuxHeldSessionIds() ?? [];
+  ids.forEach((id) => options.forEach(({ name, value }) => tmux(["set-option", "-t", tmuxSessionTarget(id), "-g", name, value])));
 }
 
 // The two line shapes `show-environment` emits. Anything else continues the
@@ -312,7 +333,7 @@ function ensureConf(): void {
   try {
     mkdirSync(path.dirname(CONF_FILE), { recursive: true });
     // Atomic: a sibling mulmoterminal may start the tmux server with `-f` while a saved setting rewrites this.
-    writeFileAtomicSync(CONF_FILE, [...TMUX_CONF_LINES, ...tmuxPrefixCommands(tmuxPrefix)].join("\n") + "\n");
+    writeFileAtomicSync(CONF_FILE, [...TMUX_CONF_LINES, ...tmuxPsmuxGlobalOptions().map(psmuxConfLine), ...tmuxPrefixCommands(tmuxPrefix)].join("\n") + "\n");
     if (tmux(["list-sessions"]).status === 0) {
       applyLiveTmuxOptions();
       scrubGlobalEnvironment();

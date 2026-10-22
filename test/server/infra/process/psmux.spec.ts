@@ -1,6 +1,14 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { isAtLeast, isPsmuxVersion, psmuxStartupNote, psmuxVersionOf, psmuxVtInputFor } from "../../../../server/infra/process/psmux";
+import {
+  isAtLeast,
+  isPsmuxVersion,
+  psmuxConfLine,
+  psmuxGlobalOptions,
+  psmuxStartupNote,
+  psmuxVersionOf,
+  psmuxVtInputFor,
+} from "../../../../server/infra/process/psmux";
 
 const PSMUX_340 = "tmux 3.4.0\npsmux 3.4.0 (e39b9fe5 2026-10-10)\n";
 const PSMUX_338 = "tmux 3.3.8\r\npsmux 3.3.8 (abc1234)\r\n";
@@ -84,5 +92,18 @@ describe("psmuxStartupNote", () => {
 
   it("says when the version could not be read", () => {
     expect(psmuxStartupNote(null)).toMatch(/could not be read.*3\.4\.0/);
+  });
+});
+
+describe("psmuxGlobalOptions", () => {
+  it.each([
+    [[3, 3, 4], ["set -g warm off"]],
+    [[3, 4, 0], ["set -g warm off"]],
+    [[4, 0, 0], ["set -g warm off"]],
+    [[3, 3, 3], []],
+    [[2, 9, 9], []],
+    [null, []],
+  ] as const)("%j sets %j", (version, expected) => {
+    expect(psmuxGlobalOptions(version).map(psmuxConfLine)).toEqual(expected);
   });
 });

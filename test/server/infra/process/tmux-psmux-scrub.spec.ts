@@ -4,7 +4,8 @@
 // still hands it to every new pane. The startup scrub has to take it from there too — and only there.
 // tmux itself is replaced by a recorder.
 import { describe, it, expect, vi, afterAll, beforeEach } from "vitest";
-import { rmSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
 
 const scratch = await vi.hoisted(async () => {
   const { mkdtempSync } = await import("node:fs");
@@ -22,6 +23,7 @@ vi.mock("../../../../server/infra/process/spawnCapture.js", () => ({
   spawnCapture: (_bin: string, args: string[]) => {
     calls.push(args);
     if (args[0] === "-V") return { status: 0, stdout: versionStdout, stderr: "" };
+    if (args[2] === "list-sessions") return { status: 0, stdout: "mt-abc\n", stderr: "" };
     if (args[2] === "show-environment") return { status: 0, stdout: "_VOLTA_TOOL_RECURSION=1\nHOME=/h\n", stderr: "" };
     return { status: 0, stdout: "", stderr: "" };
   },
@@ -50,5 +52,30 @@ describe("the startup scrub of a running server", () => {
   it("leaves it on a running real tmux", async () => {
     await startWith("tmux 3.8\n");
     expect(removed()).not.toContain("_VOLTA_TOOL_RECURSION");
+  });
+});
+
+// Every cell's `new-session` carries `-e`, which skips psmux's warm pool, so its spare shells are
+// never claimed — they only cost memory, and every client resize restarts them.
+describe("psmux's warm pool", () => {
+  const conf = (): string => readFileSync(join(scratch.home, ".mulmoterminal", "tmux.conf"), "utf8");
+  const liveWarm = (): string[][] => calls.filter((args) => args[2] === "set-option" && args.includes("warm")).map((args) => args.slice(2));
+
+  it("is turned off in the conf and on each running psmux session", async () => {
+    await startWith("tmux 3.4\npsmux 3.4.0 (abc)\n");
+    expect(conf()).toContain("set -g warm off");
+    expect(liveWarm()).toEqual([["set-option", "-t", "=mt-abc", "-g", "warm", "off"]]);
+  });
+
+  it("is left alone on a psmux too old to know the option", async () => {
+    await startWith("tmux 3.3\npsmux 3.3.3 (abc)\n");
+    expect(conf()).not.toContain("warm");
+    expect(liveWarm()).toEqual([]);
+  });
+
+  it("is never asked of a real tmux", async () => {
+    await startWith("tmux 3.8\n");
+    expect(conf()).not.toContain("warm");
+    expect(liveWarm()).toEqual([]);
   });
 });
