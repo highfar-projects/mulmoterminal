@@ -28,8 +28,10 @@ into a strategy document.
 One HTML document, everything inline. What the page can and cannot do:
 
 - Scripts and styles inline, or from the allowed CDNs (`cdn.jsdelivr.net`, `unpkg.com`,
-  `cdnjs.cloudflare.com`, Google Fonts). Anything else is blocked silently.
-- **No network.** `fetch` and XHR are blocked, so put the data the page needs into it.
+  `cdnjs.cloudflare.com`, `cdn.plot.ly`, Google Fonts). Anything else is blocked silently.
+- **No `fetch` or XHR.** Connections from the page's own script are blocked, so put the data the
+  page needs into it. Loading a library from those CDNs, and images or media over `https:`, still
+  works.
 - **No storage.** The page runs in a sandbox with an opaque origin: `localStorage` and cookies
   throw. Keep state in variables.
 
