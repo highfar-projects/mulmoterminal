@@ -12,7 +12,6 @@ import type { ApiResult } from "@mulmoclaude/accounting-plugin/vue";
 import { fetchJson } from "../utils/fetchJson";
 import { usePubSub } from "./usePubSub";
 import { i18n } from "../i18n";
-import { pluginLocaleFor } from "../utils/pluginLocale";
 
 const { subscribe } = usePubSub();
 
@@ -41,5 +40,7 @@ configureAccountingHost({
   // Raw `accounting:<bookId>` / `accounting:books` channels: the engine publishes
   // book changes (server/backends/plugins/accounting.ts) and the View live-refreshes.
   subscribe,
-  localeTag: () => pluginLocaleFor(i18n.global.locale.value),
+  // The display language as a full tag, not pluginLocaleFor's table key: the plugin's own vue-i18n
+  // falls back zh-TW to zh, and it reads the region off the tag to guess the book's country.
+  localeTag: () => i18n.global.locale.value,
 });

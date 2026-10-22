@@ -109,7 +109,8 @@ const PROJECT_INDEPENDENT: Pick<
   | "navigateToRecord"
 > = {
   confirm: (options) => Promise.resolve(window.confirm(options.message)),
-  // The plugin runs its own i18n; it follows the app's display language, in its codes.
+  // The table key, not the full tag: the same value goes to the server's custom-view translation
+  // route, which looks the language up by exact key, so zh-TW would find no strings there.
   localeTag: () => pluginLocaleFor(i18n.global.locale.value),
   generalRoleId: "general",
   personalRoleId: "personal",
