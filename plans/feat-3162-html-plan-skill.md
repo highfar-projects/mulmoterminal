@@ -14,3 +14,8 @@
 ## 決めたこと
 - 文面は plannotator/effective-html の `html-plan` を取り込まず書き直した。考え方（決定済み / 仮定 / 未決を分ける、元の約束を膨らませない）は同じで、MulmoTerminal 固有の部分（サンドボックスの制約、送信ボタン、結果が届いてからの動き）を足した。
 - skill に書いたページの制約（許可 CDN、`fetch` と `localStorage` が使えない）は、実際の CDN 一覧と、サンドボックスの iframe の中での試し測りで確かめた。
+
+## 確かめたこと
+- `@mulmoclaude/html-plugin@5.1.0` をクリーン install（`--frozen-lockfile`）した上で `lint:ci` / `typecheck` / `build` / `test` が通る。lockfile から消えた `puppeteer-core@25.14.0` と `nanoid@^3.3.19` は、元の lockfile でもどこからも参照されていなかった。
+- `HOME` を差し替えた検証用サーバーで Shell のセルを作り、そのセッションに MCP で `presentHtml` を呼んだ。ページは Canvas ペインに出る。ページで選んで送ると確認欄が出て、その時点では端末に何も届かない。確認欄の Send で端末に打ち込まれる（`tmux capture-pane` で確認）。
+- エージェントが受け取る `presentHtml` の説明文（`tools/list`）に送り方が入っている。
