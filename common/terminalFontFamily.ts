@@ -29,6 +29,10 @@ export const TERMINAL_CJK_FAMILIES = [
 // Latin first, so an existing install's ASCII rendering is unchanged.
 export const TERMINAL_FONT_FAMILY_DEFAULT = ["'JetBrains Mono'", "'Fira Code'", "Menlo", "Consolas", ...TERMINAL_CJK_FAMILIES, "monospace"].join(", ");
 
+// Personal-fork: the @font-face in src/style.css that draws the circled numbers one cell wide. In
+// common/ only so the node-side spec pinning the stylesheet can import it without the UI module.
+export const NARROW_AMBIGUOUS_FAMILY = "'MT Ambiguous Narrow'";
+
 // Long enough for a hand-written stack of a dozen names, short enough that the value stays a font
 // list rather than a place to park arbitrary text.
 export const TERMINAL_FONT_FAMILY_MAX_CHARS = 400;

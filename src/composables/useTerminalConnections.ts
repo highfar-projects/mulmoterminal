@@ -52,7 +52,7 @@ import { exitCodeOf, messageEffect, parseServerFrame, sessionExitOf, type Sessio
 import { applyViewFrame, type ConnViewState } from "./connViewFrames";
 import { enterSubmits, submitSequence, submittableLine, DEFAULT_TERMINAL_SUBMIT_MODE, type TerminalSubmitMode } from "../../common/terminalSubmit";
 import { TERMINAL_FONT_SIZE_DEFAULT } from "../../common/terminalFontSize";
-import { TERMINAL_FONT_FAMILY_DEFAULT } from "../../common/terminalFontFamily";
+import { NARROW_AMBIGUOUS_FAMILY, TERMINAL_FONT_FAMILY_DEFAULT } from "../../common/terminalFontFamily";
 import { getTerminalSubmitMode } from "./terminalSubmitMode";
 import { clipboardActionFor } from "../../common/terminalClipboard";
 import { isImeConfirming } from "./imeComposition";
@@ -993,6 +993,14 @@ export function setScrollSpeed(speed: number) {
 // a per-component watch would run the same global update once per open terminal. This manager
 // outlives every component, which is exactly the lifetime the watch wants.
 watch(getTerminalScrollSpeed, setScrollSpeed);
+
+// Personal-fork: the narrow face for `①` is a local() @font-face, which the browser loads only once
+// something asks for it. A glyph the canvas drew before that is cached in the fallback's squeezed
+// shape, so the atlas is dropped once the face is in.
+document.fonts
+  ?.load(`16px ${NARROW_AMBIGUOUS_FAMILY}`, "\u2460")
+  .then(() => conns.forEach((c) => c.term.clearTextureAtlas()))
+  .catch(() => {});
 
 // Watched at module scope for the scroll speed's reason: one value for every terminal. The config
 // usually arrives after the first terminals are built.

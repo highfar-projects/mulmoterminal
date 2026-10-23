@@ -13,7 +13,7 @@ import { translateUiSentence } from "../utils/translateUi";
 import { currentTermTheme, termThemeFor } from "../composables/useTheme";
 import { useDirConfig } from "../composables/useDirConfig";
 import { useTerminalFontSize } from "../composables/useTerminalFontSize";
-import { globalFontFamily } from "../composables/terminalFontFamily";
+import { globalFontFamily, withNarrowAmbiguous } from "../composables/terminalFontFamily";
 import { badgeStyleFor } from "./dirBadge";
 import { terminalHeaderStyleFor } from "./cellHeaderStyle";
 import { useVoiceInput } from "../composables/useVoiceInput";
@@ -289,7 +289,7 @@ function effectiveTermTheme(): ITheme {
 // the size (Settings), from config.json for the family.
 function effectiveFont(): conn.TerminalFont {
   const { fontSize: dirSize, fontFamily: dirFamily } = dirConfig.value;
-  return { size: dirSize ?? fontSize.value, family: dirFamily ?? globalFontFamily.value };
+  return { size: dirSize ?? fontSize.value, family: withNarrowAmbiguous(dirFamily ?? globalFontFamily.value) };
 }
 const dirBadgeStyle = computed(() => badgeStyleFor(props.dirBadgeColor));
 // From this terminal's OWN dirConfig, like the theme and font above (#909). Handing these down as

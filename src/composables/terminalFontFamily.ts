@@ -1,5 +1,5 @@
 import { computed, ref, type ComputedRef } from "vue";
-import { normalizeFontFamily, TERMINAL_FONT_FAMILY_DEFAULT } from "../../common/terminalFontFamily";
+import { NARROW_AMBIGUOUS_FAMILY, normalizeFontFamily, TERMINAL_FONT_FAMILY_DEFAULT } from "../../common/terminalFontFamily";
 import { postConfigField } from "./postConfigField";
 
 // The app-wide xterm font-family stack, hydrated from /api/config (`fontFamily` in
@@ -18,6 +18,14 @@ import { postConfigField } from "./postConfigField";
 const configured = ref<string | null>(null);
 
 export const globalFontFamily: ComputedRef<string> = computed(() => configured.value ?? TERMINAL_FONT_FAMILY_DEFAULT);
+
+// Personal-fork: a CJK-first stack (`HackGen Console NF`, …) draws an East Asian Ambiguous `①` two
+// cells wide while the terminal gives it one, so rescaleOverlappingGlyphs squeezes it to half its
+// width. This face is Consolas, but only for the circled numbers (the `unicode-range` in
+// src/style.css), where its glyphs are one Latin cell wide; every other character falls through to
+// the stack as configured. Where Consolas is not installed the face matches nothing and the stack
+// behaves exactly as before.
+export const withNarrowAmbiguous = (stack: string): string => `${NARROW_AMBIGUOUS_FAMILY}, ${stack}`;
 
 export const configuredFontFamily: ComputedRef<string | null> = computed(() => configured.value);
 

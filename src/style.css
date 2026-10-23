@@ -7,6 +7,16 @@
    keep winning as it always did, while `text-*` utilities can now size an icon. */
 @import "material-symbols/outlined.css" layer(base);
 
+/* Personal-fork: Consolas for the circled numbers alone, put at the head of every terminal's font
+   stack (withNarrowAmbiguous in src/composables/terminalFontFamily.ts). Its glyphs for these are one
+   Latin cell wide, where a CJK font's are two and get squeezed into the one cell xterm gives them.
+   Measured: U+2460-24FF and U+2776-277F are the ranges Consolas has and draws narrow. */
+@font-face {
+  font-family: "MT Ambiguous Narrow";
+  src: local("Consolas");
+  unicode-range: U+2460-24FF, U+2776-277F;
+}
+
 /* Theme tokens. The default (:root) palette is "Midnight"; [data-theme] blocks
    below override it. Components reference these via var(--token), so switching
    the data-theme attribute on <html> recolors the whole app. The four themes

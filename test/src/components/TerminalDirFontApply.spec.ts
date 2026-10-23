@@ -4,6 +4,7 @@ import { mount, flushPromises } from "@vue/test-utils";
 import type { TerminalFont } from "../../../src/composables/useTerminalConnections";
 import { TERMINAL_FONT_FAMILY_DEFAULT } from "../../../common/terminalFontFamily";
 import { TERMINAL_FONT_SIZE_DEFAULT } from "../../../common/terminalFontSize";
+import { withNarrowAmbiguous } from "../../../src/composables/terminalFontFamily";
 import { THEME_VAR_KEYS, type ThemeVars } from "../../../common/themeVars";
 import { setCustomThemes } from "../../../src/composables/customThemes";
 import { useTheme } from "../../../src/composables/useTheme";
@@ -93,8 +94,8 @@ describe("Terminal.vue resolves its directory's look from its own cwd", () => {
     await mountTerminal("pinned");
     await flushPromises();
 
-    expect(attached[0]).toEqual({ size: TERMINAL_FONT_SIZE_DEFAULT, family: TERMINAL_FONT_FAMILY_DEFAULT });
-    expect(setFontCalls.at(-1)).toEqual({ size: 20, family: "Songti SC, monospace" });
+    expect(attached[0]).toEqual({ size: TERMINAL_FONT_SIZE_DEFAULT, family: withNarrowAmbiguous(TERMINAL_FONT_FAMILY_DEFAULT) });
+    expect(setFontCalls.at(-1)).toEqual({ size: 20, family: withNarrowAmbiguous("Songti SC, monospace") });
   });
 
   it("applies the directory's palette the same way", async () => {
@@ -112,7 +113,7 @@ describe("Terminal.vue resolves its directory's look from its own cwd", () => {
     await mountTerminal("plain");
     await flushPromises();
 
-    expect(attached[0]).toEqual({ size: TERMINAL_FONT_SIZE_DEFAULT, family: TERMINAL_FONT_FAMILY_DEFAULT });
+    expect(attached[0]).toEqual({ size: TERMINAL_FONT_SIZE_DEFAULT, family: withNarrowAmbiguous(TERMINAL_FONT_FAMILY_DEFAULT) });
     expect(setFontCalls).toHaveLength(0);
   });
 
@@ -137,7 +138,7 @@ describe("Terminal.vue falls back to the dirCwd hint when it has no cwd", () => 
     const w = mount(Terminal, { props: { sessionId: null, connectKey: 1, persistKey: "hinted", dirCwd: "/proj/hinted" } });
     await flushPromises();
 
-    expect(setFontCalls.at(-1)).toEqual({ size: 18, family: "Cica, monospace" });
+    expect(setFontCalls.at(-1)).toEqual({ size: 18, family: withNarrowAmbiguous("Cica, monospace") });
     w.unmount();
   });
 });
