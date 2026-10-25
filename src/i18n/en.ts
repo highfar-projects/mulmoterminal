@@ -34,6 +34,7 @@ import { previewCodeCopyEn } from "./previewCodeCopy/en";
 import { fileLinksEn } from "./fileLinks/en";
 import { skillsViewEn } from "./skillsView/en";
 import { processesViewEn } from "./processesView/en";
+import { githubBoardEn } from "./githubBoard/en";
 export const en = {
   settings: {
     title: "Settings",
@@ -673,6 +674,7 @@ export const en = {
   ...fileLinksEn,
   ...skillsViewEn,
   ...processesViewEn,
+  ...githubBoardEn,
   tips: tipsEn,
   blueprints: blueprintsEn,
 } as const;

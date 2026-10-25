@@ -5,6 +5,7 @@
 import { nextTick, type Ref } from "vue";
 import { jumpTo, moveFocus, moveFocusUid, zoomedUid, type Cell, type GridState } from "../components/gridTabs";
 import * as conn from "./useTerminalConnections";
+import { useGridSessionJump } from "./gridSessionJump";
 
 /** `order` is the on-screen order as uids — the full list, not the page (GridView's `orderUids`). */
 export function useGridJumps(state: Ref<GridState>, focusedCellUid: Ref<number | null>, order: () => readonly number[]) {
@@ -21,6 +22,8 @@ export function useGridJumps(state: Ref<GridState>, focusedCellUid: Ref<number |
     state.value = jumpTo(state.value, uid, order());
     focusSoon(uid);
   };
+  // The same move by session id, for the screens that know a session and not a cell (#3172).
+  useGridSessionJump(state, jumpToTerminal);
   // The terminal a command acts on (#2465): the enlarged one, else the one holding the cursor.
   const currentUid = (): number | null => zoomedUid(state.value) ?? focusedCellUid.value;
   const currentCell = (): Cell | null => state.value.cells.find((cell) => cell.uid === currentUid()) ?? null;

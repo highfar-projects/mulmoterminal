@@ -29,6 +29,8 @@ export const routes: RouteRecordRaw[] = [
   // of honouring it is this line.
   { path: "/github", name: "github", component: Stub },
   { path: "/prs", redirect: { name: "github" } },
+  // The experimental board (#3172): the same repos as progress columns, beside the list.
+  { path: "/github/board", name: "githubBoard", component: Stub },
   // The conversation rooms a round table writes to (#1456). The open room is the URL so a
   // conversation can be linked to and reloaded.
   { path: "/rooms", name: "rooms", component: Stub },
