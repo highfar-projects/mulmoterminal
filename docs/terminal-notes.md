@@ -36,7 +36,7 @@ server   ── node-pty  ── tmux (persistence)  ── agent (claude / code
 | `@xterm/addon-web-links` | `^0.12.0` | Linkifies visible `http(s)://` URLs. |
 | `@xterm/addon-clipboard` | `^0.2.0` | OSC 52 clipboard write (auto-copy → browser clipboard). |
 | `@xterm/addon-fit` | `^0.11.0` | Size the grid to the container. |
-| `@xterm/addon-unicode11` | `^0.9.0` | Registers the Unicode 11 width table. Active only when `/api/config` says `terminalUnicodeVersion: "11"` (behind psmux); everywhere else xterm keeps its default `"6"`. |
+| `@xterm/addon-unicode11` | `^0.9.0` | Registers the Unicode 11 width table — the fallback when `/api/config` carries no `terminalWidthTable` measured from tmux (psmux, no tmux, or before the boot probe ends). |
 | `node-pty` | `^1.1.0` | The PTY. |
 | tmux | 3.4+ at runtime | OSC 8 hyperlink forwarding (`terminal-features hyperlinks`) needs 3.4+. Measured on 3.6a. |
 | psmux (Windows) | 3.4.0+ | Answers `tmux -V` as `tmux 3.x` and names itself on the second line (`server/infra/process/psmux.ts`). 3.4.0 is the first with `PSMUX_VT_INPUT`, which the client is started with. |
@@ -78,16 +78,27 @@ server   ── node-pty  ── tmux (persistence)  ── agent (claude / code
   for a fullwidth character, and the face a browser picks for an unnamed glyph is not required to
   be em-square, so leaving CJK to the generic `monospace` fallback tears box-drawing frames.
 
-### Character widths — `terminalUnicodeVersion` (#3117)
+### Character widths — measured from tmux (#3117, #3173)
 
-xterm counts cells with its Unicode 6 table by default, where an emoji such as `✅` is ONE cell;
-Claude Code (and psmux) count it as two. psmux repaints only the cells it thinks changed, so on it
-every emoji shifts the rest of its row one column and a checklist turns into a staircase. The
-browser therefore always loads `@xterm/addon-unicode11` but activates the table the server names
-in `/api/config` (`common/terminalUnicode.ts`): `"11"` behind psmux, `"6"` otherwise — a real tmux
-keeps exactly the widths it always ran on. The value can arrive after a terminal is built, so a
-module-scope watch in `useTerminalConnections.ts` carries it to the live terminals. Switching every
-host to `"11"` may well be right too, but it changes what a tmux user sees and has not been measured.
+tmux decides how many columns each character takes and places everything after it from that
+answer; when the browser's xterm counts differently, the rest of the row is drawn off by the
+difference (`[✅]` loses its `]` under the glyph, a table's right border wanders). No fixed table
+agrees with every tmux — the answer comes from utf8proc or the C library, `codepoint-widths`, and
+the tmux version — so the server asks.
+
+At boot (`server/infra/process/tmuxWidthProbe.ts`) a throwaway tmux server on an absolute `-S`
+socket, in the environment a session gets, answers `#{w:#{l:…}}` for every codepoint; the answers
+become runs of non-1 widths (`common/tmuxWidthTable.ts`). tmux also folds sequences into one cell —
+a variation selector, a ZWJ family, a skin tone, a flag — which `common/tmuxClusters.ts` mirrors from
+`screen_write_combine`; a few sample sequences are printed in the throwaway pane and the fold rule is
+used only if every one lands where it predicts. `/api/config` carries the result as
+`terminalWidthTable`, and the browser registers it with xterm as its own Unicode version
+(`common/tmuxUnicodeProvider.ts`). With no table it falls back to `terminalUnicodeVersion: "11"`,
+which agrees with tmux and Claude Code far more often than xterm's default `"6"`.
+
+`test/server/infra/process/tmuxWidthProbe.spec.ts` is the check that matters: a real tmux, a client
+attached through a PTY, and the bytes it receives fed to xterm with the table — every marker must land
+where `#{cursor_x}` says tmux put it. It is skipped where tmux is absent.
 
 ### Submit vs newline — `terminalSubmit` (#772/#780)
 

@@ -55,8 +55,14 @@ export interface XtermTermState {
   /** How many terminals the manager has constructed for this state. The rebuild (#846) is
    *  otherwise invisible from outside: it swaps `c.term` for a fresh one behind the slot key. */
   constructed: number;
-  /** `term.unicode`, shared by every terminal built on this state: which width table is active. */
-  unicode: { activeVersion: string };
+  /** `term.unicode`, shared by every terminal built on this state: which width table is active, and
+   *  the version of every provider registered, in order. */
+  unicode: { activeVersion: string; registered: string[]; register(provider: { version: string }): void };
+}
+
+function createUnicodeDouble(): XtermTermState["unicode"] {
+  const registered: string[] = [];
+  return { activeVersion: "6", registered, register: (provider) => registered.push(provider.version) };
 }
 
 export function createXtermState(): { termState: XtermTermState; keyState: XtermKeyState } {
@@ -79,7 +85,7 @@ export function createXtermState(): { termState: XtermTermState; keyState: Xterm
       bufferCursorY: 0,
       onBufferChange: null,
       constructed: 0,
-      unicode: { activeVersion: "6" },
+      unicode: createUnicodeDouble(),
     },
     keyState: { handler: () => true },
   };

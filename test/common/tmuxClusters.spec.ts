@@ -1,0 +1,144 @@
+import { describe, it, expect } from "vitest";
+import { CLUSTER_SAMPLES, JamoClass, clusterStep, jamoClassOf, rowWidthOf } from "../../common/tmuxClusters";
+import type { TmuxWidthTable, WidthRun } from "../../common/tmuxWidthTable";
+
+// The per-codepoint answers tmux 3.6a (utf8proc) gave for the characters used below.
+const RUNS: WidthRun[] = [
+  [0x0301, 0x0301, 0],
+  [0x1100, 0x115f, 2],
+  [0x1160, 0x11ff, 0],
+  [0x200d, 0x200d, 0],
+  [0x20e3, 0x20e3, 0],
+  [0x2705, 0x2705, 2],
+  [0x3042, 0x3042, 2],
+  [0xac01, 0xac01, 2],
+  [0xfe0e, 0xfe0f, 0],
+  [0x1f3fb, 0x1f3ff, 2],
+  [0x1f44d, 0x1f44d, 2],
+  [0x1f467, 0x1f469, 2],
+];
+const TMUX_36: TmuxWidthTable = { runs: RUNS, clusters: true, vs16Wide: true };
+
+describe("rowWidthOf, against what tmux 3.6a's own grid measured", () => {
+  it.each([
+    ["a symbol", "☺", 1],
+    ["a symbol + U+FE0F", "☺️", 2],
+    ["the reply marker + U+FE0F", "⏺️", 2],
+    ["a wide emoji", "✅", 2],
+    ["a wide emoji + U+FE0F", "✅️", 2],
+    ["a wide emoji + U+FE0E", "✅︎", 2],
+    ["a symbol + U+FE0E", "☺︎", 1],
+    ["a ZWJ family", "\u{1f468}‍\u{1f469}‍\u{1f467}", 2],
+    ["a skin tone", "\u{1f44d}\u{1f3fd}", 2],
+    ["two skin tones", "\u{1f44d}\u{1f3fd}\u{1f3fd}", 2],
+    ["a skin tone after a letter", "a\u{1f3fd}", 3],
+    ["one regional indicator", "\u{1f1ef}", 1],
+    ["a flag", "\u{1f1ef}\u{1f1f5}", 2],
+    ["three regional indicators", "\u{1f1ef}\u{1f1f5}\u{1f1fa}", 2],
+    ["a keycap", "1️⃣", 2],
+    ["letters around a ZWJ", "a‍b", 2],
+    ["a letter after an emoji's ZWJ", "\u{1f468}‍a", 3],
+    ["an emoji after a letter's ZWJ", "a‍\u{1f469}", 1],
+    ["a lone combining accent", "́", 0],
+    ["a letter and a combining accent", "é", 1],
+    ["a wide kana + U+FE0F", "あ️", 2],
+  ])("%s", (_label, text, columns) => {
+    expect(rowWidthOf(TMUX_36, text)).toBe(columns);
+  });
+
+  it("counts every sample the boot probe checks", () => {
+    expect(CLUSTER_SAMPLES.map((sample) => rowWidthOf(TMUX_36, sample))).toEqual([2, 2, 2, 2, 2, 1]);
+  });
+
+  it("is zero for nothing", () => {
+    expect(rowWidthOf(TMUX_36, "")).toBe(0);
+  });
+});
+
+describe("a tmux that does not fold sequences", () => {
+  const perCodepoint: TmuxWidthTable = { ...TMUX_36, clusters: false };
+
+  it("adds the parts up, folding only zero-width characters", () => {
+    expect(rowWidthOf(perCodepoint, "\u{1f468}‍\u{1f469}‍\u{1f467}")).toBe(6);
+    expect(rowWidthOf(perCodepoint, "\u{1f44d}\u{1f3fd}")).toBe(4);
+    expect(rowWidthOf(perCodepoint, "é")).toBe(1);
+  });
+
+  it("does not widen on U+FE0F", () => {
+    expect(rowWidthOf(perCodepoint, "☺️")).toBe(1);
+  });
+});
+
+describe("variation-selector-always-wide off", () => {
+  it("leaves a one-column symbol one column", () => {
+    expect(rowWidthOf({ ...TMUX_36, vs16Wide: false }, "☺️")).toBe(1);
+  });
+});
+
+describe("Hangul jamo", () => {
+  it("folds a vowel onto an initial consonant", () => {
+    expect(rowWidthOf(TMUX_36, "가")).toBe(2);
+    expect(rowWidthOf(TMUX_36, "각")).toBe(2);
+  });
+
+  it("drops a zero-width vowel with nothing before it", () => {
+    expect(rowWidthOf(TMUX_36, "ᅡ")).toBe(0);
+  });
+
+  describe("where tmux gives a vowel a width of its own", () => {
+    const visibleVowels: TmuxWidthTable = { ...TMUX_36, runs: RUNS.map((run): WidthRun => (run[0] === 0x1160 ? [0x1160, 0x11ff, 2] : run)) };
+
+    it("composes it onto a consonant", () => {
+      expect(rowWidthOf(visibleVowels, "가")).toBe(2);
+    });
+
+    it("throws it away when there is nothing to compose onto", () => {
+      expect(rowWidthOf(visibleVowels, "aᅡ")).toBe(1);
+      expect(rowWidthOf(visibleVowels, "あᅡ")).toBe(2);
+      expect(rowWidthOf(visibleVowels, "ᄀᆨ")).toBe(2);
+    });
+  });
+
+  it.each([
+    [0x1100, JamoClass.Choseong],
+    [0x115f, JamoClass.Choseong],
+    [0x1160, JamoClass.Jungseong],
+    [0x11a7, JamoClass.Jungseong],
+    [0x11a8, JamoClass.Jongseong],
+    [0x11ff, JamoClass.Jongseong],
+    [0xa960, JamoClass.Choseong],
+    [0xa97c, JamoClass.Choseong],
+    [0xa97d, JamoClass.None],
+    [0xd7b0, JamoClass.Jungseong],
+    [0xd7c6, JamoClass.Jungseong],
+    [0xd7c7, JamoClass.None],
+    [0xd7cb, JamoClass.Jongseong],
+    [0xd7fb, JamoClass.Jongseong],
+    [0x10ff, JamoClass.None],
+    [0xac00, JamoClass.None],
+  ])("U+%s is jamo class %i", (codepoint, jamo) => {
+    expect(jamoClassOf(codepoint)).toBe(jamo);
+  });
+});
+
+describe("clusterStep", () => {
+  it("drops the Hangul filler wherever it is", () => {
+    expect(clusterStep(TMUX_36, 0x3164, null)).toEqual({ kind: "drop" });
+    expect(clusterStep(TMUX_36, 0x3164, { first: 0x61, width: 1, endsWithZwj: false, lastJamo: JamoClass.None })).toEqual({ kind: "drop" });
+  });
+
+  it("never folds a character after a cell of width 0", () => {
+    expect(clusterStep(TMUX_36, 0x200d, { first: 0x0301, width: 0, endsWithZwj: false, lastJamo: JamoClass.None })).toEqual({ kind: "drop" });
+  });
+
+  it("starts a cell for a letter even after a ZWJ", () => {
+    expect(clusterStep(TMUX_36, 0x61, { first: 0x1f468, width: 2, endsWithZwj: true, lastJamo: JamoClass.None })).toMatchObject({ kind: "new" });
+  });
+
+  it("remembers the first codepoint and that the cell ends in a ZWJ", () => {
+    expect(clusterStep(TMUX_36, 0x200d, { first: 0x1f468, width: 2, endsWithZwj: false, lastJamo: JamoClass.None })).toEqual({
+      kind: "join",
+      cell: { first: 0x1f468, width: 2, endsWithZwj: true, lastJamo: JamoClass.None },
+    });
+  });
+});
