@@ -22,13 +22,20 @@ const WIDTH_SHIFT = 1;
 const WIDTH_MASK = 0x3;
 const STATE_SHIFT = 3;
 const STATE_MASK = 0xffffff;
-// Inside the state: the first codepoint (21 bits reach U+10FFFF), then the ZWJ flag, then the jamo class.
-const CODEPOINT_MASK = 0x1fffff;
-const ZWJ_FLAG_SHIFT = 21;
-const JAMO_SHIFT = 22;
+// Inside the state: the first codepoint, then the joined and ZWJ flags, then the jamo class. The
+// codepoint is only ever compared with ASCII and with characters below U+20000, so anything from
+// there up is stored as U+3FFFF — which keeps all of it inside the bits xterm leaves free.
+const CODEPOINT_MASK = 0x3ffff;
+const JOINED_FLAG_SHIFT = 18;
+const ZWJ_FLAG_SHIFT = 19;
+const JAMO_SHIFT = 20;
 const JAMO_MASK = 0x3;
 
-const packState = (cell: ClusterCell): number => cell.first | (Number(cell.endsWithZwj) << ZWJ_FLAG_SHIFT) | (cell.lastJamo << JAMO_SHIFT);
+const packState = (cell: ClusterCell): number =>
+  Math.min(cell.first, CODEPOINT_MASK) |
+  (Number(cell.joined) << JOINED_FLAG_SHIFT) |
+  (Number(cell.endsWithZwj) << ZWJ_FLAG_SHIFT) |
+  (cell.lastJamo << JAMO_SHIFT);
 
 const pack = (cell: ClusterCell, joins: boolean): number =>
   ((packState(cell) & STATE_MASK) << STATE_SHIFT) | ((cell.width & WIDTH_MASK) << WIDTH_SHIFT) | Number(joins);
@@ -44,7 +51,13 @@ export function unpackCell(preceding: number): ClusterCell | null {
   const state = (preceding >>> STATE_SHIFT) & STATE_MASK;
   const lastJamo = (state >> JAMO_SHIFT) & JAMO_MASK;
   if (!isCellWidth(width) || !isJamoClass(lastJamo)) return null;
-  return { first: state & CODEPOINT_MASK, width, endsWithZwj: ((state >> ZWJ_FLAG_SHIFT) & 1) === 1, lastJamo };
+  return {
+    first: state & CODEPOINT_MASK,
+    width,
+    joined: ((state >> JOINED_FLAG_SHIFT) & 1) === 1,
+    endsWithZwj: ((state >> ZWJ_FLAG_SHIFT) & 1) === 1,
+    lastJamo,
+  };
 }
 
 export function tmuxUnicodeProvider(table: TmuxWidthTable): TmuxUnicodeProvider {

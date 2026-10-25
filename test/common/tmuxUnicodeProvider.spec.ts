@@ -19,7 +19,7 @@ const TABLE: TmuxWidthTable = {
     [0x1f44d, 0x1f44d, 2],
     [0x1f467, 0x1f469, 2],
   ],
-  clusters: true,
+  folding: "tmux-3.6",
   vs16Wide: true,
 };
 
@@ -53,7 +53,7 @@ describe("xterm counting with the tmux table", () => {
   });
 
   it("adds the parts up when the table says tmux does not fold", async () => {
-    expect((await cursorAfter("\u{1f468}‍\u{1f469}x", { ...TABLE, clusters: false })).x).toBe(5);
+    expect((await cursorAfter("\u{1f468}‍\u{1f469}x", { ...TABLE, folding: "none" })).x).toBe(5);
   });
 });
 
@@ -65,12 +65,14 @@ describe("unpackCell", () => {
   it("reads back what the provider packed", () => {
     const provider = tmuxUnicodeProvider(TABLE);
     const family = provider.charProperties(0x200d, provider.charProperties(0x1f468, 0));
-    expect(unpackCell(family)).toEqual({ first: 0x1f468, width: 2, endsWithZwj: true, lastJamo: JamoClass.None });
+    expect(unpackCell(family)).toEqual({ first: 0x1f468, width: 2, joined: true, endsWithZwj: true, lastJamo: JamoClass.None });
   });
 
-  it("carries a codepoint at the very top of Unicode", () => {
+  it("keeps every codepoint a rule compares with, and folds the ones above into one value", () => {
     const provider = tmuxUnicodeProvider(TABLE);
-    expect(unpackCell(provider.charProperties(0x10ffff, 0))?.first).toBe(0x10ffff);
+    expect(unpackCell(provider.charProperties(0x1f9df, 0))?.first).toBe(0x1f9df);
+    expect(unpackCell(provider.charProperties(0x3ffff, 0))?.first).toBe(0x3ffff);
+    expect(unpackCell(provider.charProperties(0x10ffff, 0))?.first).toBe(0x3ffff);
   });
 
   it("is null for a width xterm never packs", () => {

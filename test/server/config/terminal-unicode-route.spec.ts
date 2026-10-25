@@ -5,6 +5,7 @@
 import { describe, it, expect, vi, afterAll } from "vitest";
 import express from "express";
 import { routeCall } from "../../helpers/routeCall";
+import type { TmuxWidthTable } from "../../../common/tmuxWidthTable";
 
 const scratch = await vi.hoisted(async () => {
   const { mkdtempSync } = await import("node:fs");
@@ -45,7 +46,7 @@ describe("cell widths on GET /api/config", () => {
   });
 
   it("serves the table measured from tmux as it is", async () => {
-    const table = { runs: [[0x2705, 0x2705, 2] as const], clusters: true, vs16Wide: true };
+    const table: TmuxWidthTable = { runs: [[0x2705, 0x2705, 2]], folding: "tmux-3.6", vs16Wide: true };
     vi.mocked(tmuxWidthTable).mockReturnValue(table);
     expect((await configServed()).terminalWidthTable).toEqual(table);
   });

@@ -80,10 +80,11 @@ const probeTempDirs = () => readdirSync(os.tmpdir()).filter((name) => name.start
 
 describe.skipIf(!hasTmux)("the measured table against a real tmux", () => {
   let table: TmuxWidthTable | null = null;
+  const probeLog: string[] = [];
   const leftBefore = hasTmux ? probeTempDirs() : [];
 
   beforeAll(async () => {
-    table = await measureTmuxWidths(() => {});
+    table = await measureTmuxWidths((line) => probeLog.push(line));
   }, 60_000);
 
   it("measures something, and leaves no server or directory behind", () => {
@@ -125,7 +126,7 @@ describe.skipIf(!hasTmux)("the measured table against a real tmux", () => {
           const xtermColumn = markerColumnInXterm(term, marker);
           if (xtermColumn !== tmuxColumn) disagreements.push(`${JSON.stringify(sample)}: tmux ${tmuxColumn}, xterm ${xtermColumn}`);
         }
-        expect(disagreements).toEqual([]);
+        expect(disagreements, `${spawnCapture("tmux", ["-V"]).stdout.trim()}, folding ${table.folding}; probe: ${probeLog.join(" / ")}`).toEqual([]);
       } finally {
         client.kill();
         term.dispose();

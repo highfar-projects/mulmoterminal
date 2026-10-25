@@ -77,7 +77,7 @@ describe("cellWidthOf", () => {
 });
 
 describe("isTmuxWidthTable", () => {
-  const table = { runs: [[0x2705, 0x2705, 2]], clusters: true, vs16Wide: true };
+  const table = { runs: [[0x2705, 0x2705, 2]], folding: "tmux-3.6", vs16Wide: true };
 
   it("accepts what the server sends", () => {
     expect(isTmuxWidthTable(table)).toBe(true);
@@ -87,7 +87,7 @@ describe("isTmuxWidthTable", () => {
   it.each([
     ["null", null],
     ["an array", []],
-    ["runs missing", { clusters: true, vs16Wide: true }],
+    ["runs missing", { folding: "tmux-3.6", vs16Wide: true }],
     ["runs not an array", { ...table, runs: "x" }],
     ["a run of width 1", { ...table, runs: [[1, 2, 1]] }],
     ["a run of two numbers", { ...table, runs: [[1, 2]] }],
@@ -114,7 +114,8 @@ describe("isTmuxWidthTable", () => {
     ],
     ["a codepoint past Unicode", { ...table, runs: [[1, 0x110000, 2]] }],
     ["a fractional codepoint", { ...table, runs: [[1.5, 2, 2]] }],
-    ["clusters missing", { runs: [], vs16Wide: true }],
+    ["folding missing", { runs: [], vs16Wide: true }],
+    ["an unknown folding rule", { ...table, folding: "tmux-9" }],
     ["vs16Wide not a boolean", { ...table, vs16Wide: "on" }],
   ])("refuses %s", (_label, value) => {
     expect(isTmuxWidthTable(value)).toBe(false);

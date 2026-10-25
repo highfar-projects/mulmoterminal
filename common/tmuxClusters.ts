@@ -1,11 +1,15 @@
-// Which characters tmux folds into the cell before them, and how wide that cell becomes: a mirror of
-// `screen_write_combine` in tmux 3.6a (screen-write.c, with utf8_should_combine and
-// hanguljamo_check_state from utf8-combined.c). tmux redraws a folded cell as one unit, so a
-// terminal that adds the parts up instead — a ZWJ family as three emoji, `☺️` as one column — puts
-// everything after it on that row in the wrong place.
+// Which characters tmux folds into the cell before them, and how wide that cell becomes: mirrors of
+// `screen_write_combine` (screen-write.c and utf8-combined.c). tmux redraws a folded cell as one
+// unit, so a terminal that adds the parts up instead — a ZWJ family as three emoji, `☺️` as one
+// column — puts everything after it on that row in the wrong place.
 //
-// Whether a given tmux behaves like this is measured, not assumed (tmuxWidthProbe.ts): an older
-// tmux folds less, and then only the per-codepoint table is used (`clusters: false`).
+// The rule changed between releases, so there is one mirror per rule, and which one this tmux
+// follows is measured, not assumed (tmuxWidthProbe.ts):
+// - "tmux-3.6": utf8_should_combine pairs regional indicators and listed skin-tone bases, Hangul jamo
+//   compose by class, `variation-selector-always-wide` decides U+FE0F.
+// - "tmux-3.4" (3.4 and 3.5): anything in the modifier table (regional indicators, skin tones) folds
+//   into any cell that is not a lone ASCII byte, and U+FE0F always widens.
+// - "none": only zero-width characters fold — what an older tmux and xterm's own tables do.
 import { cellWidthOf, type CellWidth, type TmuxWidthTable } from "./tmuxWidthTable.js";
 
 // Numbers rather than names: the provider packs the class into xterm's per-character state.
@@ -14,15 +18,19 @@ export type JamoClass = (typeof JamoClass)[keyof typeof JamoClass];
 
 /** The cell a character may fold into: what tmux looks at in it. */
 export interface ClusterCell {
-  /** utf8_should_combine decodes a cell's bytes with mbtowc, which yields its FIRST codepoint. */
+  /** tmux decodes a cell's bytes with mbtowc, which yields its FIRST codepoint. */
   first: number;
   width: CellWidth;
+  /** Whether anything has folded into it; a lone ASCII character is the one cell of one byte. */
+  joined: boolean;
   endsWithZwj: boolean;
   /** The class of the cell's last codepoint; hanguljamo_check_state reads its last three bytes. */
   lastJamo: JamoClass;
 }
 
 export type ClusterStep = { kind: "new"; cell: ClusterCell } | { kind: "join"; cell: ClusterCell } | { kind: "drop" };
+
+type Fold = "new" | "drop" | "fold" | "fold-wide";
 
 const ZWJ = 0x200d;
 const VS16 = 0xfe0f;
@@ -59,56 +67,59 @@ export const jamoClassOf = (codepoint: number): JamoClass =>
 const isRegionalIndicator = (codepoint: number): boolean => codepoint >= FIRST_REGIONAL_INDICATOR && codepoint <= LAST_REGIONAL_INDICATOR;
 const isSkinTone = (codepoint: number): boolean => codepoint >= FIRST_SKIN_TONE && codepoint <= LAST_SKIN_TONE;
 
-// utf8_should_combine, asked both ways round as screen_write_combine does.
-const shouldCombine = (cellFirst: number, codepoint: number): boolean =>
-  (isRegionalIndicator(cellFirst) && isRegionalIndicator(codepoint)) ||
-  (isSkinTone(codepoint) && SKIN_TONE_BASES.has(cellFirst)) ||
-  (isSkinTone(cellFirst) && SKIN_TONE_BASES.has(codepoint));
-
 const lastJamoOf = (codepoint: number): JamoClass => (codepoint < FIRST_FOUR_BYTE ? jamoClassOf(codepoint) : JamoClass.None);
 
 const newCell = (codepoint: number, width: CellWidth): ClusterStep => ({
   kind: "new",
-  cell: { first: codepoint, width, endsWithZwj: false, lastJamo: lastJamoOf(codepoint) },
+  cell: { first: codepoint, width, joined: false, endsWithZwj: false, lastJamo: lastJamoOf(codepoint) },
 });
 
 const joinCell = (previous: ClusterCell, codepoint: number, width: CellWidth): ClusterStep => ({
   kind: "join",
-  cell: { first: previous.first, width, endsWithZwj: codepoint === ZWJ, lastJamo: lastJamoOf(codepoint) },
+  cell: { first: previous.first, width, joined: true, endsWithZwj: codepoint === ZWJ, lastJamo: lastJamoOf(codepoint) },
 });
 
-type JamoVerdict = "drop" | "new" | "fold" | "not-jamo";
-type Fold = "new" | "drop" | "fold" | "fold-wide";
-
-// hanguljamo_check_state: a vowel or final with nothing to compose onto is thrown away.
-const jamoVerdict = (previous: ClusterCell, codepoint: number): JamoVerdict => {
-  const jamo = jamoClassOf(codepoint);
-  if (jamo === JamoClass.None) return "not-jamo";
-  if (jamo === JamoClass.Choseong) return "new";
-  const wants = jamo === JamoClass.Jungseong ? JamoClass.Choseong : JamoClass.Jungseong;
-  return previous.lastJamo === wants ? "fold" : "drop";
-};
-
-// Whether a character that is not zero-width folds in, and whether it forces the cell wide.
-const foldOfVisible = (previous: ClusterCell, codepoint: number): Fold => {
-  const jamo = jamoVerdict(previous, codepoint);
-  if (jamo !== "not-jamo") return jamo;
-  if (shouldCombine(previous.first, codepoint)) return "fold-wide";
-  return previous.endsWithZwj ? "fold" : "new";
-};
-
 const DROP: ClusterStep = { kind: "drop" };
-
-// What an older tmux does, and what xterm's own tables do: only a zero-width character folds.
-const perCodepointStep = (codepoint: number, width: CellWidth, previous: ClusterCell | null): ClusterStep =>
-  width === 0 && previous && previous.width > 0 ? joinCell(previous, codepoint, previous.width) : newCell(codepoint, width);
-
-const foldOfZeroWidth = (table: TmuxWidthTable, codepoint: number): Fold => (codepoint === VS16 && table.vs16Wide ? "fold-wide" : "fold");
 
 const applyFold = (fold: Fold, previous: ClusterCell, codepoint: number, width: CellWidth): ClusterStep => {
   if (fold === "new") return newCell(codepoint, width);
   if (fold === "drop") return DROP;
   return joinCell(previous, codepoint, fold === "fold-wide" && previous.width === 1 ? 2 : previous.width);
+};
+
+// "none": what an older tmux does, and what xterm's own tables do.
+const perCodepointStep = (codepoint: number, width: CellWidth, previous: ClusterCell | null): ClusterStep =>
+  width === 0 && previous && previous.width > 0 ? joinCell(previous, codepoint, previous.width) : newCell(codepoint, width);
+
+// utf8_should_combine (3.6), asked both ways round as screen_write_combine does.
+const shouldCombine36 = (cellFirst: number, codepoint: number): boolean =>
+  (isRegionalIndicator(cellFirst) && isRegionalIndicator(codepoint)) ||
+  (isSkinTone(codepoint) && SKIN_TONE_BASES.has(cellFirst)) ||
+  (isSkinTone(cellFirst) && SKIN_TONE_BASES.has(codepoint));
+
+// hanguljamo_check_state (3.6): a vowel or final with nothing to compose onto is thrown away.
+const jamoFold36 = (previous: ClusterCell, jamo: JamoClass): Fold => {
+  if (jamo === JamoClass.Choseong) return "new";
+  const wants = jamo === JamoClass.Jungseong ? JamoClass.Choseong : JamoClass.Jungseong;
+  return previous.lastJamo === wants ? "fold" : "drop";
+};
+
+const visibleFold36 = (previous: ClusterCell, codepoint: number): Fold => {
+  const jamo = jamoClassOf(codepoint);
+  if (jamo !== JamoClass.None) return jamoFold36(previous, jamo);
+  if (shouldCombine36(previous.first, codepoint)) return "fold-wide";
+  return previous.endsWithZwj ? "fold" : "new";
+};
+
+// utf8_is_modifier (3.4): `last.data.size < 2` refuses only a lone ASCII byte.
+const visibleFold34 = (previous: ClusterCell, codepoint: number): Fold => {
+  if (isRegionalIndicator(codepoint) || isSkinTone(codepoint)) return !previous.joined && previous.first < FIRST_MULTIBYTE ? "new" : "fold-wide";
+  return previous.endsWithZwj ? "fold" : "new";
+};
+
+const zeroWidthFold = (table: TmuxWidthTable, codepoint: number): Fold => {
+  const widens = table.folding === "tmux-3.4" || table.vs16Wide;
+  return codepoint === VS16 && widens ? "fold-wide" : "fold";
 };
 
 /**
@@ -117,12 +128,13 @@ const applyFold = (fold: Fold, previous: ClusterCell, codepoint: number, width: 
  */
 export function clusterStep(table: TmuxWidthTable, codepoint: number, previous: ClusterCell | null): ClusterStep {
   const width = cellWidthOf(table.runs, codepoint);
-  if (!table.clusters) return perCodepointStep(codepoint, width, previous);
-  if (codepoint === HANGUL_FILLER) return DROP;
+  if (table.folding === "none") return perCodepointStep(codepoint, width, previous);
+  if (codepoint === HANGUL_FILLER && table.folding === "tmux-3.6") return DROP;
   const zeroWidth = codepoint === ZWJ || codepoint === VS16 || width === 0;
   // An ASCII character never folds, and nothing folds into the start of a row or an empty cell.
   if (codepoint < FIRST_MULTIBYTE || !previous || previous.width === 0) return zeroWidth ? DROP : newCell(codepoint, width);
-  const fold = zeroWidth ? foldOfZeroWidth(table, codepoint) : foldOfVisible(previous, codepoint);
+  if (zeroWidth) return applyFold(zeroWidthFold(table, codepoint), previous, codepoint, width);
+  const fold = table.folding === "tmux-3.6" ? visibleFold36(previous, codepoint) : visibleFold34(previous, codepoint);
   return applyFold(fold, previous, codepoint, width);
 }
 
@@ -140,6 +152,15 @@ export function rowWidthOf(table: TmuxWidthTable, text: string): number {
   return columns;
 }
 
-// Sequences that only come out right when tmux folds the way clusterStep says: a variation
-// selector, a ZWJ family, a skin tone, a flag, a keycap, and an emoji after a ZWJ on a letter.
-export const CLUSTER_SAMPLES: readonly string[] = ["☺️", "\u{1f468}‍\u{1f469}‍\u{1f467}", "\u{1f44d}\u{1f3fd}", "\u{1f1ef}\u{1f1f5}", "1️⃣", "a‍\u{1f469}"];
+// Sequences whose width tells the rules apart: a variation selector, a ZWJ family, a skin tone, a
+// flag, a keycap, an emoji after a ZWJ on a letter, and a skin tone after an accented letter (3.4
+// folds it, 3.6 does not). Written as codepoints so no invisible joiner sits in the source.
+export const CLUSTER_SAMPLES: readonly string[] = [
+  [0x263a, 0xfe0f],
+  [0x1f468, 0x200d, 0x1f469, 0x200d, 0x1f467],
+  [0x1f44d, 0x1f3fd],
+  [0x1f1ef, 0x1f1f5],
+  [0x31, 0xfe0f, 0x20e3],
+  [0x61, 0x200d, 0x1f469],
+  [0xe9, 0x1f3fd],
+].map((codepoints) => String.fromCodePoint(...codepoints));

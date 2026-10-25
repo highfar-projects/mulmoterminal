@@ -9,12 +9,15 @@ export type CellWidth = 0 | 1 | 2;
 /** An inclusive codepoint range tmux gives a width other than 1. */
 export type WidthRun = readonly [first: number, last: number, width: 0 | 2];
 
+/** Which of tmux's sequence-folding rules this tmux follows (see tmuxClusters.ts). */
+export const FOLDING_RULES = ["tmux-3.6", "tmux-3.4", "none"] as const;
+export type FoldingRule = (typeof FOLDING_RULES)[number];
+
 export interface TmuxWidthTable {
   /** Sorted, non-overlapping. Every codepoint not in a run is one column. */
   runs: readonly WidthRun[];
-  /** Whether sequences are folded into one cell the way tmux 3.6 does (see tmuxClusters.ts). */
-  clusters: boolean;
-  /** tmux's `variation-selector-always-wide`: U+FE0F widens a one-column cell to two. */
+  folding: FoldingRule;
+  /** tmux 3.6's `variation-selector-always-wide`: U+FE0F widens a one-column cell to two. */
   vs16Wide: boolean;
 }
 
@@ -47,7 +50,7 @@ export const isTmuxWidthTable = (value: unknown): value is TmuxWidthTable =>
   Array.isArray(value.runs) &&
   value.runs.every(isWidthRun) &&
   runsAreOrdered(value.runs) &&
-  typeof value.clusters === "boolean" &&
+  FOLDING_RULES.some((rule) => rule === value.folding) &&
   typeof value.vs16Wide === "boolean";
 
 const parseAnswer = (answer: string): CellWidth | null => {

@@ -10,7 +10,14 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { CLUSTER_SAMPLES, rowWidthOf } from "../../../common/tmuxClusters.js";
-import { probedCodepoints, widthFormatFor, widthRunsFromAnswers, type TmuxWidthTable, type WidthRun } from "../../../common/tmuxWidthTable.js";
+import {
+  probedCodepoints,
+  widthFormatFor,
+  widthRunsFromAnswers,
+  type FoldingRule,
+  type TmuxWidthTable,
+  type WidthRun,
+} from "../../../common/tmuxWidthTable.js";
 import { sanitizePtyEnv, withFallbackLocale } from "./pty-env.js";
 import { spawnCaptureAsync } from "./spawnCapture.js";
 
@@ -79,17 +86,16 @@ async function sampleWidth(tmux: ThrowawayTmux, sample: string, index: number): 
   return null;
 }
 
-async function foldsLikeTmux36(tmux: ThrowawayTmux, table: TmuxWidthTable, log: Log): Promise<boolean> {
-  const folded = { ...table, clusters: true };
-  for (const [index, sample] of CLUSTER_SAMPLES.entries()) {
-    const measured = await sampleWidth(tmux, sample, index);
-    const predicted = rowWidthOf(folded, sample);
-    if (measured !== predicted) {
-      log(`[tmux] widths: ${JSON.stringify(sample)} is ${measured} columns here, not ${predicted} — sequences are counted per character`);
-      return false;
-    }
-  }
-  return true;
+// Tried in this order; the first whose predictions every sample matches is the one this tmux follows.
+const CANDIDATE_RULES: readonly FoldingRule[] = ["tmux-3.6", "tmux-3.4"];
+
+async function measuredFolding(tmux: ThrowawayTmux, table: TmuxWidthTable, log: Log): Promise<FoldingRule> {
+  const measured: (number | null)[] = [];
+  for (const [index, sample] of CLUSTER_SAMPLES.entries()) measured.push(await sampleWidth(tmux, sample, index));
+  const predicted = (folding: FoldingRule) => CLUSTER_SAMPLES.map((sample) => rowWidthOf({ ...table, folding }, sample));
+  const rule = CANDIDATE_RULES.find((folding) => predicted(folding).every((width, index) => width === measured[index]));
+  if (!rule) log(`[tmux] widths: sequences fold like no known tmux here (${JSON.stringify(measured)}) — they are counted per character`);
+  return rule ?? "none";
 }
 
 async function measureWith(tmux: ThrowawayTmux, log: Log): Promise<TmuxWidthTable | null> {
@@ -97,30 +103,46 @@ async function measureWith(tmux: ThrowawayTmux, log: Log): Promise<TmuxWidthTabl
   if (!started.ok) return null;
   const runs = await measuredRuns(tmux);
   if (!runs) return null;
+  // tmux 3.4 has no such option and always widens; the "tmux-3.4" rule ignores this.
   const option = await tmux.run(["show-options", "-gv", "variation-selector-always-wide"]);
-  const perCodepoint: TmuxWidthTable = { runs, clusters: false, vs16Wide: option.ok && option.stdout.trim() === "on" };
-  return { ...perCodepoint, clusters: await foldsLikeTmux36(tmux, perCodepoint, log) };
+  const perCodepoint: TmuxWidthTable = { runs, folding: "none", vs16Wide: option.ok && option.stdout.trim() === "on" };
+  return { ...perCodepoint, folding: await measuredFolding(tmux, perCodepoint, log) };
 }
 
-/** Measures the tmux on PATH and keeps the result for `tmuxWidthTable()`. Never throws. */
-export async function measureTmuxWidths(log: Log): Promise<TmuxWidthTable | null> {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "mt-w-"));
+const throwawayTmux = (dir: string): ThrowawayTmux => {
   const env = probeEnv();
-  const tmux: ThrowawayTmux = {
+  return {
     run: async (args) => {
       const result = await spawnCaptureAsync("tmux", ["-S", path.join(dir, "s"), ...args], { env });
       return { ok: result.status === 0, stdout: result.stdout };
     },
   };
+};
+
+const UNMEASURED = "terminals count with Unicode 11";
+
+async function measureIn(dir: string, log: Log): Promise<TmuxWidthTable | null> {
+  const tmux = throwawayTmux(dir);
   try {
-    measuredTable = await measureWith(tmux, log);
-    if (!measuredTable) log("[tmux] widths: could not be measured — terminals count with Unicode 11");
-    return measuredTable;
-  } catch (error) {
-    log(`[tmux] widths: measuring failed (${error instanceof Error ? error.message : String(error)}) — terminals count with Unicode 11`);
-    return null;
+    const table = await measureWith(tmux, log);
+    if (!table) log(`[tmux] widths: could not be measured — ${UNMEASURED}`);
+    return table;
   } finally {
     await tmux.run(["kill-server"]);
-    await rm(dir, { recursive: true, force: true });
   }
+}
+
+/** Measures the tmux on PATH and keeps the result for `tmuxWidthTable()`. Never rejects: it runs unawaited at boot. */
+export async function measureTmuxWidths(log: Log): Promise<TmuxWidthTable | null> {
+  let dir: string | null = null;
+  try {
+    dir = await mkdtemp(path.join(os.tmpdir(), "mt-w-"));
+    measuredTable = await measureIn(dir, log);
+  } catch (error) {
+    log(`[tmux] widths: measuring failed (${error instanceof Error ? error.message : String(error)}) — ${UNMEASURED}`);
+    measuredTable = null;
+  } finally {
+    if (dir) await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+  }
+  return measuredTable;
 }

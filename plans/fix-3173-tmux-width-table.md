@@ -22,14 +22,16 @@ The authority is the tmux this server runs, so ask it rather than pick a table:
    changes widths, and it carries hooks a probe must not fire), in the environment a session gets.
    `display-message -p '#{w:#{l:…}}'` is asked for every codepoint in batches. The answers are kept as
    runs of non-1 widths.
-2. **Mirror tmux's cluster rule** (`screen_write_combine`, tmux 3.6a): a ZWJ, `U+FE0F` and any
-   zero-width character join the cell before; a regional-indicator pair and a skin tone after a
-   listed base join and force width 2; anything after a cell ending in ZWJ joins it; `U+FE0F` widens
-   a one-column cell when `variation-selector-always-wide` is on; Hangul jamo compose by class.
-3. **Check the rule against this tmux before trusting it.** A few sample sequences are printed in
-   the throwaway pane and their width read from `#{cursor_x}`. The cluster rule is used only when
-   every sample matches what it predicts; otherwise the table is used per codepoint and the
-   mismatch is logged.
+2. **Mirror tmux's folding rules** (`screen_write_combine`). They differ by release, so there is one
+   mirror per rule. tmux 3.6: a regional-indicator pair and a skin tone after a listed base fold and
+   force width 2, `variation-selector-always-wide` decides `U+FE0F`, Hangul jamo compose by class.
+   tmux 3.4/3.5: anything in the modifier table folds into any cell but a lone ASCII byte, and
+   `U+FE0F` always widens. Both: a ZWJ and zero-width characters fold, and anything after a cell
+   ending in ZWJ folds into it.
+3. **Pick the rule by measuring.** Sample sequences are printed in the throwaway pane and their
+   width read from `#{cursor_x}`; the first rule whose predictions all of them match is used, else
+   sequences are counted per character and the mismatch is logged. (The first version knew only the
+   3.6 rule; Ubuntu CI's tmux 3.4 failed the check and fell back, which the ground-truth spec caught.)
 4. **Hand the result to xterm as its own width table** (`term.unicode.register`, version `tmux`).
    The provider is a pure function in `common/`, so the browser and a headless test use the same one.
 5. **Fallback** when nothing was measured (psmux, no tmux, a probe that failed or has not finished):
