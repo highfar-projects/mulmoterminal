@@ -43,6 +43,9 @@ const defaultBranchOf = async (repo: string): Promise<string | null> => {
   return res.ok && res.stdout.trim() ? res.stdout.trim() : null;
 };
 
+// GitHub names are case-insensitive, and a `prRepos` entry may carry the host, so both sides meet on this.
+const repoKey = (project: string): string => project.toLowerCase();
+
 // Which repo and branch each cell's directory is on, resolved once per directory.
 async function placeCells(cells: readonly LiveCell[]): Promise<Map<string, CellOnBranch[]>> {
   const byCwd = new Map<string, { repo: string; branch: string } | null>();
@@ -55,7 +58,7 @@ async function placeCells(cells: readonly LiveCell[]): Promise<Map<string, CellO
   const out = new Map<string, CellOnBranch[]>();
   cells.forEach((cell) => {
     const place = byCwd.get(cell.cwd);
-    if (place) out.set(place.repo, [...(out.get(place.repo) ?? []), { ...cell, branch: place.branch }]);
+    if (place) out.set(repoKey(place.repo), [...(out.get(repoKey(place.repo)) ?? []), { ...cell, branch: place.branch }]);
   });
   return out;
 }
@@ -83,7 +86,7 @@ export async function boardAcrossRepos(repos: readonly string[], liveCells: read
       if (!isSupported(support)) return { repo, error: support.error };
       const project = support.forge.kind === "github" ? projectPath(support.forge) : null;
       if (!project) return { repo, error: "only GitHub repositories are shown on the board" };
-      return repoBoard(project, cellsByRepo.get(repo) ?? []);
+      return repoBoard(project, cellsByRepo.get(repoKey(project)) ?? []);
     }),
   );
 }

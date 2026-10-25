@@ -174,6 +174,19 @@ describe("buildRepoBoard", () => {
       }),
     );
     expect(cards.map((card) => `${card.column}:${card.key}`)).toEqual(["todo:issue-2", "implementing:pr-21", "qa:pr-20", "merged:pr-19"]);
+    expect(cards.filter((card) => card.pr?.number !== 19).map((card) => card.issue?.number)).toEqual([2, 1, 1]);
+  });
+
+  it("still names the issue on a branch card when a PR already shows it", () => {
+    const cards = buildRepoBoard(
+      input({
+        openPrs: [row({ number: 30, branch: "feat/7-a" }, [{ number: 7, title: "", url: "" }])],
+        openIssues: [issue(7)],
+        cells: [cell("s1", "fix/7-b")],
+      }),
+    );
+    expect(cards.map((card) => card.key)).toEqual(["branch-fix/7-b", "pr-30"]);
+    expect(cards.find((card) => card.key === "branch-fix/7-b")?.issue).toEqual(issue(7));
   });
 
   it("is empty for an empty repo", () => {

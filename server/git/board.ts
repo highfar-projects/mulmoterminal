@@ -100,7 +100,7 @@ const prCard = (row: BoardPrRow, column: BoardColumn, issue: BoardIssue | null, 
 
 const columnRank = (column: BoardColumn): number => BOARD_COLUMNS.indexOf(column);
 
-// What the earlier cards have taken, so a later card never repeats an issue or a branch.
+// What the PR cards have taken: a claimed issue gets no todo card and a claimed branch no branch card.
 interface Claims {
   issues: Set<number>;
   branches: Set<string>;
@@ -138,7 +138,8 @@ const todoCards = (context: BoardContext): BoardCard[] =>
     .filter((issue) => !context.claims.issues.has(issue.number))
     .map((issue): BoardCard => ({ key: `issue-${issue.number}`, column: "todo", issue, pr: null, branch: null, cells: [] }));
 
-/** Every card for one repo, in column order. An issue or a branch appears on one card at most. */
+/** Every card for one repo, in column order. Each PR is one card, showing its issue even when another
+ *  PR closes the same one; an issue or branch that a card already shows gets no card of its own. */
 export function buildRepoBoard(input: RepoBoardInput): BoardCard[] {
   const context: BoardContext = {
     openIssues: new Map(input.openIssues.map((issue) => [issue.number, issue])),

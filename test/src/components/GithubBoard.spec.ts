@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import GithubBoard from "../../../src/components/GithubBoard.vue";
-import { gridSessionJump } from "../../../src/composables/gridSessionJump";
+import { defineComponent, h, nextTick, ref } from "vue";
+import { gridSessionJump, useGridSessionJump } from "../../../src/composables/gridSessionJump";
+import type { GridState } from "../../../src/components/gridTabs";
 import type { BoardCard, BoardResponse } from "../../../common/githubBoard";
 
 const card = (over: Partial<BoardCard>): BoardCard => ({ key: "k", column: "todo", issue: null, pr: null, branch: null, cells: [], ...over });
@@ -65,6 +67,23 @@ describe("GithubBoard", () => {
     expect(elsewhere?.attributes("disabled")).toBeDefined();
     await inGrid?.trigger("click");
     expect(goTo).toHaveBeenCalledWith("in-grid");
+  });
+
+  it("follows the grid's cells while the board is open", async () => {
+    const state = ref<GridState>({ cells: [], expanded: null, page: 0, nextUid: 1, sortMode: "manual" });
+    const grid = mount(defineComponent({ setup: () => useGridSessionJump(state, () => undefined), render: () => h("div") }));
+    serve({ repos: [{ repo: "o/r", cards: [prCard] }] });
+    const w = mount(GithubBoard);
+    await flushPromises();
+    const inGridButton = () => w.findAll('[data-testid="board-cell"]')[0];
+    expect(inGridButton()?.attributes("disabled")).toBeDefined();
+    state.value.cells.push({ uid: 1, session: "in-grid", cwd: "/w/a" });
+    await nextTick();
+    expect(inGridButton()?.attributes("disabled")).toBeUndefined();
+    state.value.cells.splice(0, 1);
+    await nextTick();
+    expect(inGridButton()?.attributes("disabled")).toBeDefined();
+    grid.unmount();
   });
 
   it("disables every cell when no grid is mounted", async () => {
