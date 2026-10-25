@@ -36,7 +36,7 @@ server   ── node-pty  ── tmux (persistence)  ── agent (claude / code
 | `@xterm/addon-web-links` | `^0.12.0` | Linkifies visible `http(s)://` URLs. |
 | `@xterm/addon-clipboard` | `^0.2.0` | OSC 52 clipboard write (auto-copy → browser clipboard). |
 | `@xterm/addon-fit` | `^0.11.0` | Size the grid to the container. |
-| `@xterm/addon-unicode11` | `^0.9.0` | Registers the Unicode 11 width table. Active only when `/api/config` says `terminalUnicodeVersion: "11"` (behind psmux); everywhere else xterm keeps its default `"6"`. The fork's headless emulators follow the same answer (`server/session/unicodeWidth.ts`). |
+| `@xterm/addon-unicode11` | `^0.9.0` | Registers the Unicode 11 width table. Active only when `/api/config` says `terminalUnicodeVersion: "11"` (behind a tmux that counts an emoji two cells: psmux, or a real tmux whose locale says so); everywhere else xterm keeps its default `"6"`. The fork's headless emulators follow the same answer (`server/session/unicodeWidth.ts`). |
 | `node-pty` | `^1.1.0` | The PTY. |
 | tmux | 3.4+ at runtime | OSC 8 hyperlink forwarding (`terminal-features hyperlinks`) needs 3.4+. Measured on 3.6a. |
 | psmux (Windows) | 3.4.0+ | Answers `tmux -V` as `tmux 3.x` and names itself on the second line (`server/infra/process/psmux.ts`). 3.4.0 is the first with `PSMUX_VT_INPUT`, which the client is started with. |
@@ -84,10 +84,14 @@ xterm counts cells with its Unicode 6 table by default, where an emoji such as `
 Claude Code (and psmux) count it as two. psmux repaints only the cells it thinks changed, so on it
 every emoji shifts the rest of its row one column and a checklist turns into a staircase. The
 browser therefore always loads `@xterm/addon-unicode11` but activates the table the server names
-in `/api/config` (`common/terminalUnicode.ts`): `"11"` behind psmux, `"6"` otherwise — a real tmux
-keeps exactly the widths it always ran on. The value can arrive after a terminal is built, so a
-module-scope watch in `useTerminalConnections.ts` carries it to the live terminals. Switching every
-host to `"11"` may well be right too, but it changes what a tmux user sees and has not been measured.
+in `/api/config` (`common/terminalUnicode.ts`): `"11"` when the tmux counts an emoji two cells,
+`"6"` when it counts one. psmux always counts two. A real tmux counts by its own locale tables, which
+differ by machine — tmux 3.6 under glibc's `C.UTF-8` (WSL2) counts two, and there `"6"` broke every
+Claude Code table that had a `✅` in it — so the server asks it once at boot
+(`tmuxCountsEmojiWide` in `server/infra/process/tmux.ts`): a throwaway `tmux -S <tmpdir socket>
+start-server ; display-message -p '#{w:#{l:✅}}' ; kill-server`, never the live server. A tmux that
+answers one keeps exactly the widths it always ran on. The value can arrive after a terminal is
+built, so a module-scope watch in `useTerminalConnections.ts` carries it to the live terminals.
 
 ### Submit vs newline — `terminalSubmit` (#772/#780)
 

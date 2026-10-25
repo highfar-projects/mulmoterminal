@@ -832,7 +832,8 @@ What MulmoTerminal does differently behind psmux, and only there:
 - starts each psmux client with `PSMUX_VT_INPUT=1`, so a paste keeps its markers and the Enter
   after it is not taken into it. `PSMUX_VT_INPUT=0` in the server's environment turns this off;
 - counts emoji two cells wide in the browser (Unicode 11), as Claude Code and psmux do — otherwise
-  each emoji shifts the rest of its row by one column;
+  each emoji shifts the rest of its row by one column. (A real tmux whose locale counts them two —
+  tmux 3.6 on WSL2, for one — gets the same; the server asks the tmux at startup);
 - keeps Volta's `_VOLTA_TOOL_RECURSION` out of psmux's environment, so `node` in a cell resolves through
   Volta's shim again;
 - turns psmux's warm pool off (`set -g warm off`, psmux 3.3.1+), in new servers and in the ones

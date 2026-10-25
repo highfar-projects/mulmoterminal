@@ -32,7 +32,7 @@ import type { PlayfulEffects } from "../../common/playfulEffects.js";
 import type { PlayfulMedia } from "../../common/playfulMedia.js";
 import { systemTaskSettingsChanged } from "./system-task-settings.js";
 import { setAccountsProvider } from "../session/session-home.js";
-import { setTmuxPrefix, tmuxIsPsmux } from "../infra/process/tmux.js";
+import { setTmuxPrefix, tmuxCountsEmojiWide } from "../infra/process/tmux.js";
 import { terminalUnicodeVersionFor } from "../../common/terminalUnicode.js";
 import type { TokenRotation } from "../../common/tokenRotation.js";
 import { installBundledSkills } from "../infra/fs/install-bundled-skills.js";
@@ -570,7 +570,7 @@ function serverFacts() {
     home: os.homedir(),
     worktreesRoot: canonicalPath(worktreesRootDir()),
     storiesRoots: registeredStoriesRoots(),
-    terminalUnicodeVersion: terminalUnicodeVersionFor(tmuxIsPsmux()),
+    terminalUnicodeVersion: terminalUnicodeVersionFor(tmuxCountsEmojiWide()),
   };
 }
 

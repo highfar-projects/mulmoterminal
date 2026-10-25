@@ -1,7 +1,8 @@
 // @vitest-environment node
 //
-// GET /api/config tells the browser which width table to count cells with: Unicode 11 behind
-// psmux, xterm's default everywhere else — so a real tmux keeps exactly what it ran on before.
+// GET /api/config tells the browser which width table to count cells with: Unicode 11 behind a
+// tmux that counts an emoji two cells (psmux, or a real tmux whose locale says so), xterm's
+// default behind one that counts it one — so such a tmux keeps exactly what it ran on before.
 import { describe, it, expect, vi, afterAll } from "vitest";
 import express from "express";
 import { routeCall } from "../../helpers/routeCall";
@@ -18,11 +19,11 @@ const scratch = await vi.hoisted(async () => {
 vi.mock("../../../server/infra/process/tmux.js", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   setTmuxPrefix: vi.fn(),
-  tmuxIsPsmux: vi.fn(() => false),
+  tmuxCountsEmojiWide: vi.fn(() => false),
 }));
 
 const { rmSync } = await import("node:fs");
-const { tmuxIsPsmux } = await import("../../../server/infra/process/tmux.js");
+const { tmuxCountsEmojiWide } = await import("../../../server/infra/process/tmux.js");
 const routes = await import("../../../server/config/config-routes.js");
 const app = express();
 app.use(express.json());
@@ -37,13 +38,13 @@ const unicodeVersionServed = async (): Promise<unknown> => {
 };
 
 describe("terminalUnicodeVersion on GET /api/config", () => {
-  it("is xterm's default behind a real tmux, or none", async () => {
-    vi.mocked(tmuxIsPsmux).mockReturnValue(false);
+  it("is xterm's default behind a tmux that counts an emoji one cell, or none", async () => {
+    vi.mocked(tmuxCountsEmojiWide).mockReturnValue(false);
     expect(await unicodeVersionServed()).toBe("6");
   });
 
-  it("is Unicode 11 behind psmux", async () => {
-    vi.mocked(tmuxIsPsmux).mockReturnValue(true);
+  it("is Unicode 11 behind a tmux that counts an emoji two cells", async () => {
+    vi.mocked(tmuxCountsEmojiWide).mockReturnValue(true);
     expect(await unicodeVersionServed()).toBe("11");
   });
 });

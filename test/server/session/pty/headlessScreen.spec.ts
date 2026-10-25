@@ -115,22 +115,22 @@ describe("renderScreen", () => {
     expect(rows[0].full).toBe(false);
   });
 
-  // Behind psmux, Claude Code and psmux count an emoji two cells wide, and a repaint addresses the
-  // cells after it by that count: psmux repaints only the cells it thinks changed, so "z" is placed
-  // at column 3 to replace "b". The browser counts the same way there (common/terminalUnicode.ts),
-  // and so must this screen. On a real tmux both keep xterm's default Unicode 6 table, where the
-  // emoji is one cell and the row reads "👉abz".
-  it("counts an emoji two cells wide behind psmux, as the program that drew it does", async () => {
-    const psmux = vi.spyOn(tmux, "tmuxIsPsmux").mockReturnValue(true);
+  // Behind a tmux that counts an emoji two cells wide (psmux, or a real tmux whose locale says so),
+  // Claude Code counts it the same, and a repaint addresses the cells after it by that count: "z"
+  // is placed at column 3 to replace "b". The browser counts the same way there
+  // (common/terminalUnicode.ts), and so must this screen. Behind a tmux that counts one, both keep
+  // xterm's default Unicode 6 table, where the emoji is one cell and the row reads "👉abz".
+  it("counts an emoji two cells wide behind a tmux that does, as the program that drew it does", async () => {
+    const wide = vi.spyOn(tmux, "tmuxCountsEmojiWide").mockReturnValue(true);
     const buffer = `👉ab${ESC}[1;4Hz`;
     expect(await screenOf({ buffer, cols: 20, rows: 2 })).toBe("👉az");
-    psmux.mockRestore();
+    wide.mockRestore();
   });
 
-  it("keeps the browser's default width table on a real tmux", async () => {
-    const psmux = vi.spyOn(tmux, "tmuxIsPsmux").mockReturnValue(false);
+  it("keeps the browser's default width table behind a tmux that counts an emoji one cell", async () => {
+    const wide = vi.spyOn(tmux, "tmuxCountsEmojiWide").mockReturnValue(false);
     const buffer = `👉ab${ESC}[1;4Hz`;
     expect(await screenOf({ buffer, cols: 20, rows: 2 })).toBe("👉abz");
-    psmux.mockRestore();
+    wide.mockRestore();
   });
 });
