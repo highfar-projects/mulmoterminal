@@ -37,3 +37,6 @@ script.json
 # `yarn lint` caches per-file results here. `content` strategy, not the default `metadata` one:
 # a checkout rewrites every mtime, so a metadata cache is worth nothing on a CI runner.
 .eslintcache
+
+# Scratch files for local review (issue drafts and the like), never committed.
+/temp/
