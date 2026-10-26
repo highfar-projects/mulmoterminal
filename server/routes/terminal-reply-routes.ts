@@ -16,13 +16,18 @@ export interface TerminalReplyRouteDeps {
   /** Resolves once the Enter has gone out; rejects when the session has no live terminal here. */
   sendReply: (sessionId: string, text: string) => Promise<unknown>;
   isAllowedOrigin: (origin: string | undefined, remoteAddress: string | undefined) => boolean;
+  isAllowedHost: (hostHeader: string | undefined) => boolean;
 }
 
 const HTTP_NOT_FOUND = 404;
 const HTTP_CONFLICT = 409;
 
 export function mountTerminalReplyRoutes(app: Express, deps: TerminalReplyRouteDeps): void {
+  // A GET is answered to any origin's page that can reach it, and a DNS-rebound page reaches it as
+  // same-origin with no Origin header; its Host is still the attacker's name, so that is what is
+  // checked before a terminal's screen is handed over.
   app.get("/api/terminal/:sessionId/screen", async (req, res) => {
+    if (!deps.isAllowedHost(req.headers.host)) return res.status(403).json({ error: "forbidden host" });
     const { sessionId } = req.params;
     if (!SESSION_ID_RE.test(sessionId)) return res.status(400).json({ error: "invalid sessionId" });
     if (!(await deps.sessionExists(sessionId))) return res.status(HTTP_NOT_FOUND).json({ error: "no such session on this host" });

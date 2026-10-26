@@ -23,16 +23,22 @@ interface Call {
 }
 let calls: Call[] = [];
 let replyStatus = 200;
+let releaseReply: (() => void) | null = null;
 
 beforeEach(() => {
   calls = [];
   replyStatus = 200;
+  releaseReply = null;
   setQuestionPaneEnabled(false);
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
       calls.push({ url, init });
       if (url.endsWith("/screen")) return new Response(JSON.stringify({ screen: "Which way?\n> Left\n  Right" }));
+      if (url.endsWith("/reply") && replyStatus === 0) {
+        await new Promise<void>((resolve) => (releaseReply = resolve));
+        return new Response(JSON.stringify({ ok: true }));
+      }
       if (url.endsWith("/reply")) {
         return replyStatus === 200
           ? new Response(JSON.stringify({ ok: true }))
@@ -127,5 +133,40 @@ describe("GithubBoardCellReply", () => {
     await flushPromises();
     const answer = calls.find((call) => call.url === `/api/question/${SESSION}/answer`);
     expect(answer && JSON.parse(String(answer.init?.body))).toMatchObject({ toolUseId: "tool-1" });
+  });
+});
+
+describe("one write at a time", () => {
+  it("offers no reply box while a question dialog is up, even with text already typed", async () => {
+    const w = mount(GithubBoardCellReply, { props: { cell: cell() } });
+    const input = w.get('[data-testid="board-cell-reply-input"]');
+    await input.setValue("type over the dialog");
+    setQuestionPaneEnabled(true);
+    await w.setProps({ cell: cell({ waiting: true }) });
+    await flushPromises();
+    expect(input.attributes("disabled")).toBeDefined();
+    await w.get("form").trigger("submit");
+    await flushPromises();
+    expect(urls()).not.toContain(`/api/terminal/${SESSION}/reply`);
+  });
+
+  it("does not answer the question while a reply is still being typed", async () => {
+    replyStatus = 0;
+    const w = mount(GithubBoardCellReply, { props: { cell: cell() } });
+    await w.get('[data-testid="board-cell-reply-input"]').setValue("first");
+    await w.get("form").trigger("submit");
+    await flushPromises();
+    setQuestionPaneEnabled(true);
+    await w.setProps({ cell: cell({ waiting: true }) });
+    await flushPromises();
+    const right = w
+      .get('[data-testid="board-cell-reply"] section')
+      .findAll("button")
+      .find((button) => button.text().includes("Right"));
+    await right?.trigger("click");
+    await flushPromises();
+    expect(urls()).not.toContain(`/api/question/${SESSION}/answer`);
+    releaseReply?.();
+    await flushPromises();
   });
 });

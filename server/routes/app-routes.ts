@@ -140,6 +140,8 @@ export interface AppRouteDeps extends SessionActivityDeps {
   isAllowedOrigin: (origin: string | undefined, remoteAddress: string | undefined) => boolean;
   /** How much of a session's output the screen capture reads (the PTY buffer's cap). */
   outputBufferLimit: number;
+  /** Whether a request's Host is one this server answers to — loopback or an operator-named host. */
+  isAllowedHost: (hostHeader: string | undefined) => boolean;
   publish: (channel: string, data: unknown) => void;
   sessionChannel: (id: string) => string;
   toolStores: ReturnType<typeof createToolStores>;
@@ -443,6 +445,7 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
     captureScreen: (sessionId) => captureTerminalScreen(sessionId, deps.outputBufferLimit),
     sendReply: sendToSession,
     isAllowedOrigin: deps.isAllowedOrigin,
+    isAllowedHost: deps.isAllowedHost,
   });
 
   // GET/POST /api/config (workspace dir + directory presets) — in its own module.

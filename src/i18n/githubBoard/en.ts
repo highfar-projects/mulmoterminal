@@ -30,6 +30,7 @@ export const githubBoardEn = {
       screenFailed: "Could not read the screen.",
       emptyScreen: "(nothing on screen)",
       placeholder: "Reply or give the next instruction",
+      answerQuestionFirst: "Answer the question above first",
       send: "Send",
       sending: "Sending…",
       failed: "Could not send to this terminal.",

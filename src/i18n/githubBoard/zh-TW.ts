@@ -30,6 +30,7 @@ export const githubBoardZhTW = {
       screenFailed: "無法讀取畫面。",
       emptyScreen: "（畫面上沒有內容）",
       placeholder: "回覆或下一步指示",
+      answerQuestionFirst: "請先回答上面的問題",
       send: "傳送",
       sending: "傳送中…",
       failed: "無法傳送到此終端機。",

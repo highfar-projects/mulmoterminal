@@ -30,6 +30,7 @@ export const githubBoardZhCN = {
       screenFailed: "无法读取屏幕。",
       emptyScreen: "（屏幕上没有内容）",
       placeholder: "回复或下一步指示",
+      answerQuestionFirst: "请先回答上面的问题",
       send: "发送",
       sending: "发送中…",
       failed: "无法发送到此终端。",

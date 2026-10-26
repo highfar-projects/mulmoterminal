@@ -26,6 +26,10 @@ Fifth step of the experimental board (#3172). The detail panel lets you read a c
   - `GET /api/terminal/:sessionId/screen` answers `{ screen }` from `captureTerminalScreen`, and 404
     when the host does not hold the session. Existence is `sessionExistsHere`, exported from
     `hostBindings.ts`, which compares names exactly because tmux resolves a target by prefix.
+    The route first checks the request's **Host** with `createIsAllowedHost` (loopback plus the
+    operator-named hostnames, the same list as the Origin check), because a DNS-rebound page reads a
+    GET as same-origin with no Origin header. The older GETs that expose session content have the same
+    exposure; that is a separate issue, not widened here.
   - `POST /api/terminal/:sessionId/reply` checks the origin itself as well as through the central
     gate. A sender rejection (no live terminal here) is a 409 carrying its reason.
 - Mounted in `app-routes.ts`. `outputBufferLimit` is now passed in from `index.ts`, as the other
@@ -38,5 +42,8 @@ Fifth step of the experimental board (#3172). The detail panel lets you read a c
   - Sending clears the box only once the host accepted the line; a refusal keeps the text and shows
     the reason.
   - It re-reads the screen and the question shortly after a reply or an answer.
+  - One write at a time: the reply box is shut while a question dialog is up (the dialog has its own
+    text field), and a question is not answered while a reply is being typed. The two go through
+    different host writers with no shared queue.
 - `QuestionPane.vue` gains `embedded`, which takes the panel's width and hides its expand and close
   buttons. Without the prop, its classes and controls are exactly as before.

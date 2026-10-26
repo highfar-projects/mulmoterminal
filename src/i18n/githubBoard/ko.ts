@@ -30,6 +30,7 @@ export const githubBoardKo = {
       screenFailed: "화면을 읽을 수 없습니다.",
       emptyScreen: "(화면에 아무것도 없습니다)",
       placeholder: "답장 또는 다음 지시",
+      answerQuestionFirst: "먼저 위의 질문에 답하세요",
       send: "보내기",
       sending: "보내는 중…",
       failed: "이 터미널로 보낼 수 없습니다.",

@@ -30,6 +30,7 @@ export const githubBoardJa = {
       screenFailed: "画面を読み込めませんでした。",
       emptyScreen: "（画面に何もありません）",
       placeholder: "返信、または次の指示",
+      answerQuestionFirst: "先に上の質問に答えてください",
       send: "送信",
       sending: "送信中…",
       failed: "このターミナルに送れませんでした。",

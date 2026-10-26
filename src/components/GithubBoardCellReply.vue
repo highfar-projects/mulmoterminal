@@ -28,6 +28,9 @@ const question = ref<AskQuestionEvent | null>(null);
 const answerFailure = ref<AnswerFailure | null>(null);
 const text = ref("");
 const sending = ref(false);
+// An answer to the question dialog in flight. The dialog's keys and a reply's paste are written by
+// two different host paths with no queue between them, so neither may start while the other runs.
+const answering = ref(false);
 const replyError = ref<string | null>(null);
 let screenRequest = 0;
 
@@ -75,8 +78,12 @@ const replyFailure = async (res: Response): Promise<string> => {
   return isRecord(body) && typeof body.error === "string" ? body.error : t("githubBoard.reply.failed");
 };
 
+// While a question dialog is up, the reply box is not offered: text typed into the terminal then
+// would land in the dialog, and the dialog has a text field of its own.
+const canSend = computed(() => !sending.value && !answering.value && question.value === null && text.value.trim() !== "");
+
 async function send(): Promise<void> {
-  if (sending.value || text.value.trim() === "") return;
+  if (!canSend.value) return;
   sending.value = true;
   replyError.value = null;
   try {
@@ -96,24 +103,31 @@ async function send(): Promise<void> {
   }
 }
 
-async function answer(picks: number[][]): Promise<void> {
+// One write at a time: refused while a reply is being typed, and holding the reply box shut while it runs.
+async function whileAnswering(run: (event: AskQuestionEvent) => Promise<void>): Promise<void> {
   const event = question.value;
-  if (!event) return;
-  question.value = null;
-  answerFailure.value = await postAnswer(event.sessionId, event.toolUseId, picks);
-  if (answerFailure.value && answerFailure.value !== "closed") question.value = event;
-  refreshSoon();
+  if (!event || sending.value || answering.value) return;
+  answering.value = true;
+  try {
+    await run(event);
+  } finally {
+    answering.value = false;
+    refreshSoon();
+  }
 }
 
-async function say(words: string): Promise<void> {
-  const event = question.value;
-  if (!event) return;
-  answerFailure.value = await postWords(event.sessionId, event.toolUseId, words);
-  if (!answerFailure.value) question.value = null;
-  refreshSoon();
-}
+const answer = (picks: number[][]): Promise<void> =>
+  whileAnswering(async (event) => {
+    question.value = null;
+    answerFailure.value = await postAnswer(event.sessionId, event.toolUseId, picks);
+    if (answerFailure.value && answerFailure.value !== "closed") question.value = event;
+  });
 
-const canSend = computed(() => !sending.value && text.value.trim() !== "");
+const say = (words: string): Promise<void> =>
+  whileAnswering(async (event) => {
+    answerFailure.value = await postWords(event.sessionId, event.toolUseId, words);
+    if (!answerFailure.value) question.value = null;
+  });
 </script>
 
 <template>
@@ -141,7 +155,8 @@ const canSend = computed(() => !sending.value && text.value.trim() !== "");
         data-testid="board-cell-reply-input"
         type="text"
         class="box-border min-w-0 flex-auto rounded-md border border-border bg-input px-2 py-1 text-[12px] text-fg focus:border-accent focus:outline-none"
-        :placeholder="t('githubBoard.reply.placeholder')"
+        :disabled="question !== null || answering"
+        :placeholder="question ? t('githubBoard.reply.answerQuestionFirst') : t('githubBoard.reply.placeholder')"
         :aria-label="t('githubBoard.reply.placeholder')"
       />
       <button
