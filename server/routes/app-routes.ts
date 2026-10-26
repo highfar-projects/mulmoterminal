@@ -72,6 +72,7 @@ import { mountFeedsRoutes } from "../backends/feeds/feeds.js";
 import { mountCalendarPushRoutes } from "../backends/calendar/calendarPush.js";
 import { listProjectRoots } from "../infra/fs/project-root.js";
 import { mountRemoteHostRoutes } from "../backends/remoteHost/index.js";
+import { mountBotJobRoutes } from "../backends/botJobs/index.js";
 import { mountNotificationRoutes } from "../backends/notifier.js";
 import { mountWhisperRoutes } from "../backends/media/whisper.js";
 import { mountSchedulerRoutes } from "../backends/scheduler/scheduler.js";
@@ -516,6 +517,10 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
   // Firestore host loop from the toolbar Connect control. Same-origin guarded like
   // the other local-only routes; the connect idToken is never logged.
   mountRemoteHostRoutes(app, { isAllowedOrigin: deps.isAllowedOrigin });
+
+  // GET/POST /api/bot-tokens + DELETE /api/bot-tokens/:id — mint and revoke the secret a remote bot
+  // sends to mulmoserver's submitBotJob for this host (backends/botJobs). Needs the connection above.
+  mountBotJobRoutes(app);
 
   // GET /api/google/status + POST /api/google/authorize|unlink — the Settings modal's
   // Google account link. Consent needs a browser on THIS machine (loopback listener),

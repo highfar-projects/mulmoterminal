@@ -254,7 +254,11 @@ export function isBackgroundSession(id: string): boolean {
 // a codex session over claude's endpoint attaches to the wrong agent, and the live PtyEntry that
 // would have said so is exactly what is gone in the case this exists for — the server restarted,
 // or the pty was reaped, before anyone opened a tab (Codex, PR #1189).
-const unplacedSessions = new Map<string, TerminalAgent>();
+// A bot job's shell (backends/botJobs) is the one non-agent kind: it is spawned with no browser
+// either, and adopting it as an agent cell would start that agent in its place.
+const unplacedSessions = new Map<string, UnplacedKind>();
+export type UnplacedKind = TerminalAgent | "shell";
+const asUnplacedKind = (value: unknown): UnplacedKind => (value === "shell" ? "shell" : asTerminalAgent(value));
 const UNPLACED_SESSIONS_FILE = path.join(MULMOTERMINAL_HOME, "unplaced-sessions.json");
 export const unplacedSessionsHydrated = (async () => {
   try {
@@ -262,7 +266,7 @@ export const unplacedSessionsHydrated = (async () => {
     for (const line of contents.split("\n")) {
       const [id, agent] = line.trim().split(/\s+/);
       // A line with no agent is one written before this field existed; claude is what those were.
-      if (id && isValidSessionId(id)) unplacedSessions.set(id, asTerminalAgent(agent));
+      if (id && isValidSessionId(id)) unplacedSessions.set(id, asUnplacedKind(agent));
     }
   } catch {
     // absent on first run / unreadable => nothing waiting
@@ -270,7 +274,7 @@ export const unplacedSessionsHydrated = (async () => {
 })();
 let unplacedPersist: Promise<void> = Promise.resolve();
 trackPersistQueue(() => unplacedPersist);
-function appendUnplacedSession(id: string, agent: TerminalAgent): void {
+function appendUnplacedSession(id: string, agent: UnplacedKind): void {
   unplacedPersist = unplacedPersist
     .then(() => fs.mkdir(MULMOTERMINAL_HOME, { recursive: true }))
     .then(() => fs.appendFile(UNPLACED_SESSIONS_FILE, `\n${id} ${agent}`))
@@ -285,7 +289,7 @@ const placedSessions = new Set<string>();
 /** Note that the server spawned a VISIBLE session nobody has a cell for yet. The agent travels
  *  with the id for the same reason it does everywhere else: the cell has to reconnect on the right
  *  endpoint, and by the time this is read the running process may be gone. */
-export function markUnplacedSession(id: string, agent: TerminalAgent = "claude"): void {
+export function markUnplacedSession(id: string, agent: UnplacedKind = "claude"): void {
   if (!isValidSessionId(id) || unplacedSessions.has(id)) return;
   unplacedSessions.set(id, agent);
   appendUnplacedSession(id, agent);
@@ -327,7 +331,21 @@ export function markAttachedSessionPlaced(sessionId: string, requested: string |
 }
 
 /** The sessions a loading grid should adopt: spawned visible by the server, never taken. */
-export function unplacedSessionRows(): { id: string; agent: TerminalAgent }[] {
+/** Sessions the detached-session reaper must leave alone, whatever their activity says. A bot job's
+ *  shell has no hooks, so it always reads as idle — and an idle detached session is reaped 30s after
+ *  its tab closes, which would kill a Python run that has an hour to go. Held from the spawn until
+ *  the job has an outcome (backends/botJobs). In memory on purpose: a restart loses the job's
+ *  waiting handler anyway, and the shell left behind is then an ordinary one. */
+const pinnedSessions = new Set<string>();
+export function pinSession(id: string): void {
+  pinnedSessions.add(id);
+}
+export function unpinSession(id: string): void {
+  pinnedSessions.delete(id);
+}
+export const isPinnedSession = (id: string): boolean => pinnedSessions.has(id);
+
+export function unplacedSessionRows(): { id: string; agent: UnplacedKind }[] {
   return [...unplacedSessions].filter(([id]) => !placedSessions.has(id)).map(([id, agent]) => ({ id, agent }));
 }
 
