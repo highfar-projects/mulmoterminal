@@ -35,7 +35,7 @@ export type CodexVerdict = "lgtm" | "changes";
 export interface BoardCodexReview {
   /** Verdict comments posted by the repo's owner, members or collaborators. */
   verdicts: number;
-  /** gh returned its cap of comments, so there may be verdicts it did not return. */
+  /** gh returned its cap of comments or of reviews, so there may be verdicts it did not return. */
   more: boolean;
   latest: CodexVerdict;
   /** Which head the newest verdict names: this PR's head, another commit, or none. */

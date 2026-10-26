@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { GH_LIST_COMMENT_CAP, codexReviewOf, parseVerdictLine } from "../../../server/git/codexVerdict";
+import { GH_LIST_ITEM_CAP, codexReviewOf, parseVerdictLine } from "../../../server/git/codexVerdict";
 
 const HEAD = "e1f77995f0ce3800f325562c134fa5fb6d769378";
 
@@ -56,11 +56,22 @@ describe("codexReviewOf", () => {
     expect(codexReviewOf([comment("CODEX VERDICT: LGTM", "t", "NONE")], [], HEAD)).toBeNull();
   });
 
-  it("flags a comment list that reached gh's cap", () => {
-    const filler = Array.from({ length: GH_LIST_COMMENT_CAP - 1 }, () => comment("hi", "2026-10-26T03:00:00Z"));
+  it("flags a comment or review list that reached gh's cap", () => {
+    const filler = Array.from({ length: GH_LIST_ITEM_CAP - 1 }, () => comment("hi", "2026-10-26T03:00:00Z"));
     const capped = [...filler, comment("CODEX VERDICT: LGTM", "2026-10-26T04:00:00Z")];
     expect(codexReviewOf(capped, [], HEAD)?.more).toBe(true);
     expect(codexReviewOf(capped.slice(1), [], HEAD)?.more).toBe(false);
+    const verdict = [comment("CODEX VERDICT: LGTM", "2026-10-26T04:00:00Z")];
+    expect(codexReviewOf(verdict, filler, HEAD)?.more).toBe(false);
+    expect(codexReviewOf(verdict, [...filler, filler[0]], HEAD)?.more).toBe(true);
+  });
+
+  it("does not count a verdict with no time, such as a review saved but not submitted", () => {
+    const posted = comment("CODEX VERDICT: CHANGES REQUESTED", "2026-10-26T04:00:00Z");
+    const pending = { body: "CODEX VERDICT: LGTM", submittedAt: null, authorAssociation: "OWNER" };
+    expect(codexReviewOf([posted], [pending], HEAD)).toEqual({ verdicts: 1, more: false, latest: "changes", head: "unknown" });
+    expect(codexReviewOf([], [pending, { ...pending, submittedAt: "" }], HEAD)).toBeNull();
+    expect(codexReviewOf([{ ...posted, createdAt: undefined }], [], HEAD)).toBeNull();
   });
 
   it("is null when nothing usable was posted, whatever the shape", () => {

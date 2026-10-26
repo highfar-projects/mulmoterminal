@@ -5,8 +5,8 @@ import type { BoardCodexReview, CodexVerdict } from "../../common/githubBoard.js
 import { isRecord } from "../../common/isRecord.js";
 import { readString } from "../../common/readString.js";
 
-/** `gh pr list --json comments` returns a PR's first this-many comments and no more. */
-export const GH_LIST_COMMENT_CAP = 100;
+/** `gh pr list` returns a PR's first this-many comments, and its first this-many reviews, and no more. */
+export const GH_LIST_ITEM_CAP = 100;
 
 // Anyone may comment on a public repo; only the repo's own people can post a verdict the board counts.
 const TRUSTED_ASSOCIATIONS = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
@@ -36,12 +36,16 @@ interface PostedVerdict extends VerdictLine {
 }
 
 // A comment carries `createdAt`, a review `submittedAt`; both are ISO times in UTC, so they sort as text.
+// A review the viewer has saved but not submitted comes back with no time, and nobody else can see it.
 const postedVerdicts = (items: unknown, timeField: "createdAt" | "submittedAt"): PostedVerdict[] =>
   (Array.isArray(items) ? items : []).flatMap((item): PostedVerdict[] => {
     if (!isRecord(item) || !TRUSTED_ASSOCIATIONS.has(readString(item.authorAssociation))) return [];
     const line = parseVerdictLine(readString(item.body));
-    return line ? [{ ...line, at: readString(item[timeField]) }] : [];
+    const at = readString(item[timeField]);
+    return line && at !== "" ? [{ ...line, at }] : [];
   });
+
+const reachedCap = (items: unknown): boolean => Array.isArray(items) && items.length >= GH_LIST_ITEM_CAP;
 
 const headState = (sha: string, headOid: string): BoardCodexReview["head"] => {
   if (sha === "") return "unknown";
@@ -55,7 +59,7 @@ export function codexReviewOf(comments: unknown, reviews: unknown, headOid: stri
   if (!latest) return null;
   return {
     verdicts: verdicts.length,
-    more: Array.isArray(comments) && comments.length >= GH_LIST_COMMENT_CAP,
+    more: reachedCap(comments) || reachedCap(reviews),
     latest: latest.verdict,
     head: headState(latest.sha, headOid),
   };

@@ -27,7 +27,7 @@ const waiting = computed(() => cardWaiting(props.card));
 
 const codex = computed(() => props.card.pr?.codex ?? null);
 
-// gh returns a PR's first comments only, so a list at its cap may hold fewer verdicts than were posted.
+// gh returns a PR's first comments and reviews only, so a list at its cap may miss later verdicts.
 const codexCount = computed(() => {
   if (!codex.value) return "";
   return codex.value.more ? `${codex.value.verdicts}+` : String(codex.value.verdicts);

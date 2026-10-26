@@ -25,8 +25,9 @@ none (every verdict posted before the skill changed).
   comments are most of the payload, and the merged list is where most such PRs are, while a verdict
   on a merged PR no longer decides anything. So a merged card shows no codex chip.
 - Count only `OWNER`, `MEMBER`, `COLLABORATOR` — anyone can comment on a public repo.
-- The newest verdict is the one with the latest time. `gh pr list` returns a PR's first 100
-  comments, so a list at that cap is flagged `more` and shown as `N+`.
+- The newest verdict is the one with the latest time; one with no time (a review saved but not
+  submitted) is not a verdict. `gh pr list` returns a PR's first 100 comments and first 100 reviews,
+  so a list at either cap is flagged `more` and shown as `N+`.
 
 ## UI
 
