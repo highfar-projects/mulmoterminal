@@ -1608,7 +1608,7 @@ Ready (QA) and Merged — joining each issue to the PR that closes it and to the
 branch. Pressing a card opens a detail panel with the issue body, the PR's checks and reviews, and
 those cells (`GET /api/github/board/detail`); GitHub is a link inside it. A To do card's **▶** starts
 the issue as above but **sends the issue text at once** and stays on the board; the new cell joins
-the grid behind it, and the card moves to Implementing. Backed by `GET /api/github/board`.
+the grid behind it, and the card moves to Implementing. The board keeps itself current while open: cells follow the same live `sessions` feed as the grid, a card whose cell is waiting for you gets an amber border, and the board reads itself again every minute while visible and a few seconds after one of its cells finishes a turn. Backed by `GET /api/github/board`.
 
 **Which clone a repo's work happens in.** `GET /api/repo-dirs` answers the reverse of the
 GitHub link a cell already shows: given `owner/repo`, which of your saved directories are

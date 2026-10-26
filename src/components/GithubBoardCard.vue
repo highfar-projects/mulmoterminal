@@ -9,6 +9,7 @@ import { ciDotClass } from "./ciDot";
 import GithubBoardCells from "./GithubBoardCells.vue";
 import IssueStartButton from "./IssueStartButton.vue";
 import type { IssueStartOptions } from "../composables/useIssueStart";
+import { cardWaiting } from "./boardLive";
 
 const props = defineProps<{ repo: string; card: BoardCard; home: string | null; selected: boolean }>();
 
@@ -21,14 +22,26 @@ const BOARD_START: IssueStartOptions = { run: true, reveal: false };
 const { t } = useI18n();
 
 const review = computed(() => (props.card.pr?.review ?? "").toUpperCase());
+
+const waiting = computed(() => cardWaiting(props.card));
+
+const borderClass = computed(() => {
+  if (props.selected) return "border-accent";
+  return waiting.value ? "border-amber" : "border-border";
+});
 </script>
 
 <template>
   <article
     data-testid="board-card"
     class="flex flex-col gap-1.5 rounded-md border bg-panel px-2.5 py-2 text-[12px] text-secondary"
-    :class="selected ? 'border-accent' : 'border-border'"
+    :class="borderClass"
+    :data-waiting="waiting || undefined"
   >
+    <span v-if="waiting" data-testid="board-card-waiting" class="flex items-center gap-1 text-[11px] font-semibold text-amber">
+      <span class="material-symbols-outlined text-[14px]" aria-hidden="true">front_hand</span>
+      {{ t("githubBoard.cell.waiting") }}
+    </span>
     <button
       type="button"
       data-testid="board-card-open"
