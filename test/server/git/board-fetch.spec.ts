@@ -9,6 +9,10 @@ const runGh = vi.hoisted(() =>
     if (args[0] === "pr" && args[1] === "view")
       return { ok: true, stdout: JSON.stringify({ number: Number(args[2]), url: "https://github.com/o/r/pull/5" }), stderr: "" };
     if (args[0] === "repo") return { ok: true, stdout: "main\n", stderr: "" };
+    if (args[0] === "pr" && args.includes("merged")) {
+      const review = { authorAssociation: "OWNER", submittedAt: "2026-10-26T04:00:00Z", body: "CODEX VERDICT: LGTM (head abc1234)" };
+      return { ok: true, stdout: JSON.stringify([{ number: 6, url: "https://github.com/o/r/pull/6", headRefName: "feat/y", reviews: [review] }]), stderr: "" };
+    }
     if (args[0] === "pr" && args.includes("open")) {
       const verdict = { authorAssociation: "MEMBER", createdAt: "2026-10-26T04:00:00Z", body: "CODEX VERDICT: LGTM (head abc1234)" };
       const pr = { number: 5, title: "t", url: "https://github.com/o/r/pull/5", headRefName: "feat/x", headRefOid: "abc1234def", comments: [verdict] };
@@ -45,6 +49,8 @@ describe("boardAcrossRepos", () => {
     expect(fieldsFor("open")).toContain("comments");
     expect(fieldsFor("merged")).not.toContain("comments");
     expect(fieldsFor("merged")).toContain("reviews");
+    // A merged row has its reviews but not its comments, so a review-body verdict is not a whole count.
+    expect(board?.cards?.find((card) => card.key === "pr-6")?.pr?.codex).toBeNull();
   });
 
   it("answers a non-GitHub repo with its own error", async () => {

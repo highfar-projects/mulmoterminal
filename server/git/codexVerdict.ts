@@ -52,8 +52,10 @@ const headState = (sha: string, headOid: string): BoardCodexReview["head"] => {
   return headOid !== "" && headOid.toLowerCase().startsWith(sha) ? "current" : "stale";
 };
 
-/** What the codex rounds on one PR come to, or null when none was posted. */
+/** What the codex rounds on one PR come to, or null when none was posted or the comments were not read. */
 export function codexReviewOf(comments: unknown, reviews: unknown, headOid: string): BoardCodexReview | null {
+  // A row read without comments (the merged list) would otherwise get a count of its review verdicts alone.
+  if (!Array.isArray(comments)) return null;
   const verdicts = [...postedVerdicts(comments, "createdAt"), ...postedVerdicts(reviews, "submittedAt")];
   const latest = verdicts.reduce<PostedVerdict | null>((newest, verdict) => (newest === null || verdict.at >= newest.at ? verdict : newest), null);
   if (!latest) return null;

@@ -74,6 +74,12 @@ describe("codexReviewOf", () => {
     expect(codexReviewOf([{ ...posted, createdAt: undefined }], [], HEAD)).toBeNull();
   });
 
+  it("is null when the comments were not read, even with a verdict in the reviews", () => {
+    const review = { body: "CODEX VERDICT: LGTM", submittedAt: "2026-10-26T04:00:00Z", authorAssociation: "OWNER" };
+    expect(codexReviewOf([], [review], HEAD)?.verdicts).toBe(1);
+    [undefined, null, {}, "x"].forEach((comments) => expect(codexReviewOf(comments, [review], HEAD)).toBeNull());
+  });
+
   it("is null when nothing usable was posted, whatever the shape", () => {
     [undefined, null, "x", {}, [], [null, 1, "x", { body: 5 }, { body: "CODEX VERDICT: LGTM" }]].forEach((comments) =>
       expect(codexReviewOf(comments, comments, HEAD)).toBeNull(),
