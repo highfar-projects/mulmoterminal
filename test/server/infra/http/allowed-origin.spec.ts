@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 
-import { bindSecurityWarning, browserOriginHostnames, createIsAllowedOrigin } from "../../../../server/infra/http/allowed-origin.js";
+import { bindSecurityWarning, browserOriginHostnames, createIsAllowedHost, createIsAllowedOrigin } from "../../../../server/infra/http/allowed-origin.js";
 
 // The default server: bound to loopback, nothing named. Every case below this line predates
 // #956 and must keep reading exactly as it did — an operator who configured nothing is the
@@ -274,6 +274,32 @@ describe("a configured server allows the origins its operator named", () => {
 
 // The warning is the one place the operator is guaranteed to look — #956 was reported by someone
 // who had read it and still met the limit as a terminal that would not connect.
+// A read is answered to a DNS-rebound page as same-origin, with no Origin to judge, so the Host it
+// was addressed to is what a sensitive GET is checked by (#3185).
+describe("isAllowedHost", () => {
+  const loopbackOnly = createIsAllowedHost(new Set());
+  const named = createIsAllowedHost(new Set(["nuc.local", "192.168.11.6", "[fe80::1]"]));
+
+  it.each(["localhost:34567", "localhost", "127.0.0.1:34567", "[::1]:34567", "LOCALHOST:34567"])("answers to the loopback host %s", (host) => {
+    expect(loopbackOnly(host)).toBe(true);
+  });
+
+  it.each(["evil.example:34567", "localhost.evil.example", "127.0.0.1.evil.example", "nuc.local:34567", "0.0.0.0:34567"])(
+    "refuses %s with nothing configured",
+    (host) => {
+      expect(loopbackOnly(host)).toBe(false);
+    },
+  );
+
+  it.each(["nuc.local:34567", "192.168.11.6:34567", "[fe80::1]:34567"])("answers to the operator-named host %s", (host) => {
+    expect(named(host)).toBe(true);
+  });
+
+  it.each([undefined, "", "http://localhost", "local host", "[::1"])("refuses a missing or malformed Host %j", (host) => {
+    expect(loopbackOnly(host)).toBe(false);
+  });
+});
+
 describe("bindSecurityWarning", () => {
   it("names the symptom and the way out when no browser origin is allowed", () => {
     const warning = bindSecurityWarning("0.0.0.0", 34567, new Set());

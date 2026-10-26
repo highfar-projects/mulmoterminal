@@ -15,7 +15,7 @@ import { rotationLoginLabel } from "../common/tokenRotation.js";
 import { countLiveSessions } from "./agents/token/token-assignment.js";
 import { enforceKeymap } from "./config/keymap/keymap-check.js";
 import { tmuxCancelCopyMode, tmuxPaneInMode, tmuxPanePidsBySessionAsync, tmuxRedrawClient, tmuxTerminalModes, tmuxWindowSize } from "./infra/process/tmux.js";
-import { browserOriginHostnames, createIsAllowedOrigin } from "./infra/http/allowed-origin.js";
+import { browserOriginHostnames, createIsAllowedHost, createIsAllowedOrigin } from "./infra/http/allowed-origin.js";
 import { serverErrorExit } from "./infra/process/server-exit.js";
 import { PORT, BIND_HOST, CLAUDE_CWD } from "./config/env.js";
 import { messageOf } from "./errors.js";
@@ -371,6 +371,7 @@ enforceKeymap(APP_CONFIG_FILE, {
 // reports — a warning describing a different rule than the one enforced is worse than none.
 const browserHostnames = browserOriginHostnames(BIND_HOST, process.env.MULMOTERMINAL_ALLOWED_ORIGINS);
 const isAllowedOrigin = createIsAllowedOrigin(browserHostnames);
+const isAllowedHost = createIsAllowedHost(browserHostnames);
 
 // What a removed feature left on disk (infra/fs/legacy-cleanup.ts). Fire-and-forget.
 runLegacyCleanupsOnce();
@@ -402,6 +403,8 @@ const logMove = (sessionId: string, why: string, outcome: LimitRotationOutcome):
 
 mountAppRoutes(app, {
   clientDir: __dirname,
+  outputBufferLimit: OUTPUT_BUFFER_LIMIT,
+  isAllowedHost,
   rateLimits,
   onRateLimited: (sessionId) => logMove(sessionId, "hit its usage limit", rotateOnLimit(limitRotationDeps, sessionId)),
   onTurnEnded: (sessionId) => logMove(sessionId, "ended a turn at the switch line", rotateNearLimit(limitRotationDeps, sessionId)),
