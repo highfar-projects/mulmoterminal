@@ -132,7 +132,7 @@ describe.skipIf(process.platform === "win32")("run.sh, run", () => {
   it("keeps only the tail of a long output on disk, one byte past what is sent back", () => {
     run(`head -c ${MAX_OUTPUT_BYTES * 2} /dev/zero | tr '\\0' x; printf END`, "y\n");
     const kept = readFileSync(path.join(dir, OUTPUT_FILE), "utf8");
-    expect(kept.length).toBe(MAX_OUTPUT_BYTES + 1);
+    expect(kept).toHaveLength(MAX_OUTPUT_BYTES + 1);
     expect(kept.endsWith("xEND")).toBe(true);
   });
 
