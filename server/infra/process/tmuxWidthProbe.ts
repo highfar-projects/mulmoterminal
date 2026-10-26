@@ -149,11 +149,25 @@ function tableForLiveServer(measurement: Measurement | null, live: LiveTmuxServe
   return null;
 }
 
+let measuring: Promise<TmuxWidthTable | null> | null = null;
+
+/** The table once the boot measurement ends, or what is known after `wait_ms` — for a browser that
+ *  read /api/config while it was still running. Immediate when nothing is being measured. */
+export function settledTmuxWidthTable(wait_ms: number): Promise<TmuxWidthTable | null> {
+  if (!measuring) return Promise.resolve(measuredTable);
+  return Promise.race([measuring, new Promise<TmuxWidthTable | null>((resolve) => setTimeout(() => resolve(measuredTable), wait_ms).unref())]);
+}
+
 /**
  * Measures the tmux on PATH and keeps the result for `tmuxWidthTable()`, unless `liveServer` reports a
  * running server of another version. Never rejects: it runs unawaited at boot.
  */
-export async function measureTmuxWidths(log: Log, liveServer: () => Promise<LiveTmuxServer>): Promise<TmuxWidthTable | null> {
+export function measureTmuxWidths(log: Log, liveServer: () => Promise<LiveTmuxServer>): Promise<TmuxWidthTable | null> {
+  measuring = measureAndKeep(log, liveServer);
+  return measuring;
+}
+
+async function measureAndKeep(log: Log, liveServer: () => Promise<LiveTmuxServer>): Promise<TmuxWidthTable | null> {
   let dir: string | null = null;
   try {
     dir = await mkdtemp(path.join(os.tmpdir(), "mt-w-"));

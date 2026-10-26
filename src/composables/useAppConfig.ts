@@ -18,6 +18,7 @@ import { DEFAULT_TERMINAL_SUBMIT_MODE, isTerminalSubmitMode } from "../../common
 import { setTerminalSubmitMode } from "./terminalSubmitMode";
 import { setTmuxPrefix } from "./tmuxPrefix";
 import { setTerminalUnicodeVersion, setTerminalWidthTable } from "./terminalUnicodeVersion";
+import { adoptLateTerminalWidthTable } from "./lateTerminalWidthTable";
 import { setGlobalFontFamily } from "./terminalFontFamily";
 import { setCustomThemes } from "./customThemes";
 import { refreshTheme } from "./useTheme";
@@ -480,6 +481,7 @@ function applyGlobalSettings(c: Record<string, unknown>, pinsMark: number): void
   setTmuxPrefix(c.tmuxPrefix);
   setTerminalUnicodeVersion(c.terminalUnicodeVersion);
   setTerminalWidthTable(c.terminalWidthTable);
+  if (c.terminalWidthTable === null || c.terminalWidthTable === undefined) void adoptLateTerminalWidthTable();
   // Keyboard shortcuts are opt-in: no `keymap` in config.json leaves this empty and
   // every shortcut stays off.
   setActiveKeymap(c.keymap);

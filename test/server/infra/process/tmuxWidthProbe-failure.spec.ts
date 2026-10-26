@@ -44,3 +44,24 @@ describe("measureTmuxWidths when it cannot measure", () => {
     expect(log).toHaveBeenCalledWith(expect.stringContaining("could not be measured"));
   });
 });
+
+describe("settledTmuxWidthTable", () => {
+  it("answers at once when nothing is being measured", async () => {
+    vi.resetModules();
+    const fresh = await import("../../../../server/infra/process/tmuxWidthProbe.js");
+    await expect(fresh.settledTmuxWidthTable(60_000)).resolves.toBeNull();
+  });
+
+  it("waits for a measurement still running, and gives up after the wait with what is known", async () => {
+    const finishLiveCheck: ((live: LiveTmuxServer) => void)[] = [];
+    const liveServer = () => new Promise<LiveTmuxServer>((resolve) => finishLiveCheck.push(resolve));
+    const { measureTmuxWidths: measure, settledTmuxWidthTable: settled } = await import("../../../../server/infra/process/tmuxWidthProbe.js");
+    const running = measure(() => undefined, liveServer);
+    let waitedOut = false;
+    await settled(10).then(() => (waitedOut = true));
+    expect(waitedOut).toBe(true);
+    const waiting = settled(60_000);
+    finishLiveCheck.forEach((resolve) => resolve({ running: false }));
+    await expect(waiting).resolves.toBe(await running);
+  });
+});
