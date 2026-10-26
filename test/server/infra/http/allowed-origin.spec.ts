@@ -304,7 +304,7 @@ describe("bindSecurityWarning", () => {
   it("names the symptom and the way out when no browser origin is allowed", () => {
     const warning = bindSecurityWarning("0.0.0.0", 34567, new Set());
     expect(warning).toContain("no authentication");
-    expect(warning).toContain("fails to attach a terminal");
+    expect(warning).toContain("is refused (403) by name");
     expect(warning).toContain("MULMOTERMINAL_ALLOWED_ORIGINS");
   });
 
@@ -312,6 +312,6 @@ describe("bindSecurityWarning", () => {
     const warning = bindSecurityWarning(LAN_A, 34567, browserOriginHostnames(LAN_A, undefined));
     expect(warning).toContain("no authentication");
     expect(warning).toContain(LAN_A);
-    expect(warning).not.toContain("fails to attach a terminal");
+    expect(warning).not.toContain("is refused (403) by name");
   });
 });

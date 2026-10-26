@@ -2313,10 +2313,11 @@ loopback, because there is no other signal that it happened.
 MULMOTERMINAL_HOST=0.0.0.0 npx mulmoterminal@latest   # trusted networks only — see the caveat below
 ```
 
-Binding wider is not by itself enough to open the page **from another machine**. The same-origin
-checks that protect the terminal WebSockets accept *localhost* plus **the origins you name**, so a
-browser reaching `http://<address>:34567` has to be one of those or it loads the page and then
-fails to attach a terminal.
+Binding wider is not by itself enough to open the page **from another machine**. The server answers
+only requests addressed to *localhost* plus **the names you configure** (the `Host` header), and the
+same-origin checks that protect the terminal WebSockets use the same list. So a browser reaching
+`http://<address>:34567` has to be one of those, or every request is refused with `403` and a line
+naming the setting to add.
 
 Naming a single address does both at once:
 
@@ -2365,8 +2366,10 @@ connects to `localhost` and is allowed for that reason alone.
 
 Reads are not judged by origin at all. A browser sends no `Origin` on a same-origin `GET`, so the
 check cannot tell one from a cross-site `<img>` load and would only refuse the page you opened
-yourself — what protects a read is the bind, which is why the warning above says a widened bind
-trusts anything that can reach the port. Up to and including 2.7.0 two status routes judged a `GET`
+yourself. What a read IS judged by is the **name it was addressed to**: a site that rebinds its own
+DNS name to this machine makes its reads look same-origin, but they still carry that site's name, so
+they are refused (since #3188). Beyond that, what protects a read is the bind, which is why the
+warning above says a widened bind trusts anything that can reach the port. Up to and including 2.7.0 two status routes judged a `GET`
 anyway, so a browser on a named origin loaded the page and then filled the console with `403` from
 `/api/remote-host/status` and `/api/google/status`; if you see that, upgrade.
 

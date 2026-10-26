@@ -38,6 +38,7 @@ import { mountAgentAvailabilityRoutes } from "../routes/agent-availability-route
 import type { AgentAvailability } from "../../common/agentAvailability.js";
 import { mountIssueWorkRoutes } from "../routes/issue-work-routes.js";
 import { mountTerminalReplyRoutes } from "./terminal-reply-routes.js";
+import { hostGuard } from "../infra/http/host-guard.js";
 import { captureTerminalScreen } from "../backends/remoteHost/hostScreens.js";
 import { sessionExistsHere } from "../backends/remoteHost/hostBindings.js";
 import { sendToSession } from "../session/session-input.js";
@@ -191,6 +192,9 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
   // the parsers so a request that is going to be refused is never handed a body to parse — the
   // gate reads only method, path and origin. Individual routes keep their own checks — this is
   // the floor, not a replacement.
+  // Ahead of that, the Host every request was addressed to (#3188): a DNS-rebound page reads as
+  // same-origin and sends no Origin, so only its Host gives it away.
+  app.use(hostGuard(deps.isAllowedHost));
   app.use(sameOriginGuard(deps.isAllowedOrigin));
 
   // Ahead of express.json, carrying its own raw parser: a dropped file is bytes under its own
@@ -446,7 +450,6 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
     openQuestion: async (sessionId) => openQuestionOf(await deps.toolStores.toolCallsStore.get(sessionId), sessionId),
     sendReply: (sessionId, text, options) => sendToSession(sessionId, text, options),
     isAllowedOrigin: deps.isAllowedOrigin,
-    isAllowedHost: deps.isAllowedHost,
   });
 
   // GET/POST /api/config (workspace dir + directory presets) — in its own module.

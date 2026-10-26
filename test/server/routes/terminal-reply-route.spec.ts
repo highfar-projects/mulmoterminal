@@ -49,13 +49,13 @@ const sessionExists = vi.fn<(sessionId: string) => Promise<boolean>>(async () =>
 const captureScreen = vi.fn<(sessionId: string) => Promise<{ screen: string }>>(async () => ({ screen: "Do you want to continue?\n> " }));
 const sendReply = vi.fn<(sessionId: string, text: string, options: SendOptions) => Promise<{ sent: boolean }>>(async () => ({ sent: true }));
 
-function routes(allowOrigin = true, allowHost = true): { get: Handler; post: Handler } {
+function routes(allowOrigin = true): { get: Handler; post: Handler } {
   const map: Record<string, Handler> = {};
   const app = {
     get: (path: string, handler: Handler) => (map[`GET ${path}`] = handler),
     post: (path: string, handler: Handler) => (map[`POST ${path}`] = handler),
   } as unknown as Express;
-  mountTerminalReplyRoutes(app, { sessionExists, captureScreen, openQuestion, sendReply, isAllowedOrigin: () => allowOrigin, isAllowedHost: () => allowHost });
+  mountTerminalReplyRoutes(app, { sessionExists, captureScreen, openQuestion, sendReply, isAllowedOrigin: () => allowOrigin });
   const get = map["GET /api/terminal/:sessionId/screen"];
   const post = map["POST /api/terminal/:sessionId/reply"];
   if (!get || !post) throw new Error("routes not mounted");
@@ -87,14 +87,6 @@ describe("GET /api/terminal/:sessionId/screen", () => {
     await routes().get(request(SESSION), res);
     expect(res.payload).toEqual({ screen: "Do you want to continue?\n> " });
     expect(captureScreen).toHaveBeenCalledWith(SESSION);
-  });
-
-  it("403s a request addressed to a host the server does not answer to (DNS rebinding)", async () => {
-    const res = makeRes();
-    await routes(true, false).get(request(SESSION), res);
-    expect(res.statusCode).toBe(403);
-    expect(sessionExists).not.toHaveBeenCalled();
-    expect(captureScreen).not.toHaveBeenCalled();
   });
 
   it("404s a session this host does not hold, without capturing", async () => {
