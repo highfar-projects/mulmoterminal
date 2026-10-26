@@ -2290,7 +2290,7 @@ there to look at.
 | `CLAUDE_CWD` / `--cwd` | The directory you run `npx mulmoterminal@latest` in (only `~/mulmoclaude` when the server is started directly) | The default working directory (the PTY's cwd), settled in the order `--cwd`, the `CLAUDE_CWD` environment variable, then the directory you ran the launcher in. **A Claude, Codex or Copilot session launched in this same directory has every GUI tool** (not Antigravity, Grok, Muse or Cursor — each takes what its directory registered — and not a Shell or any other launch command → [which directory to launch in](basics.html#launch-dir)) |
 | `PORT` | `34567` | The server port |
 | `MULMOTERMINAL_HOST` | `127.0.0.1` | The interface the server binds to (→ [below](#bind-host)) |
-| `MULMOTERMINAL_ALLOWED_ORIGINS` | *(none)* | Extra browser origins allowed to attach a terminal, comma-separated. Only needed alongside a wider `MULMOTERMINAL_HOST` (→ [below](#bind-host)) |
+| `MULMOTERMINAL_ALLOWED_ORIGINS` | *(none)* | Extra names the server answers to, comma-separated: requests addressed to any other name are refused, and terminals attach only from these origins (and localhost). Only needed alongside a wider `MULMOTERMINAL_HOST` (→ [below](#bind-host)) |
 | `MULMOTERMINAL_HOME` | `~/.mulmoterminal` | The root for managed git worktrees |
 | `CLAUDE_CONFIG_DIR` | `~/.claude` | Claude Code's own config directory. MulmoTerminal reads Claude's transcripts (`projects/`), prompt history (`history.jsonl`) and user skills (`skills/`) from it, and `.claude.json` from **inside** it (unset: `~/.claude.json`) to tell whether the per-project GUI MCP server is registered. Set it in the environment MulmoTerminal starts from, so it matches the one Claude runs under |
 | `MULMOCLAUDE_WORKSPACE_PATH` | `~/mulmoclaude` | Where the managed MulmoClaude workspace lives. Presets and helps are seeded **only** into this directory, so launching in an arbitrary project never writes them there. Set it to the same value MulmoClaude uses |
@@ -2367,8 +2367,9 @@ connects to `localhost` and is allowed for that reason alone.
 Reads are not judged by origin at all. A browser sends no `Origin` on a same-origin `GET`, so the
 check cannot tell one from a cross-site `<img>` load and would only refuse the page you opened
 yourself. What a read IS judged by is the **name it was addressed to**: a site that rebinds its own
-DNS name to this machine makes its reads look same-origin, but they still carry that site's name, so
-they are refused (since #3188). Beyond that, what protects a read is the bind, which is why the
+DNS name to this machine makes its reads look same-origin, but they still carry that site's name, and
+a name that is neither localhost nor on your list is refused (since #3188). A name you configured is
+answered, so list only names you control. Beyond that, what protects a read is the bind, which is why the
 warning above says a widened bind trusts anything that can reach the port. Up to and including 2.7.0 two status routes judged a `GET`
 anyway, so a browser on a named origin loaded the page and then filled the console with `403` from
 `/api/remote-host/status` and `/api/google/status`; if you see that, upgrade.

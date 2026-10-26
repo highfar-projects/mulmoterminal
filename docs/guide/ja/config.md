@@ -2165,7 +2165,7 @@ keymap の方は起動時の警告に名前が出るので、ファイルを直�
 | `CLAUDE_CWD` / `--cwd` | 実行したディレクトリ（`npx mulmoterminal@latest`。サーバを直接起動した場合のみ `~/mulmoclaude`） | 既定の作業ディレクトリ（PTY の cwd）。決まり方は `--cwd` > 環境変数 `CLAUDE_CWD` > 実行したディレクトリ の順。**ここと同じディレクトリで起動した Claude / Codex / Copilot のセッションが、GUI ツールを全部持ちます**（Antigravity・Grok・Muse・Cursor はディレクトリに登録されたぶんだけ。Shell やそれ以外の起動コマンドは対象外。→ [どのディレクトリで起動するか](basics.html#launch-dir)） |
 | `PORT` | `34567` | サーバのポート |
 | `MULMOTERMINAL_HOST` | `127.0.0.1` | サーバが待ち受けるインターフェース（→ [下記](#bind-host)） |
-| `MULMOTERMINAL_ALLOWED_ORIGINS` | *(なし)* | ターミナルに接続してよいブラウザのオリジンを追加（カンマ区切り）。`MULMOTERMINAL_HOST` を広げたときにだけ必要（→ [下記](#bind-host)） |
+| `MULMOTERMINAL_ALLOWED_ORIGINS` | *(なし)* | サーバーが応答する名前を追加（カンマ区切り）。これ以外の名前宛てのリクエストは拒否され、ターミナルもこのオリジン（と localhost）からだけ接続できます。`MULMOTERMINAL_HOST` を広げたときにだけ必要（→ [下記](#bind-host)） |
 | `MULMOTERMINAL_HOME` | `~/.mulmoterminal` | 管理下 git worktree のルート |
 | `CLAUDE_CONFIG_DIR` | `~/.claude` | Claude Code 自身の設定ディレクトリ。MulmoTerminal は Claude の会話記録（`projects/`）、プロンプト履歴（`history.jsonl`）、ユーザーのスキル（`skills/`）をここから読みます。`.claude.json` も**この中**から読み（未設定なら `~/.claude.json`）、プロジェクトごとの GUI MCP サーバが登録済みかの判定に使います。Claude が動く環境と一致するよう、MulmoTerminal を起動する環境で設定してください |
 | `MULMOCLAUDE_WORKSPACE_PATH` | `~/mulmoclaude` | 管理下の MulmoClaude ワークスペースの場所。プリセットや helps の書き込みは**このディレクトリに限定**されるので、任意のプロジェクトで起動しても余計なファイルが増えません。MulmoClaude 側と同じ値を指定してください |
@@ -2240,7 +2240,8 @@ MULMOTERMINAL_HOST=0.0.0.0 MULMOTERMINAL_ALLOWED_ORIGINS=nuc.local npx mulmoterm
 読み取りはオリジンで判定しません。ブラウザは同一オリジンの `GET` に `Origin` を付けないため、この
 判定はクロスサイトの `<img>` 読み込みと区別できず、自分で開いたページを拒否するだけになります。
 読み取りを判定するのは**宛先の名前**です。自分の DNS 名をこの機体に向け直すサイトの読み取りは同一
-オリジンに見えますが、そのサイトの名前を宛先にしているので拒否されます（#3188 以降）。それ以外で
+オリジンに見えますが、宛先はそのサイトの名前で、localhost でも一覧の名前でもない名前は拒否されます
+（#3188 以降）。設定した名前には応答するので、一覧には自分が管理する名前だけを入れてください。それ以外で
 読み取りを守るのはバインドで、広げたバインドではポートに到達できる相手が既に信頼されている、と上の
 警告が述べているとおりです。2.7.0 までは 2 つのステータス取得ルートだけが `GET` も判定していたため、
 名指ししたオリジンのブラウザでページは開けても `/api/remote-host/status` と `/api/google/status` の

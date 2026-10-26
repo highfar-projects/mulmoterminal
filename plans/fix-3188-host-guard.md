@@ -25,8 +25,8 @@ App-wide, chosen by the maintainer: one middleware ahead of every route, rather 
 - The list is `createIsAllowedHost` (#3185): loopback plus `MULMOTERMINAL_HOST` and
   `MULMOTERMINAL_ALLOWED_ORIGINS`, the same as the Origin check.
 - The per-route Host check on `GET /api/terminal/:sessionId/screen` is removed; the guard covers it.
-- `bindSecurityWarning` now says a name not on the list is refused (403), where before it said the
-  page loads and the terminal fails to attach.
+- `bindSecurityWarning` now says a name not on the list is refused (403). Previously it said the page
+  loads and the terminal fails to attach.
 
 ## Who is affected
 
