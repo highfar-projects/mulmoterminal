@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { CLUSTER_SAMPLES, JamoClass, clusterStep, jamoClassOf, rowWidthOf } from "../../common/tmuxClusters";
+import { CLUSTER_SAMPLES, FirstKind, JamoClass, clusterStep, jamoClassOf, rowWidthOf } from "../../common/tmuxClusters";
 import { FOLDING_RULES, type TmuxWidthTable, type WidthRun } from "../../common/tmuxWidthTable";
 import { PSMUX_WIDTH_RUNS } from "../../common/psmuxWidthRuns";
 
@@ -155,6 +155,55 @@ describe("rowWidthOf under psmux's rule", () => {
   });
 });
 
+// UTF8_SIZE is 21 in tmux 3.4/3.5 and 32 from 3.6; psmux's MAX_CELL_BYTES is 32. The 3.6a and 3.6
+// widths are what those tmux grids drew (tmuxWidthProbe.spec.ts prints the same rows).
+describe("a cell that is full", () => {
+  const table = (folding: TmuxWidthTable["folding"]): TmuxWidthTable => ({ runs: PSMUX_WIDTH_RUNS, folding, vs16Wide: true });
+  // 25 bytes: one ZWJ'd emoji past 21.
+  const familyOfFour = "\u{1f468}\u200d\u{1f469}\u200d\u{1f467}\u200d\u{1f466}x";
+  // 41 bytes: the ZWJ that would take it past 32 is dropped, so the last emoji starts a cell.
+  const tonedFamilyOfFour = "\u{1f468}\u{1f3fd}\u200d\u{1f469}\u{1f3fd}\u200d\u{1f467}\u{1f3fd}\u200d\u{1f466}\u{1f3fd}x";
+
+  it.each([
+    ["tmux-3.4", familyOfFour, 5],
+    ["tmux-3.6a", familyOfFour, 3],
+    ["tmux-3.6", familyOfFour, 3],
+    ["psmux", familyOfFour, 3],
+    ["tmux-3.6a", tonedFamilyOfFour, 5],
+    // Tag 3.6 folds a skin tone only before its base, so each tone here is a cell of its own.
+    ["tmux-3.6", tonedFamilyOfFour, 11],
+    ["psmux", tonedFamilyOfFour, 5],
+  ] as const)("%s: %j", (folding, text, columns) => {
+    expect(rowWidthOf(table(folding), text)).toBe(columns);
+  });
+
+  it("drops a zero-width character that does not fit, rather than starting a cell with it", () => {
+    const step = clusterStep(table("tmux-3.6a"), 0x200d, {
+      firstKind: FirstKind.SkinToneBase,
+      width: 2,
+      joined: true,
+      endsWithZwj: false,
+      lastJamo: JamoClass.None,
+      regionalIndicators: 0,
+      bytes: 30,
+    });
+    expect(step).toEqual({ kind: "drop" });
+  });
+
+  it("still folds what fits exactly", () => {
+    const full = {
+      firstKind: FirstKind.SkinToneBase,
+      width: 2,
+      joined: true,
+      endsWithZwj: false,
+      lastJamo: JamoClass.None,
+      regionalIndicators: 0,
+      bytes: 29,
+    } as const;
+    expect(clusterStep(table("tmux-3.6a"), 0x200d, full)).toMatchObject({ kind: "join", cell: { bytes: 32 } });
+  });
+});
+
 describe("a tmux that does not fold sequences", () => {
   const perCodepoint: TmuxWidthTable = { ...TMUX_36, folding: "none" };
 
@@ -224,29 +273,61 @@ describe("Hangul jamo", () => {
 describe("clusterStep", () => {
   it("drops the Hangul filler wherever it is", () => {
     expect(clusterStep(TMUX_36, 0x3164, null)).toEqual({ kind: "drop" });
-    expect(clusterStep(TMUX_36, 0x3164, { first: 0x61, width: 1, joined: false, endsWithZwj: false, lastJamo: JamoClass.None, regionalIndicators: 0 })).toEqual(
-      { kind: "drop" },
-    );
+    expect(
+      clusterStep(TMUX_36, 0x3164, {
+        firstKind: FirstKind.Ascii,
+        width: 1,
+        joined: false,
+        endsWithZwj: false,
+        lastJamo: JamoClass.None,
+        regionalIndicators: 0,
+        bytes: 1,
+      }),
+    ).toEqual({ kind: "drop" });
   });
 
   it("never folds a character after a cell of width 0", () => {
     expect(
-      clusterStep(TMUX_36, 0x200d, { first: 0x0301, width: 0, joined: false, endsWithZwj: false, lastJamo: JamoClass.None, regionalIndicators: 0 }),
+      clusterStep(TMUX_36, 0x200d, {
+        firstKind: FirstKind.Other,
+        width: 0,
+        joined: false,
+        endsWithZwj: false,
+        lastJamo: JamoClass.None,
+        regionalIndicators: 0,
+        bytes: 2,
+      }),
     ).toEqual({ kind: "drop" });
   });
 
   it("starts a cell for a letter even after a ZWJ", () => {
     expect(
-      clusterStep(TMUX_36, 0x61, { first: 0x1f468, width: 2, joined: true, endsWithZwj: true, lastJamo: JamoClass.None, regionalIndicators: 0 }),
+      clusterStep(TMUX_36, 0x61, {
+        firstKind: FirstKind.SkinToneBase,
+        width: 2,
+        joined: true,
+        endsWithZwj: true,
+        lastJamo: JamoClass.None,
+        regionalIndicators: 0,
+        bytes: 7,
+      }),
     ).toMatchObject({ kind: "new" });
   });
 
-  it("remembers the first codepoint and that the cell ends in a ZWJ", () => {
+  it("remembers the kind of the first codepoint, the bytes, and that the cell ends in a ZWJ", () => {
     expect(
-      clusterStep(TMUX_36, 0x200d, { first: 0x1f468, width: 2, joined: false, endsWithZwj: false, lastJamo: JamoClass.None, regionalIndicators: 0 }),
+      clusterStep(TMUX_36, 0x200d, {
+        firstKind: FirstKind.SkinToneBase,
+        width: 2,
+        joined: false,
+        endsWithZwj: false,
+        lastJamo: JamoClass.None,
+        regionalIndicators: 0,
+        bytes: 4,
+      }),
     ).toEqual({
       kind: "join",
-      cell: { first: 0x1f468, width: 2, joined: true, endsWithZwj: true, lastJamo: JamoClass.None, regionalIndicators: 0 },
+      cell: { firstKind: FirstKind.SkinToneBase, width: 2, joined: true, endsWithZwj: true, lastJamo: JamoClass.None, regionalIndicators: 0, bytes: 7 },
     });
   });
 });

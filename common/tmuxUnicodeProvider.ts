@@ -6,7 +6,7 @@
 // bit 0 "joins the cell before", bits 1–2 the cell's width, bits 3–26 free for the provider. The
 // fold state tmux keeps per cell (tmuxClusters.ts) goes in those free bits, because xterm hands the
 // previous value back as `preceding` and nothing else survives from one character to the next.
-import { clusterStep, type ClusterCell, type JamoClass } from "./tmuxClusters.js";
+import { FirstKind, clusterStep, type ClusterCell, type JamoClass } from "./tmuxClusters.js";
 import { cellWidthOf, type CellWidth, type TmuxWidthTable } from "./tmuxWidthTable.js";
 
 export const TMUX_UNICODE_VERSION = "tmux";
@@ -22,24 +22,26 @@ const WIDTH_SHIFT = 1;
 const WIDTH_MASK = 0x3;
 const STATE_SHIFT = 3;
 const STATE_MASK = 0xffffff;
-// Inside the state: the first codepoint, then the joined and ZWJ flags, the jamo class and the count
-// of regional indicators. The
-// codepoint is only ever compared with ASCII and with characters below U+20000, so anything from
-// there up is stored as U+3FFFF — which keeps all of it inside the bits xterm leaves free.
-const CODEPOINT_MASK = 0x3ffff;
-const JOINED_FLAG_SHIFT = 18;
-const ZWJ_FLAG_SHIFT = 19;
-const JAMO_SHIFT = 20;
+// Inside the state: the kind of the first codepoint, the joined and ZWJ flags, the jamo class, the
+// count of regional indicators and the cell's UTF-8 bytes. Bytes past what any rule allows are
+// stored as that bound: a cell that full refuses every fold anyway.
+const KIND_MASK = 0x7;
+const JOINED_FLAG_SHIFT = 3;
+const ZWJ_FLAG_SHIFT = 4;
+const JAMO_SHIFT = 5;
 const JAMO_MASK = 0x3;
-const INDICATORS_SHIFT = 22;
+const INDICATORS_SHIFT = 7;
 const INDICATORS_MASK = 0x3;
+const BYTES_SHIFT = 9;
+const BYTES_MASK = 0x3f;
 
 const packState = (cell: ClusterCell): number =>
-  Math.min(cell.first, CODEPOINT_MASK) |
+  cell.firstKind |
   (Number(cell.joined) << JOINED_FLAG_SHIFT) |
   (Number(cell.endsWithZwj) << ZWJ_FLAG_SHIFT) |
   (cell.lastJamo << JAMO_SHIFT) |
-  (cell.regionalIndicators << INDICATORS_SHIFT);
+  (cell.regionalIndicators << INDICATORS_SHIFT) |
+  (Math.min(cell.bytes, BYTES_MASK) << BYTES_SHIFT);
 
 const pack = (cell: ClusterCell, joins: boolean): number =>
   ((packState(cell) & STATE_MASK) << STATE_SHIFT) | ((cell.width & WIDTH_MASK) << WIDTH_SHIFT) | Number(joins);
@@ -50,21 +52,25 @@ const isCellWidth = (value: number): value is CellWidth => value === 0 || value 
 
 const isIndicatorCount = (value: number): value is ClusterCell["regionalIndicators"] => value === 0 || value === 1 || value === 2;
 
+const isFirstKind = (value: number): value is FirstKind => value >= FirstKind.Other && value <= FirstKind.SkinToneBase36a;
+
 /** The cell `preceding` describes, or null when xterm says there is none (it passes 0 then). */
 export function unpackCell(preceding: number): ClusterCell | null {
   if (preceding === 0) return null;
   const width = (preceding >> WIDTH_SHIFT) & WIDTH_MASK;
   const state = (preceding >>> STATE_SHIFT) & STATE_MASK;
+  const firstKind = state & KIND_MASK;
   const lastJamo = (state >> JAMO_SHIFT) & JAMO_MASK;
   const regionalIndicators = (state >> INDICATORS_SHIFT) & INDICATORS_MASK;
-  if (!isCellWidth(width) || !isJamoClass(lastJamo) || !isIndicatorCount(regionalIndicators)) return null;
+  if (!isCellWidth(width) || !isFirstKind(firstKind) || !isJamoClass(lastJamo) || !isIndicatorCount(regionalIndicators)) return null;
   return {
-    first: state & CODEPOINT_MASK,
+    firstKind,
     width,
     joined: ((state >> JOINED_FLAG_SHIFT) & 1) === 1,
     endsWithZwj: ((state >> ZWJ_FLAG_SHIFT) & 1) === 1,
     lastJamo,
     regionalIndicators,
+    bytes: (state >> BYTES_SHIFT) & BYTES_MASK,
   };
 }
 

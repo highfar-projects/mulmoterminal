@@ -26,6 +26,10 @@ export const FIXED_WIDTH_SAMPLES: readonly string[] = [
   "ℹ️ i",
   "\u{1f3f3}️‍\u{1f308}",
   "\u{1f9d1}\u{1f3fd}‍\u{1f4bb}",
+  // Over a cell's byte cap: 25 bytes (past tmux 3.4/3.5's 21) and 41 (past 32).
+  "\u{1f468}\u200d\u{1f469}\u200d\u{1f467}\u200d\u{1f466}x",
+  "\u{1f468}\u{1f3fd}\u200d\u{1f469}\u{1f3fd}\u200d\u{1f467}\u{1f3fd}\u200d\u{1f466}\u{1f3fd}x",
+  "\u{1f469}\u200d\u2764\ufe0f\u200d\u{1f48b}\u200d\u{1f468}\u200d\u{1f467}\u200d\u{1f466}x",
 ];
 
 export function seededWidthSamples(seed: number): string[] {
