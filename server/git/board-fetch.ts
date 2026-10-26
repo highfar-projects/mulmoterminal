@@ -16,7 +16,7 @@ import { repoIdentity } from "../../common/repoEntry.js";
 export const BOARD_OPEN_LIMIT = 50;
 export const BOARD_MERGED_LIMIT = 10;
 
-const PR_FIELDS = "number,title,url,isDraft,reviewDecision,statusCheckRollup,headRefName,headRefOid,closingIssuesReferences,reviews";
+const PR_FIELDS = "number,title,url,isDraft,reviewDecision,statusCheckRollup,headRefName,headRefOid,closingIssuesReferences,reviews,comments";
 
 /** A live cell before its repo and branch are known. */
 export type LiveCell = BoardCell;

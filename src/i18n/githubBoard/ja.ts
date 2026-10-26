@@ -18,6 +18,7 @@ export const githubBoardJa = {
     changesRequested: "修正依頼あり",
     approved: "承認済み",
     reviewRound: "レビュー {count} 回目",
+    codex: { lgtm: "Codex {count} 回: LGTM", changes: "Codex {count} 回: 修正依頼", stale: "前の push への判定", unknown: "どの push への判定か不明" },
     awaitingReview: "最新の push はまだレビューされていません",
     noCell: "このブランチで動いているターミナルはありません",
     cell: { working: "作業中", waiting: "確認待ち", idle: "待機中" },
@@ -51,6 +52,6 @@ export const githubBoardJa = {
       noReviews: "レビューはまだありません",
       noBody: "説明はありません",
     },
-    rule: "レビュー回数は、レビューを受けた push の数です。QA 待ちは、CI が通り、最新の push がレビュー済みのものです。",
+    rule: "レビュー回数は、レビューを受けた push の数です。Codex の回数は、コメントで投稿された codex の判定の数です。QA 待ちは、CI が通り、最新の push がレビュー済みのものです。",
   },
 };

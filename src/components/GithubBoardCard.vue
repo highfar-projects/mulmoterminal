@@ -25,6 +25,21 @@ const review = computed(() => (props.card.pr?.review ?? "").toUpperCase());
 
 const waiting = computed(() => cardWaiting(props.card));
 
+const codex = computed(() => props.card.pr?.codex ?? null);
+
+// gh returns a PR's first comments only, so a list at its cap may hold fewer verdicts than were posted.
+const codexCount = computed(() => {
+  if (!codex.value) return "";
+  return codex.value.more ? `${codex.value.verdicts}+` : String(codex.value.verdicts);
+});
+
+// Only a verdict on the current head speaks for the PR as it is; an older one is shown, but quietly.
+const codexClass = computed(() => {
+  if (codex.value?.head !== "current") return "border-border text-muted";
+  if (codex.value.latest === "lgtm") return "border-[#3fae6b] text-[#3fae6b]";
+  return "border-err-text text-err-text";
+});
+
 const borderClass = computed(() => {
   if (props.selected) return "border-accent";
   return waiting.value ? "border-amber" : "border-border";
@@ -73,6 +88,12 @@ const borderClass = computed(() => {
       <span v-if="review === 'APPROVED'" class="rounded border border-[#3fae6b] px-1.5 text-[#3fae6b]">{{ t("githubBoard.approved") }}</span>
       <span v-if="card.pr.reviewRounds > 0" data-testid="board-review-round" class="rounded border border-border px-1.5 text-muted">{{
         t("githubBoard.reviewRound", { count: card.pr.reviewRounds })
+      }}</span>
+      <span v-if="codex" data-testid="board-codex" class="rounded border px-1.5" :class="codexClass">{{
+        t(`githubBoard.codex.${codex.latest}`, { count: codexCount })
+      }}</span>
+      <span v-if="codex && codex.head !== 'current' && card.column !== 'merged'" data-testid="board-codex-head" class="text-dim">{{
+        t(`githubBoard.codex.${codex.head}`)
       }}</span>
       <span v-if="card.column === 'review' && !card.pr.headReviewed" class="text-dim">{{ t("githubBoard.awaitingReview") }}</span>
     </div>

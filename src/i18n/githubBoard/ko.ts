@@ -18,6 +18,12 @@ export const githubBoardKo = {
     changesRequested: "수정 요청됨",
     approved: "승인됨",
     reviewRound: "리뷰 {count}회차",
+    codex: {
+      lgtm: "Codex {count}회: LGTM",
+      changes: "Codex {count}회: 수정 요청",
+      stale: "이전 push 에 대한 판정",
+      unknown: "어느 push 에 대한 판정인지 불명",
+    },
     awaitingReview: "최신 push 는 아직 리뷰되지 않았습니다",
     noCell: "이 브랜치에서 실행 중인 터미널이 없습니다",
     cell: { working: "작업 중", waiting: "확인 대기", idle: "대기" },
@@ -51,6 +57,6 @@ export const githubBoardKo = {
       noReviews: "아직 리뷰가 없습니다",
       noBody: "설명이 없습니다",
     },
-    rule: "리뷰 횟수는 리뷰를 받은 push 의 수입니다. QA 대기는 CI 가 통과하고 최신 push 가 리뷰된 것입니다.",
+    rule: "리뷰 횟수는 리뷰를 받은 push 의 수입니다. Codex 횟수는 댓글로 게시된 codex 판정의 수입니다. QA 대기는 CI 가 통과하고 최신 push 가 리뷰된 것입니다.",
   },
 };
