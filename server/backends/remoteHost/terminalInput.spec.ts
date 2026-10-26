@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 
 import type { SessionAgent } from "../../../common/sessionAgent.js";
-import { CLEAR_BOX, PASTE_END, PASTE_START, canClearInputBox, createTerminalInputSender, sanitizeTerminalInput } from "./terminalInput.js";
+import { CLEAR_BOX, InputBlockedError, PASTE_END, PASTE_START, canClearInputBox, createTerminalInputSender, sanitizeTerminalInput } from "./terminalInput.js";
 
 // Collects what would have reached the PTY, and runs the delayed Enter on demand
 // so the tests never wait on real time.
@@ -448,5 +448,59 @@ describe("clearing the host's input box", () => {
     await tick();
     expect(chunks[0].split(CLEAR_BOX)).toHaveLength(2);
     expect(chunks[0].startsWith(CLEAR_BOX)).toBe(true);
+  });
+});
+
+// #3185. A send may carry a `blocked` check, asked right before the paste and right before the
+// Enter. Without one, the sender is exactly what it was — the cases above.
+describe("a send with a blocked check", () => {
+  it("writes nothing and rejects when blocked before the paste", async () => {
+    const { chunks, send } = recorder();
+    await expect(send("s1", "hello", { blocked: async () => true })).rejects.toBeInstanceOf(InputBlockedError);
+    expect(chunks).toEqual([]);
+  });
+
+  it("leaves the line unsubmitted when it becomes blocked before the Enter", async () => {
+    const { chunks, flushSubmit, send } = recorder();
+    let open = false;
+    const sending = send("s1", "hello", { blocked: async () => open });
+    await tick();
+    expect(chunks).toEqual([paste("hello")]);
+    open = true;
+    flushSubmit();
+    await expect(sending).rejects.toBeInstanceOf(InputBlockedError);
+    expect(chunks).toEqual([paste("hello")]);
+  });
+
+  it("pastes and submits as usual while never blocked", async () => {
+    const { chunks, flushSubmit, send } = recorder();
+    const sending = send("s1", "hello", { blocked: async () => false });
+    await tick();
+    flushSubmit();
+    await sending;
+    expect(chunks).toEqual([paste("hello"), "\r"]);
+  });
+
+  it("asks at the moment of each write, after waiting its turn in the chain", async () => {
+    const { chunks, flushSubmit, send } = recorder();
+    let open = false;
+    const first = send("s1", "one");
+    const second = send("s1", "two", { blocked: async () => open });
+    await tick();
+    open = true;
+    flushSubmit();
+    await first;
+    await expect(second).rejects.toBeInstanceOf(InputBlockedError);
+    expect(chunks).toEqual([paste("one"), "\r"]);
+  });
+
+  it("does not poison the chain for the next send", async () => {
+    const { chunks, flushSubmit, send } = recorder();
+    await expect(send("s1", "no", { blocked: async () => true })).rejects.toBeInstanceOf(InputBlockedError);
+    const next = send("s1", "yes");
+    await tick();
+    flushSubmit();
+    await next;
+    expect(chunks).toEqual([paste("yes"), "\r"]);
   });
 });

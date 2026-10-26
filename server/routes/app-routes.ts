@@ -444,7 +444,7 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
     sessionExists: sessionExistsHere,
     captureScreen: (sessionId) => captureTerminalScreen(sessionId, deps.outputBufferLimit),
     openQuestion: async (sessionId) => openQuestionOf(await deps.toolStores.toolCallsStore.get(sessionId), sessionId),
-    sendReply: sendToSession,
+    sendReply: (sessionId, text, options) => sendToSession(sessionId, text, options),
     isAllowedOrigin: deps.isAllowedOrigin,
     isAllowedHost: deps.isAllowedHost,
   });

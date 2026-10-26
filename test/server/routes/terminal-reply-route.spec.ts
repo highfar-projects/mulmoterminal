@@ -7,6 +7,7 @@ import type { Express } from "express";
 import type { AskQuestionEvent } from "../../../common/askQuestion.js";
 import { mountTerminalReplyRoutes } from "../../../server/routes/terminal-reply-routes.js";
 import { readReplyRequest, REPLY_MAX_CHARS } from "../../../server/routes/terminalReply.js";
+import { InputBlockedError, type SendOptions } from "../../../server/backends/remoteHost/terminalInput.js";
 
 const SESSION = "0b7d2c1e-1111-4222-8333-944455556666";
 
@@ -46,7 +47,7 @@ type Handler = (req: Req, res: FakeRes) => Promise<unknown>;
 const openQuestion = vi.fn<(sessionId: string) => Promise<AskQuestionEvent | null>>(async () => null);
 const sessionExists = vi.fn<(sessionId: string) => Promise<boolean>>(async () => true);
 const captureScreen = vi.fn<(sessionId: string) => Promise<{ screen: string }>>(async () => ({ screen: "Do you want to continue?\n> " }));
-const sendReply = vi.fn<(sessionId: string, text: string) => Promise<{ sent: boolean }>>(async () => ({ sent: true }));
+const sendReply = vi.fn<(sessionId: string, text: string, options: SendOptions) => Promise<{ sent: boolean }>>(async () => ({ sent: true }));
 
 function routes(allowOrigin = true, allowHost = true): { get: Handler; post: Handler } {
   const map: Record<string, Handler> = {};
@@ -117,17 +118,24 @@ describe("POST /api/terminal/:sessionId/reply", () => {
     const res = makeRes();
     await routes().post(request(SESSION, { text: "yes, go ahead" }), res);
     expect(res.payload).toEqual({ ok: true });
-    expect(sendReply).toHaveBeenCalledWith(SESSION, "yes, go ahead");
+    expect(sendReply).toHaveBeenCalledWith(SESSION, "yes, go ahead", { blocked: expect.any(Function) });
   });
 
-  it("409s without typing when the session has a question dialog open right now", async () => {
+  it("hands the sender a check that says blocked exactly while the session has a question open", async () => {
+    await routes().post(request(SESSION, { text: "hi" }), makeRes());
+    const blocked = sendReply.mock.calls[0]?.[2].blocked;
+    expect(await blocked?.()).toBe(false);
     openQuestion.mockResolvedValue({ sessionId: SESSION, toolUseId: "t", questions: [] });
+    expect(await blocked?.()).toBe(true);
+    expect(openQuestion).toHaveBeenCalledWith(SESSION);
+  });
+
+  it("409s as question-open when the sender was blocked", async () => {
+    sendReply.mockRejectedValue(new InputBlockedError("blocked"));
     const res = makeRes();
     await routes().post(request(SESSION, { text: "into the dialog" }), res);
     expect(res.statusCode).toBe(409);
     expect(res.payload).toMatchObject({ reason: "question-open" });
-    expect(openQuestion).toHaveBeenCalledWith(SESSION);
-    expect(sendReply).not.toHaveBeenCalled();
   });
 
   it("403s a foreign origin before reading anything", async () => {

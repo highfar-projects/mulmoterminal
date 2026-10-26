@@ -250,6 +250,23 @@ describe("while it is not yet known whether a question is open", () => {
   });
 });
 
+describe("a line typed while a reply is in flight", () => {
+  it("survives the reply's success; only the line that was sent is cleared", async () => {
+    replyStatus = 0;
+    const w = mount(GithubBoardCellReply, { props: { cell: cell() } });
+    const input = w.get('[data-testid="board-cell-reply-input"]');
+    await input.setValue("first");
+    await w.get("form").trigger("submit");
+    await flushPromises();
+    await input.setValue("second, typed meanwhile");
+    releaseReply?.();
+    await flushPromises();
+    expect((input.element as HTMLInputElement).value).toBe("second, typed meanwhile");
+    const reply = calls.find((call) => call.url === `/api/terminal/${SESSION}/reply`);
+    expect(JSON.parse(String(reply?.init?.body))).toEqual({ text: "first" });
+  });
+});
+
 describe("after the panel closes", () => {
   it("schedules nothing more when a reply finishes after unmount", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });

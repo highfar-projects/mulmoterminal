@@ -31,9 +31,14 @@ Fifth step of the experimental board (#3172). The detail panel lets you read a c
     GET as same-origin with no Origin header. The older GETs that expose session content have the same
     exposure; that is a separate issue, not widened here.
   - `POST /api/terminal/:sessionId/reply` checks the origin itself as well as through the central
-    gate. It **refuses when a question dialog is open at that moment** (409, `reason: question-open`),
-    read from the tool-call history the hooks record whether or not the question pane is on. The host
-    is the authority because a dialog can open after the page last asked. The browser's gate below is
+    gate. It **refuses when a question dialog is open** (409, `reason: question-open`), read from the
+    tool-call history the hooks record whether or not the question pane is on. The check is a
+    `blocked` option on the shared sender, asked inside the session's chain right before the paste and
+    again right before the Enter. Blocked before the paste, nothing is written; blocked before the
+    Enter, the line stays in the input box unsubmitted. A send without the option takes the sender's
+    old path unchanged (the phone, the shared-app watches). The residual window is the read of the
+    tool-call store before each write: the dialog is opened by the agent, not by the host, so no host
+    lock can include it. That is the same window the phone and the keyboard have. The browser's gate below is
     the earlier, friendlier half. A sender rejection (no live terminal here) is a 409 carrying its
     reason.
 - Mounted in `app-routes.ts`. `outputBufferLimit` is now passed in from `index.ts`, as the other
@@ -53,6 +58,7 @@ Fifth step of the experimental board (#3172). The detail panel lets you read a c
     already seen `open`, which stays open until the cell stops waiting. A cell that stops waiting is
     `none`. A question is not answered while a reply is being typed. Stated this way after three
     review rounds each found one more unsafe state to enumerate.
+  - Sending clears only the line that was sent, so text typed while it was in flight survives.
   - Nothing outlives the panel: after unmount no refresh is scheduled and no response in flight is
     applied.
   - `fetchOpenQuestion`, used by the grid, is now `lookUpOpenQuestion` with failures mapped to null. It

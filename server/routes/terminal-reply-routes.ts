@@ -6,6 +6,7 @@
 // central gate, as the other routes that start or drive a process do.
 import type { Express } from "express";
 import type { AskQuestionEvent } from "../../common/askQuestion.js";
+import { InputBlockedError, type SendOptions } from "../backends/remoteHost/terminalInput.js";
 import { SESSION_ID_RE } from "../config/env.js";
 import { readReplyRequest } from "./terminalReply.js";
 import { requestOriginAllowed } from "./same-origin-guard.js";
@@ -17,8 +18,9 @@ export interface TerminalReplyRouteDeps {
   /** The question dialog the session is blocked on, from the tool-call history the hooks record
    *  whether or not the question pane is on. */
   openQuestion: (sessionId: string) => Promise<AskQuestionEvent | null>;
-  /** Resolves once the Enter has gone out; rejects when the session has no live terminal here. */
-  sendReply: (sessionId: string, text: string) => Promise<unknown>;
+  /** Resolves once the Enter has gone out; rejects when the session has no live terminal here, and
+   *  with InputBlockedError when `blocked` says no at either write. */
+  sendReply: (sessionId: string, text: string, options: SendOptions) => Promise<unknown>;
   isAllowedOrigin: (origin: string | undefined, remoteAddress: string | undefined) => boolean;
   isAllowedHost: (hostHeader: string | undefined) => boolean;
 }
@@ -47,15 +49,17 @@ export function mountTerminalReplyRoutes(app: Express, deps: TerminalReplyRouteD
     if (!requestOriginAllowed(req, deps.isAllowedOrigin)) return res.status(403).end();
     const request = readReplyRequest(req.params.sessionId, req.body);
     if (!request.ok) return res.status(request.status).json({ error: request.error });
-    // Checked HERE, at the moment of writing, rather than trusted from the browser: a dialog can
-    // open after the page last asked, and the line would then be typed into it.
-    if (await deps.openQuestion(request.sessionId)) {
-      return res.status(HTTP_CONFLICT).json({ error: "a question is open in this terminal — answer it first", reason: "question-open" });
-    }
+    // Asked by the sender itself, right before the paste and again right before the Enter — not
+    // trusted from the browser, and not checked once up front: a dialog can open after the page last
+    // asked, or while this send waits its turn in the session's chain.
+    const blocked = async (): Promise<boolean> => (await deps.openQuestion(request.sessionId)) !== null;
     try {
-      await deps.sendReply(request.sessionId, request.text);
+      await deps.sendReply(request.sessionId, request.text, { blocked });
       res.json({ ok: true });
     } catch (err) {
+      if (err instanceof InputBlockedError) {
+        return res.status(HTTP_CONFLICT).json({ error: "a question is open in this terminal — answer it first", reason: "question-open" });
+      }
       res.status(HTTP_CONFLICT).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });

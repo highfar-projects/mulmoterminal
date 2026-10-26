@@ -118,14 +118,17 @@ async function send(): Promise<void> {
   if (!canSend.value) return;
   sending.value = true;
   replyError.value = null;
+  // The box stays editable while this is in flight, so only the line that was sent is cleared —
+  // whatever the user typed since is theirs.
+  const sent = text.value;
   try {
     const res = await fetchWithTimeout(terminalUrl("reply"), {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text: text.value }),
+      body: JSON.stringify({ text: sent }),
     });
     if (res.ok) {
-      text.value = "";
+      if (text.value === sent) text.value = "";
       refreshSoon();
     } else replyError.value = await replyFailure(res);
   } catch {
