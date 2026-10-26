@@ -2,7 +2,7 @@
 // Bot jobs (plans/feat-bot-gpu-jobs.md): whether a remote bot's Python may run here, with which
 // interpreter, and the tokens such a bot holds. A token is minted for this machine's mobile-remote
 // connection, so minting waits for that connection; its secret is shown here once and never again.
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { botJobsSetting, saveBotJobs } from "../../composables/botJobs";
 import SettingsButton from "../SettingsButton.vue";
@@ -106,7 +106,16 @@ const selectAll = (event: FocusEvent) => {
 };
 const createdOn = (iso: string) => iso.slice(0, 10);
 
+// Connecting happens in the toolbar, outside this pane, and the pane stays mounted (v-show) — so
+// while minting is held for the connection, look again now and then rather than leaving the button
+// disabled until Settings is reopened. Stops once connected.
+const CONNECTION_POLL_MS = 5000;
+const poll = setInterval(() => {
+  if (!connected.value) void remoteHostConnected().then((isConnected) => (connected.value = isConnected));
+}, CONNECTION_POLL_MS);
+
 onMounted(() => void refresh());
+onUnmounted(() => clearInterval(poll));
 </script>
 
 <template>

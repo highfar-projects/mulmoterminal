@@ -81,6 +81,23 @@ describe("Bot jobs section", () => {
     expect(wrapper.get('[data-testid="bot-jobs-mint"]').attributes("disabled")).toBeDefined();
   });
 
+  // Connecting happens in the toolbar while this pane stays mounted.
+  it("offers minting once the connection comes up, without reopening Settings", async () => {
+    vi.useFakeTimers();
+    try {
+      server.connected = false;
+      const wrapper = await mountSection();
+      expect(wrapper.get('[data-testid="bot-jobs-mint"]').attributes("disabled")).toBeDefined();
+      server.connected = true;
+      await vi.advanceTimersByTimeAsync(5000);
+      await flushPromises();
+      expect(wrapper.get('[data-testid="bot-jobs-mint"]').attributes("disabled")).toBeUndefined();
+      expect(wrapper.find('[data-testid="bot-jobs-not-connected"]').exists()).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("mints a token, shows its secret and the two addresses, and lists it", async () => {
     const wrapper = await mountSection();
     await wrapper.get('[data-testid="bot-jobs-token-name"]').setValue("GrokBot");
