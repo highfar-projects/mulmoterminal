@@ -31,6 +31,7 @@ export const githubBoardEn = {
       emptyScreen: "(nothing on screen)",
       placeholder: "Reply or give the next instruction",
       answerQuestionFirst: "Answer the question above first",
+      questionUnknown: "Checking whether a question is open — refresh the screen if this stays",
       send: "Send",
       sending: "Sending…",
       failed: "Could not send to this terminal.",

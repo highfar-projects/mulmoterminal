@@ -31,6 +31,7 @@ export const githubBoardJa = {
       emptyScreen: "（画面に何もありません）",
       placeholder: "返信、または次の指示",
       answerQuestionFirst: "先に上の質問に答えてください",
+      questionUnknown: "質問が開いているか確認中です。変わらなければ画面を更新してください",
       send: "送信",
       sending: "送信中…",
       failed: "このターミナルに送れませんでした。",

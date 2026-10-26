@@ -31,6 +31,7 @@ export const githubBoardKo = {
       emptyScreen: "(화면에 아무것도 없습니다)",
       placeholder: "답장 또는 다음 지시",
       answerQuestionFirst: "먼저 위의 질문에 답하세요",
+      questionUnknown: "질문이 열려 있는지 확인 중입니다. 그대로면 화면을 새로 고치세요",
       send: "보내기",
       sending: "보내는 중…",
       failed: "이 터미널로 보낼 수 없습니다.",

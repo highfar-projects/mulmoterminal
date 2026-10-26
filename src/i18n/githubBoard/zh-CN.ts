@@ -31,6 +31,7 @@ export const githubBoardZhCN = {
       emptyScreen: "（屏幕上没有内容）",
       placeholder: "回复或下一步指示",
       answerQuestionFirst: "请先回答上面的问题",
+      questionUnknown: "正在确认是否有打开的问题——如一直如此请刷新屏幕",
       send: "发送",
       sending: "发送中…",
       failed: "无法发送到此终端。",

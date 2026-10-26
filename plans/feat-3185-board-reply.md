@@ -42,10 +42,15 @@ Fifth step of the experimental board (#3172). The detail panel lets you read a c
   - Sending clears the box only once the host accepted the line; a refusal keeps the text and shows
     the reason.
   - It re-reads the screen and the question shortly after a reply or an answer.
-  - One write at a time: the reply box is shut while a question dialog is up (the dialog has its own
-    text field), and a question is not answered while a reply is being typed. The two go through
-    different host writers with no shared queue. While the question lookup is still in flight, the box
-    is shut too, since whether a dialog is open is not known yet. Switching `questionPaneEnabled`
-    asks again or clears the buttons, and the newest lookup wins.
+  - **The reply gate is a permitted list** (`src/components/boardReplyGate.ts`, pure). A reply goes
+    only when the cell's dialog is known to be `none` and nothing else is writing. `unknown` (a lookup
+    in flight, or a lookup that FAILED — `lookUpOpenQuestion` tells that apart from "nothing asked") and
+    `open` keep it shut. With the question pane off, no dialog is tracked, as on the phone, except one
+    already seen `open`, which stays open until the cell stops waiting. A cell that stops waiting is
+    `none`. A question is not answered while a reply is being typed. Stated this way after three
+    review rounds each found one more unsafe state to enumerate.
+  - `fetchOpenQuestion`, used by the grid, is now `lookUpOpenQuestion` with failures mapped to null. It
+    was run beside the old body over 140 generated responses, with identical results; the property is
+    kept in `test/src/composables/openQuestion.spec.ts`.
 - `QuestionPane.vue` gains `embedded`, which takes the panel's width and hides its expand and close
   buttons. Without the prop, its classes and controls are exactly as before.

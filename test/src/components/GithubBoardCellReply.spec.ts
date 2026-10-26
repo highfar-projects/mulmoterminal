@@ -203,15 +203,38 @@ describe("while it is not yet known whether a question is open", () => {
     expect(w.find('[data-testid="board-cell-reply"] section').exists()).toBe(true);
   });
 
-  it("drops the question's buttons when the question pane is switched off", async () => {
+  it("drops the buttons when the pane is switched off, but keeps the reply shut until the cell stops waiting", async () => {
     setQuestionPaneEnabled(true);
     const w = mount(GithubBoardCellReply, { props: { cell: cell({ waiting: true }) } });
     await flushPromises();
     expect(w.find('[data-testid="board-cell-reply"] section').exists()).toBe(true);
     setQuestionPaneEnabled(false);
     await flushPromises();
+    const input = w.get('[data-testid="board-cell-reply-input"]');
     expect(w.find('[data-testid="board-cell-reply"] section').exists()).toBe(false);
-    expect(w.get('[data-testid="board-cell-reply-input"]').attributes("disabled")).toBeUndefined();
+    expect(input.attributes("disabled")).toBeDefined();
+    await w.setProps({ cell: cell({ waiting: false }) });
+    await flushPromises();
+    expect(input.attributes("disabled")).toBeUndefined();
+  });
+
+  it("keeps the reply shut when the question lookup fails, rather than reading that as no question", async () => {
+    setQuestionPaneEnabled(true);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        calls.push({ url, init });
+        if (url === `/api/question/${SESSION}`) return new Response("oops", { status: 500 });
+        return new Response(JSON.stringify({ screen: "" }));
+      }),
+    );
+    const w = mount(GithubBoardCellReply, { props: { cell: cell() } });
+    await w.get('[data-testid="board-cell-reply-input"]').setValue("into the dialog?");
+    await w.setProps({ cell: cell({ waiting: true }) });
+    await flushPromises();
+    await w.get("form").trigger("submit");
+    await flushPromises();
+    expect(urls()).not.toContain(`/api/terminal/${SESSION}/reply`);
   });
 
   it("lets a slow lookup from before the switch went off put nothing back", async () => {

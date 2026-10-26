@@ -31,6 +31,7 @@ export const githubBoardZhTW = {
       emptyScreen: "（畫面上沒有內容）",
       placeholder: "回覆或下一步指示",
       answerQuestionFirst: "請先回答上面的問題",
+      questionUnknown: "正在確認是否有開啟的問題——若一直如此請重新整理畫面",
       send: "傳送",
       sending: "傳送中…",
       failed: "無法傳送到此終端機。",
