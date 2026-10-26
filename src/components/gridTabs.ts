@@ -37,6 +37,13 @@ export const shellCell = (cwd: string | null): Omit<Cell, "uid"> => ({ session: 
 export const sessionCell = (session: string, cwd: string | null, agent: TerminalAgent): Omit<Cell, "uid"> =>
   agent === "claude" ? { session, cwd } : { session, cwd, agent };
 
+// A row of /api/sessions/unplaced as the cell that adopts it. "shell" is a bot job's shell
+// (server/backends/botJobs): it reattaches as a Shell cell, on the launcher endpoint — read as an
+// agent it would fall to Claude and start Claude in its place. Anything else is an agent, and an
+// unknown value is Claude, as asTerminalAgent decides everywhere.
+export const unplacedCell = (session: string, cwd: string | null, kind: unknown): Omit<Cell, "uid"> =>
+  kind === "shell" ? { session, cwd, launcher: shellLauncher() } : sessionCell(session, cwd, asTerminalAgent(kind));
+
 export interface Cell {
   uid: number;
   session: string | null;

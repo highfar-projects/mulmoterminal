@@ -26,10 +26,13 @@ import { submitSequenceForAgent } from "../../../common/terminalSubmit.js";
 import { LAUNCH_TERMINAL_CHANNEL } from "../../../common/launchAgent.js";
 import { getTerminalSubmit } from "../../config/config-routes.js";
 import { CLAUDE_CWD, SESSION_ID_RE } from "../../config/env.js";
+import { hostBotJobHandler, type SpawnBotJobPty } from "../botJobs/index.js";
 
 export interface RemoteHostDeps {
   spawnClaudePty: SpawnClaudePty;
   spawnIssueSession: SpawnIssueSession;
+  spawnBotJobPty: SpawnBotJobPty;
+  armReapForDetached: (sessionId: string) => void;
   toolStores: ReturnType<typeof createToolStores>;
   outputBufferLimit: number;
   /** One tab, not every tab — see launchTerminal below. Answers whether anyone took it. */
@@ -143,5 +146,6 @@ export function initRemoteHost(deps: RemoteHostDeps): void {
     // Which agent the typed text is going to, for the completion-menu guard (#1142) — same lookup
     // again, because that guard is Claude Code's behaviour and nobody else's.
     sessionAgent: (sessionId) => ptys.get(sessionId)?.agent,
+    botJob: hostBotJobHandler(deps),
   });
 }

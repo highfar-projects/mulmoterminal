@@ -74,5 +74,9 @@ export function createRemoteHostHandlers(deps: RemoteHostHandlerDeps): CommandHa
 
     // Files a project declares under `mobileFiles` in its .mulmoterminal.json (#2911).
     ...createMobileFileHandlers({ workspace, stager: deps.mobileFileStager }),
+
+    // A remote bot's Python job, approved in a terminal cell (plans/feat-bot-gpu-jobs.md). Always
+    // advertised; `botJobs.enabled` is checked per job, so the switch needs no restart.
+    botJob: deps.botJob,
   };
 }

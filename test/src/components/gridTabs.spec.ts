@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { RunCommand } from "../../../src/components/runCommand.js";
 import {
+  unplacedCell,
   pageCount,
   pageSlice,
   resolveCellStatus,
@@ -1327,5 +1328,19 @@ describe("setCellAgent and the account (#2215)", () => {
     const stored = JSON.parse(JSON.stringify(kept));
     stored.cells[0].account = "Not An Id";
     expect("account" in (parseGridState(JSON.stringify(stored))?.cells[0] ?? {})).toBe(false);
+  });
+});
+
+// A row of /api/sessions/unplaced as the cell that adopts it. A bot job's shell must come back as a
+// Shell cell: read as an agent it falls to Claude, and the grid would start Claude in its place.
+describe("unplacedCell", () => {
+  it("adopts a shell as a Shell cell on its session", () => {
+    expect(unplacedCell("s1", "/jobs/s1", "shell")).toEqual({ session: "s1", cwd: "/jobs/s1", launcher: { shell: true, label: "shell" } });
+  });
+
+  it("adopts an agent as that agent, and an unknown kind as Claude", () => {
+    expect(unplacedCell("s1", "/w", "codex")).toEqual({ session: "s1", cwd: "/w", agent: "codex" });
+    expect(unplacedCell("s1", "/w", "claude")).toEqual({ session: "s1", cwd: "/w" });
+    expect(unplacedCell("s1", "/w", undefined)).toEqual({ session: "s1", cwd: "/w" });
   });
 });

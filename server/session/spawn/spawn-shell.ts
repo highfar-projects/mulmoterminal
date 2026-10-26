@@ -78,5 +78,26 @@ export function createShellSpawners(deps: SpawnDeps) {
     return entry;
   }
 
-  return { spawnCommandPty, spawnLauncherPty, resolveLauncher };
+  // A bot job's shell (backends/botJobs): the same persistent, reattachable pty a launcher is, but
+  // started by the HOST with no browser asking — so no socket, and the grid is told a session was
+  // created so it can adopt it (the caller marks it unplaced as "shell"). `file` and `args` are run
+  // directly, never through a shell's parser: the job directory's path is not text anyone wrote.
+  function spawnBotJobPty(sessionId: string, file: string, args: string[], cwd: string): PtyEntry {
+    const { term, tmux, reattached } = ptySpawn(sessionId, file, args, cwd, true);
+    const spawnedAtMs = Date.now();
+    console.log(ptyStartLine({ agent: "bot-job", pid: term.pid, cwd, tmux, reattached, sessionId, note: null }));
+    const entry: PtyEntry = { term, ws: null, buffer: "", cwd, tmux, reattached, active: false, agent: "shell" };
+    ptys.set(sessionId, entry);
+    const output = wireBufferedOutput(entry, deps.outputBufferLimit);
+    term.onExit(({ exitCode, signal }) => {
+      const lifetimeMs = Date.now() - spawnedAtMs;
+      console.log(ptyExitLine({ agent: "bot-job", exitCode, signal, lifetimeMs, cwd, sessionId }));
+      output.flush();
+      reportPtyExit(sessionId, entry, { exitCode, signal, lifetimeMs }, deps.reap);
+    });
+    deps.publishSessionCreated(sessionId);
+    return entry;
+  }
+
+  return { spawnCommandPty, spawnLauncherPty, spawnBotJobPty, resolveLauncher };
 }

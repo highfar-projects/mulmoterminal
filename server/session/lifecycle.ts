@@ -31,6 +31,7 @@ import {
   sessionMemos,
   titleInFlight,
   isFailedWorker,
+  isPinnedSession,
 } from "./registry.js";
 import { clearedTranscripts, forgetClearedTranscript } from "./transcript/cleared-transcripts.js";
 import { forgetEntitledToolGroups } from "./bridge-session.js";
@@ -131,6 +132,12 @@ function scheduleReap(deps: SessionLifecycleDeps, id: string, delayMs: number = 
 function armReapForDetached(deps: SessionLifecycleDeps, id: string) {
   const entry = ptys.get(id);
   if (!entry || entry.ws) return; // still attached: nothing to reap
+  // A running bot job (registry.ts pinSession): its shell has no activity to report, so the rule
+  // below would read it as idle and reap it mid-run.
+  if (isPinnedSession(id)) {
+    console.log(`[pty] keeping pinned session ${id} alive (detached)`);
+    return;
+  }
   // Recompute from scratch: state may have escalated (idle -> waiting) since the
   // last arm, and a stale short timer must not survive to reap a session that now
   // needs the user. cancelReap clears it so scheduleReap re-arms with the right grace.

@@ -58,6 +58,7 @@ grouped in `handlers/terminalSession.ts`.
 | `listMobileFileProjects` | — | `{ projects: { id, label }[] }` — only projects that declare `mobileFiles` |
 | `listMobileFiles` | `project?`, `offset?`, `limit?` | `MobileFileListing` |
 | `getMobileFile` | `project?`, `path` | `MobileFileContent` |
+| `botJob` | `script`, `args`, `name?`, `from` | `{ approved, exitCode, output, truncated }` — written by mulmoserver's `submitBotJob`, not the phone (below) |
 
 ### Which project a command means (`project`)
 
@@ -188,6 +189,27 @@ way — so until #1184 a session the phone had just started was absent from the 
 and the work it began was findable only by holding on to the returned `sessionId`. It now answers
 with cells **and** the sessions on their way to being one, which is the same set one moment later.
 This covers `startChat` too, which had the same hole.
+
+### `botJob` — Python a remote bot asks this host to run
+
+The one command the **phone does not send**. A bot on someone else's server (GrokBot) cannot sign in
+as the user, so it calls mulmoserver's `submitBotJob` with a bearer secret minted for THIS host, and
+that function writes the command for it — `method` fixed to `botJob`, `params.from` set from the
+token's name (`plans/feat-bot-gpu-jobs.md`, receptron/mulmoserver#360). The bot reads the answer back
+through `getBotJob`.
+
+- Always in the table, so `botJob` is always in the presence `capabilities`; whether it runs is
+  `botJobs.enabled` in the global config, read per job. Off, the handler refuses with a sentence.
+- The script is written to `~/.mulmoterminal/bot-jobs/<sessionId>/job.py` and a Shell cell runs
+  `run.sh` beside it: it shows the script (`cat -v`, so it cannot repaint the screen), the exact
+  command line, and asks `Run this job? [y/N]`. **Nothing runs without a `y` typed there.**
+- The cell is spawned unplaced as `"shell"`, so it needs no open tab: a grid adopts it when one is
+  there. It is pinned against the detached-session reaper until the job has an outcome.
+- Answers `{ approved: false, exitCode: null, output: "", truncated: false }` when declined, and
+  `approved: true` with the exit code and the last 200 KiB of output when run. A terminal that ends
+  with neither — closed, or Ctrl-C — is an error.
+- A restart of MulmoTerminal while a job waits or runs leaves the command `processing` for good:
+  the runner never revisits a claimed command. The shell itself survives in tmux.
 
 ### `TerminalSessionSummary`
 
@@ -485,6 +507,7 @@ that SPAWNS can mark its session unplaced and let a grid adopt it later, which i
 | Typing into a session (sanitize, bracketed paste, Enter timing) | `server/backends/remoteHost/terminalInput.ts` |
 | Quick-command scoping | `server/backends/remoteHost/quickCommands.ts` |
 | Launch validation | `server/backends/remoteHost/launchTerminal.ts` |
+| Bot jobs (handler, run.sh, tokens) | `server/backends/botJobs/` |
 | Issue work (list, refuse, start) | `server/backends/remoteHost/handlers/issueWork.ts`, `server/git/issue-work.ts` |
 | Whether the seed is typed or typed-and-run | `server/session/spawn/issue-spawn-options.ts` |
 | Which clone a repo starts in | `server/git/repo-dirs.ts`, `common/issueStartPlan.ts` |

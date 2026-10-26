@@ -9,6 +9,7 @@ import path from "node:path";
 import { existsSync, statSync } from "node:fs";
 import type { Express, Request, Response } from "express";
 import { MAX_PALETTE_FAVORITES, MAX_PALETTE_KEY_CHARS } from "../../common/paletteConfig.js";
+import type { BotJobs } from "../../common/botJobs.js";
 import { isPresetChangeList, KEYMAP_PRESETS, presetChanges, reservedBindings, withPreset } from "../../common/keymapPresets.js";
 import {
   loadAppConfig,
@@ -327,6 +328,11 @@ export function getQuestionPaneEnabled(): boolean {
 export function getUsageGauge(): { enabled: boolean; probeIntervalMinutes: number } {
   const config = loadAppConfig(CONFIG_FILE);
   return { enabled: config.usageGauge, probeIntervalMinutes: config.usageProbeIntervalMinutes };
+}
+
+// Read per job rather than at boot, so switching bot jobs off stops the next one without a restart.
+export function getBotJobs(): BotJobs {
+  return loadAppConfig(CONFIG_FILE).botJobs;
 }
 
 /** Called after a config write that CHANGED the saved directories. Injected rather than imported,
