@@ -1,0 +1,136 @@
+// @vitest-environment node
+//
+// A bot job's run.sh (plans/feat-bot-gpu-jobs.md). The approval prompt is the only thing standing
+// between another machine's code and this one, so the script is RUN here under /bin/sh rather than
+// only read: a typed `y` runs it, anything else does not, and the outcome lands where the waiting
+// handler looks for it.
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import {
+  DECLINED_FILE,
+  EXIT_CODE_FILE,
+  JOB_FILE,
+  MAX_SCRIPT_BYTES,
+  OUTPUT_FILE,
+  RUN_FILE,
+  buildRunScript,
+  expandHome,
+  outputTail,
+  parseBotJobRequest,
+  parseExitCode,
+  printable,
+  shellQuote,
+  type BotJobRequest,
+} from "../../../../server/backends/botJobs/jobScript.js";
+
+const job = (over: Partial<BotJobRequest> = {}): BotJobRequest => ({ script: "print('hi')", args: [], name: null, from: "GrokBot", ...over });
+
+describe("parseBotJobRequest", () => {
+  it("reads what submitBotJob writes, naming the sender from `from`", () => {
+    expect(parseBotJobRequest({ script: "print(1)", args: ["--n", "3"], name: "sdxl", from: { tokenId: "t", name: "GrokBot" } })).toEqual({
+      script: "print(1)",
+      args: ["--n", "3"],
+      name: "sdxl",
+      from: "GrokBot",
+    });
+  });
+
+  it("does not trust a sender it cannot read", () => {
+    expect(parseBotJobRequest({ script: "print(1)" }).from).toBe("an unnamed bot");
+  });
+
+  it("refuses what it must not run, even though mulmoserver checked it", () => {
+    for (const params of [
+      {},
+      { script: "  " },
+      { script: "x".repeat(MAX_SCRIPT_BYTES + 1) },
+      { script: "p", args: "x" },
+      { script: "p", args: [1] },
+      { script: "p", name: 3 },
+    ]) {
+      expect(() => parseBotJobRequest(params as never)).toThrow();
+    }
+  });
+});
+
+describe("the pieces run.sh is built from", () => {
+  it("quotes an argument so nothing in it is expanded", () => {
+    const out = spawnSync("/bin/sh", ["-c", `printf '%s' ${shellQuote('it\'s $HOME `id` "x"')}`], { encoding: "utf8" });
+    expect(out.stdout).toBe('it\'s $HOME `id` "x"');
+  });
+
+  it("turns control bytes in a label into spaces", () => {
+    expect(printable("Grok\u001b[2J\u001b[HBot\n")).toBe("Grok [2J [HBot");
+  });
+
+  it("expands only a leading ~/", () => {
+    expect(expandHome("~/venv/bin/python", "/Users/u")).toBe("/Users/u/venv/bin/python");
+    expect(expandHome("/opt/python", "/Users/u")).toBe("/opt/python");
+    expect(expandHome("python3", "/Users/u")).toBe("python3");
+  });
+
+  it("keeps the tail of a long output and says so", () => {
+    expect(outputTail(Buffer.from("abc"), 10)).toEqual({ output: "abc", truncated: false });
+    expect(outputTail(Buffer.from("0123456789"), 4)).toEqual({ output: "6789", truncated: true });
+    // A cut inside a three-byte character drops the broken half rather than showing U+FFFD.
+    expect(outputTail(Buffer.from("aあい"), 4)).toEqual({ output: "い", truncated: true });
+  });
+
+  it("reads the exit code the shell wrote", () => {
+    expect(parseExitCode("0\n")).toBe(0);
+    expect(parseExitCode("130\n")).toBe(130);
+    expect(parseExitCode("")).toBeNull();
+  });
+});
+
+describe("run.sh, run", () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(os.tmpdir(), "bot-job-"));
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  // `python` is replaced by /bin/sh, so job.py is a shell script here; the script's last line execs
+  // $SHELL, which is pointed at `true` so the run ends.
+  const run = (script: string, answer: string, over: Partial<BotJobRequest> = {}) => {
+    writeFileSync(path.join(dir, JOB_FILE), script);
+    writeFileSync(path.join(dir, RUN_FILE), buildRunScript(job({ script, ...over }), "/bin/sh"));
+    return spawnSync("/bin/sh", [path.join(dir, RUN_FILE)], {
+      input: answer,
+      encoding: "utf8",
+      env: { ...process.env, SHELL: "/usr/bin/true" },
+      cwd: os.tmpdir(),
+    });
+  };
+
+  it("runs on y, with the args, and records the exit code and the output", () => {
+    const out = run('echo "args: $1 $2"; echo oops >&2; exit 3', "y\n", { args: ["one", "two words"] });
+    expect(out.stdout).toContain("Run this job? [y/N]");
+    expect(readFileSync(path.join(dir, EXIT_CODE_FILE), "utf8").trim()).toBe("3");
+    const output = readFileSync(path.join(dir, OUTPUT_FILE), "utf8");
+    expect(output).toContain("args: one two words");
+    expect(output).toContain("oops");
+    expect(existsSync(path.join(dir, DECLINED_FILE))).toBe(false);
+  });
+
+  it.each(["n\n", "\n", "yes please\n", ""])("declines and runs nothing on %j", (answer) => {
+    run("touch ran", answer);
+    expect(existsSync(path.join(dir, DECLINED_FILE))).toBe(true);
+    expect(existsSync(path.join(dir, "ran"))).toBe(false);
+    expect(existsSync(path.join(dir, EXIT_CODE_FILE))).toBe(false);
+  });
+
+  it("shows the script with its control characters visible, so it cannot repaint the prompt", () => {
+    const out = run("# \u001b[2J\u001b[Hharmless\n", "n\n");
+    expect(out.stdout).toContain("^[[2J^[[H");
+    expect(out.stdout).not.toContain("\u001b[2J");
+  });
+
+  it("shows the bot's name and the job's name, stripped of control bytes", () => {
+    const out = run("true", "n\n", { from: "Grok\u001b[2JBot", name: "sdxl" });
+    expect(out.stdout).toContain("Bot job from Grok [2JBot: sdxl");
+  });
+});

@@ -5,6 +5,7 @@
 // and every terminal accessor are wired in server/index.ts, where the PTY table lives. So this
 // host keeps a FACTORY (see ./index.ts) and passes deps down — a deliberate divergence from the
 // reference host, forced by where the state lives rather than by taste.
+import type { CommandHandler } from "@mulmoclaude/core/remote-host";
 import type { SessionAgent, TerminalAgent } from "../../../../common/sessionAgent.js";
 import type { SpawnedSession } from "../../../git/issue-work.js";
 import type { TerminalSessionListing } from "../dirIcons.js";
@@ -73,4 +74,7 @@ export interface RemoteHostHandlerDeps {
   // (#831). Answered in server/index.ts, which owns the PTY table and the pub/sub the
   // grid listens on. Resolves to an error string when it could not be started.
   launchTerminal: (agent: unknown, sessionId: unknown) => Promise<{ ok: true } | { ok: false; error: string }>;
+  // Python a remote bot submitted through mulmoserver's submitBotJob, run in a cell after the user
+  // approves it (backends/botJobs). Built in hostBindings.ts, which holds the shell spawner.
+  botJob: CommandHandler;
 }

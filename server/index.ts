@@ -311,7 +311,7 @@ const { spawnGrokPty } = createGrokSpawner(spawnDeps);
 const { spawnMusePty } = createMuseSpawner(spawnDeps);
 const { spawnCopilotPty } = createCopilotSpawner(spawnDeps);
 const { spawnCursorPty } = createCursorSpawner(spawnDeps);
-const { spawnCommandPty, spawnLauncherPty, resolveLauncher } = createShellSpawners(spawnDeps);
+const { spawnCommandPty, spawnLauncherPty, spawnBotJobPty, resolveLauncher } = createShellSpawners(spawnDeps);
 
 // Which agents could be started, checked ONCE, here, as the spawn preflight checks them: against
 // the environment a spawned agent gets (#2229). Installing one needs a restart to show.
@@ -463,6 +463,7 @@ await enableShapeScriptManifold();
 initRemoteHost({
   spawnClaudePty,
   spawnIssueSession,
+  spawnBotJobPty,
   toolStores,
   outputBufferLimit: OUTPUT_BUFFER_LIMIT,
   publishToOne: (channel, data) => pubsub?.publishToOne(channel, data) ?? false,
