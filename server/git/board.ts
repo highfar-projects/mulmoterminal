@@ -6,6 +6,7 @@ import { issueCandidateFromBranch } from "../../common/prPhase.js";
 import { isRecord } from "../../common/isRecord.js";
 import { readString } from "../../common/readString.js";
 import { rollupCiState } from "./prs.js";
+import { codexReviewOf } from "./codexVerdict.js";
 
 /** A PR row with what the board needs beyond the card: the issues it closes in this repo. */
 export interface BoardPrRow {
@@ -56,6 +57,7 @@ export function parseBoardPr(raw: unknown, repo: string): BoardPrRow | null {
     review: readString(raw.reviewDecision) || null,
     reviewRounds: reviewed.size,
     headReviewed: reviewed.has(readString(raw.headRefOid)),
+    codex: codexReviewOf(raw.comments, raw.reviews, readString(raw.headRefOid)),
   };
   return { pr, closes: closesInRepo(raw.closingIssuesReferences, repo) };
 }

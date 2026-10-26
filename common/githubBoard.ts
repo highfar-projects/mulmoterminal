@@ -26,6 +26,20 @@ export interface BoardPr {
   reviewRounds: number;
   /** Whether the newest commit has been reviewed yet. */
   headReviewed: boolean;
+  /** Codex cross-review rounds, posted as comments; null when none was. */
+  codex: BoardCodexReview | null;
+}
+
+export type CodexVerdict = "lgtm" | "changes";
+
+export interface BoardCodexReview {
+  /** Verdict comments posted by the repo's owner, members or collaborators. */
+  verdicts: number;
+  /** gh returned its cap of comments or of reviews, so there may be verdicts it did not return. */
+  more: boolean;
+  latest: CodexVerdict;
+  /** Which head the newest verdict names: this PR's head, another commit, or none. */
+  head: "current" | "stale" | "unknown";
 }
 
 export interface BoardCell {

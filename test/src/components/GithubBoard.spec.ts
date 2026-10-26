@@ -23,6 +23,7 @@ const prCard: BoardCard = card({
     review: null,
     reviewRounds: 2,
     headReviewed: false,
+    codex: null,
   },
   branch: "feat/4-x",
   cells: [
@@ -82,6 +83,34 @@ describe("GithubBoard", () => {
     expect(review.text()).toContain("PR #10");
     expect(review.get('[data-testid="board-review-round"]').text()).toBe("Review 2");
     expect(w.get('[data-testid="board-column-qa"]').findAll('[data-testid="board-card"]')).toHaveLength(0);
+    expect(review.find('[data-testid="board-codex"]').exists()).toBe(false);
+  });
+
+  it("shows the codex rounds and whether the newest verdict is for this head", async () => {
+    const withCodex = (key: string, codex: NonNullable<BoardCard["pr"]>["codex"]): BoardCard =>
+      card({ ...prCard, key, pr: prCard.pr ? { ...prCard.pr, codex } : null });
+    serve({
+      repos: [
+        {
+          repo: "o/r",
+          cards: [
+            withCodex("pr-1", { verdicts: 3, more: false, latest: "lgtm", head: "current" }),
+            withCodex("pr-2", { verdicts: 100, more: true, latest: "changes", head: "stale" }),
+            withCodex("pr-3", { verdicts: 1, more: false, latest: "lgtm", head: "unknown" }),
+          ],
+        },
+      ],
+    });
+    const w = mount(GithubBoard);
+    await flushPromises();
+    const [current, stale, unknown] = w.findAll('[data-testid="board-card"]');
+    expect(current?.get('[data-testid="board-codex"]').text()).toBe("Codex 3: LGTM");
+    expect(current?.get('[data-testid="board-codex"]').classes()).toContain("text-[#3fae6b]");
+    expect(current?.find('[data-testid="board-codex-head"]').exists()).toBe(false);
+    expect(stale?.get('[data-testid="board-codex"]').text()).toBe("Codex 100+: changes requested");
+    expect(stale?.get('[data-testid="board-codex"]').classes()).toContain("text-muted");
+    expect(stale?.get('[data-testid="board-codex-head"]').text()).toBe("for an older push");
+    expect(unknown?.get('[data-testid="board-codex-head"]').text()).toBe("push not named");
   });
 
   it("jumps to a cell the grid holds and disables one it does not", async () => {
