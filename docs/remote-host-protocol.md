@@ -163,9 +163,12 @@ reply is sent as soon as the session exists; the seed is typed — and submitted
 the TUI's input box has painted. So the phone should word it as *started*, not as *the agent has
 answered*, and read the session itself (`getTerminalScreen`) for the latter.
 
-**The desktop keeps the draft.** `POST /api/issues/start` takes no `run` — there, the person who
-opened the issue and the person about to run it are often not the same, and the reviewing Enter is
-the point. It does take the same `agent`, and for anything but Claude there is no draft to keep.
+**The desktop keeps the draft by default.** `POST /api/issues/start` leaves a Claude seed in the
+input box unless the request says `run: true` — the person who opened the issue and the person
+about to run it are often not the same, and the reviewing Enter is the point. The `/github` issue
+rows never send `run`; the experimental board's start does (#3179), because there the user chose to
+drive the work without leaving the board. It takes the same `agent`, and for anything but Claude
+there is no draft to keep.
 
 **It takes no `dir`, by rule** (see "The phone never sends a path" below). The work starts in the
 clone recorded for that repo — or in the only one, when the repo has exactly one here. When
