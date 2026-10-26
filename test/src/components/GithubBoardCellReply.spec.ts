@@ -24,11 +24,15 @@ interface Call {
 let calls: Call[] = [];
 let replyStatus = 200;
 let releaseReply: (() => void) | null = null;
+let holdQuestion = false;
+let releaseQuestion: (() => void) | null = null;
 
 beforeEach(() => {
   calls = [];
   replyStatus = 200;
   releaseReply = null;
+  holdQuestion = false;
+  releaseQuestion = null;
   setQuestionPaneEnabled(false);
   vi.stubGlobal(
     "fetch",
@@ -44,7 +48,10 @@ beforeEach(() => {
           ? new Response(JSON.stringify({ ok: true }))
           : new Response(JSON.stringify({ error: "no live terminal" }), { status: replyStatus });
       }
-      if (url === `/api/question/${SESSION}`) return new Response(JSON.stringify({ question }));
+      if (url === `/api/question/${SESSION}`) {
+        if (holdQuestion) await new Promise<void>((resolve) => (releaseQuestion = resolve));
+        return new Response(JSON.stringify({ question }));
+      }
       if (url.endsWith("/answer")) return new Response(JSON.stringify({ ok: true }));
       return new Response("{}");
     }),
@@ -168,5 +175,54 @@ describe("one write at a time", () => {
     expect(urls()).not.toContain(`/api/question/${SESSION}/answer`);
     releaseReply?.();
     await flushPromises();
+  });
+});
+
+describe("while it is not yet known whether a question is open", () => {
+  it("sends no reply until the question lookup has answered", async () => {
+    holdQuestion = true;
+    const w = mount(GithubBoardCellReply, { props: { cell: cell() } });
+    await w.get('[data-testid="board-cell-reply-input"]').setValue("too early");
+    setQuestionPaneEnabled(true);
+    await w.setProps({ cell: cell({ waiting: true }) });
+    await flushPromises();
+    await w.get("form").trigger("submit");
+    await flushPromises();
+    expect(urls()).not.toContain(`/api/terminal/${SESSION}/reply`);
+    releaseQuestion?.();
+    await flushPromises();
+    expect(w.find('[data-testid="board-cell-reply"] section').exists()).toBe(true);
+  });
+
+  it("asks for the question when the question pane is switched on while the panel is open", async () => {
+    const w = mount(GithubBoardCellReply, { props: { cell: cell({ waiting: true }) } });
+    await flushPromises();
+    expect(w.find('[data-testid="board-cell-reply"] section').exists()).toBe(false);
+    setQuestionPaneEnabled(true);
+    await flushPromises();
+    expect(w.find('[data-testid="board-cell-reply"] section').exists()).toBe(true);
+  });
+
+  it("drops the question's buttons when the question pane is switched off", async () => {
+    setQuestionPaneEnabled(true);
+    const w = mount(GithubBoardCellReply, { props: { cell: cell({ waiting: true }) } });
+    await flushPromises();
+    expect(w.find('[data-testid="board-cell-reply"] section').exists()).toBe(true);
+    setQuestionPaneEnabled(false);
+    await flushPromises();
+    expect(w.find('[data-testid="board-cell-reply"] section').exists()).toBe(false);
+    expect(w.get('[data-testid="board-cell-reply-input"]').attributes("disabled")).toBeUndefined();
+  });
+
+  it("lets a slow lookup from before the switch went off put nothing back", async () => {
+    holdQuestion = true;
+    setQuestionPaneEnabled(true);
+    const w = mount(GithubBoardCellReply, { props: { cell: cell({ waiting: true }) } });
+    await flushPromises();
+    setQuestionPaneEnabled(false);
+    await flushPromises();
+    releaseQuestion?.();
+    await flushPromises();
+    expect(w.find('[data-testid="board-cell-reply"] section').exists()).toBe(false);
   });
 });

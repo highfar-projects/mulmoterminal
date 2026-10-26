@@ -44,6 +44,8 @@ Fifth step of the experimental board (#3172). The detail panel lets you read a c
   - It re-reads the screen and the question shortly after a reply or an answer.
   - One write at a time: the reply box is shut while a question dialog is up (the dialog has its own
     text field), and a question is not answered while a reply is being typed. The two go through
-    different host writers with no shared queue.
+    different host writers with no shared queue. While the question lookup is still in flight, the box
+    is shut too, since whether a dialog is open is not known yet. Switching `questionPaneEnabled`
+    asks again or clears the buttons, and the newest lookup wins.
 - `QuestionPane.vue` gains `embedded`, which takes the panel's width and hides its expand and close
   buttons. Without the prop, its classes and controls are exactly as before.

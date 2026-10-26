@@ -49,9 +49,30 @@ async function loadScreen(): Promise<void> {
   }
 }
 
+// Whether a dialog is open is UNKNOWN while it is being asked, and the reply box stays shut until it
+// is known: typing into a dialog the lookup has not reported yet is the same mistake as typing into
+// one it has. The newest lookup wins, so a slow answer cannot put back a dialog a later one cleared.
+const questionLoading = ref(false);
+let questionRequest = 0;
+
 async function loadQuestion(): Promise<void> {
-  question.value = questionPaneEnabled.value ? await fetchOpenQuestion(props.cell.session) : null;
+  const id = ++questionRequest;
+  if (!questionPaneEnabled.value) {
+    question.value = null;
+    questionLoading.value = false;
+    return;
+  }
+  questionLoading.value = true;
+  const open = await fetchOpenQuestion(props.cell.session);
+  if (id !== questionRequest) return;
+  question.value = open;
+  questionLoading.value = false;
 }
+
+// Switching the question pane on or off while the panel is open asks again — or clears what it showed.
+watch(questionPaneEnabled, () => {
+  if (props.cell.waiting || question.value) void loadQuestion();
+});
 
 // What the cell is asking is read when it starts asking, and once for a cell that already is.
 const refresh = (): void => {
@@ -80,7 +101,7 @@ const replyFailure = async (res: Response): Promise<string> => {
 
 // While a question dialog is up, the reply box is not offered: text typed into the terminal then
 // would land in the dialog, and the dialog has a text field of its own.
-const canSend = computed(() => !sending.value && !answering.value && question.value === null && text.value.trim() !== "");
+const canSend = computed(() => !sending.value && !answering.value && !questionLoading.value && question.value === null && text.value.trim() !== "");
 
 async function send(): Promise<void> {
   if (!canSend.value) return;
@@ -155,7 +176,7 @@ const say = (words: string): Promise<void> =>
         data-testid="board-cell-reply-input"
         type="text"
         class="box-border min-w-0 flex-auto rounded-md border border-border bg-input px-2 py-1 text-[12px] text-fg focus:border-accent focus:outline-none"
-        :disabled="question !== null || answering"
+        :disabled="question !== null || answering || questionLoading"
         :placeholder="question ? t('githubBoard.reply.answerQuestionFirst') : t('githubBoard.reply.placeholder')"
         :aria-label="t('githubBoard.reply.placeholder')"
       />
