@@ -92,9 +92,7 @@ const borderClass = computed(() => {
       <span v-if="codex" data-testid="board-codex" class="rounded border px-1.5" :class="codexClass">{{
         t(`githubBoard.codex.${codex.latest}`, { count: codexCount })
       }}</span>
-      <span v-if="codex && codex.head !== 'current' && card.column !== 'merged'" data-testid="board-codex-head" class="text-dim">{{
-        t(`githubBoard.codex.${codex.head}`)
-      }}</span>
+      <span v-if="codex && codex.head !== 'current'" data-testid="board-codex-head" class="text-dim">{{ t(`githubBoard.codex.${codex.head}`) }}</span>
       <span v-if="card.column === 'review' && !card.pr.headReviewed" class="text-dim">{{ t("githubBoard.awaitingReview") }}</span>
     </div>
     <div v-if="card.column === 'todo' && card.issue" class="flex items-center gap-1.5 text-[11px] text-dim">

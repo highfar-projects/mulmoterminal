@@ -10,7 +10,9 @@ const runGh = vi.hoisted(() =>
       return { ok: true, stdout: JSON.stringify({ number: Number(args[2]), url: "https://github.com/o/r/pull/5" }), stderr: "" };
     if (args[0] === "repo") return { ok: true, stdout: "main\n", stderr: "" };
     if (args[0] === "pr" && args.includes("open")) {
-      return { ok: true, stdout: JSON.stringify([{ number: 5, title: "t", url: "https://github.com/o/r/pull/5", headRefName: "feat/x" }]), stderr: "" };
+      const verdict = { authorAssociation: "MEMBER", createdAt: "2026-10-26T04:00:00Z", body: "CODEX VERDICT: LGTM (head abc1234)" };
+      const pr = { number: 5, title: "t", url: "https://github.com/o/r/pull/5", headRefName: "feat/x", headRefOid: "abc1234def", comments: [verdict] };
+      return { ok: true, stdout: JSON.stringify([pr]), stderr: "" };
     }
     return { ok: true, stdout: "[]", stderr: "" };
   }),
@@ -30,6 +32,19 @@ describe("boardAcrossRepos", () => {
   it.each(["o/r", "O/R", "github.com/o/r"])("places a cell on the PR of its branch when the repo is configured as %s", async (entry) => {
     const [board] = await boardAcrossRepos([entry], [cell]);
     expect(board?.cards?.find((card) => card.key === "pr-5")?.cells.map((c) => c.session)).toEqual(["s1"]);
+  });
+
+  it("reads comments, and so codex verdicts, for open PRs only", async () => {
+    runGh.mockClear();
+    const [board] = await boardAcrossRepos(["o/r"], []);
+    expect(board?.cards?.find((card) => card.key === "pr-5")?.pr?.codex).toEqual({ verdicts: 1, more: false, latest: "lgtm", head: "current" });
+    const fieldsFor = (state: string): string[] => {
+      const call = runGh.mock.calls.find(([args]) => args[1] === "list" && args.includes(state));
+      return (call?.[0][call[0].indexOf("--json") + 1] ?? "").split(",");
+    };
+    expect(fieldsFor("open")).toContain("comments");
+    expect(fieldsFor("merged")).not.toContain("comments");
+    expect(fieldsFor("merged")).toContain("reviews");
   });
 
   it("answers a non-GitHub repo with its own error", async () => {

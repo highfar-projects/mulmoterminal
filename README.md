@@ -1605,7 +1605,7 @@ here disables the button and says why. Backed by `POST /api/issues/start`.
 **The board (experimental).** **Open the board** on `/github` goes to `/github/board`: per repo, one
 card per piece of work in five columns — To do, Implementing, In review (with the review round),
 Ready (QA) and Merged — joining each issue to the PR that closes it and to the live cells on its
-branch. A PR card also counts the codex cross-review verdicts posted as comments (a first line
+branch. An open PR's card also counts the codex cross-review verdicts posted as comments (a first line
 `CODEX VERDICT: LGTM (head <sha>)` or `CHANGES REQUESTED`, by the repo's owner, members or
 collaborators) and shows the newest, coloured only when the sha it names is the PR's head. Pressing a card opens a detail panel with the issue body, the PR's checks and reviews, and
 those cells (`GET /api/github/board/detail`); GitHub is a link inside it. A To do card's **▶** starts

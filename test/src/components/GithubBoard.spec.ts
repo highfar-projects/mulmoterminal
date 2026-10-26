@@ -97,7 +97,6 @@ describe("GithubBoard", () => {
             withCodex("pr-1", { verdicts: 3, more: false, latest: "lgtm", head: "current" }),
             withCodex("pr-2", { verdicts: 100, more: true, latest: "changes", head: "stale" }),
             withCodex("pr-3", { verdicts: 1, more: false, latest: "lgtm", head: "unknown" }),
-            { ...withCodex("pr-4", { verdicts: 2, more: false, latest: "lgtm", head: "unknown" }), column: "merged" },
           ],
         },
       ],
@@ -112,10 +111,6 @@ describe("GithubBoard", () => {
     expect(stale?.get('[data-testid="board-codex"]').classes()).toContain("text-muted");
     expect(stale?.get('[data-testid="board-codex-head"]').text()).toBe("for an older push");
     expect(unknown?.get('[data-testid="board-codex-head"]').text()).toBe("push not named");
-    // Once merged, which push a verdict was for no longer matters.
-    const merged = w.get('[data-testid="board-column-merged"] [data-testid="board-card"]');
-    expect(merged.get('[data-testid="board-codex"]').text()).toBe("Codex 2: LGTM");
-    expect(merged.find('[data-testid="board-codex-head"]').exists()).toBe(false);
   });
 
   it("jumps to a cell the grid holds and disables one it does not", async () => {

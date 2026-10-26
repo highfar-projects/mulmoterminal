@@ -21,7 +21,9 @@ none (every verdict posted before the skill changed).
 - A verdict is a body OPENING with `CODEX VERDICT: LGTM` / `CHANGES REQUESTED`; what follows is not
   anchored, because several real verdicts were posted with a typed backslash-n after the word.
 - Read top-level comments (`createdAt`) and review bodies (`submittedAt`) from the same `gh pr list`
-  call, which gains the `comments` field.
+  call. Only the OPEN list gains the `comments` field: on a PR that went through a review loop the
+  comments are most of the payload, and the merged list is where most such PRs are, while a verdict
+  on a merged PR no longer decides anything. So a merged card shows no codex chip.
 - Count only `OWNER`, `MEMBER`, `COLLABORATOR` — anyone can comment on a public repo.
 - The newest verdict is the one with the latest time. `gh pr list` returns a PR's first 100
   comments, so a list at that cap is flagged `more` and shown as `N+`.
@@ -29,5 +31,4 @@ none (every verdict posted before the skill changed).
 ## UI
 
 A chip beside the review round: `Codex 3: LGTM`, green / red only when the verdict is for the
-current head; otherwise muted, with "for an older push" or "push not named" beside it — except on a
-merged card, where which push a verdict was for no longer matters. Columns do not change.
+current head; otherwise muted, with "for an older push" or "push not named" beside it. Columns do not change.
