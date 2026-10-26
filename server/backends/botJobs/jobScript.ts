@@ -84,8 +84,12 @@ export const DECLINED_FILE = "declined";
 //   visibly for the same reason as the script's.
 // - Anything but an explicit yes declines, and so does end of input (`read` fails, answer is empty).
 //
-// The exit code is written by the subshell and moved into place only once `tee` has finished, so
-// the waiting handler never reads `exit_code` before `output.log` is complete.
+// Everything the job prints reaches the terminal (`tee /dev/stderr`); only the last
+// MAX_OUTPUT_BYTES + 1 reach `output.log` — all that goes back, plus one byte so a cut can still be
+// told from an exact fit. A verbose job must not be able to fill the disk.
+//
+// The exit code is written by the subshell and moved into place only once the pipeline has
+// finished, so the waiting handler never reads `exit_code` before `output.log` is complete.
 export function buildRunScript(job: BotJobRequest, python: string): string {
   const command = [python, JOB_FILE, ...job.args].map(shellQuote).join(" ");
   // What is shown is the command that runs, made safe to PRINT: an argument is the bot's text too,
@@ -109,7 +113,7 @@ export function buildRunScript(job: BotJobRequest, python: string): string {
     "  y|Y|yes|Yes|YES) ;;",
     `  *) : > ${DECLINED_FILE}; printf '%s\\n' 'Declined. Nothing was run.'; exit 0 ;;`,
     "esac",
-    `( PYTHONUNBUFFERED=1 ${command}; echo $? > ${EXIT_CODE_FILE}.tmp ) 2>&1 | tee ${OUTPUT_FILE}`,
+    `( PYTHONUNBUFFERED=1 ${command}; echo $? > ${EXIT_CODE_FILE}.tmp ) 2>&1 | tee /dev/stderr | tail -c ${MAX_OUTPUT_BYTES + 1} > ${OUTPUT_FILE}`,
     `mv ${EXIT_CODE_FILE}.tmp ${EXIT_CODE_FILE}`,
     `printf '\\n%s\\n' "Finished with exit code $(cat ${EXIT_CODE_FILE}). This shell stays open in the job directory."`,
     'exec "${SHELL:-/bin/sh}" -l',

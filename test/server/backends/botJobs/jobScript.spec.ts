@@ -13,6 +13,7 @@ import {
   DECLINED_FILE,
   EXIT_CODE_FILE,
   JOB_FILE,
+  MAX_OUTPUT_BYTES,
   MAX_SCRIPT_BYTES,
   OUTPUT_FILE,
   RUN_FILE,
@@ -126,6 +127,13 @@ describe.skipIf(process.platform === "win32")("run.sh, run", () => {
     expect(output).toContain("args: one two words");
     expect(output).toContain("oops");
     expect(existsSync(path.join(dir, DECLINED_FILE))).toBe(false);
+  });
+
+  it("keeps only the tail of a long output on disk, one byte past what is sent back", () => {
+    run(`head -c ${MAX_OUTPUT_BYTES * 2} /dev/zero | tr '\\0' x; printf END`, "y\n");
+    const kept = readFileSync(path.join(dir, OUTPUT_FILE), "utf8");
+    expect(kept.length).toBe(MAX_OUTPUT_BYTES + 1);
+    expect(kept.endsWith("xEND")).toBe(true);
   });
 
   it.each(["n\n", "\n", "yes please\n", ""])("declines and runs nothing on %j", (answer) => {
