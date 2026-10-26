@@ -78,7 +78,16 @@ const failureSentence = (data: unknown): string | null => {
   return typeof data.detail === "string" && data.detail ? data.detail : null;
 };
 
-async function requestStart(repo: string, issue: number, dir: string): Promise<boolean> {
+/** How a start is carried out. The `/github` row takes the defaults; the board sends the issue and
+ *  stays where it is (#3179). */
+export interface IssueStartOptions {
+  /** Send the issue text at once instead of leaving a Claude seed in the input box. */
+  run?: boolean;
+  /** Switch to the grid to show the new cell. */
+  reveal?: boolean;
+}
+
+async function requestStart(repo: string, issue: number, dir: string, options: IssueStartOptions): Promise<boolean> {
   // The view's pick (#2226). A null account is left out, which the server reads as the default login.
   const { agent, account } = currentIssueStartChoice();
   if (useAgentAvailability().unavailableAgents.value.has(agent)) {
@@ -90,7 +99,7 @@ async function requestStart(repo: string, issue: number, dir: string): Promise<b
     {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ repo, issue, dir, agent, ...(account === null ? {} : { account }) }),
+      body: JSON.stringify({ repo, issue, dir, agent, ...(account === null ? {} : { account }), ...(options.run === true ? { run: true } : {}) }),
     },
     SLOW_COMMAND_TIMEOUT_MS,
   );
@@ -113,18 +122,21 @@ async function requestStart(repo: string, issue: number, dir: string): Promise<b
   // `agent` is the one the server started or found: a resumed session is whatever agent the worktree
   // already held, and placing it as Claude attaches it on Claude's endpoint (#2227). A reply without
   // the field is from before it existed, when every issue session was Claude.
-  placeSpawnedChat({ id: data.sessionId, agent: asTerminalAgent(data.agent), draft: data.outcome !== "resumed" && data.seedRuns !== true });
+  placeSpawnedChat(
+    { id: data.sessionId, agent: asTerminalAgent(data.agent), draft: data.outcome !== "resumed" && data.seedRuns !== true },
+    { reveal: options.reveal !== false },
+  );
   return true;
 }
 
 /** Cut the worktree and open the seeded session. `starting` names the row while it is in flight —
  *  a worktree add plus a spawn is slow enough that a second click would otherwise make two. */
-export async function startIssueWork(repo: string, issue: number, dir: string): Promise<boolean> {
+export async function startIssueWork(repo: string, issue: number, dir: string, options: IssueStartOptions = {}): Promise<boolean> {
   if (starting.value) return false;
   starting.value = keyOf(repo, issue);
   startError.value = null;
   try {
-    return await requestStart(repo, issue, dir);
+    return await requestStart(repo, issue, dir, options);
   } catch {
     startError.value = `could not reach the server to start ${repo}#${issue}`;
     return false;

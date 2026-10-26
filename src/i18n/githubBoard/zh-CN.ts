@@ -23,6 +23,7 @@ export const githubBoardZhCN = {
     cell: { working: "工作中", waiting: "等待你确认", idle: "空闲" },
     jump: "转到此终端",
     notInGrid: "正在运行，但不在网格中",
+    start: "开始：把 issue 发送到新的 worktree 会话",
     detail: {
       region: "卡片详情",
       open: "显示详情",

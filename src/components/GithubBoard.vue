@@ -12,12 +12,15 @@ import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTim
 import { useAppConfig } from "../composables/useAppConfig";
 import GithubBoardCard from "./GithubBoardCard.vue";
 import GithubBoardDetail from "./GithubBoardDetail.vue";
+import IssueStartAgentPicker from "./IssueStartAgentPicker.vue";
+import { useIssueStart } from "../composables/useIssueStart";
 import { boardSelection, type BoardSelection } from "../composables/useGithubBoardView";
 
 const emit = defineEmits<{ (e: "close" | "list"): void }>();
 
 const { t } = useI18n();
 const { home } = useAppConfig();
+const { loadRepoDirs, startError } = useIssueStart();
 
 const repos = ref<RepoBoard[]>([]);
 const loading = ref(false);
@@ -65,7 +68,10 @@ watch(repos, () => {
   if (boardSelection.value && !selectedCard(boardSelection.value)) boardSelection.value = null;
 });
 
-onMounted(() => void load());
+onMounted(() => {
+  void load();
+  void loadRepoDirs();
+});
 onBeforeUnmount(() => (boardSelection.value = null));
 </script>
 
@@ -104,9 +110,14 @@ onBeforeUnmount(() => (boardSelection.value = null));
         </button>
       </div>
     </header>
+    <!-- Its own row, as on /github: the non-Claude warning is a sentence and would crowd the header. -->
+    <div data-testid="issue-start-agent-row" class="flex-none border-b border-border bg-panel px-4 py-1.5">
+      <IssueStartAgentPicker />
+    </div>
     <div class="flex min-h-0 min-w-0 flex-auto">
       <div class="min-w-0 flex-auto overflow-auto px-4 pb-16 pt-3">
         <p class="mb-3 text-[12px] text-muted">{{ t("githubBoard.rule") }}</p>
+        <p v-if="startError" data-testid="issue-start-error" class="mb-3 text-[13px] text-err">{{ startError }}</p>
         <p v-if="failed" class="px-1 py-6 text-[13px] text-err">{{ t("githubBoard.loadFailed") }}</p>
         <p v-else-if="!loading && repos.length === 0" class="px-1 py-6 text-[13px] text-muted">{{ t("githubBoard.noRepos") }}</p>
         <section v-for="repo in repos" :key="repo.repo" data-testid="board-repo" class="mb-6">
@@ -129,7 +140,9 @@ onBeforeUnmount(() => (boardSelection.value = null));
                 :card="card"
                 :home="home"
                 :selected="isSelected(repo, card)"
+                :repo="repo.repo"
                 @select="select(repo, card)"
+                @started="load"
               />
               <span v-if="cardsIn(repo, column).length === 0" class="text-[11px] text-dim">{{ t("githubBoard.empty") }}</span>
             </div>

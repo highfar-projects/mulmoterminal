@@ -23,6 +23,7 @@ export const githubBoardEn = {
     cell: { working: "Working", waiting: "Waiting for you", idle: "Idle" },
     jump: "Go to this terminal",
     notInGrid: "Running, but not in the grid",
+    start: "Start: sends the issue to a new worktree session",
     detail: {
       region: "Card details",
       open: "Show details",
