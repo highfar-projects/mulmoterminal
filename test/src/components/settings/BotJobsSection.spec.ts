@@ -85,7 +85,7 @@ describe("Bot jobs section", () => {
   });
 
   // Connecting happens in the toolbar while this pane stays mounted.
-  it("offers minting once the connection comes up, without reopening Settings", async () => {
+  it("follows the connection coming up and going down, without reopening Settings", async () => {
     vi.useFakeTimers();
     try {
       server.connected = false;
@@ -96,6 +96,11 @@ describe("Bot jobs section", () => {
       await flushPromises();
       expect(wrapper.get('[data-testid="bot-jobs-mint"]').attributes("disabled")).toBeUndefined();
       expect(wrapper.find('[data-testid="bot-jobs-not-connected"]').exists()).toBe(false);
+      // ...and holds it again when the connection drops.
+      server.connected = false;
+      await vi.advanceTimersByTimeAsync(5000);
+      await flushPromises();
+      expect(wrapper.get('[data-testid="bot-jobs-mint"]').attributes("disabled")).toBeDefined();
     } finally {
       vi.useRealTimers();
     }

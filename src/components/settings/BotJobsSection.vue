@@ -111,12 +111,12 @@ const selectAll = (event: FocusEvent) => {
 };
 const createdOn = (iso: string) => iso.slice(0, 10);
 
-// Connecting happens in the toolbar, outside this pane, and the pane stays mounted (v-show) — so
-// while minting is held for the connection, look again now and then rather than leaving the button
-// disabled until Settings is reopened. Stops once connected.
+// Connecting and disconnecting happen in the toolbar, outside this pane, and the pane stays mounted
+// (v-show) — so the connection is looked at again now and then, both ways: a button left disabled
+// until Settings is reopened, or left enabled after the connection dropped, says the wrong thing.
 const CONNECTION_POLL_MS = 5000;
 const poll = setInterval(() => {
-  if (!connected.value) void remoteHostConnected().then((isConnected) => (connected.value = isConnected));
+  void remoteHostConnected().then((isConnected) => (connected.value = isConnected));
 }, CONNECTION_POLL_MS);
 
 onMounted(() => void refresh());
