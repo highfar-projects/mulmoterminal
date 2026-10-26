@@ -24,13 +24,35 @@ describe("adoptLateTerminalWidthTable", () => {
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe("/api/config/terminal-widths");
   });
 
-  it("asks only once per page", async () => {
+  it("does not ask twice while a request is held open", async () => {
     const fetchMock = answering({ terminalWidthTable: TABLE });
     vi.stubGlobal("fetch", fetchMock);
     const { adoptLateTerminalWidthTable } = await freshLoader();
-    await adoptLateTerminalWidthTable();
-    await adoptLateTerminalWidthTable();
+    await Promise.all([adoptLateTerminalWidthTable(), adoptLateTerminalWidthTable()]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks again after a failed request", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockRejectedValueOnce(new TypeError("network"))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ terminalWidthTable: TABLE })));
+    vi.stubGlobal("fetch", fetchMock);
+    const { state, adoptLateTerminalWidthTable } = await freshLoader();
+    await adoptLateTerminalWidthTable();
+    expect(state.getTerminalWidthTable()).toBeNull();
+    await adoptLateTerminalWidthTable();
+    expect(state.getTerminalWidthTable()).toEqual(TABLE);
+  });
+
+  it("does not replace a table that arrived some other way meanwhile", async () => {
+    const newer = { runs: [[0x2705, 0x2705, 2]], folding: "tmux-3.4", vs16Wide: false };
+    vi.stubGlobal("fetch", answering({ terminalWidthTable: TABLE }));
+    const { state, adoptLateTerminalWidthTable } = await freshLoader();
+    const asking = adoptLateTerminalWidthTable();
+    state.setTerminalWidthTable(newer);
+    await asking;
+    expect(state.getTerminalWidthTable()).toEqual(newer);
   });
 
   it.each([
