@@ -6,7 +6,6 @@ import path from "node:path";
 import {
   parseCodexRolloutHead,
   parseCodexSessionMeta,
-  isResumableThread,
   listCodexSessions,
   codexRolloutExists,
   metaCacheSize,
@@ -16,10 +15,16 @@ import { resetThreadNameCache } from "../../../../server/agents/codex/codex-thre
 const UUID_A = "019f251d-001c-7542-b13e-9a627effce52";
 const UUID_B = "019db01d-aaa3-7ba2-b597-b29a7fca488f";
 
-const metaLine = (id: string, cwd: string | null, threadSource?: string): string =>
+const metaLine = (id: string, cwd: string | null, threadSource?: string, source?: unknown): string =>
   JSON.stringify({
     type: "session_meta",
-    payload: { id, cwd, originator: "codex-tui", ...(threadSource === undefined ? {} : { thread_source: threadSource }) },
+    payload: {
+      id,
+      cwd,
+      originator: "codex-tui",
+      ...(threadSource === undefined ? {} : { thread_source: threadSource }),
+      ...(source === undefined ? {} : { source }),
+    },
   });
 // The shape codex wrote until 2026-08. Kept because the store still holds thousands of them.
 const userMsgLine = (message: string): string => JSON.stringify({ type: "event_msg", payload: { type: "user_message", message } });
@@ -134,12 +139,13 @@ describe("listCodexSessions", () => {
     mtime: Date;
     stamp?: string;
     threadSource?: string;
+    source?: unknown;
   }
-  function writeSessionOn({ id, cwd, msg, mtime, stamp = "2026-07-08T00-00-00", threadSource }: SessionFixture): void {
+  function writeSessionOn({ id, cwd, msg, mtime, stamp = "2026-07-08T00-00-00", threadSource, source }: SessionFixture): void {
     const dir = dayDir(root);
     mkdirSync(dir, { recursive: true });
     const file = path.join(dir, `rollout-${stamp}-${id}.jsonl`);
-    writeFileSync(file, [metaLine(id, cwd, threadSource), userMsgLine(msg)].join("\n") + "\n");
+    writeFileSync(file, [metaLine(id, cwd, threadSource, source), userMsgLine(msg)].join("\n") + "\n");
     utimesSync(file, mtime, mtime);
   }
   function writeSession(id: string, cwd: string, msg: string, mtime: Date): void {
@@ -196,10 +202,11 @@ describe("listCodexSessions", () => {
     expect(list.map((s) => s.title)).toEqual(["the one I want"]);
   });
 
-  // Subagent threads carry the PARENT's cwd, so without the filter they match and fill the list.
-  it("suppresses subagent and automation threads but keeps unknown and absent ones", async () => {
+  // Threads codex runs for itself carry the PARENT's cwd, so without the filter they match and
+  // fill the list. `thread_source` names some of them; `source` marks every one codex spawned.
+  it("suppresses the threads codex ran for itself but keeps unknown and absent kinds", async () => {
     writeSession(UUID_A, "/work", "mine", new Date(2026, 6, 8, 10));
-    const thread = (suffix: string, msg: string, threadSource: string, hour: number): void =>
+    const thread = (suffix: string, msg: string, threadSource: string, hour: number, source?: unknown): void =>
       writeSessionOn({
         id: `019f251d-001c-7542-b13e-0000000${suffix}`,
         cwd: "/work",
@@ -207,13 +214,18 @@ describe("listCodexSessions", () => {
         mtime: new Date(2026, 6, 8, hour),
         stamp: "2026-07-08T00-00-01",
         threadSource,
+        source,
       });
-    thread("0aaa1", "sub", "subagent", 11);
-    thread("0aaa2", "auto", "automation", 12);
+    thread("0aaa1", "sub", "subagent", 11, { subagent: "review" });
+    thread("0aaa2", "auto", "automation", 12, "vscode");
     thread("0aaa3", "voice", "realtime_voice", 13);
-    thread("0aaa4", "explicit user", "user", 14);
+    thread("0aaa4", "explicit user", "user", 14, "cli");
+    thread("0aaa5", "Guardian review", "guardian_review", 15, { subagent: { other: "guardian" } });
+    thread("0aaa6", "memories", "memory_consolidation", 16, { internal: "memory_consolidation" });
+    thread("0aaa7", "next machinery", "some_future_kind", 17, { subagent: { other: "next" } });
+    thread("0aaa8", "from another frontend", "user", 18, { custom: "atlas" });
     const titles = (await listCodexSessions(root, "/work", 10)).map((s) => s.title);
-    expect(titles).toEqual(["explicit user", "voice", "mine"]);
+    expect(titles).toEqual(["from another frontend", "explicit user", "voice", "mine"]);
   });
 
   // The window used to be picked by the filename's timestamp and only then sorted by mtime, so a
@@ -388,10 +400,23 @@ describe("listCodexSessions", () => {
 describe("parseCodexSessionMeta", () => {
   it("reads id, cwd and thread_source from line 1", () => {
     const line = JSON.stringify({ type: "session_meta", payload: { id: UUID_A, cwd: "/work", thread_source: "user" } });
-    expect(parseCodexSessionMeta(line)).toEqual({ id: UUID_A, cwd: "/work", threadSource: "user" });
+    expect(parseCodexSessionMeta(line)).toEqual({ id: UUID_A, cwd: "/work", threadSource: "user", sourceKind: "root" });
   });
   it("reports a missing cwd and thread_source as null rather than dropping the row", () => {
-    expect(parseCodexSessionMeta(JSON.stringify({ type: "session_meta", payload: { id: UUID_A } }))).toEqual({ id: UUID_A, cwd: null, threadSource: null });
+    expect(parseCodexSessionMeta(JSON.stringify({ type: "session_meta", payload: { id: UUID_A } }))).toEqual({
+      id: UUID_A,
+      cwd: null,
+      threadSource: null,
+      sourceKind: "root",
+    });
+  });
+  it("classifies who started the thread from `source`", () => {
+    // Line 1 of a guardian review rollout, as reported in #3198.
+    const line = JSON.stringify({
+      type: "session_meta",
+      payload: { id: UUID_A, cwd: "/work", thread_source: "guardian_review", source: { subagent: { other: "guardian" } }, originator: "codex-tui" },
+    });
+    expect(parseCodexSessionMeta(line)).toEqual({ id: UUID_A, cwd: "/work", threadSource: "guardian_review", sourceKind: "subagent" });
   });
   it.each([
     ["a user_message row", JSON.stringify({ type: "event_msg", payload: { type: "user_message", message: "hi" } })],
@@ -404,21 +429,6 @@ describe("parseCodexSessionMeta", () => {
     ["an empty line", ""],
   ])("returns null for %s", (_label, line) => {
     expect(parseCodexSessionMeta(line)).toBeNull();
-  });
-});
-
-describe("isResumableThread", () => {
-  const meta = (threadSource: string | null) => ({ id: UUID_A, cwd: "/work", threadSource });
-  it.each(["subagent", "automation"])("suppresses %s", (source) => {
-    expect(isResumableThread(meta(source))).toBe(false);
-  });
-  // A deny-list on purpose: an allow-list of "user" would make each new codex thread kind vanish
-  // from the listing silently, which is the failure mode this whole issue is about.
-  it.each(["user", "realtime_voice", "some_future_kind", ""])("keeps %j", (source) => {
-    expect(isResumableThread(meta(source))).toBe(true);
-  });
-  it("keeps a rollout written before codex recorded thread_source", () => {
-    expect(isResumableThread(meta(null))).toBe(true);
   });
 });
 
