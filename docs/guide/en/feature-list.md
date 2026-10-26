@@ -4,7 +4,7 @@ nav_title: Feature list
 layout: default
 parent: English
 nav_order: 6.5
-as_of: 11.3.0
+as_of: 11.4.0
 description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 9.1.0)."
 ---
 
@@ -117,6 +117,7 @@ More: [Conversations](conversation.html)
 
 More: [Phone](phone.html)
 
+- A remote bot can send a Python job to run here: it opens a terminal showing the script and runs only on a typed y; switched on and given tokens in Settings, Bot jobs (v11.4.0)
 - Several machines under one Google account, each picked on the phone; offline ones can be removed there, and unused ones go after 30 days; the phone screen comes with a MulmoServer update (v10.10.0)
 - From a terminal on the phone, list every earlier session of its directory (every agent) and read one as a conversation, paged back on request; the phone screen comes with a MulmoServer update (v10.0.0)
 - A terminal on the phone opens its project's shared files with one button, and comes back from them (v9.1.0)
@@ -203,6 +204,8 @@ More: [Feature reference](features.html)
 
 More: [Worktrees](worktree.html)
 
+- An experimental GitHub board puts each piece of work in a column (To do, Implementing, In review, Ready, Merged), joining the issue, its PR and the terminals on its branch, and keeps itself current (v11.4.0)
+- From a board card: read its issue, checks and reviews, start a To do issue with its text sent at once, and read or answer its terminals (v11.4.0)
 - On macOS the managed worktree root is kept out of Time Machine and marked for Spotlight (v10.7.2)
 - The PRs & Issues view picks which agent and account an issue starts in (v6.0.0)
 - worktreeEnv gives each git worktree its own dev-server port and database name (v4.5.0)

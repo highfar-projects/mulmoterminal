@@ -8,8 +8,8 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **11.3.0 is out.** Ask for a plan you can look at, choose between mockups on a page, and press its
-> button to hand the decisions back to the agent. [Setup guide](v11.3.0.html)
+> **11.4.0 is out.** An experimental GitHub board shows each issue and PR in a column, starts an issue
+> and answers its terminal without leaving the board. [Setup guide](v11.4.0.html)
 
 ## What is MulmoTerminal? {#what-is}
 
