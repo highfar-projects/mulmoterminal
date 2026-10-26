@@ -44,9 +44,8 @@ function sweepSurvivingSessions(): ReadonlySet<string> {
   const detail = surviving.length ? ` — ${surviving.length} session(s) survived; reattach on connect` : "";
   console.log(`[tmux] persistence on${detail}`);
   if (tmuxIsPsmux()) console.log(psmuxStartupNote(tmuxPsmuxVersion()));
-  // In the background: a browser that connects before it ends counts with Unicode 11 until reload.
-  // psmux is not measured; its format support is unverified, and it keeps Unicode 11.
-  else void measureTmuxWidths((line) => console.log(line), tmuxLiveServer);
+  // In the background; a page that read the config before it ends asks again (#3186).
+  void measureTmuxWidths((line) => console.log(line), tmuxLiveServer, tmuxIsPsmux() ? "psmux" : "tmux");
   // Then end the ones nothing is using. Here rather than on a timer: a restart is when none of OUR
   // ptys hold anything, so "in use" means somebody else's, and it is the moment the pile is
   // largest. `cleanup-orphans` has existed since #367 with no caller — this is that caller, with a
