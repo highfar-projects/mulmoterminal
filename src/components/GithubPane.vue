@@ -8,6 +8,7 @@
 import { ref, onMounted } from "vue";
 import type { RepoIssues, RepoPrs } from "../../common/ghItems";
 import { useIssueStart } from "../composables/useIssueStart";
+import { githubBoardGoto } from "../composables/useGithubBoardView";
 import GithubPrRepo from "./GithubPrRepo.vue";
 import GithubIssueRepo from "./GithubIssueRepo.vue";
 import IssueStartAgentPicker from "./IssueStartAgentPicker.vue";
@@ -88,6 +89,14 @@ onMounted(() => void load());
       </button>
       <span v-if="loading" class="text-[12px] text-muted">Loading…</span>
       <div class="ml-auto flex items-center gap-1">
+        <button
+          type="button"
+          data-testid="github-open-board"
+          class="h-6 cursor-pointer rounded-md border border-border bg-base px-2 text-[12px] text-secondary hover:bg-hover hover:text-fg"
+          @click="githubBoardGoto"
+        >
+          {{ t("githubBoard.open") }}
+        </button>
         <button
           type="button"
           class="h-6 w-[26px] cursor-pointer rounded-md border border-border bg-base text-[14px] text-secondary hover:bg-hover hover:text-fg"

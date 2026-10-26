@@ -8,6 +8,16 @@ import { repoDirsFromPresets } from "../git/repo-dirs.js";
 import { readStarState, starRepo } from "../git/github-star.js";
 import type { GithubStarState } from "../../common/githubRepo.js";
 import type { RepoDirsResponse } from "../../common/repoDirs.js";
+import type { BoardResponse } from "../../common/githubBoard.js";
+import { boardAcrossRepos, type LiveCell } from "../git/board-fetch.js";
+import { activity, ptys } from "../session/registry.js";
+
+const liveBoardCells = (): LiveCell[] =>
+  [...ptys.entries()].flatMap(([session, entry]): LiveCell[] => {
+    if (!entry.cwd) return [];
+    const state = activity.get(session);
+    return [{ session, cwd: entry.cwd, working: state?.working ?? false, waiting: state?.waiting ?? false }];
+  });
 
 export function mountRepoRoutes(app: Express): void {
   // Cross-repo PR list (the /prs view): aggregate open PRs for the configured repos via
@@ -24,6 +34,17 @@ export function mountRepoRoutes(app: Express): void {
   app.get("/api/issues", async (_req, res) => {
     try {
       res.json({ repos: await listIssuesAcrossRepos(getPrRepos()) });
+    } catch (err) {
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  // The experimental board (#3172): the same repos' issues and PRs as cards in progress columns,
+  // with the live cells working on each. Repos from config; cells from this process's own PTYs.
+  app.get("/api/github/board", async (_req, res) => {
+    try {
+      const body: BoardResponse = { repos: await boardAcrossRepos(getPrRepos(), liveBoardCells()) };
+      res.json(body);
     } catch (err) {
       res.status(500).json({ error: String(err) });
     }
