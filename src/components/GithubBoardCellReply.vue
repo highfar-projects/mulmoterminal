@@ -135,12 +135,16 @@ async function send(): Promise<void> {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ text: sent }),
     });
+    if (!mounted) return;
     if (res.ok) {
       if (text.value === sent) text.value = "";
       refreshSoon();
-    } else replyError.value = await replyFailure(res);
+    } else {
+      const failure = await replyFailure(res);
+      if (mounted) replyError.value = failure;
+    }
   } catch {
-    replyError.value = t("githubBoard.reply.failed");
+    if (mounted) replyError.value = t("githubBoard.reply.failed");
   } finally {
     sending.value = false;
   }
@@ -166,6 +170,7 @@ const answer = (picks: number[][]): Promise<void> =>
     question.value = null;
     dialog.value = "unknown";
     const reason = await postAnswer(event.sessionId, event.toolUseId, picks);
+    if (!mounted) return;
     recordFailure(event.toolUseId, reason);
     if (reason && reason !== "closed") question.value = event;
   });
@@ -173,6 +178,7 @@ const answer = (picks: number[][]): Promise<void> =>
 const say = (words: string): Promise<void> =>
   whileAnswering(async (event) => {
     const reason = await postWords(event.sessionId, event.toolUseId, words);
+    if (!mounted) return;
     recordFailure(event.toolUseId, reason);
     if (reason) return;
     question.value = null;
