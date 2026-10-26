@@ -34,8 +34,8 @@ export interface BotJobDeps {
    *  kept from the detached-session reaper until `release`. */
   startCell: (sessionId: string, file: string, args: string[], cwd: string) => void;
   release: (sessionId: string) => void;
-  /** Whether the cell's pty is still running. */
-  isAlive: (sessionId: string) => boolean;
+  /** Whether the cell's program is still running — the pty, or the tmux session it was attached to. */
+  isAlive: (sessionId: string) => Promise<boolean>;
   /** Tell the user a job is waiting for them. Must not throw. */
   notify: (job: BotJobRequest, sessionId: string) => void;
   pollMs: number;
@@ -83,7 +83,7 @@ async function waitForOutcome(deps: BotJobDeps, sessionId: string, dir: string):
   for (;;) {
     const outcome = await outcomeOf(dir);
     if (outcome) return outcome;
-    if (!deps.isAlive(sessionId)) {
+    if (!(await deps.isAlive(sessionId))) {
       const last = await outcomeOf(dir);
       if (last) return last;
       throw new Error("the job's terminal ended before the job finished (closed or interrupted)");

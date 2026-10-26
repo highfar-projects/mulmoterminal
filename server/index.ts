@@ -464,6 +464,7 @@ initRemoteHost({
   spawnClaudePty,
   spawnIssueSession,
   spawnBotJobPty,
+  armReapForDetached,
   toolStores,
   outputBufferLimit: OUTPUT_BUFFER_LIMIT,
   publishToOne: (channel, data) => pubsub?.publishToOne(channel, data) ?? false,

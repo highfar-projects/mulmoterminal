@@ -38,7 +38,7 @@ const setup = (cell: Cell, over: Partial<BotJobDeps> = {}) => {
     newId: () => SESSION,
     startCell: (...args) => void calls.started.push(args),
     release: (id) => void calls.released.push(id),
-    isAlive: () => cell.alive ?? true,
+    isAlive: async () => cell.alive ?? true,
     notify: (job, id) => void calls.notified.push(`${job.from}:${id}`),
     pollMs: 0,
     // The cell "acts" after the handler's first look, so the wait is really exercised.
@@ -113,7 +113,7 @@ describe("botJob handler", () => {
       {},
       {
         // Dead on the first ask; the exit code is written between that ask and the second look.
-        isAlive: () => {
+        isAlive: async () => {
           looks += 1;
           writeFileSync(path.join(dir, EXIT_CODE_FILE), "0\n");
           return false;

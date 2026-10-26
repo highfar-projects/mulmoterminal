@@ -9,6 +9,7 @@ import type { CommandHandler } from "@mulmoclaude/core/remote-host";
 import { getBotJobs, getPushEnabled, getPushKinds } from "../../config/config-routes.js";
 import { MULMOTERMINAL_HOME } from "../../config/env.js";
 import { sendWebPush } from "../../infra/http/web-push.js";
+import { tmuxHeldSessionIdsAsync } from "../../infra/process/tmux.js";
 import { markSessionPlaced, markUnplacedSession, pinSession, ptys, unpinSession } from "../../session/registry.js";
 import { currentHostId } from "../remoteHost/index.js";
 import { currentIdToken } from "../remoteHost/session.js";
@@ -21,6 +22,25 @@ const TOKENS_FILE = path.join(MULMOTERMINAL_HOME, "bot-tokens.json");
 const POLL_MS = 1000;
 
 export type SpawnBotJobPty = (sessionId: string, file: string, args: string[], cwd: string) => unknown;
+
+export interface BotJobHostDeps {
+  spawnBotJobPty: SpawnBotJobPty;
+  /** The lifecycle's own rule for a detached session, applied once the pin is gone. */
+  armReapForDetached: (sessionId: string) => void;
+}
+
+// The pty, or failing that the tmux session behind it. A tmux CLIENT can drop while its session —
+// and the Python in it — runs on; reportPtyExit takes the pty out of `ptys` for exactly that case,
+// so reading `ptys` alone would fail a job that is still running and lose its result. tmux that
+// cannot answer reads as gone: waiting on a session nobody can see would never end.
+const isAlive = async (sessionId: string): Promise<boolean> => ptys.has(sessionId) || ((await tmuxHeldSessionIdsAsync())?.includes(sessionId) ?? false);
+
+// The pin kept the reaper off while the job ran. A tab that closed meanwhile was skipped by it and
+// will not close again, so the rule is applied now — or the finished job's shell is kept for good.
+const release = (armReapForDetached: (sessionId: string) => void) => (sessionId: string) => {
+  unpinSession(sessionId);
+  armReapForDetached(sessionId);
+};
 
 // Pinned BEFORE the spawn, so the reaper never sees it unpinned; marked unplaced before the spawn
 // announces it, so the grid's sweep on that announcement finds the mark. A spawn that throws takes
@@ -46,16 +66,16 @@ const notify = (job: BotJobRequest, sessionId: string): void => {
   void sendWebPush("Bot job waiting", `${printable(job.from)}${what} — approve it in MulmoTerminal`, { sessionId, ...(hostId ? { hostId } : {}) });
 };
 
-export const hostBotJobHandler = (spawn: SpawnBotJobPty): CommandHandler =>
+export const hostBotJobHandler = ({ spawnBotJobPty, armReapForDetached }: BotJobHostDeps): CommandHandler =>
   createBotJobHandler({
     config: getBotJobs,
     platform: process.platform,
     home: os.homedir(),
     jobsRoot: JOBS_ROOT,
     newId: randomUUID,
-    startCell: startCell(spawn),
-    release: unpinSession,
-    isAlive: (sessionId) => ptys.has(sessionId),
+    startCell: startCell(spawnBotJobPty),
+    release: release(armReapForDetached),
+    isAlive,
     notify,
     pollMs: POLL_MS,
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
