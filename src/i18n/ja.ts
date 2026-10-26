@@ -72,6 +72,7 @@ export const ja: Messages = {
       github: "GitHub と GitLab",
       prRepos: "プルリクエストのリポジトリ",
       google: "Google アカウント",
+      botJobs: "ボットのジョブ",
       sessions: "セッションとバックグラウンド処理",
       surviving: "再起動を生き延びたセッション",
       cost: "コスト（推定）",

@@ -35,6 +35,7 @@ import { setRemoteServer } from "./remoteServer";
 import { setPlayfulEffects } from "./playfulEffects";
 import { loadPlayfulMedia } from "./playfulMedia";
 import { setConfetti } from "./useConfetti";
+import { botJobsMark, setBotJobs } from "./botJobs";
 import { setDefaultAgent } from "./defaultAgent";
 import { seedLaunchAgentFromConfig } from "./useChatLauncher";
 import { setToolbarPins, toolbarPinsMark } from "./toolbarPins";
@@ -474,7 +475,7 @@ async function saveGitlabHosts(next: string[]): Promise<boolean> {
 // The settings that are PUSHED into other modules rather than held as refs here. Grouped for the
 // same reason as adoptSoundConfig: loadConfig should read as what the config decides, not as the
 // plumbing for each decision.
-function applyGlobalSettings(c: Record<string, unknown>, pinsMark: number): void {
+function applyGlobalSettings(c: Record<string, unknown>, pinsMark: number, jobsMark: number): void {
   // The Enter-key submit/newline byte mapping, so every terminal's key handler honours it.
   // Unset falls back to the standard binding.
   setTerminalSubmitMode(isTerminalSubmitMode(c.terminalSubmit) ? c.terminalSubmit : DEFAULT_TERMINAL_SUBMIT_MODE);
@@ -501,6 +502,8 @@ function applyGlobalSettings(c: Record<string, unknown>, pinsMark: number): void
   setPlayfulEffects(c.playfulEffects);
   void loadPlayfulMedia();
   setConfetti(c.confetti);
+  // Whether a remote bot's Python may run here, and with which interpreter. Off unless set.
+  setBotJobs(c.botJobs, jobsMark);
   // Which pinned favourites the toolbar carries (#1984). Absent, it carries none. The mark is what
   // stops a read that started before a save from putting the old list back — see toolbarPins.ts.
   setToolbarPins(c.toolbarPins, pinsMark);
@@ -690,6 +693,7 @@ function createConfigReader({ defaultCwd, snapshotVersion, adoptServerPresets, m
     // Taken BEFORE the request, like `version` above and for a sibling reason: this answer must not
     // undo a toolbar-pin save that lands while it is in flight (CodeRabbit, PR #1991).
     const pinsMark = toolbarPinsMark();
+    const jobsMark = botJobsMark(); // the same race, for the bot-jobs switch
     let res: Response;
     try {
       res = await fetchWithTimeout("/api/config", { signal });
@@ -716,7 +720,7 @@ function createConfigReader({ defaultCwd, snapshotVersion, adoptServerPresets, m
       pushKinds.value = listOf(c.pushKinds, isPushKind);
       adoptRepoConfig(c);
       adoptListConfig(c);
-      applyGlobalSettings(c, pinsMark);
+      applyGlobalSettings(c, pinsMark, jobsMark);
       adoptServerSideSettings(c);
       await migrateLegacyRecents();
     } catch {

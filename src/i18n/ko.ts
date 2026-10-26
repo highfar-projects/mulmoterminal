@@ -72,6 +72,7 @@ export const ko: Messages = {
       github: "GitHub와 GitLab",
       prRepos: "풀 리퀘스트 저장소",
       google: "Google 계정",
+      botJobs: "봇 작업",
       sessions: "세션과 백그라운드 작업",
       surviving: "재시작에서 살아남은 세션",
       cost: "비용(추정)",
