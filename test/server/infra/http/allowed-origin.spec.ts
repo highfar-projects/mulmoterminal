@@ -295,6 +295,19 @@ describe("isAllowedHost", () => {
     expect(named(host)).toBe(true);
   });
 
+  it.each([
+    "evil.example@localhost",
+    "evil.example:34567@localhost:34567",
+    "localhost@evil.example",
+    "localhost/evil",
+    "localhost?x",
+    "localhost#x",
+    "localhost\\evil",
+    "localhost\tevil",
+  ])("refuses %j, which is not a bare host[:port]", (host) => {
+    expect(loopbackOnly(host)).toBe(false);
+  });
+
   it.each([undefined, "", "http://localhost", "local host", "[::1"])("refuses a missing or malformed Host %j", (host) => {
     expect(loopbackOnly(host)).toBe(false);
   });

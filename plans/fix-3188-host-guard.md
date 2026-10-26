@@ -15,8 +15,13 @@ App-wide, chosen by the maintainer: one middleware ahead of every route, rather 
 ## Change
 
 - `server/infra/http/host-guard.ts`: `hostGuard(isAllowedHost)` refuses with `403 text/plain` and a
-  sentence naming the setting that would let the name in. It is mounted first in `mountAppRoutes`,
-  ahead of the same-origin gate.
+  sentence naming the setting that would let the name in.
+- `server/routes/request-gates.ts`: `mountRequestGates` mounts the Host gate and then the same-origin
+  gate, and is the first statement of `mountAppRoutes`. A spec drives both gates on a real Express
+  server (a foreign Host reaches no route and no fallback), and checks from the source, comments
+  stripped, that `mountAppRoutes` calls it first.
+- A Host that is not a bare `host[:port]` (userinfo `@`, `/`, `?`, `#`, `\`, whitespace) is refused
+  before parsing: `new URL()` would read `evil.example@localhost` as hostname `localhost`.
 - The list is `createIsAllowedHost` (#3185): loopback plus `MULMOTERMINAL_HOST` and
   `MULMOTERMINAL_ALLOWED_ORIGINS`, the same as the Origin check.
 - The per-route Host check on `GET /api/terminal/:sessionId/screen` is removed; the guard covers it.

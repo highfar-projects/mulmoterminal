@@ -114,9 +114,14 @@ export function createIsAllowedOrigin(browserHostnames: ReadonlySet<string>) {
  * The Host it carries is still the attacker's own name, though, and a name the operator never wrote
  * is refused here. Asked of every HTTP request, by host-guard.ts.
  */
+// A Host header is `host[:port]` and nothing else. `new URL()` reads more than that — the text before
+// an `@` as userinfo, a `/` as the start of a path — so `evil.example@localhost` would parse to
+// hostname `localhost`. Anything outside the authority's own characters is refused before parsing.
+const NOT_A_BARE_AUTHORITY = /[@/?#\\\s]/;
+
 export function createIsAllowedHost(browserHostnames: ReadonlySet<string>) {
   return function isAllowedHost(hostHeader: string | undefined): boolean {
-    if (!hostHeader) return false;
+    if (!hostHeader || NOT_A_BARE_AUTHORITY.test(hostHeader)) return false;
     try {
       const { hostname } = new URL(`http://${hostHeader}`);
       return LOOPBACK_HOSTNAMES.has(hostname) || browserHostnames.has(hostname);
