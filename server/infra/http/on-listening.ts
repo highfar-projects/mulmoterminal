@@ -7,8 +7,9 @@ import type http from "node:http";
 import { announceListening } from "./announce-listening.js";
 import { bindSecurityWarning } from "./allowed-origin.js";
 import { boundAddress, isLoopbackBinding } from "./loopback.js";
-import { tmuxAvailable, tmuxIsPsmux, tmuxListSessionIds, tmuxPsmuxVersion } from "../process/tmux.js";
+import { tmuxAvailable, tmuxIsPsmux, tmuxListSessionIds, tmuxLiveServer, tmuxPsmuxVersion } from "../process/tmux.js";
 import { psmuxStartupNote } from "../process/psmux.js";
+import { measureTmuxWidths } from "../process/tmuxWidthProbe.js";
 import { rearmReapSchedule, startReapSchedule } from "../../session/reaping/reap-schedule.js";
 import { survivingAfterSweep } from "../../session/reaping/reap-idle-sessions.js";
 import { pruneOrphanSettings } from "../../session/session-settings.js";
@@ -43,6 +44,9 @@ function sweepSurvivingSessions(): ReadonlySet<string> {
   const detail = surviving.length ? ` — ${surviving.length} session(s) survived; reattach on connect` : "";
   console.log(`[tmux] persistence on${detail}`);
   if (tmuxIsPsmux()) console.log(psmuxStartupNote(tmuxPsmuxVersion()));
+  // In the background: a browser that connects before it ends counts with Unicode 11 until reload.
+  // psmux is not measured; its format support is unverified, and it keeps Unicode 11.
+  else void measureTmuxWidths((line) => console.log(line), tmuxLiveServer);
   // Then end the ones nothing is using. Here rather than on a timer: a restart is when none of OUR
   // ptys hold anything, so "in use" means somebody else's, and it is the moment the pile is
   // largest. `cleanup-orphans` has existed since #367 with no caller — this is that caller, with a
