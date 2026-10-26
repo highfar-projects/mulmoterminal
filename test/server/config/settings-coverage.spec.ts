@@ -100,8 +100,8 @@ const REACHABLE_BY: Record<string, Reachable> = {
   // Config.json only, on purpose: a hidden extra for playfulEffects with no control in Settings (#3073).
   playfulMedia: { skill: CONFIG_SKILL },
   confetti: { ui: true, skill: CONFIG_SKILL },
-  // Config.json only until the Settings section lands (plans/feat-bot-gpu-jobs.md); the config skill documents it.
-  botJobs: { skill: CONFIG_SKILL },
+  // Settings → Integrations → Bot jobs, which also mints and revokes the tokens (plans/feat-bot-gpu-jobs.md).
+  botJobs: { ui: true, skill: CONFIG_SKILL },
   fontFamily: { ui: true, skill: "mulmoterminal-dirs" },
 };
 

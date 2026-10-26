@@ -35,6 +35,7 @@ import { setRemoteServer } from "./remoteServer";
 import { setPlayfulEffects } from "./playfulEffects";
 import { loadPlayfulMedia } from "./playfulMedia";
 import { setConfetti } from "./useConfetti";
+import { setBotJobs } from "./botJobs";
 import { setDefaultAgent } from "./defaultAgent";
 import { seedLaunchAgentFromConfig } from "./useChatLauncher";
 import { setToolbarPins, toolbarPinsMark } from "./toolbarPins";
@@ -501,6 +502,8 @@ function applyGlobalSettings(c: Record<string, unknown>, pinsMark: number): void
   setPlayfulEffects(c.playfulEffects);
   void loadPlayfulMedia();
   setConfetti(c.confetti);
+  // Whether a remote bot's Python may run here, and with which interpreter. Off unless set.
+  setBotJobs(c.botJobs);
   // Which pinned favourites the toolbar carries (#1984). Absent, it carries none. The mark is what
   // stops a read that started before a save from putting the old list back — see toolbarPins.ts.
   setToolbarPins(c.toolbarPins, pinsMark);

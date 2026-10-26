@@ -79,6 +79,7 @@ export const en = {
       github: "GitHub and GitLab",
       prRepos: "Pull request repos",
       google: "Google account",
+      botJobs: "Bot jobs",
       sessions: "Sessions and background tasks",
       surviving: "Sessions that survived a restart",
       cost: "Cost (estimated)",
