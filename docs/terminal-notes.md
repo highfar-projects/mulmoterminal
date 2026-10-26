@@ -36,7 +36,7 @@ server   ── node-pty  ── tmux (persistence)  ── agent (claude / code
 | `@xterm/addon-web-links` | `^0.12.0` | Linkifies visible `http(s)://` URLs. |
 | `@xterm/addon-clipboard` | `^0.2.0` | OSC 52 clipboard write (auto-copy → browser clipboard). |
 | `@xterm/addon-fit` | `^0.11.0` | Size the grid to the container. |
-| `@xterm/addon-unicode11` | `^0.9.0` | Registers the Unicode 11 width table. Active only when `/api/config` says `terminalUnicodeVersion: "11"` (behind a tmux that counts an emoji two cells: psmux, or a real tmux whose locale says so); everywhere else xterm keeps its default `"6"`. The fork's headless emulators follow the same answer (`server/session/unicodeWidth.ts`). |
+| `@xterm/addon-unicode11` | `^0.9.0` | Registers the Unicode 11 width table — the fallback when `/api/config` carries no `terminalWidthTable` measured from tmux (psmux, no tmux, or before the boot probe ends). The fork's headless emulators follow the same rule — the measured table, else Unicode 11 (`server/session/unicodeWidth.ts`). |
 | `node-pty` | `^1.1.0` | The PTY. |
 | tmux | 3.4+ at runtime | OSC 8 hyperlink forwarding (`terminal-features hyperlinks`) needs 3.4+. Measured on 3.6a. |
 | psmux (Windows) | 3.4.0+ | Answers `tmux -V` as `tmux 3.x` and names itself on the second line (`server/infra/process/psmux.ts`). 3.4.0 is the first with `PSMUX_VT_INPUT`, which the client is started with. |
@@ -78,20 +78,28 @@ server   ── node-pty  ── tmux (persistence)  ── agent (claude / code
   for a fullwidth character, and the face a browser picks for an unnamed glyph is not required to
   be em-square, so leaving CJK to the generic `monospace` fallback tears box-drawing frames.
 
-### Character widths — `terminalUnicodeVersion` (#3117)
+### Character widths — measured from tmux (#3117, #3173)
 
-xterm counts cells with its Unicode 6 table by default, where an emoji such as `✅` is ONE cell;
-Claude Code (and psmux) count it as two. psmux repaints only the cells it thinks changed, so on it
-every emoji shifts the rest of its row one column and a checklist turns into a staircase. The
-browser therefore always loads `@xterm/addon-unicode11` but activates the table the server names
-in `/api/config` (`common/terminalUnicode.ts`): `"11"` when the tmux counts an emoji two cells,
-`"6"` when it counts one. psmux always counts two. A real tmux counts by its own locale tables, which
-differ by machine — tmux 3.6 under glibc's `C.UTF-8` (WSL2) counts two, and there `"6"` broke every
-Claude Code table that had a `✅` in it — so the server asks it once at boot
-(`tmuxCountsEmojiWide` in `server/infra/process/tmux.ts`): a throwaway `tmux -S <tmpdir socket>
-start-server ; display-message -p '#{w:#{l:✅}}' ; kill-server`, never the live server. A tmux that
-answers one keeps exactly the widths it always ran on. The value can arrive after a terminal is
-built, so a module-scope watch in `useTerminalConnections.ts` carries it to the live terminals.
+tmux decides how many columns each character takes and places everything after it from that
+answer; when the browser's xterm counts differently, the rest of the row is drawn off by the
+difference (`[✅]` loses its `]` under the glyph, a table's right border wanders). No fixed table
+agrees with every tmux — the answer comes from utf8proc or the C library, `codepoint-widths`, and
+the tmux version — so the server asks.
+
+At boot (`server/infra/process/tmuxWidthProbe.ts`) a throwaway tmux server on an absolute `-S`
+socket, in the environment a session gets, answers `#{w:#{l:…}}` for every codepoint; the answers
+become runs of non-1 widths (`common/tmuxWidthTable.ts`). tmux also folds sequences into one cell —
+a variation selector, a ZWJ family, a skin tone, a flag — by a rule that changed between releases.
+`common/tmuxClusters.ts` mirrors `screen_write_combine` as tmux 3.6 and as tmux 3.4/3.5 have it; a few
+sample sequences are printed in the throwaway pane, and the first rule whose predictions all of them
+match is used. When neither matches, sequences are counted per character. `/api/config` carries the result as
+`terminalWidthTable`, and the browser registers it with xterm as its own Unicode version
+(`common/tmuxUnicodeProvider.ts`). With no table it falls back to `terminalUnicodeVersion: "11"`,
+which agrees with tmux and Claude Code far more often than xterm's default `"6"`.
+
+`test/server/infra/process/tmuxWidthProbe.spec.ts` is the check that matters: a real tmux, a client
+attached through a PTY, and the bytes it receives fed to xterm with the table — every marker must land
+where `#{cursor_x}` says tmux put it. It is skipped where tmux is absent.
 
 ### Submit vs newline — `terminalSubmit` (#772/#780)
 
@@ -333,18 +341,6 @@ force the DOM renderer or observe effects (`window.open`, buffer state) instead 
     mouse modes; `CSI ? 1049 ; 1003 h` would reach xterm and put it into real mouse tracking,
     turning every drag into coordinate reports — the #729 regression.
   - Only tmux-backed sessions restore; a sandbox/tmux-less pty replays as before.
-  - **psmux (this fork) answers the `mouse_*_flag`s EMPTY** — only `alternate_on` comes back. Its
-    client writes `?1003;1006h` once at start, so on a busy session that fell off the tail and a
-    reattach restored the alternate buffer without mouse tracking: the wheel became arrow keys
-    (prompt history) after a reload, yet scrolled in a fresh cell. A psmux entry therefore also gets
-    the byte-stream `TerminalModeTracker` (`wireBufferedOutput`), and `reattachPty` adds its modes
-    to tmux's answer.
-- **On psmux the server keeps a trace of what it did to sessions** (`server/infra/tmux-trace.ts`,
-  `~/.mulmoterminal/tmux-trace.jsonl`, one JSON line per event, rotated at 1 MiB): `server-start`,
-  `server-shutdown`, `client-spawn` (and whether it meant to reattach), `client-exit` (the
-  keep/reap decision its `has-session` answer led to) and `kill-session` with the call path that
-  asked. Added because a Ctrl+C restart ended some working Claude cells (they came back via
-  `--resume`, "Interrupted") while idle ones survived, and psmux alone reattached correctly.
 - **The replay is a stream of deltas, not a screen — so the screen is asked for.** The bounded tail
   reconstructs only the cells that changed inside its window: rows painted before it opened stay
   blank, and cells written at different moments sit side by side. A TUI makes this the normal case
@@ -439,7 +435,6 @@ looking) — flag them for QA on the release.
 | Area | Check in code | Needs user QA |
 |---|---|---|
 | Renderer / CJK | canvas addon still **loads** (the console warns when it falls back to DOM). The peer-major mismatch is expected and is not the check — a silent fallback is, because the CJK grid goes with it | long Japanese line doesn't drift off the right edge |
-| Emoji width | `term.unicode.activeVersion` is `"11"` in the browser and in `unicodeWidth.ts` | a Claude checklist of `✅` / `👉` lines stays aligned after it scrolls, including on psmux |
 | Scrollbar / selection | — (no unit coverage) | scrollbar visible + synced; Option+drag selects; selection auto-scrolls past the visible screen (#782) |
 | OSC 8 links | tmux `terminal-features '*:hyperlinks'` present; xterm `linkHandler` set | click Claude statusline `PR #NNNN` → opens the PR (no confirm dialog) |
 | OSC 52 clipboard | tmux `Ms` override + `set-clipboard on` present (`planMsOverride`) | Claude auto-copy reaches the browser clipboard |

@@ -29,7 +29,6 @@ import {
   tmuxConfLinesFor,
   clientSizeOfWindow,
   psmuxInput,
-  isEmojiWideAnswer,
 } from "../../../../server/infra/process/tmux";
 import { isPsmuxVersion, psmuxVersionOf, psmuxVtInputFor } from "../../../../server/infra/process/psmux";
 
@@ -757,16 +756,5 @@ describe("psmuxInput", () => {
   // An emoji written as UTF-8 already reached the pane; as two surrogate key events it did not.
   it("passes a surrogate pair through untouched", () => {
     expect(psmuxInput("x😀y")).toBe("x😀y");
-  });
-});
-
-// What `display-message -p '#{w:...}'` prints for `✅`: two cells on tmux 3.6 under glibc's
-// C.UTF-8, one where the locale tables are older. Anything else — an error, nothing — is not two.
-describe("isEmojiWideAnswer", () => {
-  it("is true only for a width of two", () => {
-    expect(isEmojiWideAnswer("2\n")).toBe(true);
-    expect(isEmojiWideAnswer("1\n")).toBe(false);
-    expect(isEmojiWideAnswer("")).toBe(false);
-    expect(isEmojiWideAnswer("no server running\n")).toBe(false);
   });
 });

@@ -1,11 +1,11 @@
 // @vitest-environment node
 //
-// GET /api/config tells the browser which width table to count cells with: Unicode 11 behind a
-// tmux that counts an emoji two cells (psmux, or a real tmux whose locale says so), xterm's
-// default behind one that counts it one — so such a tmux keeps exactly what it ran on before.
+// GET /api/config tells the browser how to count cells: the table measured from this server's tmux
+// when there is one (#3173), and Unicode 11 to fall back on.
 import { describe, it, expect, vi, afterAll } from "vitest";
 import express from "express";
 import { routeCall } from "../../helpers/routeCall";
+import type { TmuxWidthTable } from "../../../common/tmuxWidthTable";
 
 const scratch = await vi.hoisted(async () => {
   const { mkdtempSync } = await import("node:fs");
@@ -19,11 +19,11 @@ const scratch = await vi.hoisted(async () => {
 vi.mock("../../../server/infra/process/tmux.js", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   setTmuxPrefix: vi.fn(),
-  tmuxCountsEmojiWide: vi.fn(() => false),
 }));
+vi.mock("../../../server/infra/process/tmuxWidthProbe.js", () => ({ tmuxWidthTable: vi.fn(() => null) }));
 
 const { rmSync } = await import("node:fs");
-const { tmuxCountsEmojiWide } = await import("../../../server/infra/process/tmux.js");
+const { tmuxWidthTable } = await import("../../../server/infra/process/tmuxWidthProbe.js");
 const routes = await import("../../../server/config/config-routes.js");
 const app = express();
 app.use(express.json());
@@ -31,20 +31,23 @@ routes.mountConfigRoutes(app, scratch.home);
 
 afterAll(() => rmSync(scratch.home, { recursive: true, force: true }));
 
-const unicodeVersionServed = async (): Promise<unknown> => {
+const configServed = async (): Promise<Record<string, unknown>> => {
   const res = await routeCall(app)("/api/config");
   expect(res.status).toBe(200);
-  return res.body.terminalUnicodeVersion;
+  return res.body;
 };
 
-describe("terminalUnicodeVersion on GET /api/config", () => {
-  it("is xterm's default behind a tmux that counts an emoji one cell, or none", async () => {
-    vi.mocked(tmuxCountsEmojiWide).mockReturnValue(false);
-    expect(await unicodeVersionServed()).toBe("6");
+describe("cell widths on GET /api/config", () => {
+  it("falls back to Unicode 11 with no measured table", async () => {
+    vi.mocked(tmuxWidthTable).mockReturnValue(null);
+    const body = await configServed();
+    expect(body.terminalUnicodeVersion).toBe("11");
+    expect(body.terminalWidthTable).toBeNull();
   });
 
-  it("is Unicode 11 behind a tmux that counts an emoji two cells", async () => {
-    vi.mocked(tmuxCountsEmojiWide).mockReturnValue(true);
-    expect(await unicodeVersionServed()).toBe("11");
+  it("serves the table measured from tmux as it is", async () => {
+    const table: TmuxWidthTable = { runs: [[0x2705, 0x2705, 2]], folding: "tmux-3.6", vs16Wide: true };
+    vi.mocked(tmuxWidthTable).mockReturnValue(table);
+    expect((await configServed()).terminalWidthTable).toEqual(table);
   });
 });

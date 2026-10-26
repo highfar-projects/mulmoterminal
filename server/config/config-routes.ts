@@ -32,8 +32,9 @@ import type { PlayfulEffects } from "../../common/playfulEffects.js";
 import type { PlayfulMedia } from "../../common/playfulMedia.js";
 import { systemTaskSettingsChanged } from "./system-task-settings.js";
 import { setAccountsProvider } from "../session/session-home.js";
-import { setTmuxPrefix, tmuxCountsEmojiWide } from "../infra/process/tmux.js";
-import { terminalUnicodeVersionFor } from "../../common/terminalUnicode.js";
+import { setTmuxPrefix } from "../infra/process/tmux.js";
+import { tmuxWidthTable } from "../infra/process/tmuxWidthProbe.js";
+import { DEFAULT_TERMINAL_UNICODE_VERSION } from "../../common/terminalUnicode.js";
 import type { TokenRotation } from "../../common/tokenRotation.js";
 import { installBundledSkills } from "../infra/fs/install-bundled-skills.js";
 import type { SystemTaskSwitches } from "../backends/scheduler/system-tasks.js";
@@ -562,15 +563,16 @@ export function effectiveConfigResponse(config: AppConfig, cwd: string, argvAgen
 // workspace symlink is retargeted, handing out a root nothing serves (CodeRabbit on #1934).
 // Its `path` is canonical for the other half of the same problem: the browser compares
 // lexically (`dirPathKey`), so a symlinked spelling would never match the file tree.
-// `terminalUnicodeVersion` is the same kind of fact: which width table the browser's xterm must
-// count with to agree with the tmux on this server (see common/terminalUnicode.ts). Read from
-// the cache tmuxAvailable() filled at boot, so a request never spawns `tmux -V`.
+// `terminalWidthTable` is the same kind of fact: how the tmux on this server counts cells, measured
+// once at boot (tmuxWidthProbe.ts), so a request never runs tmux. Null until then, or for good when
+// there is nothing to measure; the browser falls back to `terminalUnicodeVersion`.
 function serverFacts() {
   return {
     home: os.homedir(),
     worktreesRoot: canonicalPath(worktreesRootDir()),
     storiesRoots: registeredStoriesRoots(),
-    terminalUnicodeVersion: terminalUnicodeVersionFor(tmuxCountsEmojiWide()),
+    terminalUnicodeVersion: DEFAULT_TERMINAL_UNICODE_VERSION,
+    terminalWidthTable: tmuxWidthTable(),
   };
 }
 

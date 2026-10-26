@@ -6,14 +6,14 @@
 // Isolation: we use our OWN tmux server (SERVER_SOCKET: `-L mulmoterminal` on the account's own
 // home, `mulmoterminal-<hash>` on an overridden HOME) and config file, so none of this touches the
 // user's own tmux sessions, keybindings, or status bar.
-import { mkdirSync, rmSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 // The bind port, to tell OUR leaked PORT from the user's own (see isOwnPort). config/ is
 // otherwise above this layer; the alternative was threading the same two values through
 // tmuxAvailable's four call sites, where a path that forgot them would scrub nothing.
 import { HOME_SCOPE_SUFFIX, PORT } from "../../config/env.js";
-import { isLauncherEnvVar, withFallbackLocale } from "./pty-env.js";
+import { isLauncherEnvVar } from "./pty-env.js";
 import { spawnCapture, spawnCaptureAsync } from "./spawnCapture.js";
 import { splitLines } from "../fs/split-lines.js";
 import { callerFrames, traceTmux } from "../tmux-trace.js";
@@ -41,7 +41,6 @@ const tmuxAsync = (args: string[]) => spawnCaptureAsync("tmux", ["-L", SERVER_SO
 let cachedAvailable: boolean | null = null;
 let cachedPsmux = false;
 let cachedPsmuxVersion: PsmuxVersion | null = null;
-let cachedEmojiWide = false;
 
 // Set from config before the first tmuxAvailable() when the config is read at boot, and again when
 // the user saves a different one. Its commands go in the conf file (a fresh server) and are run live
@@ -65,45 +64,12 @@ export function tmuxAvailable(): boolean {
     // Once per server life, so the trace reads as one run after another.
     traceTmux(cachedPsmux, "server-start", { ppid: process.ppid, version: cachedPsmuxVersion?.join("."), vtInput: tmuxPsmuxVtInput() });
     if (cachedAvailable) ensureConf();
-    cachedEmojiWide = cachedPsmux || (cachedAvailable && probeEmojiWide());
   }
   return cachedAvailable;
 }
 
-// Whether this tmux counts an emoji such as `✅` two cells, as Claude Code does. psmux always
-// does. A real tmux decides from its own locale tables, and they differ by machine: measured
-// two on tmux 3.6 under glibc's C.UTF-8 (WSL2), where a browser counting one put everything
-// after an emoji one column off. So it is asked rather than assumed: a throwaway server on an
-// absolute socket path (never the live one, see CLAUDE.md) started from the environment a
-// session's client gets, so it reads the locale the real server will. `start-server` opens no
-// session, and the `kill-server` is for a conf that turned `exit-empty` off.
-const EMOJI_PROBE = "\u2705";
-
-export function isEmojiWideAnswer(stdout: string): boolean {
-  return stdout.trim() === "2";
-}
-
-function probeEmojiWide(): boolean {
-  const socket = path.join(os.tmpdir(), `mulmoterminal-width-${process.pid}.sock`);
-  try {
-    const probe = spawnCapture(
-      "tmux",
-      ["-S", socket, "-f", CONF_FILE, "start-server", ";", "display-message", "-p", `#{w:#{l:${EMOJI_PROBE}}}`, ";", "kill-server"],
-      { env: withFallbackLocale(process.env, process.platform), timeoutMs: 5_000 },
-    );
-    return probe.status === 0 && isEmojiWideAnswer(probe.stdout);
-  } catch {
-    return false;
-  } finally {
-    rmSync(socket, { force: true });
-  }
-}
-
 /** Whether the tmux on PATH is psmux. False until tmuxAvailable() has run. */
 export const tmuxIsPsmux = (): boolean => cachedPsmux;
-
-/** Whether the tmux on PATH counts an emoji two cells. False until tmuxAvailable() has run. */
-export const tmuxCountsEmojiWide = (): boolean => cachedEmojiWide;
 
 /** psmux's own release, or null for a real tmux. */
 export const tmuxPsmuxVersion = (): PsmuxVersion | null => cachedPsmuxVersion;

@@ -6,7 +6,7 @@ import path from "node:path";
 
 import { renderScreen, type HeadlessScreenInput } from "../../../../server/session/pty/headlessScreen.js";
 import { rowsToScreen } from "../../../../server/session/pty/screen-rows.js";
-import * as tmux from "../../../../server/infra/process/tmux.js";
+import * as widthProbe from "../../../../server/infra/process/tmuxWidthProbe.js";
 
 const ESC = String.fromCharCode(0x1b);
 
@@ -115,22 +115,21 @@ describe("renderScreen", () => {
     expect(rows[0].full).toBe(false);
   });
 
-  // Behind a tmux that counts an emoji two cells wide (psmux, or a real tmux whose locale says so),
-  // Claude Code counts it the same, and a repaint addresses the cells after it by that count: "z"
-  // is placed at column 3 to replace "b". The browser counts the same way there
-  // (common/terminalUnicode.ts), and so must this screen. Behind a tmux that counts one, both keep
-  // xterm's default Unicode 6 table, where the emoji is one cell and the row reads "👉abz".
-  it("counts an emoji two cells wide behind a tmux that does, as the program that drew it does", async () => {
-    const wide = vi.spyOn(tmux, "tmuxCountsEmojiWide").mockReturnValue(true);
+  // The screen counts cells the way the browser does (server/session/unicodeWidth.ts), and a
+  // repaint addresses the cells after an emoji by tmux's count: with the emoji two cells wide, "z"
+  // lands on column 3 and replaces "b". Without a measured table that is Unicode 11's count; with
+  // one, it is whatever the tmux on this machine said (#3173) — here a tmux that counts it one.
+  it("counts an emoji two cells wide when no tmux table was measured", async () => {
+    const measured = vi.spyOn(widthProbe, "tmuxWidthTable").mockReturnValue(null);
     const buffer = `👉ab${ESC}[1;4Hz`;
     expect(await screenOf({ buffer, cols: 20, rows: 2 })).toBe("👉az");
-    wide.mockRestore();
+    measured.mockRestore();
   });
 
-  it("keeps the browser's default width table behind a tmux that counts an emoji one cell", async () => {
-    const wide = vi.spyOn(tmux, "tmuxCountsEmojiWide").mockReturnValue(false);
+  it("counts by the measured tmux table when there is one", async () => {
+    const measured = vi.spyOn(widthProbe, "tmuxWidthTable").mockReturnValue({ runs: [], folding: "none", vs16Wide: false });
     const buffer = `👉ab${ESC}[1;4Hz`;
     expect(await screenOf({ buffer, cols: 20, rows: 2 })).toBe("👉abz");
-    wide.mockRestore();
+    measured.mockRestore();
   });
 });
