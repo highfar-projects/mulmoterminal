@@ -1,9 +1,10 @@
 // The GitHub board's inputs (#3172): per configured repo, its open and recently merged PRs and its
 // open issues through `gh`, and the live cells whose directory is a checkout of it. The decisions
 // are in board.ts; this file only gathers.
-import type { BoardCell, BoardIssue, RepoBoard } from "../../common/githubBoard.js";
+import type { BoardCell, BoardDetailResponse, BoardIssue, RepoBoard } from "../../common/githubBoard.js";
 import { runGh } from "./gh.js";
 import { buildRepoBoard, parseBoardPr, type BoardPrRow, type CellOnBranch } from "./board.js";
+import { ISSUE_DETAIL_FIELDS, PR_DETAIL_FIELDS, parseIssueDetail, parsePrDetail } from "./board-detail.js";
 import { currentBranch } from "./git-status.js";
 import { isSupported, repoForDir, repoSupport } from "./forge-support.js";
 import { projectPath } from "./forge-host.js";
@@ -20,10 +21,19 @@ const PR_FIELDS = "number,title,url,isDraft,reviewDecision,statusCheckRollup,hea
 /** A live cell before its repo and branch are known. */
 export type LiveCell = BoardCell;
 
-const ghJson = async (args: string[]): Promise<unknown[]> => {
+const ERROR_TEXT_LIMIT = 300;
+
+const ghValue = async (args: string[]): Promise<unknown> => {
   const res = await runGh(args);
-  if (!res.ok) throw new Error((res.stderr.trim() || `gh ${args.slice(0, 2).join(" ")} failed`).slice(0, 300));
+  if (!res.ok) throw new Error((res.stderr.trim() || `gh ${args.slice(0, 2).join(" ")} failed`).slice(0, ERROR_TEXT_LIMIT));
   const parsed: unknown = JSON.parse(res.stdout);
+  return parsed;
+};
+
+const errorText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+
+const ghJson = async (args: string[]): Promise<unknown[]> => {
+  const parsed = await ghValue(args);
   return isUnknownArray(parsed) ? parsed : [];
 };
 
@@ -71,8 +81,38 @@ async function repoBoard(repo: string, cells: readonly CellOnBranch[]): Promise<
     ]);
     return { repo, cards: buildRepoBoard({ repo, defaultBranch, openPrs, mergedPrs, openIssues, cells }) };
   } catch (err) {
-    return { repo, error: err instanceof Error ? err.message : String(err) };
+    return { repo, error: errorText(err) };
   }
+}
+
+// The board names a repo as its `owner/repo`; a request may only ask about one that is configured.
+const configuredProject = (repo: string, configured: readonly string[]): string | null => {
+  const entry = configured.find((candidate) => repoIdentity(candidate) === repoIdentity(repo));
+  const support = entry === undefined ? null : repoSupport(entry);
+  if (!support || !isSupported(support) || support.forge.kind !== "github") return null;
+  return projectPath(support.forge);
+};
+
+/** The detail panel's data for one card: the issue and/or the PR, each read on its own so one
+ *  failing still shows the other. Null when `repo` is not a configured GitHub repo. */
+export async function boardDetail(repo: string, configured: readonly string[], issue: number | null, pr: number | null): Promise<BoardDetailResponse | null> {
+  const project = configuredProject(repo, configured);
+  if (!project) return null;
+  const errors: string[] = [];
+  const read = async <T>(number: number | null, kind: "issue" | "pr", fields: string, parse: (raw: unknown) => T | null): Promise<T | null> => {
+    if (number === null) return null;
+    try {
+      return parse(await ghValue([kind, "view", String(number), "--repo", project, "--json", fields]));
+    } catch (err) {
+      errors.push(`${kind} #${number}: ${errorText(err)}`);
+      return null;
+    }
+  };
+  const [issueDetail, prDetail] = await Promise.all([
+    read(issue, "issue", ISSUE_DETAIL_FIELDS, parseIssueDetail),
+    read(pr, "pr", PR_DETAIL_FIELDS, parsePrDetail),
+  ]);
+  return { issue: issueDetail, pr: prDetail, errors };
 }
 
 /** One board per repo. A repo that is not on GitHub, or that `gh` cannot read, carries an error. */

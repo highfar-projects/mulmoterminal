@@ -9,7 +9,8 @@ import { readStarState, starRepo } from "../git/github-star.js";
 import type { GithubStarState } from "../../common/githubRepo.js";
 import type { RepoDirsResponse } from "../../common/repoDirs.js";
 import type { BoardResponse } from "../../common/githubBoard.js";
-import { boardAcrossRepos, type LiveCell } from "../git/board-fetch.js";
+import { boardAcrossRepos, boardDetail, type LiveCell } from "../git/board-fetch.js";
+import { parseBoardDetailQuery } from "../git/board-detail.js";
 import { activity, ptys } from "../session/registry.js";
 
 const liveBoardCells = (): LiveCell[] =>
@@ -44,6 +45,20 @@ export function mountRepoRoutes(app: Express): void {
   app.get("/api/github/board", async (_req, res) => {
     try {
       const body: BoardResponse = { repos: await boardAcrossRepos(getPrRepos(), liveBoardCells()) };
+      res.json(body);
+    } catch (err) {
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  // One card's detail panel (#3177): the issue's body and the PR's checks and reviews, read when the
+  // panel opens. Only for a configured repo — the query names the repo, the config decides it may.
+  app.get("/api/github/board/detail", async (req, res) => {
+    const query = parseBoardDetailQuery(req.query);
+    if (!query) return res.status(400).json({ error: "repo (owner/repo) and a positive issue and/or pr number are required" });
+    try {
+      const body = await boardDetail(query.repo, getPrRepos(), query.issue, query.pr);
+      if (!body) return res.status(404).json({ error: `${query.repo} is not a configured GitHub repository` });
       res.json(body);
     } catch (err) {
       res.status(500).json({ error: String(err) });

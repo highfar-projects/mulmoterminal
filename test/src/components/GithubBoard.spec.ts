@@ -4,7 +4,8 @@ import GithubBoard from "../../../src/components/GithubBoard.vue";
 import { defineComponent, h, nextTick, ref } from "vue";
 import { gridSessionJump, useGridSessionJump } from "../../../src/composables/gridSessionJump";
 import type { GridState } from "../../../src/components/gridTabs";
-import type { BoardCard, BoardResponse } from "../../../common/githubBoard";
+import type { BoardCard, BoardDetailResponse, BoardResponse } from "../../../common/githubBoard";
+import { boardSelection } from "../../../src/composables/useGithubBoardView";
 
 const card = (over: Partial<BoardCard>): BoardCard => ({ key: "k", column: "todo", issue: null, pr: null, branch: null, cells: [], ...over });
 
@@ -37,9 +38,37 @@ function serve(response: BoardResponse | null): void {
   );
 }
 
+const detail: BoardDetailResponse = {
+  issue: { number: 4, title: "make it work", url: "https://github.com/o/r/issues/4", author: "alice", labels: ["bug"], body: "## Steps\n\nrun **it**" },
+  pr: {
+    number: 10,
+    title: "feat: it works",
+    url: "https://github.com/o/r/pull/10",
+    author: "bob",
+    body: "",
+    isDraft: false,
+    additions: 12,
+    deletions: 3,
+    checks: [
+      { name: "lint", ci: "passing", url: "https://ci/lint" },
+      { name: "test", ci: "failing", url: "" },
+    ],
+    reviews: [{ author: "codex", state: "CHANGES_REQUESTED", commit: "abcdef0", submittedAt: "" }],
+  },
+  errors: ["issue #99: gone"],
+};
+
+// The board and, behind it, one card's detail; every request is recorded.
+function serveBoardAndDetail(board: BoardResponse): ReturnType<typeof vi.fn> {
+  const fetchMock = vi.fn(async (url: string) => new Response(JSON.stringify(url.startsWith("/api/github/board/detail") ? detail : board)));
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
   gridSessionJump.value = null;
+  boardSelection.value = null;
 });
 
 describe("GithubBoard", () => {
@@ -84,6 +113,85 @@ describe("GithubBoard", () => {
     await nextTick();
     expect(inGridButton()?.attributes("disabled")).toBeDefined();
     grid.unmount();
+  });
+
+  it("links nowhere from a card: GitHub is reached from its detail panel", async () => {
+    serve({ repos: [{ repo: "o/r", cards: [prCard] }] });
+    const w = mount(GithubBoard);
+    await flushPromises();
+    expect(w.get('[data-testid="board-card"]').findAll("a")).toHaveLength(0);
+  });
+
+  it("opens a card's detail panel with the issue body, the checks and the reviews", async () => {
+    const fetchMock = serveBoardAndDetail({ repos: [{ repo: "o/r", cards: [prCard] }] });
+    const w = mount(GithubBoard);
+    await flushPromises();
+    await w.get('[data-testid="board-card-open"]').trigger("click");
+    await flushPromises();
+    expect(fetchMock).toHaveBeenCalledWith("/api/github/board/detail?repo=o%2Fr&issue=4&pr=10", expect.anything());
+    const panel = w.get('[data-testid="board-detail"]');
+    expect(panel.get('[data-testid="board-detail-issue"]').html()).toContain("<strong>it</strong>");
+    expect(panel.findAll('[data-testid="board-detail-check"]').map((row) => row.text())).toEqual(["lint", "test"]);
+    expect(panel.get('[data-testid="board-detail-review"]').text()).toContain("CHANGES_REQUESTED");
+    expect(panel.text()).toContain("issue #99: gone");
+    expect(panel.findAll("a").map((link) => link.attributes("href"))).toEqual(
+      expect.arrayContaining(["https://github.com/o/r/pull/10", "https://github.com/o/r/issues/4"]),
+    );
+  });
+
+  it("links no GitHub-supplied URL that is not https", async () => {
+    const hostile: BoardDetailResponse = {
+      ...detail,
+      issue: detail.issue && { ...detail.issue, url: "javascript:alert(1)" },
+      pr: detail.pr && { ...detail.pr, url: "data:text/html,x", checks: [{ name: "evil", ci: "failing", url: "javascript:alert(2)" }] },
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async (url: string) =>
+          new Response(JSON.stringify(url.startsWith("/api/github/board/detail") ? hostile : { repos: [{ repo: "o/r", cards: [prCard] }] })),
+      ),
+    );
+    const w = mount(GithubBoard);
+    await flushPromises();
+    await w.get('[data-testid="board-card-open"]').trigger("click");
+    await flushPromises();
+    const panel = w.get('[data-testid="board-detail"]');
+    expect(panel.get('[data-testid="board-detail-check"]').text()).toBe("evil");
+    expect(panel.findAll("a").map((link) => link.attributes("href"))).toEqual([]);
+  });
+
+  it("closes the panel when the same card is pressed again, or its close button", async () => {
+    serveBoardAndDetail({ repos: [{ repo: "o/r", cards: [prCard] }] });
+    const w = mount(GithubBoard);
+    await flushPromises();
+    const open = w.get('[data-testid="board-card-open"]');
+    await open.trigger("click");
+    expect(w.find('[data-testid="board-detail"]').exists()).toBe(true);
+    await open.trigger("click");
+    expect(w.find('[data-testid="board-detail"]').exists()).toBe(false);
+    await open.trigger("click");
+    await w.get('[data-testid="board-detail"] header button').trigger("click");
+    expect(w.find('[data-testid="board-detail"]').exists()).toBe(false);
+  });
+
+  it("asks GitHub nothing for a card with neither an issue nor a PR", async () => {
+    const branchOnly = card({ key: "branch-x", column: "implementing", branch: "x", cells: prCard.cells });
+    const fetchMock = serveBoardAndDetail({ repos: [{ repo: "o/r", cards: [branchOnly] }] });
+    const w = mount(GithubBoard);
+    await flushPromises();
+    await w.get('[data-testid="board-card-open"]').trigger("click");
+    await flushPromises();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(w.get('[data-testid="board-detail"]').findAll('[data-testid="board-cell"]')).toHaveLength(2);
+  });
+
+  it("drops the selection when the card is gone after a refresh", async () => {
+    boardSelection.value = { repo: "o/r", key: "pr-gone" };
+    serveBoardAndDetail({ repos: [{ repo: "o/r", cards: [prCard] }] });
+    mount(GithubBoard);
+    await flushPromises();
+    expect(boardSelection.value).toBeNull();
   });
 
   it("disables every cell when no grid is mounted", async () => {

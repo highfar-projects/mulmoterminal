@@ -55,3 +55,51 @@ export interface RepoBoard {
 export interface BoardResponse {
   repos: RepoBoard[];
 }
+
+// What GET /api/github/board/detail answers with (#3177): the parts of one card that the board's
+// list does not carry, read when its detail panel opens.
+export interface BoardIssueDetail {
+  number: number;
+  title: string;
+  url: string;
+  author: string;
+  labels: string[];
+  /** Markdown, as written on GitHub. */
+  body: string;
+}
+
+export interface BoardCheck {
+  name: string;
+  ci: CiState;
+  /** The check's own page, or "" when it has none. */
+  url: string;
+}
+
+export interface BoardReview {
+  author: string;
+  /** gh's review state: APPROVED, CHANGES_REQUESTED, COMMENTED, … */
+  state: string;
+  /** The short oid of the commit the review was left on. */
+  commit: string;
+  submittedAt: string;
+}
+
+export interface BoardPrDetail {
+  number: number;
+  title: string;
+  url: string;
+  author: string;
+  body: string;
+  isDraft: boolean;
+  additions: number;
+  deletions: number;
+  checks: BoardCheck[];
+  reviews: BoardReview[];
+}
+
+export interface BoardDetailResponse {
+  issue: BoardIssueDetail | null;
+  pr: BoardPrDetail | null;
+  /** One line per part that could not be read; the other part is still shown. */
+  errors: string[];
+}

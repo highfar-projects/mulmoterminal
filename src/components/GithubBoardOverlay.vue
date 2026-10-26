@@ -1,14 +1,18 @@
 <script setup lang="ts">
 // The full-screen frame for the experimental GitHub board (#3172), driven by the /github/board route
 // the way GithubOverlay is driven by /github.
-import { useGithubBoardView } from "../composables/useGithubBoardView";
+import { boardSelection, useGithubBoardView } from "../composables/useGithubBoardView";
 import { githubGotoIndex } from "../composables/useGithubView";
 import { useEscapeToClose } from "../composables/useEscapeToClose";
 import GithubBoard from "./GithubBoard.vue";
 
 const { isOpen, close } = useGithubBoardView();
 
-useEscapeToClose(isOpen, close);
+// An open detail panel is the nearer thing to close.
+useEscapeToClose(isOpen, () => {
+  if (boardSelection.value) boardSelection.value = null;
+  else close();
+});
 </script>
 
 <template>
