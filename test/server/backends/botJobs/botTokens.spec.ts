@@ -5,7 +5,7 @@
 // caller once and never the file.
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import express from "express";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { routeCall, jsonPost } from "../../../helpers/routeCall.js";
@@ -128,6 +128,20 @@ describe("bot token routes", () => {
     await call("/api/bot-tokens", jsonPost({ name: "GrokBot" }));
     expect((await call(`/api/bot-tokens/${TOKEN_ID}`, { method: "DELETE" })).status).toBe(502);
     expect((await call("/api/bot-tokens")).body.tokens).toHaveLength(1);
+  });
+
+  // Read as empty, a corrupt list would be overwritten by the next mint, and every token it named
+  // would stay live with nothing here to revoke it by.
+  it("refuses to mint over a list it cannot read, and takes the new token back", async () => {
+    const { call, sent, file } = setup({}, minting);
+    writeFileSync(file, "{ not json");
+    const res = await call("/api/bot-tokens", jsonPost({ name: "GrokBot" }));
+    expect(res.status).toBe(502);
+    expect(String(res.body.error)).toMatch(/revoked again/);
+    expect(res.body.token).toBeUndefined();
+    expect(sent.map((call) => call.url.split("/").pop())).toEqual(["createBotToken", "revokeBotToken"]);
+    expect(readFileSync(file, "utf8")).toBe("{ not json");
+    expect((await call("/api/bot-tokens")).status).toBe(500);
   });
 
   it("refuses a malformed token id", async () => {

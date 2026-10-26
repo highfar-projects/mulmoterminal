@@ -24,7 +24,11 @@ const nameOf = (body: unknown): string | null => {
 
 export function mountBotTokenRoutes(app: Express, deps: BotTokenDeps): void {
   app.get("/api/bot-tokens", async (_req: Request, res: Response) => {
-    res.json({ tokens: await readBotTokens(deps.file), endpoints: BOT_ENDPOINTS });
+    try {
+      res.json({ tokens: await readBotTokens(deps.file), endpoints: BOT_ENDPOINTS });
+    } catch (err) {
+      res.status(500).json({ error: messageOf(err) });
+    }
   });
 
   app.post("/api/bot-tokens", async (req: Request, res: Response) => {

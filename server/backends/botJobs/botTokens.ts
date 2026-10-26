@@ -7,6 +7,7 @@ import { promises as fs } from "node:fs";
 import { firebaseConfig } from "../../../common/firebaseConfig.js";
 import { isRecord } from "../../../common/isRecord.js";
 import { writeFileAtomic } from "../../files/atomic-write.js";
+import { withConfigLock } from "../../config/config-lock.js";
 
 const REGION = "asia-northeast1";
 const functionUrl = (name: string): string => `https://${REGION}-${firebaseConfig.projectId}.cloudfunctions.net/${name}`;
@@ -39,26 +40,32 @@ const parseRecord = (value: unknown): BotTokenRecord | null => {
     : null;
 };
 
+const isMissing = (err: unknown): boolean => isRecord(err) && err.code === "ENOENT";
+
+// Empty only when there is no file yet. A file that cannot be read or parsed THROWS: read as empty,
+// the next mint would write a list of one over it, and every token it named would stay live at
+// mulmoserver with nothing here left to revoke it by.
 export async function readBotTokens(file: string): Promise<BotTokenRecord[]> {
+  let text: string;
   try {
-    const parsed: unknown = JSON.parse(await fs.readFile(file, "utf8"));
-    return Array.isArray(parsed) ? parsed.map(parseRecord).filter((record): record is BotTokenRecord => record !== null) : [];
-  } catch {
-    return [];
+    text = await fs.readFile(file, "utf8");
+  } catch (err) {
+    if (isMissing(err)) return [];
+    throw err;
   }
+  const parsed: unknown = JSON.parse(text);
+  if (!Array.isArray(parsed)) throw new Error(`${file} is not a list of bot tokens`);
+  return parsed.map(parseRecord).filter((record): record is BotTokenRecord => record !== null);
 }
 
 const writeBotTokens = (file: string, records: BotTokenRecord[]): Promise<void> => writeFileAtomic(file, `${JSON.stringify(records, null, 2)}\n`);
 
-// One read-modify-write of the list at a time. Two mints in flight would each read the same list and
-// the later write would drop the other's record — leaving a live token at mulmoserver that nothing
-// here can name to revoke. The atomic write keeps the FILE whole; this keeps the UPDATES.
-let listUpdates: Promise<unknown> = Promise.resolve();
-const updateBotTokens = (file: string, change: (records: BotTokenRecord[]) => BotTokenRecord[]): Promise<void> => {
-  const next = listUpdates.then(async () => writeBotTokens(file, change(await readBotTokens(file))));
-  listUpdates = next.catch(() => undefined);
-  return next;
-};
+// One read-modify-write of the list at a time, across processes too: several MulmoTerminals on one
+// machine share ~/.mulmoterminal. Two mints in flight would each read the same list and the later
+// write would drop the other's record — leaving a live token at mulmoserver that nothing here can
+// name to revoke. The atomic write keeps the FILE whole; the lock keeps the UPDATES.
+const updateBotTokens = (file: string, change: (records: BotTokenRecord[]) => BotTokenRecord[]): Promise<void> =>
+  withConfigLock(file, async () => writeBotTokens(file, change(await readBotTokens(file))));
 
 // The onCall wire: arguments in `data`, the answer in `result`, a failure in `error.message`.
 async function callFunction(deps: BotTokenDeps, name: string, data: Record<string, string>): Promise<unknown> {
@@ -89,7 +96,18 @@ export async function createBotToken(deps: BotTokenDeps, name: string): Promise<
   const result = await callFunction(deps, "createBotToken", { hostId, name });
   if (!isRecord(result) || typeof result.token !== "string" || typeof result.tokenId !== "string") throw new Error("createBotToken returned no token");
   const record: BotTokenRecord = { tokenId: result.tokenId, name, hostId, createdAt: deps.now().toISOString() };
-  await updateBotTokens(deps.file, (records) => [...records, record]);
+  try {
+    await updateBotTokens(deps.file, (records) => [...records, record]);
+  } catch (err) {
+    // Not recorded here means nobody could revoke it later, and the secret is never answered — so
+    // the token is taken back at once. If even that fails, the id is in the error for a manual revoke.
+    const revoked = await callFunction(deps, "revokeBotToken", { tokenId: record.tokenId }).then(
+      () => true,
+      () => false,
+    );
+    const left = revoked ? "it was revoked again" : `it is still live: revoke ${record.tokenId}`;
+    throw new Error(`could not record the new token (${err instanceof Error ? err.message : String(err)}); ${left}`, { cause: err });
+  }
   return { token: result.token, record, endpoints: BOT_ENDPOINTS };
 }
 

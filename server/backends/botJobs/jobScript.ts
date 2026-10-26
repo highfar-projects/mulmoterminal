@@ -124,7 +124,10 @@ export interface JobOutput {
 
 /** The last `maxBytes` of the output. A cut can land inside a multi-byte character; the replacement
  *  character that leaves at the front is dropped. */
-export function outputTail(bytes: Buffer, maxBytes: number = MAX_OUTPUT_BYTES): JobOutput {
+export function outputTail(raw: Buffer, maxBytes: number = MAX_OUTPUT_BYTES): JobOutput {
+  // Measured on the text that is SENT: an invalid byte (binary, Latin-1) decodes to U+FFFD, three
+  // bytes in UTF-8, so capping the raw bytes could send three times the limit.
+  const bytes = Buffer.from(raw.toString("utf8"), "utf8");
   if (bytes.length <= maxBytes) return { output: bytes.toString("utf8"), truncated: false };
   return {
     output: bytes

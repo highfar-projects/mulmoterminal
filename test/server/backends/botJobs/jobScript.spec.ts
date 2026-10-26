@@ -58,7 +58,7 @@ describe("parseBotJobRequest", () => {
 });
 
 describe("the pieces run.sh is built from", () => {
-  it("quotes an argument so nothing in it is expanded", () => {
+  it.skipIf(process.platform === "win32")("quotes an argument so nothing in it is expanded", () => {
     const out = spawnSync("/bin/sh", ["-c", `printf '%s' ${shellQuote('it\'s $HOME `id` "x"')}`], { encoding: "utf8" });
     expect(out.stdout).toBe('it\'s $HOME `id` "x"');
   });
@@ -77,6 +77,12 @@ describe("the pieces run.sh is built from", () => {
     expect(expandHome("python3", "/Users/u")).toBe("python3");
   });
 
+  it("caps the output it sends, not the bytes it read, when the job printed invalid UTF-8", () => {
+    const { output, truncated } = outputTail(Buffer.alloc(1000, 0xff), 100);
+    expect(truncated).toBe(true);
+    expect(Buffer.byteLength(output, "utf8")).toBeLessThanOrEqual(100);
+  });
+
   it("keeps the tail of a long output and says so", () => {
     expect(outputTail(Buffer.from("abc"), 10)).toEqual({ output: "abc", truncated: false });
     expect(outputTail(Buffer.from("0123456789"), 4)).toEqual({ output: "6789", truncated: true });
@@ -91,7 +97,8 @@ describe("the pieces run.sh is built from", () => {
   });
 });
 
-describe("run.sh, run", () => {
+// Bot jobs are not offered on Windows (the handler refuses), and there is no /bin/sh to run this with.
+describe.skipIf(process.platform === "win32")("run.sh, run", () => {
   let dir: string;
   beforeEach(() => {
     dir = mkdtempSync(path.join(os.tmpdir(), "bot-job-"));

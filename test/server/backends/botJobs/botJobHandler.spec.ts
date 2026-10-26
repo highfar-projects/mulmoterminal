@@ -70,8 +70,11 @@ describe("botJob handler", () => {
     await handler(PARAMS);
     expect(readFileSync(path.join(dir, JOB_FILE), "utf8")).toBe("print('hi')");
     expect(readFileSync(path.join(dir, RUN_FILE), "utf8")).toContain("'/Users/u/venv/bin/python' 'job.py' '--n' '3'");
-    expect(statSync(dir).mode & 0o777).toBe(0o700);
-    expect(statSync(path.join(dir, JOB_FILE)).mode & 0o777).toBe(0o600);
+    // POSIX modes; Windows has none to check (and bot jobs refuse to run there).
+    if (process.platform !== "win32") {
+      expect(statSync(dir).mode & 0o777).toBe(0o700);
+      expect(statSync(path.join(dir, JOB_FILE)).mode & 0o777).toBe(0o600);
+    }
     expect(calls.started).toEqual([[SESSION, "/bin/sh", [path.join(dir, RUN_FILE)], dir]]);
     expect(calls.notified).toEqual([`GrokBot:${SESSION}`]);
   });

@@ -560,8 +560,8 @@ and exit code go back to the bot. **Off until set**; there is no Settings contro
 { "botJobs": { "enabled": true, "python": "~/venvs/gpu/bin/python" } }
 ```
 
-- `enabled` — only a literal `true` turns it on. Read per job, so switching it off applies to the
-  next job without a restart (a hand edit of the file still needs Settings → Reload config file).
+- `enabled` — only a literal `true` turns it on. It is read from the file for every job, so a hand
+  edit — switching it off included — applies to the very next job, with no restart or reload.
 - `python` — the interpreter a job runs with. Ask which venv has the GPU packages (torch, …); the
   system `python3` usually has none. `~/` is the home directory.
 - **The token.** Needs the mobile remote connected (toolbar Connect), since a token belongs to that
