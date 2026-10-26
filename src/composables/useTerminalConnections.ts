@@ -36,7 +36,7 @@ import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { guardMouseClicks, guardMouseTracking, type WheelScrollControl } from "./terminalMouseInput";
 import { getTerminalScrollSpeed } from "./useTerminalScrollSpeed";
 import { getTerminalUnicodeVersion, getTerminalWidthTable } from "./terminalUnicodeVersion";
-import { tmuxUnicodeProvider, TMUX_UNICODE_VERSION } from "../../common/tmuxUnicodeProvider";
+import { applyCellWidths, reapplyCellWidths } from "./terminalCellWidths";
 import { scrollsToBottomOnSubmit } from "./useScrollToBottomOnSubmit";
 import { isTypedInput } from "./terminalUserInput";
 import { bufferIsShort, readBufferShape } from "./terminalBufferHealth";
@@ -431,14 +431,6 @@ interface TerminalRuntime {
   canvas: CanvasAddon | null;
   host: HTMLDivElement;
   wheel: WheelScrollControl;
-}
-
-// The server tmux's measured table when it sent one (#3173), else the built-in table it named. A table
-// that arrives later is registered then: registering replaces the provider of the same version.
-function applyCellWidths(term: Terminal): void {
-  const table = getTerminalWidthTable();
-  if (table) term.unicode.register(tmuxUnicodeProvider(table));
-  term.unicode.activeVersion = table ? TMUX_UNICODE_VERSION : getTerminalUnicodeVersion();
 }
 
 // Everything a slot's xterm is made of. Built here rather than inline in ensure() because a
@@ -1054,7 +1046,7 @@ export function setScrollSpeed(speed: number) {
 watch(getTerminalScrollSpeed, setScrollSpeed);
 
 // Watched at module scope for the scroll speed's reason: one value for every terminal. The config
-// usually arrives after the first terminals are built.
+// usually arrives after the first terminals are built, and the measured table can arrive later still.
 watch([getTerminalUnicodeVersion, getTerminalWidthTable], () => {
-  conns.forEach((c) => applyCellWidths(c.term));
+  conns.forEach((c) => reapplyCellWidths(c.term, c.ws));
 });

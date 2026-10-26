@@ -54,12 +54,17 @@ describe("settledTmuxWidthTable", () => {
 
   it("waits for a measurement still running, and gives up after the wait with what is known", async () => {
     const finishLiveCheck: ((live: LiveTmuxServer) => void)[] = [];
-    const liveServer = () => new Promise<LiveTmuxServer>((resolve) => finishLiveCheck.push(resolve));
+    const signalReached: (() => void)[] = [];
+    const reachedLiveCheck = new Promise<void>((resolve) => signalReached.push(resolve));
+    const liveServer = () =>
+      new Promise<LiveTmuxServer>((resolve) => {
+        finishLiveCheck.push(resolve);
+        signalReached.forEach((signal) => signal());
+      });
     const { measureTmuxWidths: measure, settledTmuxWidthTable: settled } = await import("../../../../server/infra/process/tmuxWidthProbe.js");
     const running = measure(() => undefined, liveServer);
-    let waitedOut = false;
-    await settled(10).then(() => (waitedOut = true));
-    expect(waitedOut).toBe(true);
+    await reachedLiveCheck;
+    await expect(settled(10)).resolves.toBeNull();
     const waiting = settled(60_000);
     finishLiveCheck.forEach((resolve) => resolve({ running: false }));
     await expect(waiting).resolves.toBe(await running);

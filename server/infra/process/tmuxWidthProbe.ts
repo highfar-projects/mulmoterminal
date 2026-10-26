@@ -153,9 +153,17 @@ let measuring: Promise<TmuxWidthTable | null> | null = null;
 
 /** The table once the boot measurement ends, or what is known after `wait_ms` — for a browser that
  *  read /api/config while it was still running. Immediate when nothing is being measured. */
-export function settledTmuxWidthTable(wait_ms: number): Promise<TmuxWidthTable | null> {
-  if (!measuring) return Promise.resolve(measuredTable);
-  return Promise.race([measuring, new Promise<TmuxWidthTable | null>((resolve) => setTimeout(() => resolve(measuredTable), wait_ms).unref())]);
+export async function settledTmuxWidthTable(wait_ms: number): Promise<TmuxWidthTable | null> {
+  if (!measuring) return measuredTable;
+  let timer: NodeJS.Timeout | undefined;
+  const waited = new Promise<TmuxWidthTable | null>((resolve) => {
+    timer = setTimeout(() => resolve(measuredTable), wait_ms).unref();
+  });
+  try {
+    return await Promise.race([measuring, waited]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**
@@ -163,7 +171,9 @@ export function settledTmuxWidthTable(wait_ms: number): Promise<TmuxWidthTable |
  * running server of another version. Never rejects: it runs unawaited at boot.
  */
 export function measureTmuxWidths(log: Log, liveServer: () => Promise<LiveTmuxServer>): Promise<TmuxWidthTable | null> {
-  measuring = measureAndKeep(log, liveServer);
+  measuring = measureAndKeep(log, liveServer).finally(() => {
+    measuring = null;
+  });
   return measuring;
 }
 

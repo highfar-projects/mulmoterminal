@@ -66,6 +66,16 @@ describe("the width table a terminal counts cells with", () => {
     expect(mockTermState.unicode.activeVersion).toBe("tmux");
   });
 
+  it("asks tmux to repaint an open terminal when the table changes, since xterm keeps parsed cells", async () => {
+    conn.attach(KEY, target, {}, document.createElement("div"));
+    const socket = FakeWebSocket.instances.at(-1);
+    if (!socket) throw new Error("no socket");
+    socket.sent.length = 0;
+    setTerminalWidthTable(TABLE);
+    await nextTick();
+    expect(socket.sent.map((data) => JSON.parse(data))).toContainEqual({ type: "redraw" });
+  });
+
   it("goes back to the named table when the measured one is withdrawn", async () => {
     setTerminalWidthTable(TABLE);
     conn.attach(KEY, target, {}, document.createElement("div"));

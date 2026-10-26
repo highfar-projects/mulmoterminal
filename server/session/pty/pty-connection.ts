@@ -148,6 +148,17 @@ function applyResizeFrame(
   if (entry.tmux) deps.checkTerminalSize(sessionId, { cols: size.cols, rows: size.rows });
 }
 
+// A page sends one when its config lands and one when a late width table does; a few more covers a
+// config reload, and the cap stops a socket from running tmux on every frame.
+const CLIENT_REDRAWS_PER_SOCKET = 8;
+
+function applyRedrawFrame(entry: PtyEntry, sessionId: string, deps: Pick<ConnectionDeps, "redrawTerminal">): void {
+  const used = entry.clientRedraws ?? 0;
+  if (used >= CLIENT_REDRAWS_PER_SOCKET) return;
+  entry.clientRedraws = used + 1;
+  deps.redrawTerminal(sessionId, entry.term.pid);
+}
+
 export function createConnectionHandlers(deps: ConnectionDeps) {
   // Reattach a live background PTY to a new socket: drop any stale socket, swap in
   // the new one, and replay the buffered tail for context.
@@ -167,6 +178,7 @@ export function createConnectionHandlers(deps: ConnectionDeps) {
       entry.ws.close();
     }
     entry.ws = ws;
+    entry.clientRedraws = 0;
     if (ws.readyState === ws.OPEN) {
       // The replay is a bounded TAIL, and the modes an app sets once at startup — the alternate
       // buffer above all — fell off its front long ago. Restore them first, or the browser draws
@@ -215,6 +227,8 @@ export function createConnectionHandlers(deps: ConnectionDeps) {
         applyInputFrame(entry, sessionId, msg.data, deps);
       } else if (msg.type === "exitCopyMode" && entry.tmux) {
         deps.exitCopyMode(sessionId);
+      } else if (msg.type === "redraw" && entry.tmux) {
+        applyRedrawFrame(entry, sessionId, deps);
       } else if (isResizeFrame(msg)) {
         applyResizeFrame(entry, sessionId, msg, deps);
       }

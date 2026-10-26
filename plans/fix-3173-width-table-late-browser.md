@@ -18,10 +18,9 @@ cross-review of the merged #3174.
   arrives. Terminals already open switch through the existing watch on the table ref.
 - `/api/config` keeps carrying the table, so a page loaded later needs no second request.
 
-## Not in scope
-
-- Rows already painted with the built-in table stay as painted until tmux repaints them; new output
-  and repainted rows count with the measured table.
+- xterm keeps cells it has already parsed, so when the table changes the page sends each open
+  terminal a `redraw` frame, and the server repaints that tmux client (`tmuxRedrawClient`, the
+  reattach path's repaint). Each runs tmux synchronously, so a socket gets a few, capped per socket.
 
 ## Verification
 
