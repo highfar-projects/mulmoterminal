@@ -52,6 +52,19 @@ const CONTROL_BYTES = /[\u0000-\u001F\u007F-\u009F]+/g;
  *  it move the cursor and overwrite what the user is reading, so they become spaces. */
 export const printable = (text: string): string => text.replace(CONTROL_BYTES, " ").trim();
 
+// eslint-disable-next-line no-control-regex -- intentional: every control byte, one at a time
+const CONTROL_BYTE = /[\u0000-\u001F\u007F-\u009F]/g;
+const caretOf = (char: string): string => {
+  const code = char.charCodeAt(0);
+  if (code === 0x7f) return "^?";
+  return code < 0x20 ? `^${String.fromCharCode(code + 0x40)}` : `<U+${code.toString(16).toUpperCase().padStart(4, "0")}>`;
+};
+
+/** Text shown on the approval screen exactly, with each control byte drawn as `cat -v` would
+ *  (`^[`, `^J`) instead of sent to the terminal. For what the user must be able to read in full —
+ *  the command line — where `printable`'s spaces would hide that something was there. */
+export const visible = (text: string): string => text.replace(CONTROL_BYTE, caretOf);
+
 /** `~/venv/bin/python` → under the home directory; anything else as written. */
 export const expandHome = (python: string, home: string): string => {
   if (python === "~") return home;
@@ -67,13 +80,17 @@ export const DECLINED_FILE = "declined";
 // The approval is the guard, so what it shows has to be what runs:
 // - `cat -v` prints the script with control characters made visible (`^[`). A plain `cat` would let
 //   the script itself clear the screen or rewrite earlier lines, and be approved as something else.
-// - The command line is printed from the same quoted words that are run.
+// - The command line is printed from the same quoted words that are run, its control bytes drawn
+//   visibly for the same reason as the script's.
 // - Anything but an explicit yes declines, and so does end of input (`read` fails, answer is empty).
 //
 // The exit code is written by the subshell and moved into place only once `tee` has finished, so
 // the waiting handler never reads `exit_code` before `output.log` is complete.
 export function buildRunScript(job: BotJobRequest, python: string): string {
   const command = [python, JOB_FILE, ...job.args].map(shellQuote).join(" ");
+  // What is shown is the command that runs, made safe to PRINT: an argument is the bot's text too,
+  // and printed raw it could clear the preview above and redraw it as something else.
+  const shown = visible(command);
   const what = job.name ? `: ${printable(job.name)}` : "";
   const title = `Bot job from ${printable(job.from)}${what}`;
   const banner = `----- ${JOB_FILE} (control characters shown as ^X) -----`;
@@ -85,7 +102,7 @@ export function buildRunScript(job: BotJobRequest, python: string): string {
     `printf '%s\\n' ${shellQuote(banner)}`,
     `cat -v ${JOB_FILE}`,
     `printf '\\n%s\\n' '-----'`,
-    `printf '%s\\n' ${shellQuote("Command: " + command)}`,
+    `printf '%s\\n' ${shellQuote("Command: " + shown)}`,
     "printf 'Run this job? [y/N] '",
     "read answer",
     'case "$answer" in',

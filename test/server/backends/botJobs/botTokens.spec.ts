@@ -79,6 +79,19 @@ describe("bot token routes", () => {
     expect((await call("/api/bot-tokens")).body).toEqual({ tokens: [res.body.record], endpoints: BOT_ENDPOINTS });
   });
 
+  // Two mints in flight each read the list before the other wrote it; the later write must not drop
+  // the earlier record, or that token is live at mulmoserver and unnamed here.
+  it("keeps every record when tokens are minted at once", async () => {
+    let n = 0;
+    const { call } = setup({}, () => {
+      n += 1;
+      return { status: 200, body: { result: { token: SECRET, tokenId: String(n).repeat(64).slice(0, 64) } } };
+    });
+    await Promise.all(["a", "b", "c"].map((name) => call("/api/bot-tokens", jsonPost({ name }))));
+    const tokens = (await call("/api/bot-tokens")).body.tokens as { name: string }[];
+    expect(tokens.map((token) => token.name).sort()).toEqual(["a", "b", "c"]);
+  });
+
   it("refuses to mint while the mobile remote is not connected", async () => {
     const { call, sent } = setup({ idToken: async () => null, hostId: () => null });
     const res = await call("/api/bot-tokens", jsonPost({ name: "GrokBot" }));

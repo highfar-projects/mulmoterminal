@@ -50,6 +50,16 @@ export async function readBotTokens(file: string): Promise<BotTokenRecord[]> {
 
 const writeBotTokens = (file: string, records: BotTokenRecord[]): Promise<void> => writeFileAtomic(file, `${JSON.stringify(records, null, 2)}\n`);
 
+// One read-modify-write of the list at a time. Two mints in flight would each read the same list and
+// the later write would drop the other's record — leaving a live token at mulmoserver that nothing
+// here can name to revoke. The atomic write keeps the FILE whole; this keeps the UPDATES.
+let listUpdates: Promise<unknown> = Promise.resolve();
+const updateBotTokens = (file: string, change: (records: BotTokenRecord[]) => BotTokenRecord[]): Promise<void> => {
+  const next = listUpdates.then(async () => writeBotTokens(file, change(await readBotTokens(file))));
+  listUpdates = next.catch(() => undefined);
+  return next;
+};
+
 // The onCall wire: arguments in `data`, the answer in `result`, a failure in `error.message`.
 async function callFunction(deps: BotTokenDeps, name: string, data: Record<string, string>): Promise<unknown> {
   const idToken = await deps.idToken();
@@ -79,7 +89,7 @@ export async function createBotToken(deps: BotTokenDeps, name: string): Promise<
   const result = await callFunction(deps, "createBotToken", { hostId, name });
   if (!isRecord(result) || typeof result.token !== "string" || typeof result.tokenId !== "string") throw new Error("createBotToken returned no token");
   const record: BotTokenRecord = { tokenId: result.tokenId, name, hostId, createdAt: deps.now().toISOString() };
-  await writeBotTokens(deps.file, [...(await readBotTokens(deps.file)), record]);
+  await updateBotTokens(deps.file, (records) => [...records, record]);
   return { token: result.token, record, endpoints: BOT_ENDPOINTS };
 }
 
@@ -87,8 +97,5 @@ export async function createBotToken(deps: BotTokenDeps, name: string): Promise<
 // one nobody can revoke any more.
 export async function revokeBotToken(deps: BotTokenDeps, tokenId: string): Promise<void> {
   await callFunction(deps, "revokeBotToken", { tokenId });
-  await writeBotTokens(
-    deps.file,
-    (await readBotTokens(deps.file)).filter((record) => record.tokenId !== tokenId),
-  );
+  await updateBotTokens(deps.file, (records) => records.filter((record) => record.tokenId !== tokenId));
 }

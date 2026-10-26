@@ -12,6 +12,7 @@ import {
   DECLINED_FILE,
   EXIT_CODE_FILE,
   JOB_FILE,
+  MAX_OUTPUT_BYTES,
   OUTPUT_FILE,
   RUN_FILE,
   buildRunScript,
@@ -47,10 +48,25 @@ const exists = (file: string): Promise<boolean> =>
     () => false,
   );
 
+// The end of the log and nothing more: a verbose job can write gigabytes, and only the tail goes back.
+// One byte past the limit is read so outputTail can still tell a cut from an exact fit.
+async function readLogTail(file: string): Promise<Buffer> {
+  const handle = await fs.open(file, "r").catch(() => null);
+  if (!handle) return Buffer.alloc(0);
+  try {
+    const { size } = await handle.stat();
+    const length = Math.min(size, MAX_OUTPUT_BYTES + 1);
+    const buffer = Buffer.alloc(length);
+    const { bytesRead } = await handle.read(buffer, 0, length, size - length);
+    return buffer.subarray(0, bytesRead);
+  } finally {
+    await handle.close();
+  }
+}
+
 const finishedResult = async (dir: string): Promise<JsonValue> => {
   const exitCode = parseExitCode(await fs.readFile(path.join(dir, EXIT_CODE_FILE), "utf8"));
-  const bytes = await fs.readFile(path.join(dir, OUTPUT_FILE)).catch(() => Buffer.alloc(0));
-  return { approved: true, exitCode, ...outputTail(bytes) };
+  return { approved: true, exitCode, ...outputTail(await readLogTail(path.join(dir, OUTPUT_FILE))) };
 };
 
 // One look at the job directory: the outcome, or null while there is none yet.

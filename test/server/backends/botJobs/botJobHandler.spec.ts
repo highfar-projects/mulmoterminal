@@ -8,7 +8,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync 
 import os from "node:os";
 import path from "node:path";
 import { createBotJobHandler, type BotJobDeps } from "../../../../server/backends/botJobs/botJobHandler.js";
-import { DECLINED_FILE, EXIT_CODE_FILE, JOB_FILE, OUTPUT_FILE, RUN_FILE } from "../../../../server/backends/botJobs/jobScript.js";
+import { DECLINED_FILE, EXIT_CODE_FILE, JOB_FILE, MAX_OUTPUT_BYTES, OUTPUT_FILE, RUN_FILE } from "../../../../server/backends/botJobs/jobScript.js";
 
 const SESSION = "00000000-0000-4000-8000-000000000001";
 const PARAMS = { script: "print('hi')", args: ["--n", "3"], from: { tokenId: "t", name: "GrokBot" } };
@@ -80,6 +80,19 @@ describe("botJob handler", () => {
     const { handler, calls } = setup({ leaves: { [EXIT_CODE_FILE]: "2\n", [OUTPUT_FILE]: "traceback\n" } });
     expect(await handler(PARAMS)).toEqual({ approved: true, exitCode: 2, output: "traceback\n", truncated: false });
     expect(calls.released).toEqual([SESSION]);
+  });
+
+  it("sends back only the tail of a long output", async () => {
+    const log = "x".repeat(100) + "y".repeat(MAX_OUTPUT_BYTES);
+    const { handler } = setup({ leaves: { [EXIT_CODE_FILE]: "0\n", [OUTPUT_FILE]: log } });
+    const result = (await handler(PARAMS)) as { output: string; truncated: boolean };
+    expect(result.truncated).toBe(true);
+    expect(result.output).toBe("y".repeat(MAX_OUTPUT_BYTES));
+  });
+
+  it("answers an empty output when the job wrote no log", async () => {
+    const { handler } = setup({ leaves: { [EXIT_CODE_FILE]: "0\n" } });
+    expect(await handler(PARAMS)).toEqual({ approved: true, exitCode: 0, output: "", truncated: false });
   });
 
   it("answers declined when the user said no", async () => {

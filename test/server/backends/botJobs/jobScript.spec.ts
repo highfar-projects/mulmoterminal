@@ -23,6 +23,7 @@ import {
   parseExitCode,
   printable,
   shellQuote,
+  visible,
   type BotJobRequest,
 } from "../../../../server/backends/botJobs/jobScript.js";
 
@@ -64,6 +65,10 @@ describe("the pieces run.sh is built from", () => {
 
   it("turns control bytes in a label into spaces", () => {
     expect(printable("Grok\u001b[2J\u001b[HBot\n")).toBe("Grok [2J [HBot");
+  });
+
+  it("draws control bytes the way cat -v does", () => {
+    expect(visible("a\u001b[1mb\tc\u007f\u009b")).toBe("a^[[1mb^Ic^?<U+009B>");
   });
 
   it("expands only a leading ~/", () => {
@@ -127,6 +132,15 @@ describe("run.sh, run", () => {
     const out = run("# \u001b[2J\u001b[Hharmless\n", "n\n");
     expect(out.stdout).toContain("^[[2J^[[H");
     expect(out.stdout).not.toContain("\u001b[2J");
+  });
+
+  // An argument is the bot's text too: printed raw on the Command line it could clear the preview
+  // and redraw it. It is drawn visibly there and still reaches the job unchanged.
+  it("draws an argument's control bytes visibly on the command line, and runs it as sent", () => {
+    const out = run('printf "%s" "$1" > arg', "y\n", { args: ["a\u001b[2Jb\nc"] });
+    expect(out.stdout).toContain("'a^[[2Jb^Jc'");
+    expect(out.stdout).not.toContain("\u001b[2J");
+    expect(readFileSync(path.join(dir, "arg"), "utf8")).toBe("a\u001b[2Jb\nc");
   });
 
   it("shows the bot's name and the job's name, stripped of control bytes", () => {
