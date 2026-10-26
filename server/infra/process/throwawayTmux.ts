@@ -19,9 +19,19 @@ export interface Measurement {
 // bare tmux client reach a server other than the one named by `-S`.
 const TMUX_CLIENT_VARS: ReadonlySet<string> = new Set(["TMUX", "TMUX_PANE"]);
 
+/** The PATH the probe's server and panes get: the running node's folder first, so the psmux probe's
+ *  `node` is this one even when the server was started by an absolute path. Exported for its spec. */
+export function probePath(currentPath: string | undefined, execPath: string, paths: Pick<typeof path, "dirname" | "delimiter"> = path): string {
+  const nodeDir = paths.dirname(execPath);
+  return currentPath ? `${nodeDir}${paths.delimiter}${currentPath}` : nodeDir;
+}
+
 function probeEnv(): NodeJS.ProcessEnv {
   const sessionEnv = withFallbackLocale(sanitizePtyEnv(process.env, path.delimiter), process.platform);
-  return Object.fromEntries(Object.entries(sessionEnv).filter(([name]) => !TMUX_CLIENT_VARS.has(name)));
+  const kept = Object.fromEntries(Object.entries(sessionEnv).filter(([name]) => !TMUX_CLIENT_VARS.has(name)));
+  // Windows spells it Path; whichever key the environment uses is the one replaced.
+  const pathKey = Object.keys(kept).find((name) => name.toUpperCase() === "PATH") ?? "PATH";
+  return { ...kept, [pathKey]: probePath(kept[pathKey], process.execPath) };
 }
 
 export const throwawayTmux = (dir: string): ThrowawayTmux => {
