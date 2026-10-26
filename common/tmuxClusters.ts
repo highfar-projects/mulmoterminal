@@ -19,10 +19,15 @@ import { cellWidthOf, type CellWidth, type FoldingRule, type TmuxWidthTable } fr
 export const JamoClass = { None: 0, Choseong: 1, Jungseong: 2, Jongseong: 3 } as const;
 export type JamoClass = (typeof JamoClass)[keyof typeof JamoClass];
 
+// What a rule asks of a cell's first codepoint, and nothing more: the provider has to fit the whole
+// cell into xterm's 24 free bits, and the codepoint itself would take 18 of them.
+export const FirstKind = { Other: 0, Ascii: 1, RegionalIndicator: 2, SkinTone: 3, SkinToneBase: 4, SkinToneBase36a: 5 } as const;
+export type FirstKind = (typeof FirstKind)[keyof typeof FirstKind];
+
 /** The cell a character may fold into: what tmux looks at in it. */
 export interface ClusterCell {
-  /** tmux decodes a cell's bytes with mbtowc, which yields its FIRST codepoint. */
-  first: number;
+  /** tmux decodes a cell's bytes with mbtowc, which yields its FIRST codepoint; this is its kind. */
+  firstKind: FirstKind;
   width: CellWidth;
   /** Whether anything has folded into it; a lone ASCII character is the one cell of one byte. */
   joined: boolean;
@@ -31,6 +36,8 @@ export interface ClusterCell {
   lastJamo: JamoClass;
   /** How many regional indicators the cell holds, counted to two: psmux pairs only a lone one. */
   regionalIndicators: 0 | 1 | 2;
+  /** The cell's UTF-8 bytes: tmux and psmux fold nothing past a fixed size (cellBytesLimit). */
+  bytes: number;
 }
 
 export type ClusterStep = { kind: "new"; cell: ClusterCell } | { kind: "join"; cell: ClusterCell } | { kind: "drop" };
@@ -59,6 +66,12 @@ const SKIN_TONE_BASES: ReadonlySet<number> = new Set([
 
 const BASE_ADDED_IN_36A = 0x1f483;
 
+// tmux's UTF8_SIZE (32 since 3.6, 21 before) and psmux's MAX_CELL_BYTES.
+const CELL_BYTES_LIMIT: Readonly<Record<Exclude<FoldingRule, "none">, number>> = { "tmux-3.6a": 32, "tmux-3.6": 32, "tmux-3.4": 21, psmux: 32 };
+const LAST_ONE_BYTE = 0x7f;
+const LAST_TWO_BYTE = 0x7ff;
+const LAST_THREE_BYTE = 0xffff;
+
 const JAMO_RANGES: readonly (readonly [first: number, last: number, jamo: JamoClass])[] = [
   [0x1100, 0x115f, JamoClass.Choseong],
   [0x1160, 0x11a7, JamoClass.Jungseong],
@@ -76,15 +89,30 @@ const isSkinTone = (codepoint: number): boolean => codepoint >= FIRST_SKIN_TONE 
 
 const lastJamoOf = (codepoint: number): JamoClass => (codepoint < FIRST_FOUR_BYTE ? jamoClassOf(codepoint) : JamoClass.None);
 
+export function firstKindOf(codepoint: number): FirstKind {
+  if (codepoint < FIRST_MULTIBYTE) return FirstKind.Ascii;
+  if (isRegionalIndicator(codepoint)) return FirstKind.RegionalIndicator;
+  if (isSkinTone(codepoint)) return FirstKind.SkinTone;
+  if (codepoint === BASE_ADDED_IN_36A) return FirstKind.SkinToneBase36a;
+  return SKIN_TONE_BASES.has(codepoint) ? FirstKind.SkinToneBase : FirstKind.Other;
+}
+
+export function utf8Length(codepoint: number): number {
+  if (codepoint <= LAST_ONE_BYTE) return 1;
+  if (codepoint <= LAST_TWO_BYTE) return 2;
+  return codepoint <= LAST_THREE_BYTE ? 3 : 4;
+}
+
 const newCell = (codepoint: number, width: CellWidth): ClusterStep => ({
   kind: "new",
   cell: {
-    first: codepoint,
+    firstKind: firstKindOf(codepoint),
     width,
     joined: false,
     endsWithZwj: false,
     lastJamo: lastJamoOf(codepoint),
     regionalIndicators: isRegionalIndicator(codepoint) ? 1 : 0,
+    bytes: utf8Length(codepoint),
   },
 });
 
@@ -96,12 +124,13 @@ const countedIndicators = (previous: ClusterCell, codepoint: number): ClusterCel
 const joinCell = (previous: ClusterCell, codepoint: number, width: CellWidth): ClusterStep => ({
   kind: "join",
   cell: {
-    first: previous.first,
+    firstKind: previous.firstKind,
     width,
     joined: true,
     endsWithZwj: codepoint === ZWJ,
     lastJamo: lastJamoOf(codepoint),
     regionalIndicators: countedIndicators(previous, codepoint),
+    bytes: previous.bytes + utf8Length(codepoint),
   },
 });
 
@@ -119,16 +148,18 @@ const perCodepointStep = (codepoint: number, width: CellWidth, previous: Cluster
 
 type Rule36 = "tmux-3.6" | "tmux-3.6a";
 
-const isSkinToneBase = (rule: Rule36, codepoint: number): boolean =>
-  SKIN_TONE_BASES.has(codepoint) && (rule === "tmux-3.6a" || codepoint !== BASE_ADDED_IN_36A);
+const isSkinToneBase = (rule: Rule36, kind: FirstKind): boolean =>
+  kind === FirstKind.SkinToneBase || (rule === "tmux-3.6a" && kind === FirstKind.SkinToneBase36a);
 
 // utf8_should_combine(with, add): a regional-indicator pair, or a listed base added to a skin tone.
-const shouldCombine = (rule: Rule36, withCodepoint: number, addCodepoint: number): boolean =>
-  (isRegionalIndicator(withCodepoint) && isRegionalIndicator(addCodepoint)) || (isSkinTone(withCodepoint) && isSkinToneBase(rule, addCodepoint));
+const shouldCombine = (rule: Rule36, withKind: FirstKind, addKind: FirstKind): boolean =>
+  (withKind === FirstKind.RegionalIndicator && addKind === FirstKind.RegionalIndicator) || (withKind === FirstKind.SkinTone && isSkinToneBase(rule, addKind));
 
 // 3.6a's screen_write_combine also asks the other way round, so a skin tone folds into a base too.
-const combines36 = (rule: Rule36, cellFirst: number, codepoint: number): boolean =>
-  shouldCombine(rule, cellFirst, codepoint) || (rule === "tmux-3.6a" && shouldCombine(rule, codepoint, cellFirst));
+const combines36 = (rule: Rule36, cellKind: FirstKind, codepoint: number): boolean => {
+  const addKind = firstKindOf(codepoint);
+  return shouldCombine(rule, cellKind, addKind) || (rule === "tmux-3.6a" && shouldCombine(rule, addKind, cellKind));
+};
 
 // hanguljamo_check_state (3.6): a vowel or final with nothing to compose onto is thrown away.
 const jamoFold36 = (previous: ClusterCell, jamo: JamoClass): Fold => {
@@ -140,21 +171,21 @@ const jamoFold36 = (previous: ClusterCell, jamo: JamoClass): Fold => {
 const visibleFold36 = (rule: Rule36, previous: ClusterCell, codepoint: number): Fold => {
   const jamo = jamoClassOf(codepoint);
   if (jamo !== JamoClass.None) return jamoFold36(previous, jamo);
-  if (combines36(rule, previous.first, codepoint)) return "fold-wide";
+  if (combines36(rule, previous.firstKind, codepoint)) return "fold-wide";
   return previous.endsWithZwj ? "fold" : "new";
 };
 
 // psmux's should_combine, asked both ways round: a flag takes no third indicator, and jamo are
 // counted by their width alone.
 const visibleFoldPsmux = (previous: ClusterCell, codepoint: number): Fold => {
-  const pairsFlag = isRegionalIndicator(previous.first) && isRegionalIndicator(codepoint);
-  if (pairsFlag ? previous.regionalIndicators === 1 : combines36("tmux-3.6a", previous.first, codepoint)) return "fold-wide";
+  const pairsFlag = previous.firstKind === FirstKind.RegionalIndicator && isRegionalIndicator(codepoint);
+  if (pairsFlag ? previous.regionalIndicators === 1 : combines36("tmux-3.6a", previous.firstKind, codepoint)) return "fold-wide";
   return previous.endsWithZwj ? "fold" : "new";
 };
 
 // utf8_is_modifier (3.4): `last.data.size < 2` refuses only a lone ASCII byte.
 const visibleFold34 = (previous: ClusterCell, codepoint: number): Fold => {
-  if (isRegionalIndicator(codepoint) || isSkinTone(codepoint)) return !previous.joined && previous.first < FIRST_MULTIBYTE ? "new" : "fold-wide";
+  if (isRegionalIndicator(codepoint) || isSkinTone(codepoint)) return !previous.joined && previous.firstKind === FirstKind.Ascii ? "new" : "fold-wide";
   return previous.endsWithZwj ? "fold" : "new";
 };
 
@@ -180,8 +211,11 @@ export function clusterStep(table: TmuxWidthTable, codepoint: number, previous: 
   const zeroWidth = codepoint === ZWJ || codepoint === VS16 || width === 0;
   // An ASCII character never folds, and nothing folds into the start of a row or an empty cell.
   if (codepoint < FIRST_MULTIBYTE || !previous || previous.width === 0) return zeroWidth ? DROP : newCell(codepoint, width);
-  if (zeroWidth) return applyFold(zeroWidthFold(table, codepoint), previous, codepoint, width);
-  return applyFold(visibleFold(table.folding, previous, codepoint), previous, codepoint, width);
+  const fold = zeroWidth ? zeroWidthFold(table, codepoint) : visibleFold(table.folding, previous, codepoint);
+  // A fold that would take the cell past its size is refused, after every other check, as in tmux.
+  const folds = fold === "fold" || fold === "fold-wide";
+  if (folds && previous.bytes + utf8Length(codepoint) > CELL_BYTES_LIMIT[table.folding]) return zeroWidth ? DROP : newCell(codepoint, width);
+  return applyFold(fold, previous, codepoint, width);
 }
 
 /** How many columns tmux advances for `text`, written from the start of a row. */

@@ -40,3 +40,6 @@ script.json
 
 # Scratch files for local review (issue drafts and the like), never committed.
 /temp/
+
+# cargo output of scripts/psmux-widths when CARGO_TARGET_DIR is not set
+scripts/psmux-widths/target/

@@ -111,6 +111,12 @@ that a flag takes no third regional indicator. Before either is used, the probe 
 samples in a throwaway psmux server, one session each, and reads `#{cursor_x}`; any disagreement
 leaves psmux on Unicode 11.
 
+Every rule also stops folding once a cell is full: tmux holds at most `UTF8_SIZE` bytes in one cell
+(21 in 3.4 and 3.5, 32 from 3.6) and psmux `MAX_CELL_BYTES` (32). A fold past that is refused after
+every other check, so a long ZWJ sequence starts a new cell (#3194). The cell's byte count rides in
+the provider state, which is why the state keeps only the kind of a cell's first codepoint rather
+than the codepoint itself.
+
 `test/server/infra/process/tmuxWidthProbe.spec.ts` is the check that matters: a real tmux, a client
 attached through a PTY, and the bytes it receives fed to xterm with the table — every marker must land
 where `#{cursor_x}` says tmux put it. It is skipped where tmux is absent.

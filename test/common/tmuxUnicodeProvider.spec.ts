@@ -4,7 +4,7 @@
 // read off xterm's buffer rather than off the provider's own answers.
 import { describe, it, expect } from "vitest";
 import headless from "@xterm/headless";
-import { JamoClass } from "../../common/tmuxClusters";
+import { FirstKind, JamoClass } from "../../common/tmuxClusters";
 import { TMUX_UNICODE_VERSION, tmuxUnicodeProvider, unpackCell } from "../../common/tmuxUnicodeProvider";
 import type { TmuxWidthTable } from "../../common/tmuxWidthTable";
 
@@ -82,14 +82,38 @@ describe("unpackCell", () => {
   it("reads back what the provider packed", () => {
     const provider = tmuxUnicodeProvider(TABLE);
     const family = provider.charProperties(0x200d, provider.charProperties(0x1f468, 0));
-    expect(unpackCell(family)).toEqual({ first: 0x1f468, width: 2, joined: true, endsWithZwj: true, lastJamo: JamoClass.None, regionalIndicators: 0 });
+    expect(unpackCell(family)).toEqual({
+      firstKind: FirstKind.SkinToneBase,
+      width: 2,
+      joined: true,
+      endsWithZwj: true,
+      lastJamo: JamoClass.None,
+      regionalIndicators: 0,
+      bytes: 7,
+    });
   });
 
-  it("keeps every codepoint a rule compares with, and folds the ones above into one value", () => {
-    const provider = tmuxUnicodeProvider(TABLE);
-    expect(unpackCell(provider.charProperties(0x1f9df, 0))?.first).toBe(0x1f9df);
-    expect(unpackCell(provider.charProperties(0x3ffff, 0))?.first).toBe(0x3ffff);
-    expect(unpackCell(provider.charProperties(0x10ffff, 0))?.first).toBe(0x3ffff);
+  it.each([
+    [0x61, FirstKind.Ascii],
+    [0x1f1ef, FirstKind.RegionalIndicator],
+    [0x1f3fd, FirstKind.SkinTone],
+    [0x1f9df, FirstKind.SkinToneBase],
+    [0x1f483, FirstKind.SkinToneBase36a],
+    [0x3042, FirstKind.Other],
+    [0x10ffff, FirstKind.Other],
+  ])("keeps what a rule asks of U+%s as its first codepoint", (codepoint, kind) => {
+    expect(unpackCell(tmuxUnicodeProvider(TABLE).charProperties(codepoint, 0))?.firstKind).toBe(kind);
+  });
+
+  it("counts a cell's bytes up to the most any rule allows, and holds them there", () => {
+    const provider = tmuxUnicodeProvider({ ...TABLE, folding: "none" });
+    const zeroWidths = Array.from({ length: 40 }, () => 0x200d);
+    const bytes = zeroWidths.reduce((state, codepoint) => provider.charProperties(codepoint, state), provider.charProperties(0x1f468, 0));
+    expect(unpackCell(bytes)?.bytes).toBe(63);
+  });
+
+  it("is null for a first-codepoint kind it never packs", () => {
+    expect(unpackCell((0b111 << 3) | (1 << 1))).toBeNull();
   });
 
   it("is null for a width xterm never packs", () => {
