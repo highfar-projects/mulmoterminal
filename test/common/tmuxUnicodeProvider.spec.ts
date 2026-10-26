@@ -52,6 +52,23 @@ describe("xterm counting with the tmux table", () => {
     expect((await cursorAfter("[✅]")).row).toBe("[✅]");
   });
 
+  // Indicators two columns wide, so a pair that fails to fold shows up as extra columns.
+  it("carries the count of regional indicators, so psmux's flag takes no third", async () => {
+    const wideIndicators: TmuxWidthTable = {
+      ...TABLE,
+      runs: [
+        [0x200d, 0x200d, 0],
+        [0x2705, 0x2705, 2],
+        [0xfe0f, 0xfe0f, 0],
+        [0x1f1e6, 0x1f1ff, 2],
+        [0x1f3fb, 0x1f3ff, 2],
+      ],
+    };
+    const flagAndOne = "\u{1f1ef}\u{1f1f5}\u{1f1fa}x";
+    expect((await cursorAfter(flagAndOne, { ...wideIndicators, folding: "psmux" })).x).toBe(5);
+    expect((await cursorAfter(flagAndOne, wideIndicators)).x).toBe(3);
+  });
+
   it("adds the parts up when the table says tmux does not fold", async () => {
     expect((await cursorAfter("\u{1f468}‍\u{1f469}x", { ...TABLE, folding: "none" })).x).toBe(5);
   });
@@ -65,7 +82,7 @@ describe("unpackCell", () => {
   it("reads back what the provider packed", () => {
     const provider = tmuxUnicodeProvider(TABLE);
     const family = provider.charProperties(0x200d, provider.charProperties(0x1f468, 0));
-    expect(unpackCell(family)).toEqual({ first: 0x1f468, width: 2, joined: true, endsWithZwj: true, lastJamo: JamoClass.None });
+    expect(unpackCell(family)).toEqual({ first: 0x1f468, width: 2, joined: true, endsWithZwj: true, lastJamo: JamoClass.None, regionalIndicators: 0 });
   });
 
   it("keeps every codepoint a rule compares with, and folds the ones above into one value", () => {

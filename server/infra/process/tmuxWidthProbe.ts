@@ -19,8 +19,8 @@ import {
   type WidthRun,
 } from "../../../common/tmuxWidthTable.js";
 import { measuredForLiveServer, type LiveTmuxServer } from "./tmuxLiveServer.js";
-import { sanitizePtyEnv, withFallbackLocale } from "./pty-env.js";
-import { spawnCaptureAsync } from "./spawnCapture.js";
+import { measurePsmuxWith } from "./psmuxWidthProbe.js";
+import { serverVersion, sleep, throwawayTmux, type Measurement, type ThrowawayTmux } from "./throwawayTmux.js";
 
 // tmux refuses a command line past a fixed length ("command too long"); this many fits with room.
 const CODEPOINTS_PER_QUERY = 1000;
@@ -37,27 +37,12 @@ let measuredTable: TmuxWidthTable | null = null;
 /** The table measured at boot, or null until it is (and for good when it could not be). */
 export const tmuxWidthTable = (): TmuxWidthTable | null => measuredTable;
 
-// The environment a session gets, so the probe counts in the same locale; minus what would make a
-// bare tmux client reach a server other than the one named by `-S`.
-const TMUX_CLIENT_VARS: ReadonlySet<string> = new Set(["TMUX", "TMUX_PANE"]);
-
-function probeEnv(): NodeJS.ProcessEnv {
-  const sessionEnv = withFallbackLocale(sanitizePtyEnv(process.env, path.delimiter), process.platform);
-  return Object.fromEntries(Object.entries(sessionEnv).filter(([name]) => !TMUX_CLIENT_VARS.has(name)));
-}
-
-const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
-
 // Every byte as an octal escape, so the shell never reads the sample as anything. `env printf` is the
 // POSIX one, whatever the default shell's own printf does with escapes.
 const octalEscaped = (text: string): string =>
   Array.from(Buffer.from(text, "utf8"))
     .map((byte) => `\\${byte.toString(8).padStart(3, "0")}`)
     .join("");
-
-interface ThrowawayTmux {
-  run(args: string[]): Promise<{ ok: boolean; stdout: string }>;
-}
 
 async function measuredRuns(tmux: ThrowawayTmux): Promise<WidthRun[] | null> {
   const codepoints = probedCodepoints();
@@ -99,11 +84,6 @@ async function measuredFolding(tmux: ThrowawayTmux, table: TmuxWidthTable, log: 
   return rule ?? "none";
 }
 
-interface Measurement {
-  table: TmuxWidthTable;
-  version: string | null;
-}
-
 async function measureWith(tmux: ThrowawayTmux, log: Log): Promise<Measurement | null> {
   const started = await tmux.run(["-f", "/dev/null", "new-session", "-d", "-x", PANE_COLUMNS, "-y", PANE_ROWS, "exec sleep 600"]);
   if (!started.ok) return null;
@@ -112,29 +92,18 @@ async function measureWith(tmux: ThrowawayTmux, log: Log): Promise<Measurement |
   // tmux 3.4 has no such option and always widens; the "tmux-3.4" rule ignores this.
   const option = await tmux.run(["show-options", "-gv", "variation-selector-always-wide"]);
   const perCodepoint: TmuxWidthTable = { runs, folding: "none", vs16Wide: option.ok && option.stdout.trim() === "on" };
-  const version = await tmux.run(["display-message", "-p", "#{version}"]);
-  return {
-    table: { ...perCodepoint, folding: await measuredFolding(tmux, perCodepoint, log) },
-    version: version.ok && version.stdout.trim() !== "" ? version.stdout.trim() : null,
-  };
+  return { table: { ...perCodepoint, folding: await measuredFolding(tmux, perCodepoint, log) }, version: await serverVersion(tmux) };
 }
-
-const throwawayTmux = (dir: string): ThrowawayTmux => {
-  const env = probeEnv();
-  return {
-    run: async (args) => {
-      const result = await spawnCaptureAsync("tmux", ["-S", path.join(dir, "s"), ...args], { env });
-      return { ok: result.status === 0, stdout: result.stdout };
-    },
-  };
-};
 
 const UNMEASURED = "terminals count with Unicode 11";
 
-async function measureIn(dir: string, log: Log): Promise<Measurement | null> {
+/** Which multiplexer the throwaway server is: psmux cannot be asked per-codepoint widths (#3180). */
+export type WidthProbeTarget = "tmux" | "psmux";
+
+async function measureIn(dir: string, log: Log, target: WidthProbeTarget): Promise<Measurement | null> {
   const tmux = throwawayTmux(dir);
   try {
-    const measurement = await measureWith(tmux, log);
+    const measurement = await (target === "psmux" ? measurePsmuxWith(tmux, log) : measureWith(tmux, log));
     if (!measurement) log(`[tmux] widths: could not be measured — ${UNMEASURED}`);
     return measurement;
   } finally {
@@ -170,18 +139,18 @@ export async function settledTmuxWidthTable(wait_ms: number): Promise<TmuxWidthT
  * Measures the tmux on PATH and keeps the result for `tmuxWidthTable()`, unless `liveServer` reports a
  * running server of another version. Never rejects: it runs unawaited at boot.
  */
-export function measureTmuxWidths(log: Log, liveServer: () => Promise<LiveTmuxServer>): Promise<TmuxWidthTable | null> {
-  measuring = measureAndKeep(log, liveServer).finally(() => {
+export function measureTmuxWidths(log: Log, liveServer: () => Promise<LiveTmuxServer>, target: WidthProbeTarget = "tmux"): Promise<TmuxWidthTable | null> {
+  measuring = measureAndKeep(log, liveServer, target).finally(() => {
     measuring = null;
   });
   return measuring;
 }
 
-async function measureAndKeep(log: Log, liveServer: () => Promise<LiveTmuxServer>): Promise<TmuxWidthTable | null> {
+async function measureAndKeep(log: Log, liveServer: () => Promise<LiveTmuxServer>, target: WidthProbeTarget): Promise<TmuxWidthTable | null> {
   let dir: string | null = null;
   try {
     dir = await mkdtemp(path.join(os.tmpdir(), "mt-w-"));
-    measuredTable = tableForLiveServer(await measureIn(dir, log), await liveServer(), log);
+    measuredTable = tableForLiveServer(await measureIn(dir, log, target), await liveServer(), log);
   } catch (error) {
     log(`[tmux] widths: measuring failed (${error instanceof Error ? error.message : String(error)}) — ${UNMEASURED}`);
     measuredTable = null;

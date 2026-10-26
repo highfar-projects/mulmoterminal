@@ -1,0 +1,11 @@
+# Generates common/psmuxWidthRuns.ts from the width crate psmux itself uses (#3180).
+# Run: CARGO_TARGET_DIR=<scratch dir> cargo run --manifest-path scripts/psmux-widths/Cargo.toml > common/psmuxWidthRuns.ts
+# Bump the version below to match psmux's crates/vt100-psmux/Cargo.lock when it moves.
+[package]
+name = "psmux-widths"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+unicode-width = "=0.2.2"

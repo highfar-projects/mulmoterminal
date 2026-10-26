@@ -33,6 +33,7 @@ const mocks = vi.hoisted(() => ({
   liveInstances: vi.fn(() => [{ pid: 123, port: 4321, startedAt: 1_000 }]),
   registerInstance: vi.fn(() => () => {}),
   tmuxLiveServer: vi.fn(),
+  tmuxIsPsmux: vi.fn(() => false),
   measureTmuxWidths: vi.fn(async () => null),
 }));
 
@@ -42,7 +43,7 @@ vi.mock("../../../../server/infra/http/loopback.js", () => ({ boundAddress: mock
 vi.mock("../../../../server/infra/process/tmux.js", () => ({
   tmuxAvailable: mocks.tmuxAvailable,
   tmuxListSessionIds: mocks.tmuxListSessionIds,
-  tmuxIsPsmux: () => false,
+  tmuxIsPsmux: mocks.tmuxIsPsmux,
   tmuxPsmuxVersion: () => null,
   tmuxLiveServer: mocks.tmuxLiveServer,
 }));
@@ -141,7 +142,14 @@ describe("onListening", () => {
 
   it("measures tmux widths against the live server's version", () => {
     run();
-    expect(mocks.measureTmuxWidths).toHaveBeenCalledWith(expect.any(Function), mocks.tmuxLiveServer);
+    expect(mocks.measureTmuxWidths).toHaveBeenCalledWith(expect.any(Function), mocks.tmuxLiveServer, "tmux");
+  });
+
+  it("measures psmux as psmux (#3180)", () => {
+    mocks.tmuxIsPsmux.mockReturnValue(true);
+    run();
+    expect(mocks.measureTmuxWidths).toHaveBeenLastCalledWith(expect.any(Function), mocks.tmuxLiveServer, "psmux");
+    mocks.tmuxIsPsmux.mockReturnValue(false);
   });
 
   it("warns about the bind only when it is not loopback", () => {

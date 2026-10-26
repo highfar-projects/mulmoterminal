@@ -36,7 +36,7 @@ server   ── node-pty  ── tmux (persistence)  ── agent (claude / code
 | `@xterm/addon-web-links` | `^0.12.0` | Linkifies visible `http(s)://` URLs. |
 | `@xterm/addon-clipboard` | `^0.2.0` | OSC 52 clipboard write (auto-copy → browser clipboard). |
 | `@xterm/addon-fit` | `^0.11.0` | Size the grid to the container. |
-| `@xterm/addon-unicode11` | `^0.9.0` | Registers the Unicode 11 width table — the fallback when `/api/config` carries no `terminalWidthTable` measured from tmux (psmux, no tmux, or before the boot probe ends). |
+| `@xterm/addon-unicode11` | `^0.9.0` | Registers the Unicode 11 width table — the fallback when `/api/config` carries no `terminalWidthTable` (no tmux, a psmux whose samples disagree, or before the boot probe ends). |
 | `node-pty` | `^1.1.0` | The PTY. |
 | tmux | 3.4+ at runtime | OSC 8 hyperlink forwarding (`terminal-features hyperlinks`) needs 3.4+. Measured on 3.6a. |
 | psmux (Windows) | 3.4.0+ | Answers `tmux -V` as `tmux 3.x` and names itself on the second line (`server/infra/process/psmux.ts`). 3.4.0 is the first with `PSMUX_VT_INPUT`, which the client is started with. |
@@ -78,7 +78,7 @@ server   ── node-pty  ── tmux (persistence)  ── agent (claude / code
   for a fullwidth character, and the face a browser picks for an unnamed glyph is not required to
   be em-square, so leaving CJK to the generic `monospace` fallback tears box-drawing frames.
 
-### Character widths — measured from tmux (#3117, #3173)
+### Character widths — measured from tmux (#3117, #3173, #3180)
 
 tmux decides how many columns each character takes and places everything after it from that
 answer; when the browser's xterm counts differently, the rest of the row is drawn off by the
@@ -102,6 +102,14 @@ table meanwhile, and asks again after a failed request. Open terminals switch to
 sends a `redraw` frame so tmux repaints the cells xterm already parsed. The table is also
 dropped when the live `-L mulmoterminal` server is a different tmux version from the one measured
 (a server that outlived an upgrade), since that server is the one laying out the reattached sessions.
+
+psmux (#3180) cannot be measured the same way: `#{w:}` answers with a codepoint count, and
+`respawn-pane -k` drops the session. Its widths are those of the Rust crate it counts with,
+`unicode-width`, generated into `common/psmuxWidthRuns.ts` by `scripts/psmux-widths` (regenerate when
+psmux moves the crate); its fold rule is the `psmux` one in `tmuxClusters.ts`, tmux 3.6a's except
+that a flag takes no third regional indicator. Before either is used, the probe prints a set of
+samples in a throwaway psmux server, one session each, and reads `#{cursor_x}`; any disagreement
+leaves psmux on Unicode 11.
 
 `test/server/infra/process/tmuxWidthProbe.spec.ts` is the check that matters: a real tmux, a client
 attached through a PTY, and the bytes it receives fed to xterm with the table — every marker must land
