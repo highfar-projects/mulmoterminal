@@ -30,10 +30,16 @@ export interface ThreadOrigin {
 // Every `ThreadSource` codex names other than `user`, plus the one its app attaches by hand.
 const MACHINERY_THREAD_SOURCES: ReadonlySet<string> = new Set(["subagent", "guardian_review", "memory_consolidation", "automation"]);
 
+// serde writes a variant with data as an object with exactly ONE key, so anything else is not
+// codex's and stays visible: absent or malformed is a root thread, because dropping a row costs a
+// person their conversation and listing one costs them a scroll.
 export function sessionSourceKind(source: unknown): SessionSourceKind {
   if (!isRecord(source)) return "root";
-  if (Object.hasOwn(source, "subagent")) return "subagent";
-  if (Object.hasOwn(source, "internal")) return "internal";
+  const keys = Object.keys(source);
+  if (keys.length !== 1) return "root";
+  const [variant] = keys;
+  if (variant === "subagent") return "subagent";
+  if (variant === "internal") return "internal";
   return "root";
 }
 

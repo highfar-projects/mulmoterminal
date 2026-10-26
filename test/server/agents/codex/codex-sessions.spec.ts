@@ -410,13 +410,14 @@ describe("parseCodexSessionMeta", () => {
       sourceKind: "root",
     });
   });
-  it("classifies who started the thread from `source`", () => {
-    // Line 1 of a guardian review rollout, as reported in #3198.
-    const line = JSON.stringify({
-      type: "session_meta",
-      payload: { id: UUID_A, cwd: "/work", thread_source: "guardian_review", source: { subagent: { other: "guardian" } }, originator: "codex-tui" },
-    });
-    expect(parseCodexSessionMeta(line)).toEqual({ id: UUID_A, cwd: "/work", threadSource: "guardian_review", sourceKind: "subagent" });
+  // The first is line 1 of a guardian review rollout as reported in #3198; the second is what
+  // codex's memory consolidation writes.
+  it.each([
+    ["a guardian review", { subagent: { other: "guardian" } }, "guardian_review", "subagent"],
+    ["memory consolidation", { internal: "memory_consolidation" }, "memory_consolidation", "internal"],
+  ])("classifies who started %s from `source`", (_label, source, threadSource, sourceKind) => {
+    const line = JSON.stringify({ type: "session_meta", payload: { id: UUID_A, cwd: "/work", thread_source: threadSource, source, originator: "codex-tui" } });
+    expect(parseCodexSessionMeta(line)).toEqual({ id: UUID_A, cwd: "/work", threadSource, sourceKind });
   });
   it.each([
     ["a user_message row", JSON.stringify({ type: "event_msg", payload: { type: "user_message", message: "hi" } })],

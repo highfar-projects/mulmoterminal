@@ -46,6 +46,8 @@ describe("sessionSourceKind", () => {
     ["an empty object", {}],
     ["the variant with the wrong case", { Subagent: "review" }],
     ["the inner shape without its key", { other: "guardian" }],
+    ["two variant keys at once", { subagent: "review", custom: "atlas" }],
+    ["a machinery key beside a stray field", { internal: "guardian", extra: 1 }],
   ])("reads %s as a root thread", (_label, source) => {
     expect(sessionSourceKind(source)).toBe("root");
   });
