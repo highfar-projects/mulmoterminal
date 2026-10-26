@@ -9,6 +9,7 @@ import { ref, watch, type Ref } from "vue";
 import { usePollWhileVisible } from "./usePollWhileVisible";
 import { EMPTY_WORK_ITEM, isIssueNumber, isPrPhase, type WorkItem } from "../../common/prPhase";
 import { isRecord } from "../../common/isRecord";
+import { safeHttpsUrl } from "../../common/httpsUrl";
 import { isIssueWorkCommentsEnabled } from "./issueWorkComments";
 import type { WorkCommentKind } from "../../common/workComment";
 import { isWorkCommentFailure, type WorkCommentFailure } from "../../common/workCommentFailure";
@@ -21,20 +22,7 @@ const POLL_MS = 30_000;
 // nothing rather than an impossible link (found by CodeRabbit review).
 const numberOrNull = (v: unknown): number | null => (isIssueNumber(v) ? v : null);
 
-// These go straight into an `<a href>`, so the scheme is not the response's decision to make:
-// `javascript:` in that attribute runs on click. https only — github.com and GitHub Enterprise
-// both serve it, and the cost of refusing anything else is a missing hyperlink next to a number
-// that still shows (found by Codex review).
 const textOrNull = (v: unknown): string | null => (typeof v === "string" && v.trim() !== "" ? v : null);
-
-const safeHttpsUrl = (v: unknown): string | null => {
-  if (typeof v !== "string" || v === "") return null;
-  try {
-    return new URL(v).protocol === "https:" ? v : null;
-  } catch {
-    return null;
-  }
-};
 
 // The server is the only writer of this shape, but it is a network response: an old build, a
 // proxy returning HTML, or a half-deployed server would otherwise put `undefined` in the chip.

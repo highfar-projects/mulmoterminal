@@ -6,6 +6,7 @@ import { ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import type { BoardCard, BoardDetailResponse } from "../../common/githubBoard";
 import { isRecord } from "../../common/isRecord";
+import { safeHttpsUrl } from "../../common/httpsUrl";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 import { ciDotClass } from "./ciDot";
@@ -24,6 +25,16 @@ const failed = ref(false);
 let requestId = 0;
 
 const isDetail = (body: unknown): body is BoardDetailResponse => isRecord(body) && "issue" in body && "pr" in body && Array.isArray(body.errors);
+
+// Every link in the panel comes from GitHub data, and a status check's `targetUrl` is whatever the
+// integration that posted it wrote — so each is made safe once, here, before anything binds it.
+const linkable = (url: string): string => safeHttpsUrl(url) ?? "";
+
+const withSafeLinks = (body: BoardDetailResponse): BoardDetailResponse => ({
+  ...body,
+  issue: body.issue && { ...body.issue, url: linkable(body.issue.url) },
+  pr: body.pr && { ...body.pr, url: linkable(body.pr.url), checks: body.pr.checks.map((check) => ({ ...check, url: linkable(check.url) })) },
+});
 
 const detailUrl = (card: BoardCard): string => {
   const query = new URLSearchParams({ repo: props.repo });
@@ -44,7 +55,7 @@ async function load(card: BoardCard): Promise<void> {
     const res = await fetchWithTimeout(detailUrl(card), {}, SLOW_COMMAND_TIMEOUT_MS);
     const body = await jsonBody(res);
     if (id !== requestId) return;
-    detail.value = res.ok && isDetail(body) ? body : null;
+    detail.value = res.ok && isDetail(body) ? withSafeLinks(body) : null;
     failed.value = detail.value === null;
   } catch {
     if (id === requestId) failed.value = true;
@@ -95,6 +106,7 @@ const REVIEW_TONE: Record<string, string> = { APPROVED: "text-[#3fae6b]", CHANGE
         <h4 class="mb-1 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-muted">
           PR #{{ detail.pr.number }}
           <a
+            v-if="detail.pr.url"
             class="ml-auto font-normal normal-case tracking-normal text-secondary hover:text-fg"
             :href="detail.pr.url"
             target="_blank"
@@ -140,6 +152,7 @@ const REVIEW_TONE: Record<string, string> = { APPROVED: "text-[#3fae6b]", CHANGE
         <h4 class="mb-1 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.06em] text-muted">
           {{ t("githubBoard.detail.issue", { number: detail.issue.number }) }}
           <a
+            v-if="detail.issue.url"
             class="ml-auto font-normal normal-case tracking-normal text-secondary hover:text-fg"
             :href="detail.issue.url"
             target="_blank"

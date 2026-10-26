@@ -139,6 +139,28 @@ describe("GithubBoard", () => {
     );
   });
 
+  it("links no GitHub-supplied URL that is not https", async () => {
+    const hostile: BoardDetailResponse = {
+      ...detail,
+      issue: detail.issue && { ...detail.issue, url: "javascript:alert(1)" },
+      pr: detail.pr && { ...detail.pr, url: "data:text/html,x", checks: [{ name: "evil", ci: "failing", url: "javascript:alert(2)" }] },
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async (url: string) =>
+          new Response(JSON.stringify(url.startsWith("/api/github/board/detail") ? hostile : { repos: [{ repo: "o/r", cards: [prCard] }] })),
+      ),
+    );
+    const w = mount(GithubBoard);
+    await flushPromises();
+    await w.get('[data-testid="board-card-open"]').trigger("click");
+    await flushPromises();
+    const panel = w.get('[data-testid="board-detail"]');
+    expect(panel.get('[data-testid="board-detail-check"]').text()).toBe("evil");
+    expect(panel.findAll("a").map((link) => link.attributes("href"))).toEqual([]);
+  });
+
   it("closes the panel when the same card is pressed again, or its close button", async () => {
     serveBoardAndDetail({ repos: [{ repo: "o/r", cards: [prCard] }] });
     const w = mount(GithubBoard);

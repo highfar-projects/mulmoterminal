@@ -32,30 +32,32 @@ const parseReview = (raw: Record<string, unknown>): BoardReview => ({
   submittedAt: readString(raw.submittedAt),
 });
 
-/** One `gh issue view --json` object, or null when it lacks the identity fields. */
-export function parseIssueDetail(raw: unknown): BoardIssueDetail | null {
-  if (!isRecord(raw) || typeof raw.number !== "number" || typeof raw.url !== "string") return null;
+type DetailBase = Pick<BoardIssueDetail, "number" | "title" | "url" | "author" | "body">;
+
+// What an issue and a PR both carry, beside the record it came from; null without the identity fields.
+const detailBase = (input: unknown): { base: DetailBase; raw: Record<string, unknown> } | null => {
+  if (!isRecord(input) || typeof input.number !== "number" || typeof input.url !== "string") return null;
   return {
-    number: raw.number,
-    title: readString(raw.title),
-    url: raw.url,
-    author: login(raw.author),
-    labels: records(raw.labels)
-      .map((label) => readString(label.name))
-      .filter((name) => name !== ""),
-    body: readString(raw.body),
+    base: { number: input.number, title: readString(input.title), url: input.url, author: login(input.author), body: readString(input.body) },
+    raw: input,
   };
+};
+
+/** One `gh issue view --json` object, or null when it lacks the identity fields. */
+export function parseIssueDetail(input: unknown): BoardIssueDetail | null {
+  const parsed = detailBase(input);
+  if (!parsed) return null;
+  const labels = records(parsed.raw.labels).map((label) => readString(label.name));
+  return { ...parsed.base, labels: labels.filter((name) => name !== "") };
 }
 
 /** One `gh pr view --json` object, or null when it lacks the identity fields. */
-export function parsePrDetail(raw: unknown): BoardPrDetail | null {
-  if (!isRecord(raw) || typeof raw.number !== "number" || typeof raw.url !== "string") return null;
+export function parsePrDetail(input: unknown): BoardPrDetail | null {
+  const parsed = detailBase(input);
+  if (!parsed) return null;
+  const { raw } = parsed;
   return {
-    number: raw.number,
-    title: readString(raw.title),
-    url: raw.url,
-    author: login(raw.author),
-    body: readString(raw.body),
+    ...parsed.base,
     isDraft: raw.isDraft === true,
     additions: count(raw.additions),
     deletions: count(raw.deletions),
