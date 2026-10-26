@@ -1,0 +1,30 @@
+// The board's live half (#3182), pure: the cards as the `sessions` channel says their cells are now,
+// and which cells have just finished a turn — the moment a push or a new PR is likely, so the board
+// is worth reading again.
+import type { BoardCard, RepoBoard } from "../../common/githubBoard";
+import type { CellActivity } from "../composables/sessionActivity";
+
+/** Every session id the board shows a cell for. */
+export const boardSessionIds = (repos: readonly RepoBoard[]): string[] => [
+  ...new Set(repos.flatMap((repo) => (repo.cards ?? []).flatMap((card) => card.cells.map((cell) => cell.session)))),
+];
+
+const liveCard = (card: BoardCard, activity: ReadonlyMap<string, CellActivity>): BoardCard => ({
+  ...card,
+  cells: card.cells.map((cell) => {
+    const live = activity.get(cell.session);
+    return live ? { ...cell, working: live.working, waiting: live.waiting } : cell;
+  }),
+});
+
+/** The board with each cell's working / waiting taken from the live feed where it has a word. */
+export const withLiveCells = (repos: readonly RepoBoard[], activity: ReadonlyMap<string, CellActivity>): RepoBoard[] =>
+  repos.map((repo) => (repo.cards ? { ...repo, cards: repo.cards.map((card) => liveCard(card, activity)) } : repo));
+
+/** A card some cell of which is waiting for the user. */
+export const cardWaiting = (card: BoardCard): boolean => card.cells.some((cell) => cell.waiting);
+
+/** Sessions that were working before and are not now. A session absent from `now` has closed, which
+ *  ends its turn too. */
+export const finishedTurns = (before: ReadonlyMap<string, boolean>, now: ReadonlyMap<string, boolean>): string[] =>
+  [...before.entries()].filter(([session, working]) => working && now.get(session) !== true).map(([session]) => session);
