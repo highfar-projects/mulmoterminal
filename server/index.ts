@@ -402,6 +402,7 @@ const logMove = (sessionId: string, why: string, outcome: LimitRotationOutcome):
 
 mountAppRoutes(app, {
   clientDir: __dirname,
+  outputBufferLimit: OUTPUT_BUFFER_LIMIT,
   rateLimits,
   onRateLimited: (sessionId) => logMove(sessionId, "hit its usage limit", rotateOnLimit(limitRotationDeps, sessionId)),
   onTurnEnded: (sessionId) => logMove(sessionId, "ended a turn at the switch line", rotateNearLimit(limitRotationDeps, sessionId)),

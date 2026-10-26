@@ -37,6 +37,10 @@ import { mountRepoRoutes } from "../routes/repo-routes.js";
 import { mountAgentAvailabilityRoutes } from "../routes/agent-availability-routes.js";
 import type { AgentAvailability } from "../../common/agentAvailability.js";
 import { mountIssueWorkRoutes } from "../routes/issue-work-routes.js";
+import { mountTerminalReplyRoutes } from "./terminal-reply-routes.js";
+import { captureTerminalScreen } from "../backends/remoteHost/hostScreens.js";
+import { sessionExistsHere } from "../backends/remoteHost/hostBindings.js";
+import { sendToSession } from "../session/session-input.js";
 import type { SpawnIssueSession } from "../session/spawn/issue-session-spawn.js";
 import { mountDirRoutes } from "../routes/dir-routes.js";
 import { mountPlayfulMediaRoutes } from "../routes/playful-media-routes.js";
@@ -134,6 +138,8 @@ export interface AppRouteDeps extends SessionActivityDeps {
   /** A live session's turn ended: move it if its credential is at the switch line (#2919). */
   onTurnEnded?: (sessionId: string) => void;
   isAllowedOrigin: (origin: string | undefined, remoteAddress: string | undefined) => boolean;
+  /** How much of a session's output the screen capture reads (the PTY buffer's cap). */
+  outputBufferLimit: number;
   publish: (channel: string, data: unknown) => void;
   sessionChannel: (id: string) => string;
   toolStores: ReturnType<typeof createToolStores>;
@@ -430,6 +436,14 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
 
   // Starting work FROM an issue row in that view: the worktree plus its seeded session (#1173).
   mountIssueWorkRoutes(app, { spawnIssueSession: deps.spawnIssueSession, isAllowedOrigin: deps.isAllowedOrigin });
+
+  // Reading a cell's screen and typing a reply into it, from the board's detail panel (#3185).
+  mountTerminalReplyRoutes(app, {
+    sessionExists: sessionExistsHere,
+    captureScreen: (sessionId) => captureTerminalScreen(sessionId, deps.outputBufferLimit),
+    sendReply: sendToSession,
+    isAllowedOrigin: deps.isAllowedOrigin,
+  });
 
   // GET/POST /api/config (workspace dir + directory presets) — in its own module.
   // GRID-ONLY (dev_tool): backs the grid launcher's default dir + the settings
