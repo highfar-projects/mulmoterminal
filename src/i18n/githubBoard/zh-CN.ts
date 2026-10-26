@@ -24,6 +24,17 @@ export const githubBoardZhCN = {
     jump: "转到此终端",
     notInGrid: "正在运行，但不在网格中",
     start: "开始：把 issue 发送到新的 worktree 会话",
+    reply: {
+      showScreen: "显示屏幕",
+      refreshScreen: "刷新屏幕",
+      screenFailed: "无法读取屏幕。",
+      emptyScreen: "（屏幕上没有内容）",
+      placeholder: "回复或下一步指示",
+      send: "发送",
+      sending: "发送中…",
+      failed: "无法发送到此终端。",
+      keysHint: "权限确认（1. Yes / 2. No）需要按键操作：请打开终端回答。",
+    },
     detail: {
       region: "卡片详情",
       open: "显示详情",

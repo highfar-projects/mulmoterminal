@@ -24,6 +24,17 @@ export const githubBoardKo = {
     jump: "이 터미널로 이동",
     notInGrid: "실행 중이지만 그리드에 없습니다",
     start: "시작: 새 worktree 세션에 issue 를 보냅니다",
+    reply: {
+      showScreen: "화면 보기",
+      refreshScreen: "화면 새로 고침",
+      screenFailed: "화면을 읽을 수 없습니다.",
+      emptyScreen: "(화면에 아무것도 없습니다)",
+      placeholder: "답장 또는 다음 지시",
+      send: "보내기",
+      sending: "보내는 중…",
+      failed: "이 터미널로 보낼 수 없습니다.",
+      keysHint: "권한 확인(1. Yes / 2. No)은 키 입력이 필요합니다. 터미널을 열어 답하세요.",
+    },
     detail: {
       region: "카드 상세",
       open: "상세 보기",

@@ -11,6 +11,7 @@ import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 import { ciDotClass } from "./ciDot";
 import GithubBoardCells from "./GithubBoardCells.vue";
+import GithubBoardCellReply from "./GithubBoardCellReply.vue";
 import MarkdownProse from "./MarkdownProse.vue";
 
 const props = defineProps<{ repo: string; card: BoardCard; home: string | null }>();
@@ -99,7 +100,10 @@ const REVIEW_TONE: Record<string, string> = { APPROVED: "text-[#3fae6b]", CHANGE
 
       <section v-if="card.cells.length" class="mb-3">
         <h4 class="mb-1 text-[11px] font-bold uppercase tracking-[0.06em] text-muted">{{ t("githubBoard.detail.cells") }}</h4>
-        <GithubBoardCells :cells="card.cells" :home="home" />
+        <div v-for="cell in card.cells" :key="cell.session" class="mb-2.5 flex flex-col gap-1">
+          <GithubBoardCells :cells="[cell]" :home="home" />
+          <GithubBoardCellReply :cell="cell" />
+        </div>
       </section>
 
       <section v-if="detail?.pr" data-testid="board-detail-pr" class="mb-3">

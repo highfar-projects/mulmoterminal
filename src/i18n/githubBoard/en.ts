@@ -24,6 +24,17 @@ export const githubBoardEn = {
     jump: "Go to this terminal",
     notInGrid: "Running, but not in the grid",
     start: "Start: sends the issue to a new worktree session",
+    reply: {
+      showScreen: "Show the screen",
+      refreshScreen: "Refresh the screen",
+      screenFailed: "Could not read the screen.",
+      emptyScreen: "(nothing on screen)",
+      placeholder: "Reply or give the next instruction",
+      send: "Send",
+      sending: "Sending…",
+      failed: "Could not send to this terminal.",
+      keysHint: "A permission prompt (1. Yes / 2. No) needs keys: open the terminal to answer it.",
+    },
     detail: {
       region: "Card details",
       open: "Show details",

@@ -24,6 +24,17 @@ export const githubBoardJa = {
     jump: "このターミナルへ移動",
     notInGrid: "動いていますが、グリッドにはありません",
     start: "開始: 新しい worktree セッションに issue を送ります",
+    reply: {
+      showScreen: "画面を表示",
+      refreshScreen: "画面を更新",
+      screenFailed: "画面を読み込めませんでした。",
+      emptyScreen: "（画面に何もありません）",
+      placeholder: "返信、または次の指示",
+      send: "送信",
+      sending: "送信中…",
+      failed: "このターミナルに送れませんでした。",
+      keysHint: "許可の確認（1. Yes / 2. No）はキー操作が必要です。ターミナルを開いて答えてください。",
+    },
     detail: {
       region: "カードの詳細",
       open: "詳細を表示",

@@ -24,6 +24,17 @@ export const githubBoardZhTW = {
     jump: "前往此終端機",
     notInGrid: "正在執行，但不在網格中",
     start: "開始：把 issue 傳送到新的 worktree 工作階段",
+    reply: {
+      showScreen: "顯示畫面",
+      refreshScreen: "重新整理畫面",
+      screenFailed: "無法讀取畫面。",
+      emptyScreen: "（畫面上沒有內容）",
+      placeholder: "回覆或下一步指示",
+      send: "傳送",
+      sending: "傳送中…",
+      failed: "無法傳送到此終端機。",
+      keysHint: "權限確認（1. Yes / 2. No）需要按鍵操作：請開啟終端機回答。",
+    },
     detail: {
       region: "卡片詳情",
       open: "顯示詳情",
