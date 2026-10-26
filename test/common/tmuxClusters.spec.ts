@@ -159,9 +159,9 @@ describe("rowWidthOf under psmux's rule", () => {
 // widths are what those tmux grids drew (tmuxWidthProbe.spec.ts prints the same rows).
 describe("a cell that is full", () => {
   const table = (folding: TmuxWidthTable["folding"]): TmuxWidthTable => ({ runs: PSMUX_WIDTH_RUNS, folding, vs16Wide: true });
-  // 25 bytes: one ZWJ'd emoji past 21.
+  // The sequence before the x is 25 bytes: its last emoji is past 21.
   const familyOfFour = "\u{1f468}\u200d\u{1f469}\u200d\u{1f467}\u200d\u{1f466}x";
-  // 41 bytes: the ZWJ that would take it past 32 is dropped, so the last emoji starts a cell.
+  // The sequence before the x is 41 bytes: the ZWJ that would take it past 32 is dropped, so the last emoji starts a cell.
   const tonedFamilyOfFour = "\u{1f468}\u{1f3fd}\u200d\u{1f469}\u{1f3fd}\u200d\u{1f467}\u{1f3fd}\u200d\u{1f466}\u{1f3fd}x";
 
   it.each([
