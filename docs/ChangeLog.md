@@ -8,6 +8,43 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@11.4.0 — 2026-10-26
+
+> **Setup guide:** [11.4.0 — A board for your issues and PRs](https://receptron.github.io/mulmoterminal/guide/en/v11.4.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v11.4.0.html))
+
+### The GitHub board, experimental (#3175, #3178, #3181, #3183, #3187)
+
+`/github/board`, opened from **Open the board (experimental)** on `/github`. Per configured GitHub repo, each piece of work is a card in To do, Implementing, In review, Ready (QA) or Merged, joining an issue to the PR that closes it (`closingIssuesReferences`, else the issue number in the branch name when that issue is open) and to the live cells on its branch (`GET /api/github/board`). Draft, failing CI or changes requested is Implementing; CI pending or an unreviewed head commit is In review; otherwise Ready. The review round counts distinct commits that received a review (#3175).
+
+- **Detail panel** (#3178): pressing a card opens the issue body and labels, the PR's per-check state, reviews and body (`GET /api/github/board/detail`, a repo outside `prRepos` is a 404), and the card's cells; GitHub is a link inside it. Bodies render through `MarkdownProse` with images as links.
+- **Start from the board** (#3181): a To do card's start button cuts the issue's worktree and starts the picked agent with the issue text sent at once, staying on the board. `POST /api/issues/start` takes an optional boolean `run`; the `/github` rows still leave the seed as a draft.
+- **Live** (#3183): cell state follows the grid's `sessions` feed; a card with a waiting cell gets an amber border and "Waiting for you"; the board reloads every minute while visible and a few seconds after one of its cells finishes a turn; a failed reload keeps the cards.
+- **Answer from the board** (#3187): each cell in the panel shows its current screen (`GET /api/terminal/:sessionId/screen`) and takes a one-line reply with Enter (`POST /api/terminal/:sessionId/reply`, the phone's sanitized sender, which never clears the input box). Claude's question dialog shows as buttons when the question pane is on; a permission prompt is answered in the terminal.
+
+### Bot jobs: a remote bot's Python job in an approved terminal (#3184, #3192)
+
+A remote agent (GrokBot) can submit Python through MulmoServer's bot entrance (receptron/mulmoserver#360). The `botJob` handler writes the script under `~/.mulmoterminal/bot-jobs/<sessionId>/` and opens a Shell cell that shows the script and the command line with control bytes drawn visibly, then asks `Run this job? [y/N]`; nothing runs without a typed `y`. It answers the exit code and the last 200 KiB of output. Off unless `botJobs.enabled`, read per job; the cell opens with no tab open and is pinned against the detached-session reaper until the job has an outcome (#3184). Settings → Integrations → **Bot jobs** holds the switch, the interpreter (`botJobs.python`) and the bot tokens; a token can be created only while the mobile remote is connected, and its secret is shown once with the two addresses to give the bot (#3192).
+
+### Terminal cell widths match tmux (#3174, #3186, #3190, #3193, #3195)
+
+The browser now counts each character's width the way the server's tmux does, so emoji, flags, skin tones, ZWJ sequences and Hangul jamo no longer shift the rest of a row. At start the server measures the running tmux's widths and its grapheme-folding rule (3.4, 3.6, 3.6a), checks the live server is the same version, and serves the table at `/api/config/terminal-widths`; xterm uses it through a custom Unicode provider (#3174). A tab that loaded before the measurement ended adopts the late table and the server redraws the client (#3186), without blocking the event loop (#3190). On Windows the same is done for psmux 3.4, whose widths come from its pinned `unicode-width` (#3193). A cell stops folding once its bytes would pass tmux's per-cell limit — 21 bytes in tmux 3.4 and 3.5, 32 in 3.6 and psmux (#3195).
+
+### Refuse requests to a host the server does not answer to (#3191)
+
+Every HTTP request is refused with `403` unless it is addressed to localhost or a name in `MULMOTERMINAL_HOST` / `MULMOTERMINAL_ALLOWED_ORIGINS`, against DNS rebinding. Before, a rebound page could read `/api/sessions` and `/api/config`. Opening by an unlisted LAN address behind a wildcard bind now gets a 403 naming the setting, instead of a page with no terminal.
+
+### Shared plugins follow the app's language (#3171)
+
+Shared plugins get the app's display language instead of a fixed `en`, and collections and accounting take the language picked in the app rather than the browser's. `zh-CN` and `zh-TW` map to the plugins' `zh` dictionary.
+
+### psmux: the warm pool is turned off (#3169)
+
+On psmux 3.3.1+, `warm off` goes into the conf and to every running session. Every cell's `new-session` carries `-e`, which never claims a spare shell, so the spares only held memory and restarted on every resize.
+
+### Dependencies (#3176)
+
+`@gui-chat-plugin/jinglescript` and `jinglescript` 0.11.2, `@gui-chat-plugin/spreadsheet` 5.0.1, `@google/genai` 2.31.0, `@modelcontextprotocol/sdk` 1.32.2, `puppeteer` 25.16.0, `knip` 6.43.0.
+
 ## mulmoterminal@11.3.0 — 2026-10-22
 
 > **Setup guide:** [11.3.0 — Decide a plan on a page](https://receptron.github.io/mulmoterminal/guide/en/v11.3.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v11.3.0.html))
