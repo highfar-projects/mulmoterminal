@@ -17,7 +17,7 @@ import type { SoundConfig } from "./useAttentionSound";
 import { DEFAULT_TERMINAL_SUBMIT_MODE, isTerminalSubmitMode } from "../../common/terminalSubmit";
 import { setTerminalSubmitMode } from "./terminalSubmitMode";
 import { setTmuxPrefix } from "./tmuxPrefix";
-import { setTerminalUnicodeVersion } from "./terminalUnicodeVersion";
+import { setTerminalUnicodeVersion, setTerminalWidthTable } from "./terminalUnicodeVersion";
 import { setGlobalFontFamily } from "./terminalFontFamily";
 import { setCustomThemes } from "./customThemes";
 import { refreshTheme } from "./useTheme";
@@ -479,6 +479,7 @@ function applyGlobalSettings(c: Record<string, unknown>, pinsMark: number): void
   setTerminalSubmitMode(isTerminalSubmitMode(c.terminalSubmit) ? c.terminalSubmit : DEFAULT_TERMINAL_SUBMIT_MODE);
   setTmuxPrefix(c.tmuxPrefix);
   setTerminalUnicodeVersion(c.terminalUnicodeVersion);
+  setTerminalWidthTable(c.terminalWidthTable);
   // Keyboard shortcuts are opt-in: no `keymap` in config.json leaves this empty and
   // every shortcut stays off.
   setActiveKeymap(c.keymap);

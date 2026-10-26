@@ -35,7 +35,8 @@ import { ClipboardAddon, type IClipboardProvider } from "@xterm/addon-clipboard"
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { guardMouseClicks, guardMouseTracking, type WheelScrollControl } from "./terminalMouseInput";
 import { getTerminalScrollSpeed } from "./useTerminalScrollSpeed";
-import { getTerminalUnicodeVersion } from "./terminalUnicodeVersion";
+import { getTerminalUnicodeVersion, getTerminalWidthTable } from "./terminalUnicodeVersion";
+import { tmuxUnicodeProvider, TMUX_UNICODE_VERSION } from "../../common/tmuxUnicodeProvider";
 import { scrollsToBottomOnSubmit } from "./useScrollToBottomOnSubmit";
 import { isTypedInput } from "./terminalUserInput";
 import { bufferIsShort, readBufferShape } from "./terminalBufferHealth";
@@ -432,6 +433,14 @@ interface TerminalRuntime {
   wheel: WheelScrollControl;
 }
 
+// The server tmux's measured table when it sent one (#3173), else the built-in table it named. A table
+// that arrives later is registered then: registering replaces the provider of the same version.
+function applyCellWidths(term: Terminal): void {
+  const table = getTerminalWidthTable();
+  if (table) term.unicode.register(tmuxUnicodeProvider(table));
+  term.unicode.activeVersion = table ? TMUX_UNICODE_VERSION : getTerminalUnicodeVersion();
+}
+
 // Everything a slot's xterm is made of. Built here rather than inline in ensure() because a
 // terminal that xterm has killed can only be replaced, never revived (see rebuildTerminal).
 // The mouse-mode record is passed in: it belongs to the connection and outlives any one terminal.
@@ -472,9 +481,9 @@ function buildTerminal(swallowedMouseModes: Set<number>, font: TerminalFont): Te
   // addon xterm ignores it, so the copy silently never reaches the browser clipboard.
   term.loadAddon(new ClipboardAddon(undefined, clipboardProvider));
   // Loading the addon only registers the "11" table; which one is active is the server's answer
-  // (see common/terminalUnicode.ts), and stays xterm's default "6" unless it says otherwise.
+  // (see applyCellWidths).
   term.loadAddon(new Unicode11Addon());
-  term.unicode.activeVersion = getTerminalUnicodeVersion();
+  applyCellWidths(term);
   const host = document.createElement("div");
   host.style.width = "100%";
   host.style.height = "100%";
@@ -1046,8 +1055,6 @@ watch(getTerminalScrollSpeed, setScrollSpeed);
 
 // Watched at module scope for the scroll speed's reason: one value for every terminal. The config
 // usually arrives after the first terminals are built.
-watch(getTerminalUnicodeVersion, (version) => {
-  conns.forEach((c) => {
-    c.term.unicode.activeVersion = version;
-  });
+watch([getTerminalUnicodeVersion, getTerminalWidthTable], () => {
+  conns.forEach((c) => applyCellWidths(c.term));
 });

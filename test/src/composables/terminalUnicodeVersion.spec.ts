@@ -11,45 +11,80 @@ vi.mock("@xterm/addon-clipboard", async () => (await import("../../helpers/xterm
 vi.mock("@xterm/xterm/css/xterm.css", () => ({}));
 
 import * as conn from "../../../src/composables/useTerminalConnections";
-import { getTerminalUnicodeVersion, setTerminalUnicodeVersion } from "../../../src/composables/terminalUnicodeVersion";
+import {
+  getTerminalUnicodeVersion,
+  getTerminalWidthTable,
+  setTerminalUnicodeVersion,
+  setTerminalWidthTable,
+} from "../../../src/composables/terminalUnicodeVersion";
 import { FakeWebSocket } from "../../helpers/xtermDouble";
 
 const KEY = "cell-unicode";
 const target = { sessionId: null, cwd: "/w", devTerminal: false, command: null, launcher: null };
+
+const TABLE = { runs: [[0x2705, 0x2705, 2]], folding: "tmux-3.6a", vs16Wide: true };
 
 describe("the width table a terminal counts cells with", () => {
   beforeEach(() => {
     FakeWebSocket.instances.length = 0;
     globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
     setTerminalUnicodeVersion(undefined);
+    setTerminalWidthTable(undefined);
     mockTermState.unicode.activeVersion = "6";
+    mockTermState.unicode.registered.length = 0;
   });
   afterEach(() => {
     conn.release(KEY);
     setTerminalUnicodeVersion(undefined);
+    setTerminalWidthTable(undefined);
   });
 
-  it("stays on xterm's default table when the server says nothing", () => {
+  it("counts with Unicode 11 when the server says nothing", () => {
+    conn.attach(KEY, target, {}, document.createElement("div"));
+    expect(mockTermState.unicode.activeVersion).toBe("11");
+    expect(mockTermState.unicode.registered).toEqual([]);
+  });
+
+  it("builds a terminal on the built-in table the server named", () => {
+    setTerminalUnicodeVersion("6");
     conn.attach(KEY, target, {}, document.createElement("div"));
     expect(mockTermState.unicode.activeVersion).toBe("6");
   });
 
-  it("builds a terminal on the table the server asked for", () => {
-    setTerminalUnicodeVersion("11");
+  it("counts with the table measured from tmux when the server sent one", () => {
+    setTerminalWidthTable(TABLE);
     conn.attach(KEY, target, {}, document.createElement("div"));
-    expect(mockTermState.unicode.activeVersion).toBe("11");
+    expect(mockTermState.unicode.registered).toEqual(["tmux"]);
+    expect(mockTermState.unicode.activeVersion).toBe("tmux");
   });
 
-  it("carries a late answer to a terminal built before it", async () => {
+  it("carries a measured table that arrives late to a terminal built before it", async () => {
     conn.attach(KEY, target, {}, document.createElement("div"));
-    setTerminalUnicodeVersion("11");
+    setTerminalWidthTable(TABLE);
+    await nextTick();
+    expect(mockTermState.unicode.registered).toEqual(["tmux"]);
+    expect(mockTermState.unicode.activeVersion).toBe("tmux");
+  });
+
+  it("goes back to the named table when the measured one is withdrawn", async () => {
+    setTerminalWidthTable(TABLE);
+    conn.attach(KEY, target, {}, document.createElement("div"));
+    // Each change is its own config load; within one tick the watch would see no change at all.
+    await nextTick();
+    setTerminalWidthTable(null);
     await nextTick();
     expect(mockTermState.unicode.activeVersion).toBe("11");
   });
 
-  it.each([null, "", "12", 11, { version: "11" }])("falls back to the default for %j", (value) => {
-    setTerminalUnicodeVersion("11");
+  it.each([null, "", "12", 11, { version: "11" }])("falls back to Unicode 11 for a named table of %j", (value) => {
+    setTerminalUnicodeVersion("6");
     setTerminalUnicodeVersion(value);
-    expect(getTerminalUnicodeVersion()).toBe("6");
+    expect(getTerminalUnicodeVersion()).toBe("11");
+  });
+
+  it.each([null, "tmux", [], { runs: [[1, 2, 1]], folding: "tmux-3.6a", vs16Wide: true }, { runs: [] }])("ignores a measured table of %j", (value) => {
+    setTerminalWidthTable(TABLE);
+    setTerminalWidthTable(value);
+    expect(getTerminalWidthTable()).toBeNull();
   });
 });
