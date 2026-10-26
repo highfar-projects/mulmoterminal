@@ -12,13 +12,24 @@ const REQUEST_TIMEOUT_MS = 5000;
 // A failure answers null rather than throwing: this runs on every enlarge, and a session with no
 // question open is the ordinary case, so there is nothing to report either way.
 export async function fetchOpenQuestion(sessionId: string): Promise<AskQuestionEvent | null> {
+  const lookup = await lookUpOpenQuestion(sessionId);
+  return lookup.ok ? lookup.question : null;
+}
+
+/** The same read, telling a failed lookup apart from "nothing is asked". A caller that must not
+ *  type into an open dialog (the board's reply box, #3185) cannot treat the two alike: a lookup that
+ *  failed has said nothing about whether one is open. */
+export type OpenQuestionLookup = { ok: true; question: AskQuestionEvent | null } | { ok: false };
+
+export async function lookUpOpenQuestion(sessionId: string): Promise<OpenQuestionLookup> {
   try {
     const res = await fetchWithTimeout(`/api/question/${encodeURIComponent(sessionId)}`, undefined, REQUEST_TIMEOUT_MS);
-    if (!res.ok) return null;
+    if (!res.ok) return { ok: false };
     const body: unknown = await res.json();
-    return isRecord(body) && isAskQuestionEvent(body.question) ? body.question : null;
+    if (!isRecord(body)) return { ok: false };
+    return { ok: true, question: isAskQuestionEvent(body.question) ? body.question : null };
   } catch {
-    return null;
+    return { ok: false };
   }
 }
 

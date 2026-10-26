@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // The experimental GitHub board (#3172): per configured repo, five progress columns of cards from
-// /api/github/board. Fetched when it mounts and on the reload button; the column rules are the
-// server's (server/git/board.ts).
+// /api/github/board. Read when it mounts, on the reload button, and as useGithubBoardLive decides
+// (#3182); the column rules are the server's (server/git/board.ts).
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { BOARD_COLUMNS, type BoardCard, type BoardColumn, type RepoBoard } from "../../common/githubBoard";
@@ -15,6 +15,7 @@ import GithubBoardDetail from "./GithubBoardDetail.vue";
 import IssueStartAgentPicker from "./IssueStartAgentPicker.vue";
 import { useIssueStart } from "../composables/useIssueStart";
 import { boardSelection, type BoardSelection } from "../composables/useGithubBoardView";
+import { useGithubBoardLive } from "../composables/useGithubBoardLive";
 
 const emit = defineEmits<{ (e: "close" | "list"): void }>();
 
@@ -38,13 +39,18 @@ async function load(): Promise<void> {
     if (id !== requestId) return;
     const rows = res.ok && isRecord(body) && isUnknownArray(body.repos) ? body.repos : null;
     failed.value = rows === null;
-    repos.value = rows?.filter(isRepoBoard) ?? [];
+    // A failed read keeps the cards on screen: with the board reading itself every minute, one
+    // dropped request would otherwise blank it until the next.
+    if (rows) repos.value = rows.filter(isRepoBoard);
   } catch {
     if (id === requestId) failed.value = true;
   } finally {
     if (id === requestId) loading.value = false;
   }
 }
+
+// The cards with their cells' state as it is now, which is what every view below reads.
+const liveRepos = useGithubBoardLive(repos, () => void load());
 
 const cardsIn = (repo: RepoBoard, column: BoardColumn): BoardCard[] => (repo.cards ?? []).filter((card) => card.column === column);
 
@@ -55,7 +61,7 @@ const select = (repo: RepoBoard, card: BoardCard): void => {
 };
 
 const selectedCard = (selection: BoardSelection | null): BoardCard | null =>
-  repos.value.find((repo) => repo.repo === selection?.repo)?.cards?.find((candidate) => candidate.key === selection?.key) ?? null;
+  liveRepos.value.find((repo) => repo.repo === selection?.repo)?.cards?.find((candidate) => candidate.key === selection?.key) ?? null;
 
 // Looked up in the latest load, so the panel follows a card's cells across a refresh.
 const selected = computed(() => {
@@ -68,10 +74,7 @@ watch(repos, () => {
   if (boardSelection.value && !selectedCard(boardSelection.value)) boardSelection.value = null;
 });
 
-onMounted(() => {
-  void load();
-  void loadRepoDirs();
-});
+onMounted(() => void loadRepoDirs());
 onBeforeUnmount(() => (boardSelection.value = null));
 </script>
 
@@ -120,7 +123,7 @@ onBeforeUnmount(() => (boardSelection.value = null));
         <p v-if="startError" data-testid="issue-start-error" class="mb-3 text-[13px] text-err">{{ startError }}</p>
         <p v-if="failed" class="px-1 py-6 text-[13px] text-err">{{ t("githubBoard.loadFailed") }}</p>
         <p v-else-if="!loading && repos.length === 0" class="px-1 py-6 text-[13px] text-muted">{{ t("githubBoard.noRepos") }}</p>
-        <section v-for="repo in repos" :key="repo.repo" data-testid="board-repo" class="mb-6">
+        <section v-for="repo in liveRepos" :key="repo.repo" data-testid="board-repo" class="mb-6">
           <h3 class="my-1.5 border-b border-border pb-1 font-mono text-[13px] font-semibold text-fg">{{ repo.repo }}</h3>
           <p v-if="repo.error" class="px-1 py-3 text-[13px] text-err">{{ repo.error }}</p>
           <div v-else class="grid min-w-[900px] grid-cols-5 gap-2.5">

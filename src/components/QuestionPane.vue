@@ -22,6 +22,10 @@ const props = defineProps<{
   // them again would fail the same way, silently.
   failure?: AnswerFailure | null;
   expanded?: boolean;
+  // Placed inside another panel (the GitHub board's, #3185) rather than in the grid's pane slot: it
+  // takes that panel's width and has no expand / close of its own, which would act on a slot it is
+  // not in.
+  embedded?: boolean;
 }>();
 
 // `closed` never reaches here: the pane simply goes, because the question is genuinely answered.
@@ -105,12 +109,12 @@ function choose(qi: number, oi: number): void {
 </script>
 
 <template>
-  <section class="flex h-full w-[340px] shrink-0 flex-col border-l border-border bg-deep">
+  <section class="flex flex-col bg-deep" :class="embedded ? 'w-full rounded-md border border-border' : 'h-full w-[340px] shrink-0 border-l border-border'">
     <div class="flex items-center justify-between bg-panel px-4 py-2 font-sans text-[14px] text-fg">
       <span class="font-semibold">Question</span>
       <!-- Expand then close, in that order, as the Canvas and Tools headers have them: the panes
            share one slot, so the same control must sit in the same place in all of them. -->
-      <div class="flex items-center gap-1">
+      <div v-if="!embedded" class="flex items-center gap-1">
         <button
           type="button"
           data-testid="question-expand-btn"

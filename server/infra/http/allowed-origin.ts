@@ -109,6 +109,24 @@ export function createIsAllowedOrigin(browserHostnames: ReadonlySet<string>) {
 }
 
 /**
+ * The same list, asked of the HOST a request was addressed to. Origin cannot stop DNS rebinding on a
+ * READ: the rebound page's fetch is same-origin, so it sends no Origin at all, and the GET is answered.
+ * The Host it carries is still the attacker's own name, though, and a name the operator never wrote
+ * is refused here. For a route whose answer is sensitive on its own, such as a terminal's screen.
+ */
+export function createIsAllowedHost(browserHostnames: ReadonlySet<string>) {
+  return function isAllowedHost(hostHeader: string | undefined): boolean {
+    if (!hostHeader) return false;
+    try {
+      const { hostname } = new URL(`http://${hostHeader}`);
+      return LOOPBACK_HOSTNAMES.has(hostname) || browserHostnames.has(hostname);
+    } catch {
+      return false;
+    }
+  };
+}
+
+/**
  * What to print when the server ends up bound somewhere other than loopback. Written here, beside
  * the rule it describes, because the two drifting apart is what produced #956: the warning covered
  * authentication and said nothing about which origins may attach, so the operator met the limit as

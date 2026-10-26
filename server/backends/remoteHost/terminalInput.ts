@@ -122,6 +122,34 @@ const typeAndSubmit = (deps: TerminalInputDeps, sessionId: string, safe: string)
 // messages that happen to repeat a word like "yes".
 export const DUPLICATE_INPUT_WINDOW_MS = 15_000;
 
+/** Thrown when a send's `blocked` check says no. The paste may already be in the input box when it
+ *  comes from the second check; nothing is submitted either way. */
+export class InputBlockedError extends Error {}
+
+/** What a single send may ask of the sender. */
+export interface SendOptions {
+  /** Asked right before the paste and again right before the Enter, inside this session's chain.
+   *  True stops the send: before the paste nothing is written; before the Enter the line stays in
+   *  the input box unsubmitted. The board's reply passes "a question dialog is open" (#3185), since a
+   *  dialog can open between a check made earlier and the write. */
+  blocked?: () => Promise<boolean>;
+}
+
+// typeAndSubmit with the `blocked` check at both writes. A separate function so a send without the
+// option keeps the exact path it always had, timing included.
+const guardedTypeAndSubmit = async (deps: TerminalInputDeps, sessionId: string, safe: string, blocked: () => Promise<boolean>): Promise<void> => {
+  if (await blocked()) throw new InputBlockedError(`session ${sessionId} is blocked from input`);
+  const clear = deps.canClearBox?.(sessionId) ? CLEAR_BOX : "";
+  const line = submittableLineForAgent(deps.sessionAgent?.(sessionId), safe);
+  if (!deps.writeToSession(sessionId, `${clear}${PASTE_START}${line}${PASTE_END}`)) {
+    throw new Error(`session ${sessionId} has no live terminal on this host`);
+  }
+  const submit = deps.submitSequence?.(sessionId) ?? "\r";
+  await new Promise<void>((resolve) => (deps.scheduleSubmit ?? defaultSchedule)(resolve));
+  if (await blocked()) throw new InputBlockedError(`session ${sessionId} became blocked before its Enter; the line was left unsubmitted`);
+  deps.writeToSession(sessionId, submit);
+};
+
 // Types lines into sessions, one at a time per session.
 //
 // The Enter is deliberately a separate, delayed write, which means two sends that
@@ -143,7 +171,7 @@ export const createTerminalInputSender = (deps: TerminalInputDeps) => {
   // a retry, not a duplicate; the entry is dropped again if that dispatch goes on to fail.
   const lastSent = new Map<string, { text: string; at: number }>();
 
-  return async (sessionId: string, text: string): Promise<{ sent: boolean; duplicate?: boolean }> => {
+  return async (sessionId: string, text: string, options: SendOptions = {}): Promise<{ sent: boolean; duplicate?: boolean }> => {
     const safe = sanitizeTerminalInput(text);
     if (!safe) {
       throw new Error("text is required");
@@ -160,7 +188,8 @@ export const createTerminalInputSender = (deps: TerminalInputDeps) => {
     // A failed send must not poison the chain for the next one, so the stored link
     // swallows the error; the caller still sees it through `run`.
     const previous = chains.get(sessionId) ?? Promise.resolve();
-    const run = previous.then(() => typeAndSubmit(deps, sessionId, safe));
+    const { blocked } = options;
+    const run = previous.then(() => (blocked ? guardedTypeAndSubmit(deps, sessionId, safe, blocked) : typeAndSubmit(deps, sessionId, safe)));
     // This dispatch never actually happened, so it must not block a retry of the same text —
     // only clear OUR OWN record, in case a newer send already replaced it by the time this rejects.
     run.catch(() => {

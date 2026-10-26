@@ -13,7 +13,7 @@ import os from "node:os";
 import path from "node:path";
 import pty from "node-pty";
 import headless from "@xterm/headless";
-import { measureTmuxWidths } from "../../../../server/infra/process/tmuxWidthProbe";
+import { measureTmuxWidths, settledTmuxWidthTable } from "../../../../server/infra/process/tmuxWidthProbe";
 import { spawnCapture } from "../../../../server/infra/process/spawnCapture";
 import { TMUX_UNICODE_VERSION, tmuxUnicodeProvider } from "../../../../common/tmuxUnicodeProvider";
 import type { TmuxWidthTable } from "../../../../common/tmuxWidthTable";
@@ -82,13 +82,20 @@ describe.skipIf(!hasTmux)("the measured table against a real tmux", () => {
   let table: TmuxWidthTable | null = null;
   const probeLog: string[] = [];
   const leftBefore = hasTmux ? probeTempDirs() : [];
+  let settledWhileMeasuring: Promise<TmuxWidthTable | null> = Promise.resolve(null);
 
   beforeAll(async () => {
-    table = await measureTmuxWidths(
+    const measuring = measureTmuxWidths(
       (line) => probeLog.push(line),
       async () => ({ running: false }),
     );
+    settledWhileMeasuring = settledTmuxWidthTable(60_000);
+    table = await measuring;
   }, 60_000);
+
+  it("hands a request made while measuring the table it ends with", async () => {
+    expect(await settledWhileMeasuring).toEqual(table);
+  });
 
   it("measures something, and leaves no server or directory behind", () => {
     expect(table).not.toBeNull();

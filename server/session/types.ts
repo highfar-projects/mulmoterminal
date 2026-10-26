@@ -53,6 +53,9 @@ export interface PtyEntry {
   // byte since spawn, so a reattach can ask it for the real screen instead of trusting the
   // bounded replay tail. Absent for a tmux entry — tmux already IS this, and better.
   headlessMirror?: HeadlessMirror;
+  // Repaints this socket asked for with a `redraw` frame, which it sends when the browser's cell
+  // width table changes. Each runs tmux synchronously, so a socket gets a few, not a stream.
+  clientRedraws?: number;
   // DECSET/DECRST modes tracked from the PTY byte stream, for hosts with no tmux (#1972).
   // tmux-backed sessions query tmux instead (terminalModesOf); this is the non-tmux fallback.
   modeTracker?: TerminalModeTracker;

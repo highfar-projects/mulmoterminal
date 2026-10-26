@@ -64,7 +64,7 @@ const spawnIssueSeed = async (spawnIssueSession: SpawnIssueSession, agent: Termi
 // `mt-<uuid>-suffix` — measured on tmux 3.6a, and true of capture-pane and display-message too
 // (#2192). Listing the names and comparing them cannot match a prefix. The async form is also the
 // one a REQUEST must use: the sync variant holds the event loop, and this runs on a phone command.
-const sessionExistsHere = async (sessionId: unknown): Promise<boolean> => {
+export const sessionExistsHere = async (sessionId: unknown): Promise<boolean> => {
   if (typeof sessionId !== "string" || !SESSION_ID_RE.test(sessionId)) return false;
   if (ptys.has(sessionId)) return true; // a live pty is existence enough, and costs no subprocess
   return (await tmuxHeldSessionIdsAsync())?.includes(sessionId) ?? false;
