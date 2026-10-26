@@ -4,6 +4,7 @@
 // and a session with no live terminal here — none of which may reach the sender.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Express } from "express";
+import type { AskQuestionEvent } from "../../../common/askQuestion.js";
 import { mountTerminalReplyRoutes } from "../../../server/routes/terminal-reply-routes.js";
 import { readReplyRequest, REPLY_MAX_CHARS } from "../../../server/routes/terminalReply.js";
 
@@ -42,6 +43,7 @@ type Req = {
 };
 type Handler = (req: Req, res: FakeRes) => Promise<unknown>;
 
+const openQuestion = vi.fn<(sessionId: string) => Promise<AskQuestionEvent | null>>(async () => null);
 const sessionExists = vi.fn<(sessionId: string) => Promise<boolean>>(async () => true);
 const captureScreen = vi.fn<(sessionId: string) => Promise<{ screen: string }>>(async () => ({ screen: "Do you want to continue?\n> " }));
 const sendReply = vi.fn<(sessionId: string, text: string) => Promise<{ sent: boolean }>>(async () => ({ sent: true }));
@@ -52,7 +54,7 @@ function routes(allowOrigin = true, allowHost = true): { get: Handler; post: Han
     get: (path: string, handler: Handler) => (map[`GET ${path}`] = handler),
     post: (path: string, handler: Handler) => (map[`POST ${path}`] = handler),
   } as unknown as Express;
-  mountTerminalReplyRoutes(app, { sessionExists, captureScreen, sendReply, isAllowedOrigin: () => allowOrigin, isAllowedHost: () => allowHost });
+  mountTerminalReplyRoutes(app, { sessionExists, captureScreen, openQuestion, sendReply, isAllowedOrigin: () => allowOrigin, isAllowedHost: () => allowHost });
   const get = map["GET /api/terminal/:sessionId/screen"];
   const post = map["POST /api/terminal/:sessionId/reply"];
   if (!get || !post) throw new Error("routes not mounted");
@@ -69,6 +71,8 @@ const request = (sessionId: string, body?: unknown): Req => ({
 });
 
 beforeEach(() => {
+  openQuestion.mockReset();
+  openQuestion.mockResolvedValue(null);
   sessionExists.mockReset();
   sessionExists.mockResolvedValue(true);
   captureScreen.mockClear();
@@ -114,6 +118,16 @@ describe("POST /api/terminal/:sessionId/reply", () => {
     await routes().post(request(SESSION, { text: "yes, go ahead" }), res);
     expect(res.payload).toEqual({ ok: true });
     expect(sendReply).toHaveBeenCalledWith(SESSION, "yes, go ahead");
+  });
+
+  it("409s without typing when the session has a question dialog open right now", async () => {
+    openQuestion.mockResolvedValue({ sessionId: SESSION, toolUseId: "t", questions: [] });
+    const res = makeRes();
+    await routes().post(request(SESSION, { text: "into the dialog" }), res);
+    expect(res.statusCode).toBe(409);
+    expect(res.payload).toMatchObject({ reason: "question-open" });
+    expect(openQuestion).toHaveBeenCalledWith(SESSION);
+    expect(sendReply).not.toHaveBeenCalled();
   });
 
   it("403s a foreign origin before reading anything", async () => {

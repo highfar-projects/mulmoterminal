@@ -107,7 +107,7 @@ import { mountMulmoScriptDispatchRoute, mountMulmoScriptMediaRoute } from "../ba
 import { CLAUDE_CWD, MULMOTERMINAL_HOME, PORT, SESSION_ID_RE } from "../config/env.js";
 import { FILE_WRITE_CHANNEL, type FileWriteEvent } from "../../common/fileWriteChannel.js";
 import { PROMPT_SUBMITTED_CHANNEL, type PromptSubmittedEvent } from "../../common/promptChannel.js";
-import { ASK_QUESTION_CHANNEL, shouldPublishQuestion, type AskQuestionDone, type AskQuestionEvent } from "../../common/askQuestion.js";
+import { ASK_QUESTION_CHANNEL, openQuestionOf, shouldPublishQuestion, type AskQuestionDone, type AskQuestionEvent } from "../../common/askQuestion.js";
 import type { createToolStores } from "../session/tool-store.js";
 import type { createClaudeSpawner } from "../session/spawn/agents/spawn-claude.js";
 import type { createCodexSpawner } from "../session/spawn/agents/spawn-codex.js";
@@ -443,6 +443,7 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
   mountTerminalReplyRoutes(app, {
     sessionExists: sessionExistsHere,
     captureScreen: (sessionId) => captureTerminalScreen(sessionId, deps.outputBufferLimit),
+    openQuestion: async (sessionId) => openQuestionOf(await deps.toolStores.toolCallsStore.get(sessionId), sessionId),
     sendReply: sendToSession,
     isAllowedOrigin: deps.isAllowedOrigin,
     isAllowedHost: deps.isAllowedHost,

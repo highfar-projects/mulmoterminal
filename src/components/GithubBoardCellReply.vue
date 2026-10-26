@@ -91,12 +91,21 @@ watch(
   { immediate: true },
 );
 
+// A send or an answer can finish after the panel closed; nothing it schedules may outlive the panel,
+// and no answer still in flight may write into it.
+let mounted = true;
 let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 const refreshSoon = (): void => {
+  if (!mounted) return;
   clearTimeout(refreshTimer);
   refreshTimer = setTimeout(refresh, SCREEN_AFTER_REPLY_MS);
 };
-onUnmounted(() => clearTimeout(refreshTimer));
+onUnmounted(() => {
+  mounted = false;
+  clearTimeout(refreshTimer);
+  screenRequest++;
+  questionRequest++;
+});
 
 const replyFailure = async (res: Response): Promise<string> => {
   const body = await jsonBody(res);

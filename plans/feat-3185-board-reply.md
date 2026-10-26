@@ -31,7 +31,11 @@ Fifth step of the experimental board (#3172). The detail panel lets you read a c
     GET as same-origin with no Origin header. The older GETs that expose session content have the same
     exposure; that is a separate issue, not widened here.
   - `POST /api/terminal/:sessionId/reply` checks the origin itself as well as through the central
-    gate. A sender rejection (no live terminal here) is a 409 carrying its reason.
+    gate. It **refuses when a question dialog is open at that moment** (409, `reason: question-open`),
+    read from the tool-call history the hooks record whether or not the question pane is on. The host
+    is the authority because a dialog can open after the page last asked. The browser's gate below is
+    the earlier, friendlier half. A sender rejection (no live terminal here) is a 409 carrying its
+    reason.
 - Mounted in `app-routes.ts`. `outputBufferLimit` is now passed in from `index.ts`, as the other
   capture callers already get it.
 
@@ -49,6 +53,8 @@ Fifth step of the experimental board (#3172). The detail panel lets you read a c
     already seen `open`, which stays open until the cell stops waiting. A cell that stops waiting is
     `none`. A question is not answered while a reply is being typed. Stated this way after three
     review rounds each found one more unsafe state to enumerate.
+  - Nothing outlives the panel: after unmount no refresh is scheduled and no response in flight is
+    applied.
   - `fetchOpenQuestion`, used by the grid, is now `lookUpOpenQuestion` with failures mapped to null. It
     was run beside the old body over 140 generated responses, with identical results; the property is
     kept in `test/src/composables/openQuestion.spec.ts`.

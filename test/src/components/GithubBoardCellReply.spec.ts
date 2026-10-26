@@ -249,3 +249,21 @@ describe("while it is not yet known whether a question is open", () => {
     expect(w.find('[data-testid="board-cell-reply"] section').exists()).toBe(false);
   });
 });
+
+describe("after the panel closes", () => {
+  it("schedules nothing more when a reply finishes after unmount", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    replyStatus = 0;
+    const w = mount(GithubBoardCellReply, { props: { cell: cell() } });
+    await w.get('[data-testid="board-cell-reply-input"]').setValue("late");
+    await w.get("form").trigger("submit");
+    await flushPromises();
+    w.unmount();
+    releaseReply?.();
+    await flushPromises();
+    const before = calls.length;
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(calls).toHaveLength(before);
+    vi.useRealTimers();
+  });
+});
