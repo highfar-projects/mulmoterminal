@@ -90,9 +90,9 @@ At boot (`server/infra/process/tmuxWidthProbe.ts`) a throwaway tmux server on an
 socket, in the environment a session gets, answers `#{w:#{l:…}}` for every codepoint; the answers
 become runs of non-1 widths (`common/tmuxWidthTable.ts`). tmux also folds sequences into one cell —
 a variation selector, a ZWJ family, a skin tone, a flag — by a rule that changed between releases.
-`common/tmuxClusters.ts` mirrors `screen_write_combine` as tmux 3.6 and as tmux 3.4/3.5 have it; a few
+`common/tmuxClusters.ts` mirrors `screen_write_combine` as tmux 3.6a, tag 3.6 and 3.4/3.5 have it; a few
 sample sequences are printed in the throwaway pane, and the first rule whose predictions all of them
-match is used. When neither matches, sequences are counted per character. `/api/config` carries the result as
+match is used. When none matches, sequences are counted per character. `/api/config` carries the result as
 `terminalWidthTable`, and the browser registers it with xterm as its own Unicode version
 (`common/tmuxUnicodeProvider.ts`). With no table it falls back to `terminalUnicodeVersion: "11"`,
 which agrees with tmux and Claude Code far more often than xterm's default `"6"`. The table is also

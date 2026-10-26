@@ -10,7 +10,7 @@ export type CellWidth = 0 | 1 | 2;
 export type WidthRun = readonly [first: number, last: number, width: 0 | 2];
 
 /** Which of tmux's sequence-folding rules this tmux follows (see tmuxClusters.ts). */
-export const FOLDING_RULES = ["tmux-3.6", "tmux-3.4", "none"] as const;
+export const FOLDING_RULES = ["tmux-3.6a", "tmux-3.6", "tmux-3.4", "none"] as const;
 export type FoldingRule = (typeof FOLDING_RULES)[number];
 
 export interface TmuxWidthTable {

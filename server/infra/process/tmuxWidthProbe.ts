@@ -88,7 +88,7 @@ async function sampleWidth(tmux: ThrowawayTmux, sample: string, index: number): 
 }
 
 // Tried in this order; the first whose predictions every sample matches is the one this tmux follows.
-const CANDIDATE_RULES: readonly FoldingRule[] = ["tmux-3.6", "tmux-3.4"];
+const CANDIDATE_RULES: readonly FoldingRule[] = ["tmux-3.6a", "tmux-3.6", "tmux-3.4"];
 
 async function measuredFolding(tmux: ThrowawayTmux, table: TmuxWidthTable, log: Log): Promise<FoldingRule> {
   const measured: (number | null)[] = [];

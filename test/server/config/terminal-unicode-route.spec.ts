@@ -46,7 +46,7 @@ describe("cell widths on GET /api/config", () => {
   });
 
   it("serves the table measured from tmux as it is", async () => {
-    const table: TmuxWidthTable = { runs: [[0x2705, 0x2705, 2]], folding: "tmux-3.6", vs16Wide: true };
+    const table: TmuxWidthTable = { runs: [[0x2705, 0x2705, 2]], folding: "tmux-3.6a", vs16Wide: true };
     vi.mocked(tmuxWidthTable).mockReturnValue(table);
     expect((await configServed()).terminalWidthTable).toEqual(table);
   });
