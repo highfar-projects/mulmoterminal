@@ -9,6 +9,7 @@ import { flushPromises } from "@vue/test-utils";
 import { resetIssueStartAgent, useIssueStartAgent } from "../../../src/composables/useIssueStartAgent";
 import { resetAgentAvailability, useAgentAvailability } from "../../../src/composables/useAgentAvailability";
 import { useAppConfig } from "../../../src/composables/useAppConfig";
+import { router } from "../../../src/router";
 
 const { repoDirs, startIssueWork, startError } = useIssueStart();
 
@@ -159,5 +160,40 @@ describe("the agent and account the view picked", () => {
     expect(bodies).toEqual([]);
     expect(startError.value).toContain("codex cannot be started");
     expect(placed).toEqual([]);
+  });
+});
+
+// #3179. The board sends the issue at once and keeps itself on screen; the /github row keeps both defaults.
+describe("how a start is carried out", () => {
+  // Off the grid, or "stays put" would pass by already being there.
+  beforeEach(async () => {
+    resetIssueStartAgent();
+    resetAgentAvailability();
+    await router.push("/github");
+  });
+
+  const sentBody = (fetchMock: typeof fetch): Record<string, unknown> => {
+    const init = vi.mocked(fetchMock).mock.calls.find(([url]) => String(url) === "/api/issues/start")?.[1];
+    return typeof init?.body === "string" ? (JSON.parse(init.body) as Record<string, unknown>) : {};
+  };
+
+  it("asks for no run and shows the grid by default", async () => {
+    const push = vi.spyOn(router, "push").mockResolvedValue(undefined);
+    globalThis.fetch = answer({ ok: true, sessionId: "s-7", outcome: "created" });
+    await startIssueWork("acme/web", 7, "/w/web");
+    expect(sentBody(globalThis.fetch)).toMatchObject({ repo: "acme/web", issue: 7 });
+    expect(sentBody(globalThis.fetch)).not.toHaveProperty("run");
+    expect(push).toHaveBeenCalledWith({ name: "terminals" });
+    push.mockRestore();
+  });
+
+  it("asks the server to run the seed and stays put when the board starts it", async () => {
+    const push = vi.spyOn(router, "push").mockResolvedValue(undefined);
+    globalThis.fetch = answer({ ok: true, sessionId: "s-8", outcome: "created", seedRuns: true });
+    expect(await startIssueWork("acme/web", 7, "/w/web", { run: true, reveal: false })).toBe(true);
+    expect(sentBody(globalThis.fetch)).toMatchObject({ run: true });
+    expect(placed[0]).toMatchObject({ id: "s-8", draft: false });
+    expect(push).not.toHaveBeenCalled();
+    push.mockRestore();
   });
 });

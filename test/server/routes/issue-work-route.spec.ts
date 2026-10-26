@@ -179,8 +179,9 @@ describe("POST /api/issues/start", () => {
     GIT_TEST_TIMEOUT_MS,
   );
 
-  // The desktop leaves a Claude seed for review — the issue text was written by whoever opened it,
-  // and the Enter is the reader's (#1253 gave the PHONE a `run`, and deliberately not this route).
+  // The desktop leaves a Claude seed for review unless the request asks to run it — the issue text was
+  // written by whoever opened it, and the Enter is the reader's (#1253 gave the PHONE a `run`; the
+  // board asks for one explicitly, #3179).
   // What `run: false` becomes for each agent is the spawner's business (issue-session-spawn.spec);
   // what the route owes is to ask for it, as the agent the request named — Claude when it named none.
   const startsBySpawning = () =>
@@ -200,6 +201,32 @@ describe("POST /api/issues/start", () => {
       expect(spawnIssueSession).toHaveBeenCalledWith("claude", "/wt/7-x", "GitHub issue #7", false, null);
       // The reply names the agent the cell must attach as (#2227), and whether the seed runs.
       expect(res.payload).toMatchObject({ sessionId: "s-new", agent: "claude", seedRuns: false });
+    },
+    GIT_TEST_TIMEOUT_MS,
+  );
+
+  it.skipIf(!hasGit)(
+    "runs the seed when the request asks for it, as the board's start does (#3179)",
+    async () => {
+      startsBySpawning();
+      await post({ repo: "acme/web", issue: 7, dir: clone, run: true });
+      expect(spawnIssueSession).toHaveBeenCalledWith("claude", "/wt/7-x", "GitHub issue #7", true, null);
+      spawnIssueSession.mockClear();
+      await post({ repo: "acme/web", issue: 7, dir: clone, run: false });
+      expect(spawnIssueSession).toHaveBeenCalledWith("claude", "/wt/7-x", "GitHub issue #7", false, null);
+    },
+    GIT_TEST_TIMEOUT_MS,
+  );
+
+  it.skipIf(!hasGit)(
+    "refuses a run that is not a boolean, starting nothing",
+    async () => {
+      startsBySpawning();
+      for (const run of ["true", 1, null]) {
+        const res = await post({ repo: "acme/web", issue: 7, dir: clone, run });
+        expect(res.statusCode).toBe(400);
+      }
+      expect(issueWork.start).not.toHaveBeenCalled();
     },
     GIT_TEST_TIMEOUT_MS,
   );

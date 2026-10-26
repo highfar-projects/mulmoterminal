@@ -23,6 +23,7 @@ export const githubBoardZhTW = {
     cell: { working: "工作中", waiting: "等待你確認", idle: "閒置" },
     jump: "前往此終端機",
     notInGrid: "正在執行，但不在網格中",
+    start: "開始：把 issue 傳送到新的 worktree 工作階段",
     detail: {
       region: "卡片詳情",
       open: "顯示詳情",

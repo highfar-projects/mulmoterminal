@@ -182,7 +182,7 @@ describe("GithubBoard", () => {
     await flushPromises();
     await w.get('[data-testid="board-card-open"]').trigger("click");
     await flushPromises();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith("/api/github/board/detail"))).toHaveLength(0);
     expect(w.get('[data-testid="board-detail"]').findAll('[data-testid="board-cell"]')).toHaveLength(2);
   });
 
@@ -192,6 +192,39 @@ describe("GithubBoard", () => {
     mount(GithubBoard);
     await flushPromises();
     expect(boardSelection.value).toBeNull();
+  });
+
+  it("starts a todo card's issue with the text sent, and reloads the board", async () => {
+    const todo = card({ key: "issue-4", issue: { number: 4, title: "make it work", url: "u" } });
+    const urls: string[] = [];
+    const bodies: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        urls.push(url);
+        if (url === "/api/repo-dirs")
+          return new Response(JSON.stringify({ repos: [{ repo: "o/r", dirs: [{ path: "/w/r", label: "r", orderPriority: null }], primary: "/w/r" }] }));
+        if (url === "/api/issues/start") {
+          bodies.push(JSON.parse(String(init?.body)));
+          return new Response(JSON.stringify({ ok: true, sessionId: "s-new", outcome: "created", seedRuns: true }));
+        }
+        if (url === "/api/github/board") return new Response(JSON.stringify({ repos: [{ repo: "o/r", cards: [todo] }] }));
+        return new Response("{}");
+      }),
+    );
+    const w = mount(GithubBoard);
+    await flushPromises();
+    await w.get('[data-testid="board-column-todo"] [data-testid="issue-start"]').trigger("click");
+    await flushPromises();
+    expect(bodies).toEqual([expect.objectContaining({ repo: "o/r", issue: 4, dir: "/w/r", run: true })]);
+    expect(urls.filter((url) => url === "/api/github/board")).toHaveLength(2);
+  });
+
+  it("offers no start on a card that is not todo", async () => {
+    serve({ repos: [{ repo: "o/r", cards: [prCard] }] });
+    const w = mount(GithubBoard);
+    await flushPromises();
+    expect(w.find('[data-testid="issue-start"]').exists()).toBe(false);
   });
 
   it("disables every cell when no grid is mounted", async () => {

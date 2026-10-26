@@ -7,10 +7,16 @@ import { useI18n } from "vue-i18n";
 import type { BoardCard } from "../../common/githubBoard";
 import { ciDotClass } from "./ciDot";
 import GithubBoardCells from "./GithubBoardCells.vue";
+import IssueStartButton from "./IssueStartButton.vue";
+import type { IssueStartOptions } from "../composables/useIssueStart";
 
-const props = defineProps<{ card: BoardCard; home: string | null; selected: boolean }>();
+const props = defineProps<{ repo: string; card: BoardCard; home: string | null; selected: boolean }>();
 
-const emit = defineEmits<{ (e: "select"): void }>();
+const emit = defineEmits<{ (e: "select" | "started"): void }>();
+
+// From the board the issue is sent at once and the board stays on screen (#3179); the cell appears
+// in the grid behind it and on this card once the board reloads.
+const BOARD_START: IssueStartOptions = { run: true, reveal: false };
 
 const { t } = useI18n();
 
@@ -56,6 +62,10 @@ const review = computed(() => (props.card.pr?.review ?? "").toUpperCase());
         t("githubBoard.reviewRound", { count: card.pr.reviewRounds })
       }}</span>
       <span v-if="card.column === 'review' && !card.pr.headReviewed" class="text-dim">{{ t("githubBoard.awaitingReview") }}</span>
+    </div>
+    <div v-if="card.column === 'todo' && card.issue" class="flex items-center gap-1.5 text-[11px] text-dim">
+      <IssueStartButton :repo="repo" :issue="card.issue.number" :options="BOARD_START" @started="emit('started')" />
+      {{ t("githubBoard.start") }}
     </div>
     <GithubBoardCells v-if="card.cells.length" :cells="card.cells" :home="home" />
     <div v-else-if="card.column !== 'todo' && card.column !== 'merged'" class="text-[11px] text-dim">{{ t("githubBoard.noCell") }}</div>

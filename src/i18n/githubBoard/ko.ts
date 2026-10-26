@@ -23,6 +23,7 @@ export const githubBoardKo = {
     cell: { working: "작업 중", waiting: "확인 대기", idle: "대기" },
     jump: "이 터미널로 이동",
     notInGrid: "실행 중이지만 그리드에 없습니다",
+    start: "시작: 새 worktree 세션에 issue 를 보냅니다",
     detail: {
       region: "카드 상세",
       open: "상세 보기",

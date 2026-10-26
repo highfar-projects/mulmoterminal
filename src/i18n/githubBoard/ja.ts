@@ -23,6 +23,7 @@ export const githubBoardJa = {
     cell: { working: "作業中", waiting: "確認待ち", idle: "待機中" },
     jump: "このターミナルへ移動",
     notInGrid: "動いていますが、グリッドにはありません",
+    start: "開始: 新しい worktree セッションに issue を送ります",
     detail: {
       region: "カードの詳細",
       open: "詳細を表示",
