@@ -7,12 +7,23 @@ import { postConfigField } from "./postConfigField";
 const setting = ref<BotJobs>(BOT_JOBS_DEFAULT);
 export const botJobsSetting = computed(() => setting.value);
 
-export const setBotJobs = (value: unknown): void => {
+// How many saves this page has landed — the toolbarPins safeguard. A config read that started BEFORE
+// a save answers with the setting as it was, and adopting it would show bot jobs switched back on
+// after the user switched them off; the next save would then persist that. The reader takes this
+// mark when its request starts and hands it back with the answer.
+let saves = 0;
+/** Take before starting a read of /api/config, hand back to `setBotJobs`. */
+export const botJobsMark = (): number => saves;
+
+export const setBotJobs = (value: unknown, mark?: number): void => {
+  if (mark !== undefined && mark !== saves) return;
   setting.value = sanitizeBotJobs(value);
 };
 
 export async function saveBotJobs(value: BotJobs): Promise<boolean> {
   const saved = await postConfigField("botJobs", value);
-  if (saved.ok) setBotJobs(saved.value);
-  return saved.ok;
+  if (!saved.ok) return false;
+  saves += 1; // before adopting, so a read already in flight cannot undo this
+  setBotJobs(saved.value);
+  return true;
 }

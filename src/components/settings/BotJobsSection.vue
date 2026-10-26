@@ -19,7 +19,11 @@ const { t } = useI18n();
 const saving = ref(false);
 const error = ref<string | null>(null);
 
+// One save at a time, whichever control asked: each builds its value from the setting as last
+// CONFIRMED, so a second save started before the first answered would write the first one's field
+// back — Enter in the Python field right after switching jobs off would switch them on again.
 async function save(next: { enabled: boolean; python: string }): Promise<void> {
+  if (saving.value) return;
   saving.value = true;
   const ok = await saveBotJobs(next);
   saving.value = false;
@@ -85,7 +89,8 @@ async function revoke(row: BotTokenRow): Promise<void> {
   const answer = await revokeBotToken(row.tokenId);
   busy.value = false;
   error.value = answer.ok ? null : answer.error;
-  if (minted.value?.record.tokenId === row.tokenId) minted.value = null;
+  // Only once it is really gone: a failed revoke leaves the token live, and its secret still useful.
+  if (answer.ok && minted.value?.record.tokenId === row.tokenId) minted.value = null;
   await refresh();
 }
 

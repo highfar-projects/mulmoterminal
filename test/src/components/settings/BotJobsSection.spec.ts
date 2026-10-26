@@ -5,7 +5,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import BotJobsSection from "../../../../src/components/settings/BotJobsSection.vue";
-import { setBotJobs } from "../../../../src/composables/botJobs";
+import { botJobsMark, botJobsSetting, saveBotJobs, setBotJobs } from "../../../../src/composables/botJobs";
 
 const SECRET = `mtb_${"a".repeat(43)}`;
 const ENDPOINTS = { submit: "https://x/submitBotJob", result: "https://x/getBotJob" };
@@ -26,25 +26,28 @@ beforeEach(() => {
   sent.length = 0;
   server = { connected: true, tokens: [], config: {} };
   setBotJobs(undefined);
-  globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = String(input);
-    const method = init?.method ?? "GET";
-    const body: unknown = init?.body ? JSON.parse(String(init.body)) : undefined;
-    sent.push({ url, method, body });
-    if (url === "/api/remote-host/status") return reply(200, { status: { connected: server.connected, uid: null } });
-    if (url === "/api/config" && method === "POST") return reply(200, body);
-    if (url === "/api/bot-tokens" && method === "GET") return reply(200, { tokens: server.tokens, endpoints: ENDPOINTS });
-    if (url === "/api/bot-tokens" && method === "POST") {
-      server.tokens = [...server.tokens, ROW];
-      return reply(200, { token: SECRET, record: ROW, endpoints: ENDPOINTS });
-    }
-    if (url.startsWith("/api/bot-tokens/") && method === "DELETE") {
-      server.tokens = [];
-      return reply(200, { ok: true });
-    }
-    return reply(404, { error: "no route" });
-  }) as unknown as typeof fetch;
+  globalThis.fetch = vi.fn(route) as unknown as typeof fetch;
 });
+
+// The fake server every test talks to; a test that needs one call to behave differently wraps it.
+async function route(input: RequestInfo | URL, init?: RequestInit) {
+  const url = String(input);
+  const method = init?.method ?? "GET";
+  const body: unknown = init?.body ? JSON.parse(String(init.body)) : undefined;
+  sent.push({ url, method, body });
+  if (url === "/api/remote-host/status") return reply(200, { status: { connected: server.connected, uid: null } });
+  if (url === "/api/config" && method === "POST") return reply(200, body);
+  if (url === "/api/bot-tokens" && method === "GET") return reply(200, { tokens: server.tokens, endpoints: ENDPOINTS });
+  if (url === "/api/bot-tokens" && method === "POST") {
+    server.tokens = [...server.tokens, ROW];
+    return reply(200, { token: SECRET, record: ROW, endpoints: ENDPOINTS });
+  }
+  if (url.startsWith("/api/bot-tokens/") && method === "DELETE") {
+    server.tokens = [];
+    return reply(200, { ok: true });
+  }
+  return reply(404, { error: "no route" });
+}
 
 const mountSection = async () => {
   const wrapper = mount(BotJobsSection);
@@ -143,5 +146,53 @@ describe("Bot jobs section", () => {
     await flushPromises();
     expect(wrapper.get('[data-testid="bot-jobs-error"]').text()).toBe("createBotToken failed: no such host");
     expect(wrapper.find('[data-testid="bot-jobs-minted"]').exists()).toBe(false);
+  });
+
+  // Each save builds its value from the last CONFIRMED setting, so a second one started before the
+  // first answered would write the first one's field back.
+  it("starts no second save while one is out, from the keyboard either", async () => {
+    setBotJobs({ enabled: true, python: "python3" });
+    const wrapper = await mountSection();
+    let release: () => void = () => undefined;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/api/config") await new Promise<void>((resolve) => (release = resolve));
+      return route(input, init);
+    }) as unknown as typeof fetch;
+    const box = wrapper.get<HTMLInputElement>('[data-testid="bot-jobs-enabled"]');
+    box.element.checked = false;
+    await box.trigger("change");
+    await wrapper.get('[data-testid="bot-jobs-python"]').setValue("~/venv/bin/python");
+    await wrapper.get('[data-testid="bot-jobs-python"]').trigger("keydown", { key: "Enter" });
+    release();
+    await flushPromises();
+    const posts = sent.filter((call) => call.url === "/api/config");
+    expect(posts).toEqual([{ url: "/api/config", method: "POST", body: { botJobs: { enabled: false, python: "python3" } } }]);
+  });
+
+  it("keeps the new secret on screen when revoking it failed", async () => {
+    const wrapper = await mountSection();
+    await wrapper.get('[data-testid="bot-jobs-mint"]').trigger("click");
+    await flushPromises();
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === "DELETE" ? reply(502, { error: "revokeBotToken failed: INTERNAL" }) : route(input, init),
+    ) as unknown as typeof fetch;
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    await wrapper.get('[data-testid="bot-jobs-tokens"] button').trigger("click");
+    await flushPromises();
+    expect(wrapper.get<HTMLInputElement>('[data-testid="bot-jobs-secret"]').element.value).toBe(SECRET);
+    expect(wrapper.get('[data-testid="bot-jobs-error"]').text()).toContain("INTERNAL");
+  });
+});
+
+// A config read that started before a save must not put the old setting back.
+describe("the botJobs setting", () => {
+  it("drops a read that started before a save landed", async () => {
+    setBotJobs({ enabled: true, python: "python3" });
+    const mark = botJobsMark();
+    expect(await saveBotJobs({ enabled: false, python: "python3" })).toBe(true);
+    setBotJobs({ enabled: true, python: "python3" }, mark);
+    expect(botJobsSetting.value.enabled).toBe(false);
+    setBotJobs({ enabled: true, python: "python3" }, botJobsMark());
+    expect(botJobsSetting.value.enabled).toBe(true);
   });
 });
