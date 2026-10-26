@@ -3,6 +3,7 @@
 // measureTmuxWidths runs unawaited at boot, so a rejection would be unhandled and take the server
 // down. Every way it can fail must come back as null and a log line instead.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { LiveTmuxServer } from "../../../../server/infra/process/tmuxLiveServer.js";
 
 const failures = vi.hoisted(() => ({ mkdtemp: false }));
 
@@ -21,6 +22,7 @@ vi.mock("../../../../server/infra/process/spawnCapture.js", () => ({
 }));
 
 const { measureTmuxWidths, tmuxWidthTable } = await import("../../../../server/infra/process/tmuxWidthProbe.js");
+const NO_LIVE_SERVER = async (): Promise<LiveTmuxServer> => ({ running: false });
 
 describe("measureTmuxWidths when it cannot measure", () => {
   beforeEach(() => {
@@ -30,14 +32,14 @@ describe("measureTmuxWidths when it cannot measure", () => {
   it("resolves to null and says so when no directory can be made", async () => {
     failures.mkdtemp = true;
     const log = vi.fn();
-    await expect(measureTmuxWidths(log)).resolves.toBeNull();
+    await expect(measureTmuxWidths(log, NO_LIVE_SERVER)).resolves.toBeNull();
     expect(tmuxWidthTable()).toBeNull();
     expect(log).toHaveBeenCalledWith(expect.stringContaining("ENOSPC"));
   });
 
   it("resolves to null and says so when tmux will not start", async () => {
     const log = vi.fn();
-    await expect(measureTmuxWidths(log)).resolves.toBeNull();
+    await expect(measureTmuxWidths(log, NO_LIVE_SERVER)).resolves.toBeNull();
     expect(tmuxWidthTable()).toBeNull();
     expect(log).toHaveBeenCalledWith(expect.stringContaining("could not be measured"));
   });

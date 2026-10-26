@@ -32,6 +32,8 @@ const mocks = vi.hoisted(() => ({
   getSessionReapIntervalHours: vi.fn(() => 0),
   liveInstances: vi.fn(() => [{ pid: 123, port: 4321, startedAt: 1_000 }]),
   registerInstance: vi.fn(() => () => {}),
+  tmuxLiveServer: vi.fn(),
+  measureTmuxWidths: vi.fn(async () => null),
 }));
 
 vi.mock("../../../../server/infra/http/announce-listening.js", () => ({ announceListening: mocks.announceListening }));
@@ -42,7 +44,9 @@ vi.mock("../../../../server/infra/process/tmux.js", () => ({
   tmuxListSessionIds: mocks.tmuxListSessionIds,
   tmuxIsPsmux: () => false,
   tmuxPsmuxVersion: () => null,
+  tmuxLiveServer: mocks.tmuxLiveServer,
 }));
+vi.mock("../../../../server/infra/process/tmuxWidthProbe.js", () => ({ measureTmuxWidths: mocks.measureTmuxWidths }));
 vi.mock("../../../../server/session/reaping/reap-schedule.js", () => ({
   startReapSchedule: mocks.startReapSchedule,
   rearmReapSchedule: mocks.rearmReapSchedule,
@@ -133,6 +137,11 @@ describe("onListening", () => {
     expect(mocks.registerInstance).toHaveBeenCalledOnce();
     expect(mocks.wireMachineGlobalHooks).toHaveBeenCalledOnce();
     expect(mocks.startUpdateStatusRefresh).toHaveBeenCalledOnce();
+  });
+
+  it("measures tmux widths against the live server's version", () => {
+    run();
+    expect(mocks.measureTmuxWidths).toHaveBeenCalledWith(expect.any(Function), mocks.tmuxLiveServer);
   });
 
   it("warns about the bind only when it is not loopback", () => {

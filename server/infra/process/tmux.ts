@@ -28,6 +28,7 @@ import {
 } from "./psmux.js";
 import { writeFileAtomicSync } from "../../files/atomic-write.js";
 import { TMUX_PREFIX_DEFAULT, staleSendPrefixKeys, tmuxPrefixCommands } from "../../../common/tmuxPrefix.js";
+import { liveServerFrom, type LiveTmuxServer } from "./tmuxLiveServer.js";
 
 // Per HOME, so a server started on another one never sweeps or reconfigures this one's sessions (#3039).
 const SERVER_SOCKET = `mulmoterminal${HOME_SCOPE_SUFFIX}`;
@@ -708,6 +709,12 @@ export async function tmuxPaneCwdsAsync(): Promise<string[] | null> {
  *  these two. */
 export const tmuxHoldsNothing = (result: { status: number | null; stderr: string }): boolean =>
   result.status !== 0 && /no server running|no such file or directory/i.test(result.stderr);
+
+/** Whether our server is running, and which tmux it is — read-only, so it never starts one. */
+export async function tmuxLiveServer(): Promise<LiveTmuxServer> {
+  const result = await tmuxAsync(["display-message", "-p", "#{version}"]);
+  return liveServerFrom(result, tmuxHoldsNothing(result));
+}
 
 /** What `tmux list-sessions` reported, read as one of three answers rather than two.
  *

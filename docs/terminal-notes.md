@@ -95,7 +95,9 @@ sample sequences are printed in the throwaway pane, and the first rule whose pre
 match is used. When neither matches, sequences are counted per character. `/api/config` carries the result as
 `terminalWidthTable`, and the browser registers it with xterm as its own Unicode version
 (`common/tmuxUnicodeProvider.ts`). With no table it falls back to `terminalUnicodeVersion: "11"`,
-which agrees with tmux and Claude Code far more often than xterm's default `"6"`.
+which agrees with tmux and Claude Code far more often than xterm's default `"6"`. The table is also
+dropped when the live `-L mulmoterminal` server is a different tmux version from the one measured
+(a server that outlived an upgrade), since that server is the one laying out the reattached sessions.
 
 `test/server/infra/process/tmuxWidthProbe.spec.ts` is the check that matters: a real tmux, a client
 attached through a PTY, and the bytes it receives fed to xterm with the table — every marker must land

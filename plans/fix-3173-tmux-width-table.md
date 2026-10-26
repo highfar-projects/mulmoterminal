@@ -36,6 +36,10 @@ The authority is the tmux this server runs, so ask it rather than pick a table:
    The provider is a pure function in `common/`, so the browser and a headless test use the same one.
 5. **Fallback** when nothing was measured (psmux, no tmux, a probe that failed or has not finished):
    "11", which is closer than "6" to every tmux and to Claude Code's own `Bun.stringWidth`.
+6. **Only for the server that draws.** The live `-L mulmoterminal` server outlives a tmux upgrade, so
+   its `#{version}` (read-only) is compared with the probe's. A running server of another version, or
+   one whose version cannot be read, gets the fallback until it restarts. It is not measured in place:
+   that would mean printing into a pane of the live server.
 
 ## Not in scope
 
