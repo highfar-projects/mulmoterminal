@@ -25,6 +25,8 @@ let calls: Call[] = [];
 let replyStatus = 200;
 let releaseReply: (() => void) | null = null;
 let holdQuestion = false;
+let currentQuestion: AskQuestionEvent = question;
+let answerStatus = 200;
 let releaseQuestion: (() => void) | null = null;
 
 beforeEach(() => {
@@ -33,6 +35,8 @@ beforeEach(() => {
   releaseReply = null;
   holdQuestion = false;
   releaseQuestion = null;
+  currentQuestion = question;
+  answerStatus = 200;
   setQuestionPaneEnabled(false);
   vi.stubGlobal(
     "fetch",
@@ -50,9 +54,13 @@ beforeEach(() => {
       }
       if (url === `/api/question/${SESSION}`) {
         if (holdQuestion) await new Promise<void>((resolve) => (releaseQuestion = resolve));
-        return new Response(JSON.stringify({ question }));
+        return new Response(JSON.stringify({ question: currentQuestion }));
       }
-      if (url.endsWith("/answer")) return new Response(JSON.stringify({ ok: true }));
+      if (url.endsWith("/answer")) {
+        return answerStatus === 200
+          ? new Response(JSON.stringify({ ok: true }))
+          : new Response(JSON.stringify({ ok: false, reason: "partial" }), { status: 409 });
+      }
       return new Response("{}");
     }),
   );
@@ -247,6 +255,31 @@ describe("while it is not yet known whether a question is open", () => {
     releaseQuestion?.();
     await flushPromises();
     expect(w.find('[data-testid="board-cell-reply"] section').exists()).toBe(false);
+  });
+});
+
+describe("a failed answer", () => {
+  it("is shown over its own question, and not over the next one", async () => {
+    setQuestionPaneEnabled(true);
+    answerStatus = 409;
+    const w = mount(GithubBoardCellReply, { props: { cell: cell({ waiting: true }) } });
+    await flushPromises();
+    const pane = () => w.get('[data-testid="board-cell-reply"] section');
+    await pane()
+      .findAll("button")
+      .find((button) => button.text().includes("Right"))
+      ?.trigger("click");
+    await flushPromises();
+    expect(pane().text()).toContain("Part of the answer");
+    currentQuestion = { ...question, toolUseId: "tool-2" };
+    await w.get('[data-testid="board-cell-screen-load"]').trigger("click");
+    await flushPromises();
+    expect(pane().text()).not.toContain("Part of the answer");
+    expect(
+      pane()
+        .findAll("button")
+        .some((button) => button.text().includes("Right")),
+    ).toBe(true);
   });
 });
 

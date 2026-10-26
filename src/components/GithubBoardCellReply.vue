@@ -26,7 +26,15 @@ const SCREEN_AFTER_REPLY_MS = 1500;
 const screen = ref<string | null>(null);
 const screenFailed = ref(false);
 const question = ref<AskQuestionEvent | null>(null);
-const answerFailure = ref<AnswerFailure | null>(null);
+// Why the last answer did not land, and which dialog it was for. A failure belongs to ITS question:
+// shown over a later one it would hide that question's buttons, as if it could not be answered.
+const answerFailure = ref<{ toolUseId: string; reason: AnswerFailure } | null>(null);
+const failureForShown = computed(() =>
+  answerFailure.value && answerFailure.value.toolUseId === question.value?.toolUseId ? answerFailure.value.reason : null,
+);
+const recordFailure = (toolUseId: string, reason: AnswerFailure | null): void => {
+  answerFailure.value = reason ? { toolUseId, reason } : null;
+};
 const text = ref("");
 const sending = ref(false);
 // An answer to the question dialog in flight. The dialog's keys and a reply's paste are written by
@@ -157,14 +165,16 @@ const answer = (picks: number[][]): Promise<void> =>
   whileAnswering(async (event) => {
     question.value = null;
     dialog.value = "unknown";
-    answerFailure.value = await postAnswer(event.sessionId, event.toolUseId, picks);
-    if (answerFailure.value && answerFailure.value !== "closed") question.value = event;
+    const reason = await postAnswer(event.sessionId, event.toolUseId, picks);
+    recordFailure(event.toolUseId, reason);
+    if (reason && reason !== "closed") question.value = event;
   });
 
 const say = (words: string): Promise<void> =>
   whileAnswering(async (event) => {
-    answerFailure.value = await postWords(event.sessionId, event.toolUseId, words);
-    if (answerFailure.value) return;
+    const reason = await postWords(event.sessionId, event.toolUseId, words);
+    recordFailure(event.toolUseId, reason);
+    if (reason) return;
     question.value = null;
     dialog.value = "unknown";
   });
@@ -193,7 +203,7 @@ const replyPlaceholder = computed(() => {
       data-testid="board-cell-screen"
       class="m-0 max-h-[240px] overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-deep p-2 font-mono text-[11px] leading-[1.4] text-fg"
       >{{ screen || t("githubBoard.reply.emptyScreen") }}</pre>
-    <QuestionPane v-if="question" embedded :event="question" :failure="answerFailure" @answer="answer" @say="say" />
+    <QuestionPane v-if="question" embedded :event="question" :failure="failureForShown" @answer="answer" @say="say" />
     <form class="flex items-center gap-1.5" @submit.prevent="send">
       <input
         v-model="text"
