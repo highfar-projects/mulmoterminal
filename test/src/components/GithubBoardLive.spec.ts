@@ -28,10 +28,12 @@ const working: BoardCard = {
 };
 
 let boardLoads = 0;
+let activitySeeds = 0;
 let activitySeed: Record<string, unknown> = {};
 
 beforeEach(() => {
   boardLoads = 0;
+  activitySeeds = 0;
   activitySeed = {};
   subscribers.clear();
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
@@ -43,7 +45,10 @@ beforeEach(() => {
         const body: BoardResponse = { repos: [{ repo: "o/r", cards: [working] }] };
         return new Response(JSON.stringify(body));
       }
-      if (url.startsWith("/api/activity")) return new Response(JSON.stringify(activitySeed));
+      if (url.startsWith("/api/activity")) {
+        activitySeeds++;
+        return new Response(JSON.stringify(activitySeed));
+      }
       return new Response("{}");
     }),
   );
@@ -107,6 +112,18 @@ describe("GithubBoard, live", () => {
     await flushPromises();
     await vi.advanceTimersByTimeAsync(BOARD_POLL_MS);
     expect(boardLoads).toBe(2);
+    w.unmount();
+  });
+
+  it("does not re-seed the cells' state when a reload brings the same cells", async () => {
+    const w = mount(GithubBoard);
+    await flushPromises();
+    const seedsAfterMount = activitySeeds;
+    expect(seedsAfterMount).toBeGreaterThan(0);
+    await vi.advanceTimersByTimeAsync(BOARD_POLL_MS);
+    await flushPromises();
+    expect(boardLoads).toBe(2);
+    expect(activitySeeds).toBe(seedsAfterMount);
     w.unmount();
   });
 

@@ -11,9 +11,14 @@ import { usePollWhileVisible } from "./usePollWhileVisible";
 export const BOARD_POLL_MS = 60_000;
 // Long enough for a push the agent just made to show up in `gh pr list`.
 export const BOARD_TURN_RELOAD_DELAY_MS = 3_000;
+// Session ids are uuids; a newline is never part of one.
+const SESSION_KEY_SEPARATOR = "\n";
 
 export function useGithubBoardLive(repos: Ref<RepoBoard[]>, load: () => void): ComputedRef<RepoBoard[]> {
-  const sessionIds = computed(() => boardSessionIds(repos.value));
+  // Through a string so the list only changes when its CONTENTS do: every read replaces `repos`, and
+  // useGridActivity re-seeds /api/activity whenever the list it is handed changes.
+  const sessionKey = computed(() => boardSessionIds(repos.value).join(SESSION_KEY_SEPARATOR));
+  const sessionIds = computed(() => (sessionKey.value === "" ? [] : sessionKey.value.split(SESSION_KEY_SEPARATOR)));
   const { activity } = useGridActivity(sessionIds);
 
   usePollWhileVisible(load, BOARD_POLL_MS);
