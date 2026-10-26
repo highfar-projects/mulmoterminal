@@ -229,7 +229,7 @@ const { reattachPty, handleClientFrame, handleClientClose } = createConnectionHa
   setWaiting: (id, waiting, event) => setWaiting(id, waiting, event),
   armReapForDetached: (id) => armReapForDetached(id),
   terminalModesOf: (id) => tmuxTerminalModes(id),
-  redrawTerminal: (id, clientPid) => tmuxRedrawClient(id, clientPid),
+  redrawTerminal: (id, clientPid) => void tmuxRedrawClient(id, clientPid),
   redrawFromMirror: (id) => redrawFromMirror(id),
   checkTerminalSize: (id, size) => tmuxSizeSync.requestCheck(id, size),
   recheckTerminalSize: (id) => tmuxSizeSync.requestCheck(id),
@@ -329,7 +329,7 @@ const { spawnGrokPty } = createGrokSpawner(spawnDeps);
 const { spawnMusePty } = createMuseSpawner(spawnDeps);
 const { spawnCopilotPty } = createCopilotSpawner(spawnDeps);
 const { spawnCursorPty } = createCursorSpawner(spawnDeps);
-const { spawnCommandPty, spawnLauncherPty, resolveLauncher } = createShellSpawners(spawnDeps);
+const { spawnCommandPty, spawnLauncherPty, spawnBotJobPty, resolveLauncher } = createShellSpawners(spawnDeps);
 
 // Which agents could be started, checked ONCE, here, as the spawn preflight checks them: against
 // the environment a spawned agent gets (#2229). Installing one needs a restart to show.
@@ -490,6 +490,8 @@ await enableShapeScriptManifold();
 initRemoteHost({
   spawnClaudePty,
   spawnIssueSession,
+  spawnBotJobPty,
+  armReapForDetached,
   toolStores,
   outputBufferLimit: OUTPUT_BUFFER_LIMIT,
   publishToOne: (channel, data) => pubsub?.publishToOne(channel, data) ?? false,

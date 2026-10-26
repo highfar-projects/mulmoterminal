@@ -142,6 +142,7 @@ export function initRemoteHostBackend(deps: RemoteHostBackendDeps): void {
       launchTerminal: deps.launchTerminal,
       openQuestion: deps.openQuestion,
       answerQuestion: deps.answerQuestion,
+      botJob: deps.botJob,
     }),
     log: { ...log, debug: () => undefined },
   });

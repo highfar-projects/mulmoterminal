@@ -76,6 +76,7 @@ describe("createRemoteHostHandlers · getFeed", () => {
       launchTerminal: async () => ({ ok: true }) as const,
       openQuestion: async () => null,
       answerQuestion: async (): Promise<AnswerResult> => ({ ok: true }),
+      botJob: async () => null,
     });
   });
   afterEach(() => vi.mocked(listFeeds).mockReset());

@@ -8,7 +8,18 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 import { createSessionLifecycle } from "../../../server/session/lifecycle.js";
 import type { WorkPhase } from "../../../server/session/activity/workPhase.js";
-import { activity, aiTitles, hiddenSessions, knownSessions, lastPrompts, lastResponses, launchChoices, ptys } from "../../../server/session/registry.js";
+import {
+  activity,
+  aiTitles,
+  hiddenSessions,
+  knownSessions,
+  lastPrompts,
+  lastResponses,
+  launchChoices,
+  pinSession,
+  ptys,
+  unpinSession,
+} from "../../../server/session/registry.js";
 import { clearedTranscripts } from "../../../server/session/transcript/cleared-transcripts.js";
 import { killPty } from "../../../server/session/pty/pty-kill.js";
 import { tmuxKillSession } from "../../../server/infra/process/tmux.js";
@@ -268,6 +279,27 @@ describe("the reap timer", () => {
     lifecycle.cancelReap(ID);
     vi.advanceTimersByTime(60 * 60_000);
     expect(ptys.has(ID)).toBe(true);
+  });
+
+  // A bot job's shell has no hooks, so it always reads as idle; pinned, it outlives its tab's
+  // close for as long as the job runs (backends/botJobs), and is an ordinary shell once released.
+  it("keeps a pinned session however idle it reads, and treats it normally once unpinned", () => {
+    vi.useFakeTimers();
+    const deps = makeDeps();
+    const lifecycle = createSessionLifecycle(deps);
+    ptys.set(ID, fakeEntry({ agent: "shell" }));
+    pinSession(ID);
+    try {
+      lifecycle.armReapForDetached(ID);
+      expect(vi.getTimerCount()).toBe(0);
+      vi.advanceTimersByTime(60 * 60_000);
+      expect(ptys.has(ID)).toBe(true);
+    } finally {
+      unpinSession(ID);
+    }
+    lifecycle.armReapForDetached(ID);
+    vi.advanceTimersByTime(31_000);
+    expect(ptys.has(ID)).toBe(false);
   });
 
   // The timer fires on a session that has since reattached — it must check again, not reap.

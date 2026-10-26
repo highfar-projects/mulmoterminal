@@ -10,8 +10,10 @@
 // - "tmux-3.6": the same, but asked one way only (a base after a skin tone), and U+1F483 is unlisted.
 // - "tmux-3.4" (3.4 and 3.5): anything in the modifier table (regional indicators, skin tones) folds
 //   into any cell that is not a lone ASCII byte, and U+FE0F always widens.
+// - "psmux": psmux's `join` (crates/vt100-psmux/src/width.rs), which copies 3.6a's but takes no third
+//   regional indicator into a flag and has no Hangul jamo composition.
 // - "none": only zero-width characters fold — what an older tmux and xterm's own tables do.
-import { cellWidthOf, type CellWidth, type TmuxWidthTable } from "./tmuxWidthTable.js";
+import { cellWidthOf, type CellWidth, type FoldingRule, type TmuxWidthTable } from "./tmuxWidthTable.js";
 
 // Numbers rather than names: the provider packs the class into xterm's per-character state.
 export const JamoClass = { None: 0, Choseong: 1, Jungseong: 2, Jongseong: 3 } as const;
@@ -27,6 +29,8 @@ export interface ClusterCell {
   endsWithZwj: boolean;
   /** The class of the cell's last codepoint; hanguljamo_check_state reads its last three bytes. */
   lastJamo: JamoClass;
+  /** How many regional indicators the cell holds, counted to two: psmux pairs only a lone one. */
+  regionalIndicators: 0 | 1 | 2;
 }
 
 export type ClusterStep = { kind: "new"; cell: ClusterCell } | { kind: "join"; cell: ClusterCell } | { kind: "drop" };
@@ -74,12 +78,31 @@ const lastJamoOf = (codepoint: number): JamoClass => (codepoint < FIRST_FOUR_BYT
 
 const newCell = (codepoint: number, width: CellWidth): ClusterStep => ({
   kind: "new",
-  cell: { first: codepoint, width, joined: false, endsWithZwj: false, lastJamo: lastJamoOf(codepoint) },
+  cell: {
+    first: codepoint,
+    width,
+    joined: false,
+    endsWithZwj: false,
+    lastJamo: lastJamoOf(codepoint),
+    regionalIndicators: isRegionalIndicator(codepoint) ? 1 : 0,
+  },
 });
+
+const countedIndicators = (previous: ClusterCell, codepoint: number): ClusterCell["regionalIndicators"] => {
+  if (!isRegionalIndicator(codepoint)) return previous.regionalIndicators;
+  return previous.regionalIndicators === 0 ? 1 : 2;
+};
 
 const joinCell = (previous: ClusterCell, codepoint: number, width: CellWidth): ClusterStep => ({
   kind: "join",
-  cell: { first: previous.first, width, joined: true, endsWithZwj: codepoint === ZWJ, lastJamo: lastJamoOf(codepoint) },
+  cell: {
+    first: previous.first,
+    width,
+    joined: true,
+    endsWithZwj: codepoint === ZWJ,
+    lastJamo: lastJamoOf(codepoint),
+    regionalIndicators: countedIndicators(previous, codepoint),
+  },
 });
 
 const DROP: ClusterStep = { kind: "drop" };
@@ -121,6 +144,14 @@ const visibleFold36 = (rule: Rule36, previous: ClusterCell, codepoint: number): 
   return previous.endsWithZwj ? "fold" : "new";
 };
 
+// psmux's should_combine, asked both ways round: a flag takes no third indicator, and jamo are
+// counted by their width alone.
+const visibleFoldPsmux = (previous: ClusterCell, codepoint: number): Fold => {
+  const pairsFlag = isRegionalIndicator(previous.first) && isRegionalIndicator(codepoint);
+  if (pairsFlag ? previous.regionalIndicators === 1 : combines36("tmux-3.6a", previous.first, codepoint)) return "fold-wide";
+  return previous.endsWithZwj ? "fold" : "new";
+};
+
 // utf8_is_modifier (3.4): `last.data.size < 2` refuses only a lone ASCII byte.
 const visibleFold34 = (previous: ClusterCell, codepoint: number): Fold => {
   if (isRegionalIndicator(codepoint) || isSkinTone(codepoint)) return !previous.joined && previous.first < FIRST_MULTIBYTE ? "new" : "fold-wide";
@@ -130,6 +161,12 @@ const visibleFold34 = (previous: ClusterCell, codepoint: number): Fold => {
 const zeroWidthFold = (table: TmuxWidthTable, codepoint: number): Fold => {
   const widens = table.folding === "tmux-3.4" || table.vs16Wide;
   return codepoint === VS16 && widens ? "fold-wide" : "fold";
+};
+
+const visibleFold = (folding: Exclude<FoldingRule, "none">, previous: ClusterCell, codepoint: number): Fold => {
+  if (folding === "tmux-3.4") return visibleFold34(previous, codepoint);
+  if (folding === "psmux") return visibleFoldPsmux(previous, codepoint);
+  return visibleFold36(folding, previous, codepoint);
 };
 
 /**
@@ -144,8 +181,7 @@ export function clusterStep(table: TmuxWidthTable, codepoint: number, previous: 
   // An ASCII character never folds, and nothing folds into the start of a row or an empty cell.
   if (codepoint < FIRST_MULTIBYTE || !previous || previous.width === 0) return zeroWidth ? DROP : newCell(codepoint, width);
   if (zeroWidth) return applyFold(zeroWidthFold(table, codepoint), previous, codepoint, width);
-  const fold = table.folding === "tmux-3.4" ? visibleFold34(previous, codepoint) : visibleFold36(table.folding, previous, codepoint);
-  return applyFold(fold, previous, codepoint, width);
+  return applyFold(visibleFold(table.folding, previous, codepoint), previous, codepoint, width);
 }
 
 /** How many columns tmux advances for `text`, written from the start of a row. */

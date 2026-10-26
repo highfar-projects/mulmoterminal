@@ -34,6 +34,7 @@ import NotificationSoundsSection from "./settings/NotificationSoundsSection.vue"
 import VoiceInputSection from "./settings/VoiceInputSection.vue";
 import WebPushSection from "./settings/WebPushSection.vue";
 import GoogleAccountSection from "./settings/GoogleAccountSection.vue";
+import BotJobsSection from "./settings/BotJobsSection.vue";
 import PrReposSection from "./settings/PrReposSection.vue";
 import LaunchersSection from "./settings/LaunchersSection.vue";
 import QuickCommandsSection from "./settings/QuickCommandsSection.vue";
@@ -409,6 +410,9 @@ useModalKeyboard({
           </div>
           <div v-if="visitedTabs.has('google')" v-show="activeTab === 'google'" data-testid="settings-pane-google">
             <GoogleAccountSection />
+          </div>
+          <div v-if="visitedTabs.has('botJobs')" v-show="activeTab === 'botJobs'" data-testid="settings-pane-botJobs">
+            <BotJobsSection @launch-skill="askBeforeLaunch" />
           </div>
           <div v-if="visitedTabs.has('sessions')" v-show="activeTab === 'sessions'" data-testid="settings-pane-sessions">
             <SessionSection />

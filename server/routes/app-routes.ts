@@ -9,7 +9,6 @@
 // What arrives as deps is what index.ts owns: the spawners, the session lifecycle, the title
 // manager, the tool stores, and `publish` (pub/sub exists only once the HTTP server does).
 import path from "node:path";
-import { sameOriginGuard } from "./same-origin-guard.js";
 import express, { type Express } from "express";
 import { mountAllRoutes } from "../infra/tools/plugins-registry.js";
 import { mountConfigRoutes } from "../config/config-routes.js";
@@ -38,6 +37,7 @@ import { mountAgentAvailabilityRoutes } from "../routes/agent-availability-route
 import type { AgentAvailability } from "../../common/agentAvailability.js";
 import { mountIssueWorkRoutes } from "../routes/issue-work-routes.js";
 import { mountTerminalReplyRoutes } from "./terminal-reply-routes.js";
+import { mountRequestGates } from "./request-gates.js";
 import { captureTerminalScreen } from "../backends/remoteHost/hostScreens.js";
 import { sessionExistsHere } from "../backends/remoteHost/hostBindings.js";
 import { sendToSession } from "../session/session-input.js";
@@ -73,6 +73,7 @@ import { mountFeedsRoutes } from "../backends/feeds/feeds.js";
 import { mountCalendarPushRoutes } from "../backends/calendar/calendarPush.js";
 import { listProjectRoots } from "../infra/fs/project-root.js";
 import { mountRemoteHostRoutes } from "../backends/remoteHost/index.js";
+import { mountBotJobRoutes } from "../backends/botJobs/index.js";
 import { mountNotificationRoutes } from "../backends/notifier.js";
 import { mountWhisperRoutes } from "../backends/media/whisper.js";
 import { mountSchedulerRoutes } from "../backends/scheduler/scheduler.js";
@@ -185,14 +186,9 @@ const sessionCallReporting = (deps: AppRouteDeps, sessionId: string) => ({
 });
 
 export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
+  // FIRST, before any route, parser or static file (request-gates.ts).
+  mountRequestGates(app, deps);
   const clientDir = deps.clientDir;
-
-  // Before any route AND before any body parser: one same-origin gate for every state-changing
-  // request, so a site the user visits cannot drive this server through their browser. Ahead of
-  // the parsers so a request that is going to be refused is never handed a body to parse — the
-  // gate reads only method, path and origin. Individual routes keep their own checks — this is
-  // the floor, not a replacement.
-  app.use(sameOriginGuard(deps.isAllowedOrigin));
 
   // Ahead of express.json, carrying its own raw parser: a dropped file is bytes under its own
   // content type, and a dropped .json would otherwise be parsed as a document rather than saved.
@@ -447,7 +443,6 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
     openQuestion: async (sessionId) => openQuestionOf(await deps.toolStores.toolCallsStore.get(sessionId), sessionId),
     sendReply: (sessionId, text, options) => sendToSession(sessionId, text, options),
     isAllowedOrigin: deps.isAllowedOrigin,
-    isAllowedHost: deps.isAllowedHost,
   });
 
   // GET/POST /api/config (workspace dir + directory presets) — in its own module.
@@ -520,6 +515,10 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
   // Firestore host loop from the toolbar Connect control. Same-origin guarded like
   // the other local-only routes; the connect idToken is never logged.
   mountRemoteHostRoutes(app, { isAllowedOrigin: deps.isAllowedOrigin });
+
+  // GET/POST /api/bot-tokens + DELETE /api/bot-tokens/:id — mint and revoke the secret a remote bot
+  // sends to mulmoserver's submitBotJob for this host (backends/botJobs). Needs the connection above.
+  mountBotJobRoutes(app);
 
   // GET /api/google/status + POST /api/google/authorize|unlink — the Settings modal's
   // Google account link. Consent needs a browser on THIS machine (loopback listener),

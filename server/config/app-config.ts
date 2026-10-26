@@ -10,6 +10,7 @@ import { DEFAULT_USAGE_PROBE_INTERVAL_MINUTES, USAGE_GAUGE_DEFAULT, sanitizeUsag
 import { PALETTE_SEARCH_BOX_DEFAULT, sanitizePaletteSearchBox } from "../../common/paletteSearchBox.js";
 import { REMOTE_SERVER_DEFAULT, sanitizeRemoteServer } from "../../common/remoteServer.js";
 import { CONFETTI_DEFAULT, sanitizeConfetti, type Confetti } from "../../common/confetti.js";
+import { BOT_JOBS_DEFAULT, sanitizeBotJobs, type BotJobs } from "../../common/botJobs.js";
 import { PLAYFUL_EFFECTS_DEFAULT, sanitizePlayfulEffects, type PlayfulEffects } from "../../common/playfulEffects.js";
 import { PLAYFUL_MEDIA_DEFAULT, sanitizePlayfulMedia, type PlayfulMedia } from "../../common/playfulMedia.js";
 import { droppedPathWarnings } from "./playful-media.js";
@@ -182,6 +183,8 @@ export interface AppConfig {
   playfulMedia: PlayfulMedia;
   // Which celebrations exist and which app events set one off; see common/confetti.ts.
   confetti: Confetti;
+  // Whether a remote bot's Python jobs may run here, and with which interpreter; see common/botJobs.ts.
+  botJobs: BotJobs;
   // Which pinned favourites the toolbar shows without opening Collections (#1984), as
   // `"<kind>:<slug>"` keys in the order they are drawn. Empty by default — the toolbar is
   // unchanged until the user promotes one. The pins themselves live in the workspace file
@@ -599,6 +602,7 @@ export const emptyConfig = (): AppConfig => ({
   playfulEffects: PLAYFUL_EFFECTS_DEFAULT,
   playfulMedia: { ...PLAYFUL_MEDIA_DEFAULT, files: [] },
   confetti: CONFETTI_DEFAULT,
+  botJobs: BOT_JOBS_DEFAULT,
   toolbarPins: [],
   cockpitLines: { ...DEFAULT_COCKPIT_LINES },
   fontFamily: null,
@@ -712,6 +716,7 @@ function sanitizeAppConfig(raw: unknown): AppConfig {
     playfulEffects: sanitizePlayfulEffects(o.playfulEffects),
     playfulMedia: sanitizePlayfulMediaWarning(o.playfulMedia),
     confetti: sanitizeConfetti(o.confetti),
+    botJobs: sanitizeBotJobs(o.botJobs),
     toolbarPins: sanitizeToolbarPins(o.toolbarPins),
     cockpitLines: sanitizeCockpitLines(o.cockpitLines),
     fontFamily: normalizeFontFamily(o.fontFamily),
@@ -849,6 +854,7 @@ export function mergeConfigUpdate(base: AppConfig, body: Record<string, unknown>
     playfulEffects: updated("playfulEffects", sanitizePlayfulEffects, base.playfulEffects),
     playfulMedia: updated("playfulMedia", sanitizePlayfulMediaWarning, base.playfulMedia),
     confetti: updated("confetti", sanitizeConfetti, base.confetti),
+    botJobs: updated("botJobs", sanitizeBotJobs, base.botJobs),
     toolbarPins: updated("toolbarPins", sanitizeToolbarPins, base.toolbarPins),
     cockpitLines: updated("cockpitLines", sanitizeCockpitLines, base.cockpitLines),
   };
@@ -907,6 +913,7 @@ export function toPublicAppConfig(config: AppConfig): AppConfig {
     playfulEffects: config.playfulEffects,
     playfulMedia: config.playfulMedia,
     confetti: config.confetti,
+    botJobs: config.botJobs,
     toolbarPins: config.toolbarPins,
     cockpitLines: config.cockpitLines,
     fontFamily: config.fontFamily,

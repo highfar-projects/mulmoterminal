@@ -552,10 +552,13 @@ export function redrawTargets(stdout: string, clientPid: number): string[] {
 //
 // Measured against a live session: one `refresh-client` returns every row of a 25-row screen in a
 // single 666-byte burst, where an idle pane sends nothing at all.
-export function tmuxRedrawClient(id: string, clientPid: number): void {
-  const clients = tmux(["list-clients", "-t", tmuxSessionTarget(id), "-F", "#{client_pid} #{client_tty}"]);
+//
+// Async: it runs once per terminal a page opens or repaints, and two synchronous tmux round trips per
+// terminal held the whole server for each (#3189). Never rejects; a failed call repaints nothing.
+export async function tmuxRedrawClient(id: string, clientPid: number): Promise<void> {
+  const clients = await tmuxAsync(["list-clients", "-t", tmuxSessionTarget(id), "-F", "#{client_pid} #{client_tty}"]);
   if (clients.status !== 0) return;
-  redrawTargets(clients.stdout, clientPid).forEach((tty) => tmux(["refresh-client", "-t", tty]));
+  await Promise.all(redrawTargets(clients.stdout, clientPid).map((tty) => tmuxAsync(["refresh-client", "-t", tty])));
 }
 
 /** Parse `#{window_width}x#{window_height}`. Null for anything that isn't a pair of numbers —

@@ -17,6 +17,7 @@ import { measureTmuxWidths, settledTmuxWidthTable } from "../../../../server/inf
 import { spawnCapture } from "../../../../server/infra/process/spawnCapture";
 import { TMUX_UNICODE_VERSION, tmuxUnicodeProvider } from "../../../../common/tmuxUnicodeProvider";
 import type { TmuxWidthTable } from "../../../../common/tmuxWidthTable";
+import { FIXED_WIDTH_SAMPLES, RANDOM_SEED, seededWidthSamples } from "../../../helpers/widthSamples";
 
 const hasTmux = process.platform !== "win32" && spawnCapture("tmux", ["-V"]).status === 0;
 
@@ -25,50 +26,6 @@ const ROWS = 10;
 const POLL_MS = 20;
 const POLL_LIMIT = 150;
 const SETTLE_MS = 150;
-const RANDOM_SEED = 3173;
-const RANDOM_SAMPLES = 20;
-const CHARACTERS_PER_RANDOM_SAMPLE = 6;
-const RANDOM_CODEPOINT_SPAN = 0x1fa00;
-
-const FIXED_SAMPLES = [
-  "[✅]",
-  "⏺ done",
-  "│ ✅ │ ok │",
-  "\u{1f468}‍\u{1f469}‍\u{1f467}",
-  "\u{1f1ef}\u{1f1f5}\u{1f1fa}",
-  "\u{1f44d}\u{1f3fd}\u{1f3fd}",
-  "a\u{1f3fd}",
-  "☺️x",
-  "✅︎x",
-  "a‍\u{1f469}b",
-  "\u{1f468}‍a",
-  "각",
-  "あい",
-  "\u{1fae0}x",
-  "\u{1f93b}x",
-  "é́",
-  "1️⃣",
-  "ℹ️ i",
-  "\u{1f3f3}️‍\u{1f308}",
-  "\u{1f9d1}\u{1f3fd}‍\u{1f4bb}",
-];
-
-// A small fixed-seed generator, so a failing random sample is the same one on every run.
-function seededSamples(seed: number): string[] {
-  let state = seed;
-  const next = () => {
-    state = (state * 1103515245 + 12345) % 2 ** 31;
-    return state / 2 ** 31;
-  };
-  return Array.from({ length: RANDOM_SAMPLES }, () =>
-    String.fromCodePoint(
-      ...Array.from({ length: CHARACTERS_PER_RANDOM_SAMPLE }, () => 0xa0 + Math.floor(next() * RANDOM_CODEPOINT_SPAN)).filter(
-        (codepoint) => codepoint < 0xd800 || codepoint > 0xdfff,
-      ),
-    ),
-  );
-}
-
 const octalEscaped = (text: string): string =>
   Array.from(Buffer.from(text, "utf8"))
     .map((byte) => `\\${byte.toString(8).padStart(3, "0")}`)
@@ -146,7 +103,7 @@ describe.skipIf(!hasTmux)("the measured table against a real tmux", () => {
       client.onData((data) => term.write(data));
       try {
         const disagreements: string[] = [];
-        for (const [index, sample] of [...FIXED_SAMPLES, ...seededSamples(RANDOM_SEED)].entries()) {
+        for (const [index, sample] of [...FIXED_WIDTH_SAMPLES, ...seededWidthSamples(RANDOM_SEED)].entries()) {
           const marker = `#${index}#`;
           tmux(["respawn-pane", "-k", `env printf '${octalEscaped(sample + marker)}'; exec sleep 600`]);
           const tmuxColumn = await markerColumnInTmux(tmux, marker);

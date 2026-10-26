@@ -1,6 +1,6 @@
 ---
 name: mulmoterminal-config
-description: The way into configuring MulmoTerminal, and the way to find out how it is configured now. Use for a broad or unsure request — "configure MulmoTerminal", "set this up", "customize this", "what can I change?", first-run setup — and route to the skill that owns the area. Also answers "how is this set up right now?", "why isn't my setting working?", "did that take effect?" by reading the live config — the global `~/.mulmoterminal/config.json`, each project's `.mulmoterminal.json`, and what the app ACTUALLY parsed from them — including keys it dropped in validation, which is the difference between a setting you never made and one that silently never applied. Owns the global settings that have no skill of their own — work comments on an issue (issueWorkComments), the PR clone footer (prWorkdirFooter), the closing summary (appendSystemPrompt), the decision digest (decisionDigest), the periodic dev-work log (worklogEnabled), roster row length (cockpitLines), the grid header's usage gauge and how often it measures Claude (usageGauge, usageProbeIntervalMinutes), the grid header's load read-out (showLoadAverage), a search box in the middle of the top bar (paletteSearchBox), an experimental switch for a server on another machine (remoteServer), the occasional terminal theatre (playfulEffects), confetti and when it falls (confetti), pinned collections on the toolbar (toolbarPins), a self-hosted GitLab (gitlabHosts), a project's Skill menu (skills), a project's Mulmo menu (decks), and the files a project shows on the phone (mobileFiles). When the request names another area, go straight to that skill instead — mulmoterminal-dirs (colours, grid order, project names, font size), mulmoterminal-theme (your own colour scheme), mulmoterminal-header (buttons and chips), mulmoterminal-keys (shortcuts, copy-on-select, Enter behaviour), mulmoterminal-model (other models and backends, and your own command for starting Claude Code), mulmoterminal-notify (sounds and push).
+description: The way into configuring MulmoTerminal, and the way to find out how it is configured now. Use for a broad or unsure request — "configure MulmoTerminal", "set this up", "customize this", "what can I change?", first-run setup — and route to the skill that owns the area. Also answers "how is this set up right now?", "why isn't my setting working?", "did that take effect?" by reading the live config — the global `~/.mulmoterminal/config.json`, each project's `.mulmoterminal.json`, and what the app ACTUALLY parsed from them — including keys it dropped in validation, which is the difference between a setting you never made and one that silently never applied. Owns the global settings that have no skill of their own — work comments on an issue (issueWorkComments), the PR clone footer (prWorkdirFooter), the closing summary (appendSystemPrompt), the decision digest (decisionDigest), the periodic dev-work log (worklogEnabled), roster row length (cockpitLines), the grid header's usage gauge and how often it measures Claude (usageGauge, usageProbeIntervalMinutes), the grid header's load read-out (showLoadAverage), a search box in the middle of the top bar (paletteSearchBox), an experimental switch for a server on another machine (remoteServer), the occasional terminal theatre (playfulEffects), confetti and when it falls (confetti), pinned collections on the toolbar (toolbarPins), Python a remote bot may run on this machine (botJobs, and the bot tokens for it), a self-hosted GitLab (gitlabHosts), a project's Skill menu (skills), a project's Mulmo menu (decks), and the files a project shows on the phone (mobileFiles). When the request names another area, go straight to that skill instead — mulmoterminal-dirs (colours, grid order, project names, font size), mulmoterminal-theme (your own colour scheme), mulmoterminal-header (buttons and chips), mulmoterminal-keys (shortcuts, copy-on-select, Enter behaviour), mulmoterminal-model (other models and backends, and your own command for starting Claude Code), mulmoterminal-notify (sounds and push).
 ---
 
 # Configuring MulmoTerminal — start here
@@ -548,3 +548,35 @@ Which of the pinned favourites get a permanent button in the toolbar, beside **G
   So a pin removed in MulmoClaude leaves the button on the toolbar of an already-open session until
   one of those happens; it is not a live feed.
 - Also in Settings, under **Toolbar pins**, which lists what is pinned and takes a tick per entry.
+
+### `botJobs` — Python a remote bot may run on this machine
+
+For an agent that runs on someone else's server (GrokBot) and needs this machine's GPU. The bot
+posts a Python script to mulmoserver with a token minted for THIS machine; it arrives as a Shell
+cell that shows the script and asks **`Run this job? [y/N]`**, and runs only on a typed `y`. Output
+and exit code go back to the bot. **Off until set.** Settings → Integrations → **Bot jobs** has the
+switch, the interpreter, and creates / revokes tokens (the secret shown once) — offer that first.
+
+```json
+{ "botJobs": { "enabled": true, "python": "~/venvs/gpu/bin/python" } }
+```
+
+- `enabled` — only a literal `true` turns it on. It is read from the file for every job, so a hand
+  edit — switching it off included — applies to the very next job, with no restart or reload.
+- `python` — the interpreter a job runs with. Ask which venv has the GPU packages (torch, …); the
+  system `python3` usually has none. `~/` is the home directory.
+- **The token.** Needs the mobile remote connected (toolbar Connect), since a token belongs to that
+  connection's machine. Mint one in Settings, or with the running server's local API, and give the bot the secret
+  and the two endpoints in the answer — the secret is shown ONCE and is never stored here:
+
+  ```sh
+  curl --noproxy localhost -s -X POST "http://localhost:${MULMOTERMINAL_PORT:-34567}/api/bot-tokens" -H 'content-type: application/json' -d '{"name":"GrokBot"}'
+  ```
+
+  The bot then calls `POST <submit>` with `Authorization: Bearer <token>` and a body
+  `{ "script": "...", "args": ["..."], "name": "..." }`, and `GET <result>?id=<id>&wait=50` until
+  `status` is `done` or `error`. `GET /api/bot-tokens` lists the tokens (no secrets);
+  `DELETE /api/bot-tokens/<tokenId>` revokes one. A token is the bot's whole access, so revoke it
+  the moment it may have leaked.
+- Every job leaves a directory under `~/.mulmoterminal/bot-jobs/` (the script, `run.sh`, the
+  output). Nothing deletes them yet.

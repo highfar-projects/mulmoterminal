@@ -112,11 +112,16 @@ export function createIsAllowedOrigin(browserHostnames: ReadonlySet<string>) {
  * The same list, asked of the HOST a request was addressed to. Origin cannot stop DNS rebinding on a
  * READ: the rebound page's fetch is same-origin, so it sends no Origin at all, and the GET is answered.
  * The Host it carries is still the attacker's own name, though, and a name the operator never wrote
- * is refused here. For a route whose answer is sensitive on its own, such as a terminal's screen.
+ * is refused here. Asked of every HTTP request, by host-guard.ts.
  */
+// A Host header is `host[:port]` and nothing else. `new URL()` reads more than that — the text before
+// an `@` as userinfo, a `/` as the start of a path — so `evil.example@localhost` would parse to
+// hostname `localhost`. Anything outside the authority's own characters is refused before parsing.
+const NOT_A_BARE_AUTHORITY = /[@/?#\\\s]/;
+
 export function createIsAllowedHost(browserHostnames: ReadonlySet<string>) {
   return function isAllowedHost(hostHeader: string | undefined): boolean {
-    if (!hostHeader) return false;
+    if (!hostHeader || NOT_A_BARE_AUTHORITY.test(hostHeader)) return false;
     try {
       const { hostname } = new URL(`http://${hostHeader}`);
       return LOOPBACK_HOSTNAMES.has(hostname) || browserHostnames.has(hostname);
@@ -134,11 +139,11 @@ export function createIsAllowedHost(browserHostnames: ReadonlySet<string>) {
  */
 export function bindSecurityWarning(bindHost: string, port: string | number, browserHostnames: ReadonlySet<string>): string {
   const exposure = `this server has no authentication, so anyone who can reach ${bindHost}:${port} can read your sessions and start terminals.`;
-  // The symptom, named before it is met: the page loads (a plain GET) and then every terminal sits
-  // at "connecting", which reads as a broken server rather than as a setting.
+  // The symptom, named before it is met: a name not on the list is refused outright (host-guard.ts),
+  // which reads as a broken server rather than as a setting unless the warning says why.
   const origins =
     browserHostnames.size === 0
-      ? `No browser origin is allowed beyond localhost, so opening http://${bindHost}:${port} from another machine loads the page and then fails to attach a terminal — set MULMOTERMINAL_ALLOWED_ORIGINS to the address you open it at.`
+      ? `No browser origin is allowed beyond localhost, so opening http://${bindHost}:${port} from another machine is refused (403) by name — set MULMOTERMINAL_ALLOWED_ORIGINS to the address you open it at.`
       : `Browsers may attach from ${[...browserHostnames].join(", ")} (and localhost).`;
   return `\x1b[33m[security]\x1b[0m bound to ${bindHost}, not loopback — ${exposure} ${origins} Unset MULMOTERMINAL_HOST to bind 127.0.0.1.`;
 }

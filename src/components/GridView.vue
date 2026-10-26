@@ -26,6 +26,7 @@ import {
   shellCell,
   isOccupied,
   sessionCell,
+  unplacedCell,
   launchInCell,
   setSortMode,
   setArrangement,
@@ -706,8 +707,7 @@ async function adoptUnplacedSessions(): Promise<void> {
       // holding a cell whose attach has not landed yet — and adopting twice would give one session
       // two cells fighting over the same socket.
       if (state.value.cells.some((cell) => cell.session === row.id)) continue;
-      const agent = asTerminalAgent(row.agent);
-      const placed = insertCellAfter(state.value, NO_ORIGIN_UID, sessionCell(row.id, typeof row.cwd === "string" ? row.cwd : defaultCwd.value, agent));
+      const placed = insertCellAfter(state.value, NO_ORIGIN_UID, unplacedCell(row.id, typeof row.cwd === "string" ? row.cwd : defaultCwd.value, row.agent));
       // A full grid drops the cell and hands the state straight back. Nothing to fall back to
       // here — this session has been waiting, and it can keep waiting: the mark is only cleared
       // by an attach, so the next load with room adopts it.
