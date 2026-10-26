@@ -1,0 +1,28 @@
+// The experimental GitHub board (#3172), out of the locale file, which is at its line cap.
+export const githubBoardJa = {
+  githubBoard: {
+    title: "GitHub ボード",
+    experimental: "実験的",
+    region: "GitHub ボード",
+    open: "ボードを開く（実験的）",
+    back: "一覧に戻る",
+    close: "ボードを閉じる",
+    refresh: "読み直す",
+    loading: "読み込んでいます…",
+    loadFailed: "ボードを読み込めませんでした。",
+    noRepos: "リポジトリが設定されていません。設定 → Pull request repos に owner/repo を追加してください。",
+    column: { todo: "未着手", implementing: "実装中", review: "レビュー中", qa: "QA 待ち", merged: "マージ済み" },
+    empty: "なし",
+    draft: "下書き",
+    ci: { passing: "CI 成功", failing: "CI 失敗", pending: "CI 実行中", none: "CI なし" },
+    changesRequested: "修正依頼あり",
+    approved: "承認済み",
+    reviewRound: "レビュー {count} 回目",
+    awaitingReview: "最新の push はまだレビューされていません",
+    noCell: "このブランチで動いているターミナルはありません",
+    cell: { working: "作業中", waiting: "確認待ち", idle: "待機中" },
+    jump: "このターミナルへ移動",
+    notInGrid: "動いていますが、グリッドにはありません",
+    rule: "レビュー回数は、レビューを受けた push の数です。QA 待ちは、CI が通り、最新の push がレビュー済みのものです。",
+  },
+};

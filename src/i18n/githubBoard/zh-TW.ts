@@ -1,0 +1,28 @@
+// The experimental GitHub board (#3172), out of the locale file, which is at its line cap.
+export const githubBoardZhTW = {
+  githubBoard: {
+    title: "GitHub 看板",
+    experimental: "實驗性",
+    region: "GitHub 看板",
+    open: "開啟看板（實驗性）",
+    back: "返回列表",
+    close: "關閉看板",
+    refresh: "重新整理",
+    loading: "讀取中…",
+    loadFailed: "無法讀取看板。",
+    noRepos: "尚未設定儲存庫。請在 設定 → Pull request repos 中加入 owner/repo。",
+    column: { todo: "待辦", implementing: "實作中", review: "審查中", qa: "待 QA", merged: "已合併" },
+    empty: "無",
+    draft: "草稿",
+    ci: { passing: "CI 通過", failing: "CI 失敗", pending: "CI 執行中", none: "無 CI" },
+    changesRequested: "要求修改",
+    approved: "已核准",
+    reviewRound: "第 {count} 輪審查",
+    awaitingReview: "最新的 push 尚未審查",
+    noCell: "沒有終端機在此分支上執行",
+    cell: { working: "工作中", waiting: "等待你確認", idle: "閒置" },
+    jump: "前往此終端機",
+    notInGrid: "正在執行，但不在網格中",
+    rule: "審查輪數是獲得審查的 push 數量。待 QA 表示 CI 已通過且最新的 push 已審查。",
+  },
+};

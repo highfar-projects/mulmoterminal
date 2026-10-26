@@ -2,6 +2,7 @@
 // One repository's open pull requests, under the repo's name.
 import type { CiState, RepoPrs } from "../../common/ghItems";
 import { relativeTimeFromIso } from "./cellDisplay";
+import { ciDotClass } from "./ciDot";
 import { useI18n } from "vue-i18n";
 
 const { t } = useI18n();
@@ -16,14 +17,6 @@ const CI_TITLE_KEY: Record<CiState, string> = {
 };
 const REVIEW_LABEL: Record<string, string> = { APPROVED: "approved", CHANGES_REQUESTED: "changes requested", REVIEW_REQUIRED: "review required" };
 
-// CI dot colour: passing green (hardcoded, token-less), failing/pending on the
-// theme err/amber tokens, no-checks the dim default.
-function ciDotClass(ci: CiState): string {
-  if (ci === "passing") return "bg-[#3fae6b]";
-  if (ci === "failing") return "bg-err-text";
-  if (ci === "pending") return "bg-amber";
-  return "bg-dim";
-}
 // Review-tag colour: approved green, changes-requested red; anything else keeps
 // the neutral tag colours. Returns text + border together so there's no cascade race.
 function reviewTagClass(review: string): string {
