@@ -73,6 +73,7 @@ export const zhCN: Messages = {
       github: "GitHub 与 GitLab",
       prRepos: "拉取请求的仓库",
       google: "Google 账号",
+      botJobs: "机器人任务",
       sessions: "会话与后台任务",
       surviving: "重启后仍存活的会话",
       cost: "费用（估算）",

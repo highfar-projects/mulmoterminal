@@ -554,7 +554,8 @@ Which of the pinned favourites get a permanent button in the toolbar, beside **G
 For an agent that runs on someone else's server (GrokBot) and needs this machine's GPU. The bot
 posts a Python script to mulmoserver with a token minted for THIS machine; it arrives as a Shell
 cell that shows the script and asks **`Run this job? [y/N]`**, and runs only on a typed `y`. Output
-and exit code go back to the bot. **Off until set**; there is no Settings control yet.
+and exit code go back to the bot. **Off until set.** Settings → Integrations → **Bot jobs** has the
+switch, the interpreter, and creates / revokes tokens (the secret shown once) — offer that first.
 
 ```json
 { "botJobs": { "enabled": true, "python": "~/venvs/gpu/bin/python" } }
@@ -565,7 +566,7 @@ and exit code go back to the bot. **Off until set**; there is no Settings contro
 - `python` — the interpreter a job runs with. Ask which venv has the GPU packages (torch, …); the
   system `python3` usually has none. `~/` is the home directory.
 - **The token.** Needs the mobile remote connected (toolbar Connect), since a token belongs to that
-  connection's machine. Mint one with the running server's local API, and give the bot the secret
+  connection's machine. Mint one in Settings, or with the running server's local API, and give the bot the secret
   and the two endpoints in the answer — the secret is shown ONCE and is never stored here:
 
   ```sh

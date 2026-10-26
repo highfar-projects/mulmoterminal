@@ -75,6 +75,7 @@ export const zhTW: Messages = {
       github: "GitHub 與 GitLab",
       prRepos: "Pull Request 的儲存庫",
       google: "Google 帳號",
+      botJobs: "機器人任務",
       sessions: "工作階段與背景作業",
       surviving: "重啟後仍存活的工作階段",
       cost: "費用（估算）",

@@ -32,6 +32,7 @@ export type SettingsTabId =
   | "github"
   | "prRepos"
   | "google"
+  | "botJobs"
   | "sessions"
   | "surviving"
   | "cost"
@@ -53,7 +54,7 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
   { key: "input", tabs: ["terminalKeys", "shortcuts", "voice"] },
   { key: "models", tabs: ["models", "mcp"] },
   { key: "notifications", tabs: ["sounds", "push", "quickCommands"] },
-  { key: "integrations", tabs: ["github", "prRepos", "google"] },
+  { key: "integrations", tabs: ["github", "prRepos", "google", "botJobs"] },
   { key: "sessions", tabs: ["sessions", "surviving", "cost", "quit"] },
   { key: "help", tabs: ["help", "releaseNotes"] },
 ];

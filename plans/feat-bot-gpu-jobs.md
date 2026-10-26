@@ -101,9 +101,12 @@ Notes to verify while building:
 
 1. **mulmoserver** — DONE (receptron/mulmoserver#360, merged; functions not yet deployed).
 2. **MulmoTerminal**, split in two:
-   - **2a** — the `botJob` handler, `run.sh`, the cell, `botJobs` config, `/api/bot-tokens`. Set up
+   - **2a** — DONE (#3184). The `botJob` handler, `run.sh`, the cell, `botJobs` config, `/api/bot-tokens`. Set up
      through the `mulmoterminal-config` skill and the local API; no Settings control yet.
-   - **2b** — a Settings section: the switch, the interpreter, mint (secret shown once) / revoke.
+   - **2b** — Settings → Integrations → **Bot jobs**: the switch, the interpreter, mint (secret
+     shown once, with the two addresses to give the bot) / revoke. Minting is disabled, with the
+     reason, until the mobile remote is connected. Its messages live in `settingsControls` because
+     every locale file is at its line cap.
 3. Try the webhook with GrokBot. Then `autoRun`, per token.
 
 ## What 2a settled
