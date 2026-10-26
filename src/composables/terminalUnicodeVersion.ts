@@ -16,6 +16,12 @@ export const setTerminalUnicodeVersion = (value: unknown): void => {
 
 export const getTerminalWidthTable = (): TmuxWidthTable | null => widthTable.value;
 
+// Bumped on every set, so an answer to a request made earlier can tell that a newer one landed.
+let widthTableGeneration = 0;
+
+export const terminalWidthTableGeneration = (): number => widthTableGeneration;
+
 export const setTerminalWidthTable = (value: unknown): void => {
+  widthTableGeneration += 1;
   widthTable.value = isTmuxWidthTable(value) ? value : null;
 };

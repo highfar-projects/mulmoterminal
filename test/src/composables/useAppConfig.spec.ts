@@ -4,6 +4,9 @@ import { currentGitlabHosts, useAppConfig } from "../../../src/composables/useAp
 import { paletteSearchBox, setPaletteSearchBox } from "../../../src/composables/paletteSearchBox";
 import { globalHeaderStatusColors, globalHeaderStatusTint } from "../../../src/composables/headerStatusColors";
 import { DEFAULT_HEADER_STATUS_TINT } from "../../../common/headerStatusColors";
+import { adoptLateTerminalWidthTable } from "../../../src/composables/lateTerminalWidthTable";
+
+vi.mock("../../../src/composables/lateTerminalWidthTable", () => ({ adoptLateTerminalWidthTable: vi.fn(async () => undefined) }));
 
 // Where the server keeps the worktrees it created. The GET carries it (the real /api/config does,
 // alongside `home`) because that is the only way this side can tell one of ours from a directory
@@ -56,6 +59,23 @@ const mockConfigFetch = () => mockServer();
 beforeEach(() => {
   localStorage.clear();
   mockConfigFetch();
+});
+
+// #3173: a page that read the config before the server finished measuring tmux asks again once.
+describe("useAppConfig — a width table the config did not carry yet", () => {
+  it("asks for it when the config has none", async () => {
+    vi.mocked(adoptLateTerminalWidthTable).mockClear();
+    mockServer([], { get: { terminalWidthTable: null } });
+    await useAppConfig().loadConfig();
+    expect(adoptLateTerminalWidthTable).toHaveBeenCalledOnce();
+  });
+
+  it("does not ask when the config already carries one", async () => {
+    vi.mocked(adoptLateTerminalWidthTable).mockClear();
+    mockServer([], { get: { terminalWidthTable: { runs: [[0x2705, 0x2705, 2]], folding: "tmux-3.6a", vs16Wide: true } } });
+    await useAppConfig().loadConfig();
+    expect(adoptLateTerminalWidthTable).not.toHaveBeenCalled();
+  });
 });
 
 // #2540. The palette's aliases and favorites arrive with the config, checked the way the server checks them.

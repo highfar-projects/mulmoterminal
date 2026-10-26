@@ -233,6 +233,41 @@ describe("handleClientFrame", () => {
     expect(t.writes).toEqual([]);
   });
 
+  // Sent when the page's cell-width table changes: xterm keeps cells it already parsed, so only a
+  // tmux repaint redraws them with the new widths.
+  describe("a redraw frame", () => {
+    it("asks tmux to repaint this client", () => {
+      const { handleClientFrame, calls } = setup();
+      const t = fakeTerm();
+      const s = fakeSocket();
+      handleClientFrame(entryWith({ term: t.term as never, ws: s.ws as never, tmux: true }), s.ws as never, frame({ type: "redraw" }), SESSION);
+      expect(calls).toEqual([`redraw:${SESSION}:${t.term.pid}`]);
+      expect(t.writes).toEqual([]);
+    });
+
+    it("does nothing for a session with no tmux", () => {
+      const { handleClientFrame, calls } = setup();
+      const s = fakeSocket();
+      handleClientFrame(entryWith({ ws: s.ws as never, tmux: false }), s.ws as never, frame({ type: "redraw" }), SESSION);
+      expect(calls).toEqual([]);
+    });
+
+    it("is capped per socket, and the cap starts again on a reattach", () => {
+      const { handleClientFrame, reattachPty, calls } = setup();
+      const t = fakeTerm();
+      const first = fakeSocket();
+      const entry = entryWith({ term: t.term as never, ws: first.ws as never, tmux: true });
+      Array.from({ length: 20 }).forEach(() => handleClientFrame(entry, first.ws as never, frame({ type: "redraw" }), SESSION));
+      const redraws = () => calls.filter((call) => call.startsWith("redraw:")).length;
+      expect(redraws()).toBe(8);
+      const second = fakeSocket();
+      reattachPty(entry, second.ws as never, SESSION);
+      const afterReattach = redraws();
+      handleClientFrame(entry, second.ws as never, frame({ type: "redraw" }), SESSION);
+      expect(redraws()).toBe(afterReattach + 1);
+    });
+  });
+
   // Keys typed straight after the button reach tmux behind the cancel, never ahead of it — otherwise
   // copy-mode eats them. The dep being synchronous is what makes this order the order tmux sees.
   it("finishes leaving copy-mode before writing the input that follows it", () => {

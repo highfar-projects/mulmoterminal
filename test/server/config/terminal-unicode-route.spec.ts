@@ -20,10 +20,10 @@ vi.mock("../../../server/infra/process/tmux.js", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   setTmuxPrefix: vi.fn(),
 }));
-vi.mock("../../../server/infra/process/tmuxWidthProbe.js", () => ({ tmuxWidthTable: vi.fn(() => null) }));
+vi.mock("../../../server/infra/process/tmuxWidthProbe.js", () => ({ tmuxWidthTable: vi.fn(() => null), settledTmuxWidthTable: vi.fn(async () => null) }));
 
 const { rmSync } = await import("node:fs");
-const { tmuxWidthTable } = await import("../../../server/infra/process/tmuxWidthProbe.js");
+const { settledTmuxWidthTable, tmuxWidthTable } = await import("../../../server/infra/process/tmuxWidthProbe.js");
 const routes = await import("../../../server/config/config-routes.js");
 const app = express();
 app.use(express.json());
@@ -49,5 +49,21 @@ describe("cell widths on GET /api/config", () => {
     const table: TmuxWidthTable = { runs: [[0x2705, 0x2705, 2]], folding: "tmux-3.6a", vs16Wide: true };
     vi.mocked(tmuxWidthTable).mockReturnValue(table);
     expect((await configServed()).terminalWidthTable).toEqual(table);
+  });
+});
+
+describe("GET /api/config/terminal-widths", () => {
+  it("answers with the table once the boot measurement settles, waiting a bounded time", async () => {
+    const table: TmuxWidthTable = { runs: [[0x2705, 0x2705, 2]], folding: "tmux-3.6a", vs16Wide: true };
+    vi.mocked(settledTmuxWidthTable).mockResolvedValue(table);
+    const res = await routeCall(app)("/api/config/terminal-widths");
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ terminalWidthTable: table });
+    expect(vi.mocked(settledTmuxWidthTable).mock.calls.at(-1)?.[0]).toBeLessThan(20_000);
+  });
+
+  it("answers null when there is nothing to measure", async () => {
+    vi.mocked(settledTmuxWidthTable).mockResolvedValue(null);
+    expect((await routeCall(app)("/api/config/terminal-widths")).body).toEqual({ terminalWidthTable: null });
   });
 });

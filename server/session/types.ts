@@ -48,6 +48,9 @@ export interface PtyEntry {
   // (see tmuxRedrawClient). Cleared by the first resize frame after the reattach — waiting for it
   // is the point, since that frame is where the client tells us the size it actually settled at.
   redrawPending?: boolean;
+  // Repaints this socket asked for with a `redraw` frame, which it sends when the browser's cell
+  // width table changes. Each runs tmux synchronously, so a socket gets a few, not a stream.
+  clientRedraws?: number;
   // DECSET/DECRST modes tracked from the PTY byte stream, for hosts with no tmux (#1972).
   // tmux-backed sessions query tmux instead (terminalModesOf); this is the non-tmux fallback.
   modeTracker?: TerminalModeTracker;

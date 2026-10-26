@@ -33,7 +33,7 @@ import type { PlayfulMedia } from "../../common/playfulMedia.js";
 import { systemTaskSettingsChanged } from "./system-task-settings.js";
 import { setAccountsProvider } from "../session/session-home.js";
 import { setTmuxPrefix } from "../infra/process/tmux.js";
-import { tmuxWidthTable } from "../infra/process/tmuxWidthProbe.js";
+import { settledTmuxWidthTable, tmuxWidthTable } from "../infra/process/tmuxWidthProbe.js";
 import { DEFAULT_TERMINAL_UNICODE_VERSION } from "../../common/terminalUnicode.js";
 import type { TokenRotation } from "../../common/tokenRotation.js";
 import { installBundledSkills } from "../infra/fs/install-bundled-skills.js";
@@ -565,7 +565,11 @@ export function effectiveConfigResponse(config: AppConfig, cwd: string, argvAgen
 // lexically (`dirPathKey`), so a symlinked spelling would never match the file tree.
 // `terminalWidthTable` is the same kind of fact: how the tmux on this server counts cells, measured
 // once at boot (tmuxWidthProbe.ts), so a request never runs tmux. Null until then, or for good when
-// there is nothing to measure; the browser falls back to `terminalUnicodeVersion`.
+// there is nothing to measure; the browser falls back to `terminalUnicodeVersion` and asks
+// /api/config/terminal-widths, which answers when the measurement ends.
+// Longer than the measurement takes on a loaded machine, shorter than the browser's own timeout.
+const TERMINAL_WIDTHS_WAIT_MS = 15_000;
+
 function serverFacts() {
   return {
     home: os.homedir(),
@@ -576,12 +580,21 @@ function serverFacts() {
   };
 }
 
-export function mountConfigRoutes(app: Express, claudeCwd: string, onCwdPresetsChanged?: CwdPresetsChanged): void {
-  const configResponse = () => effectiveConfigResponse(config, claudeCwd);
-
+function mountConfigReads(app: Express, configResponse: () => object): void {
   app.get("/api/config", (_req, res) => {
     res.json({ ...configResponse(), ...serverFacts() });
   });
+  // The browser `npx mulmoterminal` opens is usually reading /api/config before the boot
+  // measurement ends, and nothing re-reads the config afterwards.
+  app.get("/api/config/terminal-widths", async (_req, res) => {
+    res.json({ terminalWidthTable: await settledTmuxWidthTable(TERMINAL_WIDTHS_WAIT_MS) });
+  });
+}
+
+export function mountConfigRoutes(app: Express, claudeCwd: string, onCwdPresetsChanged?: CwdPresetsChanged): void {
+  const configResponse = () => effectiveConfigResponse(config, claudeCwd);
+
+  mountConfigReads(app, configResponse);
 
   // The update notice for the header's "update available" badge, from the check the server runs
   // at startup and every few hours after (startUpdateStatusRefresh). Served from memory; the
