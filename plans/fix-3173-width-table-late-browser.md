@@ -14,10 +14,12 @@ cross-review of the merged #3174.
   what is known after the wait. Immediate when nothing is being measured (psmux, no tmux).
 - `GET /api/config/terminal-widths` answers with it, waiting a bounded time below the browser's
   request timeout.
-- The browser asks it once, only when `/api/config` carried no table, and adopts a table that
-  arrives. Terminals already open switch through the existing watch on the table ref.
+- The browser asks it only when `/api/config` carried no table. Every set of the table bumps a
+  generation, and an answer is adopted only if none happened since its request, so an answer from
+  before a newer config (a restarted server, say) is dropped and the newer config asks on its own.
+  A failed request is asked again by the next config without a table. Terminals already open
+  switch through the existing watch on the table ref.
 - `/api/config` keeps carrying the table, so a page loaded later needs no second request.
-
 - xterm keeps cells it has already parsed, so when the table changes the page sends each open
   terminal a `redraw` frame, and the server repaints that tmux client (`tmuxRedrawClient`, the
   reattach path's repaint). Each runs tmux synchronously, so a socket gets a few, capped per socket.
@@ -26,5 +28,8 @@ cross-review of the merged #3174.
 
 - Probe: a request made while measuring gets the measured table (real tmux); a wait shorter than the
   measurement gives up with what is known; nothing measuring answers at once.
-- Route and client loader specs, including malformed and failed answers.
+- Route and client loader specs, including malformed and failed answers, a request held open, a
+  retry after failure and an answer from an older generation.
+- Redraw frame: capped per socket, reset on reattach, ignored without tmux. On a real session a
+  quiet pane sent nothing and one frame brought a full repaint.
 - Each new test was break-verified by removing the change it covers.
