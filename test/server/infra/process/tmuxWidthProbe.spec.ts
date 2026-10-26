@@ -84,13 +84,35 @@ describe.skipIf(!hasTmux)("the measured table against a real tmux", () => {
   const leftBefore = hasTmux ? probeTempDirs() : [];
 
   beforeAll(async () => {
-    table = await measureTmuxWidths((line) => probeLog.push(line));
+    table = await measureTmuxWidths(
+      (line) => probeLog.push(line),
+      async () => ({ running: false }),
+    );
   }, 60_000);
 
   it("measures something, and leaves no server or directory behind", () => {
     expect(table).not.toBeNull();
     expect(probeTempDirs()).toEqual(leftBefore);
   });
+
+  it("keeps nothing when the running server is another tmux", async () => {
+    const log: string[] = [];
+    const ownVersion = spawnCapture("tmux", ["-V"])
+      .stdout.trim()
+      .replace(/^tmux /, "");
+    await expect(
+      measureTmuxWidths(
+        (line) => log.push(line),
+        async () => ({ running: true, version: "2.9" }),
+      ),
+    ).resolves.toBeNull();
+    expect(log.join("\n")).toContain(`measured tmux ${ownVersion} but the running server is 2.9`);
+    table = await measureTmuxWidths(
+      () => undefined,
+      async () => ({ running: true, version: ownVersion }),
+    );
+    expect(table).not.toBeNull();
+  }, 60_000);
 
   describe("rows drawn through an attached client", () => {
     const dir = hasTmux ? mkdtempSync(path.join(os.tmpdir(), "mt-truth-")) : "";

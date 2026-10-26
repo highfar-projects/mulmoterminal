@@ -1697,6 +1697,14 @@ claude's input box to be ready — text pushed in before that lands in the scrol
 with several clones asks which one the first time and remembers the answer; a repo with no clone
 here disables the button and says why. Backed by `POST /api/issues/start`.
 
+**The board (experimental).** **Open the board** on `/github` goes to `/github/board`: per repo, one
+card per piece of work in five columns — To do, Implementing, In review (with the review round),
+Ready (QA) and Merged — joining each issue to the PR that closes it and to the live cells on its
+branch. Pressing a card opens a detail panel with the issue body, the PR's checks and reviews, and
+those cells (`GET /api/github/board/detail`); GitHub is a link inside it. A To do card's **▶** starts
+the issue as above but **sends the issue text at once** and stays on the board; the new cell joins
+the grid behind it, and the card moves to Implementing. Backed by `GET /api/github/board`.
+
 **Which clone a repo's work happens in.** `GET /api/repo-dirs` answers the reverse of the
 GitHub link a cell already shows: given `owner/repo`, which of your saved directories are
 clones of it. The candidates are derived from your directory presets by reading each one's
@@ -2239,8 +2247,9 @@ same-origin-guarded.
 | `GET /api/worktrees?cwd=` · `GET /api/worktrees/diff?cwd=` | List managed worktrees / diff one vs its base. |
 | `POST /api/worktrees/create` · `/remove` · `/push` · `/pr` | Create on `agent/<slug>` — or, with `issue: <N>`, on `issue/<N>-<slug>` forked from a freshly fetched `origin/<base>`; remove (managed root only), push, open a PR (`gh`, else compare URL). |
 | `GET /api/prs` · `GET /api/issues` | Open PRs / issues across the configured `prRepos` — `gh` for github.com entries, `glab` for gitlab.com and any host declared in `gitlabHosts`. |
+| `GET /api/github/board` · `GET /api/github/board/detail` | The experimental board: per configured GitHub repo, cards joining issues, the PRs that close them and the live cells on their branch, each in a progress column; and one card's issue body, checks and reviews (`?repo=owner/repo&issue=N&pr=M`, at least one number; a repo not in `prRepos` is a 404). GitHub only. |
 | `GET /api/repo-dirs` | Which saved directories clone which GitHub repo, ordered, with the recorded choice per repo. |
-| `POST /api/issues/start` | Cut an issue's worktree in one of that repo's known clones and spawn a session there, seeded with the issue. An optional `agent` (any hosted agent; absent is `claude`, anything else is a 400) picks which. A Claude seed is a draft; every other agent runs it at once. The reply names the `agent` and whether the seed runs (`seedRuns`), so the cell attaches on the right endpoint. |
+| `POST /api/issues/start` | Cut an issue's worktree in one of that repo's known clones and spawn a session there, seeded with the issue. An optional `agent` (any hosted agent; absent is `claude`, anything else is a 400) picks which. A Claude seed is a draft unless the request says `run: true` (the board's start does; the `/github` rows do not, and a non-boolean `run` is a 400); every other agent runs it at once. The reply names the `agent` and whether the seed runs (`seedRuns`), so the cell attaches on the right endpoint. |
 | `GET /api/agents/availability` | Which hosted agents this machine can start — `{ agents: [{ agent, available, reason?, installGuide? }] }`, `reason` being `missing`, `no-such-path` (an `<AGENT>_BIN` naming nothing) or `not-executable`, and `installGuide` the agent's official install page (from `bin/agent-install-guides.json`) or `null`. The same check a spawn makes before it starts, run once at server start, so an agent installed later shows after a restart. |
 | `GET /api/github/star` · `POST /api/github/star` | Whether you have starred MulmoTerminal, and star it (via `gh`). `starred: null` means `gh` could not answer, and hides the button. |
 

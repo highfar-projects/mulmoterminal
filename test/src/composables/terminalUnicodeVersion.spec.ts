@@ -22,7 +22,7 @@ import { FakeWebSocket } from "../../helpers/xtermDouble";
 const KEY = "cell-unicode";
 const target = { sessionId: null, cwd: "/w", devTerminal: false, command: null, launcher: null };
 
-const TABLE = { runs: [[0x2705, 0x2705, 2]], folding: "tmux-3.6", vs16Wide: true };
+const TABLE = { runs: [[0x2705, 0x2705, 2]], folding: "tmux-3.6a", vs16Wide: true };
 
 describe("the width table a terminal counts cells with", () => {
   beforeEach(() => {
@@ -82,7 +82,7 @@ describe("the width table a terminal counts cells with", () => {
     expect(getTerminalUnicodeVersion()).toBe("11");
   });
 
-  it.each([null, "tmux", [], { runs: [[1, 2, 1]], folding: "tmux-3.6", vs16Wide: true }, { runs: [] }])("ignores a measured table of %j", (value) => {
+  it.each([null, "tmux", [], { runs: [[1, 2, 1]], folding: "tmux-3.6a", vs16Wide: true }, { runs: [] }])("ignores a measured table of %j", (value) => {
     setTerminalWidthTable(TABLE);
     setTerminalWidthTable(value);
     expect(getTerminalWidthTable()).toBeNull();

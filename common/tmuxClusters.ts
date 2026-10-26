@@ -5,8 +5,9 @@
 //
 // The rule changed between releases, so there is one mirror per rule, and which one this tmux
 // follows is measured, not assumed (tmuxWidthProbe.ts):
-// - "tmux-3.6": utf8_should_combine pairs regional indicators and listed skin-tone bases, Hangul jamo
-//   compose by class, `variation-selector-always-wide` decides U+FE0F.
+// - "tmux-3.6a": utf8_should_combine pairs regional indicators and listed skin-tone bases, asked both
+//   ways round; Hangul jamo compose by class, `variation-selector-always-wide` decides U+FE0F.
+// - "tmux-3.6": the same, but asked one way only (a base after a skin tone), and U+1F483 is unlisted.
 // - "tmux-3.4" (3.4 and 3.5): anything in the modifier table (regional indicators, skin tones) folds
 //   into any cell that is not a lone ASCII byte, and U+FE0F always widens.
 // - "none": only zero-width characters fold — what an older tmux and xterm's own tables do.
@@ -43,7 +44,7 @@ const LAST_SKIN_TONE = 0x1f3ff;
 // U+10000 and above take four UTF-8 bytes, so their last three are not a jamo.
 const FIRST_FOUR_BYTE = 0x10000;
 
-// The bases tmux 3.6a lets a skin tone fold into, as listed in utf8_should_combine.
+// The bases tmux 3.6a lets a skin tone fold into, as listed in utf8_should_combine. 3.6 lacks U+1F483.
 const SKIN_TONE_BASES: ReadonlySet<number> = new Set([
   0x1f44b, 0x1f44c, 0x1f44d, 0x1f44e, 0x1f44f, 0x1f450, 0x1f466, 0x1f467, 0x1f468, 0x1f469, 0x1f46e, 0x1f470, 0x1f471, 0x1f472, 0x1f473, 0x1f474, 0x1f475,
   0x1f476, 0x1f477, 0x1f478, 0x1f47c, 0x1f481, 0x1f482, 0x1f483, 0x1f485, 0x1f486, 0x1f487, 0x1f4aa, 0x1f575, 0x1f57a, 0x1f590, 0x1f595, 0x1f596, 0x1f645,
@@ -51,6 +52,8 @@ const SKIN_TONE_BASES: ReadonlySet<number> = new Set([
   0x1f9b6, 0x1f9b8, 0x1f9b9, 0x1f9cd, 0x1f9ce, 0x1f9cf, 0x1f9d1, 0x1f9d2, 0x1f9d3, 0x1f9d4, 0x1f9d5, 0x1f9d6, 0x1f9d7, 0x1f9d8, 0x1f9d9, 0x1f9da, 0x1f9db,
   0x1f9dc, 0x1f9dd, 0x1f9de, 0x1f9df,
 ]);
+
+const BASE_ADDED_IN_36A = 0x1f483;
 
 const JAMO_RANGES: readonly (readonly [first: number, last: number, jamo: JamoClass])[] = [
   [0x1100, 0x115f, JamoClass.Choseong],
@@ -91,11 +94,18 @@ const applyFold = (fold: Fold, previous: ClusterCell, codepoint: number, width: 
 const perCodepointStep = (codepoint: number, width: CellWidth, previous: ClusterCell | null): ClusterStep =>
   width === 0 && previous && previous.width > 0 ? joinCell(previous, codepoint, previous.width) : newCell(codepoint, width);
 
-// utf8_should_combine (3.6), asked both ways round as screen_write_combine does.
-const shouldCombine36 = (cellFirst: number, codepoint: number): boolean =>
-  (isRegionalIndicator(cellFirst) && isRegionalIndicator(codepoint)) ||
-  (isSkinTone(codepoint) && SKIN_TONE_BASES.has(cellFirst)) ||
-  (isSkinTone(cellFirst) && SKIN_TONE_BASES.has(codepoint));
+type Rule36 = "tmux-3.6" | "tmux-3.6a";
+
+const isSkinToneBase = (rule: Rule36, codepoint: number): boolean =>
+  SKIN_TONE_BASES.has(codepoint) && (rule === "tmux-3.6a" || codepoint !== BASE_ADDED_IN_36A);
+
+// utf8_should_combine(with, add): a regional-indicator pair, or a listed base added to a skin tone.
+const shouldCombine = (rule: Rule36, withCodepoint: number, addCodepoint: number): boolean =>
+  (isRegionalIndicator(withCodepoint) && isRegionalIndicator(addCodepoint)) || (isSkinTone(withCodepoint) && isSkinToneBase(rule, addCodepoint));
+
+// 3.6a's screen_write_combine also asks the other way round, so a skin tone folds into a base too.
+const combines36 = (rule: Rule36, cellFirst: number, codepoint: number): boolean =>
+  shouldCombine(rule, cellFirst, codepoint) || (rule === "tmux-3.6a" && shouldCombine(rule, codepoint, cellFirst));
 
 // hanguljamo_check_state (3.6): a vowel or final with nothing to compose onto is thrown away.
 const jamoFold36 = (previous: ClusterCell, jamo: JamoClass): Fold => {
@@ -104,10 +114,10 @@ const jamoFold36 = (previous: ClusterCell, jamo: JamoClass): Fold => {
   return previous.lastJamo === wants ? "fold" : "drop";
 };
 
-const visibleFold36 = (previous: ClusterCell, codepoint: number): Fold => {
+const visibleFold36 = (rule: Rule36, previous: ClusterCell, codepoint: number): Fold => {
   const jamo = jamoClassOf(codepoint);
   if (jamo !== JamoClass.None) return jamoFold36(previous, jamo);
-  if (shouldCombine36(previous.first, codepoint)) return "fold-wide";
+  if (combines36(rule, previous.first, codepoint)) return "fold-wide";
   return previous.endsWithZwj ? "fold" : "new";
 };
 
@@ -129,12 +139,12 @@ const zeroWidthFold = (table: TmuxWidthTable, codepoint: number): Fold => {
 export function clusterStep(table: TmuxWidthTable, codepoint: number, previous: ClusterCell | null): ClusterStep {
   const width = cellWidthOf(table.runs, codepoint);
   if (table.folding === "none") return perCodepointStep(codepoint, width, previous);
-  if (codepoint === HANGUL_FILLER && table.folding === "tmux-3.6") return DROP;
+  if (codepoint === HANGUL_FILLER && table.folding !== "tmux-3.4") return DROP;
   const zeroWidth = codepoint === ZWJ || codepoint === VS16 || width === 0;
   // An ASCII character never folds, and nothing folds into the start of a row or an empty cell.
   if (codepoint < FIRST_MULTIBYTE || !previous || previous.width === 0) return zeroWidth ? DROP : newCell(codepoint, width);
   if (zeroWidth) return applyFold(zeroWidthFold(table, codepoint), previous, codepoint, width);
-  const fold = table.folding === "tmux-3.6" ? visibleFold36(previous, codepoint) : visibleFold34(previous, codepoint);
+  const fold = table.folding === "tmux-3.4" ? visibleFold34(previous, codepoint) : visibleFold36(table.folding, previous, codepoint);
   return applyFold(fold, previous, codepoint, width);
 }
 
@@ -154,7 +164,7 @@ export function rowWidthOf(table: TmuxWidthTable, text: string): number {
 
 // Sequences whose width tells the rules apart: a variation selector, a ZWJ family, a skin tone, a
 // flag, a keycap, an emoji after a ZWJ on a letter, and a skin tone after an accented letter (3.4
-// folds it, 3.6 does not). Written as codepoints so no invisible joiner sits in the source.
+// folds it, 3.6 does not). The skin tone after its base is what tells 3.6a from 3.6. Written as codepoints so no invisible joiner sits in the source.
 export const CLUSTER_SAMPLES: readonly string[] = [
   [0x263a, 0xfe0f],
   [0x1f468, 0x200d, 0x1f469, 0x200d, 0x1f467],

@@ -14,6 +14,7 @@ import CollectionsBrowseOverlay from "./components/CollectionsBrowseOverlay.vue"
 import AccountingOverlay from "./components/AccountingOverlay.vue";
 import WikiBrowseOverlay from "./components/WikiBrowseOverlay.vue";
 import GithubOverlay from "./components/GithubOverlay.vue";
+import GithubBoardOverlay from "./components/GithubBoardOverlay.vue";
 import RoomsOverlay from "./components/RoomsOverlay.vue";
 import BlueprintsOverlay from "./components/blueprints/BlueprintsOverlay.vue";
 import SkillsOverlay from "./components/SkillsOverlay.vue";
@@ -102,6 +103,7 @@ const { whatsNew, dismiss: dismissWhatsNew } = useWhatsNew(useI18n().locale.valu
   <WikiBrowseOverlay />
   <!-- Full-screen cross-repo PR list; opened by the toolbar's Pull requests button. -->
   <GithubOverlay />
+  <GithubBoardOverlay />
   <!-- The conversation rooms a round table writes to; opened by the toolbar's forum button, or
        from a cell's round-table menu on the room that table is filling. -->
   <RoomsOverlay />

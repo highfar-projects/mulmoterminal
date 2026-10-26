@@ -18,6 +18,7 @@ import {
   type TmuxWidthTable,
   type WidthRun,
 } from "../../../common/tmuxWidthTable.js";
+import { measuredForLiveServer, type LiveTmuxServer } from "./tmuxLiveServer.js";
 import { sanitizePtyEnv, withFallbackLocale } from "./pty-env.js";
 import { spawnCaptureAsync } from "./spawnCapture.js";
 
@@ -87,7 +88,7 @@ async function sampleWidth(tmux: ThrowawayTmux, sample: string, index: number): 
 }
 
 // Tried in this order; the first whose predictions every sample matches is the one this tmux follows.
-const CANDIDATE_RULES: readonly FoldingRule[] = ["tmux-3.6", "tmux-3.4"];
+const CANDIDATE_RULES: readonly FoldingRule[] = ["tmux-3.6a", "tmux-3.6", "tmux-3.4"];
 
 async function measuredFolding(tmux: ThrowawayTmux, table: TmuxWidthTable, log: Log): Promise<FoldingRule> {
   const measured: (number | null)[] = [];
@@ -98,7 +99,12 @@ async function measuredFolding(tmux: ThrowawayTmux, table: TmuxWidthTable, log: 
   return rule ?? "none";
 }
 
-async function measureWith(tmux: ThrowawayTmux, log: Log): Promise<TmuxWidthTable | null> {
+interface Measurement {
+  table: TmuxWidthTable;
+  version: string | null;
+}
+
+async function measureWith(tmux: ThrowawayTmux, log: Log): Promise<Measurement | null> {
   const started = await tmux.run(["-f", "/dev/null", "new-session", "-d", "-x", PANE_COLUMNS, "-y", PANE_ROWS, "exec sleep 600"]);
   if (!started.ok) return null;
   const runs = await measuredRuns(tmux);
@@ -106,7 +112,11 @@ async function measureWith(tmux: ThrowawayTmux, log: Log): Promise<TmuxWidthTabl
   // tmux 3.4 has no such option and always widens; the "tmux-3.4" rule ignores this.
   const option = await tmux.run(["show-options", "-gv", "variation-selector-always-wide"]);
   const perCodepoint: TmuxWidthTable = { runs, folding: "none", vs16Wide: option.ok && option.stdout.trim() === "on" };
-  return { ...perCodepoint, folding: await measuredFolding(tmux, perCodepoint, log) };
+  const version = await tmux.run(["display-message", "-p", "#{version}"]);
+  return {
+    table: { ...perCodepoint, folding: await measuredFolding(tmux, perCodepoint, log) },
+    version: version.ok && version.stdout.trim() !== "" ? version.stdout.trim() : null,
+  };
 }
 
 const throwawayTmux = (dir: string): ThrowawayTmux => {
@@ -121,23 +131,33 @@ const throwawayTmux = (dir: string): ThrowawayTmux => {
 
 const UNMEASURED = "terminals count with Unicode 11";
 
-async function measureIn(dir: string, log: Log): Promise<TmuxWidthTable | null> {
+async function measureIn(dir: string, log: Log): Promise<Measurement | null> {
   const tmux = throwawayTmux(dir);
   try {
-    const table = await measureWith(tmux, log);
-    if (!table) log(`[tmux] widths: could not be measured — ${UNMEASURED}`);
-    return table;
+    const measurement = await measureWith(tmux, log);
+    if (!measurement) log(`[tmux] widths: could not be measured — ${UNMEASURED}`);
+    return measurement;
   } finally {
     await tmux.run(["kill-server"]);
   }
 }
 
-/** Measures the tmux on PATH and keeps the result for `tmuxWidthTable()`. Never rejects: it runs unawaited at boot. */
-export async function measureTmuxWidths(log: Log): Promise<TmuxWidthTable | null> {
+function tableForLiveServer(measurement: Measurement | null, live: LiveTmuxServer, log: Log): TmuxWidthTable | null {
+  if (!measurement || measuredForLiveServer(measurement.version, live)) return measurement?.table ?? null;
+  const liveVersion = live.running ? (live.version ?? "an unreadable version") : "none";
+  log(`[tmux] widths: measured tmux ${measurement.version ?? "?"} but the running server is ${liveVersion} — ${UNMEASURED} until it restarts`);
+  return null;
+}
+
+/**
+ * Measures the tmux on PATH and keeps the result for `tmuxWidthTable()`, unless `liveServer` reports a
+ * running server of another version. Never rejects: it runs unawaited at boot.
+ */
+export async function measureTmuxWidths(log: Log, liveServer: () => Promise<LiveTmuxServer>): Promise<TmuxWidthTable | null> {
   let dir: string | null = null;
   try {
     dir = await mkdtemp(path.join(os.tmpdir(), "mt-w-"));
-    measuredTable = await measureIn(dir, log);
+    measuredTable = tableForLiveServer(await measureIn(dir, log), await liveServer(), log);
   } catch (error) {
     log(`[tmux] widths: measuring failed (${error instanceof Error ? error.message : String(error)}) — ${UNMEASURED}`);
     measuredTable = null;

@@ -77,7 +77,7 @@ describe("cellWidthOf", () => {
 });
 
 describe("isTmuxWidthTable", () => {
-  const table = { runs: [[0x2705, 0x2705, 2]], folding: "tmux-3.6", vs16Wide: true };
+  const table = { runs: [[0x2705, 0x2705, 2]], folding: "tmux-3.6a", vs16Wide: true };
 
   it("accepts what the server sends", () => {
     expect(isTmuxWidthTable(table)).toBe(true);
@@ -87,7 +87,7 @@ describe("isTmuxWidthTable", () => {
   it.each([
     ["null", null],
     ["an array", []],
-    ["runs missing", { folding: "tmux-3.6", vs16Wide: true }],
+    ["runs missing", { folding: "tmux-3.6a", vs16Wide: true }],
     ["runs not an array", { ...table, runs: "x" }],
     ["a run of width 1", { ...table, runs: [[1, 2, 1]] }],
     ["a run of two numbers", { ...table, runs: [[1, 2]] }],

@@ -35,6 +35,8 @@ export function mountIssueWorkRoutes(app: Express, deps: IssueWorkRouteDeps): vo
     if (agent === null) return res.status(400).json({ error: "agent must be one of the hosted agents, or left out for claude" });
     const account = requestedIssueAccount(body.account, agent, getAccounts());
     if (!account.ok) return res.status(400).json({ error: `account must be one of ${agent}'s configured accounts, or left out for its default login` });
+    if (body.run !== undefined && typeof body.run !== "boolean") return res.status(400).json({ error: "run must be a boolean, or left out" });
+    const run = body.run === true;
     // The entry is carried on AS CONFIGURED, host and all. Stripping it here made the layer below
     // read `isamu1/node-test` as a GitHub repo and look for an issue that does not exist there —
     // the host is what says which forge to ask. It comes off at the CLI boundary, not before.
@@ -49,11 +51,12 @@ export function mountIssueWorkRoutes(app: Express, deps: IssueWorkRouteDeps): vo
       return res.status(403).json({ error: `${dir} is not a known clone of ${repo}` });
     }
 
+    // Absent or false, the desktop leaves a Claude seed in the input box: the issue text was written by
+    // whoever opened it, who is often not the person about to run it, so the Enter is theirs. `run:
+    // true` is the board's start (#3179), where the user chose to have it sent — as the phone does
+    // (#1253), having no Enter key. Other agents run it either way.
     const result = await startIssueWork(repo, issue, dir, {
-      // run:false — the desktop leaves a Claude seed in the input box. The issue text was written by
-      // whoever opened it, who is often not the person about to run it, so the Enter is theirs. The
-      // phone passes true (#1253): it has no Enter key. Other agents run it either way.
-      spawnSeeded: (cwd, seed) => deps.spawnIssueSession(agent, cwd, seed, false, account.account),
+      spawnSeeded: (cwd, seed) => deps.spawnIssueSession(agent, cwd, seed, run, account.account),
     });
 
     if (!result.ok) return res.status(STATUS_FOR_REASON[result.reason ?? ""] ?? 500).json(result);

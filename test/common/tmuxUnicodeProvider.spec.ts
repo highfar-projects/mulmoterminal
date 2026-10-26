@@ -19,7 +19,7 @@ const TABLE: TmuxWidthTable = {
     [0x1f44d, 0x1f44d, 2],
     [0x1f467, 0x1f469, 2],
   ],
-  folding: "tmux-3.6",
+  folding: "tmux-3.6a",
   vs16Wide: true,
 };
 

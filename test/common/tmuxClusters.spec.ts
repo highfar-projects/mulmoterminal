@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { CLUSTER_SAMPLES, JamoClass, clusterStep, jamoClassOf, rowWidthOf } from "../../common/tmuxClusters";
-import type { TmuxWidthTable, WidthRun } from "../../common/tmuxWidthTable";
+import { FOLDING_RULES, type TmuxWidthTable, type WidthRun } from "../../common/tmuxWidthTable";
 
 // The per-codepoint answers tmux 3.6a (utf8proc) gave for the characters used below.
 const RUNS: WidthRun[] = [
@@ -17,7 +17,7 @@ const RUNS: WidthRun[] = [
   [0x1f44d, 0x1f44d, 2],
   [0x1f467, 0x1f469, 2],
 ];
-const TMUX_36: TmuxWidthTable = { runs: RUNS, folding: "tmux-3.6", vs16Wide: true };
+const TMUX_36: TmuxWidthTable = { runs: RUNS, folding: "tmux-3.6a", vs16Wide: true };
 // tmux 3.4 and 3.5 have no `variation-selector-always-wide`; the probe reads it as off.
 const TMUX_34: TmuxWidthTable = { runs: RUNS, folding: "tmux-3.4", vs16Wide: false };
 
@@ -74,9 +74,35 @@ describe("rowWidthOf under tmux 3.4's rule", () => {
     expect(rowWidthOf(TMUX_34, text)).toBe(columns);
   });
 
-  it("tells itself apart from 3.6 on the samples", () => {
-    const widths = (table: TmuxWidthTable) => CLUSTER_SAMPLES.map((sample) => rowWidthOf(table, sample));
-    expect(widths(TMUX_34)).not.toEqual(widths(TMUX_36));
+  it("tells every rule apart on the samples", () => {
+    const widths = (folding: TmuxWidthTable["folding"]) => JSON.stringify(CLUSTER_SAMPLES.map((sample) => rowWidthOf({ ...TMUX_36, folding }, sample)));
+    expect(new Set(FOLDING_RULES.map(widths)).size).toBe(FOLDING_RULES.length);
+  });
+});
+
+// tag 3.6 asks utf8_should_combine one way only: a base after a skin tone. The widths are what the
+// reporter of #3173 measured with `#{cursor_x}` on Ubuntu's tmux 3.6 under WSL2.
+describe("rowWidthOf under tmux 3.6's rule", () => {
+  const TMUX_36_TAG: TmuxWidthTable = { ...TMUX_36, folding: "tmux-3.6" };
+
+  it.each([
+    ["a skin tone after its base", "\u{1f44d}\u{1f3fd}", 4],
+    ["a base after a skin tone", "\u{1f3fd}\u{1f44d}", 2],
+    ["a ZWJ family", "\u{1f468}\u200d\u{1f469}\u200d\u{1f467}", 2],
+    ["a flag", "\u{1f1ef}\u{1f1f5}", 2],
+    ["a keycap", "1\ufe0f\u20e3", 2],
+  ])("%s", (_label, text, columns) => {
+    expect(rowWidthOf(TMUX_36_TAG, text)).toBe(columns);
+  });
+
+  it("does not list the dancer, which 3.6a added", () => {
+    const withDancer: TmuxWidthTable = { ...TMUX_36, runs: [...RUNS, [0x1f483, 0x1f483, 2]] };
+    expect(rowWidthOf({ ...withDancer, folding: "tmux-3.6" }, "\u{1f3fd}\u{1f483}")).toBe(4);
+    expect(rowWidthOf(withDancer, "\u{1f3fd}\u{1f483}")).toBe(2);
+  });
+
+  it("counts the samples as the reporter's tmux 3.6 drew them", () => {
+    expect(CLUSTER_SAMPLES.map((sample) => rowWidthOf(TMUX_36_TAG, sample))).toEqual([2, 2, 4, 2, 2, 1, 3]);
   });
 });
 

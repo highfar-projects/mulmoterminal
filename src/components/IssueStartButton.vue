@@ -4,7 +4,7 @@
 // disabled button that says why when the repo has no clone here at all.
 import { computed, useTemplateRef } from "vue";
 import { useDropdownMenu } from "../composables/useDropdownMenu";
-import { useIssueStart } from "../composables/useIssueStart";
+import { useIssueStart, type IssueStartOptions } from "../composables/useIssueStart";
 import { issueStartBlockedReason } from "../../common/issueStartPlan";
 import { useAppConfig } from "../composables/useAppConfig";
 import { formatCwd } from "./cwdDisplay";
@@ -12,7 +12,9 @@ import { useI18n } from "vue-i18n";
 
 const { t } = useI18n();
 
-const props = defineProps<{ repo: string; issue: number }>();
+const props = defineProps<{ repo: string; issue: number; options?: IssueStartOptions }>();
+
+const emit = defineEmits<{ (e: "started"): void }>();
 
 const { planFor, startIssueWork, rememberClone, isStarting } = useIssueStart();
 const { home, saveRepoDir } = useAppConfig();
@@ -24,9 +26,13 @@ const busy = computed(() => isStarting(props.repo, props.issue));
 const wrap = useTemplateRef<HTMLElement>("wrap");
 const { open, toggle, close } = useDropdownMenu(wrap);
 
+async function start(dir: string): Promise<void> {
+  if (await startIssueWork(props.repo, props.issue, dir, props.options)) emit("started");
+}
+
 function onClick() {
   const current = plan.value;
-  if (current.kind === "ready") void startIssueWork(props.repo, props.issue, current.dir);
+  if (current.kind === "ready") void start(current.dir);
   else if (current.kind === "choose") toggle();
 }
 
@@ -37,7 +43,7 @@ function onClick() {
 async function pick(dir: string) {
   close();
   void saveRepoDir(rememberClone(props.repo, dir), dir);
-  await startIssueWork(props.repo, props.issue, dir);
+  await start(dir);
 }
 
 const label = computed(() => (plan.value.kind === "choose" ? t("tips.cell.issueStartChoose") : t("tips.cell.issueStart")));

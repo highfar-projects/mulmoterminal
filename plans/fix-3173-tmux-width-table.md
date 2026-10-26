@@ -23,19 +23,26 @@ The authority is the tmux this server runs, so ask it rather than pick a table:
    `display-message -p '#{w:#{l:…}}'` is asked for every codepoint in batches. The answers are kept as
    runs of non-1 widths.
 2. **Mirror tmux's folding rules** (`screen_write_combine`). They differ by release, so there is one
-   mirror per rule. tmux 3.6: a regional-indicator pair and a skin tone after a listed base fold and
-   force width 2, `variation-selector-always-wide` decides `U+FE0F`, Hangul jamo compose by class.
+   mirror per rule. tmux 3.6a: a regional-indicator pair and a skin tone next to a listed base (either
+   order) fold and force width 2, `variation-selector-always-wide` decides `U+FE0F`, Hangul jamo compose
+   by class. Tag 3.6: the same, but only a base AFTER a skin tone folds, and its list lacks `U+1F483`.
    tmux 3.4/3.5: anything in the modifier table folds into any cell but a lone ASCII byte, and
    `U+FE0F` always widens. Both: a ZWJ and zero-width characters fold, and anything after a cell
    ending in ZWJ folds into it.
 3. **Pick the rule by measuring.** Sample sequences are printed in the throwaway pane and their
    width read from `#{cursor_x}`; the first rule whose predictions all of them match is used, else
    sequences are counted per character and the mismatch is logged. (The first version knew only the
-   3.6 rule; Ubuntu CI's tmux 3.4 failed the check and fell back, which the ground-truth spec caught.)
+   3.6a rule; Ubuntu CI's tmux 3.4 failed the check and fell back, which the ground-truth spec caught.
+   The reporter's WSL2 tmux 3.6 then fell back the same way, which is how the tag-3.6 rule was found;
+   it was confirmed against tmux 3.6 built from its release tarball.)
 4. **Hand the result to xterm as its own width table** (`term.unicode.register`, version `tmux`).
    The provider is a pure function in `common/`, so the browser and a headless test use the same one.
 5. **Fallback** when nothing was measured (psmux, no tmux, a probe that failed or has not finished):
    "11", which is closer than "6" to every tmux and to Claude Code's own `Bun.stringWidth`.
+6. **Only for the server that draws.** The live `-L mulmoterminal` server outlives a tmux upgrade, so
+   its `#{version}` (read-only) is compared with the probe's. A running server of another version, or
+   one whose version cannot be read, gets the fallback until it restarts. It is not measured in place:
+   that would mean printing into a pane of the live server.
 
 ## Not in scope
 
