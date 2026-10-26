@@ -55,6 +55,27 @@ describe("adoptLateTerminalWidthTable", () => {
     expect(state.getTerminalWidthTable()).toEqual(newer);
   });
 
+  it("drops an answer to a request made before a newer config, and adopts the newer request's", async () => {
+    const older = { runs: [[0x2705, 0x2705, 2]], folding: "tmux-3.4", vs16Wide: false };
+    const answers: ((res: Response) => void)[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(() => new Promise<Response>((resolve) => answers.push(resolve))),
+    );
+    const { state, adoptLateTerminalWidthTable } = await freshLoader();
+    const firstAsk = adoptLateTerminalWidthTable();
+    // A newer config, from a restarted server, arrives without a table and asks again.
+    state.setTerminalWidthTable(null);
+    const secondAsk = adoptLateTerminalWidthTable();
+    expect(answers).toHaveLength(2);
+    answers[0]?.(new Response(JSON.stringify({ terminalWidthTable: older })));
+    await firstAsk;
+    expect(state.getTerminalWidthTable()).toBeNull();
+    answers[1]?.(new Response(JSON.stringify({ terminalWidthTable: TABLE })));
+    await secondAsk;
+    expect(state.getTerminalWidthTable()).toEqual(TABLE);
+  });
+
   it.each([
     ["a null table", answering({ terminalWidthTable: null })],
     ["a malformed table", answering({ terminalWidthTable: { runs: "x" } })],
