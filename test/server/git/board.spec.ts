@@ -15,6 +15,7 @@ const basePr: BoardPr = {
   review: null,
   reviewRounds: 0,
   headReviewed: false,
+  codex: null,
 };
 
 const row = (pr: Partial<BoardPr>, closes: BoardPrRow["closes"] = []): BoardPrRow => ({ pr: { ...basePr, ...pr }, closes });

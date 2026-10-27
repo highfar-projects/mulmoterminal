@@ -18,6 +18,10 @@ export const BOARD_MERGED_LIMIT = 10;
 
 const PR_FIELDS = "number,title,url,isDraft,reviewDecision,statusCheckRollup,headRefName,headRefOid,closingIssuesReferences,reviews";
 
+// Comments carry the codex verdicts (#3196) and are most of the payload on a PR that went through a
+// review loop, so they are read only where a verdict still decides something: on an open PR.
+const prFields = (state: "open" | "merged"): string => (state === "open" ? `${PR_FIELDS},comments` : PR_FIELDS);
+
 /** A live cell before its repo and branch are known. */
 export type LiveCell = BoardCell;
 
@@ -38,7 +42,7 @@ const ghJson = async (args: string[]): Promise<unknown[]> => {
 };
 
 const listPrs = async (repo: string, state: "open" | "merged", limit: number): Promise<BoardPrRow[]> =>
-  (await ghJson(["pr", "list", "--repo", repo, "--state", state, "--limit", String(limit), "--json", PR_FIELDS])).flatMap(
+  (await ghJson(["pr", "list", "--repo", repo, "--state", state, "--limit", String(limit), "--json", prFields(state)])).flatMap(
     (raw) => parseBoardPr(raw, repo) ?? [],
   );
 

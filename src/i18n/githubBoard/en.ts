@@ -18,6 +18,7 @@ export const githubBoardEn = {
     changesRequested: "Changes requested",
     approved: "Approved",
     reviewRound: "Review {count}",
+    codex: { lgtm: "Codex {count}: LGTM", changes: "Codex {count}: changes requested", stale: "for an older push", unknown: "push not named" },
     awaitingReview: "Newest push not reviewed yet",
     noCell: "No terminal is on this branch",
     cell: { working: "Working", waiting: "Waiting for you", idle: "Idle" },
@@ -51,6 +52,6 @@ export const githubBoardEn = {
       noReviews: "No reviews yet",
       noBody: "No description",
     },
-    rule: "Review counts each pushed commit that got a review. Ready means CI passed and the newest push was reviewed.",
+    rule: "Review counts each pushed commit that got a review. Codex counts the codex verdicts posted as comments. Ready means CI passed and the newest push was reviewed.",
   },
 };

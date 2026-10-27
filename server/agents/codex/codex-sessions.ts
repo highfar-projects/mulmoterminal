@@ -5,6 +5,8 @@ import { isRecord } from "../../../common/isRecord.js";
 import { cleanTitle, parseJsonRecord, readFirstLine, readTranscriptHead } from "../transcript-head.js";
 import { codexHomeOf, readThreadNames } from "./codex-thread-names.js";
 import { codexUserPrompt } from "./codex-user-turn.js";
+import { isResumableThread, sessionSourceKind } from "./codex-thread-origin.js";
+import type { ThreadOrigin } from "./codex-thread-origin.js";
 import { byCodeUnit } from "../../../common/byCodeUnit.js";
 import { mapConcurrent } from "../../infra/async/mapConcurrent.js";
 import { rememberBounded } from "../bounded-cache.js";
@@ -25,16 +27,6 @@ const DEFAULT_TITLE = "Codex session";
 // disk, not a fixed 200.
 const READ_CONCURRENCY = 32;
 
-// Threads codex writes for its own machinery, not conversations a person can meaningfully resume.
-// They carry the PARENT's cwd (measured 14/14), so without this they match the filter and fill the
-// list with untitled rows — 183 of one reporter's newest 200 (#1777).
-//
-// A deny-list rather than an allow-list of `user`: `thread_source` is absent on rollouts written by
-// older codex versions (333 of 3059 here) and takes values we have not seen (`realtime_voice`), and
-// those are real conversations. An allow-list would make each new value disappear silently, which
-// is the failure this whole issue is about.
-const SUPPRESSED_THREAD_SOURCES: ReadonlySet<string> = new Set(["subagent", "automation"]);
-
 export interface CodexSessionSummary {
   id: string;
   title: string;
@@ -48,18 +40,22 @@ interface RolloutHead {
 }
 
 /** What line 1 answers: which session this file is, and whether it belongs in a listing. */
-export interface RolloutMeta {
+export interface RolloutMeta extends ThreadOrigin {
   id: string;
   cwd: string | null;
-  threadSource: string | null;
 }
 
 const isSessionMeta = (d: Record<string, unknown>): boolean =>
   d.type === "session_meta" && isRecord(d.payload) && typeof d.payload.id === "string" && UUID_RE.test(d.payload.id);
 
-function stringField(doc: Record<string, unknown> | undefined, key: string): string | null {
+function payloadField(doc: Record<string, unknown> | undefined, key: string): unknown {
   const payload = doc?.payload;
-  return isRecord(payload) && typeof payload[key] === "string" ? payload[key] : null;
+  return isRecord(payload) ? payload[key] : undefined;
+}
+
+function stringField(doc: Record<string, unknown> | undefined, key: string): string | null {
+  const value = payloadField(doc, key);
+  return typeof value === "string" ? value : null;
 }
 
 // From a rollout's head, pull the minted id + cwd (session_meta) and a title (first user message).
@@ -81,11 +77,9 @@ export function parseCodexSessionMeta(firstLine: string): RolloutMeta | null {
   const doc = parseJsonRecord(firstLine);
   if (!doc || !isSessionMeta(doc)) return null;
   const id = stringField(doc, "id");
-  return id === null ? null : { id, cwd: stringField(doc, "cwd"), threadSource: stringField(doc, "thread_source") };
+  if (id === null) return null;
+  return { id, cwd: stringField(doc, "cwd"), threadSource: stringField(doc, "thread_source"), sourceKind: sessionSourceKind(payloadField(doc, "source")) };
 }
-
-/** Is this a thread a person can meaningfully resume? See SUPPRESSED_THREAD_SOURCES. */
-export const isResumableThread = (meta: RolloutMeta): boolean => meta.threadSource === null || !SUPPRESSED_THREAD_SOURCES.has(meta.threadSource);
 
 function subdirsDesc(dir: string): string[] {
   try {
