@@ -8,6 +8,29 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@11.5.0 — 2026-10-28
+
+> **Setup guide:** [11.5.0 — The usage gauge works wherever you start](https://receptron.github.io/mulmoterminal/guide/en/v11.5.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v11.5.0.html))
+
+### Codex cross-review verdicts on the board (#3197)
+
+A PR card on the experimental board also shows the latest `CODEX VERDICT:` comment as `Codex N: LGTM` or `Codex N: changes requested`, where N counts the verdicts. `server/git/codexVerdict.ts` (pure) reads them from the `comments` and `reviews` of the same `gh pr list` row, counting only `OWNER` / `MEMBER` / `COLLABORATOR` authors; only the open list asks for `comments`, so merged cards show no chip. The verdict line names the head it judged (`CODEX VERDICT: LGTM (head <sha>)`); the chip is green or red only when that sha is a prefix of `headRefOid`, otherwise muted with "for an older push" or "push not named". The existing review round and the columns are unchanged.
+
+### The usage probe runs in its own folder, and MulmoTerminal trusts it (#3203, #3207)
+
+The hidden `claude` behind the 5h / 7d gauge ran in the workspace, which is wherever `npx mulmoterminal` was started. Started in the home directory, Claude Code never saves folder trust ("home trust is session-only"), so every probe stalled on the trust dialog, the gauge stayed `n/a`, and the tooltip's advice to accept the prompt "in its folder" could not work and named no folder (#3200). Every probe — default login, accounts, rotation tokens — now runs in `~/.mulmoterminal/probe` (`server/agents/probe/probe-cwd.ts`); the `/api/rate-limits` body carries `claudeProbeCwd`, and the trust-prompt tooltips name the folder in all five locales. Transcript removal (#1010) and the boot-time stray sweep (#3152) follow the probe there, and the sweep still covers the workspace (#3203).
+
+Nobody runs `claude` in that folder by hand, so every login would have needed a person to accept the dialog there once (#3206). Right before each probe spawn, after making the folder, MulmoTerminal now writes `projects[<folder's real path>].hasTrustDialogAccepted: true` into the config of the login the probe runs on — an account's own `CLAUDE_CONFIG_DIR/.claude.json`, else the default `~/.claude.json` (`server/agents/probe/probe-trust.ts`). The write happens only when the key is not already true, re-serialises the file in one step keeping key order, the entry's other fields, indentation and the trailing newline, is written beside the TARGET of the config path so a dotfiles symlink stays a link, keeps the file's mode, and lands by rename. Only a READ that finds the key is remembered, so a write that Claude Code's own save overwrote is made again on the next probe. A probe folder replaced by a symlink gets no trust (it would resolve to a directory that is not MulmoTerminal's). A missing, unreadable or non-JSON config is left alone and nothing is created; the probe still runs and the tooltip stays as the by-hand fallback (#3207).
+
+### Codex's own threads are left out of the resume list (#3199)
+
+The launcher's "resume a codex conversation here" list was filling with untitled **Guardian review** rows (#3198): codex persists its guardian approval reviews and memory consolidation as child threads carrying the parent's cwd. The gate now decides the way codex itself does — `session_meta.source` is a string or `{"custom": …}` for a frontend, and `{"subagent": …}` or `{"internal": …}` for anything codex spawned for itself (upstream's `SessionSource::is_non_root_agent()`), so a kind of machinery codex adds later is caught without a change here; the `thread_source` deny-list stays for `automation`, which the app starts with a frontend `source`. New pure module `server/agents/codex/codex-thread-origin.ts`.
+
+### Windows with psmux (#3202, #3205)
+
+- A Codex installed with npm (`codex.cmd`, no `.exe`) ended a new cell at once with `psmux: can't find session` (#3201): psmux starts a `--` command with `CreateProcessW` itself and cannot run a batch shim. `resolveTmuxPaneLaunch` in `server/infra/process/resolve-bin.ts` now makes the same decision the direct spawn has made since #798 — the `.exe` by its absolute path, a batch shim through `cmd.exe /d /e:ON /v:OFF /c` with the quoted command line in `MULMOTERMINAL_BATCH_COMMAND_LINE` — for the pane's program (#3202).
+- Every new cell on psmux 3.4.0 opened with `1 config warning(s): … unknown option 'terminal-features'` (#3204). The `set -as terminal-features '*:hyperlinks'` line, which tmux needs to forward OSC 8 hyperlinks, is left out of psmux's conf (`tmuxConfLinesFor(psmux)`), and the live `terminal-features` command is not sent to psmux, which forwards OSC 8 without a declaration (#3205).
+
 ## mulmoterminal@11.4.0 — 2026-10-26
 
 > **Setup guide:** [11.4.0 — A board for your issues and PRs](https://receptron.github.io/mulmoterminal/guide/en/v11.4.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v11.4.0.html))

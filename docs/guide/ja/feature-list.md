@@ -4,7 +4,7 @@ nav_title: 全機能リスト
 layout: default
 parent: 日本語
 nav_order: 6.5
-as_of: 11.4.0
+as_of: 11.5.0
 description: MulmoTerminal のいまある機能を、入った版つきで領域ごとに一行ずつ並べた一覧（9.1.0 時点）。
 ---
 
@@ -204,6 +204,7 @@ description: MulmoTerminal のいまある機能を、入った版つきで領�
 
 詳しく: [worktree](worktree.html)
 
+- ボードのカードに Codex のクロスレビューの最新の判定（Codex N: LGTM / 修正要求）が載る。色が付くのは、いまの push を名指しした判定だけ (v11.5.0)
 - 試験的な GitHub ボードで、作業ごとに issue・PR・そのブランチのターミナルを 1 枚のカードにまとめ、未着手・実装中・レビュー中・QA 待ち・マージ済みの列に並べる。開いている間は自動で新しくなる (v11.4.0)
 - ボードのカードから、issue とチェックとレビューを読み、未着手の issue を本文を送って始め、ターミナルの画面を見て答える (v11.4.0)
 - macOS では、worktree を置くフォルダを Time Machine の対象から外し、Spotlight にも索引しないよう印を付ける (v10.7.2)
@@ -422,6 +423,7 @@ description: MulmoTerminal のいまある機能を、入った版つきで領�
 
 詳しく: [機能リファレンス](features.html)
 
+- Claude の使用量の確認は MulmoTerminal 専用のフォルダで動き、そのフォルダの信頼は MulmoTerminal 自身が Claude Code に書き込むので、ホームを含めどこから起動してもゲージが出る (v11.5.0)
 - 使用量ゲージを止められ、Claude を測る間隔を分で決められる (v11.1.0)
 - その他の機能 → プロセス で、各セッションのプロセス（終了できる）と消せる worktree を見る (v8.6.0)
 - アカウントごとの 5h / 7d 使用枠を名前付きでツールバーに出す (v5.8.0)

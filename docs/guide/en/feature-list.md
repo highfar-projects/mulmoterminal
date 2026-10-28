@@ -4,7 +4,7 @@ nav_title: Feature list
 layout: default
 parent: English
 nav_order: 6.5
-as_of: 11.4.0
+as_of: 11.5.0
 description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 9.1.0)."
 ---
 
@@ -204,6 +204,7 @@ More: [Feature reference](features.html)
 
 More: [Worktrees](worktree.html)
 
+- A board card shows the latest Codex cross-review verdict as Codex N: LGTM or changes requested, coloured only when it names the current push (v11.5.0)
 - An experimental GitHub board puts each piece of work in a column (To do, Implementing, In review, Ready, Merged), joining the issue, its PR and the terminals on its branch, and keeps itself current (v11.4.0)
 - From a board card: read its issue, checks and reviews, start a To do issue with its text sent at once, and read or answer its terminals (v11.4.0)
 - On macOS the managed worktree root is kept out of Time Machine and marked for Spotlight (v10.7.2)
@@ -423,6 +424,7 @@ More: [Blueprints](blueprints.html)
 
 More: [Feature reference](features.html)
 
+- The Claude usage check runs in a folder of MulmoTerminal's own that it marks trusted for Claude Code itself, so the gauge works wherever MulmoTerminal was started, home directory included (v11.5.0)
 - The usage gauge can be switched off, and how often it measures Claude set in minutes (v11.1.0)
 - More features → Processes shows each session's processes (with End) and the worktrees that can be removed (v8.6.0)
 - Each account's 5h and 7d usage windows show in the toolbar, named (v5.8.0)
