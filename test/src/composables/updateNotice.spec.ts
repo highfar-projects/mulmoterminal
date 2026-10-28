@@ -67,6 +67,11 @@ describe("versionDisplay", () => {
     expect(versionDisplay(status({ distribution: "fork" }))).toEqual({ version: "4.7.0", commit: null, distribution: "fork" });
   });
 
+  // The fork runs from `npx github:…`: an npm-shaped install whose commit npm's lockfile records.
+  it("carries the commit of an install from GitHub", () => {
+    expect(versionDisplay(status({ distribution: "fork", commit: "adc667db8" }))).toEqual({ version: "4.7.0", commit: "adc667db8", distribution: "fork" });
+  });
+
   it("keeps the version when the checkout's commit could not be read", () => {
     expect(versionDisplay(status({ install: "git", commit: null }))).toEqual({ version: "4.7.0", commit: null, distribution: "upstream" });
   });

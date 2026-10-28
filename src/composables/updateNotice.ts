@@ -21,7 +21,8 @@ export function parseUpdateNotice(notice: string | null | undefined): UpdateBadg
 /** The Settings version line, as its own labelled parts rather than one pre-joined string. */
 export interface VersionDisplay {
   version: string;
-  /** git checkouts only — shown next to the version, since that is what identifies the build. */
+  /** A checkout's HEAD, or the commit a `npx github:…` install was resolved to — shown next to the
+   *  version, since that is what identifies the build. Null for a registry install. */
   commit: string | null;
   /** "fork" is shown as a chip: the version number is the same as upstream's after a merge. */
   distribution: UpdateStatus["distribution"];
@@ -33,12 +34,14 @@ export interface VersionDisplay {
  * which build this is. Null until a status has been read, so the line renders nothing rather
  * than a version nobody is on.
  *
- * The commit appears only once the probe has landed (`ready`): before that the install kind is
- * still a placeholder, and an npm install would briefly claim a commit it does not have.
+ * An install from GitHub (the fork's `npx github:…`) gets its commit too, read from npm's lockfile:
+ * its version is likewise only the last release merged in.
+ *
+ * The commit appears only once the probe has landed (`ready`): before that it is a placeholder.
  */
 export function versionDisplay(
   status: Pick<UpdateStatus, "ready" | "install" | "distribution" | "version" | "commit"> | null | undefined,
 ): VersionDisplay | null {
   if (!status) return null;
-  return { version: status.version, commit: status.ready && status.install === "git" ? status.commit : null, distribution: status.distribution };
+  return { version: status.version, commit: status.ready ? status.commit : null, distribution: status.distribution };
 }

@@ -195,9 +195,37 @@ async function gitUpdateNotice_(git, localShort) {
 // probes only, so this is also what the UI gets when the update check is opted out.
 export async function readInstallInfo(pkgDir, currentVersion, deps = {}) {
   const git = deps.runGit ?? ((args, timeout_ms) => runGit(pkgDir, args, timeout_ms));
-  const inWorkTree = hasNodeModulesSegment(pkgDir) ? false : (await git(["rev-parse", "--is-inside-work-tree"])) === "true";
+  const inNodeModules = hasNodeModulesSegment(pkgDir);
+  const inWorkTree = inNodeModules ? false : (await git(["rev-parse", "--is-inside-work-tree"])) === "true";
   const install = classifyInstall(pkgDir, inWorkTree);
-  return { install, version: currentVersion, commit: install === "git" ? await git(["rev-parse", "--short", "HEAD"]) : null };
+  if (install === "git") return { install, version: currentVersion, commit: await git(["rev-parse", "--short", "HEAD"]) };
+  const lockedCommit = inNodeModules ? (deps.readLockedCommit ?? readLockedCommit)(pkgDir) : null;
+  return { install, version: currentVersion, commit: lockedCommit };
+}
+
+// Fork-only. `npx github:highfar-projects/mulmoterminal` installs a tree with no .git, so git cannot
+// say which commit is running — but npm records it: the hidden lockfile beside the package
+// (`node_modules/.package-lock.json`) resolves a git dependency to `…git#<40-hex sha>`. A registry
+// install resolves to a tarball URL instead, so it keeps answering null.
+const LOCKED_SHORT_SHA_LENGTH = 9; // what `git rev-parse --short` gives in this repository
+
+/** The commit a git-dependency install was resolved to, from npm's lockfile entry; null otherwise. */
+export function lockedCommitFrom(lockfile, packageKey) {
+  const packages = lockfile && typeof lockfile === "object" ? lockfile.packages : undefined;
+  const entry = packages && typeof packages === "object" ? packages[packageKey] : undefined;
+  const resolved = entry && typeof entry === "object" ? entry.resolved : undefined;
+  const match = typeof resolved === "string" ? /#([0-9a-f]{40})$/.exec(resolved) : null;
+  return match ? match[1].slice(0, LOCKED_SHORT_SHA_LENGTH) : null;
+}
+
+function readLockedCommit(pkgDir) {
+  const nodeModules = path.dirname(pkgDir);
+  try {
+    const lockfile = JSON.parse(readFileSync(path.join(nodeModules, ".package-lock.json"), "utf8"));
+    return lockedCommitFrom(lockfile, `node_modules/${path.basename(pkgDir)}`);
+  } catch {
+    return null;
+  }
 }
 
 // The fork (highfar-projects/mulmoterminal) is started with `npx github:highfar-projects/mulmoterminal`,
