@@ -5,7 +5,9 @@ export interface UpdateNoticeDeps {
   runGit?: (args: string[]) => Promise<string | null>;
   fetchLatest?: () => Promise<string | null>;
   readManifest?: (pkgDir: string) => unknown;
+  readLockedCommit?: (pkgDir: string) => string | null;
 }
+export declare function lockedCommitFrom(lockfile: unknown, packageKey: string): string | null;
 export declare function computeUpdateNotice(pkgDir: string, currentVersion: string, deps?: UpdateNoticeDeps): Promise<string | null>;
 export declare function readInstallInfo(
   pkgDir: string,

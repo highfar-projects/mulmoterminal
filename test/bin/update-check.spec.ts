@@ -16,6 +16,7 @@ import {
   computeUpdateInfo,
   isUpstreamPackage,
   readInstallInfo,
+  lockedCommitFrom,
 } from "../../bin/update-check.js";
 
 describe("isNewerVersion", () => {
@@ -397,6 +398,26 @@ describe("readInstallInfo", () => {
     });
   });
 
+  // `npx github:…` installs with no .git; npm's lockfile is what still knows the commit.
+  it("reports an install from GitHub by the commit npm's lockfile resolved it to", async () => {
+    const info = await readInstallInfo("/proj/node_modules/mulmoterminal", "0.7.0", {
+      runGit: async () => null,
+      readLockedCommit: (pkgDir) => (pkgDir === "/proj/node_modules/mulmoterminal" ? "adc667db8" : null),
+    });
+    expect(info).toEqual({ install: "npm", version: "0.7.0", commit: "adc667db8" });
+  });
+
+  // Outside node_modules there is no npm lockfile entry to read; only git could have answered.
+  it("does not read a lockfile for a directory that is not under node_modules", async () => {
+    let lockReads = 0;
+    const readLockedCommit = () => {
+      lockReads++;
+      return "adc667db8";
+    };
+    expect(await readInstallInfo("/home/dev/mulmoterminal", "0.7.0", { runGit: async () => null, readLockedCommit })).toMatchObject({ commit: null });
+    expect(lockReads).toBe(0);
+  });
+
   it("does not reach the network", async () => {
     let fetched = 0;
     await readInstallInfo("/proj/node_modules/mulmoterminal", "0.7.0", {
@@ -495,5 +516,27 @@ describe("a package that is not upstream's", () => {
     // Unreadable or unnamed keeps the check upstream always had.
     expect(isUpstreamPackage(null)).toBe(true);
     expect(isUpstreamPackage({})).toBe(true);
+  });
+});
+
+describe("lockedCommitFrom", () => {
+  const SHA = "adc667db8b8006a5e14299901be2006b56fc136b";
+  const lock = (resolved: unknown) => ({ packages: { "node_modules/mulmoterminal": { version: "11.4.0", resolved } } });
+
+  it("reads the commit a git dependency was resolved to, shortened like rev-parse --short", () => {
+    expect(lockedCommitFrom(lock(`git+ssh://git@github.com/highfar-projects/mulmoterminal.git#${SHA}`), "node_modules/mulmoterminal")).toBe("adc667db8");
+  });
+
+  // A registry install resolves to a tarball, which names no commit.
+  it("answers null for a registry tarball", () => {
+    expect(lockedCommitFrom(lock("https://registry.npmjs.org/mulmoterminal/-/mulmoterminal-11.4.0.tgz"), "node_modules/mulmoterminal")).toBeNull();
+  });
+
+  it("answers null for a missing entry or a malformed lockfile", () => {
+    expect(lockedCommitFrom(lock(`git+ssh://x.git#${SHA}`), "node_modules/other")).toBeNull();
+    expect(lockedCommitFrom({ packages: null }, "node_modules/mulmoterminal")).toBeNull();
+    expect(lockedCommitFrom(null, "node_modules/mulmoterminal")).toBeNull();
+    expect(lockedCommitFrom(lock(42), "node_modules/mulmoterminal")).toBeNull();
+    expect(lockedCommitFrom(lock("git+ssh://x.git#main"), "node_modules/mulmoterminal")).toBeNull();
   });
 });
