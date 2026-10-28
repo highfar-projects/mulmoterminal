@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -25,6 +25,11 @@ vi.mock("./rate-limit-probe.js", async (importOriginal) => {
   return { ...actual, startRateLimitProbe: vi.fn((deps: Parameters<typeof actual.startRateLimitProbe>[0]) => (deps.spawn(["--probe"], deps.cwd), () => {})) };
 });
 
+// The default login's Claude Code config is looked up through CLAUDE_CONFIG_DIR at call time, and
+// the service writes the probe folder's trust into it (#3206) — so it must never be the machine's.
+const DEFAULT_LOGIN_DIR = mkdtempSync(path.join(tmpdir(), "mt-ratelimit-login-"));
+vi.stubEnv("CLAUDE_CONFIG_DIR", DEFAULT_LOGIN_DIR);
+
 const { createRateLimitService, startHomeProbe } = await import("./rate-limit-service.js");
 const { MULMOTERMINAL_HOME: STATE_DIR } = await import("../../config/env.js");
 const { startRateLimitProbe } = await import("./rate-limit-probe.js");
@@ -37,7 +42,11 @@ beforeEach(() => {
   spawnPty.mockReset();
   rmSync(PROBE_CWD, { recursive: true, force: true });
 });
-afterAll(() => rmSync(STATE_DIR, { recursive: true, force: true }));
+afterAll(() => {
+  vi.unstubAllEnvs();
+  rmSync(STATE_DIR, { recursive: true, force: true });
+  rmSync(DEFAULT_LOGIN_DIR, { recursive: true, force: true });
+});
 
 describe("the usage probes pin the classic renderer (#2936)", () => {
   it("the default login's probe passes the pin to spawnPty", () => {
@@ -71,6 +80,53 @@ describe("the usage probes run in MulmoTerminal's own folder (#3200)", () => {
   // The gauge names the folder in its trust-prompt note, so the route has to be told which it is.
   it("tells the routes the folder, so the gauge can name it", () => {
     expect(createRateLimitService().probeCwd).toBe(PROBE_CWD);
+  });
+
+  // Nobody runs `claude` in the probe folder by hand, so without this every login would need a person
+  // to accept the trust dialog there once before the gauge showed anything (#3206). The answer goes
+  // in the config of the login the probe runs on, keyed by the folder's real path.
+  const trustedIn = (configFile: string): unknown => {
+    const config: unknown = JSON.parse(readFileSync(configFile, "utf8"));
+    const projects = config !== null && typeof config === "object" && "projects" in config ? config.projects : undefined;
+    const entry = projects !== null && typeof projects === "object" ? Reflect.get(projects, realpathSync.native(PROBE_CWD)) : undefined;
+    return entry !== null && typeof entry === "object" ? Reflect.get(entry, "hasTrustDialogAccepted") : undefined;
+  };
+
+  it("marks the folder trusted in the default login's config before the spawn", () => {
+    const configFile = path.join(DEFAULT_LOGIN_DIR, ".claude.json");
+    writeFileSync(configFile, JSON.stringify({ numStartups: 3, projects: { "/elsewhere": { hasTrustDialogAccepted: true } } }, null, 2));
+
+    createRateLimitService().startProbe();
+
+    expect(trustedIn(configFile)).toBe(true);
+    expect(JSON.parse(readFileSync(configFile, "utf8"))).toMatchObject({ numStartups: 3, projects: { "/elsewhere": { hasTrustDialogAccepted: true } } });
+    expect(spawnPty).toHaveBeenCalledTimes(1);
+  });
+
+  it("writes an account's trust into that account's own config, not the default login's", () => {
+    const account = mkdtempSync(path.join(tmpdir(), "mt-ratelimit-acct-"));
+    const accountFile = path.join(account, ".claude.json");
+    writeFileSync(accountFile, "{}");
+    const defaultFile = path.join(DEFAULT_LOGIN_DIR, ".claude.json");
+    const defaultBefore = existsSync(defaultFile) ? readFileSync(defaultFile, "utf8") : null;
+
+    startHomeProbe(account, "key", () => {}, [], { CLAUDE_CONFIG_DIR: account });
+
+    expect(trustedIn(accountFile)).toBe(true);
+    expect(existsSync(defaultFile) ? readFileSync(defaultFile, "utf8") : null).toBe(defaultBefore);
+    rmSync(account, { recursive: true, force: true });
+  });
+
+  // A login that has never run claude has no config yet. The probe still runs — it is the stall
+  // that then names the prompt — and no config is invented for it.
+  it("still spawns when the login has no config file, and creates none", () => {
+    const account = mkdtempSync(path.join(tmpdir(), "mt-ratelimit-acct-"));
+
+    startHomeProbe(account, "key", () => {}, [], { CLAUDE_CONFIG_DIR: account });
+
+    expect(spawnPty).toHaveBeenCalledTimes(1);
+    expect(existsSync(path.join(account, ".claude.json"))).toBe(false);
+    rmSync(account, { recursive: true, force: true });
   });
 
   // The folder is made inside the spawn, after the caller has marked a probe in flight. A folder that

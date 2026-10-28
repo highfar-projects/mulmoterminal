@@ -9,6 +9,8 @@ import { createRateLimitStore } from "./rate-limit-store.js";
 import { startRateLimitProbe, probeSpawnEnv } from "./rate-limit-probe.js";
 import { newProbeSessionId } from "../probe/probe-session.js";
 import { probeCwd } from "../probe/probe-cwd.js";
+import { ensureProbeFolderTrusted } from "../probe/probe-trust.js";
+import { claudeProjectPath, claudeUserConfigFile } from "../../session/project-dir.js";
 import { writeProbeScreen } from "../probe/probe-stall.js";
 import { removeProbeTranscript } from "../probe/probe-transcript.js";
 import { newestRolloutFile, readRolloutTail } from "../codex/codex-rollout.js";
@@ -47,11 +49,26 @@ const claudeIsRunnable = (): boolean => {
 // probe meets the prompt on its own.
 const PROBE_CWD = probeCwd(MULMOTERMINAL_HOME);
 
+// Config files known to hold the folder's trust, so each login's is read once per server rather than
+// on every probe — the file runs to a megabyte on a long-lived install.
+const configFilesTrustingProbeFolder = new Set<string>();
+
+// Trust for the folder goes in the config of the login the probe runs on (#3206): an account's own
+// CLAUDE_CONFIG_DIR, else the server's default — which is also what a rotation token's probe reads.
+// Keyed by the folder's real path, which is what claude sees as its cwd.
+const markProbeFolderTrusted = (cwd: string, loginEnv: Record<string, string>): void => {
+  const configFile = claudeUserConfigFile(loginEnv.CLAUDE_CONFIG_DIR);
+  if (configFilesTrustingProbeFolder.has(configFile)) return;
+  if (ensureProbeFolderTrusted(configFile, claudeProjectPath(cwd))) configFilesTrustingProbeFolder.add(configFile);
+};
+
 // The folder is made on the way in rather than at boot, so one removed while the server runs costs
 // a probe, not the gauge. A folder that cannot be made fails the spawn, and startRateLimitProbe
-// already reports a spawn that threw as a probe that brought nothing back.
+// already reports a spawn that threw as a probe that brought nothing back. Trust that cannot be
+// written is not a failure here: the probe runs anyway, and its stall names the prompt.
 const spawnProbe = (args: string[], cwd: string, unset: readonly string[], loginEnv: Record<string, string>) => {
   mkdirSync(cwd, { recursive: true });
+  markProbeFolderTrusted(cwd, loginEnv);
   return spawnPty(AGENT_BINS.claude, args, cwd, unset, probeSpawnEnv(loginEnv));
 };
 

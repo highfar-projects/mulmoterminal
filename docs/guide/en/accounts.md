@@ -91,18 +91,18 @@ any other cell in that directory.
 ## 4. Let the usage check in (Claude accounts)
 
 A Claude account's usage is measured the way your usual login's is: by a short hidden session in a
-folder of MulmoTerminal's own, `~/.mulmoterminal/probe`, run on that account's login. On a new
-account, that hidden session stops at Claude Code's trust prompt for the folder, and nobody can see
-it. The toolbar then shows `Work n/a`. Hover over it for the reason; it names the folder.
+folder of MulmoTerminal's own, `~/.mulmoterminal/probe`, run on that account's login. Claude Code
+asks whether to trust a folder the first time it runs there, and nobody can answer for a hidden
+session — so MulmoTerminal records the answer itself, in the account's own Claude Code config
+(`.claude.json` in the account's directory), before the first check. Normally there is nothing to do.
 
-To clear it once:
+If the toolbar still shows `Work n/a` and the hover text names the trust prompt, the answer could
+not be written: the account has never run `claude` and so has no config yet, or the file could not
+be read. Clear it once by hand:
 
 1. Start a cell on the account in that folder: in the launch form, type `~/.mulmoterminal/probe` as
    the **Working directory**, with the account selected.
 2. Accept the trust prompt.
-
-The same folder serves your usual login, so after an upgrade from a version whose check ran in the
-workspace, the hover text asks you to run `claude` there once and accept the prompt for it too.
 
 The check retries by itself, less often each time (up to an hour apart). Restarting the server
 resets that wait, so the gauge appears sooner.
