@@ -7,7 +7,7 @@ import type { IPty } from "node-pty";
 import os from "node:os";
 import path from "node:path";
 import { sanitizePtyEnv, withFallbackLocale } from "../../infra/process/pty-env.js";
-import { resolvePtyLaunchForEnv } from "../../infra/process/resolve-bin.js";
+import { resolvePtyLaunchForEnv, resolveTmuxPaneLaunchForEnv } from "../../infra/process/resolve-bin.js";
 import { binaryProblemMessage, diagnoseBinary, type BinaryDiagnosis } from "../../infra/process/has-binary.js";
 import { cwdProblemMessage, diagnoseSpawnCwd, type CwdDiagnosis } from "../../infra/process/spawn-cwd.js";
 import { withoutUnset } from "../spawn/setup/provider-env.js";
@@ -239,12 +239,18 @@ export function ptySpawn(
   // the spawn at all — a pane's environment comes from `new-session -e`, so a variable missing
   // from that list reaches the program only if the tmux SERVER happens to already carry it.
   const env = spawnEnvFor(cwd, options.env ?? {});
+  const childEnv = ptyEnv(unset, env);
   // `new-session -A` ATTACHES a surviving session without running `file` at all, so a binary
   // that has gone missing since must not stand between the user and their running agent.
   const reattached = ptyWouldReattach(sessionId, persistent);
-  if (!reattached) refuseBeforeStart(file, binEnvVar, ptyEnv(unset, env), options.preflight);
+  if (!reattached) refuseBeforeStart(file, binEnvVar, childEnv, options.preflight);
   refuseUnusableCwd(cwd, reattached);
   if (persistent && tmuxAvailable()) {
+    // The pane's program gets the Windows resolution a direct spawn gets (see spawnPty): the
+    // multiplexer starts it with CreateProcessW too, so a bare name whose only install is a batch
+    // shim (`codex.cmd`, with no `.exe`) ended the pane at once and the session with it (#3201).
+    // Resolved against the pane's own environment, the one the binary check above used.
+    const pane = resolveTmuxPaneLaunchForEnv(file, args, childEnv);
     // A pane inherits the tmux SERVER's environment, so stripping our own copy is not
     // enough — the server may already carry the name from an earlier session. For the same
     // reason `env` goes to `new-session -e` rather than onto the tmux CLIENT we spawn here.
@@ -274,7 +280,7 @@ export function ptySpawn(
     traceTmux(tmuxIsPsmux(), "client-spawn", { id: sessionId, reattach: reattached, program: path.basename(file) });
     const client = spawnPty(
       "tmux",
-      tmuxNewSessionArgs(sessionId, file, args, cwd, env),
+      tmuxNewSessionArgs(sessionId, pane.file, pane.args, cwd, { ...env, ...pane.env }),
       TMUX_CLIENT_CWD,
       [...unset, ...tmuxClientUnsetNames(process.env.PORT, ownBindPort()), ...tmuxPsmuxScrubbedNames()],
       tmuxPsmuxVtInput() ? PSMUX_VT_INPUT_ENV : {},

@@ -18,6 +18,9 @@ export interface RateLimitSnapshot {
   claudeProbe?: ClaudeProbeState | undefined;
   /** Which silence, when the state is `no-report` (#1293). */
   claudeStall?: ClaudeProbeStall | undefined;
+  /** The folder every Claude probe runs in (#3200), named in a trust-prompt note: accepting the prompt
+   *  anywhere else does nothing. Absent only from a server that predates it. */
+  claudeProbeCwd?: string | undefined;
   /** Each account's windows (#2215), in config order; absent or empty without accounts. */
   accounts?: AccountReading[] | undefined;
 }
@@ -60,14 +63,19 @@ const PROBE_NOTES: Record<ClaudeProbeState, string | null> = {
 };
 
 // A trust prompt is the one stall a user can clear in ten seconds, and the only reason they would
-// ever know to: the hidden session waits on a dialog they cannot see. It says "the folder" rather
-// than naming one because the path is the server's (CLAUDE_CWD) and does not cross to the browser.
+// ever know to: the hidden session waits on a dialog they cannot see. The note names the folder the
+// probe runs in (#3200) — the one place accepting the prompt counts — so it is only used when the
+// server has said which folder that is; otherwise the general silence line is as much as is true.
 const TRUST_PROMPT_NOTE = "tips.rateLimit.trustPrompt";
 const USAGE_LIMIT_NOTE = "tips.rateLimit.usageLimit";
 
 // An account's probe runs in the same folder under the account's own login, whose trust answers
-// start empty — so a new claude account meets this prompt first, and it is cleared from a cell ON it.
+// start empty — so a new claude account meets this prompt first, and it is cleared from a cell ON it
+// in that folder.
 const ACCOUNT_TRUST_PROMPT_NOTE = "tips.rateLimit.accountTrustPrompt";
+
+/** What a note's translation is handed: the probe's folder, when the server named it. */
+const noteParams = (folder: string | undefined): Record<string, unknown> => (folder === undefined ? {} : { folder });
 
 /** The message key for why a claude gauge is absent, or null when there is nothing to say.
  *
@@ -81,9 +89,10 @@ function probeNoteKey(
   stall: ClaudeProbeStall | undefined,
   now_ms: number,
   trustNote: string,
+  folder: string | undefined,
 ): string | null {
   if (gaugeWindows(limits, now_ms).length > 0) return null;
-  if (probe === "no-report" && stall === "trust-prompt") return trustNote;
+  if (probe === "no-report" && stall === "trust-prompt" && folder !== undefined) return trustNote;
   if (atUsageLimit(probe, stall)) return USAGE_LIMIT_NOTE;
   return PROBE_NOTES[probe ?? "ok"];
 }
@@ -119,13 +128,13 @@ function atLimitReason(lastLimits: RateLimits | null, now_ms: number, translate:
   return resets.length ? translate("tips.rateLimit.noteResets", { note, resets: resets.join(" · ") }) : note;
 }
 
-function accountNotes(readings: readonly AccountReading[], now_ms: number, translate: Translate): AccountNote[] {
+function accountNotes(readings: readonly AccountReading[], folder: string | undefined, now_ms: number, translate: Translate): AccountNote[] {
   return readings.flatMap((reading) => {
     if (reading.agent !== "claude") return [];
-    const key = probeNoteKey(reading.limits, reading.probe, reading.probeStall, now_ms, ACCOUNT_TRUST_PROMPT_NOTE);
+    const key = probeNoteKey(reading.limits, reading.probe, reading.probeStall, now_ms, ACCOUNT_TRUST_PROMPT_NOTE, folder);
     if (!key) return [];
     const warn = atUsageLimit(reading.probe, reading.probeStall);
-    const reason = warn ? atLimitReason(reading.lastLimits ?? null, now_ms, translate) : translate(key, {});
+    const reason = warn ? atLimitReason(reading.lastLimits ?? null, now_ms, translate) : translate(key, noteParams(folder));
     return [loginNote(`account:${reading.id}`, reading.label, reason, warn, translate)];
   });
 }
@@ -141,11 +150,12 @@ function defaultClaudeNote(
   translate: Translate,
   named: boolean,
 ): { note: string | null; entry: AccountNote | null } {
-  const key = snapshot && probeNoteKey(snapshot.claude, snapshot.claudeProbe, snapshot.claudeStall, now_ms, TRUST_PROMPT_NOTE);
+  const key = snapshot && probeNoteKey(snapshot.claude, snapshot.claudeProbe, snapshot.claudeStall, now_ms, TRUST_PROMPT_NOTE, snapshot.claudeProbeCwd);
   if (!key) return { note: null, entry: null };
-  if (!named) return { note: translate(key, {}), entry: null };
+  const reason = translate(key, noteParams(snapshot?.claudeProbeCwd));
+  if (!named) return { note: reason, entry: null };
   const warn = atUsageLimit(snapshot?.claudeProbe, snapshot?.claudeStall);
-  return { note: null, entry: loginNote("claude", DEFAULT_LOGIN_SHORT_LABEL, translate(key, {}), warn, translate) };
+  return { note: null, entry: loginNote("claude", DEFAULT_LOGIN_SHORT_LABEL, reason, warn, translate) };
 }
 
 export interface GaugeWindow {
@@ -238,7 +248,7 @@ const namedAgents = (accounts: readonly AgentGauge[], notes: readonly AccountNot
 export function rateLimitReadout(snapshot: RateLimitSnapshot | null, now_ms: number, translate: Translate): RateLimitReadout {
   const readings = snapshot?.accounts ?? [];
   const accounts = accountGauges(readings, now_ms, translate);
-  const notes = accountNotes(readings, now_ms, translate);
+  const notes = accountNotes(readings, snapshot?.claudeProbeCwd, now_ms, translate);
   const named = namedAgents(accounts, notes);
   const defaultNote = defaultClaudeNote(snapshot, now_ms, translate, named.has("claude"));
   const allNotes = defaultNote.entry ? [defaultNote.entry, ...notes] : notes;

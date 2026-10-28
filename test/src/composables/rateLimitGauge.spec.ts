@@ -183,20 +183,30 @@ describe("rateLimitReadout note", () => {
   // #1293. The probe now waits on a trust dialog instead of confirming it by accident, so a user
   // whose workspace was never trusted gets a permanent `n/a` — and the one thing they need to know
   // is that ten seconds in a terminal fixes it. "Retrying, less often each time" does not say that.
-  it("says how to clear a trust prompt when that is what the probe is stuck on", () => {
-    const note = noteOf(snap({ claudeProbe: "no-report", claudeStall: "trust-prompt" }), NOW);
+  // #3200: and WHERE — a prompt accepted in any other folder changes nothing, which is how a reporter
+  // trusted the default workspace while the probe ran in their home directory.
+  const PROBE_CWD = "/home/me/.mulmoterminal/probe";
+  it("says how and where to clear a trust prompt when that is what the probe is stuck on", () => {
+    const note = noteOf(snap({ claudeProbe: "no-report", claudeStall: "trust-prompt", claudeProbeCwd: PROBE_CWD }), NOW);
     expect(note).toContain("trust prompt");
     expect(note).toContain("claude");
+    expect(note).toContain(PROBE_CWD);
+  });
+
+  // A note that said "the folder" without naming one sent people to the wrong folder; a server that
+  // has not said which folder (one older than this field) gets the line that is still true.
+  it("falls back to the general silence when the server has not said which folder the probe runs in", () => {
+    expect(noteOf(snap({ claudeProbe: "no-report", claudeStall: "trust-prompt" }), NOW)).toContain("Retrying");
   });
 
   it("falls back to the general silence when the screen proved nothing", () => {
-    expect(noteOf(snap({ claudeProbe: "no-report", claudeStall: "unknown" }), NOW)).toContain("Retrying");
+    expect(noteOf(snap({ claudeProbe: "no-report", claudeStall: "unknown", claudeProbeCwd: PROBE_CWD }), NOW)).toContain("Retrying");
   });
 
   // A stall belongs to a silence and nothing else; a state that carries its own reason must not be
   // overwritten by one left over from an earlier probe.
   it("ignores a stall that does not belong to the current state", () => {
-    expect(noteOf(snap({ claudeProbe: "no-claude", claudeStall: "trust-prompt" }), NOW)).toContain("PATH");
+    expect(noteOf(snap({ claudeProbe: "no-claude", claudeStall: "trust-prompt", claudeProbeCwd: PROBE_CWD }), NOW)).toContain("PATH");
   });
 });
 
@@ -225,14 +235,19 @@ describe("rateLimitReadout with accounts", () => {
   // gauge that is simply absent would never say so.
   const notesOf = (snapshot: RateLimitSnapshot) => rateLimitReadout(snapshot, NOW, t).accountNotes;
   const stuck = { ...work, limits: null, probe: "no-report" as const, probeStall: "trust-prompt" as const };
+  const PROBE_CWD = "/home/me/.mulmoterminal/probe";
 
-  it("names a claude account whose check is stuck, with how to clear it from a cell on it", () => {
-    const [entry, ...rest] = notesOf({ ...claudeOnly, accounts: [stuck] });
+  it("names a claude account whose check is stuck, with how to clear it from a cell on it in the probe's folder", () => {
+    const [entry, ...rest] = notesOf({ ...claudeOnly, claudeProbeCwd: PROBE_CWD, accounts: [stuck] });
     expect(rest).toEqual([]);
     expect(entry?.key).toBe("account:work");
     expect(entry?.label).toBe("Work");
-    expect(entry?.note).toMatch(/^Work: .*trust prompt.*cell on this account/);
+    expect(entry?.note).toMatch(/^Work: .*trust prompt.*cell on this account in \/home\/me\/\.mulmoterminal\/probe/);
     expect(gaugesOf({ ...claudeOnly, accounts: [stuck] }, NOW).map((g) => g.marked)).toEqual([true]);
+  });
+
+  it("gives an account the general silence when the folder is unknown, as for the default login", () => {
+    expect(notesOf({ ...claudeOnly, accounts: [stuck] })[0]?.note).toMatch(/^Work: .*no answer/);
   });
 
   it("gives an account the same reasons as the default login", () => {

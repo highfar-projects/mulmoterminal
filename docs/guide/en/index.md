@@ -8,8 +8,8 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **11.4.0 is out.** An experimental GitHub board shows each issue and PR in a column, starts an issue
-> and answers its terminal without leaving the board. [Setup guide](v11.4.0.html)
+> **11.5.0 is out.** The Claude usage gauge now works wherever you started MulmoTerminal, your home
+> directory included, and a board card shows the latest Codex verdict. [Setup guide](v11.5.0.html)
 
 ## What is MulmoTerminal? {#what-is}
 

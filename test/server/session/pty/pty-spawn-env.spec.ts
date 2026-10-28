@@ -22,10 +22,27 @@ vi.mock("../../../../server/infra/process/tmux.js", async (importOriginal) => ({
   // reaches a tmux PANE — so the fake has to carry it or the #1367 assertions below prove nothing.
   tmuxNewSessionArgs: (id: string, file: string, args: string[], cwd: string, env: Record<string, string> = {}) => {
     newSessionCwd = cwd;
+    newSessionProgram = { file, args, env };
     return ["new-session", id, ...Object.entries(env).flatMap(([key, value]) => ["-e", `${key}=${value}`]), file, ...args];
   },
   tmuxScrubEnvNames: (names: readonly string[]) => scrub(names),
 }));
+
+// The Windows resolution of the PANE's program (#3201) is a pure rule with its own spec; what is
+// under test here is that ptySpawn asks it and carries its answer — the file, the argv AND the
+// environment it needs — into `new-session`. Real unless a test sets `paneLaunch`.
+let paneLaunch: TmuxPaneLaunch | null = null;
+const paneLaunchAsked = vi.fn();
+vi.mock("../../../../server/infra/process/resolve-bin.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../../../../server/infra/process/resolve-bin.js")>();
+  return {
+    ...original,
+    resolveTmuxPaneLaunchForEnv: (file: string, args: string[], env: NodeJS.ProcessEnv) => {
+      paneLaunchAsked(file, args, env);
+      return paneLaunch ?? original.resolveTmuxPaneLaunchForEnv(file, args, env);
+    },
+  };
+});
 
 // What this directory holds per working tree (#1367). Mocked rather than reserved for real:
 // what is under test is that a spawn CARRIES it, not how it was decided.
@@ -36,6 +53,8 @@ let psmuxVtInput = false;
 let psmuxOn = false;
 // What ptySpawn handed tmuxNewSessionArgs as the PANE's directory (the `-c` the real one builds).
 let newSessionCwd = "";
+// ...and as the pane's program: the words after `--` and the `-e` environment.
+let newSessionProgram: { file: string; args: string[]; env: Record<string, string> } | null = null;
 let reserved: Record<string, string> = {};
 const liveTmuxSessions = new Set<string>();
 
@@ -51,6 +70,7 @@ const S1 = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1";
 const S2 = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2";
 
 const { spawnPty, ptySpawn, ptyWouldReattach, TMUX_CLIENT_CWD } = await import("../../../../server/session/pty/pty-spawn.js");
+type TmuxPaneLaunch = import("../../../../server/infra/process/resolve-bin.js").TmuxPaneLaunch;
 const { PORT } = await import("../../../../server/config/env.js");
 
 const envOf = (call: number = 0): NodeJS.ProcessEnv => (spawn.mock.calls[call] as unknown as [string, string[], { env: NodeJS.ProcessEnv }])[2].env;
@@ -59,6 +79,9 @@ const cwdOf = (call: number = 0): string => (spawn.mock.calls[call] as unknown a
 beforeEach(() => {
   spawn.mockClear();
   scrub.mockClear();
+  paneLaunchAsked.mockClear();
+  paneLaunch = null;
+  newSessionProgram = null;
   tmuxOn = false;
   psmuxVtInput = false;
   psmuxOn = false;
@@ -110,6 +133,57 @@ describe("spawnPty — the port a terminal can find this server on", () => {
     ptySpawn(S1, "claude", [], EXISTING_CWD, true);
     const args = (spawn.mock.calls[0] as unknown as [string, string[]])[1];
     expect(args).toContain(`MULMOTERMINAL_PORT=${PORT}`);
+  });
+});
+
+// psmux starts the pane's program with CreateProcessW itself, so a bare name whose only install is
+// a batch shim died at once and took the session with it (#3201). The resolution is resolve-bin's;
+// this pins that the tmux branch ASKS it, against the pane's environment, and hands every part of
+// the answer on — a wrapped program whose command line is dropped from `-e` is one that cmd.exe
+// starts with nothing to run.
+describe("ptySpawn — the program a tmux pane is handed", () => {
+  const COMSPEC = "C:\\Windows\\System32\\cmd.exe";
+  const wrapped: TmuxPaneLaunch = {
+    file: COMSPEC,
+    args: ["/d", "/e:ON", "/v:OFF", "/c", "%MULMOTERMINAL_BATCH_COMMAND_LINE%"],
+    env: { MULMOTERMINAL_BATCH_COMMAND_LINE: '"C:\\npm\\codex.cmd" "--resume" "abc"' },
+  };
+
+  beforeEach(() => {
+    tmuxOn = true;
+  });
+
+  it("asks for the resolution of the ORIGINAL name and argv, against the pane's environment", () => {
+    ptySpawn(S1, "codex", ["--resume", "abc"], EXISTING_CWD, true, { unset: ["ANTHROPIC_API_KEY"] });
+    expect(paneLaunchAsked).toHaveBeenCalledTimes(1);
+    const [file, args, env] = paneLaunchAsked.mock.calls[0] as [string, string[], NodeJS.ProcessEnv];
+    expect(file).toBe("codex");
+    expect(args).toEqual(["--resume", "abc"]);
+    expect(env).not.toHaveProperty("ANTHROPIC_API_KEY");
+    expect(env.MULMOTERMINAL_PORT).toBe(String(PORT));
+  });
+
+  it("puts the resolved file and argv after `--`, and its variables into `-e` beside the session's own", () => {
+    paneLaunch = wrapped;
+    ptySpawn(S1, "codex", ["--resume", "abc"], EXISTING_CWD, true, { env: { MULMOTERMINAL_SESSION_ID: S1 } });
+    expect(newSessionProgram?.file).toBe(COMSPEC);
+    expect(newSessionProgram?.args).toEqual(wrapped.args);
+    expect(newSessionProgram?.env).toMatchObject({ ...wrapped.env, MULMOTERMINAL_SESSION_ID: S1, MULMOTERMINAL_PORT: String(PORT) });
+  });
+
+  it("changes nothing about the program when the resolution is the identity", () => {
+    paneLaunch = { file: "codex", args: ["--resume", "abc"], env: {} };
+    ptySpawn(S1, "codex", ["--resume", "abc"], EXISTING_CWD, true);
+    expect(newSessionProgram?.file).toBe("codex");
+    expect(newSessionProgram?.args).toEqual(["--resume", "abc"]);
+    expect(newSessionProgram?.env).not.toHaveProperty("MULMOTERMINAL_BATCH_COMMAND_LINE");
+  });
+
+  // Without tmux the pane IS the direct spawn, which has its own resolution (spawnPty).
+  it("leaves the non-tmux path to spawnPty's own resolution", () => {
+    tmuxOn = false;
+    ptySpawn(S1, "codex", [], EXISTING_CWD, true);
+    expect(paneLaunchAsked).not.toHaveBeenCalled();
   });
 });
 

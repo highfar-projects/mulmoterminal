@@ -10,6 +10,7 @@ import {
   tmuxSessionIdsFrom,
   tmuxNewSessionArgs,
   TMUX_CONF_LINES,
+  tmuxConfLinesFor,
   isResumableTmuxSession,
   parseTmuxEnvironment,
   parseAttachedClientCount,
@@ -26,7 +27,6 @@ import {
   isScrubbedGlobalEnvEntry,
   tmuxClientUnsetNames,
   liveWheelCommand,
-  tmuxConfLinesFor,
   clientSizeOfWindow,
   psmuxInput,
 } from "../../../../server/infra/process/tmux";
@@ -216,6 +216,38 @@ describe("TMUX_CONF_LINES", () => {
   // binding only `copy-mode` leaves anyone with a vi-ish EDITOR on the five-line jump.
   it("binds both copy-mode tables, since mode-keys decides which is live", () => {
     expect(TMUX_CONF_LINES.filter((l) => l.includes("WheelUpPane"))).toHaveLength(2);
+  });
+
+  // tmux strips a program's OSC 8 unless told the outer terminal has the `hyperlinks` feature —
+  // without this, Claude Code's `PR #123` links never reach xterm (#783).
+  it("declares the hyperlinks feature so tmux forwards OSC 8", () => {
+    expect(TMUX_CONF_LINES).toContain("set -as terminal-features '*:hyperlinks'");
+  });
+});
+
+// psmux 3.4.0 has no `terminal-features`: it rejects the option and prints the rejection into the
+// first pane every new server opens (#3204), while forwarding OSC 8 to its client with no
+// declaration at all. So the line is left out for psmux and nothing else moves.
+describe("tmuxConfLinesFor", () => {
+  it("hands a real tmux the whole conf, the same array", () => {
+    expect(tmuxConfLinesFor(false)).toBe(TMUX_CONF_LINES);
+  });
+
+  it("leaves terminal-features out for psmux", () => {
+    expect(tmuxConfLinesFor(true).some((line) => line.includes("terminal-features"))).toBe(false);
+  });
+
+  it("drops exactly that one line and keeps the rest in order", () => {
+    expect(tmuxConfLinesFor(true)).toEqual(TMUX_CONF_LINES.filter((line) => !line.includes("terminal-features")));
+    expect(tmuxConfLinesFor(true)).toHaveLength(TMUX_CONF_LINES.length - 1);
+  });
+
+  // psmux 3.4.0 knows `terminal-overrides` (the one warning the report shows is for the other
+  // option), and the Ms entry is what carries OSC 52 on a real tmux — no reason to take it from psmux.
+  it("keeps the terminal-overrides Ms entry and set-clipboard for psmux", () => {
+    const lines = tmuxConfLinesFor(true);
+    expect(lines.some((l) => l.includes("terminal-overrides") && l.includes("Ms="))).toBe(true);
+    expect(lines).toContain("set -g set-clipboard on");
   });
 
   // Not cosmetic any more: the size check compares `window_height` against the client's, and a
@@ -693,22 +725,6 @@ describe("liveWheelCommand", () => {
   // every server start — the scroll has to be bound on its own there.
   it("binds the scroll alone for psmux", () => {
     expect(liveWheelCommand(up, true)).toBe("send -X -N 1 scroll-up");
-  });
-});
-
-describe("tmuxConfLinesFor", () => {
-  it("hands a real tmux the whole conf", () => {
-    expect(tmuxConfLinesFor(false)).toEqual(TMUX_CONF_LINES);
-  });
-
-  // psmux rejects terminal-features and prints the rejection into the first pane; it forwards
-  // OSC 8 and OSC 52 without either declaration.
-  it("leaves the terminal declarations out for psmux and keeps the rest", () => {
-    const lines = tmuxConfLinesFor(true);
-    expect(lines.some((l) => /terminal-(features|overrides)/.test(l))).toBe(false);
-    expect(lines).toContain("set -g status off");
-    expect(lines).toContain("set -g mouse on");
-    expect(lines.filter((l) => TMUX_CONF_LINES.includes(l))).toHaveLength(TMUX_CONF_LINES.length - 2);
   });
 });
 

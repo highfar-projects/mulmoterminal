@@ -4,9 +4,13 @@
 // Its own module rather than index.ts's because none of it is boot ORDER — it is one subsystem
 // with a single seam, and the object this returns is exactly what the /api/rate-limits routes
 // take. index.ts keeps the call and the moment it happens.
+import { mkdirSync } from "node:fs";
 import { createRateLimitStore } from "./rate-limit-store.js";
 import { startRateLimitProbe, probeSpawnEnv } from "./rate-limit-probe.js";
 import { newProbeSessionId } from "../probe/probe-session.js";
+import { probeCwd } from "../probe/probe-cwd.js";
+import { ensureProbeFolderTrusted, isProbeFolderItself } from "../probe/probe-trust.js";
+import { claudeProjectPath, claudeUserConfigFile } from "../../session/project-dir.js";
 import { writeProbeScreen } from "../probe/probe-stall.js";
 import { removeProbeTranscript } from "../probe/probe-transcript.js";
 import { newestRolloutFile, readRolloutTail } from "../codex/codex-rollout.js";
@@ -22,7 +26,7 @@ import type { ProbeOutcome } from "./rate-limit-probe.js";
 import { hasBinary } from "../../infra/process/has-binary.js";
 import { spawnPty } from "../../session/pty/pty-spawn.js";
 import { AGENT_BINS } from "../../config/agent/agent-bins.js";
-import { CLAUDE_CWD, MULMOTERMINAL_HOME, PORT } from "../../config/env.js";
+import { MULMOTERMINAL_HOME, PORT } from "../../config/env.js";
 
 // Long enough for claude's own final write to land after the PTY is killed. Deleting into that
 // window loses the race and the file comes back — and a transcript that reappears reads exactly
@@ -38,6 +42,38 @@ const claudeIsRunnable = (): boolean => {
   } catch {
     return false;
   }
+};
+
+// Every probe — the default login's, an account's, a rotation token's — runs here, never in the
+// workspace (#3200): see probe-cwd.ts. Trust for it is still per login, which is why an account's
+// probe meets the prompt on its own.
+const PROBE_CWD = probeCwd(MULMOTERMINAL_HOME);
+
+// Config files a READ has found holding the folder's trust, so each login's is read once per server
+// rather than on every probe — the file runs to a megabyte on a long-lived install. A write is not
+// recorded: Claude Code's own save can land on top of it (probe-trust.ts), so the next probe reads
+// again and finds it, or writes again. A user who removes the entry after that read gets the
+// trust-prompt note until the server restarts, which is the by-hand path working as documented.
+const configFilesTrustingProbeFolder = new Set<string>();
+
+// Trust for the folder goes in the config of the login the probe runs on (#3206): an account's own
+// CLAUDE_CONFIG_DIR, else the server's default — which is also what a rotation token's probe reads.
+// Keyed by the folder's real path, which is what claude sees as its cwd — so a folder that is a
+// LINK gets no trust at all, since the real path would then be somebody else's directory.
+const markProbeFolderTrusted = (cwd: string, loginEnv: Record<string, string>): void => {
+  const configFile = claudeUserConfigFile(loginEnv.CLAUDE_CONFIG_DIR);
+  if (configFilesTrustingProbeFolder.has(configFile) || !isProbeFolderItself(cwd)) return;
+  if (ensureProbeFolderTrusted(configFile, claudeProjectPath(cwd)) === "trusted") configFilesTrustingProbeFolder.add(configFile);
+};
+
+// The folder is made on the way in rather than at boot, so one removed while the server runs costs
+// a probe, not the gauge. A folder that cannot be made fails the spawn, and startRateLimitProbe
+// already reports a spawn that threw as a probe that brought nothing back. Trust that cannot be
+// written is not a failure here: the probe runs anyway, and its stall names the prompt.
+const spawnProbe = (args: string[], cwd: string, unset: readonly string[], loginEnv: Record<string, string>) => {
+  mkdirSync(cwd, { recursive: true });
+  markProbeFolderTrusted(cwd, loginEnv);
+  return spawnPty(AGENT_BINS.claude, args, cwd, unset, probeSpawnEnv(loginEnv));
 };
 
 // A probe that never reported. The screen is the only evidence there is, and without it the next
@@ -61,19 +97,33 @@ export function startHomeProbe(
 ) {
   const sessionId = newProbeSessionId();
   return startRateLimitProbe({
-    spawn: (args, cwd) => spawnPty(AGENT_BINS.claude, args, cwd, unset, probeSpawnEnv(env)),
+    spawn: (args, cwd) => spawnProbe(args, cwd, unset, env),
     host: "localhost",
     port: PORT,
-    cwd: CLAUDE_CWD,
+    cwd: PROBE_CWD,
     sessionId,
     probeReportKey,
     settingsEnv,
     onSettled: ({ stall }) => {
       onSettled(stall);
-      setTimeout(() => void removeProbeTranscript(CLAUDE_CWD, sessionId, home).catch(() => {}), TRANSCRIPT_FLUSH_MS).unref();
+      setTimeout(() => void removeProbeTranscript(PROBE_CWD, sessionId, home).catch(() => {}), TRANSCRIPT_FLUSH_MS).unref();
     },
   });
 }
+
+/** Each configured account's meter (#2215): Codex read from the account's own rollouts, Claude probed
+ *  under the account's own login — the same variable its cells are started with (session-home.ts). */
+const accountMeters = () =>
+  createAccountRateLimits({
+    accounts: distinctAccounts,
+    homeOf: (account) => accountHome(account),
+    readCodex: (home) => {
+      const file = newestRolloutFile(codexSessionsUnder(home), Date.now());
+      return file ? latestRateLimitsInRollout(readRolloutTail(file)) : null;
+    },
+    startClaudeProbe: (home, probeReportKey, onSettled) => startHomeProbe(home, probeReportKey, onSettled, [], homeEnv("claude", home)),
+    claudeAvailable: claudeIsRunnable,
+  });
 
 /** What index.ts takes: the routes' deps, and the choice of credential for a new session (#2919). */
 export type RateLimitService = Omit<RateLimitRouteDeps, "usageGauge"> & Omit<TokenRotationRuntime, "meters">;
@@ -128,7 +178,7 @@ export function createRateLimitService(liveSessions: (tokenId: string) => number
     store.setProbeInFlight(false);
     // Hiding it from /api/sessions is not enough: `claude --resume` reads the transcript directory
     // itself, so the probe has to take its own file with it (#1010).
-    setTimeout(() => void removeProbeTranscript(CLAUDE_CWD, sessionId).catch(() => {}), TRANSCRIPT_FLUSH_MS).unref();
+    setTimeout(() => void removeProbeTranscript(PROBE_CWD, sessionId).catch(() => {}), TRANSCRIPT_FLUSH_MS).unref();
   };
 
   const startProbe = (): void => {
@@ -142,27 +192,16 @@ export function createRateLimitService(liveSessions: (tokenId: string) => number
     store.noteProbeStarted(Date.now());
     const sessionId = newProbeSessionId();
     stopClaudeRateLimitProbe = startRateLimitProbe({
-      spawn: (args, cwd) => spawnPty(AGENT_BINS.claude, args, cwd, [], probeSpawnEnv()),
+      spawn: (args, cwd) => spawnProbe(args, cwd, [], {}),
       host: "localhost",
       port: PORT,
-      cwd: CLAUDE_CWD,
+      cwd: PROBE_CWD,
       sessionId,
       onSettled: (outcome) => onProbeSettled(sessionId, outcome),
     });
   };
 
-  const accounts = createAccountRateLimits({
-    accounts: distinctAccounts,
-    homeOf: (account) => accountHome(account),
-    readCodex: (home) => {
-      const file = newestRolloutFile(codexSessionsUnder(home), Date.now());
-      return file ? latestRateLimitsInRollout(readRolloutTail(file)) : null;
-    },
-    // The account's own login: the same variable its cells are started with (session-home.ts).
-    startClaudeProbe: (home, probeReportKey, onSettled) => startHomeProbe(home, probeReportKey, onSettled, [], homeEnv("claude", home)),
-    claudeAvailable: claudeIsRunnable,
-  });
-
+  const accounts = accountMeters();
   const { meters: tokenMeters, ...rotationControls } = createTokenRotation({
     startHomeProbe,
     claudeAvailable: claudeIsRunnable,
@@ -173,6 +212,7 @@ export function createRateLimitService(liveSessions: (tokenId: string) => number
     store,
     refreshCodex,
     startProbe,
+    probeCwd: PROBE_CWD,
     claudeAvailable: claudeIsRunnable,
     now_ms: () => Date.now(),
     accounts: combinedMeters([accounts, tokenMeters]),

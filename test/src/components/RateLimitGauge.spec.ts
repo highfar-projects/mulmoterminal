@@ -103,13 +103,15 @@ describe("RateLimitGauge", () => {
     wrapper.unmount();
   });
 
-  // #2215: a claude account whose check is stuck says so under its own name.
+  // #2215: a claude account whose check is stuck says so under its own name — and names the folder
+  // the server says its probe runs in (#3200), end to end from the response to the hover text.
   it("names a stuck account instead of leaving it out", async () => {
     const accounts = [{ id: "work", label: "Work", agent: "claude", limits: null, probing: false, probe: "no-report", probeStall: "trust-prompt" }];
-    const wrapper = await showGauge(body({ claude: limits, accounts }));
+    const wrapper = await showGauge(body({ claude: limits, accounts, claudeProbeCwd: "/home/me/.mulmoterminal/probe" }));
     const entry = wrapper.get('[data-testid="rate-limit-account-note"]');
     expect(entry.text()).toContain("Work");
     expect(entry.attributes("data-tip")).toContain("trust prompt");
+    expect(entry.attributes("data-tip")).toContain("/home/me/.mulmoterminal/probe");
     expect(note(wrapper).exists()).toBe(false);
   });
 });

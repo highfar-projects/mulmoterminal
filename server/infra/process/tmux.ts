@@ -145,6 +145,11 @@ export function liveWheelCommand(command: string, psmux: boolean): string {
 //     claude's input history rather than scrolling).
 //   - `set-clipboard on` + the `Ms` override: forward OSC 52 clipboard writes to the
 //     outer terminal so Claude's auto-copy reaches the browser clipboard (#206).
+// psmux has no `terminal-features`: 3.4.0 rejects the option and prints the rejection into the
+// first pane a new server opens (`psmux: 1 config warning(s)`), and it forwards OSC 8 to its client
+// without being told to — so on psmux the line is only ever the warning.
+const TERMINAL_FEATURES_LINE = "set -as terminal-features '*:hyperlinks'";
+
 export const TMUX_CONF_LINES: readonly string[] = [
   "set -g status off",
   "set -g escape-time 0",
@@ -158,7 +163,7 @@ export const TMUX_CONF_LINES: readonly string[] = [
   // hyperlink (Claude Code's statusline, and any OSC 8 link) never reaches xterm and isn't
   // clickable. Same shape as the `Ms` clipboard fix: xterm supports it (linkHandler), but
   // tmux only passes it through when told the terminal has the `hyperlinks` feature.
-  "set -as terminal-features '*:hyperlinks'",
+  TERMINAL_FEATURES_LINE,
   // SINGLE quotes: inside double quotes tmux runs its own escape processing over the
   // value, which eats the `\E` (leaving a bare `E` that is not an escape at all) and turns
   // `\007` into a raw BEL — so the capability tmux stores emits `E]52;…` as literal text
@@ -167,11 +172,9 @@ export const TMUX_CONF_LINES: readonly string[] = [
   ...WHEEL_SCROLL_BINDINGS,
 ];
 
-/** The conf a given tmux is handed. psmux rejects `terminal-features` and prints the rejection as
- *  a "config warning" into the first pane a new server opens — and it needs neither declaration,
- *  since it forwards OSC 8 and OSC 52 on its own (see applyLiveTmuxOptions). */
+/** The conf a given tmux is handed: everything, or everything psmux knows. */
 export function tmuxConfLinesFor(psmux: boolean): readonly string[] {
-  return psmux ? TMUX_CONF_LINES.filter((line) => !/terminal-(features|overrides)/.test(line)) : TMUX_CONF_LINES;
+  return psmux ? TMUX_CONF_LINES.filter((line) => line !== TERMINAL_FEATURES_LINE) : TMUX_CONF_LINES;
 }
 
 export type MsOverridePlan = { kind: "ok" } | { kind: "append" } | { kind: "replace"; index: number };
@@ -218,18 +221,23 @@ function applyLiveTmuxOptions(): void {
   }
   // Before the psmux return below: these options exist only on psmux (empty for a real tmux).
   applyLivePsmuxGlobalOptions().catch(() => {});
-  // psmux forwards OSC 8 and OSC 52 to its client with no declaration at all (measured on 3.3.8),
-  // and has neither the `-s` that `set -as` needs nor a readable terminal-overrides — the two
-  // calls below would only fail, and the Ms plan would re-append on every start.
+  applyLiveHyperlinksFeature();
+  // psmux has no readable terminal-overrides, so the Ms plan below would only re-append on every
+  // start; it forwards OSC 52 to its client on its own (measured on 3.3.8).
   if (cachedPsmux) return;
-  // Forward OSC 8 hyperlinks to the outer xterm (see TMUX_CONF_LINES). Append only when
-  // absent — `set -as` does NOT de-dupe, so an unguarded call grows the list on every restart.
-  if (!tmux(["show", "-g", "terminal-features"]).stdout.includes("hyperlinks")) {
-    tmux(["set", "-as", "terminal-features", "*:hyperlinks"]);
-  }
   const plan = planMsOverride(tmux(["show", "-g", "terminal-overrides"]).stdout);
   if (plan.kind === "append") tmux(["set", "-ag", "terminal-overrides", OSC52_MS_OVERRIDE]);
   if (plan.kind === "replace") tmux(["set", "-g", `terminal-overrides[${plan.index}]`, MS_OVERRIDE_ENTRY]);
+}
+
+// Forward OSC 8 hyperlinks to the outer xterm (see TMUX_CONF_LINES). Append only when
+// absent — `set -as` does NOT de-dupe, so an unguarded call grows the list on every restart.
+// Not sent to psmux, which has no such option (see TERMINAL_FEATURES_LINE).
+function applyLiveHyperlinksFeature(): void {
+  if (cachedPsmux) return;
+  if (!tmux(["show", "-g", "terminal-features"]).stdout.includes("hyperlinks")) {
+    tmux(["set", "-as", "terminal-features", "*:hyperlinks"]);
+  }
 }
 
 // psmux runs one server per session, so a `-g` set reaches only the server its target names. Async,

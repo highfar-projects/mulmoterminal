@@ -50,6 +50,7 @@ async function load(): Promise<boolean> {
       // whether a probe was refused, timed out, or answered with no windows (#1011).
       claudeProbe: isProbeState(data.claudeProbe) ? data.claudeProbe : undefined,
       claudeStall: isProbeStall(data.claudeProbeStall) ? data.claudeProbeStall : undefined,
+      claudeProbeCwd: typeof data.claudeProbeCwd === "string" ? data.claudeProbeCwd : undefined,
       accounts: accounts.map(({ probing: _probing, ...reading }) => reading),
     };
     // Waiting on ANY probe, an account's included: each takes the better part of a minute.

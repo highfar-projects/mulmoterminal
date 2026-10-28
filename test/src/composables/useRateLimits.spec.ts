@@ -103,6 +103,21 @@ describe("useRateLimits polling lifecycle", () => {
     stop();
   });
 
+  // The folder the probe runs in (#3200) travels as the server spelled it: the note tells the user to
+  // run `claude` there, so a path made up here would send them to the wrong place.
+  it("carries the probe's folder through to the snapshot, and drops one that is not a path", async () => {
+    const stuck = { claude: null, codex: null, probing: false, claudeProbe: "no-report", claudeProbeStall: "trust-prompt" };
+    fetchMock.mockImplementation(() => respond({ ...stuck, claudeProbeCwd: "/home/me/.mulmoterminal/probe" }));
+    const { start, stop, snapshot } = useRateLimits();
+    start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(snapshot.value?.claudeProbeCwd).toBe("/home/me/.mulmoterminal/probe");
+    fetchMock.mockImplementation(() => respond({ ...stuck, claudeProbeCwd: 42 }));
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(snapshot.value?.claudeProbeCwd).toBeUndefined();
+    stop();
+  });
+
   // A field the server never sent, or one it sent a new value for, must not reach the note as a
   // string nothing knows how to render.
   it("ignores a stall it does not recognise", async () => {
