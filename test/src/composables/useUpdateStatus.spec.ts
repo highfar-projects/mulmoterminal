@@ -18,6 +18,7 @@ const REFRESH_MS = 15 * 60_000;
 const served = (over: Partial<UpdateStatus> = {}): UpdateStatus => ({
   ready: true,
   install: "npm",
+  distribution: "upstream",
   version: "4.7.0",
   commit: null,
   latest: null,

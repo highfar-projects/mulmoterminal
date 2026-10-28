@@ -2,17 +2,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { UpdateStatus } from "../../../common/updateStatus.js";
 
-type UpdateInfo = Omit<UpdateStatus, "ready">;
+type UpdateInfo = Omit<UpdateStatus, "ready" | "distribution">;
 type InstallInfo = Pick<UpdateStatus, "install" | "version" | "commit">;
 
 // vi.mock is hoisted above imports, so the doubles it returns must be created inside a
 // vi.hoisted block rather than referencing top-level consts (which aren't initialized yet).
-const { computeUpdateInfo, readInstallInfo, isUpdateCheckDisabled } = vi.hoisted(() => ({
+const { computeUpdateInfo, readInstallInfo, isUpdateCheckDisabled, isUpstreamPackage } = vi.hoisted(() => ({
   computeUpdateInfo: vi.fn<(pkgDir: string, version: string) => Promise<UpdateInfo>>(),
   readInstallInfo: vi.fn<(pkgDir: string, version: string) => Promise<InstallInfo>>(),
   isUpdateCheckDisabled: vi.fn<(env: Record<string, string | undefined>) => boolean>(),
+  isUpstreamPackage: vi.fn<(manifest: unknown) => boolean>(() => true),
 }));
-vi.mock("../../../bin/update-check.js", () => ({ computeUpdateInfo, readInstallInfo, isUpdateCheckDisabled }));
+vi.mock("../../../bin/update-check.js", () => ({ computeUpdateInfo, readInstallInfo, isUpdateCheckDisabled, isUpstreamPackage }));
 
 import { refreshUpdateStatus, getUpdateStatus, startUpdateStatusRefresh } from "../../../server/config/update-status.js";
 
@@ -35,7 +36,7 @@ describe("refreshUpdateStatus", () => {
     isUpdateCheckDisabled.mockReturnValue(false);
     computeUpdateInfo.mockResolvedValue(gitInfo);
     await refreshUpdateStatus();
-    expect(getUpdateStatus()).toEqual({ ready: true, ...gitInfo });
+    expect(getUpdateStatus()).toEqual({ ready: true, distribution: "upstream", ...gitInfo });
   });
 
   // "Up to date" and "not finished yet" are both a null notice, so `ready` is what tells them
@@ -44,7 +45,7 @@ describe("refreshUpdateStatus", () => {
     isUpdateCheckDisabled.mockReturnValue(false);
     computeUpdateInfo.mockResolvedValue({ install: "npm", version: "4.7.0", commit: null, latest: null, notice: null });
     await refreshUpdateStatus();
-    expect(getUpdateStatus()).toEqual({ ready: true, install: "npm", version: "4.7.0", commit: null, latest: null, notice: null });
+    expect(getUpdateStatus()).toEqual({ ready: true, distribution: "upstream", install: "npm", version: "4.7.0", commit: null, latest: null, notice: null });
   });
 
   // The opt-out silences the notice, not the version display: the local read still runs, so a
@@ -53,7 +54,15 @@ describe("refreshUpdateStatus", () => {
     isUpdateCheckDisabled.mockReturnValue(true);
     readInstallInfo.mockResolvedValue({ install: "git", version: "4.7.0", commit: "a1b2c3d" });
     await refreshUpdateStatus();
-    expect(getUpdateStatus()).toEqual({ ready: true, install: "git", version: "4.7.0", commit: "a1b2c3d", latest: null, notice: null });
+    expect(getUpdateStatus()).toEqual({
+      ready: true,
+      distribution: "upstream",
+      install: "git",
+      version: "4.7.0",
+      commit: "a1b2c3d",
+      latest: null,
+      notice: null,
+    });
     expect(computeUpdateInfo).not.toHaveBeenCalled();
   });
 
@@ -70,7 +79,7 @@ describe("refreshUpdateStatus", () => {
     const behind: UpdateInfo = { ...current, latest: "4.11.0", notice: "Update available: 4.10.1 → 4.11.0  ·  run: npm i -g mulmoterminal" };
     computeUpdateInfo.mockResolvedValue(behind);
     await refreshUpdateStatus();
-    expect(getUpdateStatus()).toEqual({ ready: true, ...behind });
+    expect(getUpdateStatus()).toEqual({ ready: true, distribution: "upstream", ...behind });
   });
 
   // The opt-out is read per call rather than latched at the first one, so turning it on takes
@@ -84,7 +93,15 @@ describe("refreshUpdateStatus", () => {
     expect(getUpdateStatus().notice).toBe(gitInfo.notice);
 
     await refreshUpdateStatus();
-    expect(getUpdateStatus()).toEqual({ ready: true, install: "git", version: "4.7.0", commit: "a1b2c3d", latest: null, notice: null });
+    expect(getUpdateStatus()).toEqual({
+      ready: true,
+      distribution: "upstream",
+      install: "git",
+      version: "4.7.0",
+      commit: "a1b2c3d",
+      latest: null,
+      notice: null,
+    });
     expect(computeUpdateInfo).toHaveBeenCalledTimes(1);
   });
 
@@ -95,7 +112,7 @@ describe("refreshUpdateStatus", () => {
     await refreshUpdateStatus();
     computeUpdateInfo.mockRejectedValue(new Error("offline"));
     await expect(refreshUpdateStatus()).resolves.toBeUndefined();
-    expect(getUpdateStatus()).toEqual({ ready: true, ...gitInfo });
+    expect(getUpdateStatus()).toEqual({ ready: true, distribution: "upstream", ...gitInfo });
   });
 });
 
@@ -139,5 +156,21 @@ describe("startUpdateStatusRefresh", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+// A fork carries upstream's version number after a merge, so the manifest's repository is what
+// says whose build this is. The decision is made once, at load, hence the fresh import.
+describe("distribution", () => {
+  it("is fork when the manifest names another repository", async () => {
+    isUpstreamPackage.mockReturnValue(false);
+    vi.resetModules();
+    const fresh = await import("../../../server/config/update-status.js");
+    expect(fresh.getUpdateStatus().distribution).toBe("fork");
+    readInstallInfo.mockResolvedValue({ install: "npm", version: "4.7.0", commit: null });
+    isUpdateCheckDisabled.mockReturnValue(true);
+    await fresh.refreshUpdateStatus();
+    expect(fresh.getUpdateStatus().distribution).toBe("fork");
+    isUpstreamPackage.mockReturnValue(true);
   });
 });

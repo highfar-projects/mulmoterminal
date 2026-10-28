@@ -10,9 +10,9 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { computeUpdateInfo, readInstallInfo, isUpdateCheckDisabled } from "../../bin/update-check.js";
+import { computeUpdateInfo, readInstallInfo, isUpdateCheckDisabled, isUpstreamPackage } from "../../bin/update-check.js";
 import { isRecord } from "../../common/isRecord.js";
-import type { UpdateStatus } from "../../common/updateStatus.js";
+import type { Distribution, UpdateStatus } from "../../common/updateStatus.js";
 
 // This file is server/config/update-status.ts, so two dirs up is the install root — the git
 // checkout (dev / a clone) or the package dir under node_modules (npm) the check runs against.
@@ -22,11 +22,14 @@ const PKG_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..",
 // should say so here, not hand `undefined` to the update check as though it were a version.
 const pkg: unknown = createRequire(import.meta.url)("../../package.json");
 const VERSION = isRecord(pkg) && typeof pkg.version === "string" ? pkg.version : "0.0.0";
+// A fork carries upstream's version number after a merge, so the version cannot say whose build
+// this is; the manifest's repository can, and it is known before any probe lands.
+const DISTRIBUTION: Distribution = isUpstreamPackage(pkg) ? "upstream" : "fork";
 
 // The version is known synchronously, so it is served from the first request on. Every other
 // field is a placeholder until the probe lands — including `install`, which needs a git call to
 // decide — and `ready` is how the client knows not to read them yet.
-let cached: UpdateStatus = { ready: false, install: "npm", version: VERSION, commit: null, latest: null, notice: null };
+let cached: UpdateStatus = { ready: false, install: "npm", distribution: DISTRIBUTION, version: VERSION, commit: null, latest: null, notice: null };
 export function getUpdateStatus(): UpdateStatus {
   return cached;
 }
@@ -40,8 +43,8 @@ export function getUpdateStatus(): UpdateStatus {
 export async function refreshUpdateStatus(): Promise<void> {
   try {
     cached = isUpdateCheckDisabled(process.env)
-      ? { ready: true, ...(await readInstallInfo(PKG_DIR, VERSION)), latest: null, notice: null }
-      : { ready: true, ...(await computeUpdateInfo(PKG_DIR, VERSION)) };
+      ? { ready: true, distribution: DISTRIBUTION, ...(await readInstallInfo(PKG_DIR, VERSION)), latest: null, notice: null }
+      : { ready: true, distribution: DISTRIBUTION, ...(await computeUpdateInfo(PKG_DIR, VERSION)) };
   } catch {
     // best-effort — keep the last good value
   }

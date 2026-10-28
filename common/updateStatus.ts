@@ -7,10 +7,18 @@ import { isRecord } from "./isRecord.js";
 /** How the tool was installed, which decides what "the running version" even means. */
 export type InstallKind = "npm" | "git";
 
+/**
+ * Whose build this is. The version number alone cannot say: a fork that merges upstream's release
+ * carries the same `version`. Decided by the manifest's own `repository` (bin/update-check.js
+ * `isUpstreamPackage`), so it needs no file of its own that a merge could trample.
+ */
+export type Distribution = "upstream" | "fork";
+
 export interface UpdateStatus {
   /** False until the startup check has landed; `commit` / `latest` / `notice` are not final yet. */
   ready: boolean;
   install: InstallKind;
+  distribution: Distribution;
   /** The shipped package.json version. For a git checkout this is the last release, not the build. */
   version: string;
   /** git installs: short HEAD sha — the only thing that identifies which build is running. */
@@ -34,6 +42,8 @@ export function parseUpdateStatus(body: unknown): UpdateStatus | null {
   return {
     ready: body.ready === true,
     install: body.install,
+    // A server that predates the field is upstream's, which never sends it.
+    distribution: body.distribution === "fork" ? "fork" : "upstream",
     version: body.version,
     commit: stringOrNull(body.commit),
     latest: stringOrNull(body.latest),

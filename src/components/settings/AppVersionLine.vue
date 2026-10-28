@@ -25,6 +25,9 @@ const CHIP = "rounded-[0.4em] bg-selected px-1.5 py-[0.15em] font-mono text-[11p
       <span class="material-symbols-outlined text-[14px] leading-none text-muted" aria-hidden="true">deployed_code</span>
       <span class="text-[11px] font-semibold uppercase tracking-[0.04em] text-muted">{{ t("settings.version.label") }}</span>
       <span :class="CHIP" class="text-fg" data-testid="settings-app-version">{{ display.version }}</span>
+      <span v-if="display.distribution === 'fork'" :class="CHIP" class="text-accent" data-testid="settings-app-fork" title="highfar-projects/mulmoterminal"
+        >fork</span
+      >
       <span v-if="display.commit" :class="CHIP" class="text-muted" data-testid="settings-app-commit">
         {{ t("settings.version.commit", { sha: display.commit }) }}
       </span>

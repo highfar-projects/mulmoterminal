@@ -8,6 +8,7 @@ const jsonResponse = (body: unknown): Response => new Response(JSON.stringify(bo
 const status = (over: Partial<UpdateStatus> = {}): UpdateStatus => ({
   ready: true,
   install: "npm",
+  distribution: "upstream",
   version: "4.7.0",
   commit: null,
   latest: null,
@@ -45,6 +46,14 @@ describe("AppVersionLine", () => {
     expect(versionText(w)).toBe("4.7.0");
     expect(w.text()).toContain("Version");
     expect(commit(w).exists()).toBe(false);
+    expect(w.find('[data-testid="settings-app-fork"]').exists()).toBe(false);
+  });
+
+  // A fork has the same version number as upstream after a merge, so the chip is what tells them apart.
+  it("marks a fork next to the version", async () => {
+    const w = await mountWith(status({ distribution: "fork" }));
+    expect(versionText(w)).toBe("4.7.0");
+    expect(w.find('[data-testid="settings-app-fork"]').text()).toBe("fork");
   });
 
   // The hex says what it is, rather than leaving the reader to guess.

@@ -5,6 +5,7 @@ import type { UpdateStatus } from "../../../common/updateStatus";
 const status = (over: Partial<UpdateStatus> = {}): UpdateStatus => ({
   ready: true,
   install: "npm",
+  distribution: "upstream",
   version: "4.7.0",
   commit: null,
   latest: null,
@@ -52,22 +53,27 @@ describe("versionDisplay", () => {
   });
 
   it("names the package version for an npm install, with no commit", () => {
-    expect(versionDisplay(status())).toEqual({ version: "4.7.0", commit: null });
+    expect(versionDisplay(status())).toEqual({ version: "4.7.0", commit: null, distribution: "upstream" });
   });
 
   // A checkout's package.json version is only the last release, so the commit is what identifies
   // the running build.
   it("carries the commit for a git checkout", () => {
-    expect(versionDisplay(status({ install: "git", commit: "a1b2c3d" }))).toEqual({ version: "4.7.0", commit: "a1b2c3d" });
+    expect(versionDisplay(status({ install: "git", commit: "a1b2c3d" }))).toEqual({ version: "4.7.0", commit: "a1b2c3d", distribution: "upstream" });
+  });
+
+  // The version number is the same as upstream's after a merge, so the fork says so itself.
+  it("carries the distribution, so a fork can be told from upstream at the same version", () => {
+    expect(versionDisplay(status({ distribution: "fork" }))).toEqual({ version: "4.7.0", commit: null, distribution: "fork" });
   });
 
   it("keeps the version when the checkout's commit could not be read", () => {
-    expect(versionDisplay(status({ install: "git", commit: null }))).toEqual({ version: "4.7.0", commit: null });
+    expect(versionDisplay(status({ install: "git", commit: null }))).toEqual({ version: "4.7.0", commit: null, distribution: "upstream" });
   });
 
   // Before the probe lands, `install` is a placeholder — so a commit must not be claimed on the
   // strength of it.
   it("withholds the commit until the check is ready", () => {
-    expect(versionDisplay(status({ ready: false, install: "git", commit: "a1b2c3d" }))).toEqual({ version: "4.7.0", commit: null });
+    expect(versionDisplay(status({ ready: false, install: "git", commit: "a1b2c3d" }))).toEqual({ version: "4.7.0", commit: null, distribution: "upstream" });
   });
 });

@@ -2,6 +2,14 @@ import { describe, it, expect } from "vitest";
 import { parseUpdateStatus } from "../../common/updateStatus";
 
 describe("parseUpdateStatus", () => {
+  // A server that predates the field is upstream's; only an explicit "fork" says otherwise.
+  it("reads the distribution, defaulting to upstream", () => {
+    const body = { ready: true, install: "npm", version: "4.7.0", commit: null, latest: null, notice: null };
+    expect(parseUpdateStatus(body)?.distribution).toBe("upstream");
+    expect(parseUpdateStatus({ ...body, distribution: "fork" })?.distribution).toBe("fork");
+    expect(parseUpdateStatus({ ...body, distribution: "other" })?.distribution).toBe("upstream");
+  });
+
   it("reads a full status off the wire", () => {
     expect(
       parseUpdateStatus({
@@ -15,6 +23,7 @@ describe("parseUpdateStatus", () => {
     ).toEqual({
       ready: true,
       install: "git",
+      distribution: "upstream",
       version: "4.7.0",
       commit: "a1b2c3d",
       latest: null,
@@ -44,6 +53,7 @@ describe("parseUpdateStatus", () => {
     expect(parseUpdateStatus({ ready: true, install: "git", version: "4.7.0", commit: 42, latest: {}, notice: [] })).toEqual({
       ready: true,
       install: "git",
+      distribution: "upstream",
       version: "4.7.0",
       commit: null,
       latest: null,

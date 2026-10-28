@@ -23,6 +23,8 @@ export interface VersionDisplay {
   version: string;
   /** git checkouts only — shown next to the version, since that is what identifies the build. */
   commit: string | null;
+  /** "fork" is shown as a chip: the version number is the same as upstream's after a merge. */
+  distribution: UpdateStatus["distribution"];
 }
 
 /**
@@ -34,7 +36,9 @@ export interface VersionDisplay {
  * The commit appears only once the probe has landed (`ready`): before that the install kind is
  * still a placeholder, and an npm install would briefly claim a commit it does not have.
  */
-export function versionDisplay(status: Pick<UpdateStatus, "ready" | "install" | "version" | "commit"> | null | undefined): VersionDisplay | null {
+export function versionDisplay(
+  status: Pick<UpdateStatus, "ready" | "install" | "distribution" | "version" | "commit"> | null | undefined,
+): VersionDisplay | null {
   if (!status) return null;
-  return { version: status.version, commit: status.ready && status.install === "git" ? status.commit : null };
+  return { version: status.version, commit: status.ready && status.install === "git" ? status.commit : null, distribution: status.distribution };
 }

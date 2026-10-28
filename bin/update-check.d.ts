@@ -16,7 +16,7 @@ export declare function computeUpdateInfo(
   pkgDir: string,
   currentVersion: string,
   deps?: UpdateNoticeDeps,
-): Promise<Omit<import("../common/updateStatus.js").UpdateStatus, "ready">>;
+): Promise<Omit<import("../common/updateStatus.js").UpdateStatus, "ready" | "distribution">>;
 export declare function isUpdateCheckDisabled(env: Record<string, string | undefined>): boolean;
 export declare function hasNodeModulesSegment(pkgDir: string): boolean;
 export declare function classifyInstall(pkgDir: string, isGitWorkTree: boolean): "npm" | "git";
