@@ -343,10 +343,10 @@ export const tipsEn = {
     noClaude: "Claude usage unavailable — the `claude` command was not found on PATH.",
     noWindows: "Claude usage unavailable — this account reports no 5h / 7d windows (API-key billing).",
     noReport: "Claude usage unavailable — the last check got no answer. Retrying, less often each time.",
-    trustPrompt: "Claude usage unavailable — the usage check is waiting on Claude Code's trust prompt. Run `claude` in its folder once and accept it.",
+    trustPrompt: "Claude usage unavailable — the usage check is waiting on Claude Code's trust prompt. Run `claude` once in {folder} and accept it.",
     usageLimit: "Claude usage unavailable — this subscription is at its usage limit, so the check could not get an answer.",
     accountTrustPrompt:
-      "Claude usage unavailable — the usage check is waiting on Claude Code's trust prompt. Start a cell on this account in the workspace folder once and accept it.",
+      "Claude usage unavailable — the usage check is waiting on Claude Code's trust prompt. Start a cell on this account in {folder} once and accept it.",
     accountNote: "{account}: {note}",
     resetsInDays: "resets in {days}d {hours}h {minutes}m",
     resetsInHours: "resets in {hours}h {minutes}m",
