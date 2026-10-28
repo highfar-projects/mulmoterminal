@@ -1,9 +1,9 @@
 // @vitest-environment node
 import { describe, it, expect, afterEach } from "vitest";
-import { chmodSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { ensureProbeFolderTrusted, withProbeFolderTrusted } from "./probe-trust";
+import { ensureProbeFolderTrusted, isProbeFolderItself, withProbeFolderTrusted } from "./probe-trust";
 
 const DIR = "/home/me/.mulmoterminal/probe";
 
@@ -108,6 +108,22 @@ describe("ensureProbeFolderTrusted (#3206)", () => {
     expect(statSync(file).mode & 0o777).toBe(0o666);
   });
 
+  // A dotfiles setup keeps ~/.claude.json as a link; the rename must land on the file it points at
+  // and leave the link standing, or Claude Code's later saves and the dotfiles copy part ways.
+  it.skipIf(process.platform === "win32")("rewrites the target of a symlinked config and keeps the link", () => {
+    const dir = home();
+    const target = path.join(dir, "dotfiles-claude.json");
+    const link = path.join(dir, ".claude.json");
+    writeFileSync(target, CONFIG);
+    symlinkSync(target, link);
+
+    expect(ensureProbeFolderTrusted(link, DIR)).toBe("written");
+
+    expect(lstatSync(link).isSymbolicLink()).toBe(true);
+    expect(projectsOf(readFileSync(target, "utf8"))[DIR]).toEqual({ hasTrustDialogAccepted: true });
+    expect(readdirSync(dir).sort()).toEqual([".claude.json", "dotfiles-claude.json"]);
+  });
+
   it("reports an already trusted folder without touching the file", () => {
     const file = path.join(home(), ".claude.json");
     const text = JSON.stringify({ projects: { [DIR]: { hasTrustDialogAccepted: true } } });
@@ -137,5 +153,36 @@ describe("ensureProbeFolderTrusted (#3206)", () => {
     expect(ensureProbeFolderTrusted(file, DIR)).toBe("failed");
 
     expect(readFileSync(file, "utf8")).toBe('{"projects": {"/x": {"hasTrustDialogAccepted": tr');
+  });
+});
+
+// Trust is keyed by the folder's real path, so a probe folder that is a LINK would have trust
+// written for wherever it points — a directory nobody approved, which is the line this must not cross.
+describe("isProbeFolderItself (#3206)", () => {
+  const dirs: string[] = [];
+  const scratch = (): string => {
+    const dir = mkdtempSync(path.join(tmpdir(), "mt-probe-folder-"));
+    dirs.push(dir);
+    return dir;
+  };
+  afterEach(() => dirs.splice(0).forEach((dir) => rmSync(dir, { recursive: true, force: true })));
+
+  it("accepts a real directory and nothing else", () => {
+    const dir = scratch();
+    const folder = path.join(dir, "probe");
+    mkdirSync(folder);
+    expect(isProbeFolderItself(folder)).toBe(true);
+    writeFileSync(path.join(dir, "file"), "");
+    expect(isProbeFolderItself(path.join(dir, "file"))).toBe(false);
+    expect(isProbeFolderItself(path.join(dir, "missing"))).toBe(false);
+  });
+
+  it.skipIf(process.platform === "win32")("refuses a link, even one that points at a real directory", () => {
+    const dir = scratch();
+    const elsewhere = path.join(dir, "someone-elses-project");
+    mkdirSync(elsewhere);
+    const link = path.join(dir, "probe");
+    symlinkSync(elsewhere, link);
+    expect(isProbeFolderItself(link)).toBe(false);
   });
 });

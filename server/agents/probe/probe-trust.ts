@@ -23,7 +23,7 @@
 // unreadable, not JSON — does nothing, and the gauge's trust-prompt note stays as the fallback that
 // says what to do by hand.
 import { randomBytes } from "node:crypto";
-import { chmodSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, lstatSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { isRecord } from "../../../common/isRecord.js";
 
@@ -67,26 +67,42 @@ export type TrustResult = "trusted" | "written" | "failed";
 /** Mark `dir` trusted in `configFile`, landed by rename. */
 export function ensureProbeFolderTrusted(configFile: string, dir: string): TrustResult {
   let edit: TrustEdit;
+  let target: string;
   let mode: number;
   try {
-    mode = statSync(configFile).mode & PERMISSION_BITS;
-    edit = withProbeFolderTrusted(readFileSync(configFile, "utf8"), dir);
+    // The file itself, not a symlink to it: a dotfiles setup keeps `~/.claude.json` as a link, and a
+    // rename over the link would replace it with a plain file that Claude Code's saves then update
+    // while the dotfiles copy stops moving.
+    target = realpathSync(configFile);
+    mode = statSync(target).mode & PERMISSION_BITS;
+    edit = withProbeFolderTrusted(readFileSync(target, "utf8"), dir);
   } catch {
     return "failed";
   }
   if (edit.outcome !== "write") return edit.outcome === "trusted" ? "trusted" : "failed";
   // Beside the file, so the rename is within one filesystem and therefore atomic.
   const suffix = `${process.pid}.${randomBytes(TEMP_SUFFIX_BYTES).toString("hex")}.mulmoterminal-tmp`;
-  const tmp = path.join(path.dirname(configFile), `${path.basename(configFile)}.${suffix}`);
+  const tmp = path.join(path.dirname(target), `${path.basename(target)}.${suffix}`);
   try {
     writeFileSync(tmp, edit.text, { mode });
     // chmod after the write: the mode given to the open is filtered by the umask, this is not.
     chmodSync(tmp, mode);
-    renameSync(tmp, configFile);
+    renameSync(tmp, target);
     return "written";
   } catch {
     discard(tmp);
     return "failed";
+  }
+}
+
+/** Whether `dir` is the probe's own folder and not a link someone pointed elsewhere: trust written
+ *  for a link lands on whatever it resolves to, which is exactly the directory nobody approved.
+ *  Only the last component is checked — the state directory above it may legitimately be a link. */
+export function isProbeFolderItself(dir: string): boolean {
+  try {
+    return lstatSync(dir).isDirectory();
+  } catch {
+    return false;
   }
 }
 

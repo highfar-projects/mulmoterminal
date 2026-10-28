@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -142,6 +142,23 @@ describe("the usage probes run in MulmoTerminal's own folder (#3200)", () => {
     startHomeProbe(DEFAULT_LOGIN_DIR, "key", () => {}, ["CLAUDE_CODE_OAUTH_TOKEN"], {}, { CLAUDE_CODE_OAUTH_TOKEN: "secret" });
 
     expect(trustedIn(configFile)).toBe(true);
+  });
+
+  // A probe folder somebody replaced with a link points at a directory that is not ours; trust for
+  // it would land on that directory. The probe still runs there and its stall names the prompt.
+  it.skipIf(process.platform === "win32")("writes no trust when the probe folder is a link, and still spawns", () => {
+    const account = mkdtempSync(path.join(tmpdir(), "mt-ratelimit-acct-"));
+    const accountFile = path.join(account, ".claude.json");
+    writeFileSync(accountFile, "{}");
+    const elsewhere = mkdtempSync(path.join(tmpdir(), "mt-ratelimit-elsewhere-"));
+    symlinkSync(elsewhere, PROBE_CWD);
+
+    startHomeProbe(account, "key", () => {}, [], { CLAUDE_CONFIG_DIR: account });
+
+    expect(spawnPty).toHaveBeenCalledTimes(1);
+    expect(readFileSync(accountFile, "utf8")).toBe("{}");
+    rmSync(account, { recursive: true, force: true });
+    rmSync(elsewhere, { recursive: true, force: true });
   });
 
   // A login that has never run claude has no config yet. The probe still runs — it is the stall

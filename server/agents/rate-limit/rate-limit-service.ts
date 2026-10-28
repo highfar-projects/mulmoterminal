@@ -9,7 +9,7 @@ import { createRateLimitStore } from "./rate-limit-store.js";
 import { startRateLimitProbe, probeSpawnEnv } from "./rate-limit-probe.js";
 import { newProbeSessionId } from "../probe/probe-session.js";
 import { probeCwd } from "../probe/probe-cwd.js";
-import { ensureProbeFolderTrusted } from "../probe/probe-trust.js";
+import { ensureProbeFolderTrusted, isProbeFolderItself } from "../probe/probe-trust.js";
 import { claudeProjectPath, claudeUserConfigFile } from "../../session/project-dir.js";
 import { writeProbeScreen } from "../probe/probe-stall.js";
 import { removeProbeTranscript } from "../probe/probe-transcript.js";
@@ -58,10 +58,11 @@ const configFilesTrustingProbeFolder = new Set<string>();
 
 // Trust for the folder goes in the config of the login the probe runs on (#3206): an account's own
 // CLAUDE_CONFIG_DIR, else the server's default — which is also what a rotation token's probe reads.
-// Keyed by the folder's real path, which is what claude sees as its cwd.
+// Keyed by the folder's real path, which is what claude sees as its cwd — so a folder that is a
+// LINK gets no trust at all, since the real path would then be somebody else's directory.
 const markProbeFolderTrusted = (cwd: string, loginEnv: Record<string, string>): void => {
   const configFile = claudeUserConfigFile(loginEnv.CLAUDE_CONFIG_DIR);
-  if (configFilesTrustingProbeFolder.has(configFile)) return;
+  if (configFilesTrustingProbeFolder.has(configFile) || !isProbeFolderItself(cwd)) return;
   if (ensureProbeFolderTrusted(configFile, claudeProjectPath(cwd)) === "trusted") configFilesTrustingProbeFolder.add(configFile);
 };
 
