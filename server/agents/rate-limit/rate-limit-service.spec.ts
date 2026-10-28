@@ -117,6 +117,33 @@ describe("the usage probes run in MulmoTerminal's own folder (#3200)", () => {
     rmSync(account, { recursive: true, force: true });
   });
 
+  // Claude Code's own save can land on top of the write (probe-trust.ts). The service must not take
+  // its write as the last word: the next probe reads again, and writes again when the key is gone.
+  it("writes the trust again when a later read no longer finds it", () => {
+    const account = mkdtempSync(path.join(tmpdir(), "mt-ratelimit-acct-"));
+    const accountFile = path.join(account, ".claude.json");
+    writeFileSync(accountFile, "{}");
+    startHomeProbe(account, "key", () => {}, [], { CLAUDE_CONFIG_DIR: account });
+    expect(trustedIn(accountFile)).toBe(true);
+
+    writeFileSync(accountFile, JSON.stringify({ projects: {} }));
+    startHomeProbe(account, "key", () => {}, [], { CLAUDE_CONFIG_DIR: account });
+
+    expect(trustedIn(accountFile)).toBe(true);
+    rmSync(account, { recursive: true, force: true });
+  });
+
+  // A rotation token's probe runs on the default login with its own credential (#2919); its trust
+  // answers are the default login's, so that is the file its probe marks.
+  it("marks the default login's config for a rotation token's probe", () => {
+    const configFile = path.join(DEFAULT_LOGIN_DIR, ".claude.json");
+    writeFileSync(configFile, JSON.stringify({ projects: {} }));
+
+    startHomeProbe(DEFAULT_LOGIN_DIR, "key", () => {}, ["CLAUDE_CODE_OAUTH_TOKEN"], {}, { CLAUDE_CODE_OAUTH_TOKEN: "secret" });
+
+    expect(trustedIn(configFile)).toBe(true);
+  });
+
   // A login that has never run claude has no config yet. The probe still runs — it is the stall
   // that then names the prompt — and no config is invented for it.
   it("still spawns when the login has no config file, and creates none", () => {

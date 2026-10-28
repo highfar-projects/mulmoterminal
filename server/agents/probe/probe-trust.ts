@@ -13,12 +13,17 @@
 // be a bug, not a feature.
 //
 // The file is Claude Code's, and Claude Code rewrites it while running, so the write is as small as
-// it can be made: once per login per server (the caller remembers), only when the key is not already
-// true, parsed and re-serialised in one step, and landed by rename so a reader never sees half a
-// file. A write that cannot be made — no file yet (a login that has never run claude), unreadable,
-// not JSON — does nothing, and the gauge's trust-prompt note stays as the fallback that says what to
-// do by hand.
-import { readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+// it can be made: only when the key is not already true, parsed and re-serialised in one step — the
+// same round trip Claude Code's own writes make, so nothing this loses (an escape's spelling, a
+// duplicate key) survives its next save either — and landed by rename so a reader never sees half
+// a file. The window between the read and the rename is still a window: a Claude Code save landing
+// inside it is overwritten, and one landing just after it overwrites ours. That is why the caller
+// trusts a WRITE only once a later read finds the key in place — a write that did not stick is
+// simply made again. A write that cannot be made — no file yet (a login that has never run claude),
+// unreadable, not JSON — does nothing, and the gauge's trust-prompt note stays as the fallback that
+// says what to do by hand.
+import { randomBytes } from "node:crypto";
+import { chmodSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { isRecord } from "../../../common/isRecord.js";
 
@@ -26,6 +31,8 @@ const TRUST_KEY = "hasTrustDialogAccepted";
 // Claude Code writes its config two-space indented; matching it keeps the rewrite a one-line diff.
 const CONFIG_INDENT = 2;
 const PERMISSION_BITS = 0o777;
+// Beside the pid, so two servers on one HOME — or one server's two probes — never share a name.
+const TEMP_SUFFIX_BYTES = 4;
 
 /** What the config needs: nothing (already trusted), one rewrite, or nothing because it cannot be
  *  read as Claude Code's config at all. */
@@ -33,7 +40,8 @@ export type TrustEdit = { outcome: "trusted" } | { outcome: "write"; text: strin
 
 /** Pure: Claude Code's config with `projects[dir]` marked trusted. Keeps every other byte of meaning
  *  — key order, the entry's other fields, and whether the file ends in a newline — so the rewrite
- *  changes one field and nothing else. */
+ *  changes one field and nothing else. An entry that is not an object is not Claude Code's; it is
+ *  left alone rather than replaced. */
 export function withProbeFolderTrusted(configText: string, dir: string): TrustEdit {
   let config: unknown;
   try {
@@ -44,33 +52,49 @@ export function withProbeFolderTrusted(configText: string, dir: string): TrustEd
   if (!isRecord(config)) return { outcome: "unreadable" };
   const projects = config.projects === undefined ? {} : config.projects;
   if (!isRecord(projects)) return { outcome: "unreadable" };
-  const entry = projects[dir];
-  if (isRecord(entry) && entry[TRUST_KEY] === true) return { outcome: "trusted" };
-  const trusted = { ...projects, [dir]: { ...(isRecord(entry) ? entry : {}), [TRUST_KEY]: true } };
+  const entry = projects[dir] === undefined ? {} : projects[dir];
+  if (!isRecord(entry)) return { outcome: "unreadable" };
+  if (entry[TRUST_KEY] === true) return { outcome: "trusted" };
+  const trusted = { ...projects, [dir]: { ...entry, [TRUST_KEY]: true } };
   const text = JSON.stringify({ ...config, projects: trusted }, null, CONFIG_INDENT);
   return { outcome: "write", text: configText.endsWith("\n") ? `${text}\n` : text };
 }
 
-/** Mark `dir` trusted in `configFile`, landed by rename. Returns whether the folder is trusted in
- *  that file once this returns — already, or now. */
-export function ensureProbeFolderTrusted(configFile: string, dir: string): boolean {
+/** How a call left the file: the key was already there (`trusted`), it was just written (`written`)
+ *  — which is only a claim until a later read finds it, see the header — or nothing could be done. */
+export type TrustResult = "trusted" | "written" | "failed";
+
+/** Mark `dir` trusted in `configFile`, landed by rename. */
+export function ensureProbeFolderTrusted(configFile: string, dir: string): TrustResult {
   let edit: TrustEdit;
   let mode: number;
   try {
     mode = statSync(configFile).mode & PERMISSION_BITS;
     edit = withProbeFolderTrusted(readFileSync(configFile, "utf8"), dir);
   } catch {
-    return false;
+    return "failed";
   }
-  if (edit.outcome !== "write") return edit.outcome === "trusted";
+  if (edit.outcome !== "write") return edit.outcome === "trusted" ? "trusted" : "failed";
   // Beside the file, so the rename is within one filesystem and therefore atomic.
-  const tmp = path.join(path.dirname(configFile), `${path.basename(configFile)}.${process.pid}.mulmoterminal-tmp`);
+  const suffix = `${process.pid}.${randomBytes(TEMP_SUFFIX_BYTES).toString("hex")}.mulmoterminal-tmp`;
+  const tmp = path.join(path.dirname(configFile), `${path.basename(configFile)}.${suffix}`);
   try {
     writeFileSync(tmp, edit.text, { mode });
+    // chmod after the write: the mode given to the open is filtered by the umask, this is not.
+    chmodSync(tmp, mode);
     renameSync(tmp, configFile);
-    return true;
+    return "written";
   } catch {
-    rmSync(tmp, { force: true });
-    return false;
+    discard(tmp);
+    return "failed";
   }
 }
+
+// A temp file that cannot be removed is litter, not a reason to throw out of a probe's spawn.
+const discard = (file: string): void => {
+  try {
+    rmSync(file, { force: true });
+  } catch {
+    return;
+  }
+};

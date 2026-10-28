@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, afterEach } from "vitest";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { ensureProbeFolderTrusted, withProbeFolderTrusted } from "./probe-trust";
@@ -60,6 +60,13 @@ describe("withProbeFolderTrusted (#3206)", () => {
     expect(withProbeFolderTrusted(JSON.stringify({ projects: [] }), DIR)).toEqual({ outcome: "unreadable" });
   });
 
+  // An entry that is not an object is not Claude Code's own; replacing it would drop whatever it was.
+  it("leaves an entry that is not an object alone", () => {
+    expect(withProbeFolderTrusted(JSON.stringify({ projects: { [DIR]: "odd" } }), DIR)).toEqual({ outcome: "unreadable" });
+    expect(withProbeFolderTrusted(JSON.stringify({ projects: { [DIR]: null } }), DIR)).toEqual({ outcome: "unreadable" });
+    expect(withProbeFolderTrusted(JSON.stringify({ projects: { [DIR]: [true] } }), DIR)).toEqual({ outcome: "unreadable" });
+  });
+
   it("matches the file's indentation and its trailing newline, either way", () => {
     const without = withProbeFolderTrusted("{}", DIR);
     const withNewline = withProbeFolderTrusted("{}\n", DIR);
@@ -82,11 +89,23 @@ describe("ensureProbeFolderTrusted (#3206)", () => {
     const file = path.join(home(), ".claude.json");
     writeFileSync(file, CONFIG, { mode: 0o600 });
 
-    expect(ensureProbeFolderTrusted(file, DIR)).toBe(true);
+    expect(ensureProbeFolderTrusted(file, DIR)).toBe("written");
 
     expect(projectsOf(readFileSync(file, "utf8"))[DIR]).toEqual({ hasTrustDialogAccepted: true });
-    expect(statSync(file).mode & 0o777).toBe(0o600);
+    if (process.platform !== "win32") expect(statSync(file).mode & 0o777).toBe(0o600);
     expect(readdirSync(path.dirname(file))).toEqual([".claude.json"]);
+  });
+
+  // The mode handed to the open is filtered by the umask; the file must still come out as it was.
+  // Windows keeps no such mode, so there is nothing to assert there.
+  it.skipIf(process.platform === "win32")("keeps a mode the umask would have narrowed", () => {
+    const file = path.join(home(), ".claude.json");
+    writeFileSync(file, CONFIG);
+    chmodSync(file, 0o666);
+
+    expect(ensureProbeFolderTrusted(file, DIR)).toBe("written");
+
+    expect(statSync(file).mode & 0o777).toBe(0o666);
   });
 
   it("reports an already trusted folder without touching the file", () => {
@@ -95,7 +114,7 @@ describe("ensureProbeFolderTrusted (#3206)", () => {
     writeFileSync(file, text);
     const before = statSync(file).mtimeMs;
 
-    expect(ensureProbeFolderTrusted(file, DIR)).toBe(true);
+    expect(ensureProbeFolderTrusted(file, DIR)).toBe("trusted");
 
     expect(readFileSync(file, "utf8")).toBe(text);
     expect(statSync(file).mtimeMs).toBe(before);
@@ -106,7 +125,7 @@ describe("ensureProbeFolderTrusted (#3206)", () => {
   it("creates nothing when the login has no config file yet", () => {
     const file = path.join(home(), ".claude.json");
 
-    expect(ensureProbeFolderTrusted(file, DIR)).toBe(false);
+    expect(ensureProbeFolderTrusted(file, DIR)).toBe("failed");
 
     expect(existsSync(file)).toBe(false);
   });
@@ -115,7 +134,7 @@ describe("ensureProbeFolderTrusted (#3206)", () => {
     const file = path.join(home(), ".claude.json");
     writeFileSync(file, '{"projects": {"/x": {"hasTrustDialogAccepted": tr');
 
-    expect(ensureProbeFolderTrusted(file, DIR)).toBe(false);
+    expect(ensureProbeFolderTrusted(file, DIR)).toBe("failed");
 
     expect(readFileSync(file, "utf8")).toBe('{"projects": {"/x": {"hasTrustDialogAccepted": tr');
   });

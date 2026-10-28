@@ -49,8 +49,11 @@ const claudeIsRunnable = (): boolean => {
 // probe meets the prompt on its own.
 const PROBE_CWD = probeCwd(MULMOTERMINAL_HOME);
 
-// Config files known to hold the folder's trust, so each login's is read once per server rather than
-// on every probe — the file runs to a megabyte on a long-lived install.
+// Config files a READ has found holding the folder's trust, so each login's is read once per server
+// rather than on every probe — the file runs to a megabyte on a long-lived install. A write is not
+// recorded: Claude Code's own save can land on top of it (probe-trust.ts), so the next probe reads
+// again and finds it, or writes again. A user who removes the entry after that read gets the
+// trust-prompt note until the server restarts, which is the by-hand path working as documented.
 const configFilesTrustingProbeFolder = new Set<string>();
 
 // Trust for the folder goes in the config of the login the probe runs on (#3206): an account's own
@@ -59,7 +62,7 @@ const configFilesTrustingProbeFolder = new Set<string>();
 const markProbeFolderTrusted = (cwd: string, loginEnv: Record<string, string>): void => {
   const configFile = claudeUserConfigFile(loginEnv.CLAUDE_CONFIG_DIR);
   if (configFilesTrustingProbeFolder.has(configFile)) return;
-  if (ensureProbeFolderTrusted(configFile, claudeProjectPath(cwd))) configFilesTrustingProbeFolder.add(configFile);
+  if (ensureProbeFolderTrusted(configFile, claudeProjectPath(cwd)) === "trusted") configFilesTrustingProbeFolder.add(configFile);
 };
 
 // The folder is made on the way in rather than at boot, so one removed while the server runs costs
