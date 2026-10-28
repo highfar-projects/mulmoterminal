@@ -43,6 +43,12 @@ export function escapeBatchArgument(arg: string): string {
  *  verbatim, instead of applying its "is the first token a quoted path?" heuristics to a line
  *  that already contains quoted arguments. */
 export function batchCommandLine(batchPath: string, args: readonly string[]): string {
-  const command = [escapeBatchArgument(batchPath), ...args.map(escapeBatchArgument)].join(" ");
-  return `/d /s /c "${command}"`;
+  return `/d /s /c "${batchCommand(batchPath, args)}"`;
+}
+
+/** The command itself — `batchPath args…`, every word quoted for cmd.exe — without the `/c` and the
+ *  outer quote pair. For a transport that cannot carry a raw command line (a multiplexer that quotes
+ *  each argv element for the CRT) and hands cmd.exe the text another way; see resolve-bin.ts. */
+export function batchCommand(batchPath: string, args: readonly string[]): string {
+  return [escapeBatchArgument(batchPath), ...args.map(escapeBatchArgument)].join(" ");
 }

@@ -1,6 +1,12 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { resolveWindowsExecutable, resolveWindowsBatch, resolvePtyLaunch } from "../../../../server/infra/process/resolve-bin";
+import {
+  resolveWindowsExecutable,
+  resolveWindowsBatch,
+  resolvePtyLaunch,
+  resolveTmuxPaneLaunch,
+  BATCH_COMMAND_LINE_ENV,
+} from "../../../../server/infra/process/resolve-bin";
 
 // A fake Windows filesystem: the exact set of files that exist, matched case-insensitively
 // the way Windows does.
@@ -188,5 +194,92 @@ describe("resolvePtyLaunch", () => {
   it("still names cmd.exe when neither ComSpec nor PATH can place it", () => {
     const launch = resolvePtyLaunch("claude", [], "win32", NPM_BIN, undefined, filesystem(`${NPM_BIN}\\claude.cmd`));
     expect(launch.file).toBe("cmd.exe");
+  });
+});
+
+// The pane behind `tmux new-session --`, which on Windows is psmux. It starts the program with
+// CreateProcessW itself, so a batch shim has to go through cmd.exe here as well (#3201) — but it
+// quotes every argv word for the CRT on the way, so the command line cannot travel as one raw string
+// the way resolvePtyLaunch hands it to node-pty. It rides in an environment variable instead, and
+// the words psmux sees hold nothing its quoting would touch.
+describe("resolveTmuxPaneLaunch", () => {
+  const ARGS = ["--resume", "abc"];
+  const BATCH_ARGS = ["/d", "/e:ON", "/v:OFF", "/c", `%${BATCH_COMMAND_LINE_ENV}%`];
+
+  it.each(["darwin", "linux"] as const)("touches nothing on %s — same name, same argv array, no env, no filesystem probe", (platform) => {
+    let probes = 0;
+    const countingProbe = () => {
+      probes++;
+      return true;
+    };
+    const launch = resolveTmuxPaneLaunch("codex", ARGS, platform, "/usr/local/bin", "/bin/sh", countingProbe);
+    expect(launch.file).toBe("codex");
+    expect(launch.args).toBe(ARGS);
+    expect(launch.env).toEqual({});
+    expect(probes).toBe(0);
+  });
+
+  it("names the .exe, keeps the argv and sets nothing in the environment", () => {
+    const exists = filesystem(`${LOCAL_BIN}\\claude.exe`);
+    expect(resolveTmuxPaneLaunch("claude", ARGS, "win32", LOCAL_BIN, COMSPEC, exists)).toEqual({ file: `${LOCAL_BIN}\\claude.exe`, args: ARGS, env: {} });
+  });
+
+  // The reporter's install in #3201: `codex`, `codex.cmd` and `codex.ps1` from npm, no `codex.exe`.
+  it("runs a .cmd through cmd.exe, with the quoted command in the environment and only plain words in the argv", () => {
+    const exists = filesystem(`${NPM_BIN}\\codex`, `${NPM_BIN}\\codex.cmd`, `${NPM_BIN}\\codex.ps1`, COMSPEC);
+    expect(resolveTmuxPaneLaunch("codex", ARGS, "win32", NPM_BIN, COMSPEC, exists)).toEqual({
+      file: COMSPEC,
+      args: BATCH_ARGS,
+      env: { [BATCH_COMMAND_LINE_ENV]: `"${NPM_BIN}\\codex.cmd" "--resume" "abc"` },
+    });
+  });
+
+  // What makes the environment route work at all: psmux (and node-pty) quote an argv word only when
+  // it holds whitespace or a quote, so these reach cmd.exe spelled exactly as written.
+  it("passes cmd.exe no word that the multiplexer's own quoting would rewrite", () => {
+    const launch = resolveTmuxPaneLaunch("codex", ['say "hi"', "two words"], "win32", NPM_BIN, COMSPEC, filesystem(`${NPM_BIN}\\codex.cmd`));
+    for (const word of launch.args) expect(word).toMatch(/^[^\s"]+$/);
+  });
+
+  // psmux takes the first file on PATH spelled exactly like the name — for an npm install the
+  // extensionless shim — and CreateProcessW cannot run that either. Naming the .exe by its path is
+  // what keeps a working install working, as it does on the direct spawn (#794).
+  it("prefers an .exe anywhere on PATH over a shim in an earlier directory", () => {
+    const exists = filesystem(`${NPM_BIN}\\codex`, `${NPM_BIN}\\codex.cmd`, `${LOCAL_BIN}\\codex.exe`);
+    expect(resolveTmuxPaneLaunch("codex", [], "win32", `${NPM_BIN};${LOCAL_BIN}`, COMSPEC, exists)).toEqual({
+      file: `${LOCAL_BIN}\\codex.exe`,
+      args: [],
+      env: {},
+    });
+  });
+
+  it("wraps an explicit .cmd path and leaves an explicit .exe path alone", () => {
+    const explicitBatch = `${NPM_BIN}\\codex.cmd`;
+    expect(resolveTmuxPaneLaunch(explicitBatch, [], "win32", NPM_BIN, COMSPEC, filesystem(COMSPEC))).toEqual({
+      file: COMSPEC,
+      args: BATCH_ARGS,
+      env: { [BATCH_COMMAND_LINE_ENV]: `"${explicitBatch}"` },
+    });
+    const explicitExe = `${LOCAL_BIN}\\codex.exe`;
+    expect(resolveTmuxPaneLaunch(explicitExe, ARGS, "win32", LOCAL_BIN, COMSPEC, filesystem(explicitExe))).toEqual({ file: explicitExe, args: ARGS, env: {} });
+  });
+
+  it("keeps the bare name when nothing resolves, so a host that works today still works", () => {
+    expect(resolveTmuxPaneLaunch("codex", ARGS, "win32", "C:\\nowhere", COMSPEC, filesystem())).toEqual({ file: "codex", args: ARGS, env: {} });
+  });
+
+  // The two launch shapes are the same decision carried two ways. If they ever name different
+  // files for one PATH, the binary check (which follows resolvePtyLaunch's rule) says yes to a
+  // program the pane then cannot start.
+  it.each([
+    ["an .exe only", filesystem(`${LOCAL_BIN}\\codex.exe`)],
+    ["a .cmd only", filesystem(`${NPM_BIN}\\codex.cmd`, COMSPEC)],
+    ["a shim and a .cmd before an .exe", filesystem(`${NPM_BIN}\\codex`, `${NPM_BIN}\\codex.cmd`, `${LOCAL_BIN}\\codex.exe`)],
+    ["nothing", filesystem()],
+  ])("names the same file as resolvePtyLaunch when PATH holds %s", (_layout, exists) => {
+    const searchPath = `${NPM_BIN};${LOCAL_BIN}`;
+    const pane = resolveTmuxPaneLaunch("codex", ARGS, "win32", searchPath, COMSPEC, exists);
+    const direct = resolvePtyLaunch("codex", ARGS, "win32", searchPath, COMSPEC, exists);
+    expect(pane.file).toBe(direct.file);
   });
 });

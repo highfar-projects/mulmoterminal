@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import pty from "node-pty";
 import { spawnPty } from "../../../../server/session/pty/pty-spawn";
-import { resolvePtyLaunchForEnv } from "../../../../server/infra/process/resolve-bin";
+import { resolvePtyLaunchForEnv, resolveTmuxPaneLaunchForEnv, BATCH_COMMAND_LINE_ENV } from "../../../../server/infra/process/resolve-bin";
 import { hookSettingsJson } from "../../../../server/session/spawn/setup/hook-settings";
 import { buildCodexArgs } from "../../../../server/agents/codex/codex-args";
 
@@ -283,5 +283,69 @@ describe.skipIf(!isWindows)("spawnPty on Windows", () => {
     const failing = `mt-fail-${process.pid}`;
     writeFileSync(path.join(dir, `${failing}.cmd`), ["@ECHO off", "exit /b 3", ""].join("\r\n"));
     expect(await exitCodeOf(spawnPty(failing, [], dir))).toBe(3);
+  });
+
+  // The shape a tmux PANE gets on Windows (#3201): psmux hands cmd.exe an argv it quoted for the
+  // CRT, so the batch command rides in an environment variable and the argv holds only plain words.
+  // No psmux on this runner — what is measured is the half that is cmd.exe's: that `%VAR%` in its
+  // `/c` text is expanded once, that the expansion is then parsed as the command, and that our
+  // quoting inside the value reaches the shim's child intact. node-pty's argsToCommandLine quotes
+  // a word under the same rule psmux's append_quoted does (whitespace or a quote inside), so the
+  // command line cmd.exe reads here is the one psmux would write.
+  describe("as a tmux pane's program", () => {
+    async function argvThroughPaneLaunch(args: string[]): Promise<string[]> {
+      const launch = resolveTmuxPaneLaunchForEnv(SHIM, args, process.env);
+      rmSync(argsOut, { force: true });
+      const term = pty.spawn(launch.file, launch.args, { name: "xterm-256color", cols: 80, rows: 24, cwd: dir, env: { ...process.env, ...launch.env } });
+      expect(await exitCodeOf(term)).toBe(0);
+      return JSON.parse(readFileSync(argsOut, "utf8"));
+    }
+
+    it("resolves the .cmd to cmd.exe reading the command from the environment", () => {
+      const launch = resolveTmuxPaneLaunchForEnv(SHIM, ["--resume"], process.env);
+      expect(launch.file.toLowerCase()).toContain("cmd.exe");
+      expect(launch.args).toEqual(["/d", "/e:ON", "/v:OFF", "/c", `%${BATCH_COMMAND_LINE_ENV}%`]);
+      expect(launch.env).toEqual({ [BATCH_COMMAND_LINE_ENV]: `"${shimCmd}" "--resume"` });
+    });
+
+    it.each([
+      ["plain arguments", ["--resume", "abc123"]],
+      ["whitespace inside one argument", ["fix the login bug"]],
+      ["cmd metacharacters that would otherwise split the command", ["a&b", "c|d", "e>f", "g^h", "(i)"]],
+      ["embedded quotes", ['say "hi"']],
+      ["a JSON payload, the shape of --settings / --mcp-config", ['{"hooks":{"Stop":[{"command":"curl -s http://127.0.0.1:34567/api/hook"}]}}']],
+      ["a path ending in a backslash", ["C:\\Users\\u\\projects\\"]],
+      ["non-ASCII", ["ログインの不具合", "修正して"]],
+      ["a percent sign with no variable behind it", ["50% done"]],
+      ["an empty argument", ["--before", "", "--after"]],
+    ])("round-trips %s through the .cmd shim", async (_case, args) => {
+      expect(await argvThroughPaneLaunch(args)).toEqual(args);
+    });
+
+    // The reporter's agent: codex's `-c key="value"` overrides are TOML, so the quotes are syntax.
+    it("round-trips codex's quoted TOML overrides", async () => {
+      const args = buildCodexArgs({
+        resume: null,
+        model: "gpt-5",
+        permissionHook: false,
+        guiMcpServers: [{ id: "mulmoterminal-gui", url: "http://127.0.0.1:34567/api/mcp/abc-123", autoApprove: true }],
+      });
+      expect(await argvThroughPaneLaunch(args)).toEqual(args);
+    });
+
+    // cmd expands `%NAME%` in its command text in one pass and does not rescan what came out, so a
+    // `%VAR%` INSIDE the command reaches the program as text — the direct route's known limitation
+    // (pinned above as "expands %VAR% inside an argument") does not carry over to this one.
+    it("does not expand a %VAR% inside an argument a second time", async () => {
+      expect(await argvThroughPaneLaunch(["%MT_MARKER%"])).toEqual(["%MT_MARKER%"]);
+    });
+
+    it("propagates a failing shim's exit code", async () => {
+      const failing = `mt-pane-fail-${process.pid}`;
+      writeFileSync(path.join(dir, `${failing}.cmd`), ["@ECHO off", "exit /b 3", ""].join("\r\n"));
+      const launch = resolveTmuxPaneLaunchForEnv(failing, [], process.env);
+      const term = pty.spawn(launch.file, launch.args, { name: "xterm-256color", cols: 80, rows: 24, cwd: dir, env: { ...process.env, ...launch.env } });
+      expect(await exitCodeOf(term)).toBe(3);
+    });
   });
 });
