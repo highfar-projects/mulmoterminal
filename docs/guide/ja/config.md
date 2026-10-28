@@ -2139,7 +2139,7 @@ posted by MulmoTerminal
 | `prWorkdirFooter` | 作成した PR の本文末尾に `work in <クローン名>` を書く（→ [この PR はどのクローンの作業か](#pr-workdir-footer)）。**既定 ON**、`false` で無効 |
 | `appendSystemPrompt` | 返信の最後に「何を頼まれたか / できたこと / できていないこと」のまとめを書かせる（→ [返信の最後のまとめを切る](#append-system-prompt)）。**既定 ON**、`false` で無効。`.mulmoterminal.json` の指定が優先 |
 | `toolbarPins` | ツールバーにもボタンを出すピン留め（例 `["collection:works"]`）。既定は空。**描くボタンは 5 件**で、配列自体はそれ以上（最大 50）持てます — いまピン留めが外れているキーは描かれないだけで残るので、手で片付けないでください（→ [毎日開くお気に入りをツールバーに出す](#toolbar-pins)） |
-| `usageGauge` | グリッドの上の段に出す Claude と Codex の 5 時間・7 日の使用量ゲージ。Claude は隠れた `claude` が API を 1 回呼んで測り、その分も同じ枠を使います。**`false` にしない限りオン**。オフにするとゲージは消え、何も測りません（→ 設定 → グリッドのヘッダー表示） |
+| `usageGauge` | グリッドの上の段に出す Claude と Codex の 5 時間・7 日の使用量ゲージ。Claude は隠れた `claude` が API を 1 回呼んで測り、その分も同じ枠を使います。この `claude` は MulmoTerminal 専用のフォルダ `~/.mulmoterminal/probe` で動き、Claude Code はそのフォルダの信頼を一度だけ求めます。承認するまで、ゲージにカーソルを重ねるとその旨が出ます。**`false` にしない限りオン**。オフにするとゲージは消え、何も測りません（→ 設定 → グリッドのヘッダー表示） |
 | `usageProbeIntervalMinutes` | Claude の値を何分古くなったら測り直すか。**既定は `10`**、2〜60 の整数の分（→ 設定 → グリッドのヘッダー表示） |
 | `showLoadAverage` | グリッドの上の段に出すマシンの load average。**`false` にしない限りオン**（→ 設定 → グリッドのヘッダー表示） |
 | `paletteSearchBox` | どの画面でも上の段の中央に出す、コマンドパレットを開く検索欄。**`true` にしない限りオフ**（→ 設定 → グリッドのヘッダー表示） |

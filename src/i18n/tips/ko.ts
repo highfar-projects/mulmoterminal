@@ -345,10 +345,10 @@ export const tipsKo: Messages["tips"] = {
     noWindows: "Claude 사용량을 표시할 수 없습니다 — 이 계정은 5h / 7d 구간을 보고하지 않습니다(API 키 과금).",
     noReport: "Claude 사용량을 표시할 수 없습니다 — 지난 확인에 응답이 없었습니다. 간격을 늘려 가며 다시 시도합니다.",
     trustPrompt:
-      "Claude 사용량을 표시할 수 없습니다 — 사용량 확인이 Claude Code의 신뢰 확인에서 멈춰 있습니다. 해당 폴더에서 `claude`를 한 번 실행해 승인하세요.",
+      "Claude 사용량을 표시할 수 없습니다 — 사용량 확인이 Claude Code의 신뢰 확인에서 멈춰 있습니다. {folder}에서 `claude`를 한 번 실행해 승인하세요.",
     usageLimit: "Claude 사용량을 표시할 수 없습니다 — 이 구독이 사용 한도에 도달해 확인이 응답을 받지 못했습니다.",
     accountTrustPrompt:
-      "Claude 사용량을 표시할 수 없습니다 — 사용량 확인이 Claude Code의 신뢰 확인에서 멈춰 있습니다. 작업 공간 폴더에서 이 계정으로 셀을 한 번 시작해 승인하세요.",
+      "Claude 사용량을 표시할 수 없습니다 — 사용량 확인이 Claude Code의 신뢰 확인에서 멈춰 있습니다. {folder}에서 이 계정으로 셀을 한 번 시작해 승인하세요.",
     accountNote: "{account}: {note}",
     resetsInDays: "{days}일 {hours}시간 {minutes}분 후 초기화",
     resetsInHours: "{hours}시간 {minutes}분 후 초기화",

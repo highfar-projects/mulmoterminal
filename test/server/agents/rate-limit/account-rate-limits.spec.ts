@@ -157,6 +157,7 @@ describe("createAccountRateLimits (#2215)", () => {
 
 describe("the route and an account's probe", () => {
   const ON = { enabled: true, probeIntervalMinutes: 10 };
+  const PROBE_CWD = "/home/me/.mulmoterminal/probe";
   const app = (accounts: ReturnType<typeof meters> | undefined, usageGauge = ON, now_ms = NOW) => {
     const calls = { codex: 0, probe: 0 };
     const store = createRateLimitStore();
@@ -171,6 +172,7 @@ describe("the route and an account's probe", () => {
         calls.probe++;
       },
       claudeAvailable: () => true,
+      probeCwd: PROBE_CWD,
       now_ms: () => now_ms,
       usageGauge: () => usageGauge,
       ...(accounts ? { accounts } : {}),
@@ -214,6 +216,13 @@ describe("the route and an account's probe", () => {
     };
     expect(Object.keys(await body([]))).not.toContain("accounts");
     expect((await body([CW])).accounts).toMatchObject([{ id: "cw", label: "Codex work", agent: "codex" }]);
+  });
+
+  // The gauge's trust-prompt note names this folder (#3200); it is the server's to say, and the same
+  // one for every login, so it rides on the body rather than on each account's row.
+  it("names the folder the probes run in", async () => {
+    const parsed: unknown = await (await post(app(meters([])).server, "/api/rate-limits/refresh")).json();
+    expect(isRecord(parsed) ? parsed.claudeProbeCwd : undefined).toBe(PROBE_CWD);
   });
 
   // Switched off (#3153): a tab that still polls must not be what keeps spending the budget.

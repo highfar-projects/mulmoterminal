@@ -24,6 +24,9 @@ export interface RateLimitRouteDeps {
   /** Whether `claude` could be launched right now — a PATH lookup, not a spawn. Asked on every
    *  poll so the "not installed" state can clear itself when one appears (#1019). */
   claudeAvailable: () => boolean;
+  /** The folder every Claude probe runs in (#3200). Sent so the gauge can name it: a trust prompt
+   *  accepted anywhere else does nothing, and the folder is the server's to say. */
+  probeCwd: string;
   now_ms: () => number;
   /** The config's `usageGauge` and `usageProbeIntervalMinutes` (#3153), asked on every refresh so a
    *  change applies without a restart. */
@@ -115,10 +118,10 @@ const snapshotBody = (snapshot: RateLimitSnapshot, probing: boolean, state: Prob
   claudeProbeStall: state.kind === "no-report" ? state.stall : undefined,
 });
 
-// The default login's fields, then `accounts` only when there is one — so a user without accounts
-// gets the body byte for byte as before.
+// The default login's fields and the probe's folder, then `accounts` only when there is one — so a
+// user without accounts gets no key that is theirs to be absent.
 const responseBody = (deps: RateLimitRouteDeps, now_ms: number) => {
   const accounts = deps.accounts?.readings(now_ms) ?? [];
-  const body = snapshotBody(deps.store.snapshot(), deps.store.isProbing(), deps.store.probeState(), now_ms);
+  const body = { ...snapshotBody(deps.store.snapshot(), deps.store.isProbing(), deps.store.probeState(), now_ms), claudeProbeCwd: deps.probeCwd };
   return accounts.length ? { ...body, accounts } : body;
 };
