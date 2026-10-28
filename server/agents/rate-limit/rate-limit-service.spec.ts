@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -27,6 +27,8 @@ vi.mock("./rate-limit-probe.js", async (importOriginal) => {
 
 const { createRateLimitService, startHomeProbe } = await import("./rate-limit-service.js");
 const { MULMOTERMINAL_HOME: STATE_DIR } = await import("../../config/env.js");
+const { startRateLimitProbe } = await import("./rate-limit-probe.js");
+const realProbe = await vi.importActual<typeof import("./rate-limit-probe.js")>("./rate-limit-probe.js");
 
 const PIN = { CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN: "1" };
 const PROBE_CWD = path.join(STATE_DIR, "probe");
@@ -69,5 +71,22 @@ describe("the usage probes run in MulmoTerminal's own folder (#3200)", () => {
   // The gauge names the folder in its trust-prompt note, so the route has to be told which it is.
   it("tells the routes the folder, so the gauge can name it", () => {
     expect(createRateLimitService().probeCwd).toBe(PROBE_CWD);
+  });
+
+  // The folder is made inside the spawn, after the caller has marked a probe in flight. A folder that
+  // cannot be made must therefore arrive as the ordinary "nothing came back" — through the real
+  // startRateLimitProbe — or the flag stays set and the gauge stops refreshing for the life of the
+  // process.
+  it("settles the probe as silence when the folder cannot be made, leaving nothing in flight", () => {
+    writeFileSync(PROBE_CWD, "a file where the folder should be");
+    vi.mocked(startRateLimitProbe).mockImplementationOnce(realProbe.startRateLimitProbe);
+    const service = createRateLimitService();
+    service.store.setProbeInFlight(true);
+
+    service.startProbe();
+
+    expect(spawnPty).not.toHaveBeenCalled();
+    expect(service.store.isProbing()).toBe(false);
+    expect(service.store.probeState()).toMatchObject({ kind: "no-report", stall: "unknown" });
   });
 });
