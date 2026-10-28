@@ -745,7 +745,10 @@ What MulmoTerminal does differently behind psmux, and only there:
   only held memory and were restarted on every resize;
 - starts an agent installed from npm (`codex.cmd`, `claude.cmd` — a batch shim, no `.exe`) through
   `cmd.exe`, as a cell without psmux does. psmux 3.4.0 hands the pane's program to Windows as it is,
-  which cannot run a batch file, so the cell ended at once with `psmux: can't find session`.
+  which cannot run a batch file, so the cell ended at once with `psmux: can't find session`;
+- leaves the `terminal-features` declaration out of psmux's conf. psmux has no such option and
+  printed the rejection (`unknown option 'terminal-features'`) into every new cell; it forwards OSC 8
+  hyperlinks to its client without being told to.
 
 psmux imitates tmux 3.4, so the few things that need tmux 3.7+ (such as restoring bracketed paste
 after a reload) are not available on it. A Windows restart still ends every session, as a reboot

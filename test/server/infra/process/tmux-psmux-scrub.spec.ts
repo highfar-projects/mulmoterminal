@@ -104,3 +104,33 @@ describe("psmux's warm pool", () => {
     expect(liveWarm()).toEqual([]);
   });
 });
+
+// psmux has no `terminal-features`: 3.4.0 rejects the option and prints the rejection into the first
+// pane of every new server (#3204), and it forwards OSC 8 to its client without being told to. So
+// the declaration is neither written for it nor sent to a server of its that is already running.
+describe("the terminal-features declaration", () => {
+  const conf = (): string => readFileSync(join(scratch.home, ".mulmoterminal", "tmux.conf"), "utf8");
+  const liveFeatureCommands = (): string[][] => calls.filter((args) => args.includes("terminal-features")).map((args) => args.slice(2));
+
+  it("is left out of psmux's conf and never sent to a running psmux", async () => {
+    await startWith("tmux 3.4\npsmux 3.4.0 (abc)\n");
+    expect(conf()).not.toContain("terminal-features");
+    expect(liveFeatureCommands()).toEqual([]);
+  });
+
+  it("stays in a real tmux's conf, and is set on a running real tmux that lacks it", async () => {
+    await startWith("tmux 3.8\n");
+    expect(conf()).toContain("set -as terminal-features '*:hyperlinks'");
+    expect(liveFeatureCommands()).toEqual([
+      ["show", "-g", "terminal-features"],
+      ["set", "-as", "terminal-features", "*:hyperlinks"],
+    ]);
+  });
+
+  // The rest of the conf is the same for both: the Ms override that carries OSC 52 included.
+  it("takes nothing else from psmux", async () => {
+    await startWith("tmux 3.4\npsmux 3.4.0 (abc)\n");
+    expect(conf()).toContain("set -g set-clipboard on");
+    expect(conf()).toContain("Ms=");
+  });
+});
