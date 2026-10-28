@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { batchCommandLine, escapeBatchArgument, UnsafeArgumentError } from "../../../../server/infra/process/cmd-escape";
+import { batchCommand, batchCommandLine, escapeBatchArgument, UnsafeArgumentError } from "../../../../server/infra/process/cmd-escape";
 
 const CLAUDE_CMD = "C:\\Users\\u\\AppData\\Roaming\\npm\\claude.cmd";
 
@@ -84,5 +84,22 @@ describe("batchCommandLine", () => {
 
   it("propagates the rejection instead of emitting a truncated command line", () => {
     expect(() => batchCommandLine(CLAUDE_CMD, ["ok", "bad\nline"])).toThrow(UnsafeArgumentError);
+  });
+});
+
+// The text a tmux pane's cmd.exe reads out of an environment variable (resolve-bin.ts): the same
+// words, the same quoting, without the `/d /s /c` and the outer pair that the raw-string route adds.
+describe("batchCommand", () => {
+  it("is the shim and its arguments, each quoted, joined by one space", () => {
+    expect(batchCommand(CLAUDE_CMD, ["--resume", 'say "hi"'])).toBe(`"${CLAUDE_CMD}" "--resume" "say ""hi"""`);
+  });
+
+  it("is exactly what batchCommandLine wraps, so the two routes cannot drift apart", () => {
+    const args = ["--resume", "abc", "a&b", "C:\\dir\\"];
+    expect(batchCommandLine(CLAUDE_CMD, args)).toBe(`/d /s /c "${batchCommand(CLAUDE_CMD, args)}"`);
+  });
+
+  it("rejects what escapeBatchArgument rejects", () => {
+    expect(() => batchCommand(CLAUDE_CMD, ["bad\rline"])).toThrow(UnsafeArgumentError);
   });
 });

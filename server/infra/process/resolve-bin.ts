@@ -13,7 +13,7 @@
 import { statSync } from "node:fs";
 import path from "node:path";
 import { envValue, pathFromEnv } from "./pty-env.js";
-import { batchCommandLine } from "./cmd-escape.js";
+import { batchCommand, batchCommandLine } from "./cmd-escape.js";
 
 // `.exe` first: with both present, a bare name would have reached the `.exe` (CreateProcess
 // appends exactly that), so resolving must not silently switch which file runs.
@@ -30,6 +30,21 @@ export const namesAPath = (bin: string): boolean => bin.includes("\\") || bin.in
 // through verbatim (its argsToCommandLine only quotes an argv ARRAY) — which is what lets
 // the cmd.exe wrapping below own its own quoting.
 export type PtyLaunch = { file: string; args: string[] | string };
+
+// What a tmux PANE runs — the words after `new-session --` and the variables the session is given
+// with `-e`. No raw string here: psmux hands every word to CreateProcessW through its own CRT
+// quoting, so a command line built for cmd.exe would arrive re-escaped and cmd would read it wrong.
+export type TmuxPaneLaunch = { file: string; args: string[]; env: Readonly<Record<string, string>> };
+
+// Where the pane's cmd.exe reads the batch command from. cmd expands a `%NAME%` in its `/c` text
+// once and then parses what came out, so the quoting inside the value meets no other parser — the
+// same route psmux itself takes for a batch program (its PSMUX_BATCH_LINE), on releases that have it.
+export const BATCH_COMMAND_LINE_ENV = "MULMOTERMINAL_BATCH_COMMAND_LINE";
+
+// No word holds a space or a quote, so psmux's argv quoting leaves each one exactly as written —
+// which is the whole trick. `/e:ON /v:OFF` fix command extensions on and delayed expansion off,
+// whatever the registry says, so a `!` in an argument stays a `!`.
+const BATCH_COMMAND_LINE_ARGS: readonly string[] = ["/d", "/e:ON", "/v:OFF", "/c", `%${BATCH_COMMAND_LINE_ENV}%`];
 
 export function isExecutableFile(candidate: string): boolean {
   try {
@@ -77,6 +92,23 @@ export function resolveWindowsBatch(bin: string, searchPath: string | undefined,
   return searchPathFor(bin, BATCH_EXTENSIONS, searchPath, fileExists);
 }
 
+// What a Windows command name turns out to be: a file CreateProcess can run as it is, or a batch
+// file that has to go through cmd.exe. The one decision both launch shapes below share.
+type WindowsProgram = { kind: "direct"; file: string } | { kind: "batch"; path: string };
+
+// A name that already names a path needs no PATH search — but CreateProcess still cannot
+// RUN a batch file, and `CLAUDE_BIN=C:\…\claude.cmd` is exactly what someone reaches for
+// when working around a broken spawn. Wrapped without an existence check: a relative path
+// is relative to the PTY's cwd, not this process's, so checking here would ask the wrong
+// directory — and cmd.exe naming the path it cannot find beats node-pty's empty message.
+function windowsProgram(bin: string, searchPath: string | undefined, fileExists: (candidate: string) => boolean): WindowsProgram {
+  if (namesAPath(bin)) return endsWithOneOf(bin, BATCH_EXTENSIONS) ? { kind: "batch", path: bin } : { kind: "direct", file: bin };
+  const executable = resolveWindowsExecutable(bin, searchPath, fileExists);
+  if (executable) return { kind: "direct", file: executable };
+  const batch = resolveWindowsBatch(bin, searchPath, fileExists);
+  return batch ? { kind: "batch", path: batch } : { kind: "direct", file: bin };
+}
+
 /** How to launch `bin args…`. Off Windows, and whenever nothing resolves, this is the
  *  arguments unchanged — a host that spawns fine today must keep spawning fine. */
 export function resolvePtyLaunch(
@@ -88,20 +120,33 @@ export function resolvePtyLaunch(
   fileExists = isExecutableFile,
 ): PtyLaunch {
   if (platform !== "win32") return { file: bin, args };
-  // A name that already names a path needs no PATH search — but CreateProcess still cannot
-  // RUN a batch file, and `CLAUDE_BIN=C:\…\claude.cmd` is exactly what someone reaches for
-  // when working around a broken spawn. Wrapped without an existence check: a relative path
-  // is relative to the PTY's cwd, not this process's, so checking here would ask the wrong
-  // directory — and cmd.exe naming the path it cannot find beats node-pty's empty message.
-  if (namesAPath(bin)) {
-    if (!endsWithOneOf(bin, BATCH_EXTENSIONS)) return { file: bin, args };
-    return { file: commandProcessor(comspec, searchPath, fileExists), args: batchCommandLine(bin, args) };
-  }
-  const executable = resolveWindowsExecutable(bin, searchPath, fileExists);
-  if (executable) return { file: executable, args };
-  const batch = resolveWindowsBatch(bin, searchPath, fileExists);
-  if (batch) return { file: commandProcessor(comspec, searchPath, fileExists), args: batchCommandLine(batch, args) };
-  return { file: bin, args };
+  const program = windowsProgram(bin, searchPath, fileExists);
+  if (program.kind === "direct") return { file: program.file, args };
+  return { file: commandProcessor(comspec, searchPath, fileExists), args: batchCommandLine(program.path, args) };
+}
+
+/** How a tmux pane runs `bin args…` — the same decision as `resolvePtyLaunch`, carried the way a
+ *  multiplexer can take it. On Windows that multiplexer is psmux, and it starts the pane's program
+ *  with CreateProcessW itself: an npm-installed agent whose only install is `codex.cmd` therefore
+ *  ended the pane at once, and the session with it (#3201). A real `.exe` is named by its path for
+ *  the same reason as the direct spawn — psmux takes the first file on PATH spelled exactly like the
+ *  name, which for an npm install is the extensionless shim beside the `.cmd`, and not a program. */
+export function resolveTmuxPaneLaunch(
+  bin: string,
+  args: string[],
+  platform: NodeJS.Platform,
+  searchPath: string | undefined,
+  comspec: string | undefined,
+  fileExists = isExecutableFile,
+): TmuxPaneLaunch {
+  if (platform !== "win32") return { file: bin, args, env: {} };
+  const program = windowsProgram(bin, searchPath, fileExists);
+  if (program.kind === "direct") return { file: program.file, args, env: {} };
+  return {
+    file: commandProcessor(comspec, searchPath, fileExists),
+    args: [...BATCH_COMMAND_LINE_ARGS],
+    env: { [BATCH_COMMAND_LINE_ENV]: batchCommand(program.path, args) },
+  };
 }
 
 // ComSpec is where Windows itself records the command processor; falling back to a PATH
@@ -115,4 +160,10 @@ function commandProcessor(comspec: string | undefined, searchPath: string | unde
  *  that matters is the one reachable from the child's PATH, not the server's. */
 export function resolvePtyLaunchForEnv(bin: string, args: string[], env: NodeJS.ProcessEnv): PtyLaunch {
   return resolvePtyLaunch(bin, args, process.platform, pathFromEnv(env), envValue(env, "ComSpec"));
+}
+
+/** `resolveTmuxPaneLaunch` against the environment the pane will run with — the same one the
+ *  binary check resolves against, so the two cannot disagree about which file that is. */
+export function resolveTmuxPaneLaunchForEnv(bin: string, args: string[], env: NodeJS.ProcessEnv): TmuxPaneLaunch {
+  return resolveTmuxPaneLaunch(bin, args, process.platform, pathFromEnv(env), envValue(env, "ComSpec"));
 }
