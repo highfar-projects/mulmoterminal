@@ -4,7 +4,7 @@
 // watcher waits for a rollout file to APPEAR — and the surviving session's file already existed,
 // so nothing ever tailed it and the cell's working/waiting flags stayed dead until a cold
 // restart. Claude survives the same restart via its HTTP hooks; codex has only this tail.
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createCodexSpawner } from "../../../../../server/session/spawn/agents/spawn-codex.js";
 import { ptys } from "../../../../../server/session/registry.js";
 import type { SpawnDeps } from "../../../../../server/session/spawn/spawn-deps.js";
@@ -18,6 +18,9 @@ const mocks = vi.hoisted(() => ({
   reattached: false,
   argv: [] as string[][],
   envs: [] as Record<string, string>[],
+  // The pty's output listeners and what was typed into it, for the seed-prompt case.
+  onData: [] as ((data: string) => void)[],
+  writes: [] as string[],
   tracked: [] as { sessionId: string; file: string; mode: unknown }[],
   remembered: [] as { sessionId: string; conversationId: string; cwd: string }[],
   watcherRuns: 0,
@@ -29,7 +32,14 @@ vi.mock("../../../../../server/session/pty/pty-spawn.js", () => ({
   ptySpawn: vi.fn((_id: string, _bin: string, args: string[], _cwd: string, _persistent: boolean, options?: { env?: Record<string, string> }) => {
     mocks.argv.push(args);
     mocks.envs.push(options?.env ?? {});
-    return { term: { pid: 1234, onData: vi.fn(), onExit: vi.fn() }, tmux: true, reattached: mocks.reattached };
+    const onData = (handler: (data: string) => void) => {
+      mocks.onData.push(handler);
+      return { dispose: () => {} };
+    };
+    const write = (data: string) => {
+      mocks.writes.push(data);
+    };
+    return { term: { pid: 1234, onData, onExit: vi.fn(), write }, tmux: true, reattached: mocks.reattached };
   }),
   ptyWouldReattach: vi.fn(() => mocks.reattached),
 }));
@@ -85,6 +95,8 @@ describe("createCodexSpawner", () => {
     mocks.reattached = false;
     mocks.argv.length = 0;
     mocks.envs.length = 0;
+    mocks.onData.length = 0;
+    mocks.writes.length = 0;
     mocks.tracked.length = 0;
     mocks.remembered.length = 0;
     mocks.watcherRuns = 0;
@@ -149,5 +161,26 @@ describe("createCodexSpawner", () => {
   it("registers no permission hook when the spawn types a seed prompt", () => {
     spawn()(SID, null, null, "/w", false, { initialPrompt: "run the collection action" });
     expect(mocks.argv.at(-1)).not.toContain(codexPermissionHookOverride());
+  });
+
+  // The seed is typed once codex's startup output goes QUIET, and the relay's onOutput tap is the
+  // only thing that tells the auto-run about output. Advance only as far as the quiet window: the
+  // auto-run also has a cap that types regardless, so running every timer would pass with the tap
+  // unwired.
+  describe("a seed prompt", () => {
+    const QUIET_MS = 1000;
+    const SUBMIT_MS = 150;
+    const PASTED_SEED = "\x1b[200~run the collection action\x1b[201~";
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    it("is submitted once codex's output goes quiet", () => {
+      spawn()(SID, null, null, "/w", false, { initialPrompt: "run the collection action" });
+      mocks.onData.forEach((handler) => handler("codex banner"));
+      vi.advanceTimersByTime(QUIET_MS);
+      expect(mocks.writes).toEqual([PASTED_SEED]);
+      vi.advanceTimersByTime(SUBMIT_MS);
+      expect(mocks.writes).toEqual([PASTED_SEED, "\r"]);
+    });
   });
 });

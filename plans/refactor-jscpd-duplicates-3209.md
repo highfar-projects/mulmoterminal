@@ -48,3 +48,7 @@ bot job の `publishSessionCreated` を消す、lifetime を 1ms ずらす、bot
 - `test/server/session/spawn/spawn-shell.spec.ts` — 2 つのシェル起動が共有化で変えてはいけないもの:
   エントリは `shell`、開始行と終了行は `launcher` / `bot-job`、再接続した launcher はコマンド名を書かない、
   bot job は socket なしで登録後に告知され、出力はバッファだけに残る。
+- `test/server/session/spawn/agents/spawn-codex.spec.ts` に 1 件追加 — 種プロンプトは codex の起動出力が静かになると
+  貼り付けて送信される。この PR が触った唯一のエージェント側の呼び出し（`{ onOutput: autoRun }`）を実際に通す。
+  tap を外すと赤。進めるタイマーは静止窓の分だけにする: auto-run には時間切れで打つ上限もあり、全タイマーを
+  走らせると tap が外れていても緑になる（CodeRabbit の提案した形がそれだった）。
