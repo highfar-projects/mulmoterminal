@@ -59,6 +59,7 @@ MulmoTerminal — a browser terminal for parallel coding agents — organized by
 | See why a setting isn't working | Settings' **Directory settings** shows what each directory's `.mulmoterminal.json` actually puts in force, which file it came from, and **the keys dropped or never read** ([config](config.html#dir-settings-preview)) |
 | Update notice | When a new version ships, the header shows an **update badge**; click it for the update command that fits your install (npm / git clone) |
 | Question pane (opt-in) | When a Claude session stops to ask you something, its choices appear as **buttons in a pane** beside the enlarged terminal → [answering a question from the pane](#question-pane) |
+| Stacked right panes | The right pane shows one pane at a time, but the panes you open **stack**: closing the one on top shows the one it covered (open the conversation over Files, close it, and Files is back). Opening a pane that is already in the stack moves it to the top. The stack survives a reload |
 
 ### Working from a collection
 {: #collection-chat }
@@ -103,7 +104,7 @@ buttons beside the enlarged terminal.
 ![Settings, Terminal keys — the Question pane checkbox beside Copy on select](../images/question-pane-setting.png)
 
 The pane opens by itself on the enlarged cell the moment the question arrives, and closes as soon as
-it is answered. A question that arrives while its cell is tiled opens when you enlarge that cell —
+it is answered, showing again whichever pane it covered. A question that arrives while its cell is tiled opens when you enlarge that cell —
 there is no button for it, because there is nothing to open when nothing is being asked.
 
 ![A three-part question: the terminal on the left still showing its own dialog, the pane on the right offering the same choices as buttons with a Send button](../images/question-pane.png)
