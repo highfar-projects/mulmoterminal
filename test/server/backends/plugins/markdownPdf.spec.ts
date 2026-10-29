@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import ts from "typescript";
 import { marked } from "marked";
 import type { PDFOptions } from "puppeteer";
@@ -143,8 +143,23 @@ describe("drawDiagrams", () => {
   });
 
   it("stops waiting for a drawing that never settles, and says so", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const rec = recorder(() => new Promise(() => {}));
     expect(await drawDiagrams(rec.page, dist, SHORT_WAIT_MS)).toBe(false);
+    expect(warn.mock.calls.map(([line]) => line)).toEqual([expect.stringContaining("did not settle")]);
+    warn.mockRestore();
+  });
+
+  // A PDF with the blocks in it is what the export always produced; a drawing that cannot run must
+  // not take the PDF with it.
+  it("gives the page up as blocks, with the reason logged, when the drawing throws", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const rec = recorder(async () => {
+      throw new Error("mermaid is not defined");
+    });
+    expect(await drawDiagrams(rec.page, dist)).toBe(false);
+    expect(warn.mock.calls.map(([line]) => line)).toEqual([expect.stringContaining("mermaid is not defined")]);
+    warn.mockRestore();
   });
 
   it("waits a bounded time by default", () => {
@@ -165,5 +180,18 @@ describe("printMarkdown", () => {
     await printMarkdown(rec.page, { markdown: fenced("js", "1") });
     expect(rec.calls).toEqual(["setContent", "pdf"]);
     expect(rec.pdfOptions[0]?.format).toBe("Letter");
+  });
+
+  it("still prints when mermaid cannot be put into the page", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const rec = recorder();
+    rec.page.addScriptTag = async () => {
+      throw new Error("ENOENT: mermaid.min.js");
+    };
+    const pdf = await printMarkdown(rec.page, { markdown: fenced("mermaid", FLOW) });
+    expect(pdf).toEqual(new Uint8Array([1]));
+    expect(rec.calls).toEqual(["setContent", "pdf"]);
+    expect(warn.mock.calls.map(([line]) => line)).toEqual([expect.stringContaining("ENOENT")]);
+    warn.mockRestore();
   });
 });

@@ -83,18 +83,25 @@ const settledWithin = async (work: Promise<unknown>, ms: number): Promise<unknow
   }
 };
 
-/** Draw the placeholders in `page`, as the Preview draws its own. Says whether the drawing settled
- *  in time; the page is printed either way. */
+/** Draw the placeholders in `page`, as the Preview draws its own. Says whether every diagram was
+ *  drawn; the page is printed either way, since a PDF with the blocks in it is what the reader
+ *  always got, and a drawing that could not run says why in the log. */
 export async function drawDiagrams(page: PrintablePage, dist: MermaidDist = installedMermaid(), timeoutMs = DIAGRAM_DRAW_TIMEOUT_MS): Promise<boolean> {
-  await page.addScriptTag({ path: mermaidBundlePath(dist) });
-  return (await settledWithin(page.evaluate(drawDiagramsScript()), timeoutMs)) !== EXPIRED;
+  try {
+    await page.addScriptTag({ path: mermaidBundlePath(dist) });
+    const settled = await settledWithin(page.evaluate(drawDiagramsScript()), timeoutMs);
+    if (settled === EXPIRED) console.warn(`[markdown-pdf] the diagrams did not settle within ${timeoutMs}ms; printed as their blocks`);
+    return settled !== EXPIRED;
+  } catch (err) {
+    console.warn(`[markdown-pdf] the diagrams could not be drawn, printed as their blocks: ${err instanceof Error ? err.message : String(err)}`);
+    return false;
+  }
 }
 
 /** Print `markdown` as the Canvas showed it, the diagrams drawn before the page goes to paper. */
 export async function printMarkdown(page: PrintablePage, options: Pick<ExportPdfOptions, "markdown" | "format">): Promise<Uint8Array> {
   const { html, diagrams } = await markdownPdfDocument(options.markdown);
   await page.setContent(html, { waitUntil: "load" });
-  if (diagrams && !(await drawDiagrams(page)))
-    console.warn(`[markdown-pdf] the diagrams did not settle within ${DIAGRAM_DRAW_TIMEOUT_MS}ms; printed as their blocks`);
+  if (diagrams) await drawDiagrams(page);
   return page.pdf({ format: options.format === "A4" ? "A4" : "Letter", margin: PAGE_MARGIN, printBackground: true });
 }
