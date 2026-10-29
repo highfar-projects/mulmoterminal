@@ -1305,7 +1305,7 @@ describe("file pane beside the enlarged cell", () => {
   it("remembers being open across a remount, and the pane's own close puts it away", async () => {
     const w = mountCockpit([cell(1, "s1", "/proj"), cell(2)], 1, []);
     await openPane(w);
-    expect(JSON.parse(localStorage.getItem("pane_open_by_session") ?? "{}")).toEqual({ s1: "files" });
+    expect(JSON.parse(localStorage.getItem("pane_open_by_session") ?? "{}")).toEqual({ s1: ["files"] });
 
     // A reload: the same session, a uid it will not have again.
     const reopened = mountCockpit([cell(7, "s1", "/proj"), cell(8)], 7, []);
