@@ -23,6 +23,9 @@ gone too.
 - Full width: the conversation takes the row whenever it becomes the pane on screen, including
   when the pane over it is closed. No other pane inherits it.
 - No "close all": the close button closes the top one.
+- A question covering Files saves its buffer first (the editor unmounts beneath it, and nothing
+  saved it on the way there before either). A buffer that cannot be saved keeps Files on screen, as
+  every other way off Files does.
 
 ## Shape
 

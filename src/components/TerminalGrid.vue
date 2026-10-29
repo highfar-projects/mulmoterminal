@@ -323,8 +323,8 @@ function persistPane(uid: number, stack: StackedPane[]): void {
 }
 
 // A cell shown for the first time takes the pane its SESSION had before the reload. Only when the
-// cell has no answer of its own: a pane the user closed is an answer, which is why the map holds
-// an explicit null rather than dropping the entry.
+// cell has no answer of its own: panes the user closed are an answer, which is why the map holds
+// an empty stack rather than dropping the entry.
 function restoreSessionPane(uid: number): void {
   if (paneByCell.value.has(uid)) return;
   const session = sessionOf(uid);
@@ -714,7 +714,7 @@ const unsubscribeQuestion = subscribeSession(ASK_QUESTION_CHANNEL, (data) => {
     // Opened for the user, not merely made available: a question nobody sees is a session that
     // sits blocked. Only for the cell already on screen — enlarging some other cell to reveal a
     // pane would take the user off whatever they were reading.
-    if (data.sessionId === expandedSessionId.value) setRightPane("question", props.expandedUid);
+    if (data.sessionId === expandedSessionId.value) void showQuestionPane(data.sessionId);
     return;
   }
   if (isAskQuestionDone(data) && questionBox.close(data)) dropQuestion(data.sessionId);
@@ -730,7 +730,18 @@ async function revealQuestion(sessionId: string): Promise<void> {
   // Not re-opened if the user closed this very dialog: they are telling us they will answer in the
   // terminal. The next question in this cell opens as usual (questionBox tracks it per dialog).
   if (!questionBox.has(sessionId) || questionBox.isDismissed(sessionId)) return;
-  if (expandedSessionId.value === sessionId) setRightPane("question", props.expandedUid);
+  if (expandedSessionId.value === sessionId) await showQuestionPane(sessionId);
+}
+
+// The question covers Files like any pane opened over it, and the editor unmounts beneath it, so the
+// buffer is saved first. One that can be neither saved nor backed up keeps Files on screen with its
+// error, as every other way off Files does; the terminal still takes the answer.
+async function showQuestionPane(sessionId: string): Promise<void> {
+  const uid = props.expandedUid;
+  if (uid === null) return;
+  if (filesOpen.value && paneUid.value === uid && (await filesPane.value?.flush()) === false) return;
+  // The save awaits: the zoom may have moved, or the question been answered, in the meantime.
+  if (expandedSessionId.value === sessionId && questionBox.has(sessionId)) setRightPane("question", uid);
 }
 
 // A question that arrived while its cell was tiled — or on another page of the grid — still has a

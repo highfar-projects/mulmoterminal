@@ -41,6 +41,7 @@ vi.mock("../../../src/components/TranscriptPane.vue", () => ({
 vi.mock("../../../src/components/QuestionPane.vue", () => ({
   default: { name: "QuestionPane", props: ["event", "failure", "expanded"], emits: ["answer", "say", "toggle-expand", "close"], template: "<div />" },
 }));
+const flush = vi.fn(async (): Promise<boolean | undefined> => undefined);
 const snapshot = vi.fn(() => ({ tabs: [{ path: "notes.md" }], activePath: "notes.md", expanded: ["docs"] }));
 vi.mock("../../../src/components/FilesPane.vue", () => ({
   default: {
@@ -48,7 +49,7 @@ vi.mock("../../../src/components/FilesPane.vue", () => ({
     props: ["cwd", "requestedPath", "initialState"],
     emits: ["close", "dirty"],
     setup: (_p: unknown, { expose, slots }: { expose: (e: Record<string, unknown>) => void; slots: { title?: () => VNode[] } }) => {
-      expose({ flush: async () => undefined, reload: () => {}, snapshot });
+      expose({ flush, reload: () => {}, snapshot });
       return () => h("div", { class: "stub-files-pane" }, slots.title?.());
     },
   },
@@ -101,6 +102,7 @@ const remembered = () => JSON.parse(localStorage.getItem("pane_open_by_session")
 beforeEach(() => {
   vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }));
   localStorage.clear();
+  flush.mockReset().mockResolvedValue(undefined);
   vi.stubGlobal(
     "fetch",
     vi.fn(async () => ({ ok: true, json: async () => ({ groups: ["render"], tools: [] }) })),
@@ -154,6 +156,24 @@ describe("stacked right panes", () => {
     await ask(true);
     expect(shown(w)).toBe("TranscriptPane");
     expect(full(w)).toBe(true);
+  });
+
+  // The question unmounts the editor beneath it, so an unsaved buffer is written first.
+  it("saves the files pane before a question covers it", async () => {
+    const w = mountGrid();
+    await open(w, "FilesPane");
+    flush.mockClear();
+    await ask();
+    expect(flush).toHaveBeenCalledTimes(1);
+    expect(shown(w)).toBe("QuestionPane");
+  });
+
+  it("keeps the files pane on screen when its buffer could not be saved", async () => {
+    const w = mountGrid();
+    await open(w, "FilesPane");
+    flush.mockResolvedValue(false);
+    await ask();
+    expect(shown(w)).toBe("FilesPane");
   });
 
   it("shows the top pane again when the question is closed by hand", async () => {
