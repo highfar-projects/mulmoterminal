@@ -4,14 +4,13 @@
 // Split from index.ts (#548 step 3c).
 import type { IPty } from "node-pty";
 import type { WebSocket } from "ws";
-import { reportPtyExit } from "../pty/pty-exit.js";
 import { getLaunchers } from "../../config/config-routes.js";
 import { launcherAt, launchInvocation, launchTargetLabel, shellInvocation, type LaunchTarget } from "./shell-command.js";
 import { ptys } from "../registry.js";
 import { ptySpawn, spawnPty } from "../pty/pty-spawn.js";
 import { ptyExitLine, ptyStartLine } from "../pty/pty-exit-log.js";
+import { wireAgentPtyRelay } from "../pty/pty-relay.js";
 import { sendExitAndClose, sendFrame } from "../ws-frames.js";
-import { wireBufferedOutput } from "../pty/output-relay.js";
 import type { PtyEntry } from "../types.js";
 import type { SpawnDeps } from "./spawn-deps.js";
 
@@ -65,16 +64,8 @@ export function createShellSpawners(deps: SpawnDeps) {
     // indistinguishable from the Agent Picker. The Agent Picker is what records a real agent.
     const entry: PtyEntry = { term, ws, buffer: "", cwd, tmux, reattached, active: false, agent: "shell" };
     ptys.set(sessionId, entry);
-
-    const output = wireBufferedOutput(entry, deps.outputBufferLimit);
-    term.onExit(({ exitCode, signal }) => {
-      const lifetimeMs = Date.now() - spawnedAtMs;
-      console.log(ptyExitLine({ agent: "launcher", exitCode, signal, lifetimeMs, cwd, sessionId }));
-      output.flush(); // a queued batch must not arrive after the exit frame
-      // A launcher is persistent and tmux-backed like an agent cell, so it has the same two ways to
-      // lose its pty — and only one of them means the program is over (#1496).
-      reportPtyExit(sessionId, entry, { exitCode, signal, lifetimeMs }, deps.reap);
-    });
+    // Persistent and tmux-backed like an agent cell, so its exit is read the same way (#1496).
+    wireAgentPtyRelay(entry, sessionId, spawnedAtMs, deps, { loggedAs: "launcher" });
     return entry;
   }
 
@@ -88,13 +79,7 @@ export function createShellSpawners(deps: SpawnDeps) {
     console.log(ptyStartLine({ agent: "bot-job", pid: term.pid, cwd, tmux, reattached, sessionId, note: null }));
     const entry: PtyEntry = { term, ws: null, buffer: "", cwd, tmux, reattached, active: false, agent: "shell" };
     ptys.set(sessionId, entry);
-    const output = wireBufferedOutput(entry, deps.outputBufferLimit);
-    term.onExit(({ exitCode, signal }) => {
-      const lifetimeMs = Date.now() - spawnedAtMs;
-      console.log(ptyExitLine({ agent: "bot-job", exitCode, signal, lifetimeMs, cwd, sessionId }));
-      output.flush();
-      reportPtyExit(sessionId, entry, { exitCode, signal, lifetimeMs }, deps.reap);
-    });
+    wireAgentPtyRelay(entry, sessionId, spawnedAtMs, deps, { loggedAs: "bot-job" });
     deps.publishSessionCreated(sessionId);
     return entry;
   }
