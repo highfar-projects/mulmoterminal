@@ -31,7 +31,7 @@ describe("installedMermaid", () => {
 });
 
 describe("mermaidBundlePath", () => {
-  // The PDF export (#3214) puts this file into a page with no origin, so it must be the build that
+  // The PDF export puts this file into a page with no origin, so it must be the build that
   // needs no import and leaves mermaid as a global — and the route must go on refusing it.
   it("names the installed package's single-file build, which sets the global the drawing reads", () => {
     const bundle = mermaidBundlePath(dist);

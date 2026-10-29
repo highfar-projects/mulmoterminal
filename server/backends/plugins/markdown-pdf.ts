@@ -38,9 +38,12 @@ const PDF_DIAGRAM_THEME = "default";
 
 const PAGE_MARGIN = { top: "16mm", bottom: "16mm", left: "16mm", right: "16mm" };
 
+const BLANK_PAGE = "about:blank";
+
 /** What printing needs of puppeteer's page, so a spec can hand in a recorder. */
 export interface PrintablePage {
   setContent(html: string, options: { waitUntil: "load" }): Promise<void>;
+  goto(url: string): Promise<unknown>;
   addScriptTag(options: { path: string }): Promise<unknown>;
   evaluate(script: string): Promise<unknown>;
   pdf(options: PDFOptions): Promise<Uint8Array>;
@@ -83,9 +86,9 @@ const settledWithin = async (work: Promise<unknown>, ms: number): Promise<unknow
   }
 };
 
-/** Draw the placeholders in `page`, as the Preview draws its own. Says whether every diagram was
- *  drawn; the page is printed either way, since a PDF with the blocks in it is what the reader
- *  always got, and a drawing that could not run says why in the log. */
+/** Draw the placeholders in `page`, as the Preview draws its own. Says whether the drawing finished;
+ *  a drawing that could not run says why in the log, and one that ran out of time may still be
+ *  running in the page when this returns. */
 export async function drawDiagrams(page: PrintablePage, dist: MermaidDist = installedMermaid(), timeoutMs = DIAGRAM_DRAW_TIMEOUT_MS): Promise<boolean> {
   try {
     await page.addScriptTag({ path: mermaidBundlePath(dist) });
@@ -98,10 +101,22 @@ export async function drawDiagrams(page: PrintablePage, dist: MermaidDist = inst
   }
 }
 
-/** Print `markdown` as the Canvas showed it, the diagrams drawn before the page goes to paper. */
-export async function printMarkdown(page: PrintablePage, options: Pick<ExportPdfOptions, "markdown" | "format">): Promise<Uint8Array> {
+/** Print `markdown` as the Canvas showed it, the diagrams drawn before the page goes to paper. A
+ *  drawing that did not finish is discarded with the window it runs in: the document is laid out
+ *  again, untouched, so what is printed is the blocks the export always printed and not whatever
+ *  a still-running drawing manages to replace while the page is being read. */
+export async function printMarkdown(
+  page: PrintablePage,
+  options: Pick<ExportPdfOptions, "markdown" | "format">,
+  timeoutMs = DIAGRAM_DRAW_TIMEOUT_MS,
+): Promise<Uint8Array> {
   const { html, diagrams } = await markdownPdfDocument(options.markdown);
   await page.setContent(html, { waitUntil: "load" });
-  if (diagrams) await drawDiagrams(page);
+  if (diagrams && !(await drawDiagrams(page, installedMermaid(), timeoutMs))) {
+    // `setContent` rewrites the document inside the same window, where the drawing's pending
+    // promises still run and would still land; only a navigation discards that window with them.
+    await page.goto(BLANK_PAGE);
+    await page.setContent(html, { waitUntil: "load" });
+  }
   return page.pdf({ format: options.format === "A4" ? "A4" : "Letter", margin: PAGE_MARGIN, printBackground: true });
 }

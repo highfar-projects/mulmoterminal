@@ -16,7 +16,7 @@ import {
 import { MERMAID_STYLE, drawDiagramsSource } from "../../../../server/files/previewMermaid";
 import { installedMermaid, mermaidBundlePath } from "../../../../server/files/mermaidAssets";
 
-// #3214. The Canvas draws a mermaid fence; the PDF printed it as a code block. The PDF now carries
+// The Canvas draws a mermaid fence; the PDF printed it as a code block. The PDF now carries
 // the Preview's placeholder and runs the Preview's drawing in the page before printing it.
 
 const FLOW = "graph TD\n  A --> B";
@@ -98,6 +98,7 @@ describe("drawDiagramsScript", () => {
 interface Recorder {
   page: PrintablePage;
   calls: string[];
+  contents: string[];
   scripts: string[];
   evaluated: string[];
   pdfOptions: PDFOptions[];
@@ -105,12 +106,17 @@ interface Recorder {
 
 const recorder = (evaluate: () => Promise<unknown> = async () => undefined): Recorder => {
   const calls: string[] = [];
+  const contents: string[] = [];
   const scripts: string[] = [];
   const evaluated: string[] = [];
   const pdfOptions: PDFOptions[] = [];
   const page: PrintablePage = {
-    async setContent() {
+    async setContent(html) {
       calls.push("setContent");
+      contents.push(html);
+    },
+    async goto(url) {
+      calls.push(`goto ${url}`);
     },
     async addScriptTag({ path }) {
       calls.push("addScriptTag");
@@ -127,7 +133,7 @@ const recorder = (evaluate: () => Promise<unknown> = async () => undefined): Rec
       return new Uint8Array([1]);
     },
   };
-  return { page, calls, scripts, evaluated, pdfOptions };
+  return { page, calls, contents, scripts, evaluated, pdfOptions };
 };
 
 const dist = installedMermaid();
@@ -190,8 +196,21 @@ describe("printMarkdown", () => {
     };
     const pdf = await printMarkdown(rec.page, { markdown: fenced("mermaid", FLOW) });
     expect(pdf).toEqual(new Uint8Array([1]));
-    expect(rec.calls).toEqual(["setContent", "pdf"]);
+    expect(rec.calls).toEqual(["setContent", "goto about:blank", "setContent", "pdf"]);
     expect(warn.mock.calls.map(([line]) => line)).toEqual([expect.stringContaining("ENOENT")]);
+    warn.mockRestore();
+  });
+
+  // A drawing given up on is still running in the page. Printing that page would hand the PDF
+  // whatever it replaced between the deadline and the print: a diagram or two, the rest blocks, in
+  // no order anyone can repeat. Only a navigation discards the window the drawing runs in, so the
+  // document is laid out again in a fresh one.
+  it("lays the document out again in a fresh window before printing a drawing that ran out of time", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const rec = recorder(() => new Promise(() => {}));
+    await printMarkdown(rec.page, { markdown: fenced("mermaid", FLOW) }, SHORT_WAIT_MS);
+    expect(rec.calls).toEqual(["setContent", "addScriptTag", "evaluate", "goto about:blank", "setContent", "pdf"]);
+    expect(rec.contents[1]).toBe(rec.contents[0]);
     warn.mockRestore();
   });
 });

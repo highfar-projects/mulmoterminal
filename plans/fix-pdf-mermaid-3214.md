@@ -14,7 +14,7 @@ PDF は puppeteer のページで組まれるので、印刷する前にその�
 - **描き方**: プレビューの module script は `import mermaid from <url>;` の一行と、描く本体からなる。本体を `drawDiagramsSource(theme)` として切り出し、module script はその前に import の一行を足したものにする（文字列として以前と同一）。PDF のページには mermaid の単一ファイル版（`node_modules/mermaid/dist/mermaid.min.js`。読み込むと `globalThis.mermaid` が立つ）を `page.addScriptTag` で入れ、同じ本体を `async` の即時関数に包んで `page.evaluate` する。ページは `about:blank` で、サーバーから import する経路が使えないので、単一ファイル版を使う。
 - **紙の上の見え方**: 描けた fence は図だけ。プレビューが折りたたむ「Diagram source」の disclosure は紙では開けないので、折りたたまれたものは `display:none` にし、summary も消す。描けなかった fence はプレビューと同じく、エラー行と開いたままのコードブロックが残る。図は `break-inside: avoid` で途中改ページしない。
 - **テーマ**: 紙は白なので mermaid の `default` 固定。
-- **待ち時間の上限**: 描き終わらないページを待ち続けると要求とブラウザが解放されないので、`DIAGRAM_DRAW_TIMEOUT_MS` を過ぎたらそのまま印刷する。pending の placeholder は隠れ、開いたままのブロックが出るので、以前の PDF と同じ見え方に落ちる。
+- **待ち時間の上限と失敗**: 描き終わらないページを待ち続けると要求とブラウザが解放されないので、`DIAGRAM_DRAW_TIMEOUT_MS` を過ぎたら諦める。描画が投げたとき（mermaid が入らない、本体の誤り）も同じで、PDF ごと失敗させず、理由をログに残す。どちらの場合も **`about:blank` へ移ってから文書を敷き直し、それを印刷する**。諦めた描画はページの中でまだ走っているので、そのまま印刷すると「期限から印刷までに置き換わった分だけ図、残りはブロック」という再現できない紙になる（Codex の指摘）。`setContent` だけでは同じ窓の中で文書を書き直すだけで、走っている描画の約束はその窓に残る。ナビゲーションで窓ごと捨ててから敷き直せば、pending の placeholder は隠れ、開いたままのブロックが出るので、以前の PDF と同じ見え方に決定的に落ちる。
 
 ## 変更
 
