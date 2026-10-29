@@ -176,7 +176,10 @@ describe("createCodexSpawner", () => {
 
     it("is submitted once codex's output goes quiet", () => {
       spawn()(SID, null, null, "/w", false, { initialPrompt: "run the collection action" });
-      mocks.onData.forEach((handler) => handler("codex banner"));
+      // Exactly one listener, the relay's: the auto-run hears output through its tap, not through a
+      // second onData of its own (pty-relay.ts), and feeding only that listener is what proves it.
+      expect(mocks.onData).toHaveLength(1);
+      mocks.onData[0]?.("codex banner");
       vi.advanceTimersByTime(QUIET_MS);
       expect(mocks.writes).toEqual([PASTED_SEED]);
       vi.advanceTimersByTime(SUBMIT_MS);
