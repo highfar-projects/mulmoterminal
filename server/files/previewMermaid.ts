@@ -61,9 +61,10 @@ export const MERMAID_STYLE = [
 
 // The DOM is reached through the prototypes, as the reporter reaches it: a `.md` can shadow
 // `document.querySelectorAll` with `<img name=…>`.
-const bootstrapSource = (entryUrl: string, theme: MermaidTheme | null): string =>
+/** The drawing, with `mermaid` already in scope: the Preview's module script imports it on the line
+ *  before this text, and the PDF export's page has it as a global, so one text draws on both. */
+export const drawDiagramsSource = (theme: MermaidTheme | null): string =>
   [
-    `import mermaid from ${JSON.stringify(entryUrl)};`,
     `const theme = ${JSON.stringify(theme)} ?? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default');`,
     // `strict` keeps HTML in labels inert; `suppressErrorRendering` keeps mermaid from drawing its
     // own error graphic into the body, since the failed fence shows the error itself. `layout` and
@@ -102,6 +103,9 @@ const bootstrapSource = (entryUrl: string, theme: MermaidTheme | null): string =
     "};",
     "await Promise.all(pending.map(draw));",
   ].join("\n");
+
+const bootstrapSource = (entryUrl: string, theme: MermaidTheme | null): string =>
+  `import mermaid from ${JSON.stringify(entryUrl)};\n${drawDiagramsSource(theme)}`;
 
 /** The module script that draws the diagrams, under the nonce the reporter runs with. A module so
  *  that it can `import` — and the import inherits the nonce, which is what lets mermaid in. */
