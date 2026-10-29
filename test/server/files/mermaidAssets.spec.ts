@@ -4,7 +4,15 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import express from "express";
 import { routeCall } from "../../helpers/routeCall";
-import { MERMAID_ASSET_ROUTE, installedMermaid, mermaidAssetFile, mermaidEntryUrl, mountMermaidAssetRoute } from "../../../server/files/mermaidAssets";
+import {
+  MERMAID_ASSET_ROUTE,
+  MERMAID_BUNDLE_FILE,
+  installedMermaid,
+  mermaidAssetFile,
+  mermaidBundlePath,
+  mermaidEntryUrl,
+  mountMermaidAssetRoute,
+} from "../../../server/files/mermaidAssets";
 
 // #2991. The Preview imports mermaid from this server. The document is opaque-origin, so the asset
 // has to answer a CORS fetch; and the route serves the entry and its chunks, nothing else the
@@ -19,6 +27,18 @@ describe("installedMermaid", () => {
     expect(existsSync(path.join(dist.dir, "mermaid.esm.min.mjs"))).toBe(true);
     expect(existsSync(path.join(dist.dir, CHUNK_DIR))).toBe(true);
     expect(dist.version).toMatch(/^\d+\.\d+\.\d+/);
+  });
+});
+
+describe("mermaidBundlePath", () => {
+  // The PDF export (#3214) puts this file into a page with no origin, so it must be the build that
+  // needs no import and leaves mermaid as a global — and the route must go on refusing it.
+  it("names the installed package's single-file build, which sets the global the drawing reads", () => {
+    const bundle = mermaidBundlePath(dist);
+    expect(path.basename(bundle)).toBe(MERMAID_BUNDLE_FILE);
+    expect(existsSync(bundle)).toBe(true);
+    expect(readFileSync(bundle, "utf8").slice(-300)).toMatch(/globalThis\["mermaid"\]\s*=/);
+    expect(mermaidAssetFile(`/${dist.version}/${MERMAID_BUNDLE_FILE}`, dist.version)).toBeNull();
   });
 });
 

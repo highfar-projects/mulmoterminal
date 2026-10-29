@@ -7,6 +7,7 @@ import {
   MERMAID_STYLE,
   diagramFence,
   diagramFenceRenderer,
+  drawDiagramsSource,
   mermaidBootstrapTag,
   mermaidThemeFor,
 } from "../../../server/files/previewMermaid";
@@ -147,5 +148,15 @@ describe("mermaidBootstrapTag", () => {
       compilerOptions: { allowJs: true, module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
     });
     expect(result.diagnostics ?? []).toEqual([]);
+  });
+});
+
+describe("drawDiagramsSource", () => {
+  // The PDF export runs this text with mermaid as a global; the module script runs it after its
+  // import. One text, so the two surfaces cannot drift apart in how they draw.
+  it("is the module script's text after its import line", () => {
+    const entry = "/api/files/mermaid/1.0.0/mermaid.esm.min.mjs";
+    expect(bootstrapSourceOf(mermaidBootstrapTag("n1", entry, "dark"))).toBe(`import mermaid from "${entry}";\n${drawDiagramsSource("dark")}`);
+    expect(drawDiagramsSource(null)).not.toContain("import ");
   });
 });

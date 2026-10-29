@@ -45,6 +45,12 @@ export function installedMermaid(): MermaidDist {
   return { dir: path.dirname(entry), version };
 }
 
+/** mermaid's single-file build, which sets `globalThis.mermaid` when it runs. The PDF export reads
+ *  it off the disk and puts it into its headless page, which has no origin to import the entry
+ *  from; the route above never serves it. */
+export const MERMAID_BUNDLE_FILE = "mermaid.min.js";
+export const mermaidBundlePath = (dist: MermaidDist): string => path.join(dist.dir, MERMAID_BUNDLE_FILE);
+
 const serveAsset =
   (dist: MermaidDist) =>
   (req: Request, res: Response, next: NextFunction): void => {
