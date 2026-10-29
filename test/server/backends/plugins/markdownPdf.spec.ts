@@ -22,12 +22,16 @@ import { installedMermaid, mermaidBundlePath } from "../../../../server/files/me
 const FLOW = "graph TD\n  A --> B";
 const fenced = (lang: string, text: string): string => "```" + lang + "\n" + text + "\n```\n";
 
-/** A small deterministic generator, so a failing case can be found again by its seed. */
+/** A small deterministic generator, so a failing case can be found again by its seed. The step is
+ *  32-bit arithmetic on purpose: a double holds the product of two 31-bit numbers only rounded, and
+ *  a rounded state sits on a multiple of a power of two, so `state % bound` stops moving. */
 const lcg = (seed: number): ((bound: number) => number) => {
-  let state = seed;
+  const LOW_BITS_DROPPED = 8;
+  const RANGE = 2 ** (32 - LOW_BITS_DROPPED);
+  let state = seed >>> 0;
   return (bound) => {
-    state = (state * 1103515245 + 12345) % 2147483648;
-    return state % bound;
+    state = (Math.imul(state, 1103515245) + 12345) >>> 0;
+    return Math.floor(((state >>> LOW_BITS_DROPPED) / RANGE) * bound);
   };
 };
 
@@ -68,7 +72,11 @@ describe("markdownPdfDocument", () => {
       "~~~js\n~~~\n",
     ];
     const rand = lcg(3214);
-    const cases = Array.from({ length: 200 }, () => Array.from({ length: 1 + rand(4) }, () => pieces[rand(pieces.length)]).join(""));
+    const picks = Array.from({ length: 200 }, () => Array.from({ length: 1 + rand(4) }, () => rand(pieces.length)));
+    // A generator that has quietly collapsed checks the property over a handful of documents.
+    expect(new Set(picks.flat()).size).toBe(pieces.length);
+    expect(picks.some((indices) => indices.length > 1)).toBe(true);
+    const cases = picks.map((indices) => indices.map((index) => pieces[index]).join(""));
     await Promise.all(
       cases.map(async (markdown) => {
         const doc = await markdownPdfDocument(markdown);
