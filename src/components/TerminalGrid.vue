@@ -739,8 +739,11 @@ async function revealQuestion(sessionId: string): Promise<void> {
 async function showQuestionPane(sessionId: string): Promise<void> {
   const uid = props.expandedUid;
   if (uid === null) return;
-  if (filesOpen.value && paneUid.value === uid && (await filesPane.value?.flush()) === false) return;
-  // The save awaits: the zoom may have moved, or the question been answered, in the meantime.
+  const coversFiles = filesOpen.value && paneUid.value === uid;
+  if (coversFiles && (await filesPane.value?.flush()) === false) return;
+  // The save awaits. A pane opened meanwhile takes the question's place, as it would over the
+  // question; the zoom may have moved, or the question been answered.
+  if (coversFiles && (!filesOpen.value || paneUid.value !== uid)) return;
   if (expandedSessionId.value === sessionId && questionBox.has(sessionId)) setRightPane("question", uid);
 }
 

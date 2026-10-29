@@ -92,9 +92,9 @@ const closeShown = async (w: Grid) => {
   await flushPromises();
 };
 const full = (w: Grid) => w.find(".zoom-row").classes().includes("pane-full");
+const QUESTION = { sessionId: "s1", toolUseId: "t1", questions: [{ question: "Pick?", header: "Pick", options: [{ label: "A" }], multiSelect: false }] };
 const ask = async (done = false) => {
-  const question = { question: "Pick?", header: "Pick", options: [{ label: "A" }], multiSelect: false };
-  handlers.get(ASK_QUESTION_CHANNEL)?.(done ? { sessionId: "s1", toolUseId: "t1", done: true } : { sessionId: "s1", toolUseId: "t1", questions: [question] });
+  handlers.get(ASK_QUESTION_CHANNEL)?.(done ? { sessionId: "s1", toolUseId: "t1", done: true } : QUESTION);
   await flushPromises();
 };
 const remembered = () => JSON.parse(localStorage.getItem("pane_open_by_session") ?? "{}");
@@ -174,6 +174,18 @@ describe("stacked right panes", () => {
     flush.mockResolvedValue(false);
     await ask();
     expect(shown(w)).toBe("FilesPane");
+  });
+
+  it("leaves a pane opened while the save was in flight in front of the question", async () => {
+    const w = mountGrid();
+    await open(w, "FilesPane");
+    let finishSave: (saved: undefined) => void = () => {};
+    flush.mockReturnValueOnce(new Promise((resolve) => (finishSave = resolve)));
+    handlers.get(ASK_QUESTION_CHANNEL)?.(QUESTION);
+    await open(w, "ToolsPane");
+    finishSave(undefined);
+    await flushPromises();
+    expect(shown(w)).toBe("ToolsPane");
   });
 
   it("shows the top pane again when the question is closed by hand", async () => {
