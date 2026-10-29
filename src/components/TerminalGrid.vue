@@ -390,11 +390,15 @@ function setFilesOpen(open: boolean): void {
 // `uid` is which cell is being answered. It defaults to the enlarged one, and is passed
 // explicitly by the path that has just ASKED for an enlargement: the parent owns `expandedUid`,
 // so it is still the previous cell when openCanvasFor reaches here.
+// Whether answering `uid` changes what is on screen. The enlarged cell does even while the pane trails
+// another one after a re-root it could not save out of: setRightPane moves the pane to it.
+const changesScreen = (uid: number): boolean => paneUid.value === null || paneUid.value === uid || uid === props.expandedUid;
+
 function setRightPane(pane: RightPane | null, uid: number | null): void {
   if (uid === null) return; // no cell to answer for: nothing is enlarged and the pane is on none
   const next = pane === null ? withShownPaneClosed(panesOf(uid)) : withPaneOpened(panesOf(uid), pane);
   const shown = shownPane(next);
-  const leavingFiles = filesOpen.value && paneUid.value === uid && shown !== "files";
+  const leavingFiles = filesOpen.value && changesScreen(uid) && shown !== "files";
   if (leavingFiles) rememberPaneState(paneUid.value);
   // The pane moves to this cell only if it is the one on screen. A button pressed on a TILED cell
   // records what that cell wants and nothing more: moving the pane there would unmount an editor
@@ -619,9 +623,9 @@ async function toggleRightPane(pane: RightPane, uid: number | null = props.expan
   // nor backed up keeps it open — the error is visible in it. Checked whichever pane was asked
   // for: files unmounts when another pane takes the slot exactly as it does when closed.
   //
-  // Only for the cell the pane is ON: a button pressed on a tiled cell changes that cell's answer
-  // and unmounts nothing, so there is no buffer in play.
-  if (filesOpen.value && paneUid.value === uid && (await filesPane.value?.flush()) === false) return;
+  // Only for a cell whose answer reaches the screen: a button pressed on a tiled cell changes that
+  // cell's answer and unmounts nothing, so there is no buffer in play.
+  if (filesOpen.value && changesScreen(uid) && (await filesPane.value?.flush()) === false) return;
   setRightPane(paneOf(uid) === pane ? null : pane, uid);
 }
 
@@ -739,11 +743,11 @@ async function revealQuestion(sessionId: string): Promise<void> {
 async function showQuestionPane(sessionId: string): Promise<void> {
   const uid = props.expandedUid;
   if (uid === null) return;
-  const coversFiles = filesOpen.value && paneUid.value === uid;
-  if (coversFiles && (await filesPane.value?.flush()) === false) return;
+  const filesUid = filesOpen.value && changesScreen(uid) ? paneUid.value : null;
+  if (filesUid !== null && (await filesPane.value?.flush()) === false) return;
   // The save awaits. A pane opened meanwhile takes the question's place, as it would over the
   // question; the zoom may have moved, or the question been answered.
-  if (coversFiles && (!filesOpen.value || paneUid.value !== uid)) return;
+  if (filesUid !== null && (!filesOpen.value || paneUid.value !== filesUid)) return;
   if (expandedSessionId.value === sessionId && questionBox.has(sessionId)) setRightPane("question", uid);
 }
 

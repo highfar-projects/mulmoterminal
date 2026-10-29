@@ -93,8 +93,8 @@ const closeShown = async (w: Grid) => {
 };
 const full = (w: Grid) => w.find(".zoom-row").classes().includes("pane-full");
 const QUESTION = { sessionId: "s1", toolUseId: "t1", questions: [{ question: "Pick?", header: "Pick", options: [{ label: "A" }], multiSelect: false }] };
-const ask = async (done = false) => {
-  handlers.get(ASK_QUESTION_CHANNEL)?.(done ? { sessionId: "s1", toolUseId: "t1", done: true } : QUESTION);
+const ask = async (done = false, sessionId = "s1") => {
+  handlers.get(ASK_QUESTION_CHANNEL)?.(done ? { sessionId, toolUseId: "t1", done: true } : { ...QUESTION, sessionId });
   await flushPromises();
 };
 const remembered = () => JSON.parse(localStorage.getItem("pane_open_by_session") ?? "{}");
@@ -186,6 +186,38 @@ describe("stacked right panes", () => {
     finishSave(undefined);
     await flushPromises();
     expect(shown(w)).toBe("ToolsPane");
+  });
+
+  // A save that fails while the zoom moves leaves the files pane on the cell it was on. Whatever the
+  // enlarged cell then asks for moves the pane to it, so the buffer is saved first there too.
+  describe("while the files pane trails a zoom it could not save out of", () => {
+    const trailing = async () => {
+      const w = mountGrid();
+      await open(w, "FilesPane");
+      flush.mockResolvedValue(false);
+      await w.setProps({ expandedUid: 2 });
+      await flushPromises();
+      expect(shown(w)).toBe("FilesPane");
+      flush.mockClear();
+      return w;
+    };
+
+    it("saves before the enlarged cell's question takes the pane, and stays when it cannot", async () => {
+      const w = await trailing();
+      await ask(false, "s2");
+      expect(flush).toHaveBeenCalledTimes(1);
+      expect(shown(w)).toBe("FilesPane");
+    });
+
+    it("saves before the enlarged cell's pane button takes the pane, and stays when it cannot", async () => {
+      const w = await trailing();
+      w.findAllComponents({ name: "TerminalCell" })
+        .find((terminal) => terminal.props("expanded"))
+        ?.vm.$emit("toggle-tools");
+      await flushPromises();
+      expect(flush).toHaveBeenCalledTimes(1);
+      expect(shown(w)).toBe("FilesPane");
+    });
   });
 
   it("shows the top pane again when the question is closed by hand", async () => {
