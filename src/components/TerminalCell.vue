@@ -273,6 +273,9 @@ const lastPrompt = ref<string | null>(null);
 // the header because a raw follow-up prompt goes stale ("ok") or context-dependent once
 // the session is a back-and-forth. Null until the server generates/pushes one.
 const aiTitle = ref<string | null>(null);
+// The name the person gave with Claude Code's `/rename`. It outranks the AI title, and arrives with the
+// detail fetch rather than the live push, so a push that omits it leaves it standing.
+const customTitle = ref<string | null>(null);
 // The user's own one-line note on this session (#1084). It outranks both of the above in the
 // header: they say what the agent said, this says what the cell is FOR — the question six open
 // cells stop answering. Null until the server pushes one.
@@ -328,6 +331,7 @@ interface ActivityMsg {
   event?: string | null;
   lastPrompt?: string | null;
   aiTitle?: string | null;
+  customTitle?: string | null;
   memo?: string | null;
 }
 const isActivityMsg = (d: unknown): d is ActivityMsg => typeof d === "object" && d !== null && "id" in d;
@@ -353,6 +357,7 @@ function applyActivity(d: ActivityPush) {
       event: activityEvent.value,
       lastPrompt: lastPrompt.value,
       aiTitle: aiTitle.value,
+      customTitle: customTitle.value,
       memo: memo.value,
     },
     d,
@@ -362,6 +367,7 @@ function applyActivity(d: ActivityPush) {
   activityEvent.value = next.event;
   lastPrompt.value = next.lastPrompt;
   aiTitle.value = next.aiTitle;
+  customTitle.value = next.customTitle;
   // Not while the box is open: the push that lands as another tab saves would otherwise
   // overwrite the sentence being typed here, mid-word.
   if (!memoEditing.value) memo.value = next.memo;
@@ -397,7 +403,7 @@ function activityPushOf(d: Record<string, unknown>): ActivityPush {
   const push: ActivityPush = {};
   if (typeof d.working === "boolean") push.working = d.working;
   if (typeof d.waiting === "boolean") push.waiting = d.waiting;
-  for (const key of ["event", "lastPrompt", "aiTitle", "memo"] as const) {
+  for (const key of ["event", "lastPrompt", "aiTitle", "customTitle", "memo"] as const) {
     const value = d[key];
     if (value === null || typeof value === "string") push[key] = value;
   }
@@ -788,6 +794,7 @@ function teardown() {
   activityEvent.value = null;
   lastPrompt.value = null;
   aiTitle.value = null;
+  customTitle.value = null;
   // The memo belongs to the SESSION, not to the cell — it stays on disk and comes back when that
   // session is resumed. What must not survive is showing it against whatever this cell runs next.
   memo.value = null;
@@ -1145,11 +1152,11 @@ watch(
 );
 watch(status, (s) => emit("status", s), { immediate: true });
 
-const headerText = computed(() => cellHeaderText(memo.value, aiTitle.value, lastPrompt.value, sessionId.value));
+const headerText = computed(() => cellHeaderText(memo.value, customTitle.value, aiTitle.value, lastPrompt.value, sessionId.value));
 // A memo displaces the AI title from the line, so the tooltip is where that title goes — losing
 // it entirely would make the note cost information rather than add it. With no memo the tooltip
 // is what it always was: the raw prompt, which the header abbreviates.
-const headerTitleAttr = computed(() => (memo.value ? aiTitle.value || lastPrompt.value || "" : lastPrompt.value || aiTitle.value || ""));
+const headerTitleAttr = computed(() => (memo.value || customTitle.value ? aiTitle.value || lastPrompt.value || "" : lastPrompt.value || aiTitle.value || ""));
 
 const memoInput = useTemplateRef<HTMLInputElement>("memoInput");
 

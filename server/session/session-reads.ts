@@ -15,6 +15,7 @@ import path from "node:path";
 import { isRecord } from "../../common/isRecord.js";
 import { hasErrnoCode } from "../errors.js";
 import {
+  customTitleOfRecord,
   userPromptText,
   latestMeaningfulUserPromptFromParsed,
   latestAssistantTextFromParsed,
@@ -132,6 +133,7 @@ export const EMPTY_USAGE: SessionUsage = { inputTokens: 0, outputTokens: 0, cach
 export const EMPTY_CONTEXT: LatestTurnContext = { model: null, contextTokens: 0 };
 export interface SessionSummary {
   lastPrompt: string | null;
+  customTitle: string | null;
   aiTitle: string | null;
   lastResponse: string | null;
   userTurns: number;
@@ -141,6 +143,7 @@ export interface SessionSummary {
 }
 export const EMPTY_SUMMARY: SessionSummary = {
   lastPrompt: null,
+  customTitle: null,
   aiTitle: null,
   lastResponse: null,
   userTurns: 0,
@@ -170,6 +173,7 @@ const isSummaryState = (value: unknown): value is SummaryState =>
   isSessionUsage(value.usage) &&
   typeof value.userTurns === "number" &&
   (value.aiTitle === null || typeof value.aiTitle === "string") &&
+  (value.customTitle === null || typeof value.customTitle === "string") &&
   isPromptTrail(value.prompts) &&
   (value.lastAssistantText === null || typeof value.lastAssistantText === "string") &&
   isRecord(value.context) &&
@@ -180,7 +184,7 @@ const isSummaryState = (value: unknown): value is SummaryState =>
 
 const summaryFold = createTranscriptFold<SummaryState>({
   kind: "summary",
-  version: 1,
+  version: 2,
   isValue: isSummaryState,
   empty: emptySummaryState,
   fold: foldSummary,
@@ -194,6 +198,7 @@ export async function readSessionSummary(cwd: string, id: string): Promise<Sessi
     const parts = summaryPartsOf(await summaryFold.read(file, { mtimeMs: st.mtimeMs, size: st.size }), LAST_RESPONSE_MAX);
     return {
       lastPrompt: parts.lastPrompt,
+      customTitle: parts.customTitle,
       aiTitle: parts.aiTitle,
       lastResponse: parts.lastResponse,
       userTurns: parts.userTurns,
@@ -531,7 +536,8 @@ const NO_TITLE_FIELDS: TitleFields = { customTitle: null, aiTitle: null, lastPro
 // custom-title line, and Claude Code writes it again on later saves, so an empty one is a
 // rename to nothing and clears the name.
 function foldTitleField(into: TitleFields, o: Record<string, unknown>): void {
-  if (o.type === "custom-title" && typeof o.customTitle === "string") into.customTitle = readString(o.customTitle).trim() || null;
+  const renamed = customTitleOfRecord(o);
+  if (renamed !== undefined) into.customTitle = renamed;
   else if (o.type === "ai-title" && o.aiTitle) into.aiTitle = readString(o.aiTitle);
   else if (o.type === "last-prompt" && o.lastPrompt) into.lastPrompt = readString(o.lastPrompt);
   else if (o.type === "user" && into.firstUserMsg === null) {

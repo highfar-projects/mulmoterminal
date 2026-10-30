@@ -5,7 +5,7 @@
 //   working / waiting — absent means FALSE. A push that omits them is saying the session is
 //   not doing that; defaulting to the previous value would leave a finished session pulsing.
 //
-//   lastPrompt / aiTitle / memo — absent means "no news, keep what is shown", but an explicit
+//   lastPrompt / aiTitle / customTitle / memo — absent means "no news, keep what is shown", but an explicit
 //   NULL means "there is none now". Collapse the two and a cleared or restarted session keeps
 //   displaying the prompt and title from the conversation the user just ended — and an erased
 //   memo comes back on the next push.
@@ -18,6 +18,7 @@ export interface ActivityPush {
   event?: string | null;
   lastPrompt?: string | null;
   aiTitle?: string | null;
+  customTitle?: string | null;
   memo?: string | null;
 }
 
@@ -27,6 +28,7 @@ export interface CellActivityState {
   event: string | null;
   lastPrompt: string | null;
   aiTitle: string | null;
+  customTitle: string | null;
   memo: string | null;
 }
 
@@ -37,22 +39,28 @@ export function applyActivityPush(previous: CellActivityState, push: ActivityPus
     event: push.event !== undefined ? push.event : previous.event,
     lastPrompt: push.lastPrompt !== undefined ? push.lastPrompt : previous.lastPrompt,
     aiTitle: push.aiTitle !== undefined ? push.aiTitle : previous.aiTitle,
+    customTitle: push.customTitle !== undefined ? push.customTitle : previous.customTitle,
     memo: push.memo !== undefined ? push.memo : previous.memo,
   };
 }
 
-// What the cell header shows for a session: the user's own note, else our summary, else the last
-// prompt, else enough of the id to tell two cells apart, else a session that has not reported
-// anything yet.
+// What the cell header shows for a session: the user's own note, else the name they gave with
+// `/rename`, else our summary, else the last prompt, else enough of the id to tell two cells apart,
+// else a session that has not reported anything yet.
 //
-// The first three tiers go through the shared `sessionDisplayName`, which is where "the memo the
-// user wrote outranks everything the agent said" is decided once for the header, the sidebar row
-// and the phone's roster alike. The `/rename` name sits between the memo and the AI title in the
-// sidebar list and the phone's disk fallback only: this surface is fed by the live title push and
-// never reads the transcript. The id fallback is this surface's own: a cell must show SOMETHING
+// The first four tiers go through the shared `sessionDisplayName`, which is where "what the user
+// wrote outranks everything the agent said" is decided once for the header, the sidebar row and the
+// phone's roster alike. The `/rename` name is not in the live title push: it arrives with the
+// session's detail fetch and is kept when a push omits it. The id fallback is this surface's own: a cell must show SOMETHING
 // the moment it exists, which a sidebar row (with its own sentinel) does not.
 //
 // `||` rather than `??` on purpose — an empty memo, title or prompt is nothing to show, not a value.
-export function cellHeaderText(memo: string | null, aiTitle: string | null, lastPrompt: string | null, sessionId: string | null): string {
-  return sessionDisplayName(memo, aiTitle, lastPrompt) || (sessionId ? sessionId.slice(0, 8) : "starting…");
+export function cellHeaderText(
+  memo: string | null,
+  customTitle: string | null,
+  aiTitle: string | null,
+  lastPrompt: string | null,
+  sessionId: string | null,
+): string {
+  return sessionDisplayName(memo, customTitle, aiTitle, lastPrompt) || (sessionId ? sessionId.slice(0, 8) : "starting…");
 }

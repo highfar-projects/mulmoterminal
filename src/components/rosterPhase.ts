@@ -94,6 +94,8 @@ export const WORK_WORD: Record<WorkPhase, string> = { planning: "status.work.pla
 export interface SessionMetaView {
   lastPrompt: string | null;
   aiTitle: string | null;
+  /** The name the person gave with Claude Code's `/rename`; null for every other agent and for a cleared session. */
+  customTitle: string | null;
   /** What the agent's OWN store calls this session — its history-list title (#2123). Null for
    *  claude, which has `aiTitle`, and for the agents whose store cannot answer it for one id. */
   agentTitle: string | null;
@@ -110,6 +112,7 @@ export interface SessionMetaView {
 export const EMPTY_SESSION_META: SessionMetaView = {
   lastPrompt: null,
   aiTitle: null,
+  customTitle: null,
   agentTitle: null,
   agentTitleKind: null,
   lastResponse: null,
@@ -127,6 +130,7 @@ const stringOrNull = (value: unknown): string | null | undefined => (typeof valu
 // a phase); the other four said `string | null` and were taken on trust from the same response.
 export function mergeSessionMeta(previous: SessionMetaView, fetched: Record<string, unknown>): SessionMetaView {
   const aiTitle = stringOrNull(fetched.aiTitle);
+  const customTitle = stringOrNull(fetched.customTitle);
   const agentTitle = stringOrNull(fetched.agentTitle);
   // Read once rather than inside the merge, so the "keep the previous" branch stays one decision.
   const fetchedKind = isAgentTitleKind(fetched.agentTitleKind) ? fetched.agentTitleKind : null;
@@ -147,6 +151,8 @@ export function mergeSessionMeta(previous: SessionMetaView, fetched: Record<stri
     // never read under the previous title's provenance.
     agentTitleKind: agentTitle !== undefined ? fetchedKind : previous.agentTitleKind,
     aiTitle: aiTitle !== undefined ? aiTitle : previous.aiTitle,
+    // An explicit null wins (a cleared name, a cleared session); only an absent field keeps it.
+    customTitle: customTitle !== undefined ? customTitle : previous.customTitle,
     lastResponse: stringOrNull(fetched.lastResponse) ?? previous.lastResponse,
     memo: memo !== undefined ? memo : previous.memo,
     workPhase: isWorkPhase(fetched.workPhase) ? fetched.workPhase : null,

@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 
 import { sessionDetailView } from "../../../../server/session/list/session-detail-view.js";
 
-const TRANSCRIPT = { lastPrompt: "the old task", lastResponse: "the old reply" };
+const TRANSCRIPT = { lastPrompt: "the old task", lastResponse: "the old reply", customTitle: null };
 const NO_ACTIVITY = {};
 const NOT_CLEARED = false;
 
@@ -32,7 +32,7 @@ describe("sessionDetailView", () => {
   });
 
   it("reports nothing when neither side has anything", () => {
-    const view = sessionDetailView({}, { lastPrompt: null, lastResponse: null }, NO_ACTIVITY, NOT_CLEARED);
+    const view = sessionDetailView({}, { lastPrompt: null, lastResponse: null, customTitle: null }, NO_ACTIVITY, NOT_CLEARED);
     expect([view.lastPrompt, view.lastResponse]).toEqual([null, null]);
   });
 
@@ -50,6 +50,13 @@ describe("sessionDetailView", () => {
   it("still prefers what it has seen since the clear", () => {
     const view = sessionDetailView({ lastPrompt: "the new task" }, TRANSCRIPT, NO_ACTIVITY, true);
     expect([view.lastPrompt, view.lastResponse]).toEqual(["the new task", ""]);
+  });
+
+  // `/rename` names the conversation, so a clear ends it with the rest of the transcript.
+  it("reports the /rename name, except for a session that was cleared", () => {
+    const renamed = { ...TRANSCRIPT, customTitle: "Parser rewrite" };
+    expect(sessionDetailView({}, renamed, NO_ACTIVITY, NOT_CLEARED).customTitle).toBe("Parser rewrite");
+    expect(sessionDetailView({}, renamed, NO_ACTIVITY, true).customTitle).toBeNull();
   });
 
   // The memo is the user's own note about the CELL, not something read off the transcript, so a

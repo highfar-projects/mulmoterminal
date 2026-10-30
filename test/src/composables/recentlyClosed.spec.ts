@@ -69,9 +69,10 @@ describe("closedCellOf", () => {
 });
 
 describe("closedTitle", () => {
-  const meta = { memo: null, aiTitle: null, agentTitle: null, lastPrompt: null };
-  it("prefers the memo, then the agent's titles, then the prompt", () => {
-    expect(closedTitle({ ...meta, memo: "m", aiTitle: "a", lastPrompt: "p" })).toBe("m");
+  const meta = { memo: null, customTitle: null, aiTitle: null, agentTitle: null, lastPrompt: null };
+  it("prefers the memo, then the /rename name, then the agent's titles, then the prompt", () => {
+    expect(closedTitle({ ...meta, memo: "m", customTitle: "r", aiTitle: "a", lastPrompt: "p" })).toBe("m");
+    expect(closedTitle({ ...meta, customTitle: "r", aiTitle: "a", lastPrompt: "p" })).toBe("r");
     expect(closedTitle({ ...meta, aiTitle: "a", agentTitle: "g", lastPrompt: "p" })).toBe("a");
     expect(closedTitle({ ...meta, agentTitle: "g", lastPrompt: "p" })).toBe("g");
     expect(closedTitle({ ...meta, lastPrompt: "p" })).toBe("p");

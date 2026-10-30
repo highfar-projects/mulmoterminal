@@ -19,6 +19,7 @@ const cell = (over: Partial<Cell> = {}): Cell => ({ uid: 1, cwd: "/a", session: 
 const META: SessionMetaView = {
   lastPrompt: "fix the parser",
   aiTitle: "Parser fix",
+  customTitle: null,
   agentTitle: null,
   agentTitleKind: null,
   lastResponse: "done",
@@ -29,6 +30,11 @@ const META: SessionMetaView = {
 const CHROME: RowChrome = { headerColor: "#111", headerTextColor: "#fff", iconUrl: "/logo.png" };
 
 describe("rosterRow — the summary line (#2123)", () => {
+  it("shows the /rename name over the AI title", () => {
+    const row = rosterRow(cell(), lookups({ meta: () => ({ ...META, customTitle: "Parser rewrite" }) }));
+    expect(row.summary).toBe("Parser rewrite");
+  });
+
   // Claude's own AI title and the agent's store label are DISJOINT: `aiTitle` is null for every
   // non-claude agent, `agentTitle` is null for claude. So the `??` is a merge of two sources, not a
   // preference between two answers for one cell — and that is why it can share the label.

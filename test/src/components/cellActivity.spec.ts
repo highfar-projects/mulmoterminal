@@ -2,9 +2,23 @@ import { describe, it, expect } from "vitest";
 
 import { applyActivityPush, cellHeaderText, type CellActivityState } from "../../../src/components/cellActivity";
 
-const shown: CellActivityState = { working: true, waiting: false, event: "Stop", lastPrompt: "fix the login bug", aiTitle: "Login fix", memo: null };
+const shown: CellActivityState = {
+  working: true,
+  waiting: false,
+  event: "Stop",
+  lastPrompt: "fix the login bug",
+  aiTitle: "Login fix",
+  customTitle: null,
+  memo: null,
+};
 
 describe("applyActivityPush", () => {
+  it("keeps the /rename name a push omits, and clears it on an explicit null", () => {
+    const renamed = { ...shown, customTitle: "Parser rewrite" };
+    expect(applyActivityPush(renamed, { aiTitle: "x" }).customTitle).toBe("Parser rewrite");
+    expect(applyActivityPush(renamed, { customTitle: null }).customTitle).toBeNull();
+  });
+
   it("takes the flags the push carries", () => {
     expect(applyActivityPush(shown, { working: false, waiting: true })).toMatchObject({ working: false, waiting: true });
   });
@@ -46,42 +60,55 @@ describe("applyActivityPush", () => {
 
   it("does not mutate the state it was given", () => {
     applyActivityPush(shown, { working: false, lastPrompt: null });
-    expect(shown).toEqual({ working: true, waiting: false, event: "Stop", lastPrompt: "fix the login bug", aiTitle: "Login fix", memo: null });
+    expect(shown).toEqual({
+      working: true,
+      waiting: false,
+      event: "Stop",
+      lastPrompt: "fix the login bug",
+      aiTitle: "Login fix",
+      customTitle: null,
+      memo: null,
+    });
   });
 });
 
 describe("cellHeaderText", () => {
+  it("shows the /rename name over our summary, and the memo over both", () => {
+    expect(cellHeaderText(null, "Parser rewrite", "Login fix", "fix the login bug", "abcdef12")).toBe("Parser rewrite");
+    expect(cellHeaderText("ship it", "Parser rewrite", "Login fix", "fix the login bug", "abcdef12")).toBe("ship it");
+  });
+
   it("prefers our summary", () => {
-    expect(cellHeaderText(null, "Login fix", "fix the login bug", "abcdef12-3456")).toBe("Login fix");
+    expect(cellHeaderText(null, null, "Login fix", "fix the login bug", "abcdef12-3456")).toBe("Login fix");
   });
 
   it("falls back to the last prompt", () => {
-    expect(cellHeaderText(null, null, "fix the login bug", "abcdef12-3456")).toBe("fix the login bug");
+    expect(cellHeaderText(null, null, null, "fix the login bug", "abcdef12-3456")).toBe("fix the login bug");
   });
 
   // Enough of the id to tell two untitled cells apart.
   it("falls back to a short session id", () => {
-    expect(cellHeaderText(null, null, null, "abcdef12-3456")).toBe("abcdef12");
+    expect(cellHeaderText(null, null, null, null, "abcdef12-3456")).toBe("abcdef12");
   });
 
   it("says a session has not reported anything yet", () => {
-    expect(cellHeaderText(null, null, null, null)).toBe("starting…");
+    expect(cellHeaderText(null, null, null, null, null)).toBe("starting…");
   });
 
   // An empty title is nothing to show, not a value — `||`, not `??`.
   it("skips an empty title and an empty prompt", () => {
-    expect(cellHeaderText(null, "", "fix the login bug", "abcdef12")).toBe("fix the login bug");
-    expect(cellHeaderText(null, "", "", "abcdef12")).toBe("abcdef12");
+    expect(cellHeaderText(null, null, "", "fix the login bug", "abcdef12")).toBe("fix the login bug");
+    expect(cellHeaderText(null, null, "", "", "abcdef12")).toBe("abcdef12");
   });
 
   // The memo is the only tier the USER wrote; everything below it is what the agent said. Same
   // precedence as the sidebar's sessionListTitle, so one session does not go by two names.
   it("prefers the user's memo over the summary and the prompt", () => {
-    expect(cellHeaderText("release check", "Login fix", "fix the login bug", "abcdef12")).toBe("release check");
+    expect(cellHeaderText("release check", null, "Login fix", "fix the login bug", "abcdef12")).toBe("release check");
   });
 
   it("falls back to the summary when the memo is erased", () => {
-    expect(cellHeaderText(null, "Login fix", "fix the login bug", "abcdef12")).toBe("Login fix");
-    expect(cellHeaderText("", "Login fix", "fix the login bug", "abcdef12")).toBe("Login fix");
+    expect(cellHeaderText(null, null, "Login fix", "fix the login bug", "abcdef12")).toBe("Login fix");
+    expect(cellHeaderText("", null, "Login fix", "fix the login bug", "abcdef12")).toBe("Login fix");
   });
 });

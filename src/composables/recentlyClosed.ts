@@ -15,9 +15,9 @@ export const RECENTLY_CLOSED_MAX = 20;
 
 const basename = (path: string | null): string => (path ?? "").split(/[\\/]/).filter(Boolean).pop() ?? "";
 
-/** What the roster would call the session: the user's memo first, then the agent's title, then the prompt. */
-export const closedTitle = (meta: Pick<SessionMetaView, "memo" | "aiTitle" | "agentTitle" | "lastPrompt"> | undefined): string | null =>
-  meta ? (meta.memo ?? meta.aiTitle ?? meta.agentTitle ?? meta.lastPrompt) : null;
+/** What the roster would call the session: the user's memo first, then their `/rename` name, then the agent's title, then the prompt. */
+export const closedTitle = (meta: Pick<SessionMetaView, "memo" | "customTitle" | "aiTitle" | "agentTitle" | "lastPrompt"> | undefined): string | null =>
+  meta ? (meta.memo ?? meta.customTitle ?? meta.aiTitle ?? meta.agentTitle ?? meta.lastPrompt) : null;
 
 /** What reopening `cell` needs, or null for a cell there is nothing to reopen of. A command cell is
  *  ephemeral, and a configured launcher is addressed by its position in a list that may have moved. */
