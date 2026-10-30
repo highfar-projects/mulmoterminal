@@ -339,6 +339,9 @@ const isActivityMsg = (d: unknown): d is ActivityMsg => typeof d === "object" &&
 // moment it ASKED; a live push that lands while it is in flight is newer, so the seed must
 // not overwrite it — the #620 race, scoped to one cell.
 let activityGen = 0;
+// Bumped when a `/clear` ends the conversation. A detail read that began before it describes the
+// ended conversation, so its name must not be applied after it.
+let clearGen = 0;
 // Seeds also overlap each other — mount racing a reconnect, or reconnect flaps. Only the
 // newest may apply; an older one, even resolving last, describes a moment already overtaken.
 let latestSeed = 0;
@@ -351,7 +354,10 @@ function applyActivity(d: ActivityPush) {
   activityGen++;
   // `/clear` publishes an empty prompt (hook-routes.ts), and the name was given to the conversation
   // it ended. Waiting for the next fetch would leave the old name on an idle cell.
-  if (d.lastPrompt === "") customTitle.value = null;
+  if (d.lastPrompt === "") {
+    clearGen++;
+    customTitle.value = null;
+  }
   const next = applyActivityPush(
     {
       working: working.value,
@@ -445,6 +451,7 @@ async function loadInitial(id: string) {
   const seedId = ++latestSeed;
   const badgeReq = ++latestBadgeReq;
   const genBeforeFetch = activityGen;
+  const clearGenBeforeFetch = clearGen;
   const data = await fetchSessionDetail(id);
   // A newer seed superseded this one while it was in flight: its answer is the current one,
   // so this stale snapshot applies neither activity nor badges.
@@ -457,7 +464,7 @@ async function loadInitial(id: string) {
     applyBadges(data);
     // The name is read off the transcript like the badges, and can change between two reads, so it
     // follows their token: an older read resolving late must not put a name back.
-    applyCustomTitle(data);
+    if (clearGen === clearGenBeforeFetch) applyCustomTitle(data);
   }
   // Not guarded by either token: it is a fact about how the session began, so every answer for
   // this id carries the same one and there is no older-vs-newer to lose.
@@ -470,10 +477,11 @@ async function refreshUsage() {
   const id = sessionId.value;
   if (!id) return;
   const badgeReq = ++latestBadgeReq;
+  const clearGenBeforeFetch = clearGen;
   const data = await fetchSessionDetail(id);
   if (!data || badgeReq !== latestBadgeReq) return;
   applyBadges(data);
-  applyCustomTitle(data);
+  if (clearGen === clearGenBeforeFetch) applyCustomTitle(data);
 }
 
 // Canvas output this cell has produced that nobody has looked at. The grid is a TRIAGE board,

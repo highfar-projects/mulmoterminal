@@ -1188,6 +1188,28 @@ describe("TerminalCell", () => {
     expect(promptText(w)).toBe(id.slice(0, 8));
   });
 
+  it("does not let a detail read that began before /clear put the ended conversation's name back", async () => {
+    const id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+    const gate = deferred<boolean>();
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ sessions: [] }) };
+      if (u.includes(`/api/session/${id}`)) {
+        await gate.promise;
+        return { ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: "p", customTitle: "Old name" }) };
+      }
+      return { ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: null }) };
+    }) as unknown as typeof fetch;
+
+    const w = mountCell(id); // the seed is in flight
+    captured?.({ id, working: false, waiting: false, lastPrompt: "" }); // /clear lands first
+    await nextTick();
+    gate.resolve(true);
+    await flushPromises();
+    await nextTick();
+    expect(promptText(w)).toBe(id.slice(0, 8));
+  });
+
   it("does not let an older detail read put back a name a newer one removed", async () => {
     const id = "99999999-9999-9999-9999-999999999999";
     const gates = [deferred<boolean>(), deferred<boolean>()];
