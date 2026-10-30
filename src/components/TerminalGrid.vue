@@ -374,23 +374,27 @@ const rowWidthNow = ref(0);
 const paneMax = computed(() => Math.max(0, rowWidthNow.value - MIN_TERMINAL));
 const paneMin = computed(() => Math.min(MIN_GUI, paneMax.value));
 
-// The pane's OWN close button, and the terminal-click entrance. Both act on the pane that is on
-// screen, which is `paneUid` — normally the enlarged cell, but not while the pane trails a re-root
-// it could not save out of.
-function setFilesOpen(open: boolean): void {
-  setRightPane(open ? "files" : null, paneUid.value ?? props.expandedUid);
+// The terminal-click entrance (the close button is below). It acts on the pane that is on screen,
+// which is `paneUid` — normally the enlarged cell, but not while the pane trails a re-root it could
+// not save out of.
+function showFilesPane(): void {
+  setRightPane("files", paneUid.value ?? props.expandedUid);
 }
-// Closing awaits the save, and a pane pressed meanwhile can take the slot first and unmount the
-// files pane, whose `close` is then dropped. That close is finished here, by taking Files out from
-// under the pane that covered it, so the press and the close are both done in either order.
-// A Files opened again while the save was pending is a newer request, and is left where it is.
+// The pane's own close button. It awaits the save, and meanwhile a pane pressed or a zoom move can
+// take the slot and unmount the files pane, or swap what is on top, so the pane's own `close`
+// would land late or not at all. The close is decided here instead, against where Files is NOW:
+// on top of that cell's stack, it closes as usual; under another pane, it is taken out from there.
+// A Files opened again on that cell while the save was pending is a newer request, and stays.
 const filesOpenedTimes = new Map<number, number>();
-async function finishFilesCloseOnceSaved(saved: Promise<boolean>): Promise<void> {
+async function closeFilesOnceSaved(saved: Promise<boolean>): Promise<void> {
   const uid = paneUid.value ?? props.expandedUid;
   if (uid === null) return;
   const openedBefore = filesOpenedTimes.get(uid);
-  if (!(await saved) || paneOf(uid) === "files") return; // still on screen: its own `close` lands
-  if (filesOpenedTimes.get(uid) !== openedBefore) return;
+  if (!(await saved) || filesOpenedTimes.get(uid) !== openedBefore) return;
+  if (paneOf(uid) === "files") {
+    setRightPane(null, uid);
+    return;
+  }
   const next = withPaneRemoved(panesOf(uid), "files");
   paneByCell.value = new Map(paneByCell.value).set(uid, next);
   persistPane(uid, next.stack);
@@ -590,11 +594,11 @@ onBeforeUnmount(registerGridCellRunner((uid, action) => runCellAction(action, ui
 // beside them — so this is the seam rather than another prop to watch.
 /** The `files-find` shortcut's entrance (#2099): make sure the files pane is up, then put the
  *  finder over it. Shaped like `showClickedPath` — the other way something outside this component
- *  opens this pane — and for its reason: `setFilesOpen` answers for the pane that is ON SCREEN,
+ *  opens this pane — and for its reason: `showFilesPane` answers for the pane that is ON SCREEN,
  *  which is not always the enlarged cell. The pane can TRAIL another cell after a re-root it could
  *  not save out of, and moving it from here would take that unsaved buffer with it. */
 async function openFilesFinder(query = ""): Promise<void> {
-  if (!filesOpen.value) setFilesOpen(true);
+  if (!filesOpen.value) showFilesPane();
   await nextTick(); // the pane may have just mounted; `filesPane` is only a ref afterwards
   filesPane.value?.openFinder(query);
 }
@@ -602,7 +606,7 @@ async function openFilesFinder(query = ""): Promise<void> {
 /** The `files-search` shortcut's entrance (#2140), the same shape as the finder's above and for
  *  every one of its reasons — the pane may not be up, and it may be rooted on another cell. */
 async function openFilesSearch(query = ""): Promise<void> {
-  if (!filesOpen.value) setFilesOpen(true);
+  if (!filesOpen.value) showFilesPane();
   await nextTick();
   filesPane.value?.openSearch(query);
 }
@@ -1238,7 +1242,7 @@ function openClickedPath(cwd: string, pathRel: string, location: FileLocation | 
 }
 
 async function showClickedPath(pathRel: string, location: FileLocation | undefined, newTab: boolean): Promise<void> {
-  if (!filesOpen.value) setFilesOpen(true);
+  if (!filesOpen.value) showFilesPane();
   // Let the pane mount and the re-root watcher put paneCwd under it — the pane resolves the
   // path against that prop, so opening any earlier would read it from the wrong directory.
   await nextTick();
@@ -1873,8 +1877,7 @@ function onRosterDragLeave(event: DragEvent) {
           :stories-roots="storiesRoots"
           :style="{ flex: `0 0 ${paneWidth}px` }"
           class="border-l border-border bg-deep"
-          @close="setFilesOpen(false)"
-          @closing="finishFilesCloseOnceSaved"
+          @closing="closeFilesOnceSaved"
           @insert-text="insertIntoPaneCell"
           @open-canvas="openPaneCellCanvas"
         >

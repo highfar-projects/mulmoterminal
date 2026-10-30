@@ -101,7 +101,9 @@ const open = async (w: Grid, name: Exclude<PaneName, "QuestionPane">) => {
 };
 const closeShown = async (w: Grid) => {
   const name = shown(w);
-  if (name) w.findComponent({ name }).vm.$emit("close");
+  // The files pane's close button hands its save over; the grid closes once it lands.
+  if (name === "FilesPane") w.findComponent({ name }).vm.$emit("closing", Promise.resolve(true));
+  else if (name) w.findComponent({ name }).vm.$emit("close");
   await flushPromises();
 };
 const full = (w: Grid) => w.find(".zoom-row").classes().includes("pane-full");
@@ -426,6 +428,33 @@ describe("stacked right panes", () => {
       finishSaves[1](true);
       await flushPromises();
       expect(remembered()).toEqual({ s1: ["tools", "files", "transcript"] });
+    });
+
+    it("when both saves finish together", async () => {
+      const { w, finishSaves } = await pressThenClose();
+      finishSaves[0](true);
+      finishSaves[1](true);
+      await flushPromises();
+      expect(await outcome(w)).toEqual(TOOLS_ALONE);
+    });
+
+    it("when the zoom moves away before the close's save lands", async () => {
+      const w = mountGrid();
+      await open(w, "FilesPane");
+      const finishSaves: ((saved: boolean) => void)[] = [];
+      flush.mockImplementation(() => new Promise((resolve) => finishSaves.push(resolve)));
+      const files: unknown = w.findComponent({ name: "FilesPane" }).vm;
+      if (!hasRequestClose(files)) throw new Error("the files pane stub exposes requestClose");
+      void files.requestClose();
+      await w.setProps({ expandedUid: 2 });
+      finishSaves[1](true);
+      await flushPromises();
+      finishSaves[0](true);
+      await flushPromises();
+      expect(remembered()).toEqual({});
+      await w.setProps({ expandedUid: 1 });
+      await flushPromises();
+      expect(shown(w)).toBeNull();
     });
 
     it("when the press's save finishes first", async () => {

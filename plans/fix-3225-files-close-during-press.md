@@ -15,18 +15,20 @@ stack.
 ## Fix
 
 - `FilesPane` emits `closing` with the save (a promise) before awaiting it, while it is still
-  mounted. `close` is unchanged, so `FilesOverlay` and the grid's normal path are untouched.
-- The grid awaits that save itself. If it landed and Files is no longer on screen in that cell, it
-  takes Files out of the stack (`withPaneRemoved`, pure). When Files is still on screen it does
-  nothing, and the pane's own `close` closes it as before.
+  mounted. `close` is unchanged, so `FilesOverlay` is untouched.
+- The grid closes Files from `closing` alone and no longer listens to `close`. The pane's own `close`
+  can land late (both saves finishing in one tick: it would close whatever is on top by then) or not
+  at all (a press or a zoom move unmounted the pane). The grid awaits the save and decides against
+  where Files is NOW in the cell it was on: on top, it closes as usual (`setRightPane(null)`); under
+  another pane, it is taken out of the stack (`withPaneRemoved`, pure).
 - Files opened again on that cell while the save was pending is a newer request. `setRightPane`
-  counts openings of Files per cell, and the late close leaves the stack alone when the count moved.
+  counts openings of Files per cell, and the late close does nothing when the count moved.
 
 ## Tests
 
 - `rightPaneStack.spec.ts`: `withPaneRemoved`.
-- `rightPaneStackGrid.spec.ts`: a press then a close, in both save orders; an ordinary close still
-  goes through the pane's own `close` (red if the grid finishes it while Files is on screen, which
-  skips filing the tree); a Files opened again before the close's save lands stays. The stub's close
-  button mirrors `FilesPane`'s.
+- `rightPaneStackGrid.spec.ts`: a press then a close, with the saves finishing in either order or
+  together; the zoom moving away before the close's save lands; a Files opened again meanwhile
+  stays; an ordinary close files the tree for next time. The stub's close button mirrors
+  `FilesPane`'s, and specs close the files pane by emitting `closing`.
 - `FilesPane.spec.ts`: `closing` carries the save result, `true` when saved and `false` when not.
