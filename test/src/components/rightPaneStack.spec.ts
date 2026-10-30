@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { RIGHT_PANES } from "../../../src/components/gridCell";
-import { NO_PANES, readStack, shownPane, withPaneOpened, withShownPaneClosed, type CellPanes } from "../../../src/components/rightPaneStack";
+import { NO_PANES, readStack, shownPane, withPaneOpened, withPaneRemoved, withShownPaneClosed, type CellPanes } from "../../../src/components/rightPaneStack";
 
 const opened = (...panes: (typeof RIGHT_PANES)[number][]): CellPanes => panes.reduce(withPaneOpened, NO_PANES);
 
@@ -36,6 +36,14 @@ describe("rightPaneStack", () => {
     const asked = withPaneOpened(opened("files"), "question");
     expect(withPaneOpened(asked, "canvas")).toEqual({ stack: ["files", "canvas"], question: false });
     expect(withPaneOpened(asked, "files")).toEqual({ stack: ["files"], question: false });
+  });
+
+  it("takes one pane out from anywhere in the stack, keeping the rest and any question", () => {
+    expect(withPaneRemoved(opened("files", "tools"), "files")).toEqual({ stack: ["tools"], question: false });
+    expect(withPaneRemoved(opened("tools", "files"), "files")).toEqual({ stack: ["tools"], question: false });
+    expect(withPaneRemoved(withPaneOpened(opened("files", "tools"), "question"), "files")).toEqual({ stack: ["tools"], question: true });
+    expect(withPaneRemoved(opened("tools"), "files")).toEqual({ stack: ["tools"], question: false });
+    expect(withPaneRemoved(NO_PANES, "files")).toEqual(NO_PANES);
   });
 
   it("closing with nothing open stays empty", () => {

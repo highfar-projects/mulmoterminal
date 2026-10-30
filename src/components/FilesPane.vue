@@ -90,7 +90,15 @@ const props = defineProps<{
   // (#3075). Absent where there is no cell — the full-screen view — and then every file opens on its editor.
   viewModeSession?: string | null;
 }>();
-const emit = defineEmits<{ close: []; dirty: [boolean]; "insert-text": [text: string]; "open-canvas": [] }>();
+const emit = defineEmits<{
+  close: [];
+  /** The close button was pressed. Carries the save, so a host can finish closing even if this pane
+   *  is unmounted before the save lands (a `close` emitted then is dropped). */
+  closing: [saved: Promise<boolean>];
+  dirty: [boolean];
+  "insert-text": [text: string];
+  "open-canvas": [];
+}>();
 
 // The tree is its own thing now (#2158): what has been read, what is expanded, what is on screen.
 // The markup for it stays here.
@@ -347,7 +355,9 @@ function openSearch(query = ""): void {
 }
 
 async function requestClose(): Promise<void> {
-  if (await flush()) emit("close");
+  const saved = flush();
+  emit("closing", saved);
+  if (await saved) emit("close");
 }
 
 // Bound to this pane's own subtree, not to window: with a pane open beside a terminal,

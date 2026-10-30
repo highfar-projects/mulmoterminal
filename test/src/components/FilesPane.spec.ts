@@ -109,6 +109,10 @@ describe("FilesPane", () => {
     expect(writeCalls()).toHaveLength(1);
     expect(confirmSpy).not.toHaveBeenCalled();
     expect(w.emitted("close")).toHaveLength(1);
+    // The save is handed over too, for a host that unmounts this pane before `close` could land.
+    const closing = w.emitted("closing") ?? [];
+    expect(closing).toHaveLength(1);
+    await expect(closing[0][0]).resolves.toBe(true);
     confirmSpy.mockRestore();
   });
 
@@ -288,6 +292,7 @@ describe("FilesPane when nothing can be saved or banked", () => {
     await w.find('[aria-label="Close files"]').trigger("click");
     await flushPromises();
     expect(w.emitted("close")).toBeUndefined();
+    await expect((w.emitted("closing") ?? [])[0]?.[0]).resolves.toBe(false);
   });
 
   // "Kept as a backup either way" is the banner's promise; a store that refuses the write
