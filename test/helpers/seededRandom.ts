@@ -11,7 +11,7 @@ const RANGE = 2 ** (32 - LOW_BITS_DROPPED);
 export interface SeededRandom {
   /** A fraction in [0, 1). */
   fraction(): number;
-  /** An integer in [0, bound); a bound below one names no integer, so it throws rather than answer. */
+  /** An integer in [0, bound), for a positive integer bound; any other bound is a spec bug, so it throws. */
   below(bound: number): number;
   /** One of `choices`; a spec picking from none is a spec bug, so it throws rather than answer. */
   pick<T>(choices: readonly T[]): T;
@@ -24,7 +24,7 @@ export function seededRandom(seed: number): SeededRandom {
     return (state >>> LOW_BITS_DROPPED) / RANGE;
   };
   const below = (bound: number): number => {
-    if (bound < 1) throw new Error(`seededRandom.below: no integer lies in [0, ${bound})`);
+    if (!Number.isInteger(bound) || bound < 1) throw new Error(`seededRandom.below: the bound must be a positive integer, not ${bound}`);
     return Math.floor(fraction() * bound);
   };
   const pick = <T>(choices: readonly T[]): T => {
