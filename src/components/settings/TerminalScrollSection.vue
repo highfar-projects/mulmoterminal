@@ -43,10 +43,11 @@ function onReturnToggle(e: Event) {
       data-testid="copy-mode-banner-toggle"
       :checked="copyModeBanner"
       :aria-label="t('terminal.copyMode.settingLabel')"
+      aria-describedby="copy-mode-banner-hint"
       @change="onBannerToggle"
     />
     <span class="text-[12px]">
-      <strong>{{ t("terminal.copyMode.settingLabel") }}</strong> — {{ t("terminal.copyMode.settingHint") }}
+      <strong>{{ t("terminal.copyMode.settingLabel") }}</strong> — <span id="copy-mode-banner-hint">{{ t("terminal.copyMode.settingHint") }}</span>
     </span>
   </label>
 </template>

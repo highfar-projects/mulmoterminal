@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 import { mount, shallowMount } from "@vue/test-utils";
 import { nextTick } from "vue";
+import { i18n } from "../../../src/i18n";
 
 vi.mock("../../../src/composables/usePubSub", () => ({
   usePubSub: () => ({ subscribe: () => () => {}, onReconnect: () => () => {} }),
@@ -53,12 +54,23 @@ describe("the copy-mode banner switch", () => {
   it("is driven by the Settings checkbox, which starts ticked", async () => {
     const settings = mount(TerminalScrollSection);
     const box = settings.get('[data-testid="copy-mode-banner-toggle"]');
-    expect((box.element as HTMLInputElement).checked).toBe(true);
+    expect(box.element).toBeInstanceOf(HTMLInputElement);
+    expect(box.element instanceof HTMLInputElement && box.element.checked).toBe(true);
     await box.setValue(false);
     await nextTick();
     expect(bannerCount(true)).toBe(0);
     await box.setValue(true);
     await nextTick();
     expect(bannerCount(true)).toBe(1);
+  });
+
+  // The aria-label names the checkbox; without a description its hint (what the banner is and that q
+  // still returns) is never announced.
+  it("describes the checkbox with its hint, which the accessible name does not carry", () => {
+    const settings = mount(TerminalScrollSection, { attachTo: document.body });
+    const box = settings.get('[data-testid="copy-mode-banner-toggle"]');
+    const described = document.getElementById(box.attributes("aria-describedby") ?? "");
+    expect(described?.textContent).toBe(i18n.global.t("terminal.copyMode.settingHint"));
+    settings.unmount();
   });
 });
