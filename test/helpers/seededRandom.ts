@@ -11,7 +11,7 @@ const RANGE = 2 ** (32 - LOW_BITS_DROPPED);
 export interface SeededRandom {
   /** A fraction in [0, 1). */
   fraction(): number;
-  /** An integer in [0, bound). */
+  /** An integer in [0, bound); a bound below one names no integer, so it throws rather than answer. */
   below(bound: number): number;
   /** One of `choices`; a spec picking from none is a spec bug, so it throws rather than answer. */
   pick<T>(choices: readonly T[]): T;
@@ -23,7 +23,10 @@ export function seededRandom(seed: number): SeededRandom {
     state = (Math.imul(state, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
     return (state >>> LOW_BITS_DROPPED) / RANGE;
   };
-  const below = (bound: number): number => Math.floor(fraction() * bound);
+  const below = (bound: number): number => {
+    if (bound < 1) throw new Error(`seededRandom.below: no integer lies in [0, ${bound})`);
+    return Math.floor(fraction() * bound);
+  };
   const pick = <T>(choices: readonly T[]): T => {
     if (choices.length === 0) throw new Error("seededRandom.pick: nothing to pick from");
     return choices[below(choices.length)];

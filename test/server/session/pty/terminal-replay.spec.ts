@@ -293,12 +293,13 @@ describe("growOutputTail + boundedTail vs. appendBoundedOutput", () => {
       `${ESC}(B`,
       "日本語テキストの行です",
     ].forEach((atom) => expect(whole).toContain(atom));
-    // The aborted escape: an ESC followed by none of the openers above.
+    // The aborted escape: an ESC followed by none of the openers above, nor by the backslash that
+    // ends an OSC 8 string.
     expect(
       whole
         .split(ESC)
         .slice(1)
-        .some((after) => !/^[[\]=(]/.test(after)),
+        .some((after) => !/^[[\]=(\\]/.test(after)),
     ).toBe(true);
   });
 

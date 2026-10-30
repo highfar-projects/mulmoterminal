@@ -5,6 +5,7 @@
 import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import vitestConfig from "../../vitest.config.js";
 import { LCG_MULTIPLIER, seededRandom } from "./seededRandom.js";
 
 const DRAWS = 100_000;
@@ -13,6 +14,20 @@ const DRAWS = 100_000;
 const WINDOW = 4;
 const REACH_DRAWS = 2000;
 const SAMPLE = 10_000;
+
+/** Where vitest collects specs from: every `.ts` under test/, since its helpers are the specs' code
+ *  too, and the specs colocated with the code under the other roots. Pinned to the config below. */
+const SPEC_ROOTS = [
+  { root: "test", suffix: ".ts" },
+  { root: "src", suffix: ".spec.ts" },
+  { root: "server", suffix: ".spec.ts" },
+  { root: "bin", suffix: ".spec.ts" },
+];
+
+const specFiles = ({ root, suffix }: { root: string; suffix: string }): string[] =>
+  readdirSync(path.join(process.cwd(), root), { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(suffix))
+    .map((entry) => path.join(entry.parentPath, entry.name));
 
 const fractions = (seed: number, count: number): number[] => {
   const random = seededRandom(seed);
@@ -50,21 +65,29 @@ describe("seededRandom", () => {
     expect(windows.size).toBe(DRAWS - WINDOW + 1);
   });
 
-  it("picks only members, and refuses an empty list", () => {
+  it("picks only members", () => {
     const random = seededRandom(2);
     const choices = ["a", "b", "c"] as const;
     const picked = new Set(Array.from({ length: 300 }, () => random.pick(choices)));
     expect([...picked].sort()).toEqual([...choices]);
-    expect(() => random.pick([])).toThrow();
   });
 
-  it("is the only generator of its kind under test/", () => {
+  it("refuses an empty list and a bound below one", () => {
+    const random = seededRandom(2);
+    expect(() => random.pick([])).toThrow();
+    expect(() => random.below(0)).toThrow();
+    expect(random.below(1)).toBe(0);
+  });
+
+  it("scans every root vitest collects specs from", () => {
+    const configured = (vitestConfig.test?.include ?? []).map((pattern) => pattern.split("/")[0]);
+    expect([...new Set(configured)].sort()).toEqual(SPEC_ROOTS.map(({ root }) => root).sort());
+  });
+
+  it("is the only generator of its kind among the specs and their helpers", () => {
     // The step is short enough to copy and quietly wrong when copied in doubles: a spec reaches it
     // through this helper or not at all.
-    const root = path.join(process.cwd(), "test");
-    const carriers = readdirSync(root, { recursive: true, withFileTypes: true })
-      .filter((entry) => entry.isFile() && entry.name.endsWith(".ts"))
-      .map((entry) => path.join(entry.parentPath, entry.name))
+    const carriers = SPEC_ROOTS.flatMap(specFiles)
       .filter((file) => readFileSync(file, "utf-8").includes(String(LCG_MULTIPLIER)))
       .map((file) => path.relative(process.cwd(), file).split(path.sep).join("/"));
     expect(carriers).toEqual(["test/helpers/seededRandom.ts"]);

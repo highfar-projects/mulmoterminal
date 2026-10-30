@@ -9,7 +9,7 @@ Issue: #3220
 ## 方針
 
 - **生成器を一つにする**: `test/helpers/seededRandom.ts`。一歩は `Math.imul` で 32 bit に収め、値は上位 bit から取る（`fraction()` は [0, 1) の小数、`below(bound)` は [0, bound) の整数、`pick(choices)` はその一つ）。#3216 の spec が使っていた算術と同一なので、その spec の入力は変わらない。
-- **自前の一歩を全部消す**: 一歩を写していた 12 箇所（`previewCodeNumbering.spec.ts` の BigInt 版も含む）を helper に向ける。写しが残っていないことは helper の spec が `test/` を走査して固定する（乗数の数字を含むファイルが helper 一つだけであること）。
+- **自前の一歩を全部消す**: 一歩を写していた 12 箇所（`previewCodeNumbering.spec.ts` の BigInt 版も含む）を helper に向ける。写しが残っていないことは helper の spec が spec の置き場（`test/` の全 `.ts` と、`src/`・`server/`・`bin/` に同居する `.spec.ts`）を走査して固定する（乗数の数字を含むファイルが helper 一つだけであること）。走査する置き場は `vitest.config.ts` の `include` と突き合わせる。
 - **届く範囲を assertion にする**: 生成器の契約（同じ種は同じ列、範囲、小さな上限の全値に届く、十万回で巡回しない）は helper の spec に一度だけ置く。各 spec には、その spec が言っている入力空間を実際に踏んだこと（全部の片・全部の長さ・全部の agent、など）を足す。周期の退化で半分が重複していた二本には「生成列の過半が別物」を足す。
 - **入力が変わる**: 生成器を替えれば生成される入力も変わる。性質が広がった入力で初めて赤になるものがあれば、それは退化していた間に見えていなかった発見として別に扱う（この PR で直さない）。
 
@@ -22,5 +22,5 @@ Issue: #3220
 
 - 置き換えた spec を一本ずつ回し、足した届く範囲の assertion が通ること。
 - `tmuxWidthProbe.spec.ts` は実際の tmux と幅を突き合わせる。乱数の見本が変わるので、新しい見本で不一致が出ないことを手元の tmux で確認する。
-- helper の spec の走査は、どこかの spec に一歩を書き戻すと赤になることを確認する。
+- helper の spec の走査は、どこかの spec（同居する spec も含む）に一歩を書き戻すと赤になることを確認する。
 - `yarn format` → `yarn lint` → `yarn typecheck` → `yarn build` → `yarn test`。
