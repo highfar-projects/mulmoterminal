@@ -12,13 +12,14 @@ issue の案 A。
 
 - `useFilesTree` に `refreshAll()` を足す。ルートを `loadRoot()` で読み直したあと、読み込み済みのフォルダを親から順に再帰的に `refreshDir()` で読み直す。開いているかどうかは問わない（畳んであるだけのフォルダは、次に開いたとき古いままになるため）。一度も開いていないフォルダは読まない（開いたときに読む）。
 - 親を先に読み直してから子を探す。ディスクから消えたフォルダは親の一覧から落ちるので、問い合わせない。
+- 同じフォルダの読みが二つ同時に飛ぶことがある（ボタンの読みと、ペイン内の作成・改名が呼ぶ `refresh(dirRel)`）。古い方の返事が後から届いて新しい一覧を上書きしないよう、`refreshDir` はフォルダごとに読みの回数を数え、最後に頼んだ読みの返事だけを、頼んだときのルート世代の中で、その時点でその path を持つ node に載せる（Codex の round 1 の指摘）。
 - ルートが読めなかったときは、そこで止めてツリーを残す（`loadRoot()` の既存の振る舞い）。途中でペインのルートが変わった（`reset()`）ときも止める。読み直しは一つずつ順に行う（読み込み済みのフォルダは数個程度で、同時に投げる理由がない）。
 - `reloadTree()` は `tree.refreshAll()` を呼ぶ。`start()` と `refresh("")` は `loadRoot()` のまま。`adoptListing()` の引き継ぎもそのまま（キャッシュから描いた直後の往復では今までどおり必要）。
 - `toggleDir()` は変えない。開き直すたびに読む案は、クリックごとに往復が一つ増える上、ボタンで全体が最新になれば要らない。issue の「あわせて決める」はこの判断で閉じる。
 
 ## 変更
 
-- `src/composables/useFilesTree.ts`: `refreshAll()`、`refreshLoadedUnder()`
+- `src/composables/useFilesTree.ts`: `refreshAll()`、`refreshLoadedUnder()`、`refreshDir()` の読みの所有権、`toggleDir()` を module 階層へ（行数の上限のため、中身はそのまま）
 - `src/components/FilesPane.vue`: `reloadTree()` の呼び先
 - `test/src/composables/useFilesTree.spec.ts`: `refreshAll` の契約（開いている・畳んである・入れ子・一度も開いていない・消えた・ルートが読めない・一つのフォルダだけ読めない・途中でルートが変わる）
 - `test/src/components/filesPaneReloadTree.spec.ts`: ボタンから `refreshAll` に届くこと（ペインを mount して行を開き、外で足したファイルがボタンで出る）
