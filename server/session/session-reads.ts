@@ -55,6 +55,7 @@ import type { PromptWindow } from "../../common/promptHistory.js";
 import { anchorOf, memoKeyFor, resumePlan, ANCHOR_BYTES, EMPTY_ANCHOR, type HistoryMemo } from "./transcript/prompt-history-memo.js";
 import { clearedAtOf, clearedClaudeIdOf, clearedTranscripts } from "./transcript/cleared-transcripts.js";
 import { currentTurnReplyFromClaudeParsed, lastTurnFromClaudeParsed, lastTurnFromCodexRolloutDocs, EMPTY_TURN, type LastTurn } from "./transcript/last-turn.js";
+import { fileContains } from "../infra/fs/file-contains.js";
 import { forEachJsonlRecord, forEachJsonlRecordIn, readTailRecords } from "../infra/fs/jsonl-file.js";
 import { copySummaryState, emptySummaryState, foldSummary, summaryPartsOf, type SummaryState } from "./transcript/summary-scan.js";
 import { partitionPending } from "./partitionPending.js";
@@ -542,6 +543,7 @@ function foldTitleField(into: TitleFields, o: Record<string, unknown>): void {
 // 508 MB, each read end to end): the first `user` record sat at most 26.6 KB in, and the last
 // ai-title / last-prompt at most 52.8 KB from EOF. Both windows are ~10x that, and a file whose
 // fields fall outside them is not guessed at — the fold reads the whole file instead.
+const CUSTOM_TITLE_MARK = "custom-title";
 const TITLE_HEAD_BYTES = 256 * 1024;
 const TITLE_TAIL_BYTES = 512 * 1024;
 
@@ -572,22 +574,22 @@ const titleFieldsFold = createTranscriptFold<TitleFields>({
 // answer: only when all three are found is the fold provably the same as the whole-file one (the
 // tail runs to EOF, so an ai-title found there IS the last one).
 //
-// The custom title is the exception, and the one place this is a bet rather than a proof: a
-// transcript that was never renamed has none, so its absence from the tail cannot be told from a
-// rename further back. It is made because Claude Code writes the line again on later saves — in
-// the transcripts measured it sat within 20 KB of EOF, against a 512 KB window. Losing it would
-// show the ai-title, which is what the list showed before.
-//
-// The offset comes back with the fields, and it is the end of the last COMPLETE line rather than
-// the file's size: a transcript caught mid-append ends in half a record, and resuming past it would
-// start the next scan inside a line — losing the record that half line becomes.
+// The custom title is the one field the ends cannot settle: a transcript that was never renamed
+// has none, so its absence from the tail cannot be told from a rename further back. A rename can
+// sit anywhere, so when the tail holds none the whole file is searched for the text — raw bytes,
+// not parsed — and only a file that mentions it is folded whole.
+// The tail runs to EOF, so a custom-title in it IS the last one. Without one, only a file that never
+// mentions the record type is known to have none.
+const customTitleSettled = async (full: string, tail: TitleFields): Promise<boolean> =>
+  tail.customTitle !== null || !(await fileContains(full, CUSTOM_TITLE_MARK));
+
 async function coldTitleFields(full: string, size: number): Promise<FoldedAt<TitleFields> | null> {
   if (size > TITLE_HEAD_BYTES + TITLE_TAIL_BYTES) {
     const head: TitleFields = { ...NO_TITLE_FIELDS };
     const tail: TitleFields = { ...NO_TITLE_FIELDS };
     await forEachJsonlRecordIn(full, { to: TITLE_HEAD_BYTES }, (o) => foldTitleField(head, o));
     const offset = await forEachJsonlRecordIn(full, { from: size - TITLE_TAIL_BYTES }, (o) => foldTitleField(tail, o));
-    if (head.firstUserMsg !== null && tail.aiTitle !== null && tail.lastPrompt !== null) {
+    if (head.firstUserMsg !== null && tail.aiTitle !== null && tail.lastPrompt !== null && (await customTitleSettled(full, tail))) {
       return { value: { customTitle: tail.customTitle, aiTitle: tail.aiTitle, lastPrompt: tail.lastPrompt, firstUserMsg: head.firstUserMsg }, offset };
     }
   }

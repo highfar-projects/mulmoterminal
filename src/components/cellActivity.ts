@@ -47,7 +47,9 @@ export function applyActivityPush(previous: CellActivityState, push: ActivityPus
 //
 // The first three tiers go through the shared `sessionDisplayName`, which is where "the memo the
 // user wrote outranks everything the agent said" is decided once for the header, the sidebar row
-// and the phone's roster alike. The id fallback is this surface's own: a cell must show SOMETHING
+// and the phone's roster alike. The `/rename` name sits between the memo and the AI title in the
+// sidebar list and the phone's disk fallback only: this surface is fed by the live title push and
+// never reads the transcript. The id fallback is this surface's own: a cell must show SOMETHING
 // the moment it exists, which a sidebar row (with its own sentinel) does not.
 //
 // `||` rather than `??` on purpose — an empty memo, title or prompt is nothing to show, not a value.

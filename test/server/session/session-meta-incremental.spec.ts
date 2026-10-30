@@ -181,4 +181,23 @@ describe("readSessionMeta", () => {
     );
     expect(await titleOf(file)).toBe("renamed");
   });
+
+  // The tail window cannot see this rename, and nothing repeats it later. The file is searched for
+  // the record type before the ends are trusted, so the rename is still found.
+  it("finds a rename that sits outside both windows", async () => {
+    const { file } = writeTranscript(
+      userLine("start") +
+        fillerLine(300 * 1024) +
+        customTitleLine("renamed long ago") +
+        fillerLine(900 * 1024) +
+        aiTitleLine("end title") +
+        promptLine("last prompt"),
+    );
+    expect(await titleOf(file)).toBe("renamed long ago");
+  });
+
+  it("answers a big never-renamed transcript from its ends", async () => {
+    const { file } = writeTranscript(userLine("start") + fillerLine(900 * 1024) + aiTitleLine("end title") + promptLine("last prompt"));
+    expect(await titleOf(file)).toBe("end title");
+  });
 });

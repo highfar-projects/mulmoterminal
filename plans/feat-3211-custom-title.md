@@ -17,8 +17,9 @@ ai-title or a prompt instead.
 - Filter box on the resume list (separate request in the issue).
 - Cell header and live phone rows that already hold an in-memory title: they do not read the transcript per request.
 
-## Risk
+## Cold read of a huge transcript
 
-The cold read of a very large transcript trusts the tail window for the custom title. Absence there
-cannot be told from a rename further back; Claude Code rewrites the line on later saves, so it was
-within a few KB of EOF in measured files.
+The cold read answers from the two ends of the file. A custom title found in the tail is the last
+one, since the tail runs to EOF. When the tail has none, the file is searched for the record type
+as raw bytes, and only a file that mentions it is folded whole. A never-renamed file therefore
+costs one streaming scan, once, and the result is cached beside it.
