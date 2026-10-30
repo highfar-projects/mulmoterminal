@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { adoptListing, findIn, flattenRows, useFilesTree, type TreeNode } from "../../../src/composables/useFilesTree";
 
 // The three decisions the tree makes about NODES, now that they are reachable without mounting a
@@ -208,5 +208,118 @@ describe("useFilesTree", () => {
 
     expect(paths(tree)).toEqual(["src", "a.ts"]);
     expect(calls.filter((c) => c === "src")).toHaveLength(1);
+  });
+
+  // #3215: the Reload button read the root only, and `adoptListing` carried every directory already
+  // read, so a file added to an expanded folder from outside never showed.
+  describe("refreshAll", () => {
+    type Listing = { name: string; dir: boolean; size: number }[] | null;
+    const file = (name: string) => ({ name, dir: false, size: 1 });
+    const folder = (name: string) => ({ name, dir: true, size: 0 });
+    /** A tree with `src` open and `plans` read once and collapsed, over a disk the test then changes. */
+    const opened = async (disk: Record<string, Listing>) => {
+      const calls = serve(disk);
+      const tree = useFilesTree(() => "/proj");
+      await tree.loadRoot();
+      await tree.toggleDir(nodeAt(tree, "src"));
+      await tree.toggleDir(nodeAt(tree, "plans"));
+      await tree.toggleDir(nodeAt(tree, "plans"));
+      calls.length = 0;
+      return { tree, calls };
+    };
+
+    it("reads the root and every directory already read, open or collapsed, and not one never opened", async () => {
+      const disk: Record<string, Listing> = {
+        "": [folder("src"), folder("plans"), folder("docs")],
+        src: [file("a.ts")],
+        plans: [file("p.md")],
+        docs: [file("d.md")],
+      };
+      const { tree, calls } = await opened(disk);
+      disk.src = [file("a.ts"), file("b.ts")];
+      disk.plans = [file("p.md"), file("zzz.md")];
+      disk.docs = [file("d.md"), file("never.md")];
+
+      await tree.refreshAll();
+
+      expect(paths(tree)).toEqual(["src", "src/a.ts", "src/b.ts", "plans", "docs"]);
+      const plans = nodeAt(tree, "plans");
+      expect(plans.expanded).toBe(false);
+      expect(plans.children.map((child) => child.path)).toEqual(["plans/p.md", "plans/zzz.md"]);
+      expect(calls).toEqual(["", "src", "plans"]);
+    });
+
+    it("reads a directory nested under one it just re-read, found in the parent's fresh listing", async () => {
+      const disk: Record<string, Listing> = { "": [folder("src"), folder("plans")], src: [folder("lib")], "src/lib": [file("x.ts")], plans: [] };
+      const { tree, calls } = await opened(disk);
+      await tree.toggleDir(nodeAt(tree, "src/lib"));
+      calls.length = 0;
+      disk["src/lib"] = [file("x.ts"), file("y.ts")];
+
+      await tree.refreshAll();
+
+      expect(paths(tree)).toEqual(["src", "src/lib", "src/lib/x.ts", "src/lib/y.ts", "plans"]);
+      expect(calls).toEqual(["", "src", "src/lib", "plans"]);
+    });
+
+    it("drops a directory gone from the disk and does not ask for it", async () => {
+      const disk: Record<string, Listing> = { "": [folder("src"), folder("plans")], src: [file("a.ts")], plans: [file("p.md")] };
+      const { tree, calls } = await opened(disk);
+      disk[""] = [folder("src")];
+      disk.plans = null;
+
+      await tree.refreshAll();
+
+      expect(paths(tree)).toEqual(["src", "src/a.ts"]);
+      expect(calls).toEqual(["", "src"]);
+    });
+
+    it("keeps the tree and asks nothing more when the root cannot be read", async () => {
+      const disk: Record<string, Listing> = { "": [folder("src"), folder("plans")], src: [file("a.ts")], plans: [file("p.md")] };
+      const { tree, calls } = await opened(disk);
+      disk[""] = null;
+
+      await tree.refreshAll();
+
+      expect(tree.error.value).not.toBeNull();
+      expect(paths(tree)).toEqual(["src", "src/a.ts", "plans"]);
+      expect(calls).toEqual([""]);
+    });
+
+    it("keeps one directory's listing when only that directory cannot be read", async () => {
+      const disk: Record<string, Listing> = { "": [folder("src"), folder("plans")], src: [file("a.ts")], plans: [file("p.md")] };
+      const { tree } = await opened(disk);
+      disk.src = null;
+      disk.plans = [file("p.md"), file("zzz.md")];
+
+      await tree.refreshAll();
+
+      expect(tree.error.value).toBeNull();
+      expect(paths(tree)).toEqual(["src", "src/a.ts", "plans"]);
+      expect(nodeAt(tree, "plans").children.map((child) => child.path)).toEqual(["plans/p.md", "plans/zzz.md"]);
+    });
+
+    it("stops when the pane moves to another root while it is reading", async () => {
+      const disk: Record<string, Listing> = { "": [folder("src"), folder("plans")], src: [file("a.ts")], plans: [file("p.md")] };
+      const { tree, calls } = await opened(disk);
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      const plain = globalThis.fetch;
+      // The request is recorded at once; its answer is held until the test lets it through.
+      globalThis.fetch = async (input, init) => {
+        const response = await plain(input, init);
+        if (new URL(String(input), "https://x").searchParams.get("path") === "src") await gate;
+        return response;
+      };
+
+      const reloading = tree.refreshAll();
+      await vi.waitFor(() => expect(calls).toContain("src"));
+      tree.reset();
+      release();
+      await reloading;
+
+      expect(tree.roots.value).toBeNull();
+      expect(calls).toEqual(["", "src"]);
+    });
   });
 });

@@ -97,6 +97,18 @@ async function refreshDir(roots: TreeNode[], cwd: string | null, dirRel: string)
   }
 }
 
+/** Every directory already read under `nodes`, read again: parents first, so a child is found in its
+ *  parent's fresh listing and one gone from the disk is not asked for. `wanted` says whether the
+ *  tree being read is still the one on screen. */
+async function refreshLoadedUnder(roots: TreeNode[], cwd: string | null, nodes: TreeNode[], wanted: () => boolean): Promise<void> {
+  for (const node of nodes.filter((child) => child.dir && child.loaded)) {
+    if (!wanted()) return;
+    await refreshDir(roots, cwd, node.path);
+    const fresh = findIn(roots, node.path);
+    if (fresh) await refreshLoadedUnder(roots, cwd, fresh.children, wanted);
+  }
+}
+
 /** One directory's listing, off the wire. */
 export async function fetchListing(cwd: string | null, pathRel: string): Promise<ListingEntry[]> {
   const res = await fetchWithTimeout(`/api/files/browse/list?${browseQuery(cwd, pathRel)}`);
@@ -119,6 +131,10 @@ export interface FilesTree {
   /** Read one directory again (the root for ""), keeping what is open under it (#2578). A directory
    *  that was never opened is left alone; it is read when it is. */
   refresh: (dirRel: string) => Promise<void>;
+  /** The Reload button: the root, then every directory already read under it, open or collapsed. A
+   *  collapsed one would otherwise show its old listing when next opened (#3215). One never opened is
+   *  left alone. Stops when the root cannot be read, or when the pane has moved to another root. */
+  refreshAll: () => Promise<void>;
   findNode: (target: string) => TreeNode | null;
   /** Nothing has been read for the root this pane is moving to. Bumps the generation too, so an
    *  answer already in flight cannot land in the new tree. */
@@ -161,6 +177,13 @@ export function useFilesTree(cwd: () => string | null): FilesTree {
     }
   }
 
+  async function refreshAll(): Promise<void> {
+    await loadRoot();
+    const id = reqId;
+    if (error.value !== null || roots.value === null) return;
+    await refreshLoadedUnder(roots.value, cwd(), roots.value, () => id === reqId);
+  }
+
   async function toggleDir(node: TreeNode): Promise<void> {
     node.expanded = !node.expanded;
     if (node.expanded && !node.loaded) {
@@ -180,6 +203,7 @@ export function useFilesTree(cwd: () => string | null): FilesTree {
     loadRoot,
     toggleDir,
     refresh: (dirRel) => (dirRel === "" ? loadRoot() : refreshDir(roots.value ?? [], cwd(), dirRel)),
+    refreshAll,
     findNode: (target) => findIn(roots.value ?? [], target),
     reset: () => {
       reqId += 1;

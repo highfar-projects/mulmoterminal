@@ -284,7 +284,7 @@ const { gitStatus, git, head, showChanges, history } = useFilesPaneGit(() => pro
 async function reloadTree(): Promise<void> {
   void gitStatus.refresh();
   folder.refresh();
-  await tree.loadRoot();
+  await tree.refreshAll();
 }
 
 /** A file opened from the folder view, whose row goes with the view: the keyboard follows the file. */
