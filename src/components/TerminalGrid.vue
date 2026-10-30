@@ -1184,6 +1184,9 @@ watch(
     // leaving that tree behind too, and the snapshot is what the directory layer restores from
     // when anything comes back to it (Codex review). A pane with no root yet has nothing to file.
     if (!firstShowing) rememberPaneState(paneUid.value);
+    // A takeover was asked for on the cell it was on; the next cell's pane, a restored conversation
+    // included, starts beside its terminal.
+    if (paneUid.value !== uid) paneExpanded.value = false;
     paneUid.value = uid;
     tiledPaneUid.value = uid;
     restoreSessionPane(uid);
