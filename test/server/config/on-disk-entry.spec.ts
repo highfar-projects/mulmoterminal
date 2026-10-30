@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { buildAccount, buildCustomAgent } from "../../../common/agentEntries";
-import { buildProvider } from "../../../common/providerEntries";
+import { buildAccount, buildCustomAgent, ENTRY_PROBLEMS } from "../../../common/agentEntries";
+import { buildProvider, PROVIDER_PROBLEMS } from "../../../common/providerEntries";
 import { emptyConfig, type AppConfig } from "../../../server/config/app-config";
 import { appendOnDisk, refuseOnProblem } from "../../../server/config/on-disk-entry";
 import { seededRandom, type SeededRandom } from "../../helpers/seededRandom";
@@ -84,10 +84,16 @@ describe("appendOnDisk", () => {
       const base = gen.grow();
       seen.add(gen.change(gen.key())(base));
     });
-    // The generator must reach the success path of every list and a refusal of each.
+    // The generator must reach the success path of every list and every problem its builder can
+    // name: a custom agent has no home, an account no command.
+    const EXPECTED_OUTCOMES = {
+      customAgents: ["ok", ...ENTRY_PROBLEMS.filter((problem) => problem !== "home")],
+      accounts: ["ok", ...ENTRY_PROBLEMS.filter((problem) => problem !== "command")],
+      providers: ["ok", ...PROVIDER_PROBLEMS],
+    };
     (["customAgents", "accounts", "providers"] as const).forEach((key) => {
-      expect([...seen].some((tag) => tag === `${key} ok`)).toBe(true);
-      expect([...seen].some((tag) => tag.startsWith(`${key} `) && tag !== `${key} ok`)).toBe(true);
+      const outcomes = [...seen].filter((tag) => tag.startsWith(`${key} `)).map((tag) => tag.slice(key.length + 1));
+      expect(outcomes.sort()).toEqual([...EXPECTED_OUTCOMES[key]].sort());
     });
   });
 });
