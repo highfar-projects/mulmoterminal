@@ -321,5 +321,33 @@ describe("useFilesTree", () => {
       expect(tree.roots.value).toBeNull();
       expect(calls).toEqual(["", "src"]);
     });
+
+    // CodeRabbit on #3228: the generation has to be taken before the root read is awaited, or a
+    // reload whose root was still pending when the pane moved resumes against the NEW root's tree.
+    it("does not read the new root's folders when the move happened during its root read", async () => {
+      const disk: Record<string, Listing> = { "": [folder("src"), folder("plans")], src: [file("a.ts")], plans: [file("p.md")] };
+      const { tree, calls } = await opened(disk);
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      const plain = globalThis.fetch;
+      let rootReads = 0;
+      // Only the FIRST root read is held: the one the stale reload is waiting on.
+      globalThis.fetch = async (input, init) => {
+        const response = await plain(input, init);
+        if (new URL(String(input), "https://x").searchParams.get("path") === "" && ++rootReads === 1) await gate;
+        return response;
+      };
+
+      const reloading = tree.refreshAll();
+      await vi.waitFor(() => expect(calls).toEqual([""]));
+      tree.reset();
+      await tree.loadRoot();
+      await tree.toggleDir(nodeAt(tree, "src"));
+      release();
+      await reloading;
+
+      expect(calls).toEqual(["", "", "src"]); // the stale reload read nothing after the move
+      expect(paths(tree)).toEqual(["src", "src/a.ts", "plans"]);
+    });
   });
 });

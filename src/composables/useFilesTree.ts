@@ -178,9 +178,12 @@ export function useFilesTree(cwd: () => string | null): FilesTree {
   }
 
   async function refreshAll(): Promise<void> {
-    await loadRoot();
+    const rootRead = loadRoot();
+    // The generation that read just took, before any await: a root change while it is pending
+    // ends this reload, and reading it afterwards would hand it the NEW tree's generation.
     const id = reqId;
-    if (error.value !== null || roots.value === null) return;
+    await rootRead;
+    if (id !== reqId || error.value !== null || roots.value === null) return;
     await refreshLoadedUnder(roots.value, cwd(), roots.value, () => id === reqId);
   }
 
