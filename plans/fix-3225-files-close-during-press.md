@@ -19,11 +19,14 @@ stack.
 - The grid awaits that save itself. If it landed and Files is no longer on screen in that cell, it
   takes Files out of the stack (`withPaneRemoved`, pure). When Files is still on screen it does
   nothing, and the pane's own `close` closes it as before.
+- Files opened again on that cell while the save was pending is a newer request. `setRightPane`
+  counts openings of Files per cell, and the late close leaves the stack alone when the count moved.
 
 ## Tests
 
 - `rightPaneStack.spec.ts`: `withPaneRemoved`.
 - `rightPaneStackGrid.spec.ts`: a press then a close, in both save orders; an ordinary close still
   goes through the pane's own `close` (red if the grid finishes it while Files is on screen, which
-  skips filing the tree). The stub's close button mirrors `FilesPane`'s.
+  skips filing the tree); a Files opened again before the close's save lands stays. The stub's close
+  button mirrors `FilesPane`'s.
 - `FilesPane.spec.ts`: `closing` carries the save result, `true` when saved and `false` when not.

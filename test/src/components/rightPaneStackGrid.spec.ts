@@ -416,6 +416,18 @@ describe("stacked right panes", () => {
       expect(w.findComponent({ name: "FilesPane" }).props("initialState")).toEqual(snapshot());
     });
 
+    it("leaves a Files opened again before the close's save lands", async () => {
+      const { w, finishSaves } = await pressThenClose();
+      finishSaves[0](true);
+      await flushPromises();
+      flush.mockResolvedValue(undefined);
+      await open(w, "FilesPane");
+      await open(w, "TranscriptPane");
+      finishSaves[1](true);
+      await flushPromises();
+      expect(remembered()).toEqual({ s1: ["tools", "files", "transcript"] });
+    });
+
     it("when the press's save finishes first", async () => {
       const { w, finishSaves } = await pressThenClose();
       finishSaves[0](true);

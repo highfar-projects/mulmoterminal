@@ -383,9 +383,14 @@ function setFilesOpen(open: boolean): void {
 // Closing awaits the save, and a pane pressed meanwhile can take the slot first and unmount the
 // files pane, whose `close` is then dropped. That close is finished here, by taking Files out from
 // under the pane that covered it, so the press and the close are both done in either order.
+// A Files opened again while the save was pending is a newer request, and is left where it is.
+const filesOpenedTimes = new Map<number, number>();
 async function finishFilesCloseOnceSaved(saved: Promise<boolean>): Promise<void> {
   const uid = paneUid.value ?? props.expandedUid;
-  if (uid === null || !(await saved) || paneOf(uid) === "files") return; // still on screen: its own `close` lands
+  if (uid === null) return;
+  const openedBefore = filesOpenedTimes.get(uid);
+  if (!(await saved) || paneOf(uid) === "files") return; // still on screen: its own `close` lands
+  if (filesOpenedTimes.get(uid) !== openedBefore) return;
   const next = withPaneRemoved(panesOf(uid), "files");
   paneByCell.value = new Map(paneByCell.value).set(uid, next);
   persistPane(uid, next.stack);
@@ -408,6 +413,7 @@ function setRightPane(pane: RightPane | null, uid: number | null): void {
   if (uid === null) return; // no cell to answer for: nothing is enlarged and the pane is on none
   const next = pane === null ? withShownPaneClosed(panesOf(uid)) : withPaneOpened(panesOf(uid), pane);
   const shown = shownPane(next);
+  if (pane === "files") filesOpenedTimes.set(uid, (filesOpenedTimes.get(uid) ?? 0) + 1);
   const leavingFiles = filesOpen.value && changesScreen(uid) && shown !== "files";
   if (leavingFiles) rememberPaneState(paneUid.value);
   // The pane moves to this cell only if it is the one on screen. A button pressed on a TILED cell
