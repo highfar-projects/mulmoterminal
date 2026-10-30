@@ -339,6 +339,18 @@ describe("stacked right panes", () => {
     expect(full(w)).toBe(true);
   });
 
+  it("does not hand the takeover of a refused move to a later zoom", async () => {
+    const w = mountGrid();
+    await flushPromises();
+    const tiled = w.findAllComponents({ name: "TerminalCell" }).find((terminal) => !terminal.props("expanded"));
+    tiled?.vm.$emit("toggle-transcript");
+    await flushPromises();
+    await w.setProps({ expandedUid: 2 });
+    await flushPromises();
+    expect(shown(w)).toBe("TranscriptPane");
+    expect(full(w)).toBe(false);
+  });
+
   it("starts another pane asked for on another cell beside the terminal", async () => {
     const w = await askOnTheOtherCell("toggle-tools");
     expect(shown(w)).toBe("ToolsPane");

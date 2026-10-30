@@ -21,11 +21,13 @@ watcher running after it would undo that.
 
 A conversation asked for on a cell that is not enlarged (`openPaneFor`, which moves the zoom
 there) is the exception: the takeover is the request. `openPaneFor` decides the pane before the zoom
-arrives, so it leaves the cell in `conversationAskedOnArrival`, which the watcher consumes on its
-next run.
+arrives, so it leaves the cell in `conversationAskedOnArrival` for the watcher run that the move
+triggers. It is cleared after that flush whatever happened, so a refused move does not hand it to a
+later, unrelated zoom.
 
 ## Tests
 
 `test/src/components/rightPaneStackGrid.spec.ts`: full width not carried by a zoom move (red
 without the fix); a conversation reached by a zoom move, and one restored by a reload, start split;
-a conversation asked for on another cell takes the row, and Tools asked for there does not.
+a conversation asked for on another cell takes the row, and Tools asked for there does not; a
+refused move does not hand the takeover to a later zoom.

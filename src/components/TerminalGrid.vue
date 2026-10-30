@@ -528,9 +528,11 @@ async function openPaneFor(uid: number, pane: RightPane, stillWanted: () => bool
   if (!isLatest() || !stillWanted()) return;
   if (props.expandedUid === null) tiledPaneUid.value = uid;
   else if (props.expandedUid !== uid) {
-    // The pane is decided before the zoom gets there, so its takeover waits for the move to apply.
+    // The pane is decided before the zoom gets there, so its takeover waits for the move to apply —
+    // that flush and no later one, or a refused move would hand it to an unrelated zoom.
     conversationAskedOnArrival = pane === "transcript" ? uid : null;
     emit("toggle-expand", uid);
+    void nextTick(() => (conversationAskedOnArrival = null));
   }
   setRightPane(pane, uid);
 }
