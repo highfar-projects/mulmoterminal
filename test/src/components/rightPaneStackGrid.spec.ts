@@ -55,12 +55,12 @@ vi.mock("../../../src/components/FilesPane.vue", () => ({
   },
 }));
 
-const cell = (uid: number, session: string): Cell => ({ uid, session, cwd: "/work" });
+const cell = (uid: number, session: string): Cell => ({ uid, session, cwd: `/work/${session}` });
 
-const mountGrid = (uids: [number, number] = [1, 2]) =>
+const mountGrid = (uids: number[] = [1, 2]) =>
   mount(TerminalGrid, {
     props: {
-      cells: [cell(uids[0], "s1"), cell(uids[1], "s2")],
+      cells: uids.map((uid, index) => cell(uid, `s${index + 1}`)),
       expandedUid: uids[0],
       listRows: [],
       cancelUid: null,
@@ -218,6 +218,39 @@ describe("stacked right panes", () => {
       expect(flush).toHaveBeenCalledTimes(1);
       expect(shown(w)).toBe("FilesPane");
     });
+  });
+
+  // Each zoom move saves the files pane before leaving it, and the saves can finish in either order.
+  // Every cell shows Files, so the pane on screen does not change and nothing else moves it on.
+  it("leaves the pane on the cell enlarged last when two moves' saves finish out of order", async () => {
+    localStorage.setItem("pane_open_by_session", JSON.stringify({ s2: ["files"], s3: ["files"] }));
+    const w = mountGrid([1, 2, 3]);
+    await open(w, "FilesPane");
+    const finishSaves: ((saved: boolean) => void)[] = [];
+    flush.mockImplementation(() => new Promise((resolve) => finishSaves.push(resolve)));
+    await w.setProps({ expandedUid: 2 });
+    await w.setProps({ expandedUid: 3 });
+    expect(finishSaves).toHaveLength(2);
+    finishSaves[1](true);
+    await flushPromises();
+    finishSaves[0](true);
+    await flushPromises();
+    expect(shown(w)).toBe("FilesPane");
+    expect(w.findComponent({ name: "FilesPane" }).props("cwd")).toBe("/work/s3");
+  });
+
+  it("stays on the first cell when the zoom comes back to it before the save out of it finishes", async () => {
+    localStorage.setItem("pane_open_by_session", JSON.stringify({ s2: ["files"] }));
+    const w = mountGrid([1, 2]);
+    await open(w, "FilesPane");
+    const finishSaves: ((saved: boolean) => void)[] = [];
+    flush.mockImplementation(() => new Promise((resolve) => finishSaves.push(resolve)));
+    await w.setProps({ expandedUid: 2 });
+    await w.setProps({ expandedUid: 1 });
+    finishSaves.forEach((finish) => finish(true));
+    await flushPromises();
+    expect(shown(w)).toBe("FilesPane");
+    expect(w.findComponent({ name: "FilesPane" }).props("cwd")).toBe("/work/s1");
   });
 
   it("shows the top pane again when the question is closed by hand", async () => {

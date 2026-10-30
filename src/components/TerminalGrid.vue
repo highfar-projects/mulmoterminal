@@ -1147,9 +1147,12 @@ const paneCwd = ref<string | null>(null);
 // `rightPane` is a dependency too, not just an input: reopening a files pane on the cell it was
 // closed on changes nothing else, and without it the pane would mount with no root and no
 // remembered tree.
+// Each run awaits the save, and a later run can finish first; only the latest may move the pane.
+let rerootRun = 0;
 watch(
   [paneTargetUid, () => cwdOf(paneTargetUid.value), rightPane],
   async ([uid, targetCwd]) => {
+    const run = ++rerootRun;
     // A target that is not among the cells this grid was handed — a tiled pane's cell on another
     // page — has no directory of its own, and `cwdOf` would answer the grid's default for it.
     if (uid === null || cellOf(uid) === undefined) return;
@@ -1164,6 +1167,7 @@ watch(
     // back on means staying put: the pane keeps the cell and root it is on, which its header names.
     const wasFiles = filesOpen.value && !firstShowing;
     if (wasFiles && (await filesPane.value?.flush()) === false) return;
+    if (run !== rerootRun) return;
     // On EVERY re-root, not only a move to another cell: a terminal that changed directory is
     // leaving that tree behind too, and the snapshot is what the directory layer restores from
     // when anything comes back to it (Codex review). A pane with no root yet has nothing to file.
