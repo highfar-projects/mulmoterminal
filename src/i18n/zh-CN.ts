@@ -551,6 +551,9 @@ export const zhCN: Messages = {
   launch: {
     dirMissing: "此文件夹不存在，无法在此启动。",
     dirSuggestions: "匹配的文件夹",
+    resumeFilterAria: "筛选对话",
+    resumeFilterPlaceholder: "按标题筛选",
+    resumeNoMatch: "没有匹配的对话",
     mcpGroupsNextStart: "从此目录下次启动的终端开始生效。已打开的单元仍使用启动时的工具，请重新启动它。",
     agentUnavailable: {
       missing: "此计算机上未安装 {agent}，因此无法在此启动。",

@@ -9,6 +9,7 @@ import { orderByDirPriority } from "../../common/dirPriorityOrder";
 import { CHIP_IDLE, CHIP_RUNNING, CHIP_DOT_RUNNING } from "./dirChipColor";
 import { relativeTime as relativeTimeFrom } from "./cellDisplay";
 import { agentPickerOptions } from "./agentPicker";
+import { filterResumable, RESUME_FILTER_MIN_ROWS } from "./resumeFilter";
 import { useI18n } from "vue-i18n";
 import { useAgentAvailability } from "../composables/useAgentAvailability";
 import type { AgentUnavailableReason } from "../../common/agentAvailability";
@@ -329,6 +330,14 @@ const resumeHeading = computed(() => {
   const badge = agentBadge(listAgent.value);
   return badge ? `or resume a ${badge.full} conversation here` : "or resume here";
 });
+
+// What the person typed to narrow the resume list. It belongs to the list on show, so a different
+// directory or agent starts it blank; a reload of the same list (after a stop) keeps it.
+const resumeQuery = ref("");
+const showResumeFilter = computed(() => resumable.value.sessions.length >= RESUME_FILTER_MIN_ROWS);
+// Only while the box is on show: a list that shrank under the minimum has no box to clear a query with.
+const shownResumable = computed(() => filterResumable(resumable.value.sessions, showResumeFilter.value ? resumeQuery.value : ""));
+watch([() => resumable.value.cwd, listAgent], () => (resumeQuery.value = ""));
 
 // Everything this form offers is per-directory, so they are read as one.
 function loadForDir(dir: string | null, agent: TerminalAgent | null): void {
@@ -1105,8 +1114,21 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
          than resting on that. -->
     <div v-if="listAgent && resumable.sessions.length" data-testid="cell-resume" class="flex min-h-0 flex-col items-center gap-1.5" :class="LAUNCH_ROW">
       <span data-testid="cell-resume-heading" class="font-sans text-[11px] uppercase tracking-[0.05em] text-dim">{{ resumeHeading }}</span>
+      <input
+        v-if="showResumeFilter"
+        v-model="resumeQuery"
+        data-testid="cell-resume-filter"
+        class="w-full rounded-md border border-border bg-input px-2.5 py-[5px] font-sans text-[12px] text-fg focus:border-accent focus:outline-none"
+        type="text"
+        :placeholder="t('launch.resumeFilterPlaceholder')"
+        :aria-label="t('launch.resumeFilterAria')"
+        spellcheck="false"
+      />
+      <span v-if="showResumeFilter && shownResumable.length === 0" data-testid="cell-resume-nomatch" class="font-sans text-[12px] text-dim">{{
+        t("launch.resumeNoMatch")
+      }}</span>
       <div class="flex w-full flex-col gap-1">
-        <div v-for="s in resumable.sessions" :key="s.id" class="flex w-full items-center gap-1.5">
+        <div v-for="s in shownResumable" :key="s.id" class="flex w-full items-center gap-1.5">
           <button
             data-testid="cell-resume-item"
             class="flex flex-auto min-w-0 items-baseline justify-between gap-2 rounded-md border bg-deep px-2.5 py-[5px] text-left font-sans text-[12px]"

@@ -565,6 +565,9 @@ export const ko: Messages = {
   launch: {
     dirMissing: "이 폴더가 없으므로 여기서 시작할 수 없습니다.",
     dirSuggestions: "일치하는 폴더",
+    resumeFilterAria: "대화 걸러내기",
+    resumeFilterPlaceholder: "제목으로 걸러내기",
+    resumeNoMatch: "일치하는 대화가 없습니다",
     mcpGroupsNextStart: "이 폴더에서 다음에 시작하는 터미널부터 적용됩니다. 이미 열려 있는 셀은 시작할 때의 도구를 그대로 쓰므로 다시 시작하세요.",
     agentUnavailable: {
       missing: "이 컴퓨터에 {agent}이(가) 설치되어 있지 않아 여기서 시작할 수 없습니다.",
