@@ -1168,6 +1168,55 @@ describe("TerminalCell", () => {
     expect(promptText(w)).toBe("Parser rewrite");
   });
 
+  it("drops the /rename name when /clear ends the conversation it was given to", async () => {
+    const id = "88888888-8888-8888-8888-888888888888";
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ sessions: [] }) };
+      if (u.includes(`/api/session/${id}`)) {
+        return { ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: "p", aiTitle: null, customTitle: "Parser rewrite" }) };
+      }
+      return { ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: null }) };
+    }) as unknown as typeof fetch;
+
+    const w = mountCell(id);
+    await flushPromises();
+    expect(promptText(w)).toBe("Parser rewrite");
+
+    captured?.({ id, working: false, waiting: false, lastPrompt: "", aiTitle: null }); // the /clear sentinel
+    await nextTick();
+    expect(promptText(w)).toBe(id.slice(0, 8));
+  });
+
+  it("does not let an older detail read put back a name a newer one removed", async () => {
+    const id = "99999999-9999-9999-9999-999999999999";
+    const gates = [deferred<boolean>(), deferred<boolean>()];
+    let call = 0;
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ sessions: [] }) };
+      if (u.includes(`/api/session/${id}`)) {
+        const mine = call++;
+        await gates[mine]?.promise;
+        return { ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: "p", customTitle: mine === 0 ? "Old name" : null }) };
+      }
+      return { ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: null }) };
+    }) as unknown as typeof fetch;
+
+    const w = mountCell(id); // the seed is call 0, held open
+    await nextTick();
+    captured?.({ id, working: true, waiting: false, lastPrompt: "p" });
+    await nextTick();
+    captured?.({ id, working: false, waiting: false, lastPrompt: "p" }); // the turn ends: a newer read (call 1)
+    await nextTick();
+    gates[1].resolve(true);
+    await flushPromises();
+    gates[0].resolve(true); // the older seed resolves last, still carrying the old name
+    await flushPromises();
+    await nextTick();
+    expect(promptText(w)).toBe("p");
+  });
+
   // The header's "open on GitHub" control: shown only when /api/git-remote
   // reports a repository URL for the cell's dir.
   // What POST /api/git-remote answers: `forge` is what the menu reads; `githubUrl` rides along as the

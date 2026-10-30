@@ -349,6 +349,9 @@ let latestSeed = 0;
 let latestBadgeReq = 0;
 function applyActivity(d: ActivityPush) {
   activityGen++;
+  // `/clear` publishes an empty prompt (hook-routes.ts), and the name was given to the conversation
+  // it ended. Waiting for the next fetch would leave the old name on an idle cell.
+  if (d.lastPrompt === "") customTitle.value = null;
   const next = applyActivityPush(
     {
       working: working.value,
@@ -450,11 +453,15 @@ async function loadInitial(id: string) {
   // and don't let a stale seed put the cell back to idle. Badges have no such push, so they
   // always refresh — unless a newer badge fetch has since superseded this one.
   if (activityGen === genBeforeFetch) applyActivity(activityPushOf(data));
-  if (badgeReq === latestBadgeReq) applyBadges(data);
+  if (badgeReq === latestBadgeReq) {
+    applyBadges(data);
+    // The name is read off the transcript like the badges, and can change between two reads, so it
+    // follows their token: an older read resolving late must not put a name back.
+    applyCustomTitle(data);
+  }
   // Not guarded by either token: it is a fact about how the session began, so every answer for
   // this id carries the same one and there is no older-vs-newer to lose.
   collection.value = asSessionCollection(data.collection);
-  applyCustomTitle(data);
 }
 
 // Refresh ONLY the token usage (not the live activity — that's pub/sub's job). Called
