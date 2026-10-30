@@ -349,5 +349,58 @@ describe("useFilesTree", () => {
       expect(calls).toEqual(["", "", "src"]); // the stale reload read nothing after the move
       expect(paths(tree)).toEqual(["src", "src/a.ts", "plans"]);
     });
+
+    /** Hold the answer to the `nth` read of `dirRel` from here on; the request itself is recorded at once. */
+    const holdRead = (dirRel: string, nth: number): (() => void) => {
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      const plain = globalThis.fetch;
+      let reads = 0;
+      globalThis.fetch = async (input, init) => {
+        const response = await plain(input, init);
+        if (new URL(String(input), "https://x").searchParams.get("path") === dirRel && ++reads === nth) await gate;
+        return response;
+      };
+      return release;
+    };
+
+    // Codex on #3228: the reload reads a directory a file operation may read again before the reload's
+    // answer arrives; the operation's newer listing has to stand.
+    it("lets the later of two reads of one directory land, so a file operation is not undone by the reload", async () => {
+      const disk: Record<string, Listing> = { "": [folder("src"), folder("plans")], src: [file("a.ts")], plans: [file("p.md")] };
+      const { tree, calls } = await opened(disk);
+      const release = holdRead("src", 1);
+
+      const reloading = tree.refreshAll();
+      await vi.waitFor(() => expect(calls).toContain("src"));
+      disk.src = [file("a.ts"), file("made.ts")];
+      await tree.refresh("src"); // the operation's read answers at once
+      expect(paths(tree)).toEqual(["src", "src/a.ts", "src/made.ts", "plans"]);
+      release(); // the reload's older answer arrives last
+      await reloading;
+
+      expect(paths(tree)).toEqual(["src", "src/a.ts", "src/made.ts", "plans"]);
+      expect(calls).toEqual(["", "src", "src", "plans"]);
+    });
+
+    it("drops a directory read from the root the pane left, even when the new root has that path open", async () => {
+      const disk: Record<string, Listing> = { "": [folder("src"), folder("plans")], src: [file("old-root.ts")], plans: [] };
+      const { tree } = await opened(disk);
+      const release = holdRead("src", 1);
+
+      const refreshing = tree.refresh("src");
+      tree.reset();
+      disk.src = [file("new-root.ts")];
+      await tree.loadRoot();
+      await tree.toggleDir(nodeAt(tree, "src"));
+      // The new root's own first read of `src`: the count of reads starts over with the root, so the
+      // old root's read is told apart by generation, not by count.
+      await tree.refresh("src");
+      expect(paths(tree)).toEqual(["src", "src/new-root.ts", "plans"]);
+      release();
+      await refreshing;
+
+      expect(paths(tree)).toEqual(["src", "src/new-root.ts", "plans"]);
+    });
   });
 });

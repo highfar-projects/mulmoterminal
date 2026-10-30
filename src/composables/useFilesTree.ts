@@ -85,13 +85,32 @@ export function adoptListing(before: TreeNode[] | null, entries: ListingEntry[],
   });
 }
 
+/** What a directory read needs of its tree: the nodes as they are NOW (a read lands on the node that
+ *  holds the path by then, which an intervening read of its parent may have replaced), the root, and
+ *  the two marks that say whether its answer is still wanted: the root generation, and how many
+ *  times each directory has been asked for, so of two reads in flight for one directory the later
+ *  one lands and the earlier is dropped, whoever asked. The Reload button and a file operation can
+ *  ask at once, and the older answer must not undo the newer. */
+interface TreeReads {
+  roots: () => TreeNode[];
+  cwd: () => string | null;
+  generation: () => number;
+  asked: Map<string, number>;
+}
+
 /** A directory's children read again, keeping what is open under it. One never opened is left
  *  alone, and one that cannot be read keeps the listing on screen. */
-async function refreshDir(roots: TreeNode[], cwd: string | null, dirRel: string): Promise<void> {
-  const node = findIn(roots, dirRel);
+async function refreshDir(tree: TreeReads, dirRel: string): Promise<void> {
+  const node = findIn(tree.roots(), dirRel);
   if (!node?.dir || !node.loaded) return;
+  const generation = tree.generation();
+  const read = (tree.asked.get(dirRel) ?? 0) + 1;
+  tree.asked.set(dirRel, read);
   try {
-    node.children = adoptListing(node.children, await fetchListing(cwd, node.path), node.path);
+    const entries = await fetchListing(tree.cwd(), dirRel);
+    if (generation !== tree.generation() || tree.asked.get(dirRel) !== read) return;
+    const current = findIn(tree.roots(), dirRel);
+    if (current?.dir && current.loaded) current.children = adoptListing(current.children, entries, dirRel);
   } catch {
     // The next open of the directory reads it again.
   }
@@ -100,12 +119,25 @@ async function refreshDir(roots: TreeNode[], cwd: string | null, dirRel: string)
 /** Every directory already read under `nodes`, read again: parents first, so a child is found in its
  *  parent's fresh listing and one gone from the disk is not asked for. `wanted` says whether the
  *  tree being read is still the one on screen. */
-async function refreshLoadedUnder(roots: TreeNode[], cwd: string | null, nodes: TreeNode[], wanted: () => boolean): Promise<void> {
+async function refreshLoadedUnder(tree: TreeReads, nodes: TreeNode[], wanted: () => boolean): Promise<void> {
   for (const node of nodes.filter((child) => child.dir && child.loaded)) {
     if (!wanted()) return;
-    await refreshDir(roots, cwd, node.path);
-    const fresh = findIn(roots, node.path);
-    if (fresh) await refreshLoadedUnder(roots, cwd, fresh.children, wanted);
+    await refreshDir(tree, node.path);
+    const fresh = findIn(tree.roots(), node.path);
+    if (fresh) await refreshLoadedUnder(tree, fresh.children, wanted);
+  }
+}
+
+/** Open a closed directory, reading it the first time, or close an open one. */
+async function toggleDir(cwd: () => string | null, node: TreeNode): Promise<void> {
+  node.expanded = !node.expanded;
+  if (node.expanded && !node.loaded) {
+    try {
+      node.children = (await fetchListing(cwd(), node.path)).map((entry) => makeNode(entry, node.path));
+      node.loaded = true;
+    } catch {
+      node.expanded = false; // couldn't read — collapse again
+    }
   }
 }
 
@@ -145,6 +177,7 @@ export function useFilesTree(cwd: () => string | null): FilesTree {
   const roots = ref<TreeNode[] | null>(null);
   const error = ref<string | null>(null);
   let reqId = 0;
+  const reads: TreeReads = { roots: () => roots.value ?? [], cwd, generation: () => reqId, asked: new Map() };
 
   /** Show this directory's last listing, if there is one. Says whether it painted, because what
    *  happens to it when the read fails is not what happens to a tree that was really read. */
@@ -179,24 +212,10 @@ export function useFilesTree(cwd: () => string | null): FilesTree {
 
   async function refreshAll(): Promise<void> {
     const rootRead = loadRoot();
-    // The generation that read just took, before any await: a root change while it is pending
-    // ends this reload, and reading it afterwards would hand it the NEW tree's generation.
-    const id = reqId;
+    const id = reqId; // before the await: a root change meanwhile ends this reload rather than lending it the new generation
     await rootRead;
     if (id !== reqId || error.value !== null || roots.value === null) return;
-    await refreshLoadedUnder(roots.value, cwd(), roots.value, () => id === reqId);
-  }
-
-  async function toggleDir(node: TreeNode): Promise<void> {
-    node.expanded = !node.expanded;
-    if (node.expanded && !node.loaded) {
-      try {
-        node.children = (await fetchListing(cwd(), node.path)).map((entry) => makeNode(entry, node.path));
-        node.loaded = true;
-      } catch {
-        node.expanded = false; // couldn't read — collapse again
-      }
-    }
+    await refreshLoadedUnder(reads, roots.value, () => id === reqId);
   }
 
   return {
@@ -204,12 +223,13 @@ export function useFilesTree(cwd: () => string | null): FilesTree {
     error,
     rows: computed(() => flattenRows(roots.value ?? [])),
     loadRoot,
-    toggleDir,
-    refresh: (dirRel) => (dirRel === "" ? loadRoot() : refreshDir(roots.value ?? [], cwd(), dirRel)),
+    toggleDir: (node) => toggleDir(cwd, node),
+    refresh: (dirRel) => (dirRel === "" ? loadRoot() : refreshDir(reads, dirRel)),
     refreshAll,
     findNode: (target) => findIn(roots.value ?? [], target),
     reset: () => {
       reqId += 1;
+      reads.asked.clear();
       roots.value = null;
       error.value = null;
     },
