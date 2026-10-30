@@ -3,6 +3,7 @@ import { usageViewZhCN } from "./usageView/zh-CN";
 import { blueprintsZhCN } from "./blueprints/zh-CN";
 import { tipsZhCN } from "./tips/zh-CN";
 import { commandPaletteZhCN } from "./commandPalette/zh-CN";
+import { terminalCopyModeZhCN } from "./terminalCopyMode/zh-CN";
 import { focusModeZhCN } from "./focusMode/zh-CN";
 import { fileHistoryZhCN } from "./fileHistory/zh-CN";
 import { filesRecentZhCN } from "./filesRecent/zh-CN";
@@ -567,12 +568,7 @@ export const zhCN: Messages = {
     waiting: "{key} 之后按：",
     cancel: "按 Esc 取消",
   },
-  terminal: {
-    copyMode: {
-      message: "正在查看历史 — 输入不会发送到终端。按 q 返回。",
-      exit: "返回输入",
-    },
-  },
+  terminal: terminalCopyModeZhCN,
   sortMenu: {
     trigger: "单元格排序：{mode}",
     title: "单元格排序",

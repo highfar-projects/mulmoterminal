@@ -3,6 +3,7 @@ import { usageViewZhTW } from "./usageView/zh-TW";
 import { blueprintsZhTW } from "./blueprints/zh-TW";
 import { tipsZhTW } from "./tips/zh-TW";
 import { commandPaletteZhTW } from "./commandPalette/zh-TW";
+import { terminalCopyModeZhTW } from "./terminalCopyMode/zh-TW";
 import { focusModeZhTW } from "./focusMode/zh-TW";
 import { fileHistoryZhTW } from "./fileHistory/zh-TW";
 import { filesRecentZhTW } from "./filesRecent/zh-TW";
@@ -572,12 +573,7 @@ export const zhTW: Messages = {
     waiting: "{key} 之後按：",
     cancel: "按 Esc 取消",
   },
-  terminal: {
-    copyMode: {
-      message: "正在檢視歷史 — 輸入不會送到終端機。按 q 返回。",
-      exit: "返回輸入",
-    },
-  },
+  terminal: terminalCopyModeZhTW,
   sortMenu: {
     trigger: "儲存格排序：{mode}",
     title: "儲存格排序",
