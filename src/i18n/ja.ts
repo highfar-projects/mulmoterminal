@@ -3,6 +3,7 @@ import { usageViewJa } from "./usageView/ja";
 import { blueprintsJa } from "./blueprints/ja";
 import { tipsJa } from "./tips/ja";
 import { commandPaletteJa } from "./commandPalette/ja";
+import { terminalCopyModeJa } from "./terminalCopyMode/ja";
 import { focusModeJa } from "./focusMode/ja";
 import { fileHistoryJa } from "./fileHistory/ja";
 import { filesRecentJa } from "./filesRecent/ja";
@@ -584,12 +585,7 @@ export const ja: Messages = {
     waiting: "{key} のあとに押すキー:",
     cancel: "Esc で取り消し",
   },
-  terminal: {
-    copyMode: {
-      message: "履歴を表示中 — 入力は端末に届きません。q で戻ります。",
-      exit: "入力に戻る",
-    },
-  },
+  terminal: terminalCopyModeJa,
   sortMenu: {
     trigger: "セルの並び順：{mode}",
     title: "セルの並び順",

@@ -22,6 +22,7 @@ import * as conn from "../composables/useTerminalConnections";
 import type { TerminalAgent } from "../../common/sessionAgent";
 import RunMenu from "./RunMenu.vue";
 import CopyModeBanner from "./CopyModeBanner.vue";
+import { useCopyModeBanner } from "../composables/useCopyModeBanner";
 import CpuHeatOverlay from "./CpuHeatOverlay.vue";
 import TerminalBackground from "./TerminalBackground.vue";
 import SkillMenu from "./SkillMenu.vue";
@@ -162,6 +163,7 @@ const statusClass = computed(() => {
 // Run menu so it lists THAT directory's scripts. Falls back to the requested cwd.
 const serverCwd = computed(() => conn.connView.get(slotKey)?.serverCwd ?? props.cwd ?? null);
 const inCopyMode = computed(() => conn.connView.get(slotKey)?.inCopyMode ?? false);
+const { copyModeBanner } = useCopyModeBanner();
 const heatView = computed(() => {
   const view = conn.connView.get(slotKey);
   return { level: view?.heatLevel ?? 0, finales: view?.heatFinales ?? 0 };
@@ -728,7 +730,7 @@ onUnmounted(() => {
     <CpuHeatOverlay :session-id="sessionId" :heat-level="heatView.level" :heat-finales="heatView.finales" :class="hideHeader ? 'top-0' : 'top-[34px]'" />
     <!-- Below the header row, which it must not cover: that row holds the actions a user in this
          state may reach for. 42px is the row's fixed 34px plus the same 8px gap as `top-2`. -->
-    <CopyModeBanner v-if="inCopyMode" :class="hideHeader ? 'top-2' : 'top-[42px]'" @exit="exitCopyMode" />
+    <CopyModeBanner v-if="inCopyMode && copyModeBanner" :class="hideHeader ? 'top-2' : 'top-[42px]'" @exit="exitCopyMode" />
     <Transition
       enter-active-class="transition-opacity duration-200 ease-[ease]"
       leave-active-class="transition-opacity duration-200 ease-[ease]"
