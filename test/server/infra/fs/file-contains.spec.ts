@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileContains } from "../../../../server/infra/fs/file-contains.js";
+import { CUSTOM_TITLE_MARK } from "../../../../server/session/session-reads.js";
 
 let dir = "";
 const write = (body: string): string => {
@@ -45,5 +46,14 @@ describe("fileContains", () => {
 
   it("treats an empty needle as present", async () => {
     expect(await fileContains(write("anything"), "")).toBe(true);
+  });
+
+  // The marker the transcript reader searches for must match a custom-title record and must NOT
+  // match conversation that quotes one: JSON escapes the quotes inside a string.
+  it("tells a custom-title record from text that mentions one", async () => {
+    const record = JSON.stringify({ type: "custom-title", customTitle: "name", sessionId: "s" });
+    const mention = JSON.stringify({ type: "user", message: { content: `a line like ${record} and the word custom-title` } });
+    expect(await fileContains(write(`${record}\n`), CUSTOM_TITLE_MARK)).toBe(true);
+    expect(await fileContains(write(`${mention}\n`), CUSTOM_TITLE_MARK)).toBe(false);
   });
 });

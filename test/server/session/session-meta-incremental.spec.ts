@@ -200,4 +200,19 @@ describe("readSessionMeta", () => {
     const { file } = writeTranscript(userLine("start") + fillerLine(900 * 1024) + aiTitleLine("end title") + promptLine("last prompt"));
     expect(await titleOf(file)).toBe("end title");
   });
+
+  // The cold read of a big file caches an offset; a rename appended after it has to be folded in
+  // by the resumed scan, not lost behind the cached answer.
+  it("picks up a rename appended after a big transcript was first read", async () => {
+    const { file } = writeTranscript(userLine("start") + fillerLine(900 * 1024) + aiTitleLine("end title") + promptLine("last prompt"));
+    expect(await titleOf(file)).toBe("end title");
+    appendFileSync(path.join(dir, file), customTitleLine("renamed afterwards"));
+    expect(await titleOf(file)).toBe("renamed afterwards");
+  });
+
+  it("does not take conversation that mentions custom-title for a rename", async () => {
+    const mention = line({ type: "user", message: { content: `see ${JSON.stringify({ type: "custom-title", customTitle: "quoted" })}` } });
+    const { file } = writeTranscript(userLine("start") + mention + fillerLine(900 * 1024) + aiTitleLine("end title") + promptLine("last prompt"));
+    expect(await titleOf(file)).toBe("end title");
+  });
 });

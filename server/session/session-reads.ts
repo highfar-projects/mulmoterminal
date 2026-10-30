@@ -543,7 +543,9 @@ function foldTitleField(into: TitleFields, o: Record<string, unknown>): void {
 // 508 MB, each read end to end): the first `user` record sat at most 26.6 KB in, and the last
 // ai-title / last-prompt at most 52.8 KB from EOF. Both windows are ~10x that, and a file whose
 // fields fall outside them is not guessed at — the fold reads the whole file instead.
-const CUSTOM_TITLE_MARK = "custom-title";
+// With both quotes, because JSON writes a quote inside a string as \" — so this can only be a
+// string token, never conversation text that merely mentions the record type.
+export const CUSTOM_TITLE_MARK = '"custom-title"';
 const TITLE_HEAD_BYTES = 256 * 1024;
 const TITLE_TAIL_BYTES = 512 * 1024;
 
@@ -576,8 +578,8 @@ const titleFieldsFold = createTranscriptFold<TitleFields>({
 //
 // The custom title is the one field the ends cannot settle: a transcript that was never renamed
 // has none, so its absence from the tail cannot be told from a rename further back. A rename can
-// sit anywhere, so when the tail holds none the whole file is searched for the text — raw bytes,
-// not parsed — and only a file that mentions it is folded whole.
+// sit anywhere, so when the tail holds none the whole file is searched for the record type — raw
+// bytes, not parsed — and only a file that has one is folded whole.
 // The tail runs to EOF, so a custom-title in it IS the last one. Without one, only a file that never
 // mentions the record type is known to have none.
 const customTitleSettled = async (full: string, tail: TitleFields): Promise<boolean> =>
