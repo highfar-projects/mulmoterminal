@@ -1,5 +1,7 @@
 // Rows the width ground-truth specs print, for tmux and for psmux: fixed ones that have each been a
 // disagreement, and seeded random ones, so a failing sample is the same one on every run.
+import { seededRandom } from "./seededRandom.js";
+
 export const RANDOM_SEED = 3173;
 const RANDOM_SAMPLES = 20;
 const CHARACTERS_PER_RANDOM_SAMPLE = 6;
@@ -33,14 +35,10 @@ export const FIXED_WIDTH_SAMPLES: readonly string[] = [
 ];
 
 export function seededWidthSamples(seed: number): string[] {
-  let state = seed;
-  const next = () => {
-    state = (state * 1103515245 + 12345) % 2 ** 31;
-    return state / 2 ** 31;
-  };
+  const random = seededRandom(seed);
   return Array.from({ length: RANDOM_SAMPLES }, () =>
     String.fromCodePoint(
-      ...Array.from({ length: CHARACTERS_PER_RANDOM_SAMPLE }, () => 0xa0 + Math.floor(next() * RANDOM_CODEPOINT_SPAN)).filter(
+      ...Array.from({ length: CHARACTERS_PER_RANDOM_SAMPLE }, () => 0xa0 + random.below(RANDOM_CODEPOINT_SPAN)).filter(
         (codepoint) => codepoint < 0xd800 || codepoint > 0xdfff,
       ),
     ),

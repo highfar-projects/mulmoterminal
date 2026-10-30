@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { seededRandom } from "../helpers/seededRandom";
 import {
   THEME_VAR_KEYS,
   isUsableCustomThemeId,
@@ -168,12 +169,15 @@ describe("termThemeFromVars", () => {
       const [hi, lo] = la > lb ? [la, lb] : [lb, la];
       return (hi + 0.05) / (lo + 0.05);
     };
-    // A small deterministic PRNG: a spec that re-randomises every run reports a different
-    // failure than the one you are asked to reproduce.
-    let seed = 0x2097;
+    // Seeded: a spec that re-randomises every run reports a different failure than the one you
+    // are asked to reproduce.
+    const BYTE_VALUES = 256;
+    const random = seededRandom(0x2097);
+    const bytes: number[] = [];
     const nextByte = () => {
-      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-      return (seed >> 16) & 0xff;
+      const byte = random.below(BYTE_VALUES);
+      bytes.push(byte);
+      return byte;
     };
     const hex = () => `#${[nextByte(), nextByte(), nextByte()].map((b) => b.toString(16).padStart(2, "0")).join("")}`;
 
@@ -182,6 +186,8 @@ describe("termThemeFromVars", () => {
       const term = termThemeFromVars(vars);
       expect(contrast(term.cursor, term.cursorAccent)).toBe(contrast(term.foreground, term.background));
     }
+    // Every channel value, or the rule was checked over a corner of the colours.
+    expect(new Set(bytes).size).toBe(BYTE_VALUES);
   });
 
   // The degenerate case Codex raised on #2098: a theme whose foreground equals its background.

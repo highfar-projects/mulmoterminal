@@ -4,19 +4,12 @@ import { buildAccount, buildCustomAgent } from "../../../common/agentEntries";
 import { buildProvider } from "../../../common/providerEntries";
 import { emptyConfig, type AppConfig } from "../../../server/config/app-config";
 import { appendOnDisk, refuseOnProblem } from "../../../server/config/on-disk-entry";
+import { seededRandom, type SeededRandom } from "../../helpers/seededRandom";
 
 // The add routes' refuse/update halves, over bases grown with the real builders and drafts that
 // reach every problem each builder can name, plus the success path.
 const SEED = 2822;
 const CASES = 600;
-
-function seeded(seed: number): (n: number) => number {
-  let state = seed;
-  return (n) => {
-    state = (state * 1103515245 + 12345) % 2147483648;
-    return Math.floor(state / 65536) % n;
-  };
-}
 
 const LABELS = ["", " ", "Kimi K3", "kimi", "a", "x".repeat(200), "Kimi K3 ", "b"];
 const COMMANDS = ["", "run", " ollama launch claude -- ", "x".repeat(2000)];
@@ -45,11 +38,11 @@ function checkAppend<K extends Key>(key: K, build: (base: AppConfig) => { entry:
   return `${key} ok`;
 }
 
-function generator(rand: (n: number) => number) {
-  const pick = <T>(xs: readonly T[]): T => xs[rand(xs.length)];
+function generator(random: SeededRandom) {
+  const { pick } = random;
   const grow = (): AppConfig => {
     const base = emptyConfig();
-    Array.from({ length: rand(GROWTH_MAX) }).forEach(() => {
+    Array.from({ length: random.below(GROWTH_MAX) }).forEach(() => {
       const agent = buildCustomAgent(pick(LABELS), "run", base.customAgents);
       if ("entry" in agent) base.customAgents = [...base.customAgents, agent.entry];
       const account = buildAccount(pick(LABELS), "claude", "/h", base.accounts);
@@ -85,7 +78,7 @@ function generator(rand: (n: number) => number) {
 
 describe("appendOnDisk", () => {
   it("refuses exactly when the build names a problem, and otherwise appends the built entry", () => {
-    const gen = generator(seeded(SEED));
+    const gen = generator(seededRandom(SEED));
     const seen = new Set<string>();
     Array.from({ length: CASES }).forEach(() => {
       const base = gen.grow();
