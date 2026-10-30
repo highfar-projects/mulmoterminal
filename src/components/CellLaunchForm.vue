@@ -337,7 +337,7 @@ const resumeQuery = ref("");
 const showResumeFilter = computed(() => resumable.value.sessions.length >= RESUME_FILTER_MIN_ROWS);
 // Only while the box is on show: a list that shrank under the minimum has no box to clear a query with.
 const shownResumable = computed(() => filterResumable(resumable.value.sessions, showResumeFilter.value ? resumeQuery.value : ""));
-watch([() => resumable.value.cwd, listAgent], () => (resumeQuery.value = ""));
+watch([targetDir, listAgent], () => (resumeQuery.value = ""));
 
 // Everything this form offers is per-directory, so they are read as one.
 function loadForDir(dir: string | null, agent: TerminalAgent | null): void {

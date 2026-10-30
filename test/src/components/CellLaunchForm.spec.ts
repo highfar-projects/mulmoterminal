@@ -311,6 +311,23 @@ describe("the resume filter", () => {
     expect(titles(w)).toHaveLength(RESUME_FILTER_MIN_ROWS + 2);
   });
 
+  // Stopping a session re-reads the list, and the read empties it for a moment. The query belongs to
+  // the directory and the agent, not to that gap.
+  it("keeps the query across the reload that stopping a session causes", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const many = [...rows(RESUME_FILTER_MIN_ROWS + 2), { id: "run-1", title: "running parser job", mtime: 1, runningKey: "mt-key-9" }];
+    mockFetch([], many);
+    const w = mountForm();
+    await flushPromises();
+    await w.find('[data-testid="cell-resume-filter"]').setValue("parser");
+    expect(titles(w)).toEqual(["fix the parser", "running parser job"]);
+
+    await w.find('[data-testid="ri-stop"]').trigger("click");
+    await flushPromises();
+    expect((w.find('[data-testid="cell-resume-filter"]').element as HTMLInputElement).value).toBe("parser");
+    expect(titles(w)).toEqual(["fix the parser", "running parser job"]);
+  });
+
   it("resumes the row that was picked from the narrowed list", async () => {
     mockFetch([], rows(RESUME_FILTER_MIN_ROWS + 2));
     const w = mountForm();
