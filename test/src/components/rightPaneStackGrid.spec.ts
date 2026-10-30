@@ -298,6 +298,73 @@ describe("stacked right panes", () => {
     expect(shown(w)).toBe("ToolsPane");
   });
 
+  // Full width is asked for on one cell. Another cell's pane starts beside its terminal, whichever
+  // pane it shows, and so does a reload (#3219).
+  it("does not carry full width to the cell the zoom moves to", async () => {
+    localStorage.setItem("pane_open_by_session", JSON.stringify({ s2: ["tools"] }));
+    const w = mountGrid();
+    await open(w, "TranscriptPane");
+    expect(full(w)).toBe(true);
+    await w.setProps({ expandedUid: 2 });
+    await flushPromises();
+    expect(shown(w)).toBe("ToolsPane");
+    expect(full(w)).toBe(false);
+  });
+
+  it("starts a conversation shown by a zoom move beside the terminal", async () => {
+    localStorage.setItem("pane_open_by_session", JSON.stringify({ s2: ["transcript"] }));
+    const w = mountGrid();
+    await open(w, "ToolsPane");
+    await w.setProps({ expandedUid: 2 });
+    await flushPromises();
+    expect(shown(w)).toBe("TranscriptPane");
+    expect(full(w)).toBe(false);
+  });
+
+  // Asked for from a cell that is not enlarged, which moves the zoom there: the takeover is the request.
+  const askOnTheOtherCell = async (event: "toggle-transcript" | "toggle-tools") => {
+    const w = mountGrid();
+    w.setProps({ "onToggle-expand": (uid: number) => w.setProps({ expandedUid: uid }) });
+    await flushPromises();
+    const tiled = w.findAllComponents({ name: "TerminalCell" }).find((terminal) => !terminal.props("expanded"));
+    tiled?.vm.$emit(event);
+    await flushPromises();
+    expect(w.props("expandedUid")).toBe(2);
+    return w;
+  };
+
+  it("gives the row to a conversation asked for on another cell", async () => {
+    const w = await askOnTheOtherCell("toggle-transcript");
+    expect(shown(w)).toBe("TranscriptPane");
+    expect(full(w)).toBe(true);
+  });
+
+  it("does not hand the takeover of a refused move to a later zoom", async () => {
+    const w = mountGrid();
+    await flushPromises();
+    const tiled = w.findAllComponents({ name: "TerminalCell" }).find((terminal) => !terminal.props("expanded"));
+    tiled?.vm.$emit("toggle-transcript");
+    await flushPromises();
+    await w.setProps({ expandedUid: 2 });
+    await flushPromises();
+    expect(shown(w)).toBe("TranscriptPane");
+    expect(full(w)).toBe(false);
+  });
+
+  it("starts another pane asked for on another cell beside the terminal", async () => {
+    const w = await askOnTheOtherCell("toggle-tools");
+    expect(shown(w)).toBe("ToolsPane");
+    expect(full(w)).toBe(false);
+  });
+
+  it("starts a conversation restored by a reload beside the terminal", async () => {
+    localStorage.setItem("pane_open_by_session", JSON.stringify({ s1: ["files", "transcript"] }));
+    const w = mountGrid();
+    await flushPromises();
+    expect(shown(w)).toBe("TranscriptPane");
+    expect(full(w)).toBe(false);
+  });
+
   it("shows the top pane again when the question is closed by hand", async () => {
     const w = mountGrid();
     await open(w, "FilesPane");

@@ -1,0 +1,33 @@
+# fix: full width carried to the cell the zoom moves to (#3219)
+
+## Problem
+
+`paneExpanded` (the right pane taking the row) is decided in `setRightPane` only. Moving the zoom
+moves the pane through the re-root watcher instead, which left the flag as it was: a conversation
+taken full width on one cell made the next cell's Tools cover its terminal. Reproduced in the app
+on `main` and in a spec.
+
+## Decision (asked)
+
+A zoom move and a reload start the pane split, whatever it shows, a conversation included. Full
+width stays something asked for on the cell it is on (opening the conversation there, or closing
+the pane over it, or the expand button).
+
+## Fix
+
+The re-root watcher clears `paneExpanded` when it moves the pane to another cell. Not a watch on
+`paneUid`: `setRightPane` itself moves `paneUid` and decides full width in the same call, and a
+watcher running after it would undo that.
+
+A conversation asked for on a cell that is not enlarged (`openPaneFor`, which moves the zoom
+there) is the exception: the takeover is the request. `openPaneFor` decides the pane before the zoom
+arrives, so it leaves the cell in `conversationAskedOnArrival` for the watcher run that the move
+triggers. It is cleared after that flush whatever happened, so a refused move does not hand it to a
+later, unrelated zoom.
+
+## Tests
+
+`test/src/components/rightPaneStackGrid.spec.ts`: full width not carried by a zoom move (red
+without the fix); a conversation reached by a zoom move, and one restored by a reload, start split;
+a conversation asked for on another cell takes the row, and Tools asked for there does not; a
+refused move does not hand the takeover to a later zoom.
