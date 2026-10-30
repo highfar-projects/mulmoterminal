@@ -16,6 +16,7 @@ import { blueprintsEn } from "./blueprints/en";
 import { usageViewEn } from "./usageView/en";
 import { tipsEn } from "./tips/en";
 import { commandPaletteEn } from "./commandPalette/en";
+import { terminalCopyModeEn } from "./terminalCopyMode/en";
 import { focusModeEn } from "./focusMode/en";
 import { fileHistoryEn } from "./fileHistory/en";
 import { filesRecentEn } from "./filesRecent/en";
@@ -603,12 +604,7 @@ export const en = {
     waiting: "After {key}, press:",
     cancel: "Esc cancels",
   },
-  terminal: {
-    copyMode: {
-      message: "Viewing history — what you type doesn't reach the terminal. Press q to return.",
-      exit: "Back to input",
-    },
-  },
+  terminal: terminalCopyModeEn,
   // The cockpit roster row's ⋮ menu (#2299).
   sortMenu: {
     trigger: "Grid cell ordering: {mode}",

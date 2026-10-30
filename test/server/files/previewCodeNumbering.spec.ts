@@ -5,6 +5,7 @@ import { existsSync, writeFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import express from "express";
 import { routeCall } from "../../helpers/routeCall";
+import { seededRandom } from "../../helpers/seededRandom";
 import { mountFilesBrowseRoutes } from "../../../server/files/files-browse";
 import { previewCodeBlocks } from "../../../common/previewCodeBlocks";
 
@@ -30,22 +31,12 @@ const PIECES = [
 ];
 const FRONT_MATTER = "---\ntitle: t\nbody: |\n  ```\n  in front matter\n  ```\n---\n";
 
-/** A small deterministic generator, so a failure names a seed that reproduces it. */
 const MAX_PIECES = 8;
-const LCG_MULTIPLIER = 1103515245n;
-const LCG_INCREMENT = 12345n;
-const LCG_MODULUS = 2n ** 31n;
-const HIGH_BITS_SHIFT = 16;
 
-/** The pieces a seed's document is made of. BigInt, because the multiply overflows a double and the
- *  low bits it lost made most pieces unreachable; and the HIGH bits, which a small LCG randomises. */
+/** The pieces a seed's document is made of, so a failure names a seed that reproduces it. */
 function piecesFor(seed: number): number[] {
-  let state = BigInt(seed);
-  const next = (): number => {
-    state = (state * LCG_MULTIPLIER + LCG_INCREMENT) % LCG_MODULUS;
-    return Number(state) >>> HIGH_BITS_SHIFT;
-  };
-  return Array.from({ length: 1 + (next() % MAX_PIECES) }, () => next() % PIECES.length);
+  const random = seededRandom(seed);
+  return Array.from({ length: 1 + random.below(MAX_PIECES) }, () => random.below(PIECES.length));
 }
 
 function documentFor(seed: number): string {

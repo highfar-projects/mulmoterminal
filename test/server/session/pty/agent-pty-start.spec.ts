@@ -7,6 +7,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { TERMINAL_AGENTS } from "../../../../common/sessionAgent.js";
 import type { PtySpawnEnv } from "../../../../server/session/pty/pty-spawn.js";
+import { seededRandom } from "../../../helpers/seededRandom.js";
 
 interface SpawnCall {
   sessionId: string;
@@ -36,12 +37,8 @@ const { startAgentPty } = await import("../../../../server/session/pty/agent-pty
 const { ptys } = await import("../../../../server/session/registry.js");
 
 const GENERATED_STARTS = 200;
-let seed = 1;
-const random = (): number => {
-  seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-  return seed / 0x7fffffff;
-};
-const pick = <T>(choices: readonly T[]): T => choices[Math.floor(random() * choices.length)];
+const random = seededRandom(1);
+const { pick } = random;
 
 const generateStart = (index: number) => {
   const spawnEnv: PtySpawnEnv = pick<PtySpawnEnv>([
@@ -82,9 +79,11 @@ afterEach(() => vi.restoreAllMocks());
 
 describe("startAgentPty", () => {
   it("hands every spawner's choices to the pty and the registry unchanged", () => {
+    const agents = new Set<string>();
     for (let index = 1; index <= GENERATED_STARTS; index += 1) {
       const start = generateStart(index);
-      Object.assign(outcome, { tmux: random() < 0.5, reattached: random() < 0.5, pid: index, throws: false });
+      agents.add(start.agent);
+      Object.assign(outcome, { tmux: random.fraction() < 0.5, reattached: random.fraction() < 0.5, pid: index, throws: false });
       spawnCalls.length = 0;
       order.length = 0;
       logged = [];
@@ -116,6 +115,8 @@ describe("startAgentPty", () => {
       expect(line).toContain(`session ${start.sessionId}`);
       if (start.note !== null) expect(line).toContain(start.note);
     }
+    // Every agent the picker knows, or one spawner's choices went unchecked.
+    expect(agents.size).toBe(TERMINAL_AGENTS.length);
   });
 
   it("registers nothing and logs nothing when the pty refuses to start", () => {

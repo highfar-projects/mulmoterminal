@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { fencedBlocks, lastFencedBlock, markdownSegments } from "../../common/codeBlocks";
+import { seededRandom } from "../helpers/seededRandom";
 
 // #865. The value of this feature is that what lands on the clipboard is byte-for-byte what the
 // agent wrote — so the cases that matter are the ones where a naive split would quietly change
@@ -171,6 +172,8 @@ const LINE_SHAPES = [
 ];
 
 const SEED = 20260917;
+const DOCUMENTS = 2000;
+const MAX_LINES = 12;
 
 /** Every line that no fenced block consumed, grouped into the runs they form. Reads the fences
  *  through `fencedBlocks` boundaries rather than re-deriving them: a block's consumed range is its
@@ -221,18 +224,20 @@ const proseRunsOutsideBlocks = (text: string): string[] => {
 
 describe("markdownSegments over generated documents", () => {
   it("loses no prose line, and keeps every run in order", () => {
-    let seed = SEED;
-    const next = (): number => {
-      seed = (seed * 1103515245 + 12345) % 2147483648;
-      return seed / 2147483648;
-    };
-    for (let run = 0; run < 2000; run++) {
-      const lines: string[] = [];
-      const count = Math.floor(next() * 13);
-      for (let i = 0; i < count; i++) lines.push(LINE_SHAPES[Math.floor(next() * LINE_SHAPES.length)] ?? "");
-      const text = lines.join("\n");
+    const random = seededRandom(SEED);
+    const counts = new Set<number>();
+    const shapes = new Set<number>();
+    for (let run = 0; run < DOCUMENTS; run++) {
+      const count = random.below(MAX_LINES + 1);
+      const picked = Array.from({ length: count }, () => random.below(LINE_SHAPES.length));
+      counts.add(count);
+      picked.forEach((shape) => shapes.add(shape));
+      const text = picked.map((shape) => LINE_SHAPES[shape]).join("\n");
       const prose = markdownSegments(text).flatMap((s) => (s.kind === "text" ? [s.text] : []));
       expect(prose, `seed ${SEED}, document ${JSON.stringify(text)}`).toEqual(proseRunsOutsideBlocks(text));
     }
+    // Every shape and every length, or the property held over a corner of the documents it names.
+    expect(shapes.size).toBe(LINE_SHAPES.length);
+    expect(counts.size).toBe(MAX_LINES + 1);
   });
 });

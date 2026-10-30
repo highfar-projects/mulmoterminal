@@ -15,25 +15,13 @@ import {
 } from "../../../../server/backends/plugins/markdown-pdf";
 import { MERMAID_STYLE, drawDiagramsSource } from "../../../../server/files/previewMermaid";
 import { installedMermaid, mermaidBundlePath } from "../../../../server/files/mermaidAssets";
+import { seededRandom } from "../../../helpers/seededRandom";
 
 // The Canvas draws a mermaid fence; the PDF printed it as a code block. The PDF now carries
 // the Preview's placeholder and runs the Preview's drawing in the page before printing it.
 
 const FLOW = "graph TD\n  A --> B";
 const fenced = (lang: string, text: string): string => "```" + lang + "\n" + text + "\n```\n";
-
-/** A small deterministic generator, so a failing case can be found again by its seed. The step is
- *  32-bit arithmetic on purpose: a double holds the product of two 31-bit numbers only rounded, and
- *  a rounded state sits on a multiple of a power of two, so `state % bound` stops moving. */
-const lcg = (seed: number): ((bound: number) => number) => {
-  const LOW_BITS_DROPPED = 8;
-  const RANGE = 2 ** (32 - LOW_BITS_DROPPED);
-  let state = seed >>> 0;
-  return (bound) => {
-    state = (Math.imul(state, 1103515245) + 12345) >>> 0;
-    return Math.floor(((state >>> LOW_BITS_DROPPED) / RANGE) * bound);
-  };
-};
 
 describe("markdownPdfDocument", () => {
   it("puts a mermaid fence's placeholder beside the block marked makes of it, and counts it", async () => {
@@ -71,8 +59,8 @@ describe("markdownPdfDocument", () => {
       "    indented\n\n",
       "~~~js\n~~~\n",
     ];
-    const rand = lcg(3214);
-    const picks = Array.from({ length: 200 }, () => Array.from({ length: 1 + rand(4) }, () => rand(pieces.length)));
+    const random = seededRandom(3214);
+    const picks = Array.from({ length: 200 }, () => Array.from({ length: 1 + random.below(4) }, () => random.below(pieces.length)));
     // A generator that has quietly collapsed checks the property over a handful of documents.
     expect(new Set(picks.flat()).size).toBe(pieces.length);
     expect(picks.some((indices) => indices.length > 1)).toBe(true);
