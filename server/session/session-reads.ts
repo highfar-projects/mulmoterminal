@@ -517,17 +517,21 @@ export async function claudeCurrentTurnReply(cwd: string, id: string): Promise<s
 // live ai-title, the activity flags) is read per request from memory, because those change while
 // the file does not — caching the finished row would freeze an edited memo behind it.
 export interface TitleFields {
+  customTitle: string | null;
   aiTitle: string | null;
   lastPrompt: string | null;
   firstUserMsg: string | null;
 }
 
-const NO_TITLE_FIELDS: TitleFields = { aiTitle: null, lastPrompt: null, firstUserMsg: null };
+const NO_TITLE_FIELDS: TitleFields = { customTitle: null, aiTitle: null, lastPrompt: null, firstUserMsg: null };
 
 // The rule, in one place, so the whole-file read and the resumed one cannot drift apart: the LAST
-// ai-title / last-prompt win, the FIRST user message does.
+// custom-title / ai-title / last-prompt win, the FIRST user message does. `/rename` appends a
+// custom-title line, and Claude Code writes it again on later saves, so an empty one is a
+// rename to nothing and clears the name.
 function foldTitleField(into: TitleFields, o: Record<string, unknown>): void {
-  if (o.type === "ai-title" && o.aiTitle) into.aiTitle = readString(o.aiTitle);
+  if (o.type === "custom-title" && typeof o.customTitle === "string") into.customTitle = readString(o.customTitle).trim() || null;
+  else if (o.type === "ai-title" && o.aiTitle) into.aiTitle = readString(o.aiTitle);
   else if (o.type === "last-prompt" && o.lastPrompt) into.lastPrompt = readString(o.lastPrompt);
   else if (o.type === "user" && into.firstUserMsg === null) {
     into.firstUserMsg = userPromptText(isRecord(o.message) ? o.message.content : undefined);
@@ -547,13 +551,14 @@ const TITLE_TAIL_BYTES = 512 * 1024;
 // changes what it means, or old sidecars answer for a rule that no longer exists.
 const isTitleFields = (value: unknown): value is TitleFields =>
   isRecord(value) &&
+  (value.customTitle === null || typeof value.customTitle === "string") &&
   (value.aiTitle === null || typeof value.aiTitle === "string") &&
   (value.lastPrompt === null || typeof value.lastPrompt === "string") &&
   (value.firstUserMsg === null || typeof value.firstUserMsg === "string");
 
 const titleFieldsFold = createTranscriptFold<TitleFields>({
   kind: "title-fields",
-  version: 1,
+  version: 2,
   isValue: isTitleFields,
   empty: () => ({ ...NO_TITLE_FIELDS }),
   fold: foldTitleField,
@@ -567,6 +572,12 @@ const titleFieldsFold = createTranscriptFold<TitleFields>({
 // answer: only when all three are found is the fold provably the same as the whole-file one (the
 // tail runs to EOF, so an ai-title found there IS the last one).
 //
+// The custom title is the exception, and the one place this is a bet rather than a proof: a
+// transcript that was never renamed has none, so its absence from the tail cannot be told from a
+// rename further back. It is made because Claude Code writes the line again on later saves — in
+// the transcripts measured it sat within 20 KB of EOF, against a 512 KB window. Losing it would
+// show the ai-title, which is what the list showed before.
+//
 // The offset comes back with the fields, and it is the end of the last COMPLETE line rather than
 // the file's size: a transcript caught mid-append ends in half a record, and resuming past it would
 // start the next scan inside a line — losing the record that half line becomes.
@@ -577,7 +588,7 @@ async function coldTitleFields(full: string, size: number): Promise<FoldedAt<Tit
     await forEachJsonlRecordIn(full, { to: TITLE_HEAD_BYTES }, (o) => foldTitleField(head, o));
     const offset = await forEachJsonlRecordIn(full, { from: size - TITLE_TAIL_BYTES }, (o) => foldTitleField(tail, o));
     if (head.firstUserMsg !== null && tail.aiTitle !== null && tail.lastPrompt !== null) {
-      return { value: { aiTitle: tail.aiTitle, lastPrompt: tail.lastPrompt, firstUserMsg: head.firstUserMsg }, offset };
+      return { value: { customTitle: tail.customTitle, aiTitle: tail.aiTitle, lastPrompt: tail.lastPrompt, firstUserMsg: head.firstUserMsg }, offset };
     }
   }
   return null; // the ends did not answer — the caller folds the whole file
@@ -597,10 +608,17 @@ export async function claudeTitleFields(cwd: string, id: string): Promise<TitleF
 export async function readSessionMeta(dir: string, file: string): Promise<SessionMeta> {
   const full = path.join(dir, file);
   const stat = await fs.stat(full);
-  const { aiTitle, lastPrompt, firstUserMsg } = await titleFieldsFold.read(full, { mtimeMs: stat.mtimeMs, size: stat.size });
+  const { customTitle, aiTitle, lastPrompt, firstUserMsg } = await titleFieldsFold.read(full, { mtimeMs: stat.mtimeMs, size: stat.size });
 
   const id = path.basename(file, ".jsonl");
-  const title = sessionListTitle({ memo: sessionMemos.get(id), liveAiTitle: aiTitles.get(id), diskAiTitle: aiTitle, diskLastPrompt: lastPrompt, firstUserMsg });
+  const title = sessionListTitle({
+    memo: sessionMemos.get(id),
+    diskCustomTitle: customTitle,
+    liveAiTitle: aiTitles.get(id),
+    diskAiTitle: aiTitle,
+    diskLastPrompt: lastPrompt,
+    firstUserMsg,
+  });
   const a = activity.get(id);
   return {
     id,

@@ -218,7 +218,7 @@ through `getBotJob`.
 ```
 
 `title` is the memo, the AI title or the recorded title. A live row with none of those is named
-from disk instead — the transcript's `ai-title`, the agent's own title, the latest prompt, the first
+from disk instead — the transcript's `custom-title` (the name from `/rename`), its `ai-title`, the agent's own title, the latest prompt, the first
 user message — then `<project> · <agent>`, and only then its `id` (#2210). A `/clear`ed session
 reads nothing off disk. `prompt` is the latest prompt on one line, absent when there is none or when
 it only repeats `title`.

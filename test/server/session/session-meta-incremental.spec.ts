@@ -20,6 +20,7 @@ let n = 0;
 const line = (o: unknown) => `${JSON.stringify(o)}\n`;
 const userLine = (text: string) => line({ type: "user", message: { content: text } });
 const aiTitleLine = (title: string) => line({ type: "ai-title", aiTitle: title });
+const customTitleLine = (title: string) => line({ type: "custom-title", customTitle: title, sessionId: "s" });
 const promptLine = (text: string) => line({ type: "last-prompt", lastPrompt: text });
 // Filler that carries no field the reader folds — a stand-in for the tool output that makes a real
 // transcript hundreds of MB.
@@ -147,5 +148,37 @@ describe("readSessionMeta", () => {
 
     sessionMemos.set(id, "what I am actually doing");
     expect(await titleOf(file)).toBe("what I am actually doing");
+  });
+
+  // Claude Code appends a custom-title for `/rename` and writes it again on later saves; the
+  // newest one is the name, and it outranks the ai-title the agent generated.
+  it("names the session by its last /rename, above the ai-title", async () => {
+    const { file } = writeTranscript(userLine("u") + aiTitleLine("agent's title") + customTitleLine("first name") + customTitleLine("second name"));
+    expect(await titleOf(file)).toBe("second name");
+  });
+
+  it("reads a rename written after the first read", async () => {
+    const { file } = writeTranscript(userLine("u") + aiTitleLine("agent's title"));
+    expect(await titleOf(file)).toBe("agent's title");
+    appendFileSync(path.join(dir, file), customTitleLine("renamed later"));
+    expect(await titleOf(file)).toBe("renamed later");
+  });
+
+  it("treats an empty custom-title as a rename to nothing", async () => {
+    const { file } = writeTranscript(userLine("u") + aiTitleLine("agent's title") + customTitleLine("named") + customTitleLine("  "));
+    expect(await titleOf(file)).toBe("agent's title");
+  });
+
+  it("keeps the memo above the /rename name", async () => {
+    const { file, id } = writeTranscript(userLine("u") + customTitleLine("renamed"));
+    sessionMemos.set(id, "memo");
+    expect(await titleOf(file)).toBe("memo");
+  });
+
+  it("finds a rename in the tail window of a big transcript", async () => {
+    const { file } = writeTranscript(
+      userLine("start") + fillerLine(900 * 1024) + aiTitleLine("end title") + customTitleLine("renamed") + promptLine("last prompt"),
+    );
+    expect(await titleOf(file)).toBe("renamed");
   });
 });
