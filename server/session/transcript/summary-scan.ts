@@ -26,6 +26,7 @@
 // window rather than reimplemented here.
 import {
   aiTitleFromParsed,
+  customTitleOfRecord,
   countUserTurnsFromParsed,
   emptyPromptTrail,
   foldPromptTrail,
@@ -41,6 +42,7 @@ import { isRecord } from "../../../common/isRecord.js";
 
 export interface SummaryParts {
   lastPrompt: string | null;
+  customTitle: string | null;
   aiTitle: string | null;
   lastResponse: string | null;
   userTurns: number;
@@ -54,6 +56,8 @@ export interface SummaryState {
   usage: SessionUsage;
   userTurns: number;
   aiTitle: string | null;
+  /** What `/rename` last set; an empty rename clears it. */
+  customTitle: string | null;
   prompts: PromptTrail;
   /** Whatever produced text most recently, so a long run of tool calls afterwards cannot bury it. */
   lastAssistantText: string | null;
@@ -68,6 +72,7 @@ export const emptySummaryState = (): SummaryState => ({
   usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheCreationTokens: 0 },
   userTurns: 0,
   aiTitle: null,
+  customTitle: null,
   prompts: emptyPromptTrail(),
   lastAssistantText: null,
   context: { model: null, contextTokens: 0 },
@@ -80,6 +85,7 @@ export const copySummaryState = (state: SummaryState): SummaryState => ({
   usage: { ...state.usage },
   userTurns: state.userTurns,
   aiTitle: state.aiTitle,
+  customTitle: state.customTitle,
   prompts: { ...state.prompts },
   lastAssistantText: state.lastAssistantText,
   context: { ...state.context },
@@ -97,6 +103,8 @@ export function foldSummary(into: SummaryState, record: Record<string, unknown>)
   into.usage.cacheReadTokens += perRecord.cacheReadTokens;
   into.usage.cacheCreationTokens += perRecord.cacheCreationTokens;
   into.aiTitle = aiTitleFromParsed(one) ?? into.aiTitle;
+  const renamed = customTitleOfRecord(record);
+  if (renamed !== undefined) into.customTitle = renamed;
   foldTurnToolNames(into.turnTools, record);
   foldPromptTrail(into.prompts, record);
   // `?? previous` rather than an unconditional assign: an assistant record carrying only a
@@ -109,6 +117,7 @@ export function foldSummary(into: SummaryState, record: Record<string, unknown>)
 
 export const summaryPartsOf = (state: SummaryState, responseMax: number): SummaryParts => ({
   lastPrompt: meaningfulPromptOf(state.prompts),
+  customTitle: state.customTitle,
   aiTitle: state.aiTitle,
   lastResponse: state.lastAssistantText?.slice(0, responseMax) ?? null,
   userTurns: state.userTurns,

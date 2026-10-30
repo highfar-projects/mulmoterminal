@@ -92,7 +92,7 @@ export function rosterRow(c: Cell, look: RosterLookups): CockpitRow {
     // what the other agents' opening prompt is. `aiTitle` is null for every non-claude agent and
     // `agentTitle` is null for claude, so the `??` is a merge of two disjoint sources, not a
     // preference between two answers for the same cell.
-    summary: meta.aiTitle ?? agentSummary(meta.agentTitle, meta.lastPrompt, meta.agentTitleKind),
+    summary: meta.customTitle ?? meta.aiTitle ?? agentSummary(meta.agentTitle, meta.lastPrompt, meta.agentTitleKind),
     prompt: meta.lastPrompt,
     response: meta.lastResponse,
     fallback: fallbackLabel(c),

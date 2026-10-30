@@ -107,6 +107,13 @@ export function aiTitleFromParsed(records: Record<string, unknown>[]): string | 
   }
   return title;
 }
+/** The name `/rename` gave, from one record: undefined when it is not a custom-title record, null
+ *  when it renames to nothing (which clears the name). */
+export function customTitleOfRecord(o: Record<string, unknown>): string | null | undefined {
+  if (o.type !== "custom-title" || typeof o.customTitle !== "string") return undefined;
+  return readString(o.customTitle).trim() || null;
+}
+
 export const aiTitleFromJsonl = (raw: string): string | null => aiTitleFromParsed(parseJsonl(raw));
 
 export interface ConversationTurn {

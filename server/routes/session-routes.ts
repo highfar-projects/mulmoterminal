@@ -185,7 +185,7 @@ async function sessionDetail(req: Request<{ id: string }>, res: Response, freshe
   await sessionCollectionsHydrated; // and a chat opened from a collection must not lose its mark to a restart
   const view = sessionDetailView(
     { lastPrompt: lastPrompts.get(id), lastResponse: lastResponses.get(id), aiTitle: aiTitles.get(id), memo: sessionMemos.get(id) },
-    { lastPrompt: exchange.prompt, lastResponse: exchange.reply },
+    { lastPrompt: exchange.prompt, lastResponse: exchange.reply, customTitle: claudeSummary.customTitle },
     activity.get(id) ?? {},
     clearedTranscripts.has(id),
   );
