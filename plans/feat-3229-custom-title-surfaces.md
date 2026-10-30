@@ -20,11 +20,13 @@ carries only the in-memory `ai-title` copy.
 - Client: `SessionMetaView.customTitle` (an explicit null wins in the merge, an absent field keeps
   it), the roster row's summary, `closedTitle`, and the cell header. The order everywhere is memo,
   `/rename` name, AI title, prompt.
-- Cell header: `customTitle` is cell state set by the detail fetch. A live push omits it, so the
-  push path keeps what the fetch set.
+- Cell header: `customTitle` is cell state, set from the detail fetch on mount, on reconnect and
+  at the end of a turn. It is not an activity push field, and it is applied outside the guard that
+  drops a seed when a push landed mid-fetch, because that guard protects working/waiting, not a
+  fact read off the transcript.
 
 ## Left out
 
-- Pushing a rename the moment it is typed. The name appears on the next detail fetch (window focus,
-  turn end), which is how the roster already learns everything else.
+- Pushing a rename the moment it is typed. The name appears on the next detail fetch (mount, reconnect,
+  turn end).
 - The resume list's filter box: #3230.

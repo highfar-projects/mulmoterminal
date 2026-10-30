@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-import { applyActivityPush, cellHeaderText, type CellActivityState } from "../../../src/components/cellActivity";
+import { applyActivityPush, cellHeaderText, cellHeaderTooltip, type CellActivityState } from "../../../src/components/cellActivity";
 
 const shown: CellActivityState = {
   working: true,
@@ -8,17 +8,10 @@ const shown: CellActivityState = {
   event: "Stop",
   lastPrompt: "fix the login bug",
   aiTitle: "Login fix",
-  customTitle: null,
   memo: null,
 };
 
 describe("applyActivityPush", () => {
-  it("keeps the /rename name a push omits, and clears it on an explicit null", () => {
-    const renamed = { ...shown, customTitle: "Parser rewrite" };
-    expect(applyActivityPush(renamed, { aiTitle: "x" }).customTitle).toBe("Parser rewrite");
-    expect(applyActivityPush(renamed, { customTitle: null }).customTitle).toBeNull();
-  });
-
   it("takes the flags the push carries", () => {
     expect(applyActivityPush(shown, { working: false, waiting: true })).toMatchObject({ working: false, waiting: true });
   });
@@ -66,7 +59,6 @@ describe("applyActivityPush", () => {
       event: "Stop",
       lastPrompt: "fix the login bug",
       aiTitle: "Login fix",
-      customTitle: null,
       memo: null,
     });
   });
@@ -110,5 +102,19 @@ describe("cellHeaderText", () => {
   it("falls back to the summary when the memo is erased", () => {
     expect(cellHeaderText(null, null, "Login fix", "fix the login bug", "abcdef12")).toBe("Login fix");
     expect(cellHeaderText("", null, "Login fix", "fix the login bug", "abcdef12")).toBe("Login fix");
+  });
+});
+
+describe("cellHeaderTooltip", () => {
+  it("carries the title the header line displaced", () => {
+    expect(cellHeaderTooltip("ship it", "Parser rewrite", "Login fix", "fix the login bug")).toBe("Parser rewrite");
+    expect(cellHeaderTooltip("ship it", null, "Login fix", "fix the login bug")).toBe("Login fix");
+    expect(cellHeaderTooltip(null, "Parser rewrite", "Login fix", "fix the login bug")).toBe("Login fix");
+    expect(cellHeaderTooltip(null, "Parser rewrite", null, "fix the login bug")).toBe("fix the login bug");
+  });
+
+  it("is the raw prompt when nothing displaced anything, and empty when there is nothing", () => {
+    expect(cellHeaderTooltip(null, null, "Login fix", "fix the login bug")).toBe("fix the login bug");
+    expect(cellHeaderTooltip(null, null, null, null)).toBe("");
   });
 });

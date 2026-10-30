@@ -1136,6 +1136,38 @@ describe("TerminalCell", () => {
     expect(promptText(w)).toBe("2番目にして");
   });
 
+  // #3229: the `/rename` name is read off the transcript, so it arrives with the detail fetch and is
+  // not an activity push. A push that lands while that fetch is in flight discards the fetch's
+  // ACTIVITY (the #620 guard) but must not discard the name.
+  it("shows the /rename name over the AI title, even when a push lands while the detail is in flight", async () => {
+    const id = "77777777-7777-7777-7777-777777777777";
+    const gate = deferred<boolean>();
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/api/sessions")) return { ok: true, json: async () => ({ sessions: [] }) };
+      if (u.includes(`/api/session/${id}`)) {
+        await gate.promise;
+        return { ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: "p", aiTitle: "AI title", customTitle: "Parser rewrite" }) };
+      }
+      return { ok: true, json: async () => ({ working: false, waiting: false, lastPrompt: null }) };
+    }) as unknown as typeof fetch;
+
+    const w = mountCell(id);
+    captured?.({ id, working: true, waiting: false, lastPrompt: "p", aiTitle: "AI title" }); // lands before the detail resolves
+    await nextTick();
+    expect(promptText(w)).toBe("AI title");
+
+    gate.resolve(true);
+    await flushPromises();
+    await nextTick();
+    expect(promptText(w)).toBe("Parser rewrite");
+
+    // A later push says nothing about the name, so it stays.
+    captured?.({ id, working: true, waiting: false, lastPrompt: "p2", aiTitle: "AI title 2" });
+    await nextTick();
+    expect(promptText(w)).toBe("Parser rewrite");
+  });
+
   // The header's "open on GitHub" control: shown only when /api/git-remote
   // reports a repository URL for the cell's dir.
   // What POST /api/git-remote answers: `forge` is what the menu reads; `githubUrl` rides along as the

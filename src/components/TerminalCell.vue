@@ -26,7 +26,7 @@ import AccountMark from "./AccountMark.vue";
 import { unsavedWork } from "./unsavedWork";
 import { shouldPromptTidy } from "./mergedTidy";
 import { usageBadge } from "./cellDisplay";
-import { applyActivityPush, cellHeaderText, type ActivityPush } from "./cellActivity";
+import { applyActivityPush, cellHeaderText, cellHeaderTooltip, type ActivityPush } from "./cellActivity";
 import { MEMO_MAX_LENGTH, normalizeMemo } from "../../common/sessionMemo";
 import { asSessionCollection, type SessionCollection } from "../../common/sessionCollection";
 import { preferredLaunchDir, shouldSyncLaunchDir } from "./launchDir";
@@ -331,7 +331,6 @@ interface ActivityMsg {
   event?: string | null;
   lastPrompt?: string | null;
   aiTitle?: string | null;
-  customTitle?: string | null;
   memo?: string | null;
 }
 const isActivityMsg = (d: unknown): d is ActivityMsg => typeof d === "object" && d !== null && "id" in d;
@@ -357,7 +356,6 @@ function applyActivity(d: ActivityPush) {
       event: activityEvent.value,
       lastPrompt: lastPrompt.value,
       aiTitle: aiTitle.value,
-      customTitle: customTitle.value,
       memo: memo.value,
     },
     d,
@@ -367,7 +365,6 @@ function applyActivity(d: ActivityPush) {
   activityEvent.value = next.event;
   lastPrompt.value = next.lastPrompt;
   aiTitle.value = next.aiTitle;
-  customTitle.value = next.customTitle;
   // Not while the box is open: the push that lands as another tab saves would otherwise
   // overwrite the sentence being typed here, mid-word.
   if (!memoEditing.value) memo.value = next.memo;
@@ -403,7 +400,7 @@ function activityPushOf(d: Record<string, unknown>): ActivityPush {
   const push: ActivityPush = {};
   if (typeof d.working === "boolean") push.working = d.working;
   if (typeof d.waiting === "boolean") push.waiting = d.waiting;
-  for (const key of ["event", "lastPrompt", "aiTitle", "customTitle", "memo"] as const) {
+  for (const key of ["event", "lastPrompt", "aiTitle", "memo"] as const) {
     const value = d[key];
     if (value === null || typeof value === "string") push[key] = value;
   }
@@ -434,6 +431,13 @@ function applyBadges(data: Record<string, unknown>) {
   context.value = isCellContext(data.context) ? data.context : null;
 }
 
+// What the person named the conversation with `/rename`: a fact in the transcript, so every answer
+// for this id carries the same one. An explicit null clears it (a cleared name or session); a body
+// that does not carry the field leaves what is shown.
+function applyCustomTitle(data: Record<string, unknown>) {
+  if (data.customTitle === null || typeof data.customTitle === "string") customTitle.value = data.customTitle;
+}
+
 async function loadInitial(id: string) {
   const seedId = ++latestSeed;
   const badgeReq = ++latestBadgeReq;
@@ -450,6 +454,7 @@ async function loadInitial(id: string) {
   // Not guarded by either token: it is a fact about how the session began, so every answer for
   // this id carries the same one and there is no older-vs-newer to lose.
   collection.value = asSessionCollection(data.collection);
+  applyCustomTitle(data);
 }
 
 // Refresh ONLY the token usage (not the live activity — that's pub/sub's job). Called
@@ -459,7 +464,9 @@ async function refreshUsage() {
   if (!id) return;
   const badgeReq = ++latestBadgeReq;
   const data = await fetchSessionDetail(id);
-  if (data && badgeReq === latestBadgeReq) applyBadges(data);
+  if (!data || badgeReq !== latestBadgeReq) return;
+  applyBadges(data);
+  applyCustomTitle(data);
 }
 
 // Canvas output this cell has produced that nobody has looked at. The grid is a TRIAGE board,
@@ -1156,7 +1163,7 @@ const headerText = computed(() => cellHeaderText(memo.value, customTitle.value, 
 // A memo displaces the AI title from the line, so the tooltip is where that title goes — losing
 // it entirely would make the note cost information rather than add it. With no memo the tooltip
 // is what it always was: the raw prompt, which the header abbreviates.
-const headerTitleAttr = computed(() => (memo.value || customTitle.value ? aiTitle.value || lastPrompt.value || "" : lastPrompt.value || aiTitle.value || ""));
+const headerTitleAttr = computed(() => cellHeaderTooltip(memo.value, customTitle.value, aiTitle.value, lastPrompt.value));
 
 const memoInput = useTemplateRef<HTMLInputElement>("memoInput");
 
