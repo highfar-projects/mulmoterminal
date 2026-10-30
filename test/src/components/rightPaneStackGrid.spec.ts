@@ -47,9 +47,22 @@ vi.mock("../../../src/components/FilesPane.vue", () => ({
   default: {
     name: "FilesPane",
     props: ["cwd", "requestedPath", "initialState"],
-    emits: ["close", "dirty"],
-    setup: (_p: unknown, { expose, slots }: { expose: (e: Record<string, unknown>) => void; slots: { title?: () => VNode[] } }) => {
-      expose({ flush, reload: () => {}, snapshot });
+    emits: ["close", "closing", "dirty"],
+    setup: (
+      _p: unknown,
+      {
+        expose,
+        slots,
+        emit,
+      }: { expose: (e: Record<string, unknown>) => void; slots: { title?: () => VNode[] }; emit: (event: string, ...args: unknown[]) => void },
+    ) => {
+      // The close button, as FilesPane has it: hand the save over, then close once it lands.
+      const requestClose = async () => {
+        const saved = flush().then((result) => result !== false);
+        emit("closing", saved);
+        if (await saved) emit("close");
+      };
+      expose({ flush, reload: () => {}, snapshot, requestClose });
       return () => h("div", { class: "stub-files-pane" }, slots.title?.());
     },
   },
@@ -363,6 +376,63 @@ describe("stacked right panes", () => {
     await flushPromises();
     expect(shown(w)).toBe("TranscriptPane");
     expect(full(w)).toBe(false);
+  });
+
+  // Leaving Files and closing it both await its save; whichever finishes first, both are done (#3225).
+  describe("Files closed while a press away from it saves", () => {
+    const hasRequestClose = (value: unknown): value is { requestClose: () => Promise<void> } =>
+      typeof value === "object" && value !== null && typeof Reflect.get(value, "requestClose") === "function";
+    const pressThenClose = async () => {
+      const w = mountGrid();
+      await open(w, "FilesPane");
+      const finishSaves: ((saved: boolean) => void)[] = [];
+      flush.mockImplementation(() => new Promise((resolve) => finishSaves.push(resolve)));
+      w.findComponent({ name: "TerminalCell" }).vm.$emit("toggle-tools");
+      const files: unknown = w.findComponent({ name: "FilesPane" }).vm;
+      if (!hasRequestClose(files)) throw new Error("the files pane stub exposes requestClose");
+      void files.requestClose();
+      expect(finishSaves).toHaveLength(2);
+      return { w, finishSaves };
+    };
+    // What is on screen, what is remembered, and what closing that pane leaves.
+    const outcome = async (w: Grid) => {
+      const first = shown(w);
+      const stored = remembered();
+      await closeShown(w);
+      return { first, stored, then: shown(w) };
+    };
+    const TOOLS_ALONE = { first: "ToolsPane", stored: { s1: ["tools"] }, then: null };
+
+    // With nothing pressed the pane's own close does it, which also files its tree for next time.
+    it("leaves an ordinary close to the pane itself", async () => {
+      const w = mountGrid();
+      await open(w, "FilesPane");
+      const files: unknown = w.findComponent({ name: "FilesPane" }).vm;
+      if (!hasRequestClose(files)) throw new Error("the files pane stub exposes requestClose");
+      await files.requestClose();
+      await flushPromises();
+      expect(shown(w)).toBeNull();
+      await open(w, "FilesPane");
+      expect(w.findComponent({ name: "FilesPane" }).props("initialState")).toEqual(snapshot());
+    });
+
+    it("when the press's save finishes first", async () => {
+      const { w, finishSaves } = await pressThenClose();
+      finishSaves[0](true);
+      await flushPromises();
+      finishSaves[1](true);
+      await flushPromises();
+      expect(await outcome(w)).toEqual(TOOLS_ALONE);
+    });
+
+    it("when the close's save finishes first", async () => {
+      const { w, finishSaves } = await pressThenClose();
+      finishSaves[1](true);
+      await flushPromises();
+      finishSaves[0](true);
+      await flushPromises();
+      expect(await outcome(w)).toEqual(TOOLS_ALONE);
+    });
   });
 
   it("shows the top pane again when the question is closed by hand", async () => {

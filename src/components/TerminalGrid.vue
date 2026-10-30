@@ -61,7 +61,7 @@ import { usePubSub } from "../composables/usePubSub";
 import { isDrawnResult } from "../utils/drawnResult";
 import { hasCanvasGroup, hasCollectionsGroup } from "../../common/toolGroups";
 import type { RightPane } from "./gridCell";
-import { NO_PANES, withPaneOpened, withShownPaneClosed, readStack, shownPane, type CellPanes, type StackedPane } from "./rightPaneStack";
+import { NO_PANES, withPaneOpened, withPaneRemoved, withShownPaneClosed, readStack, shownPane, type CellPanes, type StackedPane } from "./rightPaneStack";
 import QuestionPane from "./QuestionPane.vue";
 import { ASK_QUESTION_CHANNEL, isAskQuestionDone, isAskQuestionEvent } from "../../common/askQuestion";
 import { PANE_COMMAND_CHANNEL, checkClosedNotice, checkSummary, isPaneCommand, type CheckAnswer, type PaneTarget } from "../../common/paneCommand";
@@ -379,6 +379,16 @@ const paneMin = computed(() => Math.min(MIN_GUI, paneMax.value));
 // it could not save out of.
 function setFilesOpen(open: boolean): void {
   setRightPane(open ? "files" : null, paneUid.value ?? props.expandedUid);
+}
+// Closing awaits the save, and a pane pressed meanwhile can take the slot first and unmount the
+// files pane, whose `close` is then dropped. That close is finished here, by taking Files out from
+// under the pane that covered it, so the press and the close are both done in either order.
+async function finishFilesCloseOnceSaved(saved: Promise<boolean>): Promise<void> {
+  const uid = paneUid.value ?? props.expandedUid;
+  if (uid === null || !(await saved) || paneOf(uid) === "files") return; // still on screen: its own `close` lands
+  const next = withPaneRemoved(panesOf(uid), "files");
+  paneByCell.value = new Map(paneByCell.value).set(uid, next);
+  persistPane(uid, next.stack);
 }
 
 // Switching panes is the same event as closing the files one, because the files pane unmounts
@@ -1858,6 +1868,7 @@ function onRosterDragLeave(event: DragEvent) {
           :style="{ flex: `0 0 ${paneWidth}px` }"
           class="border-l border-border bg-deep"
           @close="setFilesOpen(false)"
+          @closing="finishFilesCloseOnceSaved"
           @insert-text="insertIntoPaneCell"
           @open-canvas="openPaneCellCanvas"
         >
