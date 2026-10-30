@@ -74,8 +74,9 @@ describe("seededRandom", () => {
   });
 
   it("reaches every value below a small bound, powers of two included", () => {
-    // A step done in doubles leaves the state on multiples of a power of two, and `below(4)` then
-    // never moves while `below(7)` still seems to.
+    // Why powers of two: the collapsed specs took `state % bound` from a state the double step had
+    // left on multiples of 64, so `% 4` never moved while `% 7` seemed to. The step itself is pinned
+    // by the golden and cycle tests, which the double step fails.
     [2, 4, 7, 8, 12, 64].forEach((bound) => {
       const random = seededRandom(3214);
       const seen = new Set(Array.from({ length: REACH_DRAWS }, () => random.below(bound)));
