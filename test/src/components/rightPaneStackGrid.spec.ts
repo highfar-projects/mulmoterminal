@@ -321,6 +321,30 @@ describe("stacked right panes", () => {
     expect(full(w)).toBe(false);
   });
 
+  // Asked for from a cell that is not enlarged, which moves the zoom there: the takeover is the request.
+  const askOnTheOtherCell = async (event: "toggle-transcript" | "toggle-tools") => {
+    const w = mountGrid();
+    w.setProps({ "onToggle-expand": (uid: number) => w.setProps({ expandedUid: uid }) });
+    await flushPromises();
+    const tiled = w.findAllComponents({ name: "TerminalCell" }).find((terminal) => !terminal.props("expanded"));
+    tiled?.vm.$emit(event);
+    await flushPromises();
+    expect(w.props("expandedUid")).toBe(2);
+    return w;
+  };
+
+  it("gives the row to a conversation asked for on another cell", async () => {
+    const w = await askOnTheOtherCell("toggle-transcript");
+    expect(shown(w)).toBe("TranscriptPane");
+    expect(full(w)).toBe(true);
+  });
+
+  it("starts another pane asked for on another cell beside the terminal", async () => {
+    const w = await askOnTheOtherCell("toggle-tools");
+    expect(shown(w)).toBe("ToolsPane");
+    expect(full(w)).toBe(false);
+  });
+
   it("starts a conversation restored by a reload beside the terminal", async () => {
     localStorage.setItem("pane_open_by_session", JSON.stringify({ s1: ["files", "transcript"] }));
     const w = mountGrid();

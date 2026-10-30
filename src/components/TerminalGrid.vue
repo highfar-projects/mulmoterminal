@@ -527,7 +527,11 @@ async function openPaneFor(uid: number, pane: RightPane, stillWanted: () => bool
   if (filesUnmounts && (await filesPane.value?.flush()) === false) return;
   if (!isLatest() || !stillWanted()) return;
   if (props.expandedUid === null) tiledPaneUid.value = uid;
-  else if (props.expandedUid !== uid) emit("toggle-expand", uid);
+  else if (props.expandedUid !== uid) {
+    // The pane is decided before the zoom gets there, so its takeover waits for the move to apply.
+    conversationAskedOnArrival = pane === "transcript" ? uid : null;
+    emit("toggle-expand", uid);
+  }
   setRightPane(pane, uid);
 }
 
@@ -1161,10 +1165,14 @@ const paneCwd = ref<string | null>(null);
 // remembered tree.
 // Each run awaits the save, and a later run can finish first; only the latest may move the pane.
 let rerootRun = 0;
+// The cell a conversation was just asked for on, from another cell (see openPaneFor).
+let conversationAskedOnArrival: number | null = null;
 watch(
   [paneTargetUid, () => cwdOf(paneTargetUid.value), rightPane],
   async ([uid, targetCwd]) => {
     const run = ++rerootRun;
+    const conversationAsked = conversationAskedOnArrival === uid;
+    conversationAskedOnArrival = null;
     // A target that is not among the cells this grid was handed — a tiled pane's cell on another
     // page — has no directory of its own, and `cwdOf` would answer the grid's default for it.
     if (uid === null || cellOf(uid) === undefined) return;
@@ -1185,8 +1193,8 @@ watch(
     // when anything comes back to it (Codex review). A pane with no root yet has nothing to file.
     if (!firstShowing) rememberPaneState(paneUid.value);
     // A takeover was asked for on the cell it was on; the next cell's pane, a restored conversation
-    // included, starts beside its terminal.
-    if (paneUid.value !== uid) paneExpanded.value = false;
+    // included, starts beside its terminal unless the conversation was asked for there.
+    if (paneUid.value !== uid) paneExpanded.value = conversationAsked;
     paneUid.value = uid;
     tiledPaneUid.value = uid;
     restoreSessionPane(uid);
