@@ -3,6 +3,7 @@ import { usageViewKo } from "./usageView/ko";
 import { blueprintsKo } from "./blueprints/ko";
 import { tipsKo } from "./tips/ko";
 import { commandPaletteKo } from "./commandPalette/ko";
+import { terminalCopyModeKo } from "./terminalCopyMode/ko";
 import { focusModeKo } from "./focusMode/ko";
 import { fileHistoryKo } from "./fileHistory/ko";
 import { filesRecentKo } from "./filesRecent/ko";
@@ -581,12 +582,7 @@ export const ko: Messages = {
     waiting: "{key} 다음에 누를 키:",
     cancel: "Esc로 취소",
   },
-  terminal: {
-    copyMode: {
-      message: "기록 보는 중 — 입력이 터미널로 전달되지 않습니다. q를 눌러 돌아갑니다.",
-      exit: "입력으로 돌아가기",
-    },
-  },
+  terminal: terminalCopyModeKo,
   sortMenu: {
     trigger: "셀 정렬: {mode}",
     title: "셀 정렬",
