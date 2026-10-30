@@ -10,6 +10,7 @@
 // keeping did: WHICH record shapes matter, and WHAT must hold once the old code is gone.
 import { describe, it, expect } from "vitest";
 import { createCodexFold, renderCodexRecord } from "../../../../server/session/transcript/transcript-view-codex";
+import { seededRandom } from "../../../helpers/seededRandom";
 import {
   emptyTranscriptScan,
   foldTranscriptView,
@@ -209,14 +210,18 @@ describe("claude's fold is exactly the shared fold plus claude's renderers", () 
     () => ({}),
   ];
 
+  const SEQUENCES = 2000;
+  const LONGEST_SEQUENCE = 40;
+
   it("agrees over 2000 generated sequences", () => {
-    let seed = 12345;
-    const rnd = () => {
-      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-      return seed / 0x7fffffff;
-    };
-    for (let n = 0; n < 2000; n++) {
-      const records = Array.from({ length: 1 + Math.floor(rnd() * 40) }, () => shapes[Math.floor(rnd() * shapes.length)]?.() ?? {});
+    const random = seededRandom(12345);
+    const used = new Set<() => Record<string, unknown>>();
+    const sequences = new Set<string>();
+    for (let n = 0; n < SEQUENCES; n++) {
+      const picked = Array.from({ length: 1 + random.below(LONGEST_SEQUENCE) }, () => random.pick(shapes));
+      picked.forEach((shape) => used.add(shape));
+      const records = picked.map((shape) => shape());
+      sequences.add(JSON.stringify(records));
       const viaClaude = emptyTranscriptScan();
       const viaShared = emptyTranscriptScan();
       for (const record of records) {
@@ -232,5 +237,8 @@ describe("claude's fold is exactly the shared fold plus claude's renderers", () 
       }
       expect(JSON.stringify(viaShared), `sequence ${n}`).toBe(JSON.stringify(viaClaude));
     }
+    // Every shape, and sequences that are mostly distinct: a generator that cycles repeats them.
+    expect(used.size).toBe(shapes.length);
+    expect(sequences.size).toBeGreaterThan(SEQUENCES / 2);
   });
 });

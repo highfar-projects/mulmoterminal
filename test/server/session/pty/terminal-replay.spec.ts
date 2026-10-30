@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
 import { appendBoundedOutput, boundedTail, growOutputTail, stripTerminalQueries, terminalModePrefix } from "../../../../server/session/pty/terminal-replay.js";
+import { seededRandom } from "../../../helpers/seededRandom.js";
 
 const ESC = String.fromCharCode(0x1b);
 const BEL = String.fromCharCode(0x07);
@@ -237,19 +238,15 @@ describe("growOutputTail + boundedTail vs. appendBoundedOutput", () => {
   // A deterministic pseudo-random stream of the things a real pty emits, re-cut at
   // arbitrary chunk boundaries so sequences straddle them.
   function stream(seed: number, maxOscUnits: number) {
-    let state = seed;
-    const rnd = () => {
-      state = (state * 1103515245 + 12345) & 0x7fffffff;
-      return state / 0x7fffffff;
-    };
+    const random = seededRandom(seed);
     const atoms = [
-      () => "text".repeat(1 + Math.floor(rnd() * 20)),
+      () => "text".repeat(1 + random.below(20)),
       () => "\r\n",
-      () => `${ESC}[${Math.floor(rnd() * 200)}m`,
-      () => `${ESC}[${Math.floor(rnd() * 50)};${Math.floor(rnd() * 50)}H`,
+      () => `${ESC}[${random.below(200)}m`,
+      () => `${ESC}[${random.below(50)};${random.below(50)}H`,
       () => `${ESC}]0;a title${BEL}`,
-      () => `${ESC}]52;c;${"QUJD".repeat(1 + Math.floor(rnd() * maxOscUnits))}${BEL}`, // OSC 52 clipboard
-      () => `${ESC}]8;;https://example.com/${"p".repeat(Math.floor(rnd() * 300))}${ESC}\\`,
+      () => `${ESC}]52;c;${"QUJD".repeat(1 + random.below(maxOscUnits))}${BEL}`, // OSC 52 clipboard
+      () => `${ESC}]8;;https://example.com/${"p".repeat(random.below(300))}${ESC}\\`,
       () => `${ESC}=`,
       () => `${ESC}(B`,
       () => ESC, // an aborted escape
@@ -258,14 +255,14 @@ describe("growOutputTail + boundedTail vs. appendBoundedOutput", () => {
     const parts: string[] = [];
     let length = 0;
     while (length < 40000) {
-      const atom = atoms[Math.floor(rnd() * atoms.length)]();
+      const atom = random.pick(atoms)();
       parts.push(atom);
       length += atom.length;
     }
     const whole = parts.join("");
     const chunks: string[] = [];
     for (let at = 0; at < whole.length;) {
-      const size = 1 + Math.floor(rnd() * 200);
+      const size = 1 + random.below(200);
       chunks.push(whole.slice(at, at + size));
       at += size;
     }
@@ -281,6 +278,30 @@ describe("growOutputTail + boundedTail vs. appendBoundedOutput", () => {
     }
     return { eager, deferred: boundedTail(deferred, limit) };
   };
+
+  it("carries every kind of atom in one stream, so the comparison is over the stream it names", () => {
+    const whole = stream(1, 800).join("");
+    expect(whole).toMatch(new RegExp(`${ESC}\\[\\d+m`));
+    expect(whole).toMatch(new RegExp(`${ESC}\\[\\d+;\\d+H`));
+    [
+      "texttext",
+      "\r\n",
+      `${ESC}]0;a title${BEL}`,
+      `${ESC}]52;c;QUJD`,
+      `${ESC}]8;;https://example.com/`,
+      `${ESC}=`,
+      `${ESC}(B`,
+      "日本語テキストの行です",
+    ].forEach((atom) => expect(whole).toContain(atom));
+    // The aborted escape: an ESC followed by none of the openers above, nor by the backslash that
+    // ends an OSC 8 string.
+    expect(
+      whole
+        .split(ESC)
+        .slice(1)
+        .some((after) => !/^[[\]=(\\]/.test(after)),
+    ).toBe(true);
+  });
 
   it("replays byte-for-byte the same tail when no single sequence outgrows the limit", () => {
     for (let seed = 1; seed <= 25; seed++) {

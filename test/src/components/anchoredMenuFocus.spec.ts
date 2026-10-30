@@ -1,6 +1,7 @@
 // Which item takes focus when an anchored menu opens, checked over generated item lists.
 import { describe, it, expect } from "vitest";
 import { ANCHORED_MENU_INITIAL_FOCUS, initialMenuItem, type MenuItemLike } from "../../../src/components/anchoredMenuFocus";
+import { seededRandom } from "../../helpers/seededRandom";
 
 interface Item extends MenuItemLike {
   index: number;
@@ -15,20 +16,22 @@ const SEED = 2822;
 const makeItem = (index: number, checked: string | null): Item => ({ index, getAttribute: (name) => (name === "aria-checked" ? checked : null) });
 
 function* generatedLists(): Generator<Item[]> {
-  let state = SEED;
-  const next = (bound: number): number => {
-    state = (state * 1103515245 + 12345) % 2147483648;
-    return state % bound;
-  };
+  const random = seededRandom(SEED);
   for (let sample = 0; sample < SAMPLE_COUNT; sample++) {
-    const length = next(MAX_ITEMS + 1);
-    yield Array.from({ length }, (_, index) => makeItem(index, ARIA_CHECKED_VALUES[next(ARIA_CHECKED_VALUES.length)] ?? null));
+    const length = random.below(MAX_ITEMS + 1);
+    yield Array.from({ length }, (_, index) => makeItem(index, random.pick(ARIA_CHECKED_VALUES)));
   }
 }
 
 const firstChecked = (items: Item[]): Item | undefined => items.find((item) => item.getAttribute("aria-checked") === "true");
 
 describe("initialMenuItem", () => {
+  it("is checked over every list length and every aria-checked value", () => {
+    const lists = [...generatedLists()];
+    expect(new Set(lists.map((items) => items.length)).size).toBe(MAX_ITEMS + 1);
+    expect(new Set(lists.flatMap((items) => items.map((item) => item.getAttribute("aria-checked")))).size).toBe(ARIA_CHECKED_VALUES.length);
+  });
+
   it("returns nothing for an empty menu, whatever the mode", () => {
     ANCHORED_MENU_INITIAL_FOCUS.forEach((focus) => expect(initialMenuItem(focus, [])).toBeUndefined());
   });

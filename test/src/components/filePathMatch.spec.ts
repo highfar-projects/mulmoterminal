@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { compareMatches, finderRow, highlightParts, matchPath, normalizeQuery, rankPaths } from "../../../src/components/filePathMatch";
+import { seededRandom, type SeededRandom } from "../../helpers/seededRandom";
 
 /** The path a query is ranked highest against, out of a candidate set. */
 const best = (paths: string[], query: string): string | undefined => rankPaths(paths, query, paths.length)[0]?.path;
@@ -113,22 +114,24 @@ describe("rankPaths — the order a reader sees", () => {
 // shapes that break an alignment (a repeated character, a separator run, a query that matches in
 // several places) are exactly the ones nobody writes out by hand.
 describe("matchPath — the alignment is real, over generated input", () => {
-  const ALPHABET = "abcab/._X";
-  // A cheap deterministic generator: a seeded LCG, so a failure names one seed and re-runs.
-  const rng = (seed: number) => {
-    let state = seed;
-    return () => {
-      state = (state * 1103515245 + 12345) % 2147483648;
-      return state / 2147483648;
-    };
+  const LETTERS = [..."abcab/._X"];
+  const CASES = 2000;
+  // Seeded, so a failure names one seed and re-runs.
+  const word = (random: SeededRandom, longest: number): string => Array.from({ length: 1 + random.below(longest) }, () => random.pick(LETTERS)).join("");
+  /** Every letter and every length up to `longest`: the shapes the property is about are made of them. */
+  const spans = (words: string[], longest: number): void => {
+    expect(new Set(words.join("")).size).toBe(new Set(LETTERS).size);
+    expect(new Set(words.map((w) => w.length)).size).toBe(longest);
   };
 
   it("reports indexes that are ascending, in range, and spell the query", () => {
-    const next = rng(20990917);
+    const random = seededRandom(20990917);
+    const paths: string[] = [];
     let checked = 0;
-    for (let n = 0; n < 2000; n += 1) {
-      const path = Array.from({ length: 1 + Math.floor(next() * 24) }, () => ALPHABET[Math.floor(next() * ALPHABET.length)]).join("");
-      const query = Array.from({ length: 1 + Math.floor(next() * 4) }, () => ALPHABET[Math.floor(next() * ALPHABET.length)]).join("");
+    for (let n = 0; n < CASES; n += 1) {
+      const path = word(random, 24);
+      const query = word(random, 4);
+      paths.push(path);
       const match = matchPath(path, query);
       if (match === null) continue;
       checked += 1;
@@ -138,10 +141,12 @@ describe("matchPath — the alignment is real, over generated input", () => {
     }
     // A run where nothing matched would pass every assertion above and prove nothing.
     expect(checked).toBeGreaterThan(100);
+    spans(paths, 24);
   });
 
   it("accepts exactly what a plain subsequence test accepts", () => {
-    const next = rng(776643);
+    const random = seededRandom(776643);
+    const paths: string[] = [];
     const isSub = (haystack: string, needle: string): boolean => {
       let at = 0;
       for (const char of needle.toLowerCase()) {
@@ -150,11 +155,13 @@ describe("matchPath — the alignment is real, over generated input", () => {
       }
       return true;
     };
-    for (let n = 0; n < 2000; n += 1) {
-      const path = Array.from({ length: 1 + Math.floor(next() * 20) }, () => ALPHABET[Math.floor(next() * ALPHABET.length)]).join("");
-      const query = Array.from({ length: 1 + Math.floor(next() * 5) }, () => ALPHABET[Math.floor(next() * ALPHABET.length)]).join("");
+    for (let n = 0; n < CASES; n += 1) {
+      const path = word(random, 20);
+      const query = word(random, 5);
+      paths.push(path);
       expect(matchPath(path, query) !== null).toBe(isSub(path, query));
     }
+    spans(paths, 20);
   });
 });
 
