@@ -61,6 +61,7 @@ async function readRow(id: string, untitledLive: boolean): Promise<RowReads> {
   const untitledName = diskTitle({
     cleared: clearedTranscripts.has(id),
     livePrompt: lastPrompts.get(id),
+    diskCustomTitle: fields?.customTitle ?? null,
     diskAiTitle: fields?.aiTitle ?? null,
     agentTitle: await agentTitleOf(id, cwd, agent),
     diskLastPrompt: fields?.lastPrompt ?? null,

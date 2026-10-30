@@ -3,11 +3,18 @@ import { describe, it, expect } from "vitest";
 
 import { sessionListTitle, UNTITLED_SESSION } from "../../../../server/session/list/sessionListTitle.js";
 
-const NONE = { memo: undefined, liveAiTitle: undefined, diskAiTitle: null, diskLastPrompt: null, firstUserMsg: null };
+const NONE = { memo: undefined, diskCustomTitle: null, liveAiTitle: undefined, diskAiTitle: null, diskLastPrompt: null, firstUserMsg: null };
 
 describe("sessionListTitle", () => {
   it("prefers the live AI title over every disk source", () => {
-    const title = sessionListTitle({ memo: undefined, liveAiTitle: "live", diskAiTitle: "disk-ai", diskLastPrompt: "prompt", firstUserMsg: "first" });
+    const title = sessionListTitle({
+      memo: undefined,
+      diskCustomTitle: null,
+      liveAiTitle: "live",
+      diskAiTitle: "disk-ai",
+      diskLastPrompt: "prompt",
+      firstUserMsg: "first",
+    });
     expect(title).toBe("live");
   });
 
@@ -20,9 +27,15 @@ describe("sessionListTitle", () => {
   // `||`, not `??`: an empty string at any tier means "nothing usable here", so it is skipped
   // rather than pinned as the title.
   it("skips an empty string at each tier and takes the next non-empty source", () => {
-    expect(sessionListTitle({ memo: undefined, liveAiTitle: "", diskAiTitle: "disk-ai", diskLastPrompt: "prompt", firstUserMsg: "first" })).toBe("disk-ai");
-    expect(sessionListTitle({ memo: undefined, liveAiTitle: "", diskAiTitle: "", diskLastPrompt: "prompt", firstUserMsg: "first" })).toBe("prompt");
-    expect(sessionListTitle({ memo: undefined, liveAiTitle: "", diskAiTitle: "", diskLastPrompt: "", firstUserMsg: "first" })).toBe("first");
+    expect(
+      sessionListTitle({ memo: undefined, diskCustomTitle: null, liveAiTitle: "", diskAiTitle: "disk-ai", diskLastPrompt: "prompt", firstUserMsg: "first" }),
+    ).toBe("disk-ai");
+    expect(
+      sessionListTitle({ memo: undefined, diskCustomTitle: null, liveAiTitle: "", diskAiTitle: "", diskLastPrompt: "prompt", firstUserMsg: "first" }),
+    ).toBe("prompt");
+    expect(sessionListTitle({ memo: undefined, diskCustomTitle: null, liveAiTitle: "", diskAiTitle: "", diskLastPrompt: "", firstUserMsg: "first" })).toBe(
+      "first",
+    );
   });
 
   // THE contract that makes this a `||` and not a `??`: a live title of "" must NOT win — it
@@ -36,13 +49,22 @@ describe("sessionListTitle", () => {
   });
 
   it("returns the sentinel when every tier is an empty string", () => {
-    expect(sessionListTitle({ memo: undefined, liveAiTitle: "", diskAiTitle: "", diskLastPrompt: "", firstUserMsg: "" })).toBe(UNTITLED_SESSION);
+    expect(sessionListTitle({ memo: undefined, diskCustomTitle: null, liveAiTitle: "", diskAiTitle: "", diskLastPrompt: "", firstUserMsg: "" })).toBe(
+      UNTITLED_SESSION,
+    );
   });
 
   // The point of the memo (#1084): every other tier is what the AGENT said, so the one line the
   // user wrote about what this session is FOR has to outrank all of them.
   it("lets the user's memo win over every generated title", () => {
-    const title = sessionListTitle({ memo: "#1077 の検証", liveAiTitle: "live", diskAiTitle: "disk-ai", diskLastPrompt: "prompt", firstUserMsg: "first" });
+    const title = sessionListTitle({
+      memo: "#1077 の検証",
+      diskCustomTitle: null,
+      liveAiTitle: "live",
+      diskAiTitle: "disk-ai",
+      diskLastPrompt: "prompt",
+      firstUserMsg: "first",
+    });
     expect(title).toBe("#1077 の検証");
   });
 
@@ -51,5 +73,15 @@ describe("sessionListTitle", () => {
   it("falls through an absent or empty memo", () => {
     expect(sessionListTitle({ ...NONE, liveAiTitle: "live" })).toBe("live");
     expect(sessionListTitle({ ...NONE, memo: "", liveAiTitle: "live" })).toBe("live");
+  });
+
+  // `/rename` is the user naming the session in the agent's own UI, so it outranks everything the
+  // agent generated and yields only to the memo written in MulmoTerminal.
+  it("puts the /rename name above generated titles and below the memo", () => {
+    const tiers = { ...NONE, diskCustomTitle: "renamed", liveAiTitle: "live", diskAiTitle: "disk-ai", diskLastPrompt: "prompt", firstUserMsg: "first" };
+    expect(sessionListTitle(tiers)).toBe("renamed");
+    expect(sessionListTitle({ ...tiers, memo: "memo" })).toBe("memo");
+    expect(sessionListTitle({ ...tiers, diskCustomTitle: null })).toBe("live");
+    expect(sessionListTitle({ ...tiers, diskCustomTitle: "" })).toBe("live");
   });
 });
