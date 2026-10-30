@@ -253,6 +253,51 @@ describe("stacked right panes", () => {
     expect(w.findComponent({ name: "FilesPane" }).props("cwd")).toBe("/work/s1");
   });
 
+  // Leaving Files awaits its save, so two presses in a row can finish in either order.
+  it("shows the pane pressed last when two presses' saves finish out of order", async () => {
+    const w = mountGrid();
+    await open(w, "FilesPane");
+    const finishSaves: ((saved: boolean) => void)[] = [];
+    flush.mockImplementation(() => new Promise((resolve) => finishSaves.push(resolve)));
+    const terminal = w.findComponent({ name: "TerminalCell" });
+    terminal.vm.$emit("toggle-tools");
+    terminal.vm.$emit("toggle-transcript");
+    expect(finishSaves).toHaveLength(2);
+    finishSaves[1](true);
+    await flushPromises();
+    finishSaves[0](true);
+    await flushPromises();
+    expect(shown(w)).toBe("TranscriptPane");
+  });
+
+  it("keeps Files when it is asked for again while a press away from it saves", async () => {
+    const w = mountGrid();
+    await open(w, "FilesPane");
+    let finishSave: (saved: boolean) => void = () => {};
+    flush.mockImplementation(() => new Promise((resolve) => (finishSave = resolve)));
+    w.findComponent({ name: "TerminalCell" }).vm.$emit("toggle-tools");
+    await open(w, "FilesPane");
+    finishSave(true);
+    await flushPromises();
+    expect(shown(w)).toBe("FilesPane");
+  });
+
+  it("does not move the pane for a browse a later press overtook during the flush", async () => {
+    const w = mountGrid();
+    await open(w, "FilesPane");
+    const finishSaves: ((saved: boolean) => void)[] = [];
+    flush.mockImplementation(() => new Promise((resolve) => finishSaves.push(resolve)));
+    const [enlarged, tiled] = w.findAllComponents({ name: "TerminalCell" });
+    tiled.vm.$emit("open-files");
+    enlarged.vm.$emit("toggle-tools");
+    finishSaves[1](true);
+    await flushPromises();
+    finishSaves[0](true);
+    await flushPromises();
+    expect(w.emitted("toggle-expand")).toBeUndefined();
+    expect(shown(w)).toBe("ToolsPane");
+  });
+
   it("shows the top pane again when the question is closed by hand", async () => {
     const w = mountGrid();
     await open(w, "FilesPane");

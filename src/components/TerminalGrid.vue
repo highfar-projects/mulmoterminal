@@ -455,14 +455,23 @@ function setRightPane(pane: RightPane | null, uid: number | null): void {
 // below means the cell asked for is never the one already enlarged, so the toggle cannot collapse
 // the zoom out from under a drawing. It reaches a single-terminal grid too — that used to be
 // refused (#374), which made the pane unreachable there; see toggleExpand in gridTabs.ts.
+// Each pane request below awaits the files pane's save before it commits, and a later one can
+// finish first; only the latest may commit. A question is not one: it must not cancel a press.
+let latestPaneRequest = 0;
+function startPaneRequest(): () => boolean {
+  const request = ++latestPaneRequest;
+  return () => request === latestPaneRequest;
+}
+
 /** The Canvas of the cell the files pane is beside, after the pane put a card on it. */
 function openPaneCellCanvas(): void {
   if (paneCellUid.value !== null) void openCanvasFor(paneCellUid.value);
 }
 
 async function openCanvasFor(uid: number, enlarge = true, stillWanted?: () => boolean): Promise<void> {
+  const isLatest = startPaneRequest();
   if (filesOpen.value && (await filesPane.value?.flush()) === false) return;
-  if (stillWanted && !stillWanted()) return;
+  if (!isLatest() || (stillWanted && !stillWanted())) return;
   if (props.expandedUid !== uid) {
     if (!enlarge) return;
     emit("toggle-expand", uid);
@@ -473,6 +482,7 @@ async function openCanvasFor(uid: number, enlarge = true, stillWanted?: () => bo
   // `setRightPane` below names `uid`, so a zoom that walks while this is asked records the Canvas
   // for the cell asked about, never for the one the user walked to.
   if (mayHaveGainedACard()) await adoptStoredCard();
+  if (!isLatest()) return;
   // Named rather than left to default: the enlargement above is the PARENT's to apply, so
   // `expandedUid` is still the previous cell when this runs.
   setRightPane("canvas", uid);
@@ -512,9 +522,10 @@ async function adoptStoredCard(): Promise<void> {
 // `stillWanted` is asked again after the save, which awaits: a caller that did not come from a click
 // (an agent's showInPane) must not take the zoom back from a cell the user moved to meanwhile.
 async function openPaneFor(uid: number, pane: RightPane, stillWanted: () => boolean = () => true): Promise<void> {
+  const isLatest = startPaneRequest();
   const filesUnmounts = filesOpen.value && (paneUid.value !== uid || pane !== "files");
   if (filesUnmounts && (await filesPane.value?.flush()) === false) return;
-  if (!stillWanted()) return;
+  if (!isLatest() || !stillWanted()) return;
   if (props.expandedUid === null) tiledPaneUid.value = uid;
   else if (props.expandedUid !== uid) emit("toggle-expand", uid);
   setRightPane(pane, uid);
@@ -625,8 +636,9 @@ async function toggleRightPane(pane: RightPane, uid: number | null = props.expan
   //
   // Only for a cell whose answer reaches the screen: a button pressed on a tiled cell changes that
   // cell's answer and unmounts nothing, so there is no buffer in play.
+  const isLatest = startPaneRequest();
   if (filesOpen.value && changesScreen(uid) && (await filesPane.value?.flush()) === false) return;
-  setRightPane(paneOf(uid) === pane ? null : pane, uid);
+  if (isLatest()) setRightPane(paneOf(uid) === pane ? null : pane, uid);
 }
 
 // A cell's project dir — what the pane browses. A cell that hasn't reported one yet (a launcher, a

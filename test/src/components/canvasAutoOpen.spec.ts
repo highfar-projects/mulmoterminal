@@ -267,6 +267,69 @@ describe("the canvas opening itself when the agent draws", () => {
     expect(w.emitted("toggle-expand")).toEqual([[1]]);
   });
 
+  // Leaving Files awaits its save, so a pane pressed while the drawing waits can finish first.
+  it("leaves a pane pressed during the flush in front of the drawing", async () => {
+    const w = mountGrid([cell(1, "s1")], 1);
+    await flushPromises();
+    const terminal = w.findComponent({ name: "TerminalCell" });
+    terminal.vm.$emit("open-files");
+    await flushPromises();
+    const finishSaves: ((saved: boolean) => void)[] = [];
+    filesStub.flush.mockImplementation(() => new Promise((resolve) => finishSaves.push(resolve)));
+
+    publish("session:s1", drew);
+    terminal.vm.$emit("toggle-tools");
+    expect(finishSaves).toHaveLength(2);
+    finishSaves[1](true);
+    await flushPromises();
+    finishSaves[0](true);
+    await flushPromises();
+    expect(canvasOpen(w)).toBe(false);
+    expect(w.findComponent({ name: "ToolsPane" }).exists()).toBe(true);
+  });
+
+  it("does not take the zoom for a canvas click a later press overtook during the flush", async () => {
+    const w = mountGrid([cell(1, "s1"), cell(2, "s2")], 1);
+    await flushPromises();
+    const [enlarged, tiled] = w.findAllComponents({ name: "TerminalCell" });
+    enlarged.vm.$emit("open-files");
+    await flushPromises();
+    const finishSaves: ((saved: boolean) => void)[] = [];
+    filesStub.flush.mockImplementation(() => new Promise((resolve) => finishSaves.push(resolve)));
+
+    tiled.vm.$emit("open-canvas");
+    enlarged.vm.$emit("toggle-tools");
+    finishSaves[1](true);
+    await flushPromises();
+    finishSaves[0](true);
+    await flushPromises();
+    expect(w.emitted("toggle-expand")).toBeUndefined();
+    expect(w.findComponent({ name: "ToolsPane" }).exists()).toBe(true);
+  });
+
+  // With the canvas switched off the drawing first asks the store for a card, which awaits too.
+  it("leaves a pane pressed while the drawing asks for a stored card in front of it", async () => {
+    let answerCard: (body: unknown) => void = () => {};
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.startsWith("/api/agent/toolResults/")) return new Promise((resolve) => (answerCard = (body) => resolve({ ok: true, json: async () => body })));
+        return { ok: true, json: async () => ({ groups: [], tools: [] }) };
+      }),
+    );
+    const w = mountGrid([cell(1, "s1")], 1);
+    await flushPromises();
+
+    publish("session:s1", drew);
+    await flushPromises();
+    w.findComponent({ name: "TerminalCell" }).vm.$emit("toggle-tools");
+    await flushPromises();
+    answerCard({ toolResults: [{ uuid: "u1", toolName: "presentDocument" }] });
+    await flushPromises();
+    expect(canvasOpen(w)).toBe(false);
+    expect(w.findComponent({ name: "ToolsPane" }).exists()).toBe(true);
+  });
+
   // The subscription follows the enlarged cell, so walking the zoom must not leave the old
   // session able to open the pane.
   it("follows the zoom to another cell", async () => {
