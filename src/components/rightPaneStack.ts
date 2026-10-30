@@ -33,6 +33,11 @@ export function withShownPaneClosed(panes: CellPanes): CellPanes {
   return { stack: panes.stack.slice(0, -1), question: false };
 }
 
+/** Takes one pane out of the stack wherever it is, leaving what is on screen otherwise as it was. */
+export function withPaneRemoved(panes: CellPanes, pane: StackedPane): CellPanes {
+  return { stack: panes.stack.filter((stacked) => stacked !== pane), question: panes.question };
+}
+
 /** What a remembered value reads back as: a stack, or one pane as a stack of one (the format
  *  written before #3213). Anything else, a question pane included, is dropped. */
 export function readStack(value: unknown): StackedPane[] {

@@ -30,7 +30,7 @@ vi.mock("../../../src/components/FilesPane.vue", () => ({
   default: {
     name: "FilesPane",
     props: ["cwd", "requestedPath", "initialState", "canvasTarget", "viewModeSession"],
-    emits: ["close", "dirty", "open-canvas"],
+    emits: ["close", "closing", "dirty", "open-canvas"],
     setup: (_p: unknown, { expose, slots }: { expose: (e: Record<string, unknown>) => void; slots: { title?: () => VNode[] } }) => {
       expose({ reload: paneStub.reload, flush: paneStub.flush, snapshot: paneStub.snapshot });
       return () => h("div", { class: "stub-files-pane" }, slots.title?.());
@@ -1045,7 +1045,9 @@ describe("file pane beside the enlarged cell", () => {
     await openPane(w);
     paneStub.flush.mockClear();
 
-    await paneOf(w).vm.$emit("close");
+    // The pane's own close button: it hands its save over, and the grid closes once it lands.
+    paneOf(w).vm.$emit("closing", Promise.resolve(true));
+    await flushPromises();
     await flushPromises();
     expect(paneStub.flush).not.toHaveBeenCalled();
     expect(paneOf(w).exists()).toBe(false);
@@ -1265,7 +1267,9 @@ describe("file pane beside the enlarged cell", () => {
     await openPane(w);
     paneStub.snapshot.mockReturnValueOnce(oneFile("a.md", { expanded: [] }));
 
-    await paneOf(w).vm.$emit("close");
+    // The pane's own close button: it hands its save over, and the grid closes once it lands.
+    paneOf(w).vm.$emit("closing", Promise.resolve(true));
+    await flushPromises();
     await flushPromises();
     await w.findComponent({ name: "TerminalCell" }).vm.$emit("open-files");
     await flushPromises();
@@ -1312,7 +1316,9 @@ describe("file pane beside the enlarged cell", () => {
     await flushPromises();
     expect(paneOf(reopened).exists()).toBe(true);
 
-    await paneOf(reopened).vm.$emit("close");
+    // The pane's own close button: it hands its save over, and the grid closes once it lands.
+    paneOf(reopened).vm.$emit("closing", Promise.resolve(true));
+    await flushPromises();
     await nextTick();
     expect(paneOf(reopened).exists()).toBe(false);
     expect(JSON.parse(localStorage.getItem("pane_open_by_session") ?? "{}")).toEqual({});
@@ -1373,7 +1379,9 @@ describe("file pane beside the enlarged cell", () => {
     it("keeps a cell closed after the user closes it", async () => {
       const w = mountCockpit([cell(1, "s1", "/proj"), cell(2)], 1, []);
       await openPane(w);
-      await paneOf(w).vm.$emit("close");
+      // The pane's own close button: it hands its save over, and the grid closes once it lands.
+      paneOf(w).vm.$emit("closing", Promise.resolve(true));
+      await flushPromises();
       await flushPromises();
 
       const reopened = mountCockpit([cell(9, "s1", "/proj"), cell(10)], 9, []);
