@@ -19,6 +19,7 @@ export interface DiskTitleTiers {
   // from it may name the row (#1085).
   cleared: boolean;
   livePrompt: string | undefined;
+  diskCustomTitle: string | null;
   diskAiTitle: string | null;
   agentTitle: string | null;
   diskLastPrompt: string | null;
@@ -38,7 +39,9 @@ export function oneLine(text: string | null | undefined, maxChars: number): stri
 
 /** The best name the transcript and the agent's store offer, generated titles before prompts. */
 export function diskTitle(tiers: DiskTitleTiers): string {
-  const candidates = tiers.cleared ? [tiers.livePrompt] : [tiers.diskAiTitle, tiers.agentTitle, tiers.livePrompt, tiers.diskLastPrompt, tiers.firstUserMsg];
+  const candidates = tiers.cleared
+    ? [tiers.livePrompt]
+    : [tiers.diskCustomTitle, tiers.diskAiTitle, tiers.agentTitle, tiers.livePrompt, tiers.diskLastPrompt, tiers.firstUserMsg];
   // Flattened BEFORE the pick, so a whitespace-only tier is skipped rather than chosen as blank.
   return sessionDisplayName(null, ...candidates.map((text) => oneLine(text, ROW_TITLE_MAX_CHARS)));
 }

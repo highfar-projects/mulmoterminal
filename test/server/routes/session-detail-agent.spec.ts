@@ -20,6 +20,7 @@ import { routeCall } from "../../helpers/routeCall";
 import { mountSessionRoutes } from "../../../server/routes/session-routes";
 import { projectSessionsDir } from "../../../server/session/project-dir";
 import { lastPrompts, lastResponses } from "../../../server/session/registry";
+import { clearedTranscripts } from "../../../server/session/transcript/cleared-transcripts";
 import { clearAgentTitleCache } from "../../../server/agents/agent-session-title";
 
 // A codex session is addressed by the id codex minted for itself — what the sidebar hands over for
@@ -189,6 +190,25 @@ describe("GET /api/session/:id — the exchange comes from the agent's own log",
       expect("agentTitle" in res.body).toBe(false);
     } finally {
       delete process.env.MUSE_HOME;
+    }
+  });
+
+  // #3229: the name `/rename` gave is read off the same fold, and only claude's transcript can say it.
+  it("answers the /rename name for claude, and none for another agent or a cleared session", async () => {
+    const dir = projectSessionsDir(cwd);
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(
+      path.join(dir, `${SESSION}.jsonl`),
+      line({ type: "user", message: { role: "user", content: "claude prompt" } }) +
+        line({ type: "custom-title", customTitle: "Parser rewrite", sessionId: SESSION }),
+    );
+    expect((await detail({ cwd, agent: "claude" })).body.customTitle).toBe("Parser rewrite");
+    expect((await detail({ cwd, agent: "grok" })).body.customTitle).toBeNull();
+    clearedTranscripts.add(SESSION);
+    try {
+      expect((await detail({ cwd, agent: "claude" })).body.customTitle).toBeNull();
+    } finally {
+      clearedTranscripts.delete(SESSION);
     }
   });
 

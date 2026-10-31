@@ -14,6 +14,7 @@ import {
 const NO_TIERS: DiskTitleTiers = {
   cleared: false,
   livePrompt: undefined,
+  diskCustomTitle: null,
   diskAiTitle: null,
   agentTitle: null,
   diskLastPrompt: null,
@@ -55,6 +56,12 @@ describe("oneLine", () => {
 describe("diskTitle", () => {
   it("answers empty when there is nothing", () => {
     expect(diskTitle(NO_TIERS)).toBe("");
+  });
+
+  it("puts the /rename name before every generated title", () => {
+    const tiers = { ...NO_TIERS, diskCustomTitle: "renamed", diskAiTitle: "Fix copy mode", agentTitle: "Codex summary" };
+    expect(diskTitle(tiers)).toBe("renamed");
+    expect(diskTitle({ ...tiers, cleared: true })).toBe("");
   });
 
   it("puts generated titles before any prompt", () => {

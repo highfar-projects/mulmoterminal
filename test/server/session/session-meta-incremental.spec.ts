@@ -20,6 +20,7 @@ let n = 0;
 const line = (o: unknown) => `${JSON.stringify(o)}\n`;
 const userLine = (text: string) => line({ type: "user", message: { content: text } });
 const aiTitleLine = (title: string) => line({ type: "ai-title", aiTitle: title });
+const customTitleLine = (title: string) => line({ type: "custom-title", customTitle: title, sessionId: "s" });
 const promptLine = (text: string) => line({ type: "last-prompt", lastPrompt: text });
 // Filler that carries no field the reader folds — a stand-in for the tool output that makes a real
 // transcript hundreds of MB.
@@ -147,5 +148,71 @@ describe("readSessionMeta", () => {
 
     sessionMemos.set(id, "what I am actually doing");
     expect(await titleOf(file)).toBe("what I am actually doing");
+  });
+
+  // Claude Code appends a custom-title for `/rename` and writes it again on later saves; the
+  // newest one is the name, and it outranks the ai-title the agent generated.
+  it("names the session by its last /rename, above the ai-title", async () => {
+    const { file } = writeTranscript(userLine("u") + aiTitleLine("agent's title") + customTitleLine("first name") + customTitleLine("second name"));
+    expect(await titleOf(file)).toBe("second name");
+  });
+
+  it("reads a rename written after the first read", async () => {
+    const { file } = writeTranscript(userLine("u") + aiTitleLine("agent's title"));
+    expect(await titleOf(file)).toBe("agent's title");
+    appendFileSync(path.join(dir, file), customTitleLine("renamed later"));
+    expect(await titleOf(file)).toBe("renamed later");
+  });
+
+  it("treats an empty custom-title as a rename to nothing", async () => {
+    const { file } = writeTranscript(userLine("u") + aiTitleLine("agent's title") + customTitleLine("named") + customTitleLine("  "));
+    expect(await titleOf(file)).toBe("agent's title");
+  });
+
+  it("keeps the memo above the /rename name", async () => {
+    const { file, id } = writeTranscript(userLine("u") + customTitleLine("renamed"));
+    sessionMemos.set(id, "memo");
+    expect(await titleOf(file)).toBe("memo");
+  });
+
+  it("finds a rename in the tail window of a big transcript", async () => {
+    const { file } = writeTranscript(
+      userLine("start") + fillerLine(900 * 1024) + aiTitleLine("end title") + customTitleLine("renamed") + promptLine("last prompt"),
+    );
+    expect(await titleOf(file)).toBe("renamed");
+  });
+
+  // The tail window cannot see this rename, and nothing repeats it later. The file is searched for
+  // the record type before the ends are trusted, so the rename is still found.
+  it("finds a rename that sits outside both windows", async () => {
+    const { file } = writeTranscript(
+      userLine("start") +
+        fillerLine(300 * 1024) +
+        customTitleLine("renamed long ago") +
+        fillerLine(900 * 1024) +
+        aiTitleLine("end title") +
+        promptLine("last prompt"),
+    );
+    expect(await titleOf(file)).toBe("renamed long ago");
+  });
+
+  it("answers a big never-renamed transcript from its ends", async () => {
+    const { file } = writeTranscript(userLine("start") + fillerLine(900 * 1024) + aiTitleLine("end title") + promptLine("last prompt"));
+    expect(await titleOf(file)).toBe("end title");
+  });
+
+  // The cold read of a big file caches an offset; a rename appended after it has to be folded in
+  // by the resumed scan, not lost behind the cached answer.
+  it("picks up a rename appended after a big transcript was first read", async () => {
+    const { file } = writeTranscript(userLine("start") + fillerLine(900 * 1024) + aiTitleLine("end title") + promptLine("last prompt"));
+    expect(await titleOf(file)).toBe("end title");
+    appendFileSync(path.join(dir, file), customTitleLine("renamed afterwards"));
+    expect(await titleOf(file)).toBe("renamed afterwards");
+  });
+
+  it("does not take conversation that mentions custom-title for a rename", async () => {
+    const mention = line({ type: "user", message: { content: `see ${JSON.stringify({ type: "custom-title", customTitle: "quoted" })}` } });
+    const { file } = writeTranscript(userLine("start") + mention + fillerLine(900 * 1024) + aiTitleLine("end title") + promptLine("last prompt"));
+    expect(await titleOf(file)).toBe("end title");
   });
 });

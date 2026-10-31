@@ -5,6 +5,7 @@ import AgentMark from "../../../src/components/AgentMark.vue";
 import type { AgentPick, CustomAgent } from "../../../common/customAgents";
 import { TERMINAL_AGENTS } from "../../../common/sessionAgent";
 import { setRemoteServer } from "../../../src/composables/remoteServer";
+import { RESUME_FILTER_MIN_ROWS } from "../../../src/components/resumeFilter";
 
 // The launcher's two "there is already a session here" surfaces, mounted directly: a worktree row
 // (one branch, one session) and a resume row. Both used to hand a running agent's terminal to a
@@ -343,6 +344,62 @@ describe("a worktree reached without its row", () => {
     await flushPromises();
     expect(confirmSpy).not.toHaveBeenCalled();
     expect(w.emitted("start")?.[0]).toEqual(["/repo"]);
+  });
+});
+
+describe("the resume filter", () => {
+  const rows = (n: number): SessionRow[] => Array.from({ length: n }, (_, i) => ({ id: `s-${i}`, title: i === 2 ? "fix the parser" : `task ${i}`, mtime: 1 }));
+  const titles = (w: ReturnType<typeof mountForm>): string[] => w.findAll('[data-testid="ri-title"]').map((el) => el.text());
+
+  it("shows no box for a short list", async () => {
+    mockFetch([], rows(RESUME_FILTER_MIN_ROWS - 1));
+    const w = mountForm();
+    await flushPromises();
+    expect(w.find('[data-testid="cell-resume-filter"]').exists()).toBe(false);
+  });
+
+  it("narrows a long list as the person types, and says so when nothing matches", async () => {
+    mockFetch([], rows(RESUME_FILTER_MIN_ROWS + 2));
+    const w = mountForm();
+    await flushPromises();
+    expect(titles(w)).toHaveLength(RESUME_FILTER_MIN_ROWS + 2);
+
+    await w.find('[data-testid="cell-resume-filter"]').setValue("PARSER");
+    expect(titles(w)).toEqual(["fix the parser"]);
+    expect(w.find('[data-testid="cell-resume-nomatch"]').exists()).toBe(false);
+
+    await w.find('[data-testid="cell-resume-filter"]').setValue("zzz");
+    expect(titles(w)).toEqual([]);
+    expect(w.find('[data-testid="cell-resume-nomatch"]').exists()).toBe(true);
+
+    await w.find('[data-testid="cell-resume-filter"]').setValue("");
+    expect(titles(w)).toHaveLength(RESUME_FILTER_MIN_ROWS + 2);
+  });
+
+  // Stopping a session re-reads the list, and the read empties it for a moment. The query belongs to
+  // the directory and the agent, not to that gap.
+  it("keeps the query across the reload that stopping a session causes", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const many = [...rows(RESUME_FILTER_MIN_ROWS + 2), { id: "run-1", title: "running parser job", mtime: 1, runningKey: "mt-key-9" }];
+    mockFetch([], many);
+    const w = mountForm();
+    await flushPromises();
+    await w.find('[data-testid="cell-resume-filter"]').setValue("parser");
+    expect(titles(w)).toEqual(["fix the parser", "running parser job"]);
+
+    await w.find('[data-testid="ri-stop"]').trigger("click");
+    await flushPromises();
+    expect((w.find('[data-testid="cell-resume-filter"]').element as HTMLInputElement).value).toBe("parser");
+    expect(titles(w)).toEqual(["fix the parser", "running parser job"]);
+  });
+
+  it("resumes the row that was picked from the narrowed list", async () => {
+    mockFetch([], rows(RESUME_FILTER_MIN_ROWS + 2));
+    const w = mountForm();
+    await flushPromises();
+    await w.find('[data-testid="cell-resume-filter"]').setValue("parser");
+    await w.find('[data-testid="cell-resume-item"]').trigger("click");
+    expect(w.emitted("resume")?.[0]).toEqual([{ id: "s-2", cwd: "/repo", agent: "claude", account: null }]);
   });
 });
 

@@ -150,7 +150,7 @@ export function createCodexSpawner(deps: SpawnDeps) {
     // A seed prompt is typed into codex's input box after it settles (not a CLI arg — see
     // attachCodexAutoRun), so a long collection-action prompt can't overflow tmux's command limit.
     const autoRun = initialPrompt ? attachCodexAutoRun(entry, initialPrompt) : undefined;
-    wireAgentPtyRelay(entry, sessionId, spawnedAtMs, deps, autoRun);
+    wireAgentPtyRelay(entry, sessionId, spawnedAtMs, deps, { onOutput: autoRun });
     return entry;
   }
 

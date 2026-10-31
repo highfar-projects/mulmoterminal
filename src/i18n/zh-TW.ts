@@ -3,6 +3,7 @@ import { usageViewZhTW } from "./usageView/zh-TW";
 import { blueprintsZhTW } from "./blueprints/zh-TW";
 import { tipsZhTW } from "./tips/zh-TW";
 import { commandPaletteZhTW } from "./commandPalette/zh-TW";
+import { terminalCopyModeZhTW } from "./terminalCopyMode/zh-TW";
 import { focusModeZhTW } from "./focusMode/zh-TW";
 import { fileHistoryZhTW } from "./fileHistory/zh-TW";
 import { filesRecentZhTW } from "./filesRecent/zh-TW";
@@ -555,6 +556,9 @@ export const zhTW: Messages = {
   launch: {
     dirMissing: "此資料夾不存在，無法在此啟動。",
     dirSuggestions: "符合的資料夾",
+    resumeFilterAria: "篩選對話",
+    resumeFilterPlaceholder: "依標題篩選",
+    resumeNoMatch: "沒有符合的對話",
     mcpGroupsNextStart: "從此目錄下次啟動的終端機開始生效。已開啟的儲存格仍使用啟動時的工具，請重新啟動它。",
     agentUnavailable: {
       missing: "此電腦上未安裝 {agent}，因此無法在此啟動。",
@@ -572,12 +576,7 @@ export const zhTW: Messages = {
     waiting: "{key} 之後按：",
     cancel: "按 Esc 取消",
   },
-  terminal: {
-    copyMode: {
-      message: "正在檢視歷史 — 輸入不會送到終端機。按 q 返回。",
-      exit: "返回輸入",
-    },
-  },
+  terminal: terminalCopyModeZhTW,
   sortMenu: {
     trigger: "儲存格排序：{mode}",
     title: "儲存格排序",

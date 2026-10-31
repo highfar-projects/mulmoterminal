@@ -8,6 +8,7 @@
 import { describe, it, expect } from "vitest";
 import { Terminal } from "@xterm/headless";
 import { bufferIsShort, readBufferShape } from "../../../src/composables/terminalBufferHealth";
+import { seededRandom } from "../../helpers/seededRandom";
 
 const write = (term: Terminal, data: string) => new Promise<void>((resolve) => term.write(data, resolve));
 
@@ -45,7 +46,6 @@ describe("bufferIsShort", () => {
 
 // The operations a live slot performs: PTY output, fit()'s resize, connect()'s reset, a TUI
 // entering and leaving the alternate buffer, and wheel scrolling.
-const mkRng = (seed: number) => () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff), seed / 0x7fffffff);
 const noise = (rows: number, width: number) => Array.from({ length: rows }, (_, i) => `r${i} ` + "z".repeat(width)).join("\r\n");
 
 describe("bufferIsShort on a real terminal", () => {
@@ -62,24 +62,30 @@ describe("bufferIsShort on a real terminal", () => {
   it("stays quiet across writes, resizes, resets, alt-buffer switches and scrolling", async () => {
     const SEEDS = 25;
     const OPS_PER_SEED = 60;
+    const operations = new Set<string>();
     for (let seed = 1; seed <= SEEDS; seed++) {
-      const rnd = mkRng(seed);
+      const random = seededRandom(seed);
       const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true, scrollback: 1000 });
       let inAltBuffer = false;
       for (let step = 0; step < OPS_PER_SEED; step++) {
-        const pick = rnd();
+        const pick = random.fraction();
         if (pick < 0.35) {
-          term.write(noise(1 + Math.floor(rnd() * 120), 10 + Math.floor(rnd() * 200)));
+          operations.add("write");
+          term.write(noise(1 + random.below(120), 10 + random.below(200)));
         } else if (pick < 0.7) {
-          term.resize(2 + Math.floor(rnd() * 200), 1 + Math.floor(rnd() * 70));
+          operations.add("resize");
+          term.resize(2 + random.below(200), 1 + random.below(70));
         } else if (pick < 0.78) {
+          operations.add("reset");
           term.reset();
           inAltBuffer = false;
         } else if (pick < 0.9) {
+          operations.add("alt-buffer");
           inAltBuffer = !inAltBuffer;
           term.write(inAltBuffer ? "\x1b[?1049h" : "\x1b[?1049l");
         } else {
-          term.scrollLines(Math.floor(rnd() * 40) - 20);
+          operations.add("scroll");
+          term.scrollLines(random.below(40) - 20);
         }
         // Both the state the app can observe synchronously and the settled one, since the probe
         // runs on output (mid-stream) and on fit(), and confirms itself a task later.
@@ -89,6 +95,8 @@ describe("bufferIsShort on a real terminal", () => {
       }
       term.dispose();
     }
+    // Every operation the title names was performed, or the fuzz covered less than it says.
+    expect([...operations].sort()).toEqual(["alt-buffer", "reset", "resize", "scroll", "write"]);
     // A per-test timeout, not the 15s baseline: the floor here is SEEDS * OPS_PER_SEED sequential
     // timer yields, and a yield costs latency rather than work — 1500 of them are already ~1.7s of
     // this file's ~2.3s on macOS, and enough more on a Windows runner to cross 15s with the

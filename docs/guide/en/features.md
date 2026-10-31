@@ -59,6 +59,7 @@ MulmoTerminal — a browser terminal for parallel coding agents — organized by
 | See why a setting isn't working | Settings' **Directory settings** shows what each directory's `.mulmoterminal.json` actually puts in force, which file it came from, and **the keys dropped or never read** ([config](config.html#dir-settings-preview)) |
 | Update notice | When a new version ships, the header shows an **update badge**; click it for the update command that fits your install (npm / git clone) |
 | Question pane (opt-in) | When a Claude session stops to ask you something, its choices appear as **buttons in a pane** beside the enlarged terminal → [answering a question from the pane](#question-pane) |
+| Stacked right panes | The right pane shows one pane at a time, but the panes you open **stack**: closing the one on top shows the one it covered (open the conversation over Files, close it, and Files is back). Opening a pane that is already in the stack moves it to the top. The stack survives a reload |
 
 ### Working from a collection
 {: #collection-chat }
@@ -103,7 +104,7 @@ buttons beside the enlarged terminal.
 ![Settings, Terminal keys — the Question pane checkbox beside Copy on select](../images/question-pane-setting.png)
 
 The pane opens by itself on the enlarged cell the moment the question arrives, and closes as soon as
-it is answered. A question that arrives while its cell is tiled opens when you enlarge that cell —
+it is answered, showing again whichever pane it covered. A question that arrives while its cell is tiled opens when you enlarge that cell —
 there is no button for it, because there is nothing to open when nothing is being asked.
 
 ![A three-part question: the terminal on the left still showing its own dialog, the pane on the right offering the same choices as buttons with a Send button](../images/question-pane.png)
@@ -267,7 +268,7 @@ so a very large unsaved buffer may not get out.
 | Themes | Midnight / Nord / Daylight / Solarized Light |
 | Terminal font size | Adjustable in settings (per browser), or pinned per directory with `fontSize` in `.mulmoterminal.json` |
 | Terminal scroll speed | Adjustable in settings (per browser, 0.25x-3x) — one control for both a shell's scrollback and a full-screen app like Claude Code; turn it down if a Mac trackpad swipe scrolls past what you were reading |
-| Leave history view | A shell or Codex cell that is scrolled back with the wheel (or dragged) is in tmux's **copy-mode**, where keys move through the history instead of reaching the program. The cell says so with a **"Viewing history" banner** and a **Back to input** button (`q` works too). Leaving sends nothing to the program |
+| Leave history view | A shell or Codex cell that is scrolled back with the wheel (or dragged) is in tmux's **copy-mode**, where keys move through the history instead of reaching the program. The cell says so with a **"Viewing history" banner** and a **Back to input** button (`q` works too). If the banner covers what you are reading, untick **Show the "Viewing history" banner** in Settings under Terminal scroll speed; it is per browser and `q` still leaves. Leaving sends nothing to the program |
 | Return to the latest on send | Pressing Enter (or a send button) takes a scrolled-up terminal back to the bottom, the way an ordinary terminal does. A shell already behaves this way; a full-screen agent like Claude Code keeps its own scroll position, so this unwinds exactly the scrolling you did. On by default, switchable in settings (per browser) |
 | Terminal font | `fontFamily` in the global config, or per directory — CJK faces are in the default stack, so Japanese no longer falls back to whatever the browser picks |
 

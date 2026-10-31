@@ -2,6 +2,7 @@
 import { useI18n } from "vue-i18n";
 import { useTerminalScrollSpeed } from "../../composables/useTerminalScrollSpeed";
 import { useScrollToBottomOnSubmit } from "../../composables/useScrollToBottomOnSubmit";
+import { useCopyModeBanner } from "../../composables/useCopyModeBanner";
 import SettingsStepper from "./SettingsStepper.vue";
 
 // Same shape and the same per-browser reasoning as the font size: it is a property of the
@@ -9,6 +10,10 @@ import SettingsStepper from "./SettingsStepper.vue";
 const { t } = useI18n();
 const { scrollSpeed, nudgeScrollSpeed, min, max, step } = useTerminalScrollSpeed();
 const { scrollToBottomOnSubmit, setScrollToBottomOnSubmit } = useScrollToBottomOnSubmit();
+const { copyModeBanner, setCopyModeBanner } = useCopyModeBanner();
+function onBannerToggle(e: Event) {
+  if (e.target instanceof HTMLInputElement) setCopyModeBanner(e.target.checked);
+}
 function onReturnToggle(e: Event) {
   if (e.target instanceof HTMLInputElement) setScrollToBottomOnSubmit(e.target.checked);
 }
@@ -28,6 +33,21 @@ function onReturnToggle(e: Event) {
     />
     <span class="text-[12px]">
       <strong>{{ t("settings.scroll.returnLabel") }}</strong> — {{ t("settings.scroll.returnHint") }}
+    </span>
+  </label>
+
+  <label class="mt-3 flex cursor-pointer items-start gap-2">
+    <input
+      type="checkbox"
+      class="mt-1 cursor-pointer"
+      data-testid="copy-mode-banner-toggle"
+      :checked="copyModeBanner"
+      :aria-label="t('terminal.copyMode.settingLabel')"
+      aria-describedby="copy-mode-banner-hint"
+      @change="onBannerToggle"
+    />
+    <span class="text-[12px]">
+      <strong>{{ t("terminal.copyMode.settingLabel") }}</strong> — <span id="copy-mode-banner-hint">{{ t("terminal.copyMode.settingHint") }}</span>
     </span>
   </label>
 </template>

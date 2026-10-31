@@ -38,6 +38,7 @@ function fakeTree(dirs: string[], opened: string[], hold?: Promise<void>): Files
     },
     findNode: (target: string) => nodes.get(target) ?? null,
     refresh: async () => {},
+    refreshAll: async () => {},
     reset: () => {},
   };
 }

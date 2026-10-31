@@ -29,6 +29,8 @@ export interface LiveSessionState {
 export interface TranscriptSessionState {
   lastPrompt: string | null;
   lastResponse: string | null;
+  /** What `/rename` last set, read from the transcript. */
+  customTitle: string | null;
 }
 
 export interface SessionActivity {
@@ -44,6 +46,7 @@ export interface SessionDetailView {
   lastPrompt: string | null;
   lastResponse: string | null;
   aiTitle: string | null;
+  customTitle: string | null;
   memo: string | null;
 }
 
@@ -74,6 +77,9 @@ export function sessionDetailView(
     // the manager is what keeps the /clear contract: a cleared session has no live title, and
     // reading disk here would put the pre-clear one back on screen (#1085).
     aiTitle: live.aiTitle ?? null,
+    // The transcript's, so a cleared session shows none: the name was given to the conversation the
+    // user ended, and the same persisted mark that blanks the prompt covers it across a restart.
+    customTitle: transcriptCleared ? null : transcript.customTitle,
     memo: live.memo ?? null,
   };
 }

@@ -86,6 +86,29 @@ describe("readSessionSummary", () => {
     expect(summary.workPhase).not.toBeNull();
   });
 
+  // `/rename` appends a custom-title record, and Claude Code writes it again on later saves; an
+  // empty one is a rename to nothing. The resumed fold has to land where one pass would.
+  it("reports the last /rename name, and an empty rename clears it", async () => {
+    const readSessionSummary = await freshSummary();
+    const rename = (customTitle: string) => line({ type: "custom-title", customTitle, sessionId: "s" });
+    const id = writeTranscript(user("build the parser") + rename("First name") + assistant("done"));
+    expect((await readSessionSummary(CWD, id)).customTitle).toBe("First name");
+
+    appendFileSync(transcriptPath(id), rename("Second name"));
+    expect((await readSessionSummary(CWD, id)).customTitle).toBe("Second name");
+
+    appendFileSync(transcriptPath(id), rename("  "));
+    const cleared = await readSessionSummary(CWD, id);
+    expect(cleared.customTitle).toBeNull();
+    expect(cleared).toEqual(await (await freshSummary())(CWD, id));
+  });
+
+  it("reports no name for a conversation that merely mentions custom-title", async () => {
+    const readSessionSummary = await freshSummary();
+    const id = writeTranscript(user('what is {"type":"custom-title","customTitle":"x"}?') + assistant("a record"));
+    expect((await readSessionSummary(CWD, id)).customTitle).toBeNull();
+  });
+
   // The case the old memo could not help with: the file changed, so it re-read all of it. Now the
   // append is all that is folded — and the answer has to be the one a full read would give.
   it("continues the fold across a turn, landing where one pass would", async () => {

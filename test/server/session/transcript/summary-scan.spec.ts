@@ -11,6 +11,7 @@ import {
 import {
   aiTitleFromParsed,
   countUserTurnsFromParsed,
+  customTitleOfRecord,
   currentTurnToolNamesFromParsed,
   latestAssistantTextFromParsed,
   latestMeaningfulUserPromptFromParsed,
@@ -46,8 +47,15 @@ const scanned = (records: Record<string, unknown>[]) => {
   return scan.finish(RESPONSE_MAX);
 };
 
+const lastRename = (records: Record<string, unknown>[]): string | null =>
+  records.reduce<string | null>((name, record) => {
+    const renamed = customTitleOfRecord(record);
+    return renamed === undefined ? name : renamed;
+  }, null);
+
 const folded = (records: Record<string, unknown>[]) => ({
   lastPrompt: latestMeaningfulUserPromptFromParsed(records),
+  customTitle: lastRename(records),
   aiTitle: aiTitleFromParsed(records),
   lastResponse: latestAssistantTextFromParsed(records)?.slice(0, RESPONSE_MAX) ?? null,
   userTurns: countUserTurnsFromParsed(records),
@@ -63,6 +71,11 @@ describe("createSummaryScan agrees with the whole-array fold", () => {
     ["several turns", [user("one"), assistant("a"), user("two"), assistant("b"), user("three"), assistant("c")]],
     ["a turn still in progress", [user("do it"), toolCall("Read"), toolCall("Edit")]],
     ["an AI title, which the newest wins", [user("q"), { type: "ai-title", aiTitle: "first" }, assistant("a"), { type: "ai-title", aiTitle: "second" }]],
+    [
+      "a /rename, where the newest wins and an empty one clears",
+      [user("q"), { type: "custom-title", customTitle: "first" }, { type: "custom-title", customTitle: "second" }, assistant("a")],
+    ],
+    ["a /rename cleared by an empty one", [user("q"), { type: "custom-title", customTitle: "first" }, { type: "custom-title", customTitle: "  " }]],
     ["records that are neither user nor assistant", [{ type: "system", note: "x" }, user("q"), { type: "summary" }, assistant("a")]],
     ["an assistant turn carrying no usage", [user("q"), assistant("a", { usage: undefined })]],
   ])("on %s", (_case, records) => {

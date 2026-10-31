@@ -115,6 +115,7 @@ describe("mergeSessionMeta", () => {
   const shown = {
     lastPrompt: "fix the login bug",
     aiTitle: "Login fix",
+    customTitle: null,
     agentTitle: null,
     agentTitleKind: null,
     lastResponse: "done",
@@ -128,6 +129,7 @@ describe("mergeSessionMeta", () => {
     expect(merged).toEqual({
       lastPrompt: "new task",
       aiTitle: "New",
+      customTitle: null,
       agentTitle: null,
       agentTitleKind: null,
       lastResponse: "ok",
@@ -190,10 +192,19 @@ describe("mergeSessionMeta", () => {
     expect([merged.lastPrompt, merged.aiTitle, merged.lastResponse]).toEqual(["fix the login bug", "Renamed", "done"]);
   });
 
+  it("keeps the /rename name when the fetch omits it, and drops it on an explicit null", () => {
+    const renamed = mergeSessionMeta(shown, { customTitle: "Parser rewrite" });
+    expect(renamed.customTitle).toBe("Parser rewrite");
+    expect(mergeSessionMeta(renamed, { aiTitle: "x" }).customTitle).toBe("Parser rewrite");
+    expect(mergeSessionMeta(renamed, { customTitle: null }).customTitle).toBeNull();
+    expect(mergeSessionMeta(renamed, { customTitle: 7 }).customTitle).toBe("Parser rewrite");
+  });
+
   it("starts from nothing for a session it has not seen", () => {
     expect(mergeSessionMeta(EMPTY_SESSION_META, { lastPrompt: "first" })).toEqual({
       lastPrompt: "first",
       aiTitle: null,
+      customTitle: null,
       agentTitle: null,
       agentTitleKind: null,
       lastResponse: null,

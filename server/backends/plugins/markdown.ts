@@ -15,7 +15,6 @@
 //     and PDF export needs no image-resolution step.
 import fs from "fs";
 import path from "path";
-import { marked } from "marked";
 import { renderMarpDeck, fillImagePlaceholders } from "@mulmoclaude/markdown-plugin";
 import type { MarkdownHostApp, ExportPdfOptions } from "@mulmoclaude/markdown-plugin";
 import { publishFileChange } from "../files/fileChange.js";
@@ -23,6 +22,7 @@ import { generateImage } from "../media/image-gen.js";
 import { buildDocPath, newDocId, DOCS_DIR } from "../files/docPath.js";
 import { hasErrnoCode } from "../../errors.js";
 import { markdownByPath } from "../files/openPath.js";
+import { printMarkdown } from "./markdown-pdf.js";
 
 // Set once at boot (server/index.ts) — workspace = CLAUDE_CWD. File-change
 // live-refresh is forwarded by the shared publisher (see fileChange.ts).
@@ -36,13 +36,6 @@ function absFor(rel: string): string {
   if (!workspace) throw new Error("markdown backend not initialised (missing workspace)");
   return path.join(workspace, rel);
 }
-
-const MARKDOWN_PDF_CSS = `
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; font-size: 13px; line-height: 1.6; color: #1f2937; max-width: 800px; margin: 0 auto; padding: 32px 48px; }
-  h1 { font-size: 1.75rem; } h2 { font-size: 1.25rem; border-bottom: 1px solid #e5e7eb; padding-bottom: .25rem; } h3 { font-size: 1rem; }
-  pre { background: #f3f4f6; padding: .75rem; border-radius: .375rem; overflow-x: auto; } code { background: #f3f4f6; padding: .1rem .3rem; border-radius: .25rem; }
-  table { border-collapse: collapse; width: 100%; } th, td { border: 1px solid #e5e7eb; padding: .5rem .75rem; } a { color: #2563eb; } img { max-width: 100%; height: auto; }
-`;
 
 const DOC_CREATE_ATTEMPTS = 5;
 
@@ -141,14 +134,7 @@ div.marpit > svg > foreignObject > section img:not([data-marp-twemoji]){max-widt
           printBackground: true,
         });
       } else {
-        const body = await marked.parse(options.markdown);
-        const fullHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>${MARKDOWN_PDF_CSS}</style></head><body>${body}</body></html>`;
-        await page.setContent(fullHtml, { waitUntil: "load" });
-        pdf = await page.pdf({
-          format: options.format === "A4" ? "A4" : "Letter",
-          margin: { top: "16mm", bottom: "16mm", left: "16mm", right: "16mm" },
-          printBackground: true,
-        });
+        pdf = await printMarkdown(page, options);
       }
       return { pdfBase64: Buffer.from(pdf).toString("base64") };
     } finally {
