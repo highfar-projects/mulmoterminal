@@ -21,6 +21,12 @@ const REMOVED_NAMES = new Set([
   "npm_execpath",
   "npm_node_execpath",
   "npm_command",
+  // Fork-only (upstream #3233): Volta marks what `volta run` launches so a shim beneath it skips
+  // Volta and runs whatever PATH names next. A cell under ANY multiplexer, or none, inherited it:
+  // on a real tmux `node` still ran (Volta's node dir travels on PATH) but `yarn` failed with
+  // "Node is not available" and a project's `volta` pins were ignored. A fresh shell never has it.
+  // Upstream drops it from psmux clients alone (PSMUX_SCRUBBED_NAMES), which this makes redundant.
+  "_volta_tool_recursion",
 ]);
 
 const REMOVED_PREFIXES = ["npm_config_", "npm_package_", "npm_lifecycle_"];

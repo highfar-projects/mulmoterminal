@@ -371,6 +371,12 @@ describe("isScrubbedGlobalEnvEntry", () => {
     ["PREFIX", "npm_config_registry", "INIT_CWD"].forEach((name) => expect(isScrubbedGlobalEnvEntry(name, "x", BOUND), name).toBe(true));
   });
 
+  // Fork-only (upstream #3233): a real tmux server started under `volta run` carries Volta's marker
+  // into every pane, so it is scrubbed without the psmux-only extra names.
+  it("scrubs Volta's marker from a real tmux server too", () => {
+    expect(isScrubbedGlobalEnvEntry("_VOLTA_TOOL_RECURSION", "1", BOUND)).toBe(true);
+  });
+
   // NODE_ENV is the deliberate omission (#989): we never read it, so no value under that name is
   // identifiable as ours and taking it would be the bug #955 refused to introduce. MULMOTERMINAL_PORT
   // is how a cell finds this server (#1873) and is set per pane, not globally.
@@ -398,9 +404,10 @@ describe("isScrubbedGlobalEnvEntry", () => {
   });
 
   // A psmux server started before Volta's marker was kept off its client still carries it.
+  // Fork-only: the marker is launcher context here (#3233), so a name of no list of ours stands in.
   it("takes the extra names it is given, and only those", () => {
-    expect(isScrubbedGlobalEnvEntry("_VOLTA_TOOL_RECURSION", "1", BOUND, ["_VOLTA_TOOL_RECURSION"])).toBe(true);
-    expect(isScrubbedGlobalEnvEntry("_VOLTA_TOOL_RECURSION", "1", BOUND)).toBe(false);
+    expect(isScrubbedGlobalEnvEntry("MT_EXTRA_NAME", "1", BOUND, ["MT_EXTRA_NAME"])).toBe(true);
+    expect(isScrubbedGlobalEnvEntry("MT_EXTRA_NAME", "1", BOUND)).toBe(false);
   });
 });
 

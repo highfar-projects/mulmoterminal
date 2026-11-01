@@ -27,6 +27,7 @@ describe("isLauncherEnvVar", () => {
       "npm_package_scripts_dev",
       "npm_lifecycle_event",
       "npm_lifecycle_script",
+      "_VOLTA_TOOL_RECURSION",
     ]) {
       expect(isLauncherEnvVar(name), name).toBe(true);
     }

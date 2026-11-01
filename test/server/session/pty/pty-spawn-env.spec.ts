@@ -401,7 +401,9 @@ describe("ptySpawn — the psmux VT input route", () => {
   });
 });
 
-describe("ptySpawn — Volta's marker on a psmux client", () => {
+// Fork-only (upstream #3233): upstream keeps it off a psmux client alone; the fork drops it from
+// every spawn, since a `yarn` shim beneath it fails on a real tmux and without one too.
+describe("ptySpawn — Volta's marker", () => {
   beforeEach(() => vi.stubEnv("_VOLTA_TOOL_RECURSION", "1"));
   afterEach(() => vi.unstubAllEnvs());
 
@@ -412,16 +414,15 @@ describe("ptySpawn — Volta's marker on a psmux client", () => {
     expect(envOf()).not.toHaveProperty("_VOLTA_TOOL_RECURSION");
   });
 
-  it("leaves it on a real tmux client", () => {
+  it("keeps it off a real tmux client", () => {
     tmuxOn = true;
     ptySpawn(S1, "claude", [], EXISTING_CWD, true);
-    expect(envOf()._VOLTA_TOOL_RECURSION).toBe("1");
+    expect(envOf()).not.toHaveProperty("_VOLTA_TOOL_RECURSION");
   });
 
-  it("leaves it on a spawn without tmux", () => {
-    psmuxOn = true;
+  it("keeps it off a spawn without tmux", () => {
     ptySpawn(S1, "claude", [], EXISTING_CWD, true);
-    expect(envOf()._VOLTA_TOOL_RECURSION).toBe("1");
+    expect(envOf()).not.toHaveProperty("_VOLTA_TOOL_RECURSION");
   });
 });
 
