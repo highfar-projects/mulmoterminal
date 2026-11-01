@@ -90,6 +90,43 @@ describe("sanitizePathEntries", () => {
   it("drops a relative node_modules/.bin entry (no leading separator)", () => {
     expect(sanitizePathEntries("node_modules/.bin:/usr/bin", ":")).toBe("/usr/bin");
   });
+
+  // Fork-only (follows upstream #3233): what `volta run` prepends goes, so `node` reaches Volta's
+  // shim and a project's pin — but only while that shim dir is on the PATH to find one.
+  describe("Volta's image dirs", () => {
+    const VOLTA = "/home/u/.volta";
+
+    it("drops every tool's image dir beside Volta's shim dir", () => {
+      const dirty = [
+        `${VOLTA}/tools/image/node/24.21.0/bin`,
+        `${VOLTA}/tools/image/npm/12.2.1/bin`,
+        `${VOLTA}/tools/image/yarn/1.22.22/bin`,
+        `${VOLTA}/bin`,
+        "/usr/bin",
+      ];
+      expect(sanitizePathEntries(dirty.join(":"), ":", "linux")).toBe([`${VOLTA}/bin`, "/usr/bin"].join(":"));
+    });
+
+    it("keeps the image dir when Volta's shim dir is not on the PATH", () => {
+      const p = [`${VOLTA}/tools/image/node/24.21.0/bin`, "/usr/bin"].join(":");
+      expect(sanitizePathEntries(p, ":", "linux")).toBe(p);
+    });
+
+    it("keeps the image dir when the shim dir on the PATH is another Volta's", () => {
+      const p = [`${VOLTA}/tools/image/node/24.21.0/bin`, "/opt/volta/bin"].join(":");
+      expect(sanitizePathEntries(p, ":", "linux")).toBe(p);
+    });
+
+    it("keeps a dir that only looks like one", () => {
+      const p = [`${VOLTA}/tools/image/python/3.12/bin`, `${VOLTA}/tools/image/node/24.21.0/lib`, `${VOLTA}/bin`].join(":");
+      expect(sanitizePathEntries(p, ":", "linux")).toBe(p);
+    });
+
+    it("drops a Windows image dir, which has no bin, matching case-insensitively", () => {
+      const dirty = ["C:\\Users\\u\\AppData\\Local\\Volta\\tools\\image\\node\\24.21.0", "c:\\users\\u\\appdata\\local\\volta\\bin", "C:\\Windows"];
+      expect(sanitizePathEntries(dirty.join(";"), ";", "win32")).toBe(dirty.slice(1).join(";"));
+    });
+  });
 });
 
 describe("isPathVar", () => {

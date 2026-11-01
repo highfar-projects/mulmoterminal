@@ -83,13 +83,42 @@ export function isLauncherPathEntry(entry: string, platform: NodeJS.Platform = p
   return YARN_SHIM_DIR.test(last) || (last === ".bin" && parent === "node_modules") || last === "node-gyp-bin";
 }
 
+// Fork-only (follows upstream #3233): `volta run` prepends the image dir of the tool it picked —
+// `<volta>/tools/image/node/24.21.0/bin`, or `…\tools\image\node\24.21.0` on Windows — and a cell
+// that inherits it runs that `node`/`npm` directly, past the shim and so past a project's `volta`
+// pin. It is dropped only beside Volta's own shim dir (`<volta>/bin`), which still finds a `node`.
+const VOLTA_IMAGE_TOOLS = new Set(["node", "npm", "yarn", "pnpm"]);
+
+// The entry as compared against another: segments joined, case folded where the platform folds it.
+const pathKey = (segments: readonly string[], platform: NodeJS.Platform): string => {
+  const joined = segments.join("/");
+  return platform === "win32" ? joined.toLowerCase() : joined;
+};
+
+const pathSegments = (entry: string, platform: NodeJS.Platform): string[] =>
+  asSearched(entry, platform)
+    .split(/[\\/]/)
+    .filter((segment) => segment !== "");
+
+// The key of the Volta shim dir an image entry belongs to, or null when the entry is not an image dir.
+function voltaShimDirKeyOf(entry: string, platform: NodeJS.Platform): string | null {
+  const segments = pathSegments(entry, platform);
+  const folded = platform === "win32" ? segments.map((segment) => segment.toLowerCase()) : segments;
+  const end = folded[folded.length - 1] === "bin" ? folded.length - 1 : folded.length;
+  if (end < 4 || folded[end - 4] !== "tools" || folded[end - 3] !== "image" || !VOLTA_IMAGE_TOOLS.has(folded[end - 2] ?? "")) return null;
+  return pathKey([...segments.slice(0, end - 4), "bin"], platform);
+}
+
 // PATH with the run-script injections removed; everything else (nvm, homebrew,
 // system dirs) kept in order.
 export function sanitizePathEntries(pathValue: string, delimiter: string, platform: NodeJS.Platform = process.platform): string {
-  return pathValue
-    .split(delimiter)
-    .filter((entry) => !isLauncherPathEntry(entry, platform))
-    .join(delimiter);
+  const entries = pathValue.split(delimiter);
+  const present = new Set(entries.map((entry) => pathKey(pathSegments(entry, platform), platform)));
+  const isVoltaImageBesideShim = (entry: string): boolean => {
+    const shimKey = voltaShimDirKeyOf(entry, platform);
+    return shimKey !== null && present.has(shimKey);
+  };
+  return entries.filter((entry) => !isLauncherPathEntry(entry, platform) && !isVoltaImageBesideShim(entry)).join(delimiter);
 }
 
 // Read in this order by every locale-aware program; the first non-empty one wins.
