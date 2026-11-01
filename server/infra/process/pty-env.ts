@@ -27,6 +27,10 @@ const REMOVED_NAMES = new Set([
   // "Node is not available" and a project's `volta` pins were ignored. A fresh shell never has it.
   // Upstream drops it from psmux clients alone (PSMUX_SCRUBBED_NAMES), which this makes redundant.
   "_volta_tool_recursion",
+  // Fork-only: says the launcher sits in a wrapper that re-runs it on a restart. A launcher started
+  // by hand inside a cell sits in no such wrapper, and inheriting this would make it leave on a
+  // restart with nothing to bring it back.
+  "mulmoterminal_relaunch_on_exit",
 ]);
 
 const REMOVED_PREFIXES = ["npm_config_", "npm_package_", "npm_lifecycle_"];

@@ -24,6 +24,7 @@ import FilesOverlay from "./components/FilesOverlay.vue";
 import ConfettiOverlay from "./components/ConfettiOverlay.vue";
 import HoverTip from "./components/HoverTip.vue";
 import ServerStoppedOverlay from "./components/ServerStoppedOverlay.vue";
+import ServerRestartingOverlay from "./components/ServerRestartingOverlay.vue";
 import WhatsNewDialog from "./components/WhatsNewDialog.vue";
 import GridView from "./components/GridView.vue";
 import { useSessions } from "./composables/useSessions";
@@ -125,6 +126,8 @@ const { whatsNew, dismiss: dismissWhatsNew } = useWhatsNew(useI18n().locale.valu
   <!-- Over everything, including the settings modal it was pressed in: once the server is gone
        nothing behind it works, and a live-looking pane underneath would say otherwise (#1820). -->
   <ServerStoppedOverlay />
+  <!-- Fork-only: the same, for a restart — up until the page reloads onto the server that came back. -->
+  <ServerRestartingOverlay />
   <!-- A celebration over everything (the confetti shortcut, an opted-in event, the Konami code); takes no clicks. -->
   <ConfettiOverlay />
 </template>

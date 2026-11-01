@@ -253,6 +253,36 @@ function readManifest(pkgDir) {
   }
 }
 
+// Fork-only. A `npx github:…` install has no registry version to compare, but it knows the commit it
+// was resolved to (readLockedCommit) and the repository it came from (its own manifest), so it is
+// measured the way a checkout is: against the remote's HEAD, read with ls-remote and no clone.
+// The way to move to it is to start the launch command again — `npx github:…` resolves HEAD as it
+// starts — so the notice names a restart rather than a command to copy, and carries no "run: ".
+
+/** The https URL the manifest's repository names on GitHub, or null for anything else. Only
+ *  github.com is accepted: the URL reaches `git ls-remote`, and a manifest is not ours to trust. */
+export function forkRepositoryUrl(manifest) {
+  const repo = manifest && typeof manifest === "object" ? manifest.repository : undefined;
+  const url = repo && typeof repo === "object" ? repo.url : undefined;
+  const raw = typeof repo === "string" ? repo : url;
+  if (typeof raw !== "string") return null;
+  const match = /^(?:git\+)?https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/?$/.exec(raw.trim());
+  return match ? `https://github.com/${match[1]}/${match[2]}.git` : null;
+}
+
+/** The fork's notice, or null when current or when either side could not be read. `localShort` is
+ *  the abbreviated commit from the lockfile; the remote's is cut to the same length to print. */
+export function forkUpdateNotice({ localShort, remoteSha }) {
+  if (!localShort || !remoteSha || remoteSha.toLowerCase().startsWith(localShort.toLowerCase())) return null;
+  return `Update available: ${localShort} → ${remoteSha.slice(0, localShort.length)}  ·  restart MulmoTerminal to update`;
+}
+
+async function forkUpdateNotice_(git, manifest, localShort) {
+  const url = forkRepositoryUrl(manifest);
+  if (!url || !localShort) return null;
+  return forkUpdateNotice({ localShort, remoteSha: parseLsRemoteHead(await git(["ls-remote", url, "HEAD"], LS_REMOTE_TIMEOUT_MS)) });
+}
+
 // The whole check, front to back: what is running, what is newer, and the one line that says so
 // (null when current). `pkgDir` is where the tool lives — a node_modules dir (→ npm) or a bare
 // checkout (→ git). `deps` lets tests drive it without spawning git or hitting the network;
@@ -260,9 +290,10 @@ function readManifest(pkgDir) {
 export async function computeUpdateInfo(pkgDir, currentVersion, deps = {}) {
   const git = deps.runGit ?? ((args, timeout_ms) => runGit(pkgDir, args, timeout_ms));
   const fetchLatest = deps.fetchLatest ?? fetchLatestVersion;
-  const info = await readInstallInfo(pkgDir, currentVersion, { runGit: git });
+  const info = await readInstallInfo(pkgDir, currentVersion, { runGit: git, readLockedCommit: deps.readLockedCommit });
   if (info.install === "git") return { ...info, latest: null, notice: await gitUpdateNotice_(git, info.commit) };
-  if (!isUpstreamPackage((deps.readManifest ?? readManifest)(pkgDir))) return { ...info, latest: null, notice: null };
+  const manifest = (deps.readManifest ?? readManifest)(pkgDir);
+  if (!isUpstreamPackage(manifest)) return { ...info, latest: null, notice: await forkUpdateNotice_(git, manifest, info.commit) };
   const latest = await fetchLatest();
   // `latest` is what the UI OFFERS, so it carries only a version worth moving to — the registry
   // answering with the version already installed is not news.

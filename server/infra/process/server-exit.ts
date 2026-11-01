@@ -18,6 +18,10 @@ import { hasErrnoCode, messageOf } from "../../errors.js";
 // of bin/ that this is the only launcher-side copy.
 export const PORT_IN_USE_EXIT_CODE = 75;
 export const SERVER_ERROR_EXIT_CODE = 1;
+// Fork-only: the server was asked to restart (POST /api/restart). The launcher brings it back, or —
+// under a wrapper that re-runs the whole launch command — leaves with it so that command fetches
+// the latest build. Kept in sync with bin/server-supervision.js the same way PORT_IN_USE_EXIT_CODE is.
+export const RESTART_EXIT_CODE = 76;
 
 export interface ServerExit {
   message: string;

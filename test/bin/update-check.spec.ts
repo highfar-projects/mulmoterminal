@@ -15,6 +15,8 @@ import {
   computeUpdateNotice,
   computeUpdateInfo,
   isUpstreamPackage,
+  forkRepositoryUrl,
+  forkUpdateNotice,
   readInstallInfo,
   lockedCommitFrom,
 } from "../../bin/update-check.js";
@@ -516,6 +518,78 @@ describe("a package that is not upstream's", () => {
     // Unreadable or unnamed keeps the check upstream always had.
     expect(isUpstreamPackage(null)).toBe(true);
     expect(isUpstreamPackage({})).toBe(true);
+  });
+
+  // Fork-only: measured against its repository's HEAD instead, the way a checkout is.
+  describe("the fork's own check", () => {
+    const LOCAL = "78f0791be";
+    const REMOTE = "5078d582c1234567890abcdef1234567890abcde";
+    const forkInfo = (lsRemote: string | null, commit: string | null = LOCAL) => {
+      const asked: string[][] = [];
+      const info = computeUpdateInfo("/home/u/.npm/_npx/abc/node_modules/mulmoterminal", "11.5.0", {
+        runGit: async (args) => {
+          asked.push(args);
+          return args[0] === "ls-remote" ? lsRemote : null;
+        },
+        fetchLatest: async () => "99.0.0",
+        readManifest: () => fork,
+        readLockedCommit: () => commit,
+      });
+      return { info, asked };
+    };
+
+    it("names the newer commit and a restart, with nothing to copy", async () => {
+      const { info, asked } = forkInfo(`${REMOTE}\tHEAD\n`);
+      expect(await info).toEqual({
+        install: "npm",
+        version: "11.5.0",
+        commit: LOCAL,
+        latest: null,
+        notice: "Update available: 78f0791be → 5078d582c  ·  restart MulmoTerminal to update",
+      });
+      expect(asked).toContainEqual(["ls-remote", "https://github.com/highfar-projects/mulmoterminal.git", "HEAD"]);
+    });
+
+    it("is quiet when the running commit is the remote's HEAD", async () => {
+      expect((await forkInfo(`${LOCAL}0000000000000000000000000000000\tHEAD\n`).info).notice).toBeNull();
+    });
+
+    it("is quiet, and asks nothing, when the running commit is unknown", async () => {
+      const { info, asked } = forkInfo(`${REMOTE}\tHEAD\n`, null);
+      expect((await info).notice).toBeNull();
+      expect(asked.filter((args) => args[0] === "ls-remote")).toEqual([]);
+    });
+
+    it("is quiet when the remote cannot be read", async () => {
+      expect((await forkInfo(null).info).notice).toBeNull();
+    });
+
+    it("leaves the copy command out, so the badge offers no command", () => {
+      expect(forkUpdateNotice({ localShort: LOCAL, remoteSha: REMOTE })).not.toContain("run: ");
+    });
+  });
+
+  describe("forkRepositoryUrl", () => {
+    it.each([
+      ["git+https://github.com/highfar-projects/mulmoterminal.git", "https://github.com/highfar-projects/mulmoterminal.git"],
+      ["https://github.com/highfar-projects/mulmoterminal", "https://github.com/highfar-projects/mulmoterminal.git"],
+    ])("turns %s into an ls-remote URL", (url, expected) => {
+      expect(forkRepositoryUrl({ repository: { url } })).toBe(expected);
+      expect(forkRepositoryUrl({ repository: url })).toBe(expected);
+    });
+
+    // The URL reaches git; a manifest is not trusted to name anything but a GitHub repository.
+    it.each(["https://evil.example/a/b", "github:highfar-projects/mulmoterminal", "https://github.com/a/b;rm -rf ~", "--upload-pack=x"])(
+      "refuses %s",
+      (url) => {
+        expect(forkRepositoryUrl({ repository: { url } })).toBeNull();
+      },
+    );
+
+    it("is null without a repository", () => {
+      expect(forkRepositoryUrl(null)).toBeNull();
+      expect(forkRepositoryUrl({})).toBeNull();
+    });
   });
 });
 

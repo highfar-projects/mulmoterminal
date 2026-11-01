@@ -4,7 +4,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { serverErrorExit, PORT_IN_USE_EXIT_CODE, SERVER_ERROR_EXIT_CODE } from "../../../../server/infra/process/server-exit.js";
+import { serverErrorExit, PORT_IN_USE_EXIT_CODE, RESTART_EXIT_CODE, SERVER_ERROR_EXIT_CODE } from "../../../../server/infra/process/server-exit.js";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..");
 
@@ -79,6 +79,30 @@ describe("serverErrorExit", () => {
       const declaring = readdirSync(binDir)
         .filter((name) => name.endsWith(".js"))
         .filter((name) => /PORT_IN_USE_EXIT_CODE\s*=\s*\d+/.test(readFileSync(path.join(binDir, name), "utf8")));
+      expect(declaring).toEqual(["server-supervision.js"]);
+    });
+  });
+
+  // Fork-only: the restart code is a contract with the launcher the same way, pinned the same way.
+  describe("the restart contract with bin/server-supervision.js", () => {
+    const supervision = readFileSync(path.join(REPO_ROOT, "bin", "server-supervision.js"), "utf8");
+
+    it("uses the exit code the launcher restarts on", () => {
+      const declared = supervision.match(/RESTART_EXIT_CODE\s*=\s*(\d+)/);
+      expect(declared, "bin/server-supervision.js no longer declares RESTART_EXIT_CODE").not.toBeNull();
+      expect(Number(declared?.[1])).toBe(RESTART_EXIT_CODE);
+      expect(supervision).toMatch(/code === RESTART_EXIT_CODE/);
+    });
+
+    it("is distinct from every other code the launcher branches on", () => {
+      expect(new Set([RESTART_EXIT_CODE, PORT_IN_USE_EXIT_CODE, SERVER_ERROR_EXIT_CODE, 0]).size).toBe(4);
+    });
+
+    it("is the only launcher-side copy of the number", () => {
+      const binDir = path.join(REPO_ROOT, "bin");
+      const declaring = readdirSync(binDir)
+        .filter((name) => name.endsWith(".js"))
+        .filter((name) => /RESTART_EXIT_CODE\s*=\s*\d+/.test(readFileSync(path.join(binDir, name), "utf8")));
       expect(declaring).toEqual(["server-supervision.js"]);
     });
   });

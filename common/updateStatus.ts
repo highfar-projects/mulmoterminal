@@ -27,6 +27,9 @@ export interface UpdateStatus {
   latest: string | null;
   /** The one-line "update available" rendering both the launcher and the header badge show. */
   notice: string | null;
+  /** Fork-only: a restart from the browser re-runs the launch command (the README's wrapper loop),
+   *  so it brings up the latest build rather than the same one again. */
+  relaunch: boolean;
 }
 
 const isInstallKind = (value: unknown): value is InstallKind => value === "npm" || value === "git";
@@ -48,5 +51,7 @@ export function parseUpdateStatus(body: unknown): UpdateStatus | null {
     commit: stringOrNull(body.commit),
     latest: stringOrNull(body.latest),
     notice: stringOrNull(body.notice),
+    // Upstream's server never sends it, and a restart there cannot update.
+    relaunch: body.relaunch === true,
   };
 }

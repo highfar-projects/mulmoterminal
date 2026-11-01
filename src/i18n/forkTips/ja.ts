@@ -23,4 +23,17 @@ export const forkTipsJa: Tree<typeof forkTipsEn> = {
     stop: "このディレクトリの devcontainer を停止",
     fixPersistence: "ここでは再ビルドで Claude Code の設定が失われます — クリックで修正",
   },
+  restart: {
+    button: "MulmoTerminal を再起動",
+    description: "サーバーを止めて、もう一度起動します。ターミナルは tmux 上で動いているので元のまま戻り、サーバーが応答したらこのページも読み直されます。",
+    descriptionRelaunch:
+      "サーバーを止めて、起動コマンドからもう一度起動します。このとき最新の版が取得されます。ターミナルは tmux 上で動いているので元のまま戻り、サーバーが応答したらこのページも読み直されます。",
+    relaunchHint: "同じ版のまま再起動します。再起動のときに新しい版を取得するには、フォークの README にある再起動ループから MulmoTerminal を起動してください。",
+    failed: "サーバーに再起動を頼めませんでした。サーバーはまだ動いていますか？",
+    restartingTitle: "MulmoTerminal を再起動しています…",
+    restartingBody: "サーバーが戻ったら、このページは自動で読み直されます。",
+    restartingBodyRelaunch: "最新の版を取得して起動しています。サーバーが戻ったら、このページは自動で読み直されます。",
+    slow: "時間がかかっています。MulmoTerminal を起動したターミナルを確認してください。インストールがまだ続いているか、エラーで止まっている可能性があります。",
+    updateButton: "再起動して更新",
+  },
 };

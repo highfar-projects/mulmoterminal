@@ -13,6 +13,7 @@ const status = (over: Partial<UpdateStatus> = {}): UpdateStatus => ({
   commit: null,
   latest: null,
   notice: null,
+  relaunch: false,
   ...over,
 });
 

@@ -13,12 +13,13 @@ import { mountShutdownRoute } from "../../../server/routes/shutdown-routes";
 const DELAY_MS = 20;
 const settle = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function mounted() {
+function mounted(relaunches = false) {
   const stop = vi.fn();
+  const restart = vi.fn();
   const app = express();
   app.use(express.json());
-  mountShutdownRoute(app, { stop, delayMs: DELAY_MS });
-  return { stop, call: routeCall(app) };
+  mountShutdownRoute(app, { stop, restart, relaunches, delayMs: DELAY_MS });
+  return { stop, restart, call: routeCall(app) };
 }
 
 describe("POST /api/shutdown", () => {
@@ -57,5 +58,30 @@ describe("POST /api/shutdown", () => {
     const { call } = mounted();
     const res = await call("/api/shutdown");
     expect(res.status).toBe(404);
+  });
+});
+
+// Fork-only. The same answer-first contract, and a restart must never take the stop's path: SIGTERM
+// exits 0, which tells the launcher to stop rather than bring the server back.
+describe("POST /api/restart", () => {
+  it.each([false, true])("answers before it restarts, saying whether a newer build can come back (relaunch %s)", async (relaunches) => {
+    const { restart, call } = mounted(relaunches);
+    const res = await call("/api/restart", jsonPost({}));
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ restarting: true, relaunch: relaunches });
+    expect(restart).not.toHaveBeenCalled();
+  });
+
+  it("restarts once the grace period elapses, and does not stop", async () => {
+    const { stop, restart, call } = mounted();
+    await call("/api/restart", jsonPost({}));
+    await settle(DELAY_MS * 3);
+    expect(restart).toHaveBeenCalledTimes(1);
+    expect(stop).not.toHaveBeenCalled();
+  });
+
+  it("is not reachable by GET", async () => {
+    const { call } = mounted();
+    expect((await call("/api/restart")).status).toBe(404);
   });
 });

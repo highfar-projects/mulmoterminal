@@ -28,6 +28,7 @@ describe("isLauncherEnvVar", () => {
       "npm_lifecycle_event",
       "npm_lifecycle_script",
       "_VOLTA_TOOL_RECURSION",
+      "MULMOTERMINAL_RELAUNCH_ON_EXIT",
     ]) {
       expect(isLauncherEnvVar(name), name).toBe(true);
     }

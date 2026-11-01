@@ -19,6 +19,22 @@
  *  Kept in sync with `PORT_IN_USE_EXIT_CODE` in server/infra/process/server-exit.ts, which a spec pins. */
 export const PORT_IN_USE_EXIT_CODE = 75;
 
+/** Fork-only. The exit code `server/index.ts` leaves with when the browser asked it to restart
+ *  (POST /api/restart). Kept in sync with `RESTART_EXIT_CODE` in server/infra/process/server-exit.ts,
+ *  which a spec pins. The launcher leaves with the same code when it hands the restart on. */
+export const RESTART_EXIT_CODE = 76;
+
+/** Fork-only. Set by a wrapper that re-runs the whole launch command whenever the launcher exits
+ *  with RESTART_EXIT_CODE — the loop in the fork's README. Re-running `npx github:…` is what fetches
+ *  a newer build; restarting the server child in place only runs the same code again. */
+export const RELAUNCH_ENV_VAR = "MULMOTERMINAL_RELAUNCH_ON_EXIT";
+
+/** Whether this launch sits inside such a wrapper. Any non-empty value other than "0" counts. */
+export const relaunchesOnRestart = (env) => {
+  const value = env[RELAUNCH_ENV_VAR];
+  return typeof value === "string" && value !== "" && value !== "0";
+};
+
 /** How long the launcher waits before the first restart, and the ceiling the doubling stops at.
  *  The ceiling has to sit BELOW what the last allowed attempt would otherwise ask for, or it is
  *  decoration that nothing can reach — a spec pins that relationship, because it is the kind of
@@ -79,13 +95,24 @@ const canTellStopFromCrash = (platform) => platform !== "win32";
  * `platform` is asked for rather than read from `process` so that a run on one platform can decide
  * about another — and so that nothing here depends on ambient state.
  *
+ * `relaunches` (fork-only) says a wrapper re-runs the launch command when the launcher leaves with
+ * RESTART_EXIT_CODE; see RELAUNCH_ENV_VAR.
+ *
  * @param {{ code: number | null, signal: string | null, everServed: boolean,
- *           consecutiveFailures: number, platform: string }} exit
- * @returns {{ action: "port-in-use" | "restart" | "stop", delayMs: number, reason: string | null }}
+ *           consecutiveFailures: number, platform: string, relaunches?: boolean }} exit
+ * @returns {{ action: "port-in-use" | "restart" | "relaunch" | "stop", delayMs: number, reason: string | null }}
  */
-export function planAfterServerExit({ code, signal, everServed, consecutiveFailures, platform }) {
+export function planAfterServerExit({ code, signal, everServed, consecutiveFailures, platform, relaunches = false }) {
   // A port that is taken will still be taken next time; the caller names who has it and stops.
   if (code === PORT_IN_USE_EXIT_CODE) return { action: "port-in-use", delayMs: 0, reason: null };
+  // Fork-only. A restart somebody asked for, so none of the crash accounting below applies, and it
+  // is decided before the platform check: the server leaves with this code by calling exit itself,
+  // which arrives intact on Windows too. Under a wrapper the launcher leaves so the wrapper can
+  // fetch the latest build; otherwise the same server is brought back at once.
+  if (code === RESTART_EXIT_CODE)
+    return relaunches
+      ? { action: "relaunch", delayMs: 0, reason: "Restart requested from the browser — re-running the launch command to pick up the latest version." }
+      : { action: "restart", delayMs: 0, reason: "Restart requested from the browser — restarting the server. Terminals are tmux-backed, so they reattach." };
   // `mulmoterminal stop` and the browser's Stop button both SIGTERM the server, whose handler
   // exits 0 (server/infra/process/shutdown.ts). Restarting that is the product's stop button not stopping.
   if (code === 0) return { action: "stop", delayMs: 0, reason: null };

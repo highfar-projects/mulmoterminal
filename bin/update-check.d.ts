@@ -18,7 +18,7 @@ export declare function computeUpdateInfo(
   pkgDir: string,
   currentVersion: string,
   deps?: UpdateNoticeDeps,
-): Promise<Omit<import("../common/updateStatus.js").UpdateStatus, "ready" | "distribution">>;
+): Promise<Omit<import("../common/updateStatus.js").UpdateStatus, "ready" | "distribution" | "relaunch">>;
 export declare function isUpdateCheckDisabled(env: Record<string, string | undefined>): boolean;
 export declare function hasNodeModulesSegment(pkgDir: string): boolean;
 export declare function classifyInstall(pkgDir: string, isGitWorkTree: boolean): "npm" | "git";
@@ -35,3 +35,5 @@ export declare function gitUpdateNotice(args: {
   dirty: boolean;
 }): string | null;
 export declare function isUpstreamPackage(manifest: unknown): boolean;
+export declare function forkRepositoryUrl(manifest: unknown): string | null;
+export declare function forkUpdateNotice(args: { localShort: string | null; remoteSha: string | null }): string | null;

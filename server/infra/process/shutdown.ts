@@ -26,6 +26,7 @@ import { drainPersistQueues } from "../../session/reaping/persist-drain.js";
 import { isRecord } from "../../../common/isRecord.js";
 import { tmuxIsPsmux } from "./tmux.js";
 import { traceTmux } from "../tmux-trace.js";
+import { RESTART_EXIT_CODE } from "./server-exit.js";
 
 const SIGNALS = ["SIGINT", "SIGTERM"] as const;
 
@@ -83,10 +84,17 @@ function stopSidecarOnce(): void {
   }
 }
 
-async function stopAndExit(): Promise<void> {
-  traceTmux(tmuxIsPsmux(), "server-shutdown", {});
+async function stopAndExit(code = 0): Promise<void> {
+  traceTmux(tmuxIsPsmux(), "server-shutdown", { code });
   stopSidecarOnce();
   const drained = await drainPersistQueues();
   if (!drained) console.warn("[shutdown] gave up waiting for queued session state to reach disk; some of it is lost");
-  process.exit(0);
+  process.exit(code);
+}
+
+/** Fork-only: the stop sequence above, leaving with RESTART_EXIT_CODE so the launcher brings the
+ *  server back instead of stopping with it (POST /api/restart). The same path as a stop, so a
+ *  restart drains and cleans up exactly what Ctrl+C does. */
+export function restartAndExit(): Promise<void> {
+  return stopAndExit(RESTART_EXIT_CODE);
 }

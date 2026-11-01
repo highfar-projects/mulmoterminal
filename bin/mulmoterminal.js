@@ -17,7 +17,7 @@ import { detectNpxCacheDir, npxCacheHintLines } from "./npx-cache-hint.js";
 import { remotionCheck } from "./remotion-check.js";
 import { avatarCheck } from "./avatar-check.js";
 import { configuredRemoteServer, sshTunnelHintLines } from "./ssh-hint.js";
-import { planAfterServerExit } from "./server-supervision.js";
+import { RESTART_EXIT_CODE, planAfterServerExit, relaunchesOnRestart } from "./server-supervision.js";
 import { LAUNCH_COMMAND } from "./launch-command.js";
 import { waitUntilReady } from "./wait-ready.js";
 import {
@@ -635,9 +635,22 @@ async function superviseServer(serverSpec, priorLifetimes) {
   const everServed = priorLifetimes.everServed || exit.served;
   // Reaching the port is the only evidence that the lifetime before this one was not a failure.
   const consecutiveFailures = (exit.served ? 0 : priorLifetimes.consecutiveFailures) + 1;
-  const plan = planAfterServerExit({ code: exit.code, signal: exit.signal, everServed, consecutiveFailures, platform: process.platform });
+  const plan = planAfterServerExit({
+    code: exit.code,
+    signal: exit.signal,
+    everServed,
+    consecutiveFailures,
+    platform: process.platform,
+    relaunches: relaunchesOnRestart(process.env),
+  });
   if (plan.action === "port-in-use") return; // the caller names who has the port and stops
   if (plan.action === "stop") return stopForServerExit(plan, exit); // leaves the process; never comes back
+  // Fork-only: the wrapper around this launcher re-runs the launch command on this code, which is
+  // what fetches a newer build (see RELAUNCH_ENV_VAR).
+  if (plan.action === "relaunch") {
+    log(plan.reason);
+    process.exit(RESTART_EXIT_CODE);
+  }
   log(plan.reason);
   await sleep(plan.delayMs);
   return superviseServer(serverSpec, { restarts: priorLifetimes.restarts + 1, everServed, consecutiveFailures });

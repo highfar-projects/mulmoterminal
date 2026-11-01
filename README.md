@@ -313,8 +313,10 @@ npx github:highfar-projects/mulmoterminal#main     # the same, pinned to the new
 - **The first start takes a few minutes**: npm installs the build tools and builds the web UI
   (`prepare` → `scripts/build-if-missing.mjs`). Later starts reuse npm's cache.
 - **No update notice from npm.** The registry's `mulmoterminal` is upstream's, so the startup check
-  stays quiet on a fork install instead of offering `npx mulmoterminal@latest`, which would replace
-  the fork. To update, run the command again with `#main`.
+  never offers `npx mulmoterminal@latest`, which would replace the fork. It compares the commit it
+  is running with this repository's HEAD instead, and the header's update badge says when a newer
+  commit is there. `npx github:…` resolves HEAD each time it starts, so starting it again is the
+  update — by hand, or from the browser with the loop below.
 - **The directory you start it from becomes the workspace** (`CLAUDE_CWD`), as upstream's `npx`
   does: new cells open there, its sessions are the ones listed, and the usage probe runs there.
   A shortcut or `.cmd` in your home directory therefore makes HOME the workspace, and the usage
@@ -328,6 +330,57 @@ npx github:highfar-projects/mulmoterminal#main     # the same, pinned to the new
   `~/.mulmoterminal/.env` first and the launch directory's `.env` after it, so the launch directory
   still overrides it, and a variable set in the shell still beats both. `yarn dev` reads the same
   file before the repo root's `.env`.
+
+### Restart and update from the browser
+
+Settings → Quit has a **Restart MulmoTerminal** button above Quit, and the header's update badge
+offers **Restart to update**. Terminals are tmux-backed, so they come back as they were, and the
+page reloads once the server answers.
+
+On its own, a restart runs the same build again. To have it fetch the newest commit, start the fork
+from a loop that runs the launch command again whenever it exits with code **76**, and tell it so
+with `MULMOTERMINAL_RELAUNCH_ON_EXIT=1`:
+
+```bash
+#!/bin/bash
+# Re-runs npx on a restart from the browser, which is what fetches the newest commit.
+open_flag=()
+while true; do
+  MULMOTERMINAL_RELAUNCH_ON_EXIT=1 npx --yes github:highfar-projects/mulmoterminal --cwd ~/workspace "${open_flag[@]}"
+  code=$?
+  [ "$code" -eq 76 ] || exit "$code"
+  open_flag=(--no-open) # the browser tab is already open and reloads by itself
+done
+```
+
+```powershell
+# Windows (PowerShell): the same loop.
+$flags = @()
+do {
+  $env:MULMOTERMINAL_RELAUNCH_ON_EXIT = "1"
+  npx --yes github:highfar-projects/mulmoterminal --cwd $HOME\workspace @flags
+  $code = $LASTEXITCODE
+  $flags = @("--no-open")
+} while ($code -eq 76)
+```
+
+- **`--yes` is required.** When the commit changed, `npx` asks `Ok to proceed? (y)` before
+  installing it, and nobody is at the terminal to answer after a restart from the browser: the
+  server would never come back.
+- **A new commit takes minutes to come up**, as the first start does: npm installs and builds it.
+  The restarting screen keeps waiting, and after three minutes says to look at the terminal.
+- Any other exit — Quit, Ctrl+C, a crash the launcher gave up on — leaves the loop as before.
+- **With `volta run`, the loop has to run INSIDE it.** `volta run` turns every non-zero exit of
+  its command into 126 (measured with Volta 2.0.2: 1, 2, 75, 76 and 130 all came back as 126), so a
+  loop around it never sees 76. Let the script enter Volta once and loop from there:
+
+  ```bash
+  #!/bin/bash
+  if [ "$1" != "--inside-volta" ]; then
+    exec volta run --node 24.21.0 --bundled-npm env -u _VOLTA_TOOL_RECURSION "$0" --inside-volta
+  fi
+  # ... the loop above ...
+  ```
 
 ### Windows: persistent sessions with psmux
 

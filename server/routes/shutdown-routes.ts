@@ -18,6 +18,8 @@
 // covers every state-changing method, which is the whole point of it being central — a route added
 // today is covered by default rather than by memory.
 import type { Express } from "express";
+import { restartAndExit } from "../infra/process/shutdown.js";
+import { relaunchesOnRestart } from "../../bin/server-supervision.js";
 
 // Zero would race the response: the socket can close before the browser has read it, and the user
 // sees a failed request from a button that in fact worked. Same value as MulmoClaude's
@@ -27,6 +29,10 @@ const SHUTDOWN_RESPONSE_GRACE_MS = 250;
 export interface ShutdownRouteDeps {
   /** Injected so the request can be observed in a test without the test process dying. */
   stop: () => void;
+  /** Fork-only, POST /api/restart: the same stop, leaving with the code that brings the server back. */
+  restart: () => void;
+  /** Whether a restart re-runs the whole launch command — and so fetches the latest build. */
+  relaunches: boolean;
   delayMs: number;
 }
 
@@ -35,6 +41,10 @@ export interface ShutdownRouteDeps {
 // does. Duplicating any of that here is how the two copies start to disagree.
 const defaultDeps: ShutdownRouteDeps = {
   stop: () => process.kill(process.pid, "SIGTERM"),
+  // Not a signal: SIGTERM's handler exits 0, which is what tells the launcher "stop". A restart has
+  // to leave with its own code, so it calls the same sequence directly.
+  restart: () => void restartAndExit(),
+  relaunches: relaunchesOnRestart(process.env),
   delayMs: SHUTDOWN_RESPONSE_GRACE_MS,
 };
 
@@ -47,5 +57,14 @@ export function mountShutdownRoute(app: Express, deps: ShutdownRouteDeps = defau
     res.json({ stopping: true });
     // unref so a pending stop is not itself the reason the process stays alive.
     setTimeout(deps.stop, deps.delayMs).unref();
+  });
+
+  // Fork-only. Answered first for the same reason: the browser puts its "restarting" screen up from
+  // this reply, then waits for the server to come back. `relaunch` tells it whether the server that
+  // comes back can be a newer build (the launch command is re-run) or is the same one restarted.
+  app.post("/api/restart", (_req, res) => {
+    console.log("[shutdown] restart requested from the browser");
+    res.json({ restarting: true, relaunch: deps.relaunches });
+    setTimeout(deps.restart, deps.delayMs).unref();
   });
 }

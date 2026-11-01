@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { UpdateStatus } from "../../../common/updateStatus.js";
 
-type UpdateInfo = Omit<UpdateStatus, "ready" | "distribution">;
+type UpdateInfo = Omit<UpdateStatus, "ready" | "distribution" | "relaunch">;
 type InstallInfo = Pick<UpdateStatus, "install" | "version" | "commit">;
 
 // vi.mock is hoisted above imports, so the doubles it returns must be created inside a
@@ -36,7 +36,7 @@ describe("refreshUpdateStatus", () => {
     isUpdateCheckDisabled.mockReturnValue(false);
     computeUpdateInfo.mockResolvedValue(gitInfo);
     await refreshUpdateStatus();
-    expect(getUpdateStatus()).toEqual({ ready: true, distribution: "upstream", ...gitInfo });
+    expect(getUpdateStatus()).toEqual({ ready: true, distribution: "upstream", relaunch: false, ...gitInfo });
   });
 
   // "Up to date" and "not finished yet" are both a null notice, so `ready` is what tells them
@@ -45,7 +45,16 @@ describe("refreshUpdateStatus", () => {
     isUpdateCheckDisabled.mockReturnValue(false);
     computeUpdateInfo.mockResolvedValue({ install: "npm", version: "4.7.0", commit: null, latest: null, notice: null });
     await refreshUpdateStatus();
-    expect(getUpdateStatus()).toEqual({ ready: true, distribution: "upstream", install: "npm", version: "4.7.0", commit: null, latest: null, notice: null });
+    expect(getUpdateStatus()).toEqual({
+      ready: true,
+      distribution: "upstream",
+      relaunch: false,
+      install: "npm",
+      version: "4.7.0",
+      commit: null,
+      latest: null,
+      notice: null,
+    });
   });
 
   // The opt-out silences the notice, not the version display: the local read still runs, so a
@@ -56,6 +65,7 @@ describe("refreshUpdateStatus", () => {
     await refreshUpdateStatus();
     expect(getUpdateStatus()).toEqual({
       ready: true,
+      relaunch: false,
       distribution: "upstream",
       install: "git",
       version: "4.7.0",
@@ -79,7 +89,7 @@ describe("refreshUpdateStatus", () => {
     const behind: UpdateInfo = { ...current, latest: "4.11.0", notice: "Update available: 4.10.1 → 4.11.0  ·  run: npm i -g mulmoterminal" };
     computeUpdateInfo.mockResolvedValue(behind);
     await refreshUpdateStatus();
-    expect(getUpdateStatus()).toEqual({ ready: true, distribution: "upstream", ...behind });
+    expect(getUpdateStatus()).toEqual({ ready: true, distribution: "upstream", relaunch: false, ...behind });
   });
 
   // The opt-out is read per call rather than latched at the first one, so turning it on takes
@@ -95,6 +105,7 @@ describe("refreshUpdateStatus", () => {
     await refreshUpdateStatus();
     expect(getUpdateStatus()).toEqual({
       ready: true,
+      relaunch: false,
       distribution: "upstream",
       install: "git",
       version: "4.7.0",
@@ -112,7 +123,7 @@ describe("refreshUpdateStatus", () => {
     await refreshUpdateStatus();
     computeUpdateInfo.mockRejectedValue(new Error("offline"));
     await expect(refreshUpdateStatus()).resolves.toBeUndefined();
-    expect(getUpdateStatus()).toEqual({ ready: true, distribution: "upstream", ...gitInfo });
+    expect(getUpdateStatus()).toEqual({ ready: true, distribution: "upstream", relaunch: false, ...gitInfo });
   });
 });
 

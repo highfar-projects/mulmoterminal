@@ -13,6 +13,7 @@ import { createRequire } from "node:module";
 import { computeUpdateInfo, readInstallInfo, isUpdateCheckDisabled, isUpstreamPackage } from "../../bin/update-check.js";
 import { isRecord } from "../../common/isRecord.js";
 import type { Distribution, UpdateStatus } from "../../common/updateStatus.js";
+import { relaunchesOnRestart } from "../../bin/server-supervision.js";
 
 // This file is server/config/update-status.ts, so two dirs up is the install root — the git
 // checkout (dev / a clone) or the package dir under node_modules (npm) the check runs against.
@@ -25,11 +26,22 @@ const VERSION = isRecord(pkg) && typeof pkg.version === "string" ? pkg.version :
 // A fork carries upstream's version number after a merge, so the version cannot say whose build
 // this is; the manifest's repository can, and it is known before any probe lands.
 const DISTRIBUTION: Distribution = isUpstreamPackage(pkg) ? "upstream" : "fork";
+// Fork-only: fixed for the life of the process — the wrapper either started this launch or did not.
+const RELAUNCH = relaunchesOnRestart(process.env);
 
 // The version is known synchronously, so it is served from the first request on. Every other
 // field is a placeholder until the probe lands — including `install`, which needs a git call to
 // decide — and `ready` is how the client knows not to read them yet.
-let cached: UpdateStatus = { ready: false, install: "npm", distribution: DISTRIBUTION, version: VERSION, commit: null, latest: null, notice: null };
+let cached: UpdateStatus = {
+  ready: false,
+  install: "npm",
+  distribution: DISTRIBUTION,
+  version: VERSION,
+  commit: null,
+  latest: null,
+  notice: null,
+  relaunch: RELAUNCH,
+};
 export function getUpdateStatus(): UpdateStatus {
   return cached;
 }
@@ -43,8 +55,8 @@ export function getUpdateStatus(): UpdateStatus {
 export async function refreshUpdateStatus(): Promise<void> {
   try {
     cached = isUpdateCheckDisabled(process.env)
-      ? { ready: true, distribution: DISTRIBUTION, ...(await readInstallInfo(PKG_DIR, VERSION)), latest: null, notice: null }
-      : { ready: true, distribution: DISTRIBUTION, ...(await computeUpdateInfo(PKG_DIR, VERSION)) };
+      ? { ready: true, distribution: DISTRIBUTION, relaunch: RELAUNCH, ...(await readInstallInfo(PKG_DIR, VERSION)), latest: null, notice: null }
+      : { ready: true, distribution: DISTRIBUTION, relaunch: RELAUNCH, ...(await computeUpdateInfo(PKG_DIR, VERSION)) };
   } catch {
     // best-effort — keep the last good value
   }

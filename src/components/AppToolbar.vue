@@ -39,6 +39,7 @@ import { useSoundEnabled } from "../composables/useSoundEnabled";
 import { audioBlocked } from "../composables/audioUnlockState";
 import { soundButtonState } from "./soundButtonState";
 import { useUpdateStatus } from "../composables/useUpdateStatus";
+import { restartServer } from "../composables/useServerRestart";
 import { useGithubStar } from "../composables/useGithubStar";
 import { useDropdownMenu } from "../composables/useDropdownMenu";
 import type { GridArrangement, SortMode, StatusCounts } from "./gridTabs";
@@ -90,7 +91,7 @@ const { isOpen: prsOpen } = useGithubView();
 const { enabled: soundEnabled, toggle: toggleSound } = useSoundEnabled();
 const soundButton = computed(() => soundButtonState(soundEnabled.value, audioBlocked.value));
 const soundLabel = computed(() => t(soundButton.value.labelKey));
-const { badge: updateBadge } = useUpdateStatus();
+const { badge: updateBadge, status: updateStatus } = useUpdateStatus();
 const { visible: starVisible, confirming: starConfirming, titleKey: starTitleKey, activate: activateStar } = useGithubStar();
 const starTitle = computed(() => t(starTitleKey.value));
 
@@ -347,6 +348,17 @@ const FEATURE_ACTIONS: Record<FeatureMenuEntry, () => void> = {
             </div>
           </template>
           <p v-else class="text-muted">{{ updateBadge.text }}</p>
+          <!-- Fork-only: under the README's wrapper loop a restart IS the update, so offer it here. -->
+          <button
+            v-if="updateStatus?.relaunch"
+            type="button"
+            data-testid="update-restart"
+            class="mt-2 inline-flex items-center gap-1.5 rounded border border-border px-2 py-1 text-[12px] hover:bg-selected"
+            @click="restartServer"
+          >
+            <span class="material-symbols-outlined text-[15px] leading-none" aria-hidden="true">restart_alt</span>
+            {{ t("forkTips.restart.updateButton") }}
+          </button>
         </div>
       </div>
       <!-- Grid only: star this project on GitHub. It retires itself once starred (or once the

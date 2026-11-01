@@ -44,6 +44,7 @@ import GitHubSection from "./settings/GitHubSection.vue";
 import SessionSection from "./settings/SessionSection.vue";
 import SurvivingSessionsSection from "./settings/SurvivingSessionsSection.vue";
 import QuitSection from "./settings/QuitSection.vue";
+import RestartSection from "./settings/RestartSection.vue";
 import HeaderChromeSection from "./settings/HeaderChromeSection.vue";
 import ModelsSection from "./settings/ModelsSection.vue";
 import TerminalKeysSection from "./settings/TerminalKeysSection.vue";
@@ -424,6 +425,8 @@ useModalKeyboard({
             <CostSection :cwd="cwd" :session-id="sessionId" />
           </div>
           <div v-if="visitedTabs.has('quit')" v-show="activeTab === 'quit'" data-testid="settings-pane-quit">
+            <!-- Fork-only: restart, above upstream's Quit. -->
+            <RestartSection />
             <QuitSection />
           </div>
           <div v-if="visitedTabs.has('help')" v-show="activeTab === 'help'" data-testid="settings-pane-help">

@@ -28,7 +28,16 @@ describe("parseUpdateStatus", () => {
       commit: "a1b2c3d",
       latest: null,
       notice: "Update available: a1b2c3d → origin  ·  run: git pull",
+      relaunch: false,
     });
+  });
+
+  // Fork-only: only an explicit true says a restart can bring up a newer build; upstream never sends it.
+  it("reads relaunch, defaulting to false", () => {
+    const body = { ready: true, install: "npm", version: "4.7.0", commit: null, latest: null, notice: null };
+    expect(parseUpdateStatus(body)?.relaunch).toBe(false);
+    expect(parseUpdateStatus({ ...body, relaunch: true })?.relaunch).toBe(true);
+    expect(parseUpdateStatus({ ...body, relaunch: "true" })?.relaunch).toBe(false);
   });
 
   // The startup probe has not landed: the version is already true, the rest is not to be read.
@@ -58,6 +67,7 @@ describe("parseUpdateStatus", () => {
       commit: null,
       latest: null,
       notice: null,
+      relaunch: false,
     });
   });
 

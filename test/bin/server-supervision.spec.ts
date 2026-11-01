@@ -6,7 +6,10 @@ import { fileURLToPath } from "node:url";
 
 import {
   planAfterServerExit,
+  relaunchesOnRestart,
   PORT_IN_USE_EXIT_CODE,
+  RESTART_EXIT_CODE,
+  RELAUNCH_ENV_VAR,
   RESTART_MIN_DELAY_MS,
   RESTART_MAX_DELAY_MS,
   MAX_CONSECUTIVE_RESTARTS,
@@ -175,5 +178,43 @@ describe("the contract with bin/mulmoterminal.js", () => {
     // crash took the launcher with it while `yarn dev` restarted the same backend (#2162).
     expect(closeHandler?.[0]).not.toMatch(/process\.exit/);
     expect(launcher).toMatch(/planAfterServerExit\(/);
+  });
+});
+
+// Fork-only: a restart asked for from the browser (POST /api/restart).
+describe("planAfterServerExit — a restart somebody asked for", () => {
+  it("brings the same server back at once when nothing re-runs the launcher", () => {
+    expect(plan({ code: RESTART_EXIT_CODE })).toMatchObject({ action: "restart", delayMs: 0 });
+  });
+
+  it("hands it on to the wrapper that re-runs the launch command", () => {
+    expect(plan({ code: RESTART_EXIT_CODE, relaunches: true }).action).toBe("relaunch");
+  });
+
+  // None of the crash accounting applies: it was asked for, so it neither waits nor gives up.
+  it("is not counted as a failure, however many came before", () => {
+    expect(plan({ code: RESTART_EXIT_CODE, consecutiveFailures: MAX_CONSECUTIVE_RESTARTS + 3 })).toMatchObject({ action: "restart", delayMs: 0 });
+  });
+
+  // The server leaves with this code by calling exit itself, which Windows delivers intact.
+  it("is honoured on Windows, where a stop and a crash look alike", () => {
+    expect(plan({ code: RESTART_EXIT_CODE, platform: "win32" }).action).toBe("restart");
+    expect(plan({ code: RESTART_EXIT_CODE, platform: "win32", relaunches: true }).action).toBe("relaunch");
+  });
+
+  it("leaves a stop a stop under the wrapper", () => {
+    expect(plan({ code: 0, relaunches: true }).action).toBe("stop");
+  });
+});
+
+describe("relaunchesOnRestart", () => {
+  it.each([
+    [undefined, false],
+    ["", false],
+    ["0", false],
+    ["1", true],
+    ["yes", true],
+  ])("reads %j as %s", (value, expected) => {
+    expect(relaunchesOnRestart(value === undefined ? {} : { [RELAUNCH_ENV_VAR]: value })).toBe(expected);
   });
 });
