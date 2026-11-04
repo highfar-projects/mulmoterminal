@@ -179,22 +179,33 @@ copying from a web page usually does, so that pasting text keeps working.
 
 <a id="clicking-a-file-path"></a>
 
-**Clicking a file path** — the other direction. A path an agent *prints* becomes a link, and
+**Clicking a file path** — the other direction. A path an agent *prints* becomes a link (in a
+Windows session that includes `\`-separated ones such as `.claude\notes\a.md` and `C:\work\a.ts`; a path
+holding a space in a folder name is linked whole when it sits inside `"…"`, `'…'`, a backtick pair,
+`(…)`, `（…）` or `「…」`, as in `Read(/Users/me/My Docs/a.md)`), and
 **what it opens is chosen by its extension**, so each kind arrives as the thing it is rather
 than as bytes:
 
 | A clicked … | opens as |
 |---|---|
-| `.md` `.markdown` | **rendered** markdown in a new tab — the same sandboxed `…/md` HTML the Files preview renders, minus the scripts the preview needs (the one that reports where you are reading, and the one that draws mermaid diagrams — so a mermaid fence stays a code block here). It follows your system light/dark setting, since under the sandbox CSP it can't ask the app which theme is on |
-| `.json` | **indented** in a new tab (Chrome and Safari otherwise show one long line) |
-| `.csv` `.tsv` | a **table** in a new tab, with a sticky header that scrolls inside its own box |
+| `.md` `.markdown` | **rendered** markdown in a new tab — the same sandboxed `…/md` HTML the Files preview renders, with a **toolbar** at the top that switches between the preview and the file's **source** and has a copy button for each (the source as it is; the preview as text and as HTML, so a rich editor keeps the headings). That toolbar is the one script the tab runs, admitted by a per-response nonce the way the pane's scroll reporter is, and nothing in the file runs; the two scripts the preview needs are still absent (the one that reports where you are reading, and the one that draws mermaid diagrams — so a mermaid fence stays a code block here). It follows your system light/dark setting and your browser's language, since under the sandbox it can't ask the app which theme or language is on |
+| `.json` | **indented** in a new tab (Chrome and Safari otherwise show one long line), with the same toolbar: switch to the file as it is, copy either |
+| `.csv` `.tsv` | a **table** in a new tab, with a sticky header that scrolls inside its own box, and the same toolbar: switch to the file as it is, copy either |
 | source, config, logs, and `.txt` — 46 extensions | the app's own **Files** view (`/files?path=`), where CodeMirror highlights it, the tree is right there, and it can be edited |
 | `.html` `.htm` | the **rendered page** in a new tab, under the same sandboxed policy as the Files pane's Preview: its scripts run at an opaque origin with no fetch or XHR (so they cannot reach the app or its API), and an image beside it loads by its relative path (a relative stylesheet or script does not). The raw route answers `.html` as plain text, so opening one there showed its source |
 | images, PDF, SVG, video, audio | raw bytes in a new tab, which the browser renders better than an editor would |
 | everything else — `.xlsx`, `.docx`, `.zip`, a `Makefile` | the app's own **Files** view. A tab cannot display these, so opening one there is not a view — it is a download starting with no warning. The pane names the file and offers **Open in OS**, which hands it to the application that owns it (Excel for an `.xlsx`) |
 
+The same tab is one button away from the Files pane: on a Markdown, JSON or CSV/TSV file, the header's
+open-in-new button opens that document, toolbar included, in a tab of its own.
+
 **A path outside the session's working directory opens too** — absolute, `~/…`, or `../` climbing out.
-Markdown, JSON, tables and source open against the file's own directory. An HTML page, an image, a PDF,
+Markdown, JSON, tables and source open **in the Files pane on their own**: the tree stays on the cell's
+directory and the file has no row in it, an arrow mark before its name says it is outside (hover for the
+path), and it is read, previewed and saved against its own directory with the same conditional save as
+any other file. History and Changes are not offered for it, and a link in its Preview is not followed.
+With no pane to take the click, they open against the file's own directory in a tab or the Files view
+as before. An HTML page, an image, a PDF,
 an SVG, a video or an audio file opens in a new tab through a **one-file link**: the app asks the server
 for it with a same-origin POST, and only that file is served under it — not its directory, and not the
 image an HTML page links beside itself. The link lasts until the server restarts (or until many newer links push it out); seeking a video works.
@@ -209,12 +220,14 @@ to and simply opens as itself. A route that renders the file in a new tab (`.md`
 keyboard stays in the terminal; the full-screen Files view, with no terminal beside it,
 puts it in the editor. (ESLint's default output puts the path on a line of its own, with no line number to follow.)
 
-**While a grid cell is enlarged, or a pane is open beside the tiled grid, the [Files pane](#files-view-browse--edit) takes the click first** — every
+**A right-click on the path opens a menu** instead of the browser's: open it in the pane (what a plain click does), open it in a **new tab** (the rendered document for Markdown, JSON and tables, the Files page for source, the one-file link for a picture or a PDF outside the cell), open it in the **Files view**, or **copy the path** as an absolute path, ready for a prompt or an issue. A right-click only opens the menu; it no longer also opens the file the way a click does (it used to, under the browser's menu). Off a link the right-click is the browser's as before. Cmd/Ctrl+click still opens a new Files tab.
+
+**The [Files pane](#files-view-browse--edit) beside the terminal takes the click first** — beside an enlarged cell, and on the tiled grid too, where the pane opens beside the tile that printed the path, or moves to it, the way that tile's menu would open it (`fileLinkOpensPane`, on by default; `false` keeps a tiled-grid click on the routes above unless a pane is already beside that tile) — every
 row above, since the pane is the same editor with a Preview for Markdown, HTML and SVG, shows an
 image as a picture and a PDF in a frame, and plays a video or an audio file with the browser's own
 controls (seeking included, whatever the file's size). The file opens *beside* the terminal
 that printed it, and the pane opens itself if it was closed. It declines, leaving the routing
-above untouched, when nothing is enlarged and no pane is beside the tiles, or when the path is not
+above untouched, when `fileLinkOpensPane` is off on the tiled grid and no pane is beside the tiles, or when the path is not
 under the directory of the cell the pane belongs to (the pane cannot walk above its root). A file too large to edit as text still offers **Open in OS**.
 
 Highlighting in the Files view covers the JS/TS family, JSON and Markdown (the modes
@@ -836,9 +849,10 @@ there is no terminal to start it again in. A stop you asked for is still a stop:
 managed to bind is not restarted either — the reason it printed is the answer, and
 retrying would bury it. Repeated failures give up rather than respawn forever.
 
-**Not on Windows**, where it is not yet possible: Node has no real signals there, so every
-way of stopping the server terminates it outright, and the launcher cannot tell that from
-a crash. Windows keeps the old behaviour — the launcher ends when its server does.
+**Not on Windows**, where it is not yet possible: Node has no real signals there, so a
+`taskkill` (or a `stop` the server did not answer) terminates it outright, and the launcher
+cannot tell that from a crash. Windows keeps the old behaviour — the launcher ends when its
+server does.
 
 **No tmux? No problem** — terminals fall back to plain (non-persistent) PTYs, exactly as
 before. An explicit close (a cell's ✕) ends the tmux session; a machine reboot does not
@@ -886,8 +900,8 @@ What MulmoTerminal does differently behind psmux, and only there:
   after it is not taken into it. `PSMUX_VT_INPUT=0` in the server's environment turns this off;
 - counts emoji two cells wide in the browser (Unicode 11), as Claude Code and psmux do — otherwise
   each emoji shifts the rest of its row by one column;
-- keeps Volta's `_VOLTA_TOOL_RECURSION` out of psmux's environment, so `node` in a cell resolves through
-  Volta's shim again;
+- keeps Volta's `_VOLTA_TOOL_RECURSION` out of every cell's environment (psmux and real tmux alike), so
+  `node` in a cell resolves through Volta's shim again;
 - turns psmux's warm pool off (`set -g warm off`, psmux 3.3.1+), in new servers and in the ones
   already running. Every cell starts with `-e`, which never claims a spare shell, so the spares
   only held memory and were restarted on every resize;
@@ -1021,7 +1035,7 @@ The Settings modal (the gear button) persists per-user UI choices to `~/.mulmote
 | `quickCommands` | `{ label, text, agents? }` phrases the **phone** offers as chips on a session's terminal view. Tapping one puts `text` in the input box; it is not sent until you press send. `agents` scopes a chip to session kinds — any of `SESSION_AGENTS` (`"claude"`, `"codex"`, `"antigravity"`, `"grok"`, `"muse"`, `"copilot"`, `"cursor"`, `"shell"`); omit it to offer the chip everywhere. Empty by default. |
 | `userMcpServers` | `{ id, url }` HTTP MCP servers merged into the `--mcp-config` of the **Claude** sessions that carry the full GUI MCP (codex is handed the GUI server alone, `codexGuiMcpServers`) — a cell whose working directory is the **workspace**, and a session the server starts itself (the phone, a scheduled task) unless it asks for a grid cell's shape, as an issue's seed session does (`issueSpawnOptions`). A cell in a project directory does not get this merge; the MCP config the user wrote is read either way. Takes effect on the next session. |
 | `buttons`    | Header action buttons — see [Header buttons](#header-buttons). Omit to keep the defaults; set to replace them. |
-| `chips`      | Header info chips (`dir` / `git` / `work` / `diff` / `ctx` / `usage` / `status` / `tools` / `env`, or custom text). `env` shows what this working tree was reserved by [`worktreeEnv`](#per-directory-settings-projectmulmoterminaljson) (`:3010`, clickable) and draws nothing where none is declared. Omit to keep the default set; `[]` hides all built-ins. `work` shows which PR / issue the cell is on (`#977 → #966`) and clears itself when the PR merges — see the [Configuration guide](https://receptron.github.io/mulmoterminal/guide/en/config.html#work-chip). |
+| `chips`      | Header info chips (`dir` / `git` / `work` / `diff` / `ctx` / `usage` / `status` / `tools` / `env` / `peer`, or custom text). `peer` is the name the other Claude Code sessions on this machine message this one by (`myrepo-66`, what their `ListAgents` lists), as an icon that copies it; it draws nothing on a cell that is not a Claude session. `env` shows what this working tree was reserved by [`worktreeEnv`](#per-directory-settings-projectmulmoterminaljson) (`:3010`, clickable) and draws nothing where none is declared. Omit to keep the default set; `[]` hides all built-ins. `work` shows which PR / issue the cell is on (`#977 → #966`) and clears itself when the PR merges — see the [Configuration guide](https://receptron.github.io/mulmoterminal/guide/en/config.html#work-chip). |
 | `pushEnabled` | `true` to send a **Web Push** to your registered devices. Off by default; only sends while the **RemoteHost** channel is connected (see below). The master switch — `pushKinds` picks which moments. |
 | `pushKinds` | Which moments push: `"finished"` (a turn ended, ✅) and/or `"waiting"` (the agent stopped to ask — a permission prompt or a question, ❓, **once per prompt**). Omit to keep both; `[]` for none. A kind added in a later version stays off until you tick it. |
 | `worklogEnabled` | `true` to run the built-in **dev worklog** batch (see below). Off by default (each run spawns an LLM session, so it costs tokens). Editable in Settings → **Sessions and background tasks**. |
@@ -1031,6 +1045,7 @@ The Settings modal (the gear button) persists per-user UI choices to `~/.mulmote
 | `tmuxPrefix` | The prefix key of the dedicated tmux server: `"none"` (default — every key reaches the agent, so Ctrl+B is "one character left" again), `"C-b"` (tmux's own default) or another control key such as `"C-]"`. Applied to a running tmux server on save. See the [Configuration guide](https://receptron.github.io/mulmoterminal/guide/en/config.html#tmux-prefix). Settings → **Terminal keys** has a dropdown. |
 | `terminalSubmit` | Which bytes Claude reads as **submit** vs **newline**: `"cr"` (default — Enter submits, Shift+Enter makes a newline) or `"esc-cr"` (for a Claude Code rebound the other way). Applies to the keyboard **and** the phone remote-view submit, for **Claude sessions only** (shell/codex keep plain Enter). See the [Configuration guide](https://receptron.github.io/mulmoterminal/guide/en/config.html#terminal-submit). Settings → **Terminal keys** offers both, worded as behaviour. |
 | `copyOnSelect` | `true` puts a **mouse selection on the clipboard the moment it settles**, with no key pressed (the PuTTY / iTerm2 behaviour). **Off by default** — it changes the clipboard when you may only have meant to highlight something. There is a checkbox in Settings → **Terminal keys**, applied at once; a hand edit of the file needs a **server restart, then a tab reload** (the server reads this file once at startup, and the browser reads the value from it on load). Composes with the `copy` keymap action rather than replacing it. Over plain `http://` the browser gives a page no clipboard access, so a fallback asks xterm to copy instead; see the [Configuration guide](https://receptron.github.io/mulmoterminal/guide/en/config.html#copy-on-select). |
+| `fileLinkOpensPane` | `false` keeps a **file path clicked on the tiled grid** on its old route — a new tab, or the in-app Files view — unless a pane is already open beside that cell. **On by default**: the click opens the Files pane beside the tile that printed the path, the way the tile's menu would, or moves it there. Beside an enlarged cell nothing changes either way. Settings → Terminal keys has a checkbox |
 | `questionPaneEnabled` | `true` offers a Claude session's **`AskUserQuestion` choices as buttons** in a pane beside the enlarged terminal. **The terminal's own dialog stays** and the pane drives it — a click presses the arrow keys and Enter in the real dialog, so either end can answer and the first one wins. Claude sessions only (the choices arrive on Claude Code's hooks). A **single** question can also be answered in your own words — a text box under the buttons writes into the dialog's own `Type something` row; several questions at once, or a multi-select one, get buttons only, and `Chat about this` stays in the terminal. **Off by default** — it lets a pane type into your terminal. Checkbox in Settings → **Terminal keys**, applied at once (the server re-reads the file per question). See the [Feature reference](https://receptron.github.io/mulmoterminal/guide/en/features.html#question-pane). |
 | `decisionDigest` | Keep a **Markdown digest of the decisions this project's sessions asked for**, refreshed at startup and every few hours, so an agent can read what has already been decided before asking something similar. Written to `~/.mulmoterminal/decisions/<project>.md` (never into your repository) and served to agents by the bundled `mulmoterminal-decisions` skill. **Off by default** — it is a vision-stage idea, and it writes a file that would otherwise not exist. The digest holds dated facts, never inferred rules. Settings → **Sessions and background tasks** has the switch. |
 | `issueWorkComments` | Let a cell **comment on the issue it is working on**: **one comment**, posted when the work starts and then **edited** as the PR opens and merges (closing the issue if the forge has not already), each milestone stamped in UTC. The comment names the working **directory** it happened in — the folder name only, never the path — so a reader can tell which clone, and two terminals do not start the same issue twice. It says it came from MulmoTerminal. CI is deliberately not reported: it is on the PR already, and it flaps. **Off by default**; it writes to the forge, often on somebody else's issue. Needs the matching CLI logged in — `gh` for GitHub, `glab` for gitlab.com and any host declared in `gitlabHosts`. See the [Configuration guide](https://receptron.github.io/mulmoterminal/guide/en/config.html#issue-work-comments). Editable in Settings → **GitHub and GitLab**. |
@@ -1297,7 +1312,7 @@ show are left as they are, and a file that isn't a JSON object is not touched �
 ```bash
 yarn install            # postinstall fixes node-pty prebuilt binary perms
 
-yarn dev                # backend (:34567) + Vite UI (:6856), concurrently — open http://localhost:6856
+yarn dev                # backend (:34567) + Vite UI (:6856), concurrently (on Windows started directly, unprefixed) — open http://localhost:6856
 # or individually:
 yarn dev:server         # backend only  (node --import tsx --env-file-if-exists=.env server/index.ts)
 yarn dev:client         # Vite dev server only
@@ -1597,8 +1612,8 @@ goes to the tab that file already has. A link that climbs above the pane's folde
 the pane says so; an external link opens in a new browser tab, and a `#heading` link scrolls the
 document.
 
-The toggle is not the only way in: while a cell is enlarged, or this pane is open beside the tiled
-grid, **clicking a file path the agent printed** opens it here too, rather than in a new tab or full-screen — see
+The toggle is not the only way in: **clicking a file path the agent printed** opens it here too, beside
+that cell — on the tiled grid the pane opens or moves beside the tile — rather than in a new tab or full-screen — see
 [Clicking a file path](#clicking-a-file-path).
 
 **Open a file by name instead of walking the tree.** The pane's header has a **search** button
@@ -2291,7 +2306,7 @@ name in `MULMOTERMINAL_HOST` / `MULMOTERMINAL_ALLOWED_ORIGINS`, against DNS rebi
 
 | Endpoint | Purpose |
 | -------- | ------- |
-| `GET /api/session/:id?cwd=` | One session's summary — cumulative `usage` and `context` (model + last-turn context tokens). Backs the cell token & ctx% badges. |
+| `GET /api/session/:id?cwd=` | One session's summary — cumulative `usage` and `context` (model + last-turn context tokens), and for a Claude session `peerName`, the name other Claude Code sessions on this machine message it by (`null` when no running claude answers to the id). Backs the cell token & ctx% badges and the `peer` chip. |
 | `GET /api/codex/sessions?cwd=` | Codex sessions for the project (from `~/.codex` rollouts), newest first. |
 | `GET /api/antigravity/sessions?cwd=` | Antigravity conversations for the project, newest first. agy does record a workspace, but never as a complete conversation-to-workspace map (`cache/last_conversations.json` keeps one conversation per directory and is written at exit; `history.jsonl` carries no conversation id), so the project comes from MulmoTerminal's own `~/.mulmoterminal/antigravity-conversations.jsonl`; agy's transcript supplies the title. |
 | `GET /api/grok/sessions?cwd=` | Grok conversations for the project, newest first. `~/.grok/sessions` is partitioned by working directory (percent-encoded), so this is a directory listing; each conversation's `summary.json` supplies the title and the last-active time, falling back to the directory's `prompt_history.jsonl`. |

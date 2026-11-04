@@ -59,7 +59,7 @@ import { clipboardActionFor } from "../../common/terminalClipboard";
 import { isImeConfirming } from "./imeComposition";
 import { getActiveKeymap } from "./activeKeymap";
 import { wireCopyOnSelect } from "./terminalCopyOnSelect";
-import { registerFilePathLinks } from "./terminalFileLinks";
+import { forgetFilePathLinks, registerFilePathLinks } from "./terminalFileLinks";
 
 export type ConnStatus = "connecting" | "connected" | "disconnected";
 
@@ -438,7 +438,7 @@ function buildTerminal(swallowedMouseModes: Set<number>, font: TerminalFont): Te
 
 // The wiring that needs the connection itself, so it is re-applied to every terminal a slot owns.
 function wireTerminalToConn(term: Terminal, c: Conn): void {
-  registerFilePathLinks(term, () => c.knownCwd);
+  registerFilePathLinks(term, { cwd: () => c.knownCwd, session: () => c.knownSessionId });
   wireTerminalInput(term, c);
   if (c.theme) term.options.theme = c.theme;
 }
@@ -507,6 +507,7 @@ function rebuildTerminal(c: Conn): void {
   watchOnScreen(c);
   c.attachedEl?.appendChild(host);
   deadHost.remove();
+  forgetFilePathLinks(deadTerm);
   // Renderer first, and never throwing: the lines below are the half that makes the new terminal
   // usable, and disposing in the other order threw right here — leaving the replacement attached
   // to nothing (#2021).
@@ -758,6 +759,7 @@ export function release(key: string) {
   } catch {
     // not in the DOM
   }
+  forgetFilePathLinks(c.term);
   disposeTerminal(c.term, c.canvas);
   c.canvas = null;
   conns.delete(key);

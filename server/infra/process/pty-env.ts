@@ -10,6 +10,11 @@
 // are the same class of leak: run-script context that a user terminal — or a
 // claude session — should never inherit. Strip it all so spawned PTYs start
 // from an environment a fresh login shell would recognize.
+//
+// Claude Code's CLAUDE_CODE_ENTRYPOINT is the same class from another launcher: a claude
+// that started the server exports how IT was started (`cli`, an SDK's `sdk-cli`), and a
+// claude in a cell that inherits the value registers as that instead of as the terminal's,
+// which is what the peer chip reads (#3244).
 
 // All lowercase: matching is case-insensitive, since Windows env names are.
 const REMOVED_NAMES = new Set([
@@ -21,12 +26,8 @@ const REMOVED_NAMES = new Set([
   "npm_execpath",
   "npm_node_execpath",
   "npm_command",
-  // Fork-only (upstream #3233): Volta marks what `volta run` launches so a shim beneath it skips
-  // Volta and runs whatever PATH names next. A cell under ANY multiplexer, or none, inherited it:
-  // on a real tmux `node` still ran (Volta's node dir travels on PATH) but `yarn` failed with
-  // "Node is not available" and a project's `volta` pins were ignored. A fresh shell never has it.
-  // Upstream drops it from psmux clients alone (PSMUX_SCRUBBED_NAMES), which this makes redundant.
-  "_volta_tool_recursion",
+  "claude_code_entrypoint", // an ancestor claude's own entrypoint (see header comment)
+  "_volta_tool_recursion", // `volta run` marks its node; a shim that sees it skips Volta's version choice (#3233)
   // Fork-only: says the launcher sits in a wrapper that re-runs it on a restart. A launcher started
   // by hand inside a cell sits in no such wrapper, and inheriting this would make it leave on a
   // restart with nothing to bring it back.
@@ -35,8 +36,8 @@ const REMOVED_NAMES = new Set([
 
 const REMOVED_PREFIXES = ["npm_config_", "npm_package_", "npm_lifecycle_"];
 
-// Is this env var package-manager launcher context (vs. real user environment)?
-// Deliberately narrow: HOMEBREW_PREFIX / CONDA_PREFIX etc. must survive.
+// Is this env var launcher context (a package manager's, or an ancestor claude's) rather than
+// real user environment? Deliberately narrow: HOMEBREW_PREFIX / CONDA_PREFIX etc. must survive.
 export function isLauncherEnvVar(name: string): boolean {
   const lower = name.toLowerCase();
   return REMOVED_NAMES.has(lower) || REMOVED_PREFIXES.some((prefix) => lower.startsWith(prefix));
@@ -87,30 +88,34 @@ export function isLauncherPathEntry(entry: string, platform: NodeJS.Platform = p
   return YARN_SHIM_DIR.test(last) || (last === ".bin" && parent === "node_modules") || last === "node-gyp-bin";
 }
 
-// Fork-only (follows upstream #3233): `volta run` prepends the image dir of the tool it picked —
-// `<volta>/tools/image/node/24.21.0/bin`, or `…\tools\image\node\24.21.0` on Windows — and a cell
-// that inherits it runs that `node`/`npm` directly, past the shim and so past a project's `volta`
-// pin. It is dropped only beside Volta's own shim dir (`<volta>/bin`), which still finds a `node`.
+// `volta run` prepends the image dir of the tool it picked — `<volta>/tools/image/node/24.21.0/bin`, or
+// `…\tools\image\node\24.21.0` on Windows. A cell that keeps it runs that `node`/`npm` directly, past
+// the shim and so past a project's `volta` pin. It goes only beside Volta's own shim dir
+// (`<volta>/bin`), which still finds a `node`; without one the image dir may be the only way to it.
+// Lexical on purpose: a pure function of PATH cannot see VOLTA_HOME or the disk, so a user dir with exactly this
+// shape beside its own `bin` is dropped too, and spellings that differ (`.`, symlinks) are kept, as before.
 const VOLTA_IMAGE_TOOLS = new Set(["node", "npm", "yarn", "pnpm"]);
 
-// The entry as compared against another: segments joined, case folded where the platform folds it.
+// A leading "" stays: it is the root, and `/tools/bin` is not `tools/bin`. POSIX splits on "/" only —
+// a backslash is a legal character in a directory name there.
+const pathSegments = (entry: string, platform: NodeJS.Platform): string[] =>
+  asSearched(entry, platform)
+    .split(platform === "win32" ? /[\\/]/ : "/")
+    .filter((segment, index) => segment !== "" || index === 0);
+
+// Segments joined, case folded where the platform folds it, so two spellings of one dir compare equal.
 const pathKey = (segments: readonly string[], platform: NodeJS.Platform): string => {
   const joined = segments.join("/");
   return platform === "win32" ? joined.toLowerCase() : joined;
 };
 
-const pathSegments = (entry: string, platform: NodeJS.Platform): string[] =>
-  asSearched(entry, platform)
-    .split(/[\\/]/)
-    .filter((segment) => segment !== "");
-
 // The key of the Volta shim dir an image entry belongs to, or null when the entry is not an image dir.
 function voltaShimDirKeyOf(entry: string, platform: NodeJS.Platform): string | null {
   const segments = pathSegments(entry, platform);
-  const folded = platform === "win32" ? segments.map((segment) => segment.toLowerCase()) : segments;
+  const folded = segments.map((segment) => (platform === "win32" ? segment.toLowerCase() : segment));
   const end = folded[folded.length - 1] === "bin" ? folded.length - 1 : folded.length;
-  if (end < 4 || folded[end - 4] !== "tools" || folded[end - 3] !== "image" || !VOLTA_IMAGE_TOOLS.has(folded[end - 2] ?? "")) return null;
-  return pathKey([...segments.slice(0, end - 4), "bin"], platform);
+  const isImageDir = end >= 4 && folded[end - 4] === "tools" && folded[end - 3] === "image" && VOLTA_IMAGE_TOOLS.has(folded[end - 2] ?? "");
+  return isImageDir ? pathKey([...segments.slice(0, end - 4), "bin"], platform) : null;
 }
 
 // PATH with the run-script injections removed; everything else (nvm, homebrew,
@@ -118,11 +123,11 @@ function voltaShimDirKeyOf(entry: string, platform: NodeJS.Platform): string | n
 export function sanitizePathEntries(pathValue: string, delimiter: string, platform: NodeJS.Platform = process.platform): string {
   const entries = pathValue.split(delimiter);
   const present = new Set(entries.map((entry) => pathKey(pathSegments(entry, platform), platform)));
-  const isVoltaImageBesideShim = (entry: string): boolean => {
-    const shimKey = voltaShimDirKeyOf(entry, platform);
-    return shimKey !== null && present.has(shimKey);
+  const isImageDirBesideShims = (entry: string): boolean => {
+    const shimDirKey = voltaShimDirKeyOf(entry, platform);
+    return shimDirKey !== null && present.has(shimDirKey);
   };
-  return entries.filter((entry) => !isLauncherPathEntry(entry, platform) && !isVoltaImageBesideShim(entry)).join(delimiter);
+  return entries.filter((entry) => !isLauncherPathEntry(entry, platform) && !isImageDirBesideShims(entry)).join(delimiter);
 }
 
 // Read in this order by every locale-aware program; the first non-empty one wins.

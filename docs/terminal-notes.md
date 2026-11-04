@@ -143,9 +143,17 @@ same question.
 
 | Kind | Where | Recognizes |
 |---|---|---|
-| Local file path (#778) | `terminalFilePathLinkProvider.ts` (`registerLinkProvider`) | a token with a `/` and a file extension (plus a `:line[:col]` / `(line,col)` suffix, which opens the text at that line, #2573), scoped to the session cwd → the grid's **Files pane** (beside an enlarged cell, or one already open beside the tiled grid) when it can show that kind and the path is under its cell's dir (#910), else **routed by extension** (#808–#811); a page, image, PDF, video or audio file outside the cell opens through a one-file grant (`/api/files/grant` → `/api/files/granted/…`, #3024), never by widening `/api/files/raw`: rendered/indented/table routes, the rendered-page route for `.html` (#2560), the in-app Files view, or `/api/files/raw` as the fallback. A type the BROWSER cannot display (`.xlsx`, `.zip`, an extensionless `Makefile`) goes to the Files view too rather than to a tab that would silently download it (#2038) |
+| Local file path (#778) | `terminalFilePathLinkProvider.ts` (`registerLinkProvider`) | a token with a `/` and a file extension — in a cell whose cwd is a Windows path, also `\` and a drive (`C:\x\a.md`), handed on `/`-separated (#3236); a path with a space in a folder name only when quoted, backticked or bracketed and reading as one anchored path (not a command line), as in `Read(/Users/me/My Docs/a.md)` (#3246) — (plus a `:line[:col]` / `(line,col)` suffix, which opens the text at that line, #2573), scoped to the session cwd → the grid's **Files pane** (beside an enlarged cell; on the tiled grid the pane is opened or moved beside the clicked tile, #3238 — with `fileLinkOpensPane` off, only a pane already beside that tile) when it can show that kind: a path under its cell's dir relative to it (#910), a text file outside the cell on its own by its absolute path, read and saved against its own directory (#3238), else **routed by extension** (#808–#811); a page, image, PDF, video or audio file outside the cell opens through a one-file grant (`/api/files/grant` → `/api/files/granted/…`, #3024), never by widening `/api/files/raw`: rendered/indented/table routes, the rendered-page route for `.html` (#2560), the in-app Files view, or `/api/files/raw` as the fallback. A type the BROWSER cannot display (`.xlsx`, `.zip`, an extensionless `Makefile`) goes to the Files view too rather than to a tab that would silently download it (#2038) |
 | OSC 8 hyperlink (#783/#785) | `linkHandler` + xterm core `OscLinkService` | arbitrary text → URL (Claude statusline `PR #NNNN`) — **requires the tmux `hyperlinks` feature** |
 | Plain URL | `WebLinksAddon` | visible `http(s)://` URLs |
+
+A right-click on a file-path link opens the app's own menu (#3238): the provider's `ILink.hover` /
+`leave` callbacks track which link the pointer is over, and a `contextmenu` listener on
+`term.element` (`terminalFileLinks.ts`) hands that link to the one `TerminalLinkMenu` mounted in
+`App.vue`. Off a link the event is not prevented, so the browser's menu (paste) stays. xterm hands a link's
+`activate` the `mouseup` of ANY button, so the provider ignores an activation from any button but the
+main one — before #3256 a right-click opened the link as a click would. A terminal's hover and its
+menu request are forgotten when the terminal is disposed (`forgetFilePathLinks`).
 
 The per-extension routing table is **not** repeated here — it belongs to the file routes and
 the Files view, not to this stack, and nothing in it breaks when xterm or tmux is upgraded.

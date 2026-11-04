@@ -2,9 +2,8 @@
 // cwd at all. The Files pane is rooted at its cell's directory and cannot walk above it, so
 // this is what decides whether a click can go there or has to keep its old route.
 //
-// Browser-side, so no `node:path`. A clicked token can be a Windows path (`C:\...`, `a\b.md`,
-// see terminalFilePathLinks) and the CWD arrives with backslashes on Windows, so separators
-// are normalized before anything is compared.
+// Browser-side, so no `node:path`. The CWD arrives with backslashes on Windows, so separators are
+// normalized before anything is compared.
 
 import { resolveRelativeSegments } from "../../common/resolveRelativeSegments";
 
@@ -14,7 +13,7 @@ const toSlashes = (p: string): string => p.replace(/\\/g, "/");
 
 // Case-folded only when the root looks like a Windows path. On a case-sensitive filesystem
 // `/A/b` and `/a/b` are two directories, and folding would silently accept the wrong one.
-const isWindowsRoot = (root: string): boolean => DRIVE_PREFIX.test(root);
+export const isWindowsRoot = (root: string): boolean => DRIVE_PREFIX.test(root);
 
 const isAbsolute = (p: string): boolean => p.startsWith("/") || DRIVE_PREFIX.test(p);
 
@@ -76,4 +75,14 @@ function normalizedSegments(rel: string): string[] {
     if (segment === "..") return out.slice(0, -1);
     return [...out, segment];
   }, []);
+}
+
+const WRITTEN_ABSOLUTE = /^(?:\/|[A-Za-z]:[\\/])/;
+
+/** `token` relative to `cwd` when it was WRITTEN absolute and lies under it; otherwise as written. A
+ *  token written relative is never folded — on a POSIX root a `\` in it is part of the name — and
+ *  a root file must never arrive absolute, since an absolute tab path is a file outside the root
+ *  (#3238). */
+export function underRootAsWritten(token: string, cwd: string | null): string {
+  return WRITTEN_ABSOLUTE.test(token) ? (pathWithinCwd(token, cwd) ?? token) : token;
 }

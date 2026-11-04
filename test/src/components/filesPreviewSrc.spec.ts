@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { diskVersion, previewQuery, previewSrcFor, rawFileSrc } from "../../../src/components/filesPreviewSrc";
+import { diskVersion, previewQuery, previewSrcFor, previewTabUrl, rawFileSrc } from "../../../src/components/filesPreviewSrc";
 import { browseQuery } from "../../../src/components/filesPaneApi";
+import { MD_PREVIEW_EMBED_PARAM, MD_PREVIEW_TOKEN_PARAM } from "../../../common/mdPreviewMessage";
 
 // Preview renders the file on disk through an iframe, so WHICH REVISION it shows is decided
 // entirely by the URL it is given — and before #2136 that URL never changed, which is invisible
@@ -118,8 +119,8 @@ describe("previewSrcFor", () => {
     expect(previewSrcFor("html", null, "report.html", "v1", null)).toBe("");
   });
 
-  // #2559. The table route, with the version and the theme but nothing of the Markdown wire: a table
-  // has no script to report with, so it is not the embeddable document and carries no token.
+  // #2559. The table route, with the version and the theme, and `embed` to say the pane is asking
+  // (#3238) — but nothing of the Markdown wire: a table has no script to report with, so no token.
   it("renders a CSV through the table route, themed and versioned", () => {
     const theme = { bg: "#1a1a2e", fg: "#e6e6f0", muted: "#a0a0b8", subtle: "#232342", border: "#33335a", link: "#4a8cff" };
     const src = previewSrcFor("table", "/proj", "data/rows.csv", "v1", theme, "token-1");
@@ -131,7 +132,7 @@ describe("previewSrcFor", () => {
     expect(params.get("v")).toBe("v1");
     expect(params.get("bg")).toBe("#1a1a2e");
     expect(params.get("link")).toBe("#4a8cff");
-    expect(src).not.toContain("embed");
+    expect(params.get("embed")).toBe("1");
     expect(src).not.toContain("token-1");
   });
 
@@ -145,17 +146,50 @@ describe("previewSrcFor", () => {
     expect(params.get("path")).toBe("data/x.json");
     expect(params.get("v")).toBe("v1");
     expect(params.get("bg")).toBe("#1a1a2e");
-    expect(src).not.toContain("embed");
+    expect(params.get("embed")).toBe("1");
     expect(src).not.toContain("token-1");
   });
 
   it("changes a table's src when the file does", () => {
     expect(previewSrcFor("table", "/proj", "a.csv", "v1", null)).not.toBe(previewSrcFor("table", "/proj", "a.csv", "v2", null));
-    expect(previewSrcFor("table", "/proj", "a.csv", null, null)).toBe("/api/files/browse/table?cwd=%2Fproj&path=a.csv");
+    expect(previewSrcFor("table", "/proj", "a.csv", null, null)).toBe("/api/files/browse/table?cwd=%2Fproj&path=a.csv&embed=1");
   });
 
   it("draws an SVG from the raw route", () => {
     expect(previewSrcFor("svg", "/proj", "chart.svg", "v1", null)).toBe(rawFileSrc("/proj", "chart.svg", "v1"));
     expect(rawFileSrc("/proj", "chart.svg", "v1")).toBe("/api/files/raw?cwd=%2Fproj&path=chart.svg&v=v1");
+  });
+});
+
+// #3238, part 3. The pane's header can hand the open file to a tab of its own, and the tab's
+// document is NOT the frame's: it carries the toolbar, and its URL must carry none of what the
+// frame's URL exists to carry.
+describe("previewTabUrl", () => {
+  it("is the rendered route for each kind a tab has a document for", () => {
+    expect(previewTabUrl("markdown", "/proj", "a.md")).toBe("/api/files/browse/md?cwd=%2Fproj&path=a.md");
+    expect(previewTabUrl("table", "/proj", "a.csv")).toBe("/api/files/browse/table?cwd=%2Fproj&path=a.csv");
+    expect(previewTabUrl("json", "/proj", "a.json")).toBe("/api/files/browse/json?cwd=%2Fproj&path=a.json");
+  });
+
+  // An HTML page or an SVG is the file itself in a tab; there is no document with a toolbar to open.
+  it("is null for a kind the tab shows as the file itself", () => {
+    expect(previewTabUrl("html", "/proj", "a.html")).toBeNull();
+    expect(previewTabUrl("svg", "/proj", "a.svg")).toBeNull();
+  });
+
+  it("is null with no root to name", () => {
+    expect(previewTabUrl("markdown", null, "a.md")).toBeNull();
+  });
+
+  it("carries the root and the path and nothing the frame's URL rides on", () => {
+    const url = new URL(previewTabUrl("markdown", "/proj", "a.md") ?? "", "https://x");
+    expect([...url.searchParams.keys()].sort()).toEqual(["cwd", "path"]);
+    expect(url.searchParams.has(MD_PREVIEW_EMBED_PARAM)).toBe(false);
+    expect(url.searchParams.has(MD_PREVIEW_TOKEN_PARAM)).toBe(false);
+    expect(url.searchParams.has("v")).toBe(false);
+  });
+
+  it("escapes a path that would otherwise end the query", () => {
+    expect(previewTabUrl("markdown", "/proj", "a&b.md")).toBe("/api/files/browse/md?cwd=%2Fproj&path=a%26b.md");
   });
 });

@@ -21,6 +21,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveWatchDirs, shouldSchedule, isReloadableChange, createContentChangeFilter, restartPlan, isListeningMessage } from "./dev-server-config.js";
 import { serverEnvFiles } from "../bin/cli-args.js";
+import { CHILD_EXIT_GRACE_MS, installParentShutdown, stopChildWithin } from "../bin/child-shutdown.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // Which dirs a source change reloads on (server/ + the common/ and bin/ the backend imports),
@@ -146,7 +147,8 @@ function onChange(dir, filename) {
     if (child) {
       log(`change detected (${filename}) — restarting backend`);
       killedForRestart = true;
-      child.kill("SIGTERM");
+      // Asked, so it flushes what it owes the disk first; its exit handler above brings up the next.
+      stopChildWithin(child, CHILD_EXIT_GRACE_MS);
     } else {
       log(`change detected (${filename}) — starting backend`);
       scheduleBringUp(MIN_DELAY_MS);
@@ -162,40 +164,14 @@ for (const dir of WATCH_DIRS) {
   }
 }
 
-// How long to wait for the backend to stop itself over IPC before falling back to a hard kill.
-// Covers server/infra/shutdown.ts's own DRAIN_TIMEOUT_MS with margin for a slow disk.
-const GRACEFUL_STOP_TIMEOUT_MS = 4000;
-
-// `child.kill(sig)` has no real signal to deliver on Windows — libuv maps it straight to
-// TerminateProcess, so the backend's own installShutdownHandlers (server/infra/shutdown.ts) never
-// runs, and a session-log write it had queued (which account a cell just launched on, which
-// custom agent, …) can be abandoned mid-append. IPC is the channel this process already has open
-// to the child (the "listening" handshake rides the same one) and behaves the same on every
-// platform, so it is what asks for a graceful stop; a hard kill is only the fallback.
-function stopChildGracefully(proc) {
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      proc.kill();
-      resolve();
-    }, GRACEFUL_STOP_TIMEOUT_MS);
-    proc.once("exit", () => {
-      clearTimeout(timer);
-      resolve();
-    });
-    if (proc.connected) proc.send({ type: "shutdown" });
-    // No IPC channel at all (a stub entry spawned without one) — nothing else can ask nicely.
-    else proc.kill("SIGTERM");
-  });
-}
-
-// Clean teardown so Ctrl-C / concurrently's kill actually stops the backend.
-for (const sig of ["SIGINT", "SIGTERM"]) {
-  process.on(sig, async () => {
+// Clean teardown so Ctrl-C / concurrently's kill actually stops the backend — by ASKING it and
+// waiting, the way the launcher does: on Windows a signal to the child is TerminateProcess, which
+// ended it before it could flush queued session state (#3234).
+installParentShutdown(() => child, {
+  onStopping: () => {
     shuttingDown = true;
-    if (child) await stopChildGracefully(child);
-    process.exit(0);
-  });
-}
+  },
+});
 
 log("starting backend with crash-restart + reload-on-change");
 bringUp();

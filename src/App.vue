@@ -22,6 +22,7 @@ import ProcessesOverlay from "./components/processes/ProcessesOverlay.vue";
 import UsageOverlay from "./components/usage/UsageOverlay.vue";
 import FilesOverlay from "./components/FilesOverlay.vue";
 import ConfettiOverlay from "./components/ConfettiOverlay.vue";
+import TerminalLinkMenu from "./components/TerminalLinkMenu.vue";
 import HoverTip from "./components/HoverTip.vue";
 import ServerStoppedOverlay from "./components/ServerStoppedOverlay.vue";
 import ServerRestartingOverlay from "./components/ServerRestartingOverlay.vue";
@@ -128,6 +129,8 @@ const { whatsNew, dismiss: dismissWhatsNew } = useWhatsNew(useI18n().locale.valu
   <ServerStoppedOverlay />
   <!-- Fork-only: the same, for a restart — up until the page reloads onto the server that came back. -->
   <ServerRestartingOverlay />
+  <!-- The right-click menu on a path in terminal output (#3238): one for every terminal, wherever it is mounted. -->
+  <TerminalLinkMenu />
   <!-- A celebration over everything (the confetti shortcut, an opted-in event, the Konami code); takes no clicks. -->
   <ConfettiOverlay />
 </template>

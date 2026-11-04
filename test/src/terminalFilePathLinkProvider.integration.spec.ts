@@ -46,7 +46,7 @@ function provideLinks(
   openInPane: (filePath: string, cwd: string, location: FileLocation | undefined, newTab: boolean) => boolean = () => false,
   openOutside: (absPath: string) => void = () => {},
 ): ILink[] | undefined {
-  const provider = createFilePathLinkProvider(term, () => cwd, open, openInFiles, openInPane, openOutside);
+  const provider = createFilePathLinkProvider(term, () => cwd, { openUrl: open, openInFiles, openInPane, openOutside });
   let result: ILink[] | undefined;
   provider.provideLinks(1, (links) => {
     result = links;
@@ -164,6 +164,91 @@ describe("createFilePathLinkProvider against real xterm", () => {
     term.dispose();
   });
 
+  // A right-click asks what the pointer is over (#3238): xterm tells each link when the pointer
+  // enters and leaves it, and the provider passes that on as the path, the cwd and the line.
+  it("reports the link under the pointer, and nothing once it leaves", async () => {
+    const term = new Terminal({ cols: 120, rows: 10, allowProposedApi: true });
+    term.open(document.createElement("div"));
+    await writeLine(term, "see src/a.ts:42 here");
+    const hovered: unknown[] = [];
+    const provider = createFilePathLinkProvider(term, () => "/proj", {
+      openUrl: () => {},
+      openInFiles: () => {},
+      openInPane: () => false,
+      openOutside: () => {},
+      onHover: (link) => hovered.push(link),
+    });
+    let links: ILink[] | undefined;
+    provider.provideLinks(1, (found) => {
+      links = found;
+    });
+    const link = links?.[0];
+    expect(link).toBeDefined();
+    link?.hover?.(new MouseEvent("mousemove"), link.text);
+    link?.leave?.(new MouseEvent("mousemove"), link.text);
+    expect(hovered).toHaveLength(2);
+    expect(hovered[0]).toEqual({ text: "src/a.ts", cwd: "/proj", location: { line: 42, col: null } });
+    expect(hovered[1]).toBeNull();
+  });
+
+  // The hover is cleared by the hovered link's own leave or release, and by the cwd going unknown
+  // (no links, so nothing is under the pointer) — never by another link's release: xterm releases a
+  // line's cached links when the line changes, which may be a link the pointer left long ago.
+  it("clears the hover only for the hovered link, and whenever the cwd becomes unknown", async () => {
+    const term = new Terminal({ cols: 120, rows: 10, allowProposedApi: true });
+    term.open(document.createElement("div"));
+    await writeLine(term, "see docs/a.md and src/a.ts");
+    const hovered: unknown[] = [];
+    let cwd: string | null = "/proj";
+    const provider = createFilePathLinkProvider(term, () => cwd, {
+      openUrl: () => {},
+      openInFiles: () => {},
+      openInPane: () => false,
+      openOutside: () => {},
+      onHover: (link) => hovered.push(link),
+    });
+    const provide = (): ILink[] | undefined => {
+      let links: ILink[] | undefined;
+      provider.provideLinks(1, (found) => {
+        links = found;
+      });
+      return links;
+    };
+    const [doc, source] = provide() ?? [];
+    if (!doc || !source) throw new Error("expected two links");
+    doc.hover?.(new MouseEvent("mousemove"), doc.text);
+    source.leave?.(new MouseEvent("mousemove"), source.text);
+    source.dispose?.();
+    expect(hovered).toEqual([{ text: "docs/a.md", cwd: "/proj", location: undefined }]);
+    doc.dispose?.();
+    expect(hovered).toEqual([{ text: "docs/a.md", cwd: "/proj", location: undefined }, null]);
+    doc.hover?.(new MouseEvent("mousemove"), doc.text);
+    cwd = null;
+    expect(provide()).toBeUndefined();
+    expect(hovered).toHaveLength(4);
+    expect(hovered[3]).toBeNull();
+    term.dispose();
+  });
+
+  // xterm hands activate() the mouseup of ANY button; a right-click is the menu's, and must not
+  // also open the file the way a left click would (found by the real-app check on #3256).
+  it("ignores an activation from a button other than the main one", async () => {
+    const term = new Terminal({ cols: 120, rows: 10, allowProposedApi: true });
+    term.open(document.createElement("div"));
+    await writeLine(term, "see docs/a.md and src/a.ts");
+    const opened: string[] = [];
+    const links = provideLinks(
+      term,
+      "/proj",
+      (url) => opened.push(url),
+      (filePath) => opened.push(`files:${filePath}`),
+    );
+    links?.forEach((link) => link.activate(new MouseEvent("mouseup", { button: 2 }), link.text));
+    expect(opened).toEqual([]);
+    links?.forEach((link) => link.activate(new MouseEvent("click", { button: 0 }), link.text));
+    expect(opened).toHaveLength(2);
+  });
+
   it("provides no links when the session cwd is unknown", async () => {
     const term = new Terminal({ cols: 80, rows: 10, allowProposedApi: true });
     term.open(document.createElement("div"));
@@ -198,23 +283,6 @@ describe("createFilePathLinkProvider against real xterm", () => {
     if (!link) throw new Error("expected a link");
     link.activate(new MouseEvent("click"), link.text);
     expect(openInFiles).toHaveBeenCalledWith("notes.ts", "/Users/me/other", undefined);
-    term.dispose();
-  });
-
-  // A Windows path is linked as printed, backslashes and all, but every opener downstream
-  // compares `/`-separated paths — so the click hands them that shape.
-  it("opens a backslash-separated path with forward slashes", async () => {
-    const term = new Terminal({ cols: 120, rows: 10, allowProposedApi: true });
-    term.open(document.createElement("div"));
-    await writeLine(term, "wrote .claude\\evidence\\test\\test.md");
-    const open = vi.fn();
-    const openInPane = vi.fn(() => false);
-    const [link] = provideLinks(term, "C:\\work\\proj", open, vi.fn(), openInPane) ?? [];
-    if (!link) throw new Error("expected a link");
-    expect(link.text).toBe(".claude\\evidence\\test\\test.md");
-    link.activate(new MouseEvent("click"), link.text);
-    expect(openInPane).toHaveBeenCalledWith(".claude/evidence/test/test.md", "C:\\work\\proj", undefined, false);
-    expect(open).toHaveBeenCalledWith("/api/files/browse/md?cwd=C%3A%5Cwork%5Cproj&path=.claude%2Fevidence%2Ftest%2Ftest.md");
     term.dispose();
   });
 
@@ -269,6 +337,53 @@ describe("createFilePathLinkProvider against real xterm", () => {
     if (!link) throw new Error("expected a link");
     link.activate(new MouseEvent("click"), link.text);
     expect(openOutside).not.toHaveBeenCalled();
+    term.dispose();
+  });
+});
+
+// #3236. Which cell decides whether `\` separates: a Windows cwd does, anything else does not.
+describe("Windows paths against real xterm", () => {
+  const LINE = "edit C:\\w\\app\\src\\a.ts:12 and .claude\\e\\t.md";
+
+  it("links them in a Windows cell over the printed columns, handing the `/` form to the pane", async () => {
+    const term = new Terminal({ cols: 120, rows: 10, allowProposedApi: true });
+    term.open(document.createElement("div"));
+    await writeLine(term, LINE);
+    const openInPane = vi.fn(() => true);
+    const links = provideLinks(term, "C:\\w\\app", vi.fn(), () => {}, openInPane) ?? [];
+    expect(links.map((l) => [l.text, l.range.start.x, l.range.end.x])).toEqual([
+      ["C:/w/app/src/a.ts", 6, 25],
+      [".claude/e/t.md", 31, 44],
+    ]);
+    links.forEach((link) => link.activate(new MouseEvent("click"), link.text));
+    expect(openInPane.mock.calls).toEqual([
+      ["C:/w/app/src/a.ts", "C:\\w\\app", { line: 12, col: null }, false],
+      [".claude/e/t.md", "C:\\w\\app", undefined, false],
+    ]);
+    term.dispose();
+  });
+
+  it("leaves them alone in a macOS or Linux cell", async () => {
+    const term = new Terminal({ cols: 120, rows: 10, allowProposedApi: true });
+    term.open(document.createElement("div"));
+    await writeLine(term, LINE);
+    expect(provideLinks(term, "/Users/me/proj", vi.fn())).toBeUndefined();
+    term.dispose();
+  });
+});
+
+// #3246. A path holding a space, enclosed as an agent's tool line prints it, is one link over the
+// columns it was printed in, and the click hands the pane the whole path.
+describe("a path holding a space against real xterm", () => {
+  it("links it whole and hands the whole path to the pane", async () => {
+    const term = new Terminal({ cols: 120, rows: 10, allowProposedApi: true });
+    term.open(document.createElement("div"));
+    await writeLine(term, "Read(/Users/me/proj/My Docs/a.md)");
+    const openInPane = vi.fn(() => true);
+    const links = provideLinks(term, "/Users/me/proj", vi.fn(), () => {}, openInPane) ?? [];
+    expect(links.map((l) => [l.text, l.range.start.x, l.range.end.x])).toEqual([["/Users/me/proj/My Docs/a.md", 6, 32]]);
+    links.forEach((link) => link.activate(new MouseEvent("click"), link.text));
+    expect(openInPane.mock.calls).toEqual([["/Users/me/proj/My Docs/a.md", "/Users/me/proj", undefined, false]]);
     term.dispose();
   });
 });

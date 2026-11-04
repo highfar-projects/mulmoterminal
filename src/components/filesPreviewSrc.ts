@@ -29,8 +29,8 @@ export function diskVersion(baseVersion: string | null, conflict: { version: str
  *
  *  `embed` is the one the server does read (#2157): it asks for the same rendering with the
  *  scroll reporter in it, under a policy that lets that one script run and still nothing from the
- *  file. Only THIS url carries it — the new tab a clicked `.md` opens builds its own, and keeps
- *  the document that has no script in it at all. */
+ *  file. The new tab a clicked `.md` opens builds its own URL without it, and gets the document
+ *  with the toolbar that switches to the source and copies (#3238); the pane has those already. */
 export function previewQuery(
   cwd: string | null,
   pathRel: string,
@@ -70,11 +70,34 @@ export function previewSrcFor(
   return version ? `${page}?v=${encodeURIComponent(version)}` : page;
 }
 
-/** The table and JSON routes' query: `v` and the theme for `previewQuery`'s reasons, and none of
- *  the Markdown wire's — neither document carries a script to report with. */
+/** The route that renders each kind for a tab of its own — the document with the toolbar that
+ *  switches to the source and copies (#3238). The kinds absent here have no such document: an HTML
+ *  page or an SVG is the file itself in a tab. */
+const TAB_ROUTE_BY_KIND: Partial<Record<FilePreviewKind, string>> = {
+  markdown: "/api/files/browse/md",
+  table: "/api/files/browse/table",
+  json: "/api/files/browse/json",
+};
+
+/** The open file's Preview as a tab of its own, or null when it has none — or when the pane has no
+ *  root: the routes would fall back to the server's default directory for a URL without `cwd`, and
+ *  a tab the pane opens must name the pane's own root. Only `cwd` and `path` ride on it: not `embed`,
+ *  which asks for the toolbar-less document the iframe wants; not `v` or the theme, which exist to
+ *  make the frame refetch; and never the token, which must not leave the frame's own URL. */
+export function previewTabUrl(kind: FilePreviewKind, cwd: string | null, pathRel: string): string | null {
+  const route = TAB_ROUTE_BY_KIND[kind];
+  if (!route || !cwd) return null;
+  return `${route}?${browseQuery(cwd, pathRel)}`;
+}
+
+/** The table and JSON routes' query: `v` and the theme for `previewQuery`'s reasons, and `embed`
+ *  for one of them — it says this is the pane asking, so the document comes without the tab's
+ *  toolbar (#3238). Neither document carries a script to report with, so the wire's token stays
+ *  off these. */
 function renderedQuery(cwd: string | null, pathRel: string, version: string | null, theme: PreviewTheme | null): string {
   const params = new URLSearchParams(browseQuery(cwd, pathRel));
   if (version) params.set("v", version);
+  params.set(MD_PREVIEW_EMBED_PARAM, MD_PREVIEW_EMBED_ON);
   if (theme) Object.entries(theme).forEach(([param, colour]) => params.set(param, colour));
   return params.toString();
 }

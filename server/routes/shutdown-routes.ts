@@ -18,7 +18,7 @@
 // covers every state-changing method, which is the whole point of it being central — a route added
 // today is covered by default rather than by memory.
 import type { Express } from "express";
-import { restartAndExit } from "../infra/process/shutdown.js";
+import { requestShutdown, restartAndExit } from "../infra/process/shutdown.js";
 import { relaunchesOnRestart } from "../../bin/server-supervision.js";
 
 // Zero would race the response: the socket can close before the browser has read it, and the user
@@ -36,13 +36,13 @@ export interface ShutdownRouteDeps {
   delayMs: number;
 }
 
-// SIGTERM to ourselves rather than a second shutdown implementation: infra/process/shutdown.ts already
-// handles it — it stops the whisper sidecar and exits 0 — so the button provably does what Ctrl+C
-// does. Duplicating any of that here is how the two copies start to disagree.
+// The same function the signal handlers call, so the button provably does what Ctrl+C does. Not a
+// SIGTERM to ourselves: on Windows that is TerminateProcess even for our own pid, so the drain
+// never ran (#3234).
 const defaultDeps: ShutdownRouteDeps = {
-  stop: () => process.kill(process.pid, "SIGTERM"),
-  // Not a signal: SIGTERM's handler exits 0, which is what tells the launcher "stop". A restart has
-  // to leave with its own code, so it calls the same sequence directly.
+  stop: requestShutdown,
+  // Fork-only: a restart has to leave with its own code (RESTART_EXIT_CODE), so the launcher brings
+  // the server back rather than stopping with it.
   restart: () => void restartAndExit(),
   relaunches: relaunchesOnRestart(process.env),
   delayMs: SHUTDOWN_RESPONSE_GRACE_MS,
@@ -53,7 +53,7 @@ const defaultDeps: ShutdownRouteDeps = {
  *  a failure. */
 export function mountShutdownRoute(app: Express, deps: ShutdownRouteDeps = defaultDeps): void {
   app.post("/api/shutdown", (_req, res) => {
-    console.log("[shutdown] stop requested from the browser");
+    console.log("[shutdown] stop requested (the Stop button or `mulmoterminal stop`)");
     res.json({ stopping: true });
     // unref so a pending stop is not itself the reason the process stays alive.
     setTimeout(deps.stop, deps.delayMs).unref();

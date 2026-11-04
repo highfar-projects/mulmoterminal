@@ -4,14 +4,9 @@
 // signal listener suppresses Node's default termination — so the sidecar has to be killed and the
 // exit made explicit. `exit` covers the normal-return path, where no signal is involved.
 //
-// It lives here rather than at the foot of index.ts because it has more than one caller:
+// It lives here rather than at the foot of index.ts because it is about to have a second caller:
 // stopping MulmoTerminal from the browser (#1820) has to run THIS path and not a second one that
-// drifts from it — the guarantee a user is owed is that the button does what Ctrl+C does. So does
-// a supervisor that spawned this process (scripts/dev-server.mjs, bin/mulmoterminal.js) and wants
-// to stop it gracefully over the IPC channel it already has: `child.kill()` has no real SIGTERM to
-// deliver on Windows — libuv maps it straight to TerminateProcess — so a cross-process signal
-// never reaches the handlers below there, and IPC is the one channel that behaves the same on
-// every platform.
+// drifts from it — the guarantee a user is owed is that the button does what Ctrl+C does.
 //
 // The exit is ASYNC now, and that is the fix for #2161: the session registry's appends are
 // fire-and-forget, `process.exit()` runs no pending microtask, and a burst queued just before
@@ -19,46 +14,41 @@
 // wait is capped, because a disk that has stopped answering must not turn Ctrl+C into a hang.
 //
 // `exit` cannot wait — the event loop is already over by then — so it stays synchronous and
-// drains nothing. That is why the signal path is the one that matters: it is the path Ctrl+C and
-// the browser's stop button both take.
+// drains nothing. That is why `requestShutdown` is the one that matters: Ctrl+C, the browser's stop
+// button and a parent's message all reach it — never a signal sent from one process to another,
+// which on Windows ends the target without running any of this (#3234).
 import { stopWhisperSidecar } from "../../backends/media/whisper.js";
 import { drainPersistQueues } from "../../session/reaping/persist-drain.js";
-import { isRecord } from "../../../common/isRecord.js";
+import { isShutdownMessage } from "../../../bin/child-shutdown.js";
 import { tmuxIsPsmux } from "./tmux.js";
 import { traceTmux } from "../tmux-trace.js";
 import { RESTART_EXIT_CODE } from "./server-exit.js";
 
 const SIGNALS = ["SIGINT", "SIGTERM"] as const;
 
-// What a supervisor sends over the IPC channel `stdio: […, "ipc"]` already opens, when it wants
-// this exact sequence but cannot reach it any other way. Kept to one field, the same shape
-// announce-listening.ts's own message going the other direction uses `type` for.
-const isShutdownMessage = (message: unknown): boolean => isRecord(message) && message.type === "shutdown";
+/** Where a parent's request to stop arrives: the IPC channel, which is `process` itself. */
+export interface ShutdownChannel {
+  on(event: "message", listener: (message: unknown) => void): unknown;
+}
 
-export function installShutdownHandlers(): void {
-  // Installing handlers marks the start of a process lifecycle, so the once-only latch starts
+export function installShutdownHandlers(channel: ShutdownChannel = process): void {
+  // Installing handlers marks the start of a process lifecycle, so the once-only latches start
   // fresh with it. Production calls this once; a spec calls it per test, and without this the
   // first test to stop the sidecar would leave every later one looking at an already-stopped one.
   sidecarStopped = false;
+  stopping = false;
   process.once("exit", stopSidecarOnce);
+  // A parent asks over the channel because on Windows its signal would be TerminateProcess (#3234).
+  channel.on("message", (message) => {
+    if (isShutdownMessage(message)) requestShutdown();
+  });
   for (const signal of SIGNALS) {
     // `once`, not `on`, and that now carries a second guarantee worth stating: after the handler
     // fires the listener is gone, so Node's default action is restored and a SECOND Ctrl+C during
     // the drain terminates immediately (measured: exit 130). Switching this to `on` would make the
     // server unkillable for the length of the cap.
-    //
-    // Voided rather than returned: a promise handed to a void-returning callback is what
-    // `no-misused-promises` is about, and the rule is right — a rejection there would be
-    // unhandled. `stopAndExit` cannot reject, and a spec observes it by flushing instead.
-    process.once(signal, () => {
-      void stopAndExit();
-    });
+    process.once(signal, requestShutdown);
   }
-  // Not `once`: a supervisor's IPC channel can carry more than this one message shape, and only
-  // the first thing to arrive on it would earn a listener under `once`.
-  process.on("message", (message: unknown) => {
-    if (isShutdownMessage(message)) void stopAndExit();
-  });
 }
 
 /** Kill the sidecar first: it is synchronous, and it must not outlive us whether or not the drain
@@ -84,6 +74,18 @@ function stopSidecarOnce(): void {
   }
 }
 
+/** Run the shutdown, once — whoever asks: a signal, the browser's stop button, or a parent's message.
+ *
+ *  ONCE, because one Ctrl+C on POSIX arrives twice: the terminal signals the whole process group
+ *  and the launcher also sends its message. A later request while the drain runs changes nothing;
+ *  a second Ctrl+C still ends it at once, since the signal listener was `once`. */
+let stopping = false;
+export function requestShutdown(): void {
+  if (stopping) return;
+  stopping = true;
+  void stopAndExit();
+}
+
 async function stopAndExit(code = 0): Promise<void> {
   traceTmux(tmuxIsPsmux(), "server-shutdown", { code });
   stopSidecarOnce();
@@ -94,7 +96,10 @@ async function stopAndExit(code = 0): Promise<void> {
 
 /** Fork-only: the stop sequence above, leaving with RESTART_EXIT_CODE so the launcher brings the
  *  server back instead of stopping with it (POST /api/restart). The same path as a stop, so a
- *  restart drains and cleans up exactly what Ctrl+C does. */
+ *  restart drains and cleans up exactly what Ctrl+C does — and it takes the same once-only latch,
+ *  so a stop already under way is not turned into a restart. */
 export function restartAndExit(): Promise<void> {
+  if (stopping) return Promise.resolve();
+  stopping = true;
   return stopAndExit(RESTART_EXIT_CODE);
 }

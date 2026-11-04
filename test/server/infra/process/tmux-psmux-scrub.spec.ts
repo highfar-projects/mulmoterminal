@@ -1,8 +1,7 @@
 // @vitest-environment node
 //
 // A psmux server outlives this process, so one started before Volta's marker was kept off its client
-// still hands it to every new pane. The startup scrub has to take it from there too — and, in the
-// fork, from a real tmux as well (upstream #3233).
+// still hands it to every new pane. The startup scrub takes it from there, on the shared rule.
 // tmux itself is replaced by a recorder.
 import { describe, it, expect, vi, afterAll, beforeEach } from "vitest";
 import { readFileSync, rmSync } from "node:fs";
@@ -60,8 +59,8 @@ describe("the startup scrub of a running server", () => {
     expect(removed()).toContain("_VOLTA_TOOL_RECURSION");
   });
 
-  // Fork-only (upstream #3233): upstream leaves it on a real tmux, where it still breaks a `yarn` shim.
-  it("takes it from a running real tmux too", async () => {
+  // Not only psmux: a real tmux server keeps the client's environment for life too (#3233).
+  it("takes it from a running real tmux as well", async () => {
     await startWith("tmux 3.8\n");
     expect(removed()).toContain("_VOLTA_TOOL_RECURSION");
   });

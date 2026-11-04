@@ -403,11 +403,14 @@ describe("isScrubbedGlobalEnvEntry", () => {
     expect(isScrubbedGlobalEnvEntry("PORT", "34567", BOUND)).toBe(false);
   });
 
-  // A psmux server started before Volta's marker was kept off its client still carries it.
-  // Fork-only: the marker is launcher context here (#3233), so a name of no list of ours stands in.
-  it("takes the extra names it is given, and only those", () => {
-    expect(isScrubbedGlobalEnvEntry("MT_EXTRA_NAME", "1", BOUND, ["MT_EXTRA_NAME"])).toBe(true);
-    expect(isScrubbedGlobalEnvEntry("MT_EXTRA_NAME", "1", BOUND)).toBe(false);
+  // A real tmux server inherits the client's environment, so a marker that reached it once stays in
+  // `show-environment -g` for every pane unless the scrub takes it (#3233).
+  it("takes Volta's recursion marker from a real tmux server too", () => {
+    expect(isScrubbedGlobalEnvEntry("_VOLTA_TOOL_RECURSION", "1", BOUND)).toBe(true);
+  });
+
+  it("leaves a name it has no rule for", () => {
+    expect(isScrubbedGlobalEnvEntry("SOME_OTHER", "1", BOUND)).toBe(false);
   });
 });
 
