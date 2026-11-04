@@ -32,6 +32,14 @@ describe("findFilePathLinks", () => {
     expect(texts("生成しました dir/f.png。")).toEqual(["dir/f.png"]);
   });
 
+  it("terminates a path at a full-width colon, with or without a space after it", () => {
+    expect(texts("できたこと：src/a.md の該当行")).toEqual(["src/a.md"]);
+    const windows = (line: string) => findFilePathLinks(line, { windowsPaths: true }).map((l) => l.text);
+    expect(windows("できたこと：D:\\x\\a.md の該当行")).toEqual(["D:/x/a.md"]);
+    expect(windows("できたこと： D:\\x\\a.md の該当行")).toEqual(["D:/x/a.md"]);
+    expect(texts("確認：dir/a.ts、dir/b.ts！dir/c.ts？")).toEqual(["dir/a.ts", "dir/b.ts", "dir/c.ts"]);
+  });
+
   it("trims a clinging sentence period", () => {
     const [link] = findFilePathLinks("open dir/report.pdf.");
     expect(link.text).toBe("dir/report.pdf");
