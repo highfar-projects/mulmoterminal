@@ -4,6 +4,7 @@ import { blueprintsJa } from "./blueprints/ja";
 import { tipsJa } from "./tips/ja";
 import { commandPaletteJa } from "./commandPalette/ja";
 import { terminalCopyModeJa } from "./terminalCopyMode/ja";
+import { rowMenuJa } from "./rowMenu/ja";
 import { focusModeJa } from "./focusMode/ja";
 import { fileHistoryJa } from "./fileHistory/ja";
 import { filesRecentJa } from "./filesRecent/ja";
@@ -435,6 +436,7 @@ export const ja: Messages = {
       waiting: "あなたを待っている",
       finished: "終わっただけの",
       blink: "待っている行を点滅させる",
+      compact: "コンパクト表示（見出しとセッション名だけ）",
       linesTitle: "1 行あたりの行数",
       linesHint: "各行をどこまで表示してから打ち切るか。増やすほど 1 つを読みやすくなり、画面に収まるセッション数は減ります。",
       fields: {
@@ -611,20 +613,7 @@ export const ja: Messages = {
     },
   },
   usageView: usageViewJa,
-  rowMenu: {
-    trigger: "このセルの操作",
-    title: "操作",
-    markUnread: "未読にする",
-    markUnreadHint: "確認待ちの色を付け直す",
-    markRead: "既読にする",
-    moveUp: "上へ移動",
-    moveDown: "下へ移動",
-    moveLeft: "左へ移動",
-    moveRight: "右へ移動",
-    setAside: "脇に置く",
-    wake: "起こす",
-    close: "閉じる",
-  },
+  rowMenu: rowMenuJa,
   fileOutline: {
     button: "見出し",
     tip: "このファイルの見出し（選ぶとそこへ移動）",

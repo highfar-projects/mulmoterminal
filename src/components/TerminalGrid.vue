@@ -10,11 +10,13 @@ import CockpitHeader from "./CockpitHeader.vue";
 import * as conn from "../composables/useTerminalConnections";
 import { trackStyle, layoutForCount, stackGrid } from "./gridLayout";
 import { cockpitLines } from "../composables/cockpitLines";
+import { cockpitCompact } from "../composables/cockpitCompact";
 import { dragSplitter } from "../composables/dragSplitter";
 import { flipKeyframes, flipPairs, onScreen, FLIP_MS, FLIP_EASING } from "./cellFlip";
 import { canDropCellBefore, canMoveCell, reorderBefore, type Cell, type GridArrangement } from "./gridTabs";
 import { dropBeforeUid, dropSlot, pointerInside, type RowBox } from "./rosterDrag";
-import type { AttentionStatus } from "./attentionStatus";
+import { ROSTER_STATUS_KEY, type AttentionStatus } from "./attentionStatus";
+import { STATUS_DOT_CLASS } from "./statusDot";
 import { cellPlacement, teleportKey, type CellPlacement } from "./cellTeleport";
 import { collectionTerminalClaim } from "../composables/collectionTerminalClaim";
 import type { RunCommand } from "./runCommand";
@@ -108,6 +110,7 @@ export interface CockpitRow {
   prompt: string | null; // current user prompt
   response: string | null; // tail of the agent's latest reply
   fallback: string | null; // label when there's no prompt/summary yet (launcher/command name)
+  title: string; // the one line a compact row keeps (#3270): the session's name, in the cell header's tiers
   phase: PrPhase; // the branch's PR workflow phase (`none` until a PR exists)
   workPhase: WorkPhase | null; // planning vs editing while working; null when unknown / not working
   collection: SessionCollection | null; // the collection this chat was started from (#2020), or null
@@ -1442,6 +1445,19 @@ const STRIP_HEIGHT_KEY = "strip_height";
 const ROSTER_WIDTH_DEFAULT = 360;
 const STRIP_HEIGHT_DEFAULT = 150;
 const rosterWidth = ref(Number(stored(ROSTER_WIDTH_KEY)) || ROSTER_WIDTH_DEFAULT);
+// The roster folded to a rail of status dots (#3271), remembered per browser like its width: it is
+// about how much of THIS screen the terminal gets. The width is kept while folded, for unfolding.
+const ROSTER_COLLAPSED_KEY = "roster_collapsed";
+const RAIL_WIDTH_PX = 40;
+const rosterCollapsed = ref(stored(ROSTER_COLLAPSED_KEY) === "1");
+// The menu that asked was in the branch this swaps out, so the focus would fall to <body>; it goes
+// to the same session on the other side instead — its rail dot, or its row.
+function setRosterCollapsed(collapsed: boolean, uid: number | null): void {
+  rosterCollapsed.value = collapsed;
+  remember(ROSTER_COLLAPSED_KEY, collapsed ? "1" : "0");
+  void nextTick(() => rosterRoot.value?.querySelector<HTMLElement>(`[data-uid="${uid}"]`)?.focus({ preventScroll: true }));
+}
+const shownRosterWidth = (): number => (rosterCollapsed.value ? RAIL_WIDTH_PX : rosterWidth.value);
 const stripHeight = ref(Number(stored(STRIP_HEIGHT_KEY)) || STRIP_HEIGHT_DEFAULT);
 // Each stage splitter divides what is left after its own separator (see SEPARATOR_PX).
 const stageWidth = () => Math.max(0, (stage.value?.clientWidth ?? 0) - SEPARATOR_PX);
@@ -1477,7 +1493,7 @@ function setRosterWidth(width: number): void {
   // for the reason setPaneWidth's parameter exists.
   // Skipped while the canvas is full-width: it is not sharing the row with a terminal, so its
   // remembered split width has nothing to be re-clamped against and must survive the drag intact.
-  if (rightPane.value && !paneFull.value) setPaneWidth(paneWidth.value, available - rosterWidth.value - PANE_CHROME_PX);
+  if (rightPane.value && !paneFull.value) setPaneWidth(paneWidth.value, available - shownRosterWidth() - PANE_CHROME_PX);
 }
 
 // Both floors change under a full-width transition, so both geometries are re-clamped after it.
@@ -1557,7 +1573,7 @@ const reclampStage = () => {
 };
 onMounted(() => window.addEventListener("resize", reclampStage));
 onBeforeUnmount(() => window.removeEventListener("resize", reclampStage));
-watch([zoomed, () => props.listMode, rightPane], async () => {
+watch([zoomed, () => props.listMode, rightPane, rosterCollapsed], async () => {
   await nextTick();
   reclampStage();
 });
@@ -1839,7 +1855,7 @@ function onRosterDragLeave(event: DragEvent) {
       ref="roster"
       data-testid="cockpit"
       class="relative flex min-w-0 shrink-0 grow-0 flex-col gap-[9px] overflow-y-auto bg-deep py-1.5 pr-0 pl-1.5"
-      :style="{ flexBasis: `${rosterWidth}px`, '--roster-move-ms': `${ROSTER_MOVE_MS}ms` }"
+      :style="{ flexBasis: `${shownRosterWidth()}px`, '--roster-move-ms': `${ROSTER_MOVE_MS}ms` }"
       @dragover="onRosterDragOver"
       @drop="onRosterDrop"
       @dragleave="onRosterDragLeave"
@@ -1850,7 +1866,59 @@ function onRosterDragLeave(event: DragEvent) {
            The duration rides in on a CSS variable because Tailwind generates utilities from the
            literal text it finds, so `duration-[${ms}]` built at runtime would produce no rule —
            the same reason the zoom's FLIP passes `--flip-ms` (cellFlip.ts). -->
-      <TransitionGroup :move-class="dragUid !== null ? ROSTER_MOVE_CLASS : ROSTER_STILL_CLASS">
+      <!-- Folded (#3271): one dot per session, the same order and the same alert rings as the rows.
+           Hover names it, a click enlarges it, a right-click opens its row menu — which is also
+           where "expand" is, along with the one ⋮ at the top that belongs to no row. -->
+      <template v-if="rosterCollapsed">
+        <div class="mr-1.5 flex justify-center">
+          <CockpitRowMenu
+            :can-up="false"
+            :can-down="false"
+            :reorderable="false"
+            :attention="null"
+            :parkable="false"
+            :parked="false"
+            roster="collapsed"
+            roster-only
+            @roster="(collapsed) => setRosterCollapsed(collapsed, expandedUid)"
+          />
+        </div>
+        <div
+          v-for="row in rosterRows"
+          :key="row.uid"
+          :data-uid="row.uid"
+          role="button"
+          :tabindex="0"
+          data-testid="cockpit-rail-item"
+          class="grid h-7 shrink-0 cursor-pointer place-items-center rounded-lg border"
+          :class="rosterAlertClass(row.status, { expanded: row.uid === expandedUid, blink: rosterBlink, parked: row.parked })"
+          :data-tip="row.title"
+          :aria-label="t('rowMenu.railItem', { title: row.title, status: t(ROSTER_STATUS_KEY[row.status]) })"
+          @click="row.uid !== expandedUid && emit('toggle-expand', row.uid)"
+          @keydown.enter.self.prevent="row.uid !== expandedUid && emit('toggle-expand', row.uid)"
+          @keydown.space.self.prevent="row.uid !== expandedUid && emit('toggle-expand', row.uid)"
+          @contextmenu.prevent="rowMenuAt = { uid: row.uid, point: { top: $event.clientY, left: $event.clientX } }"
+        >
+          <span class="h-2.5 w-2.5 rounded-full" :class="STATUS_DOT_CLASS[row.status]" aria-hidden="true" />
+          <CockpitRowMenu
+            hide-trigger
+            :can-up="canMoveCell(cells, row.uid, -1)"
+            :can-down="canMoveCell(cells, row.uid, 1)"
+            :reorderable="false"
+            :attention="attentionAction(row.status, row.markable && slotConnected(row.uid))"
+            :parkable="row.parkable"
+            :parked="row.parked"
+            :at="rowMenuAt?.uid === row.uid ? rowMenuAt.point : null"
+            roster="collapsed"
+            @roster="(collapsed) => setRosterCollapsed(collapsed, row.uid)"
+            @attention="(waiting) => markAttention(row.uid, waiting)"
+            @park="(on) => emit('park', row.uid, on)"
+            @close="closeRow(row.uid)"
+            @dismissed="rowMenuAt = null"
+          />
+        </div>
+      </template>
+      <TransitionGroup v-else :move-class="dragUid !== null ? ROSTER_MOVE_CLASS : ROSTER_STILL_CLASS">
         <div
           v-for="row in rosterRows"
           :key="row.uid"
@@ -1898,6 +1966,8 @@ function onRosterDragLeave(event: DragEvent) {
               :parkable="row.parkable"
               :parked="row.parked"
               :at="rowMenuAt?.uid === row.uid ? rowMenuAt.point : null"
+              roster="open"
+              @roster="(collapsed) => setRosterCollapsed(collapsed, row.uid)"
               @move="(dir) => emit('move', row.uid, dir)"
               @attention="(waiting) => markAttention(row.uid, waiting)"
               @park="(on) => emit('park', row.uid, on)"
@@ -1905,48 +1975,51 @@ function onRosterDragLeave(event: DragEvent) {
               @dismissed="rowMenuAt = null"
             />
           </CockpitHeader>
-          <!-- The user's own note, above every line below it: those are what the AGENT said, and the
+          <span v-if="cockpitCompact" data-testid="cockpit-title" class="truncate text-[12px] leading-[1.35]" :data-tip="row.title">{{ row.title }}</span>
+          <template v-else>
+            <!-- The user's own note, above every line below it: those are what the AGENT said, and the
              memo is the user saying what the cell is FOR (#1084) — the same precedence the cell
              header, the sidebar row and the phone's roster already share via sessionDisplayName.
              Unclamped, alone among these lines, because it needs no guard: normalizeMemo caps a
              memo at one line of 200 code points, where the three below are agent text of no
              bounded length, which is what `cockpitLines` exists for. -->
-          <span v-if="row.memo" data-testid="cockpit-memo" class="text-[12px] leading-[1.35]"
-            ><b class="mr-1 text-[10px] font-bold text-[#7a8aa0]">memo</b> {{ row.memo }}</span
-          >
-          <!-- The clamp is a runtime value, so the utility reads a CSS variable each line sets for
+            <span v-if="row.memo" data-testid="cockpit-memo" class="text-[12px] leading-[1.35]"
+              ><b class="mr-1 text-[10px] font-bold text-[#7a8aa0]">memo</b> {{ row.memo }}</span
+            >
+            <!-- The clamp is a runtime value, so the utility reads a CSS variable each line sets for
              itself — `line-clamp-N` only exists for the literals Tailwind found in the source.
              `title` carries the rest, so a low clamp hides nothing you can't get at. -->
-          <span
-            v-if="row.summary"
-            data-testid="cockpit-line"
-            class="line-clamp-[var(--cockpit-lines)] overflow-hidden text-[12px] leading-[1.35]"
-            :style="{ '--cockpit-lines': cockpitLines.summary }"
-            :data-tip="row.summary"
-            ><b class="mr-1 text-[10px] font-bold text-[#7a8aa0]">summary</b> {{ row.summary }}</span
-          >
-          <span
-            data-testid="cockpit-line"
-            class="line-clamp-[var(--cockpit-lines)] overflow-hidden text-[12px] leading-[1.35]"
-            :style="{ '--cockpit-lines': cockpitLines.prompt }"
-            :data-tip="row.prompt || row.fallback || undefined"
-            ><b class="mr-1 text-[10px] font-bold text-[#7a8aa0]">prompt</b> {{ row.prompt || row.fallback || "—" }}</span
-          >
-          <span
-            v-if="row.response"
-            data-testid="cockpit-line"
-            class="line-clamp-[var(--cockpit-lines)] overflow-hidden text-[12px] leading-[1.35] text-dim"
-            :style="{ '--cockpit-lines': cockpitLines.response }"
-            :data-tip="row.response"
-            ><b class="mr-1 text-[10px] font-bold text-[#7a8aa0]">reply</b> {{ row.response }}</span
-          >
+            <span
+              v-if="row.summary"
+              data-testid="cockpit-line"
+              class="line-clamp-[var(--cockpit-lines)] overflow-hidden text-[12px] leading-[1.35]"
+              :style="{ '--cockpit-lines': cockpitLines.summary }"
+              :data-tip="row.summary"
+              ><b class="mr-1 text-[10px] font-bold text-[#7a8aa0]">summary</b> {{ row.summary }}</span
+            >
+            <span
+              data-testid="cockpit-line"
+              class="line-clamp-[var(--cockpit-lines)] overflow-hidden text-[12px] leading-[1.35]"
+              :style="{ '--cockpit-lines': cockpitLines.prompt }"
+              :data-tip="row.prompt || row.fallback || undefined"
+              ><b class="mr-1 text-[10px] font-bold text-[#7a8aa0]">prompt</b> {{ row.prompt || row.fallback || "—" }}</span
+            >
+            <span
+              v-if="row.response"
+              data-testid="cockpit-line"
+              class="line-clamp-[var(--cockpit-lines)] overflow-hidden text-[12px] leading-[1.35] text-dim"
+              :style="{ '--cockpit-lines': cockpitLines.response }"
+              :data-tip="row.response"
+              ><b class="mr-1 text-[10px] font-bold text-[#7a8aa0]">reply</b> {{ row.response }}</span
+            >
+          </template>
         </div>
       </TransitionGroup>
     </aside>
     <!-- Roster | enlarged cell. Same separator as the file pane's, mirrored: the roster is BEFORE
          it, so the pointer and the arrow keys both move it the other way (#1077). -->
     <div
-      v-if="zoomed && listMode"
+      v-if="zoomed && listMode && !rosterCollapsed"
       data-testid="roster-splitter"
       class="w-[5px] flex-none cursor-col-resize bg-border hover:bg-accent focus-visible:bg-accent"
       role="separator"

@@ -4,6 +4,7 @@ import { blueprintsKo } from "./blueprints/ko";
 import { tipsKo } from "./tips/ko";
 import { commandPaletteKo } from "./commandPalette/ko";
 import { terminalCopyModeKo } from "./terminalCopyMode/ko";
+import { rowMenuKo } from "./rowMenu/ko";
 import { focusModeKo } from "./focusMode/ko";
 import { fileHistoryKo } from "./fileHistory/ko";
 import { filesRecentKo } from "./filesRecent/ko";
@@ -432,6 +433,7 @@ export const ko: Messages = {
       waiting: "당신을 기다리는",
       finished: "끝나기만 한",
       blink: "나를 기다리는 행을 깜박이게 하기",
+      compact: "간단히 표시 (머리줄과 세션 이름만)",
       linesTitle: "행당 줄 수",
       linesHint: "각 행을 어디까지 보여 주고 자를지. 올릴수록 화면에 들어가는 세션 수를 내주고, 긴 것 하나를 그 자리에서 읽게 됩니다.",
       fields: {
@@ -608,20 +610,7 @@ export const ko: Messages = {
     },
   },
   usageView: usageViewKo,
-  rowMenu: {
-    trigger: "이 터미널 작업",
-    title: "작업",
-    markUnread: "읽지 않음으로 표시",
-    markUnreadHint: "확인 대기 색을 다시 표시합니다",
-    markRead: "읽음으로 표시",
-    moveUp: "위로 이동",
-    moveDown: "아래로 이동",
-    moveLeft: "왼쪽으로 이동",
-    moveRight: "오른쪽으로 이동",
-    setAside: "옆으로 치우기",
-    wake: "깨우기",
-    close: "닫기",
-  },
+  rowMenu: rowMenuKo,
   fileOutline: {
     button: "개요",
     tip: "이 파일의 제목(선택하면 그곳으로 이동)",

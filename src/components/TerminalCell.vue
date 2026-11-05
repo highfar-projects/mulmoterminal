@@ -1249,15 +1249,20 @@ async function close() {
 // the close was asked for.
 defineExpose({ close });
 
-// An agent that ended on its own (`/exit`, Ctrl+C, a crash) takes its cell with it (#3049), through
-// the same teardown as the close button so the cell lands in the reopen list.
+// An agent that ended on its own (`/exit`, Ctrl+C) takes its cell with it (#3049), through the same
+// teardown as the close button so the cell lands in the reopen list. A crash stays (#3272).
 //
 // DIVERGES FROM UPSTREAM (fork-only): not when the session ended because a devcontainer rebuild or
 // stop removed its container (devcontainerExitHold.ts) — that ending was asked for from a cell, and
 // the cell is kept and resumed in place once the operation succeeded.
-function onTerminalExit(_exitCode: number | null, session: SessionExit) {
+function onTerminalExit(exitCode: number | null, session: SessionExit) {
+  // A kept cell has no agent either, so an exchange or table it started must stop typing into the others.
+  if (session.sessionEnded) {
+    exchangeStop = true;
+    tableStop = true;
+  }
   if (session.sessionEnded && holdForDevcontainerOp()) return;
-  if (shouldCloseEndedCell({ ...session, worktreeCell: isWorktreeCell.value })) teardown();
+  if (shouldCloseEndedCell({ ...session, exitCode, worktreeCell: isWorktreeCell.value })) teardown();
 }
 
 // The session id this cell is waiting to resume once its directory's devcontainer operation
