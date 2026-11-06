@@ -8,9 +8,9 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **12.0.1 is out.** A file path printed right after a full-width colon (`できたこと：src/a.md`) is
-> linked on its own. [Setup guide](v12.0.1.html) — and 12.0.0 opened a clicked path in the Files pane
-> beside its cell: [12.0.0 setup guide](v12.0.0.html)
+> **12.1.1 is out.** A Codex cell keeps showing when it is working and announcing finished turns,
+> even after a long wait for its first prompt or a server restart. [Setup guide](v12.1.1.html) —
+> and 12.1.0 added compact roster rows and a roster you can fold: [12.1.0 setup guide](v12.1.0.html)
 
 ## What is MulmoTerminal? {#what-is}
 

@@ -50,7 +50,7 @@ import type { RunCommand } from "../components/runCommand";
 import { readableSlot, type SlotCandidate, type SlotInfo } from "./readableSlot";
 import { makeEnterHandler, makeSendHandler } from "./terminalKeyHandlers";
 import { exitCodeOf, messageEffect, parseServerFrame, sessionExitOf, type SessionExit } from "./serverMessage";
-import { applyViewFrame, type ConnViewState } from "./connViewFrames";
+import { applySessionExit, applySessionOutput, applyViewFrame, type ConnViewState } from "./connViewFrames";
 import { enterSubmits, submitSequence, submittableLine, DEFAULT_TERMINAL_SUBMIT_MODE, type TerminalSubmitMode } from "../../common/terminalSubmit";
 import { TERMINAL_FONT_SIZE_DEFAULT } from "../../common/terminalFontSize";
 import { NARROW_AMBIGUOUS_FAMILY, TERMINAL_FONT_FAMILY_DEFAULT } from "../../common/terminalFontFamily";
@@ -479,7 +479,7 @@ function ensure(key: string, target: ConnTarget, font: TerminalFont): Conn {
     onScreenObserver: null,
   };
   conns.set(key, c);
-  connView.set(key, { status: "connecting", serverCwd: target.cwd, inCopyMode: false, heatLevel: 0, heatFinales: 0 });
+  connView.set(key, { status: "connecting", serverCwd: target.cwd, inCopyMode: false, heatLevel: 0, heatFinales: 0, sessionEnded: false });
   wireTerminalToConn(term, c);
   watchOnScreen(c);
   return c;
@@ -622,6 +622,7 @@ function applyTerminalFrame(c: Conn, msg: Record<string, unknown>): void {
   c.sawExit = true;
   if (effect.banner) c.term.write(effect.banner);
   setStatus(c, "disconnected");
+  if (effect.callsOnExit) applySessionExit(connView.get(c.key), msg);
   if (effect.callsOnExit) c.handlers.onExit?.(exitCodeOf(msg), sessionExitOf(msg));
 }
 
@@ -632,6 +633,7 @@ function handleMessage(c: Conn, event: MessageEvent) {
     // Checked here as well as on fit() because a slot that is only receiving output would
     // otherwise sit frozen until something happened to resize it (#846).
     guardBufferHealth(c);
+    applySessionOutput(connView.get(c.key));
     if (typeof msg.data === "string") c.term.write(msg.data);
   } else if (msg.type === "session") {
     applySessionFrame(c, msg);
