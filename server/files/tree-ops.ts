@@ -96,7 +96,10 @@ const TRASH_NAME_BYTES = MAX_NAME_BYTES - ".trashinfo".length;
 /** `stem` cut, by whole characters, so `stem + suffix` fits in `maxBytes`. */
 function fitted(stem: string, suffix: string, maxBytes: number): string {
   const chars = [...stem];
-  while (chars.length > 1 && Buffer.byteLength(chars.join("") + suffix, "utf8") > maxBytes) chars.pop();
+  // One pass: the bytes of the whole stem are counted once, then each dropped character is
+  // subtracted, instead of re-joining and re-measuring the string after every drop.
+  let bytes = Buffer.byteLength(stem + suffix, "utf8");
+  while (chars.length > 1 && bytes > maxBytes) bytes -= Buffer.byteLength(chars.pop() ?? "", "utf8");
   return chars.join("") + suffix;
 }
 
