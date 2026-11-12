@@ -7,7 +7,7 @@
 // real, possibly slow decision the user makes once per worktree (the launcher confirms before
 // doing it), not something every spawn should silently redo.
 import { existsSync, writeFileSync } from "node:fs";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";
 import { DIR_LOCAL_CONFIG_FILE } from "./dir/dir-config.js";
 import { readJsonFile } from "../infra/fs/read-text-file.js";
@@ -171,6 +171,19 @@ export function markDevcontainerDisabled(dir: string): void {
 // not an `up`, and should answer in well under a second or not at all.
 const DEVCONTAINER_NAME_LOOKUP_TIMEOUT_MS = 5_000;
 
+const psArgs = (dir: string): string[] => ["ps", "--filter", `label=devcontainer.local_folder=${path.resolve(dir)}`, "--format", "{{.Names}}"];
+
+/** Synchronous twin of runningDevcontainerName, for the one caller that cannot await: the spawn
+ *  decides host-or-container before it starts anything (spawn-claude.ts's resolveSessionBackend).
+ *  The devcontainer flag means "use it when it is up", not "require it" — a container costs real
+ *  disk, so a directory marked for one must still open on the host once the container is gone.
+ *  Any failure (no docker, daemon down, timeout) reads as "not running". */
+export function isDevcontainerRunning(dir: string): boolean {
+  // eslint-disable-next-line sonarjs/no-os-command-from-path -- 'docker' is a standard tool from PATH, same convention as runningDevcontainerName
+  const result = spawnSync("docker", psArgs(dir), { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: DEVCONTAINER_NAME_LOOKUP_TIMEOUT_MS });
+  return result.status === 0 && result.stdout.trim().split("\n").filter(Boolean).length === 1;
+}
+
 /** The Docker name of `dir`'s running devcontainer (`angry_rubin`, not the image or id) — what a
  *  `docker exec`/`docker logs` typed by hand actually needs, and the reason the badge that says
  *  "in devcontainer" (TerminalCell.vue) is otherwise not enough to act on: the name is randomly
@@ -184,7 +197,7 @@ const DEVCONTAINER_NAME_LOOKUP_TIMEOUT_MS = 5_000;
  *  for "no container answers that label" (never built, or `docker rm`'d since), which reads as
  *  "not running" rather than as an error — a truthful answer, not a failure. */
 export function runningDevcontainerName(dir: string): Promise<string | null> {
-  const args = ["ps", "--filter", `label=devcontainer.local_folder=${path.resolve(dir)}`, "--format", "{{.Names}}"];
+  const args = psArgs(dir);
   return new Promise((resolve) => {
     // eslint-disable-next-line sonarjs/no-os-command-from-path -- 'docker' is a standard tool from PATH, same convention as devcontainer() above
     const child = spawn("docker", args, { stdio: ["ignore", "pipe", "ignore"], timeout: DEVCONTAINER_NAME_LOOKUP_TIMEOUT_MS });

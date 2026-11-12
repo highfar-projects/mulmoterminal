@@ -8,7 +8,7 @@ import { describe, it, expect } from "vitest";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { hasDevcontainerConfig, markDevcontainerEnabled, markDevcontainerDisabled } from "../../../server/config/devcontainer-flag.js";
+import { hasDevcontainerConfig, markDevcontainerEnabled, markDevcontainerDisabled, isDevcontainerRunning } from "../../../server/config/devcontainer-flag.js";
 
 const tmp = () => mkdtempSync(path.join(tmpdir(), "mt-devcontainer-flag-"));
 const readLocal = (dir: string) => JSON.parse(readFileSync(path.join(dir, ".mulmoterminal.local.json"), "utf8"));
@@ -107,6 +107,19 @@ describe("markDevcontainerEnabled / markDevcontainerDisabled", () => {
     try {
       markDevcontainerDisabled(dir);
       expect(readLocal(dir)).toEqual({ devcontainer: false, devcontainerWorkspaceFolder: null });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("isDevcontainerRunning", () => {
+  // Real `docker ps` against a path no container was ever built for: "not running" whether docker
+  // answers an empty list or is not installed at all, which is exactly the fallback-to-host case.
+  it("is false for a directory that has no container", () => {
+    const dir = tmp();
+    try {
+      expect(isDevcontainerRunning(dir)).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
