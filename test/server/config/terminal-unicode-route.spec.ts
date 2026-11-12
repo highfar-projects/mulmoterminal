@@ -21,6 +21,10 @@ vi.mock("../../../server/infra/process/tmux.js", async (importOriginal) => ({
   setTmuxPrefix: vi.fn(),
 }));
 vi.mock("../../../server/infra/process/tmuxWidthProbe.js", () => ({ tmuxWidthTable: vi.fn(() => null), settledTmuxWidthTable: vi.fn(async () => null) }));
+vi.mock("../../../server/files/wsl.js", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  isWsl: vi.fn(() => false),
+}));
 
 const { rmSync } = await import("node:fs");
 const { settledTmuxWidthTable, tmuxWidthTable } = await import("../../../server/infra/process/tmuxWidthProbe.js");
@@ -49,6 +53,17 @@ describe("cell widths on GET /api/config", () => {
     const table: TmuxWidthTable = { runs: [[0x2705, 0x2705, 2]], folding: "tmux-3.6a", vs16Wide: true };
     vi.mocked(tmuxWidthTable).mockReturnValue(table);
     expect((await configServed()).terminalWidthTable).toEqual(table);
+  });
+});
+
+// The page names its window after this, so a Windows server and a WSL one can be told apart.
+describe("whether the server runs inside WSL, on GET /api/config", () => {
+  it("is true for a server inside WSL and false otherwise", async () => {
+    const { isWsl } = await import("../../../server/files/wsl.js");
+    vi.mocked(isWsl).mockReturnValue(true);
+    expect((await configServed()).wsl).toBe(true);
+    vi.mocked(isWsl).mockReturnValue(false);
+    expect((await configServed()).wsl).toBe(false);
   });
 });
 
