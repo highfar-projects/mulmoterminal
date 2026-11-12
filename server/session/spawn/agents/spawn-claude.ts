@@ -5,6 +5,7 @@ import type { WebSocket } from "ws";
 import { CLAUDE_CWD, PORT } from "../../../config/env.js";
 import { hookSocketPath } from "../../../infra/hook-socket.js";
 import { devcontainerAuthEnv } from "../../../infra/claude-credentials.js";
+import { isDevcontainerRunning } from "../../../config/devcontainer-flag.js";
 import { guiMcpEnv, carriesFullGuiMcp, directoryGroupsMcpConfigJson, fullGuiAllowedTools, restrictedAllowedTools } from "../setup/mcp-config.js";
 import type { ToolGroup } from "../../../../common/toolGroups.js";
 import {
@@ -129,7 +130,12 @@ function newSessionTitle(seed: string | undefined): string {
 // Its own function because the spawn body is at its line budget and this is one decision made
 // from three sources, not part of spawning.
 function resolveSessionBackend(input: { cwd: string; sessionId: string; launch?: DirModelChoice | undefined; canResume: boolean }) {
-  const dir = loadDirConfig(input.cwd);
+  const loaded = loadDirConfig(input.cwd);
+  // `devcontainer: true` is "use the container when it is up", never "require it": a stopped or
+  // removed container (they are large) falls back to the host instead of ending the cell at once.
+  const fallBack = loaded.devcontainer === true && !isDevcontainerRunning(input.cwd);
+  if (fallBack) console.log(`[pty] devcontainer for ${input.cwd} is not running — starting on the host instead`);
+  const dir = fallBack ? { ...loaded, devcontainer: false } : loaded;
   const choice = effectiveChoice({
     launch: input.launch,
     remembered: launchChoices.get(input.sessionId),
