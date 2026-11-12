@@ -60,6 +60,7 @@ import { withConfigLock, ConfigLockTimeout } from "./config-lock.js";
 import { mountConfigReloadRoute } from "./config-reload.js";
 import { mountKeymapBindingRoute } from "./keymap/keymap-binding-route.js";
 import { lastSegment } from "../../common/pathSegments.js";
+import { isWsl } from "../files/wsl.js";
 
 export const APP_CONFIG_FILE = path.join(os.homedir(), ".mulmoterminal", "config.json");
 const CONFIG_FILE = APP_CONFIG_FILE;
@@ -573,6 +574,10 @@ export function effectiveConfigResponse(config: AppConfig, cwd: string, argvAgen
 // once at boot (tmuxWidthProbe.ts), so a request never runs tmux. Null until then, or for good when
 // there is nothing to measure; the browser falls back to `terminalUnicodeVersion` and asks
 // /api/config/terminal-widths, which answers when the measurement ends.
+// `wsl` is whether this server runs inside WSL, which the page puts in its window title
+// (common/windowTitle.ts): a Windows server and a WSL server on one machine otherwise open two
+// windows both called "mulmoterminal". Asked of `isWsl`, the same test the file dialogs use, so the
+// title and the dialog never disagree about which machine this is.
 // Longer than the measurement takes on a loaded machine, shorter than the browser's own timeout.
 const TERMINAL_WIDTHS_WAIT_MS = 15_000;
 
@@ -583,6 +588,7 @@ function serverFacts() {
     storiesRoots: registeredStoriesRoots(),
     terminalUnicodeVersion: DEFAULT_TERMINAL_UNICODE_VERSION,
     terminalWidthTable: tmuxWidthTable(),
+    wsl: isWsl(process.platform, process.env),
   };
 }
 

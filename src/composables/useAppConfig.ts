@@ -2,6 +2,7 @@ import { sanitizeTokenRotation, TOKEN_ROTATION_OFF, type TokenRotation } from ".
 import { getCurrentScope, onScopeDispose, ref, type Ref } from "vue";
 import { presetLabel, type CwdPreset } from "../components/presets";
 import { isManagedWorktreePath, worktreeLabel } from "../../common/worktreePath";
+import { windowTitleFor } from "../../common/windowTitle";
 import type { Launcher } from "../components/launchers";
 import { isCustomAgent, type CustomAgent } from "../../common/customAgents";
 import { sanitizePaletteAliases, sanitizePaletteFavorites, type PaletteAliases } from "../../common/paletteConfig";
@@ -717,6 +718,9 @@ function createConfigReader({ defaultCwd, snapshotVersion, adoptServerPresets, m
       defaultCwd.value = typeof c.cwd === "string" ? c.cwd : null;
       home.value = typeof c.home === "string" ? c.home : null;
       worktreesRoot.value = typeof c.worktreesRoot === "string" ? c.worktreesRoot : null;
+      // A Windows server and a WSL one can run side by side on one machine; without this both
+      // windows are called "mulmoterminal" (common/windowTitle.ts).
+      document.title = windowTitleFor(c.wsl === true);
       storiesRoots.value = readStoriesRoots(c.storiesRoots);
       adoptServerPresets(c.cwdPresets, version);
       adoptSoundConfig(c);

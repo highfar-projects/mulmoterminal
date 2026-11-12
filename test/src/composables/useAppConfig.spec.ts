@@ -78,6 +78,27 @@ describe("useAppConfig — a width table the config did not carry yet", () => {
   });
 });
 
+// A Windows server and a WSL one on one machine opened two windows both called "mulmoterminal".
+describe("useAppConfig — the window title", () => {
+  it("says (WSL) when the server runs inside WSL", async () => {
+    mockServer([], { get: { wsl: true } });
+    await useAppConfig().loadConfig();
+    expect(document.title).toBe("mulmoterminal (WSL)");
+  });
+
+  it("stays the plain title otherwise, including a server that does not say", async () => {
+    mockServer([], { get: { wsl: true } });
+    await useAppConfig().loadConfig();
+    mockServer([], { get: { wsl: false } });
+    await useAppConfig().loadConfig();
+    expect(document.title).toBe("mulmoterminal");
+    document.title = "something else";
+    mockServer();
+    await useAppConfig().loadConfig();
+    expect(document.title).toBe("mulmoterminal");
+  });
+});
+
 // #2540. The palette's aliases and favorites arrive with the config, checked the way the server checks them.
 describe("useAppConfig — the palette's aliases and favorites", () => {
   it("adopts them off the wire, dropping what is malformed", async () => {
