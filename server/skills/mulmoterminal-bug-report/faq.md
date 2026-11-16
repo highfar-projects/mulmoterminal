@@ -73,24 +73,39 @@ bug.
 
 source: server/infra/process/tmux.ts
 source: src/composables/useTerminalConnections.ts
+source: server/session/spawn/agents/claude-fullscreen.ts
 source: docs/terminal-notes.md
+guide: docs/guide/en/faq.md
 
 Not a renderer bug — the canvas-mismatch theory was ruled out, and the OSC 8 "links aren't
 clickable" half was tmux stripping hyperlinks (fixed in #785). tmux owns the scrollback, so the
-outer terminal only ever holds the visible screen. A **shell** cell keeps its history in tmux and
-can be drag-selected; a **Claude/Codex** cell runs in the alternate screen, which has no scrollback
-at all (its tmux `history_size` is 0) — the app redraws its own transcript as you scroll. Selecting
-that scrolled-off history is therefore impossible in ANY terminal (VS Code / iTerm included), not
-specific to this app. Workaround: to copy long output from a Claude/Codex cell, redirect it to a
-file and open it in the browser viewer (source/text files render inline, #785), or select
-screen-by-screen. Background and the parked shell-cell fix live in #782 and docs/terminal-notes.md;
-**do not open a new issue** — add repro details to #782.
+outer terminal only ever holds the visible screen. What decides the rest is **which screen the
+agent draws on**, so find that out first rather than assuming it from the agent's name:
+
+- **Normal screen** — a shell, and a Claude cell on Claude Code's classic renderer, which is what
+  MulmoTerminal starts Claude with when nobody chose a renderer (#2808; the rule is in
+  `claude-fullscreen.ts`). Codex was measured on the normal screen too (#2943). The history is in
+  tmux, so what scrolled off is still there. If the scrollbar is missing, or a drag-selection will
+  not auto-scroll past the visible screen, that is #782 — **do not open a new issue**, add repro
+  details there.
+- **Alternate screen** — a Claude cell on the **fullscreen** renderer: the user's Claude settings
+  name it in `tui`, or one of the env vars `claude-fullscreen.ts` lists is set. That screen has no
+  scrollback (tmux `history_size` is 0) and the app redraws its own transcript as you scroll, so
+  selecting past one screen is impossible in ANY terminal (VS Code / iTerm included). By design;
+  the guide FAQ's `#claude-fullscreen` entry says how to switch back. Workaround while staying on
+  it: redirect long output to a file and open it in the browser viewer (#785), or select
+  screen-by-screen.
 
 Scrolling that history with the wheel does work, and is a separate thing from selecting it. If the
-wheel itself stops moving a Claude/Codex cell after a reload or a session switch, that was #1073 —
-the alternate-screen SET fell off the front of the bounded replay, so the browser came back in the
-normal buffer and the wheel had nothing to deliver to. Fixed by restoring the pane's modes from
-tmux ahead of the replay; on a version that has the fix, report it as a new bug.
+wheel itself stops moving a fullscreen Claude cell after a reload or a session switch, that was
+#1073 — the alternate-screen SET fell off the front of the bounded replay, so the browser came back
+in the normal buffer and the wheel had nothing to deliver to. Fixed by restoring the pane's modes
+from tmux ahead of the replay; on a version that has the fix, report it as a new bug.
+
+The same block of output **repeating** in a Claude cell's scrollback is a different thing: Claude
+Code repaints its whole screen on every width change without clearing scrollback, and enlarging,
+restoring or re-tiling a cell changes the width. That is #2943 (Claude Code's side is
+anthropics/claude-code#46834) — add details there rather than opening a new issue.
 
 ## The phone's terminal view shows no directory or branch
 
