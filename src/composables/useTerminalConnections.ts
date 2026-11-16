@@ -42,6 +42,7 @@ import { isTypedInput } from "./terminalUserInput";
 import { bufferIsShort, readBufferShape } from "./terminalBufferHealth";
 import { disposeTerminal, loadCanvasRenderer } from "./terminalRenderer";
 import { initialFitGate, reportOnScreen, requestFit, type FitGate } from "./terminalFitGate";
+import { createPtySizeSender, type PtySizeSender } from "./ptyWidthSettle";
 import type { CanvasAddon } from "@xterm/addon-canvas";
 import "@xterm/xterm/css/xterm.css";
 import { connWsUrl, type ConnTargetUrlInput } from "../components/wsUrl";
@@ -181,6 +182,9 @@ interface Conn {
   // (#846) — an observer left on the dead host would report the state of an element nothing
   // renders into.
   onScreenObserver: IntersectionObserver | null;
+  // Resize frames to the pty. A new width waits to settle — see ptyWidthSettle for why that and
+  // nothing else does (#2943).
+  ptySize: PtySizeSender;
 }
 
 // The banner is re-armed on a timer rather than shown once per stretch, because a stretch has no
@@ -227,8 +231,15 @@ function fitAndSyncSize(c: Conn): void {
   } catch {
     // host not laid out yet
   }
-  if (c.ws?.readyState === WebSocket.OPEN) c.ws.send(JSON.stringify({ type: "resize", cols: c.term.cols, rows: c.term.rows }));
+  c.ptySize.sync();
   c.term.scrollToBottom();
+}
+
+// One resize frame on the slot's socket; false when there is no open one to carry it.
+function sendResizeFrame(c: Conn, { cols, rows }: { cols: number; rows: number }): boolean {
+  if (c.released || c.ws?.readyState !== WebSocket.OPEN) return false;
+  c.ws.send(JSON.stringify({ type: "resize", cols, rows }));
+  return true;
 }
 
 // Feed the gate above. `host` rather than xterm's own `.xterm-screen`: it is the element this
@@ -477,6 +488,11 @@ function ensure(key: string, target: ConnTarget, font: TerminalFont): Conn {
     lastDroppedInputNoticeMs: Number.NEGATIVE_INFINITY,
     fitGate: initialFitGate,
     onScreenObserver: null,
+    // Both callbacks run later, never during this initializer, so they may name `c`.
+    ptySize: createPtySizeSender(
+      (size) => sendResizeFrame(c, size),
+      () => ({ cols: c.term.cols, rows: c.term.rows }),
+    ),
   };
   conns.set(key, c);
   connView.set(key, { status: "connecting", serverCwd: target.cwd, inCopyMode: false, heatLevel: 0, heatFinales: 0, sessionEnded: false });
@@ -573,6 +589,9 @@ function connect(c: Conn) {
   const url = connWsUrl(c.target, resumeId, location.host, secure, { cols: c.term.cols, rows: c.term.rows });
   const sock = new WebSocket(url);
   c.ws = sock;
+  // A width waiting to settle was meant for the socket being replaced; onopen sends the new one
+  // the terminal's current size.
+  c.ptySize.reset();
 
   sock.onopen = () => {
     if (sock !== c.ws) return;
@@ -582,7 +601,9 @@ function connect(c: Conn) {
     c.warnedDroppedInput = false;
     c.lastDroppedInputNoticeMs = Number.NEGATIVE_INFINITY;
     setStatus(c, "connected");
-    sock.send(JSON.stringify({ type: "resize", cols: c.term.cols, rows: c.term.rows }));
+    // A new socket starts a new count: whatever the old one sent, this pty has been told nothing
+    // over it yet beyond the URL's geometry, so the size goes now and no stale wait carries over.
+    c.ptySize.sendNow();
   };
   sock.onmessage = (event) => {
     if (sock !== c.ws) return;
@@ -744,6 +765,7 @@ export function release(key: string) {
   const c = conns.get(key);
   if (!c) return;
   c.released = true;
+  c.ptySize.reset();
   if (c.reconnectTimer) {
     clearTimeout(c.reconnectTimer);
     c.reconnectTimer = null;
