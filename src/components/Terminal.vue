@@ -83,6 +83,8 @@ const props = defineProps<{
   customAgent?: string | null;
   // The account a new session starts on (#2215) — one of the user's second logins.
   account?: string | null;
+  // The peer server this terminal runs on (common/peers.ts), or null/absent for this one.
+  host?: string | null;
   // Provider/model picked in the launch form, for this session only (#584).
   launch?: LaunchChoice | null;
   runMenu?: boolean;
@@ -147,6 +149,7 @@ function currentTarget(): conn.ConnTarget {
     customAgent: props.customAgent ?? null,
     account: props.account ?? null,
     launch: props.launch ?? null,
+    host: props.host ?? null,
   };
 }
 

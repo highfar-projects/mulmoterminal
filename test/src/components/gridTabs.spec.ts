@@ -1345,6 +1345,28 @@ describe("setCellAgent and the account (#2215)", () => {
   });
 });
 
+// The peer server a cell runs on (common/peers.ts): the session id names nothing on any other server,
+// so a reload must reconnect the cell to the same machine.
+describe("setCellAgent and the peer host", () => {
+  const launched = () => make([{ uid: 0, session: null, cwd: "/p", host: "win", autoStart: true }]);
+
+  it("keeps the peer the launch reports", () => {
+    expect(setCellAgent(launched(), 0, "claude", null, null, "win").cells[0].host).toBe("win");
+  });
+
+  it("drops it when the launch reports this server", () => {
+    expect("host" in setCellAgent(launched(), 0, "claude").cells[0]).toBe(false);
+  });
+
+  it("round-trips a valid peer through parseGridState and drops a malformed one", () => {
+    const kept = setSession(setCellAgent(launched(), 0, "claude", null, null, "win"), 0, U(7));
+    expect(parseGridState(JSON.stringify(kept))?.cells[0].host).toBe("win");
+    const stored = JSON.parse(JSON.stringify(kept));
+    stored.cells[0].host = "Not/A Peer";
+    expect("host" in (parseGridState(JSON.stringify(stored))?.cells[0] ?? {})).toBe(false);
+  });
+});
+
 // A row of /api/sessions/unplaced as the cell that adopts it. A bot job's shell must come back as a
 // Shell cell: read as an agent it falls to Claude, and the grid would start Claude in its place.
 describe("unplacedCell", () => {

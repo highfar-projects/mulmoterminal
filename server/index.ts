@@ -30,6 +30,7 @@ import { createTranslationWorker } from "./session/scheduled/translation-worker.
 import { createTitleManager } from "./session/list/session-title.js";
 import { resolveSessionTitle } from "./config/header/header-title.js";
 import { mountTerminalWebSockets } from "./routes/ws-routes.js";
+import { attachPeerUpgradeRelay } from "./infra/http/peer-proxy.js";
 import { createConnectionHandlers } from "./session/pty/pty-connection.js";
 import { createTmuxSizeSync } from "./session/pty/tmux-size-sync.js";
 import { createIssueSessionSpawner } from "./session/spawn/issue-session-spawn.js";
@@ -516,6 +517,10 @@ startDecisionDigestSchedule();
 // and spawn a NEW chat seeded with the task's prompt (e.g. the workout-log weekly
 // nudge). Non-fatal: a scheduler failure must never abort startup.
 initScheduling({ spawnChat: scheduledSessions.spawnScheduledChat, projectRoots: () => listProjectRoots().map((project) => project.cwd) });
+
+// A peer server's terminal sockets, relayed byte for byte (infra/http/peer-proxy.ts). Its own
+// upgrade listener, which ignores every path that is not under /peer/.
+attachPeerUpgradeRelay(listeners, isAllowedOrigin);
 
 // The terminal WebSocket endpoints (routes/ws-routes.ts).
 mountTerminalWebSockets({

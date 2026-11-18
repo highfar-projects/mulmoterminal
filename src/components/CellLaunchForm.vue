@@ -28,6 +28,7 @@ import LaunchChipList from "./LaunchChipList.vue";
 import AgentMark from "./AgentMark.vue";
 import ModelPicker from "./ModelPicker.vue";
 import AccountPicker from "./AccountPicker.vue";
+import type { PeerSummary } from "../../common/peers";
 import { accountLabel, accountsForAgent, type AgentAccount } from "../../common/agentAccounts";
 import { LAUNCH_ROW } from "./launchFormClasses";
 import { jsonBody } from "../jsonBody";
@@ -66,6 +67,9 @@ const props = defineProps<{
   // Second logins (#2215) and which one a new session starts on — null for the default login.
   accounts?: AgentAccount[] | undefined;
   account?: string | null | undefined;
+  // Peer servers (common/peers.ts) and which one a new session runs on — null for this server.
+  peers?: PeerSummary[] | undefined;
+  host?: string | null | undefined;
   defaultCwd: string | null;
   presets: CwdPreset[];
   // The saved directories could not be READ — /api/config failed and the retries gave up. The
@@ -93,7 +97,8 @@ const emit = defineEmits<{
   // `start`: start what the Agent Picker picked, in this dir. EVERY launch in this form goes through
   // here — the dir field, a preset chip and a worktree alike — so the cell decides once what the
   // picked agent means (a shell replaces the cell; an agent runs in it).
-  (e: "update:account" | "start", value: string | null): void;
+  // `update:host`: the peer server a new session runs on, null for this one.
+  (e: "update:account" | "update:host" | "start", value: string | null): void;
   // Attach to an existing session, in the cwd its row was listed for. `agent` says which endpoint
   // that session speaks — a worktree row reads it off the session it found, a resume row is one of
   // the picked agent's own conversations (#1417). Resuming a codex conversation as Claude would
@@ -161,8 +166,17 @@ const blockedNotice = computed(() => {
   return t(REASON_MESSAGE[blocked.reason], { agent: label });
 });
 
+// A shell is a launcher cell, which cannot run on a peer yet (the notice under the picker says so).
+const shellOnPeer = computed(() => !!props.host && props.agent === "shell");
+
+// The picker's empty option is this server.
+const onHostChange = (event: Event): void => {
+  const value = event.target instanceof HTMLSelectElement ? event.target.value : "";
+  emit("update:host", value || null);
+};
+
 const startAt = (path: string | null): void => {
-  if (!blockedAgent.value) emit("start", path);
+  if (!blockedAgent.value && !shellOnPeer.value) emit("start", path);
 };
 
 // v-model over a prop the cell owns: typing reports the new path up, and the field shows what
@@ -255,6 +269,9 @@ const startHere = async (): Promise<void> => {
   if (launchCheckPending.value) return;
   const typed = props.dir;
   const path = targetDir.value;
+  // Every check below asks THIS server about its own disk. On a peer the path names the peer's
+  // disk, so they would refuse a folder that exists there; the peer answers for it when it spawns.
+  if (props.host) return startAt(path);
   if (takenWorktreeAt(path)) return;
   launchCheckPending.value = true;
   try {
@@ -980,7 +997,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
           </ul>
         </span>
         <button
-          v-if="!remoteServer"
+          v-if="!remoteServer && !host"
           type="button"
           data-testid="cell-dir-pick"
           class="flex-none inline-flex items-center justify-center px-2 rounded-md border border-border bg-elevated text-secondary cursor-pointer enabled:hover:bg-hover enabled:hover:text-fg enabled:hover:border-accent disabled:cursor-default disabled:opacity-40"
@@ -995,8 +1012,8 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
           type="button"
           data-testid="cell-dir-go"
           class="inline-flex flex-none cursor-pointer items-center justify-center rounded-md border border-border bg-elevated px-2 text-secondary enabled:hover:border-accent enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-40"
-          :disabled="!dir.trim() || !!takenWorktreeAt(targetDir) || !!blockedAgent || dirMissing"
-          :data-tip="takenWorktreeAt(targetDir) ?? (dirMissing ? t('launch.dirMissing') : t('tips.launch.start'))"
+          :disabled="!dir.trim() || !!blockedAgent || shellOnPeer || (!host && (!!takenWorktreeAt(targetDir) || dirMissing))"
+          :data-tip="host ? t('tips.launch.start') : (takenWorktreeAt(targetDir) ?? (dirMissing ? t('launch.dirMissing') : t('tips.launch.start')))"
           :aria-label="t('tips.launch.startAria')"
           @click="startHere"
         >
@@ -1008,7 +1025,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
       <span v-if="takenWorktreeAt(targetDir)" data-testid="cell-dir-busy" class="font-sans text-[11px] leading-snug text-amber">{{
         takenWorktreeAt(targetDir)
       }}</span>
-      <span v-if="dirMissing" data-testid="cell-dir-missing" role="status" class="font-sans text-[11px] leading-snug text-amber">{{
+      <span v-if="dirMissing && !host" data-testid="cell-dir-missing" role="status" class="font-sans text-[11px] leading-snug text-amber">{{
         t("launch.dirMissing")
       }}</span>
       <span v-if="pickError" data-testid="cell-dir-pick-error" role="alert" class="font-sans text-[11px] leading-snug text-amber">{{ pickError }}</span>
@@ -1025,6 +1042,19 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
       :model-value="account ?? null"
       @update:model-value="(value) => emit('update:account', value)"
     />
+    <!-- Where the session runs: this server, or a peer it relays (common/peers.ts). Absent for a user
+         who configured no peers, which is everyone who has not written one into config.json. -->
+    <label v-if="peers && peers.length" data-testid="cell-peer-picker" class="flex items-center gap-2 font-sans text-[12px] text-dim" :class="LAUNCH_ROW">
+      <span>{{ t("peers.runOn") }}</span>
+      <select class="rounded-md border border-border bg-elevated px-1.5 py-0.5 text-[12px] text-fg" :value="host ?? ''" @change="onHostChange">
+        <option value="">{{ t("peers.thisServer") }}</option>
+        <option v-for="peer in peers" :key="peer.id" :value="peer.id">{{ peer.label }}</option>
+      </select>
+    </label>
+    <span v-if="host" data-testid="cell-peer-note" class="font-sans text-[11px] leading-snug text-dim" :class="LAUNCH_ROW">{{ t("peers.peerNote") }}</span>
+    <span v-if="shellOnPeer" data-testid="cell-peer-shell" role="alert" class="font-sans text-[11px] leading-snug text-amber" :class="LAUNCH_ROW">{{
+      t("peers.shellOnPeer")
+    }}</span>
     <!-- A GUI tool group is a per-DIRECTORY registration in Claude Code's own MCP config, not
          a per-launch choice — but it only takes effect when a session starts, so this is
          where it belongs: decided before the thing it configures exists.
@@ -1101,7 +1131,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
          agent reads and writes shared state (wiki, collections, accounting), which is exactly what
          a detached branch would cut it off from. Offering it there is offering a mistake. -->
     <div
-      v-if="worktreeList.isGit && launchesAgent && !inWorkspace"
+      v-if="worktreeList.isGit && launchesAgent && !inWorkspace && !host"
       data-testid="cell-worktrees"
       class="flex flex-col items-stretch gap-1.5"
       :class="LAUNCH_ROW"
@@ -1190,7 +1220,12 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
     <!-- The picked agent's OWN conversations. Shell has none, and reaches here with an empty list
          anyway (loadForDir passes it no directory) — the `listAgent` test says so out loud rather
          than resting on that. -->
-    <div v-if="listAgent && resumable.sessions.length" data-testid="cell-resume" class="flex min-h-0 flex-col items-center gap-1.5" :class="LAUNCH_ROW">
+    <div
+      v-if="listAgent && resumable.sessions.length && !host"
+      data-testid="cell-resume"
+      class="flex min-h-0 flex-col items-center gap-1.5"
+      :class="LAUNCH_ROW"
+    >
       <span data-testid="cell-resume-heading" class="font-sans text-[11px] uppercase tracking-[0.05em] text-dim">{{ resumeHeading }}</span>
       <input
         v-if="showResumeFilter"

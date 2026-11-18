@@ -1,4 +1,5 @@
 import type { RunCommand } from "./runCommand";
+import { isPeerId } from "../../common/peers";
 import type { Translate } from "../i18n/translate";
 import type { LaunchChoice } from "./wsUrl";
 import { dirPriority } from "../../common/dirPriorityOrder";
@@ -66,6 +67,9 @@ export interface Cell {
   // Kept across a reload so the header can keep saying which login it is; the SERVER is what holds
   // the session to it, so a stale value here can mislabel a cell but never move its conversation.
   account?: string;
+  // The PEER server this cell runs on (common/peers.ts), or absent for this one. Kept across a
+  // reload because the session id alone names nothing here: the session lives on that server.
+  host?: string;
   // Set aside by the user: still connected and still holding its history, just sunk out of the
   // way (#992). Stored as the ABSENCE of the key when not parked, for the same reason `agent`
   // is — only an absent key survives the JSON a persisted cell round-trips.
@@ -146,7 +150,14 @@ export function setCwd(state: GridState, uid: number, cwd: string): GridState {
 export const storedCellAgent = (agent: TerminalAgent): Cell["agent"] => (agent === "claude" ? undefined : agent);
 
 // Record which agent a cell launched, so a reloaded cell reconnects to the right endpoint.
-export function setCellAgent(state: GridState, uid: number, agent: TerminalAgent, customAgent: string | null = null, account: string | null = null): GridState {
+export function setCellAgent(
+  state: GridState,
+  uid: number,
+  agent: TerminalAgent,
+  customAgent: string | null = null,
+  account: string | null = null,
+  host: string | null = null,
+): GridState {
   // Claude is the ABSENT case, so switching back to it removes the key rather than setting it
   // to undefined — a persisted cell round-trips through JSON, where only the former survives.
   //
@@ -157,11 +168,14 @@ export function setCellAgent(state: GridState, uid: number, agent: TerminalAgent
   // reconnected as the built-in (codex + CodeRabbit, #1890).
   // `account` is replaced the same way, for the same reason: a launch on the default login reports
   // null, and keeping the previous value would label the new session with somebody else's login.
-  const applied = ({ agent: _previous, customAgent: _wrapper, account: _login, ...rest }: Cell): Cell => ({
+  // `host` too: a launch on this server reports null, and keeping a peer would reconnect the new
+  // session to the wrong machine after a reload.
+  const applied = ({ agent: _previous, customAgent: _wrapper, account: _login, host: _machine, ...rest }: Cell): Cell => ({
     ...rest,
     ...(agent === "claude" ? {} : { agent }),
     ...(customAgent === null ? {} : { customAgent }),
     ...(account === null ? {} : { account }),
+    ...(host === null ? {} : { host }),
   });
   return { ...state, cells: state.cells.map((c) => (c.uid === uid ? applied(c) : c)) };
 }
@@ -674,6 +688,7 @@ export function parseGridState(raw: string | null): GridState | null {
         ...(agent === undefined ? {} : { agent }),
         ...(isCustomAgentId(c.customAgent) ? { customAgent: c.customAgent } : {}),
         ...(isAccountId(c.account) ? { account: c.account } : {}),
+        ...(isPeerId(c.host) ? { host: c.host } : {}),
         ...(c.parked === true ? { parked: true as const } : {}),
       };
     });

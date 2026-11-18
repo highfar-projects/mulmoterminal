@@ -120,6 +120,7 @@ import type { createCopilotSpawner } from "../session/spawn/agents/spawn-copilot
 import type { createCursorSpawner } from "../session/spawn/agents/spawn-cursor.js";
 import type { createTranslationWorker } from "../session/scheduled/translation-worker.js";
 import type { createTitleManager } from "../session/list/session-title.js";
+import { mountPeerHttpRelay } from "../infra/http/peer-proxy.js";
 import { tmuxHasSession, tmuxKillSession, tmuxPanePidsBySessionAsync } from "../infra/process/tmux.js";
 import { mountProcessRoutes } from "./process-routes.js";
 import { listProcessDetails } from "../infra/process/process-list.js";
@@ -189,6 +190,10 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
   // FIRST, before any route, parser or static file (request-gates.ts).
   mountRequestGates(app, deps);
   const clientDir = deps.clientDir;
+
+  // A peer server's cells (common/peers.ts), relayed with their bodies untouched — so ahead of
+  // every parser, right behind the gates.
+  mountPeerHttpRelay(app, deps.isAllowedOrigin);
 
   // Ahead of express.json, carrying its own raw parser: a dropped file is bytes under its own
   // content type, and a dropped .json would otherwise be parsed as a document rather than saved.

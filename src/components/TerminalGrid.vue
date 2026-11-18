@@ -2241,6 +2241,7 @@ function onRosterDragLeave(event: DragEvent) {
           :initial-agent="cell.agent"
           :initial-custom-agent="cell.customAgent"
           :initial-account="cell.account"
+          :initial-host="cell.host"
           :initial-launch-choice="cell.launchChoice"
           :auto-start="cell.autoStart === true"
           :presets="presets"
