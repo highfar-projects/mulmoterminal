@@ -55,6 +55,7 @@ import { registerCellAction } from "../composables/useCellAction";
 import type { CellSelfAction } from "../../common/headerActions";
 import { reapSessionOnServer, restartSession, switchTokenOnServer } from "../composables/restartSession";
 import { loadPeerHosts, peerHosts, peerLabel } from "../composables/peerHosts";
+import { providePaneHost } from "../composables/paneHost";
 import { peerApiPath } from "../../common/peers";
 import { accountSwitchChoices } from "../composables/accountSwitchChoices";
 import { useAppConfig } from "../composables/useAppConfig";
@@ -212,6 +213,9 @@ const sessionId = ref<string | null>(props.initialSessionId);
 // this names.
 const hostId = ref<string | null>(props.initialHost ?? null);
 loadPeerHosts();
+// Everything below that reads a server by injection — the launch form's lists above all — reads this
+// cell's (paneHost.ts).
+providePaneHost(hostId);
 // What the launch form's AGENT PICKER will start here. "shell" is one of its options and is a
 // LAUNCHER, not an agent: the parent replaces this cell with a launcher cell, so it never becomes
 // the `agent` below.
@@ -868,9 +872,7 @@ const accountMarkChoices = computed(() =>
 // picker decides for the dir field, for a preset chip, and for a worktree alike, and a rule
 // that has to hold at three call sites belongs in one of them.
 function startPickedAgent(dir: string | null) {
-  // A shell is a launcher cell, which has no peer to run on yet; the form says so.
-  if (pickedAgent.value === "shell" && hostId.value) return;
-  if (pickedAgent.value === "shell") emit("launch", { launcher: shellLauncher(), cwd: dir });
+  if (pickedAgent.value === "shell") emit("launch", { launcher: shellLauncher(), cwd: dir, ...(hostId.value ? { host: hostId.value } : {}) });
   else launchIn(dir);
 }
 
@@ -891,11 +893,23 @@ onMounted(() => {
 // endpoint against a real session. Both kinds of row send it — a worktree row, whose session may be
 // any agent, and a resume row, which since #1417 lists the PICKED agent's own conversations rather
 // than always Claude's. Absent (an older caller) leaves the pick alone.
-function resumeSession({ id, cwd: dir, agent: resumeAgent, account }: { id: string; cwd: string | null; agent?: TerminalAgent; account?: string | null }) {
+function resumeSession({
+  id,
+  cwd: dir,
+  agent: resumeAgent,
+  account,
+  host,
+}: {
+  id: string;
+  cwd: string | null;
+  agent?: TerminalAgent;
+  account?: string | null;
+  host?: string | null;
+}) {
   // The login the row was found under — what the server runs it on, whatever the picker said.
   accountId.value = account ?? null;
-  // Every row the form lists is THIS server's: it hides them while a peer is picked.
-  hostId.value = null;
+  // And the server it was listed from: the form lists the picked server's sessions (common/peers.ts).
+  hostId.value = host ?? null;
   if (resumeAgent) {
     pickedAgent.value = resumeAgent;
     // A resumed session already exists; it was not started through a wrapper now, so the cell is

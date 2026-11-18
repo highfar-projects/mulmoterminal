@@ -2,7 +2,9 @@
 // Read once per page and shared by every cell; the list only changes when the user edits config.json,
 // and a reload picks that up.
 import { ref, watch } from "vue";
-import { isPeerId, type PeerSummary } from "../../common/peers";
+import { isPeerId, peerApiPath, type PeerSummary } from "../../common/peers";
+import { isUnknownArray } from "../../common/isUnknownArray";
+import type { CwdPreset } from "../components/presets";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { isRecord } from "../../common/isRecord";
 import { usePubSub } from "./usePubSub";
@@ -66,3 +68,34 @@ export function subscribeEveryPeer(channel: string, callback: (data: unknown, pe
     offs.clear();
   };
 }
+
+/** A peer's own saved directories and default workspace (its `/api/config`), for the launch form
+ *  starting a session there: the chips must name folders on THAT machine. Empty while unknown, or
+ *  for this server (whose own come in as props); re-read whenever the picked peer changes. */
+export function usePeerLaunchDirs(peer: () => string | null) {
+  const presets = ref<CwdPreset[]>([]);
+  const defaultCwd = ref<string | null>(null);
+  let asked = 0;
+  watch(
+    peer,
+    async (id) => {
+      const my = ++asked;
+      presets.value = [];
+      defaultCwd.value = null;
+      if (!id) return;
+      try {
+        const res = await fetchWithTimeout(peerApiPath(id, "/api/config"));
+        const body: unknown = res.ok ? await res.json() : null;
+        if (my !== asked || !isRecord(body)) return;
+        presets.value = isUnknownArray(body.cwdPresets) ? body.cwdPresets.filter(isCwdPreset) : [];
+        defaultCwd.value = typeof body.cwd === "string" ? body.cwd : null;
+      } catch {
+        // No chips: the field still takes a typed path.
+      }
+    },
+    { immediate: true },
+  );
+  return { presets, defaultCwd };
+}
+
+const isCwdPreset = (value: unknown): value is CwdPreset => isRecord(value) && typeof value.label === "string" && typeof value.path === "string";

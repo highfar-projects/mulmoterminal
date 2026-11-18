@@ -1,4 +1,6 @@
 import { ref, type Ref } from "vue";
+import { peerApiPath } from "../../common/peers";
+import { usePaneHost } from "./paneHost";
 import { TOOL_GROUPS, type ToolGroup } from "../../common/toolGroups";
 import { queueMcpWrite } from "../components/mcpWriteQueue";
 import { isUnknownArray } from "../../common/isUnknownArray";
@@ -30,6 +32,8 @@ interface Switches {
   failed: Ref<Record<ToolGroup, string | null>>;
   // Request token: a reply for a directory the user has since moved off is dropped.
   req: number;
+  // The server the directory is on (paneHost.ts): a peer's Claude Code config is written by the peer.
+  host: Readonly<Ref<string | null>>;
 }
 
 // Take the switches away without asking for new ones — the directory field just changed, and rows
@@ -49,7 +53,7 @@ async function load(switches: Switches, target: string | null): Promise<void> {
   switches.dir.value = null;
   if (!target) return;
   try {
-    const res = await fetchWithTimeout(`/api/gui-mcp-groups?cwd=${encodeURIComponent(target)}`);
+    const res = await fetchWithTimeout(peerApiPath(switches.host.value, `/api/gui-mcp-groups?cwd=${encodeURIComponent(target)}`));
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await jsonBody(res);
     // A slower reply for a directory the user has since moved off would show its answer under the
@@ -96,7 +100,7 @@ function apply(switches: Switches, group: ToolGroup): Promise<void> {
 async function write(switches: Switches, group: ToolGroup, target: string, wanted: boolean): Promise<void> {
   try {
     const res = await fetchWithTimeout(
-      "/api/gui-mcp-groups",
+      peerApiPath(switches.host.value, "/api/gui-mcp-groups"),
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -146,7 +150,8 @@ async function syncInto(switches: Switches, worktreePath: string): Promise<void>
   // to write and writing it. Read lazily, the worktree would then be handed another directory's
   // positions under this repository's name.
   const wantedNow = { ...switches.enabled.value };
-  const already = await registeredIn(worktreePath);
+  const host = switches.host.value;
+  const already = await registeredIn(worktreePath, host);
   const wanted = (group: ToolGroup) => wantedNow[group];
   const changed = TOOL_GROUPS.filter((group) => already === null || already.includes(group) !== wanted(group));
   // Through the same queue as the switches, one group at a time: a launch that fires while a
@@ -155,7 +160,7 @@ async function syncInto(switches: Switches, worktreePath: string): Promise<void>
     await queueMcpWrite(async () => {
       try {
         await fetchWithTimeout(
-          "/api/gui-mcp-groups",
+          peerApiPath(host, "/api/gui-mcp-groups"),
           {
             method: "POST",
             headers: { "content-type": "application/json" },
@@ -172,9 +177,9 @@ async function syncInto(switches: Switches, worktreePath: string): Promise<void>
 
 // What the target directory has registered right now, or null when that can't be read — which the
 // caller reads as "write every group" rather than as "nothing is registered".
-async function registeredIn(dir: string): Promise<unknown[] | null> {
+async function registeredIn(dir: string, host: string | null): Promise<unknown[] | null> {
   try {
-    const res = await fetchWithTimeout(`/api/gui-mcp-groups?cwd=${encodeURIComponent(dir)}`);
+    const res = await fetchWithTimeout(peerApiPath(host, `/api/gui-mcp-groups?cwd=${encodeURIComponent(dir)}`));
     if (!res.ok) return null;
     const data = await jsonBody(res);
     return isUnknownArray(data.groups) ? data.groups : null;
@@ -190,6 +195,7 @@ export function useMcpToolGroups() {
     busy: ref(byToolGroup(false)),
     failed: ref(byToolGroup<string | null>(null)),
     req: 0,
+    host: usePaneHost(),
   };
   return {
     dir: switches.dir,

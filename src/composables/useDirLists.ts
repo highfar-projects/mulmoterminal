@@ -1,4 +1,6 @@
 import { ref, shallowRef } from "vue";
+import { peerApiPath } from "../../common/peers";
+import { usePaneHost } from "./paneHost";
 import { isAccountId } from "../../common/agentAccounts";
 import type { PartialWorkerStatus } from "../../common/workerStatus";
 import type { PartialSessionOccupancy, SessionOccupancy } from "../../common/sessionOccupancy";
@@ -149,6 +151,8 @@ const isWorktree = (row: unknown): row is Worktree =>
 const dirOf = (value: unknown, fallback: string): string => (typeof value === "string" ? value : fallback);
 
 function useDirList<T>(url: (dir: string) => string, parse: (body: ListBody, dir: string) => T, empty: () => T) {
+  // The server the lists are about (paneHost.ts) — a peer's directory is listed by the peer.
+  const host = usePaneHost();
   // shallowRef, not ref: the list is always replaced wholesale, and a generic `ref<T>` would need
   // a cast back out of UnwrapRef.
   const value = shallowRef<T>(empty());
@@ -175,7 +179,7 @@ function useDirList<T>(url: (dir: string) => string, parse: (body: ListBody, dir
     loading.value = dir !== null;
     if (!dir) return;
     try {
-      const res = await fetchWithTimeout(url(dir));
+      const res = await fetchWithTimeout(peerApiPath(host.value, url(dir)));
       if (reqId !== req) return; // a newer request superseded this one
       const body: ListBody = res.ok ? await jsonBody(res) : {};
       if (reqId !== req) return; // re-check after awaiting the body

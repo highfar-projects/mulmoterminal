@@ -2239,6 +2239,7 @@ function onRosterDragLeave(event: DragEvent) {
           :launcher="cell.launcher"
           :session="cell.session"
           :cwd="cell.cwd"
+          :host="cell.host ?? null"
           v-on="gridCellEvents(cell)"
           @session="(id) => emit('session', cell.uid, id)"
         />

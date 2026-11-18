@@ -63,6 +63,8 @@ export interface PanelResume {
   cwd: string | null;
   agent?: TerminalAgent;
   account?: string | null;
+  /** The peer server the listed session runs on (common/peers.ts), null/absent for this one. */
+  host?: string | null;
 }
 
 // Only the keys that were decided: the cell round-trips through JSON, where an absent key and one
@@ -80,7 +82,9 @@ export const cellForPanelStart = ({ dir, pick, choice, account, host }: PanelSta
   ...(host ? { host } : {}),
 });
 
-export const cellForPanelResume = ({ id, cwd, agent, account }: PanelResume): Omit<Cell, "uid"> => ({
+export const cellForPanelResume = ({ id, cwd, agent, account, host }: PanelResume): Omit<Cell, "uid"> => ({
   ...sessionCell(id, cwd, agent ?? "claude"),
   ...withAccount(account),
+  // A session listed from a peer reconnects there (common/peers.ts).
+  ...(host ? { host } : {}),
 });

@@ -28,7 +28,8 @@ import LaunchChipList from "./LaunchChipList.vue";
 import AgentMark from "./AgentMark.vue";
 import ModelPicker from "./ModelPicker.vue";
 import AccountPicker from "./AccountPicker.vue";
-import type { PeerSummary } from "../../common/peers";
+import { peerApiPath, peerDirKey, type PeerSummary } from "../../common/peers";
+import { usePeerLaunchDirs } from "../composables/peerHosts";
 import { accountLabel, accountsForAgent, type AgentAccount } from "../../common/agentAccounts";
 import { LAUNCH_ROW } from "./launchFormClasses";
 import { jsonBody } from "../jsonBody";
@@ -114,7 +115,20 @@ const emit = defineEmits<{
 }>();
 
 // An empty field means the server's workspace default — the placeholder is a hint, not a value.
-const dirFor = (value: string): string | null => value.trim() || props.defaultCwd;
+// The server the session will run on: this one, or a peer (common/peers.ts). The form's lists and
+// checks are that server's — TerminalCell / LaunchPanel provide it to the composables below
+// (paneHost.ts) — and so are its saved folders and default workspace, read from the peer's config.
+const peerDirs = usePeerLaunchDirs(() => props.host ?? null);
+const shownPresets = computed(() => (props.host ? peerDirs.presets.value : props.presets));
+const shownDefaultCwd = computed(() => (props.host ? peerDirs.defaultCwd.value : props.defaultCwd));
+// A directory as the key the colour / icon / rank maps are built on: the same path on two servers is
+// two directories (peerDirKey).
+const dirKey = (path: string): string => peerDirKey(props.host, path);
+// The picked peer on what this form emits, or no key at all for this server — the absent key IS
+// "this server" everywhere a launch is recorded.
+const onHost = (): { host?: string } => (props.host ? { host: props.host } : {});
+
+const dirFor = (value: string): string | null => value.trim() || shownDefaultCwd.value;
 const targetDir = computed(() => dirFor(props.dir));
 
 // The agent-only parts of the form: a shell takes no model, registers no MCP servers, and is not
@@ -166,9 +180,6 @@ const blockedNotice = computed(() => {
   return t(REASON_MESSAGE[blocked.reason], { agent: label });
 });
 
-// A shell is a launcher cell, which cannot run on a peer yet (the notice under the picker says so).
-const shellOnPeer = computed(() => !!props.host && props.agent === "shell");
-
 // The picker's empty option is this server.
 const onHostChange = (event: Event): void => {
   const value = event.target instanceof HTMLSelectElement ? event.target.value : "";
@@ -176,7 +187,7 @@ const onHostChange = (event: Event): void => {
 };
 
 const startAt = (path: string | null): void => {
-  if (!blockedAgent.value && !shellOnPeer.value) emit("start", path);
+  if (!blockedAgent.value) emit("start", path);
 };
 
 // v-model over a prop the cell owns: typing reports the new path up, and the field shows what
@@ -192,7 +203,7 @@ const dirField = computed({
 // Chips follow the same rank the grid sorts by, so a project sits in the same place on both
 // screens. The stored list stays most-recently-used (recordPreset depends on that) — only the
 // display is reordered, which is also what keeps unranked directories where they were.
-const { priorities: presetPriorities } = useDirPriorities(computed(() => props.presets.map((p) => p.path)));
+const { priorities: presetPriorities } = useDirPriorities(computed(() => shownPresets.value.map((p) => dirKey(p.path))));
 // The workspace rides in front, whether or not it was ever recorded as a recent dir — it is the one
 // directory where every GUI tool is reachable, so it must be one click away (see launchChips).
 //
@@ -200,13 +211,13 @@ const { priorities: presetPriorities } = useDirPriorities(computed(() => props.p
 // `const` is a temporal-dead-zone throw at mount, not a lint nit.
 const chips = computed(() =>
   launchChips(
-    orderByDirPriority(props.presets, (p) => p.path, presetPriorities.value),
-    props.defaultCwd,
+    orderByDirPriority(shownPresets.value, (p) => dirKey(p.path), presetPriorities.value),
+    shownDefaultCwd.value,
   ),
 );
 // The workspace is coloured like any other directory — it has a `.mulmoterminal.json` too, and the
 // stripe means the same thing there as everywhere else.
-const presetPaths = computed(() => chips.value.map((p) => p.path));
+const presetPaths = computed(() => chips.value.map((p) => dirKey(p.path)));
 const { colors: presetColors } = useDirColors(presetPaths);
 const { icons: presetIcons } = useDirIcons(presetPaths);
 
@@ -269,14 +280,12 @@ const startHere = async (): Promise<void> => {
   if (launchCheckPending.value) return;
   const typed = props.dir;
   const path = targetDir.value;
-  // Every check below asks THIS server about its own disk. On a peer the path names the peer's
-  // disk, so they would refuse a folder that exists there; the peer answers for it when it spawns.
-  if (props.host) return startAt(path);
   if (takenWorktreeAt(path)) return;
   launchCheckPending.value = true;
   try {
     if (typed.trim() && !(await dirSuggest.confirmLaunchable(typed))) return;
-    if (path && launchesAgent.value && !blockedAgent.value) await offerDevcontainerIfNeeded(path);
+    // Not on a peer: the offer asks and builds through THIS server's devcontainer routes.
+    if (path && launchesAgent.value && !blockedAgent.value && !props.host) await offerDevcontainerIfNeeded(path);
     if (props.dir === typed) startAt(path);
   } finally {
     launchCheckPending.value = false;
@@ -413,7 +422,7 @@ watch(listAgent, (agent) => {
   void loadResumable(agent === null ? null : targetDir.value, agent ?? "claude");
 });
 
-watch([() => props.dir, () => props.defaultCwd], () => {
+watch([() => props.dir, shownDefaultCwd], () => {
   // Cancel any pending debounced reload FIRST — whether we skip (a fillDir just loaded
   // immediately) or reschedule (typing), a stale timer from a prior change (e.g. a type then a
   // preset click) must not fire a duplicate load afterwards.
@@ -466,7 +475,7 @@ async function pickDir(): Promise<void> {
 async function selectPreset(p: CwdPreset): Promise<void> {
   if (takenWorktreeAt(p.path)) return fillDir(p.path);
   emit("update:dir", p.path);
-  if (launchesAgent.value && !blockedAgent.value) await offerDevcontainerIfNeeded(p.path);
+  if (launchesAgent.value && !blockedAgent.value && !props.host) await offerDevcontainerIfNeeded(p.path);
   startAt(p.path);
 }
 
@@ -516,9 +525,11 @@ function launchProgram(index: number): void {
   if (launcher) emit("launch", { launcher: { index, label: launcher.label }, cwd: targetDir.value });
 }
 
-const scriptChips = computed(() => scriptList.value.scripts.map((s) => ({ key: s.index, label: s.label, title: s.command })));
-const launchConfigChips = computed(() => launchConfigList.value.configs.map((c) => ({ key: c.index, label: c.label, title: c.command })));
-const launcherChips = computed(() => (props.launchers ?? []).map((l) => ({ key: l.label, label: l.label, title: l.command })));
+// None on a peer: a script, a launch config or a configured launcher opens a command cell that THIS
+// server resolves and runs, on this machine (common/peers.ts).
+const scriptChips = computed(() => (props.host ? [] : scriptList.value.scripts.map((s) => ({ key: s.index, label: s.label, title: s.command }))));
+const launchConfigChips = computed(() => (props.host ? [] : launchConfigList.value.configs.map((c) => ({ key: c.index, label: c.label, title: c.command }))));
+const launcherChips = computed(() => (props.host ? [] : (props.launchers ?? []).map((l) => ({ key: l.label, label: l.label, title: l.command }))));
 
 function runScript(index: number): void {
   const script = scriptList.value.scripts[index];
@@ -559,7 +570,13 @@ function resume(s: ResumableSession): void {
   // every cold reconnect (#1533). The surviving key reattaches the process that is already there,
   // which is what "resume it here" on the badge promises. For Claude and grok the key IS the row's
   // id, so this changes nothing there.
-  emit("resume", { id: s.runningKey ?? s.id, cwd: resumable.value.cwd ?? targetDir.value, agent: listAgent.value, account: s.account ?? null });
+  emit("resume", {
+    id: s.runningKey ?? s.id,
+    cwd: resumable.value.cwd ?? targetDir.value,
+    agent: listAgent.value,
+    account: s.account ?? null,
+    ...onHost(),
+  });
 }
 
 // A conversation whose session is still RUNNING with nobody attached — what a server restart leaves
@@ -588,7 +605,7 @@ async function renameSession(s: ResumableSession): Promise<void> {
   if (next === null) return; // cancelled
   rowBusy.value = s.id;
   try {
-    await fetchWithTimeout(`/api/session/${encodeURIComponent(s.id)}/memo`, {
+    await fetchWithTimeout(peerApiPath(props.host, `/api/session/${encodeURIComponent(s.id)}/memo`), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ text: next }),
@@ -607,7 +624,7 @@ async function deleteSession(s: ResumableSession): Promise<void> {
   rowBusy.value = s.id;
   try {
     const cwd = resumable.value.cwd ?? targetDir.value;
-    await fetchWithTimeout(`/api/session/${encodeURIComponent(s.id)}?cwd=${encodeURIComponent(cwd ?? "")}`, { method: "DELETE" });
+    await fetchWithTimeout(peerApiPath(props.host, `/api/session/${encodeURIComponent(s.id)}?cwd=${encodeURIComponent(cwd ?? "")}`), { method: "DELETE" });
   } catch (err) {
     console.warn("[session-delete] failed:", err);
   } finally {
@@ -638,7 +655,7 @@ const mcpGroupFailure = (group: ToolGroup): string | undefined => mcpGroupFailed
 //
 // Asked of the directory the launch will USE, not of the field: an empty field means the workspace
 // (see dirFor), which is exactly the case a comparison against the raw input would miss.
-const inWorkspace = computed(() => isSameDirPath(targetDir.value, props.defaultCwd));
+const inWorkspace = computed(() => isSameDirPath(targetDir.value, shownDefaultCwd.value));
 
 // The workspace answers "every tool automatically" only for an agent that can RECEIVE a per-spawn
 // config — the directory alone is not enough. Antigravity, grok, muse and cursor take what the
@@ -708,7 +725,7 @@ async function requestWorktree(repoDir: string, task: string): Promise<void> {
   worktreeError.value = null;
   try {
     const res = await fetchWithTimeout(
-      "/api/worktrees/create",
+      peerApiPath(props.host, "/api/worktrees/create"),
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -739,7 +756,7 @@ async function requestWorktree(repoDir: string, task: string): Promise<void> {
     // `hasDevcontainer` rides createWorktree's own answer (server/git/worktrees.ts) rather than a
     // second round trip to /api/devcontainer/status for a directory that was just created and
     // can't have answered the offer yet.
-    if (isRecord(body) && body.hasDevcontainer === true) await offerDevcontainerIfNeeded(path);
+    if (isRecord(body) && body.hasDevcontainer === true && !props.host) await offerDevcontainerIfNeeded(path);
     startAt(path);
   } catch (e) {
     reportWorktreeFailure(repoDir, requestFailureText(e));
@@ -758,12 +775,12 @@ const openWorktree = async (w: Worktree): Promise<void> => {
   await runWorktreeAction(openKey(w), async () => {
     await syncMcpGroupsInto(w.path);
     if (action === "resume" && w.session) {
-      emit("resume", { id: w.session.id, cwd: w.path, agent: w.session.agent });
+      emit("resume", { id: w.session.id, cwd: w.path, agent: w.session.agent, ...onHost() });
       return;
     }
     // A fresh session in an existing worktree — listWorktrees doesn't carry hasDevcontainer the
     // way createWorktree's own answer does, so this asks fresh rather than skipping the offer.
-    await offerDevcontainerIfNeeded(w.path);
+    if (!props.host) await offerDevcontainerIfNeeded(w.path);
     startAt(w.path);
   });
 };
@@ -795,7 +812,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
   worktreeError.value = null;
   try {
     const res = await fetchWithTimeout(
-      "/api/worktrees/remove",
+      peerApiPath(props.host, "/api/worktrees/remove"),
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -844,10 +861,10 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
            identical strengths, so a colour-coded directory read as running (#1106). Wider than
            it was, now that it carries the directory on its own. -->
         <span
-          v-if="presetColors[p.path]"
+          v-if="presetColors[dirKey(p.path)]"
           data-testid="cell-chip-color"
           class="w-[8px] flex-none"
-          :style="{ background: presetColors[p.path] }"
+          :style="{ background: presetColors[dirKey(p.path)] }"
           aria-hidden="true"
         />
         <button
@@ -869,7 +886,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
                would put us back where that bug came from. -->
           <span v-if="p.isWorkspace" data-testid="cell-chip-workspace" class="material-symbols-outlined mr-[4px] text-[13px] align-middle" aria-hidden="true"
             >workspaces</span
-          ><DirIcon :src="presetIcons[p.path]" :size="13" class="mr-[4px] inline-block align-middle" />{{ p.label }}
+          ><DirIcon :src="presetIcons[dirKey(p.path)]" :size="13" class="mr-[4px] inline-block align-middle" />{{ p.label }}
         </button>
         <button
           type="button"
@@ -885,8 +902,9 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
         <!-- No remove button on the workspace. It is not a recorded preset, so there is nothing to
              remove: dropping it would only make it reappear on the next render, and it is the one
              directory the launcher is supposed to always offer. -->
+        <!-- Nor on a peer's chip: removing it here would edit THIS server's list (common/peers.ts). -->
         <button
-          v-if="!p.isWorkspace"
+          v-if="!p.isWorkspace && !host"
           type="button"
           data-testid="cell-chip-del"
           class="cursor-pointer border-0 border-l border-l-border bg-transparent px-[7px] text-[11px] text-secondary hover:bg-hover hover:text-[var(--danger,#e5484d)]"
@@ -1012,8 +1030,8 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
           type="button"
           data-testid="cell-dir-go"
           class="inline-flex flex-none cursor-pointer items-center justify-center rounded-md border border-border bg-elevated px-2 text-secondary enabled:hover:border-accent enabled:hover:bg-hover enabled:hover:text-fg disabled:cursor-default disabled:opacity-40"
-          :disabled="!dir.trim() || !!blockedAgent || shellOnPeer || (!host && (!!takenWorktreeAt(targetDir) || dirMissing))"
-          :data-tip="host ? t('tips.launch.start') : (takenWorktreeAt(targetDir) ?? (dirMissing ? t('launch.dirMissing') : t('tips.launch.start')))"
+          :disabled="!dir.trim() || !!takenWorktreeAt(targetDir) || !!blockedAgent || dirMissing"
+          :data-tip="takenWorktreeAt(targetDir) ?? (dirMissing ? t('launch.dirMissing') : t('tips.launch.start'))"
           :aria-label="t('tips.launch.startAria')"
           @click="startHere"
         >
@@ -1025,7 +1043,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
       <span v-if="takenWorktreeAt(targetDir)" data-testid="cell-dir-busy" class="font-sans text-[11px] leading-snug text-amber">{{
         takenWorktreeAt(targetDir)
       }}</span>
-      <span v-if="dirMissing && !host" data-testid="cell-dir-missing" role="status" class="font-sans text-[11px] leading-snug text-amber">{{
+      <span v-if="dirMissing" data-testid="cell-dir-missing" role="status" class="font-sans text-[11px] leading-snug text-amber">{{
         t("launch.dirMissing")
       }}</span>
       <span v-if="pickError" data-testid="cell-dir-pick-error" role="alert" class="font-sans text-[11px] leading-snug text-amber">{{ pickError }}</span>
@@ -1052,9 +1070,6 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
       </select>
     </label>
     <span v-if="host" data-testid="cell-peer-note" class="font-sans text-[11px] leading-snug text-dim" :class="LAUNCH_ROW">{{ t("peers.peerNote") }}</span>
-    <span v-if="shellOnPeer" data-testid="cell-peer-shell" role="alert" class="font-sans text-[11px] leading-snug text-amber" :class="LAUNCH_ROW">{{
-      t("peers.shellOnPeer")
-    }}</span>
     <!-- A GUI tool group is a per-DIRECTORY registration in Claude Code's own MCP config, not
          a per-launch choice — but it only takes effect when a session starts, so this is
          where it belongs: decided before the thing it configures exists.
@@ -1131,7 +1146,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
          agent reads and writes shared state (wiki, collections, accounting), which is exactly what
          a detached branch would cut it off from. Offering it there is offering a mistake. -->
     <div
-      v-if="worktreeList.isGit && launchesAgent && !inWorkspace && !host"
+      v-if="worktreeList.isGit && launchesAgent && !inWorkspace"
       data-testid="cell-worktrees"
       class="flex flex-col items-stretch gap-1.5"
       :class="LAUNCH_ROW"
@@ -1220,12 +1235,7 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
     <!-- The picked agent's OWN conversations. Shell has none, and reaches here with an empty list
          anyway (loadForDir passes it no directory) — the `listAgent` test says so out loud rather
          than resting on that. -->
-    <div
-      v-if="listAgent && resumable.sessions.length && !host"
-      data-testid="cell-resume"
-      class="flex min-h-0 flex-col items-center gap-1.5"
-      :class="LAUNCH_ROW"
-    >
+    <div v-if="listAgent && resumable.sessions.length" data-testid="cell-resume" class="flex min-h-0 flex-col items-center gap-1.5" :class="LAUNCH_ROW">
       <span data-testid="cell-resume-heading" class="font-sans text-[11px] uppercase tracking-[0.05em] text-dim">{{ resumeHeading }}</span>
       <input
         v-if="showResumeFilter"

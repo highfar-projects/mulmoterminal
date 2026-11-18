@@ -112,9 +112,29 @@ B's git marks, previewed B's README through `/peer/b/api/files/browse/md` with i
 `/peer/b/api/files/raw`, and a card POSTed to B opened the Canvas on A by itself and drew
 "Hello from server B". No file or canvas request reached A.
 
+## Stage 5: the launch form on a peer, and a shell there
+
+- TerminalCell and LaunchPanel provide the picked server (`providePaneHost`), so everything the launch
+  form reads is that server's: the directory lists (`useDirList` — past sessions, worktrees, scripts),
+  path suggestions and the "not there" check, the GUI tool-group switches, stopping / renaming /
+  deleting a listed session, creating / removing a worktree, and which agents can start
+  (`useAgentAvailability`, now one answer per server).
+- The saved-folder chips and the default workspace are the peer's, read from its `/api/config`
+  (`usePeerLaunchDirs`); their colours, icons and rank are keyed by `peerDirKey`. A peer's chip has no
+  remove button (it would edit this server's list).
+- Withheld on a peer: the script, launch-config and configured-launcher chips (each opens a command
+  cell this server runs) and the devcontainer offer (this server's routes).
+- A resumed row and a worktree's session carry the peer (`ResumeRequest.host`, `PanelResume.host`).
+- A shell runs there: `LaunchPick.host` → `launchInCell(…, host)`, and LauncherCell / CellShell pass
+  it to the terminal and the chrome, show the peer's badge, and withhold the path menu.
+
+Measured with two scratch servers: with B picked in A's form, the chips were B's folders only and
+had no remove button; B's past session was listed and resuming it reconnected B's session by id; a
+Shell started from the launch panel ran on B (`$HOME` was B's) with the "Server B" badge and B's git
+chip. A saw no terminal connection at all.
+
 ## Not yet (later stages)
 
 4. The question pane (AskUserQuestion) and `showInPane` for a peer cell: both listen on this
    server's channels only.
-5. The peer's saved folders and past sessions in the launch form; a shell cell on a peer.
-6. Showing a peer that is down as such, per cell.
+5. Showing a peer that is down as such, per cell.

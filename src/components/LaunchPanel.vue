@@ -22,6 +22,7 @@ import type { RunCommand } from "./runCommand";
 import type { ResumeRequest } from "./resumeRequest";
 import type { PanelStart } from "./launchCell";
 import { loadPeerHosts, peerHosts } from "../composables/peerHosts";
+import { providePaneHost } from "../composables/paneHost";
 import { useI18n } from "vue-i18n";
 
 const { t } = useI18n();
@@ -71,6 +72,8 @@ const account = ref<string | null>(null);
 // This server every time, like the agent: opening the panel from a peer cell is not a request to
 // start the next session there too.
 const host = ref<string | null>(null);
+// The launch form's lists are the picked server's (paneHost.ts).
+providePaneHost(host);
 
 const panel = ref<HTMLElement | null>(null);
 

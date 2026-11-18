@@ -7,4 +7,6 @@ export interface ResumeRequest {
   cwd: string | null;
   agent?: TerminalAgent;
   account?: string | null;
+  /** The peer server the listed session runs on (common/peers.ts), null/absent for this one. */
+  host?: string | null;
 }
