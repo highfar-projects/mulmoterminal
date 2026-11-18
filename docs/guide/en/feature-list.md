@@ -4,7 +4,7 @@ nav_title: Feature list
 layout: default
 parent: English
 nav_order: 6.5
-as_of: 12.1.2
+as_of: 13.0.0
 description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 9.1.0)."
 ---
 
@@ -315,6 +315,7 @@ More: [Configuration](config.html)
 
 More: [From a collection](from-collection.html) · [MulmoCast videos](mulmocast.html) · [Spreadsheets and charts](spreadsheet.html)
 
+- Agents build solid models for parts that are made (replicad, OpenCascade) and the Canvas shows them in 3D with a check report and STEP, STL and drawing downloads (presentBrep) (v12.2.0)
 - The bundled /mulmoterminal-html-plan skill lays a plan out as a page in the Canvas, with each open choice as mockups or controls, and its button hands the decisions back as your next message (v11.3.0)
 - Spreadsheet formulas can answer a table that fills the cells beside them (SORT, FILTER, UNIQUE, GROUPBY, PIVOTBY), and add LET and LAMBDA, LINEST, FREQUENCY, FORECAST.ETS and more tests (v11.2.0)
 - Charts add maps of Japan and the world, clusters, a box per column, fitted curves and histograms that follow the sheet, word clouds, 3D, SVG and CSV export, and cards side by side (v11.1.0)
@@ -452,11 +453,12 @@ More: [Feature reference](features.html)
 
 More: [Getting started](getting-started.html)
 
+- WHISPER_SERVER_EXTRA_ARGS passes extra flags to the voice-input whisper-server, such as --vad to skip silence and noise (v13.0.0)
 - On Windows, psmux keeps cells alive across a server restart (v11.1.0)
 - Settings → Release notes lists every version up to the running one with its dated guide (v8.0.0)
 - Experimental: run the server on another machine over an SSH tunnel, with remoteServer mode and a Settings box (v7.2.0)
 - After an upgrade, a What's new dialog shows each new version's dated setup guide in your language (v7.2.0)
-- On Node older than 22.12, npx mulmoterminal stops with upgrade steps (v6.6.0)
+- On Node older than the supported minimum, npx mulmoterminal stops with upgrade steps (v6.6.0)
 - The UI adds Simplified Chinese, Traditional Chinese and Korean, each language also named in English (5.5) (v5.4.0)
 - The launcher restarts a crashed server and the browser reconnects (not on Windows) (v5.4.0)
 - mulmoterminal stop shuts down the server from any terminal, one port at a time with --port since 7.2 (v4.11.0)

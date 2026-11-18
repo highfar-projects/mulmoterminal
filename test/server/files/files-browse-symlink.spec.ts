@@ -3,10 +3,10 @@
 // files-browse.spec.ts is at its line budget.
 import { describe, it, expect } from "vitest";
 import { makeTempDir } from "../../support/tempDir.js";
-import { writeFileSync, mkdirSync, rmSync, symlinkSync } from "node:fs";
+import { existsSync, realpathSync, writeFileSync, mkdirSync, rmSync, symlinkSync } from "node:fs";
 import path from "node:path";
 import express from "express";
-import { routeCall } from "../../helpers/routeCall";
+import { routeCall, jsonPost } from "../../helpers/routeCall";
 import { listEntries, mountFilesBrowseRoutes } from "../../../server/files/files-browse";
 import { canSymlink } from "../../support/canSymlink";
 
@@ -73,5 +73,41 @@ describe("browsing through a symlink that leaves the project root", () => {
 
     rmSync(dir, { recursive: true, force: true });
     rmSync(outside, { recursive: true, force: true });
+  });
+});
+
+const serveProject = (dir: string) => {
+  const app = express();
+  app.use(express.json());
+  mountFilesBrowseRoutes(app, { defaultCwd: dir, backupRoot: path.join(dir, ".backups") });
+  return app;
+};
+
+// #3301 (upstream). Upstream also pins a READ behind a link out answering 403 with
+// `escape: "symlink"`; this fork follows links on reads (above), so only the refusals both share
+// are kept here: a climb out by spelling carries no symlink field, and a write through a link is
+// still refused with one.
+describe("a 403 says when a symlink is what leads out", () => {
+  it("not for a climb out by spelling", async () => {
+    const dir = realpathSync(tmp());
+    const res = await routeCall(serveProject(dir))(`/api/files/browse/version?cwd=${encodeURIComponent(dir)}&path=../clip.mp4`);
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ error: "path escapes the project root" });
+  });
+});
+
+// #3303 (upstream). A save through a link whose target does not exist yet would create that target.
+describe("a link out whose target does not exist yet", () => {
+  it.runIf(canSymlink)("is refused by /browse/write, and nothing is created where it points", async () => {
+    const dir = realpathSync(tmp());
+    const planted = path.join(realpathSync(tmp()), "planted.txt");
+    symlinkSync(planted, path.join(dir, "notes.txt"));
+    const res = await routeCall(serveProject(dir))(`/api/files/browse/write?cwd=${encodeURIComponent(dir)}&path=notes.txt`, {
+      ...jsonPost({ text: "written through link\n", baseVersion: null }),
+      method: "PUT",
+    });
+    expect(res.status).toBe(403);
+    expect(res.body).toMatchObject({ escape: "symlink" });
+    expect(existsSync(planted)).toBe(false);
   });
 });

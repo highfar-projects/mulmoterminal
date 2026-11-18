@@ -90,6 +90,6 @@ export function mountFilesRoutes(app: Express, deps: { workspace: string; sessio
       res.status(403).json({ error: "path escapes the serving root" });
       return;
     }
-    sendRawFile(req, res, abs, rel);
+    sendRawFile(req, res, abs, rel, () => resolveContained(base.dir, rel, os.homedir()));
   });
 }

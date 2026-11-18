@@ -8,9 +8,8 @@ description: 複数の AI コーディングエージェントをブラウザの
 
 # MulmoTerminal ガイド（日本語）
 
-> **12.1.2 が出ました。** トークンローテーションが、Claude Code を使えない契約でセッションを始めなくなりました。
-> [セットアップガイド](v12.1.2.html) — ロスターのコンパクト表示と畳む機能が入った 12.1.0 は
-> [12.1.0 のセットアップガイド](v12.1.0.html)
+> **13.0.0 が出ました。** Node.js 24.15 以上が必要になり、音声入力で無音や雑音を飛ばせるようになりました。
+> [セットアップガイド](v13.0.0.html)
 
 ## MulmoTerminal とは {#what-is}
 
@@ -276,7 +275,7 @@ AI エージェントは 1 タスクに数分かかります。1 体を見張る
 
 ## まずは起動 {#cli-tools}
 
-[`claude`](https://claude.com/claude-code)（Claude Code）が動く環境 + **Node ≥ 22.12** があれば、コマンド 1 つで始められます。
+[`claude`](https://claude.com/claude-code)（Claude Code）が動く環境 + **Node ≥ 24.15** があれば、コマンド 1 つで始められます。
 
 ```bash
 npx mulmoterminal@latest    # → http://localhost:34567 が開く
