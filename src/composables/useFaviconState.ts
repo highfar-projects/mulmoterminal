@@ -7,6 +7,7 @@
 // lets a missed "closed" (e.g. one that happened while the socket was down) recover.
 import { computed, onUnmounted, ref, watch, type Ref } from "vue";
 import { usePubSub } from "./usePubSub";
+import { subscribeEveryPeer } from "./peerHosts";
 import { useDynamicFavicon } from "./useDynamicFavicon";
 import type { Session } from "./useSessions";
 import { isRecord } from "../../common/isRecord";
@@ -46,14 +47,22 @@ export function useFaviconState(sessions: Ref<Session[]>): void {
   const live = ref(new Map<string, Activity>());
 
   const { subscribe } = usePubSub();
-  const unsubscribe = subscribe("sessions", (d) => {
+  const onActivity = (d: unknown): void => {
     if (!isActivityMsg(d)) return;
     const next = new Map(live.value);
     if (d.event === "closed") next.delete(d.id);
     else next.set(d.id, { working: d.working ?? false, waiting: d.waiting ?? false });
     live.value = next;
+  };
+  const unsubscribe = subscribe("sessions", onActivity);
+  // A peer server's sessions (common/peers.ts) light the tab too. They never appear in the list
+  // reconciled below — it is this server's — so, like a cross-dir grid id, each is pruned by its own
+  // "closed" event.
+  const unsubscribePeers = subscribeEveryPeer("sessions", (d) => onActivity(d));
+  onUnmounted(() => {
+    unsubscribe();
+    unsubscribePeers();
   });
-  onUnmounted(unsubscribe);
 
   // Reconcile with the authoritative list: adopt its truth and drop default-project
   // ids it no longer reports (cross-dir grid ids never appear here, so they stay,

@@ -87,3 +87,7 @@ export function splitPeerPath(pathWithQuery: string): { id: string; rest: string
  *  prefix reaches all of them without each learning about peers. */
 export const peerWsHost = (peer: string | null | undefined, locationHost: string): string =>
   peer ? `${locationHost}${PEER_PATH_PREFIX}${peer}` : locationHost;
+
+/** An `/api/…` path as THIS server should be asked it for a cell: unchanged for this server, under the
+ *  peer's prefix for a peer, so the relay hands it to the server the session actually runs on. */
+export const peerApiPath = (peer: string | null | undefined, path: string): string => (peer ? `${PEER_PATH_PREFIX}${peer}${path}` : path);

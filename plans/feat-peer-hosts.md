@@ -37,9 +37,24 @@ Measured with two scratch servers and headless Chrome: a page served by A starte
 fake `claude` printed B's HOME), keystrokes reached B, and a page reload reattached the same process
 (same `$$`).
 
+## Stage 2: a peer cell's activity
+
+- `usePubSub(host)` keeps one socket per server; a peer's is its own socket.io, reached at
+  `/peer/<id>/ws/pubsub` through the relay. `usePubSub()` is this server, unchanged.
+- TerminalCell listens to its own server's `sessions` stream and seeds from its
+  `/api/session/:id` (`peerApiPath`), re-wiring if the cell's server changes before launch. The
+  Canvas count is not wired on a peer: the pane still reads this server.
+- `useGridActivity(ids, hostOf)` seeds each server from its own `/api/activity` and listens to each
+  server holding a cell, so off-page peer cells still rank and route attention.
+- The attention sound and the favicon also listen to every configured peer (`subscribeEveryPeer`).
+  A directory's own sound is asked of the server the directory is on, keyed by host.
+
+Measured with two scratch servers: hooks posted to B (prompt, Notification, Stop) turned the peer
+cell's frame working, blocked, then done on A's page; a reload came back done from B's snapshot; the
+sound path fired for both and asked `/peer/b/api/dir-sound`.
+
 ## Not yet (later stages)
 
-2. Working/waiting dots and the attention sound for peer cells: subscribe to each peer's pub/sub.
 3. Per-cell features against the peer: the seven `/api/session/:id/…` routes, restart, diff, files,
    usage. Each surface that acts on "the machine" needs its own decision (see docs/file-surfaces.md).
 4. The peer's saved folders and past sessions in the launch form; a shell cell on a peer.

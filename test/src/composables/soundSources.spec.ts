@@ -38,6 +38,15 @@ describe("soundSources", () => {
     expect(sources[0].url).toBe("/api/dir-sound?cwd=%2Frepo%2Fapp&kind=waiting");
   });
 
+  // A peer's directory is on THAT machine (common/peers.ts): its sound is asked of that server, and the
+  // same path here is a different directory, so it must not share the decoded buffer.
+  it("asks a peer's directory sound of the peer, under a key of its own", () => {
+    const here = soundSources("waiting", "/repo/app", config())[0];
+    const there = soundSources("waiting", "/repo/app", config(), "win")[0];
+    expect(there.url).toBe("/peer/win/api/dir-sound?cwd=%2Frepo%2Fapp&kind=waiting");
+    expect(there.key).not.toBe(here.key);
+  });
+
   // The cache key has to change with the CONFIGURED VALUE, or picking a different sound would
   // keep replaying the decoded buffer of the old one.
   it("keys the global source on the chosen sound", () => {
