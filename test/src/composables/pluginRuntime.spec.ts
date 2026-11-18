@@ -5,9 +5,15 @@
 // signature. What it did NOT do was call `parse`. These pin the behavior instead.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-const m = vi.hoisted(() => ({ subscribe: vi.fn() }));
-vi.mock("../../../src/composables/usePubSub", () => ({ usePubSub: () => ({ subscribe: m.subscribe }) }));
+const m = vi.hoisted(() => ({ subscribe: vi.fn(), pubsubHost: vi.fn() }));
+vi.mock("../../../src/composables/usePubSub", () => ({
+  usePubSub: (host: string | null = null) => {
+    m.pubsubHost(host);
+    return { subscribe: m.subscribe };
+  },
+}));
 
+import { ref } from "vue";
 import { makeBrowserPluginRuntime } from "../../../src/composables/pluginRuntime";
 import { PLUGIN_DISPATCH_TIMEOUT_MS } from "../../../src/composables/pluginDispatchDeadline";
 import { SLOW_COMMAND_TIMEOUT_MS } from "../../../src/utils/fetchWithTimeout";
@@ -59,6 +65,28 @@ describe("makeBrowserPluginRuntime dispatch", () => {
     const parse = vi.fn((raw: unknown) => `parsed:${JSON.stringify(raw)}`);
     await expect(runtime().dispatch({ kind: "list" }, parse)).resolves.toBe('parsed:{"count":2}');
     expect(parse).toHaveBeenCalledOnce();
+  });
+
+  // A peer's file exists only on the peer, so a view in a pane about a peer cell must reach the
+  // peer's route through the relay. Posting to this server's own route answered "no file exists".
+  it("POSTs through the peer relay when the pane is about a peer's cell", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await makeBrowserPluginRuntime({ scope: "markdown", toolName: "presentDocument", host: ref("wsl") }).dispatch({ kind: "list" });
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/peer/wsl/api/plugin/presentDocument");
+    expect(m.pubsubHost).toHaveBeenLastCalledWith("wsl");
+  });
+
+  it("follows the pane when it moves to another server", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
+    vi.stubGlobal("fetch", fetchMock);
+    const host = ref<string | null>("wsl");
+    const { dispatch } = makeBrowserPluginRuntime({ scope: "markdown", toolName: "presentDocument", host });
+
+    host.value = null;
+    await dispatch({ kind: "list" });
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/plugin/presentDocument");
   });
 
   it("throws with the route's status and body on a non-2xx response", async () => {
