@@ -13,8 +13,10 @@ vi.mock("../../../src/composables/usePubSub", () => ({
   },
 }));
 
-import { ref } from "vue";
-import { makeBrowserPluginRuntime } from "../../../src/composables/pluginRuntime";
+import { defineComponent, h, nextTick, ref } from "vue";
+import { mount } from "@vue/test-utils";
+import { makeBrowserPluginRuntime, wrapWithPluginRuntime } from "../../../src/composables/pluginRuntime";
+import { providePaneHost } from "../../../src/composables/paneHost";
 import { PLUGIN_DISPATCH_TIMEOUT_MS } from "../../../src/composables/pluginDispatchDeadline";
 import { SLOW_COMMAND_TIMEOUT_MS } from "../../../src/utils/fetchWithTimeout";
 import { i18n } from "../../../src/i18n";
@@ -209,6 +211,36 @@ describe("makeBrowserPluginRuntime subscribe", () => {
     expect(seen).toEqual(["ok.md"]);
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
+  });
+});
+
+// The wrapper as the hosts use it: every parent passes the card as `:selected-result`, and the
+// wrapper does not declare it, so it arrives in `attrs` under THAT spelling. Reading only
+// `attrs.selectedResult` found no document, and a peer's images kept the slash markdown-utils drops.
+describe("wrapWithPluginRuntime on a peer's pane", () => {
+  const Inner = defineComponent({
+    props: { selectedResult: { type: Object, default: null } },
+    setup: () => () => h("img", { src: "/api/files/raw?path=home%2Fu%2Fws%2Fa.png" }),
+  });
+  const Host = (host: string | null) =>
+    defineComponent({
+      setup() {
+        providePaneHost(ref(host));
+        const View = wrapWithPluginRuntime("markdown", "presentDocument", Inner);
+        return () => h(View, { "selected-result": { toolName: "presentDocument", data: { markdown: "", docPath: "/home/u/ws/README.md" } } });
+      },
+    });
+
+  it("points the view's images at the peer, with the document's leading slash back", async () => {
+    const wrapper = mount(Host("wsl"));
+    await nextTick();
+    expect(wrapper.find("img").attributes("src")).toBe("/peer/wsl/api/files/raw?path=%2Fhome%2Fu%2Fws%2Fa.png");
+  });
+
+  it("leaves this server's views alone", async () => {
+    const wrapper = mount(Host(null));
+    await nextTick();
+    expect(wrapper.find("img").attributes("src")).toBe("/api/files/raw?path=home%2Fu%2Fws%2Fa.png");
   });
 });
 
