@@ -55,6 +55,7 @@ import { registerCellAction } from "../composables/useCellAction";
 import type { CellSelfAction } from "../../common/headerActions";
 import { reapSessionOnServer, restartSession, switchTokenOnServer } from "../composables/restartSession";
 import { loadPeerHosts, peerHosts, peerLabel } from "../composables/peerHosts";
+import { peerApiPath } from "../../common/peers";
 import { accountSwitchChoices } from "../composables/accountSwitchChoices";
 import { useAppConfig } from "../composables/useAppConfig";
 import { useRateLimits } from "../composables/useRateLimits";
@@ -205,6 +206,12 @@ const { chromeProps, chromeEvents } = cellChromeBinding(props, emit, () => void 
 // starts empty and lazy-launches when the user picks a dir and clicks Start.
 const launched = ref(props.initialSessionId !== null);
 const sessionId = ref<string | null>(props.initialSessionId);
+// The peer server the session runs on, or null for this one. Picked in the launch form; kept for the
+// life of the cell like the account, since the session id names nothing on any other server. Up
+// here because the activity and canvas subscriptions below are wired during setup, on the server
+// this names.
+const hostId = ref<string | null>(props.initialHost ?? null);
+loadPeerHosts();
 // What the launch form's AGENT PICKER will start here. "shell" is one of its options and is a
 // LAUNCHER, not an agent: the parent replaces this cell with a launcher cell, so it never becomes
 // the `agent` below.
@@ -533,7 +540,9 @@ const cellChips = computed<CellChipView[]>(() => {
   return views;
 });
 
-const { subscribe, onReconnect } = usePubSub();
+// The pub/sub of the server this cell's session runs on: this one, or its peer (common/peers.ts),
+// whose `sessions` stream is the only one that knows the session at all.
+const cellPubSub = () => usePubSub(hostId.value);
 let unsubscribe: (() => void) | null = null;
 let offReconnect: (() => void) | null = null;
 
@@ -635,7 +644,7 @@ async function fetchSessionDetail(id: string): Promise<Record<string, unknown> |
     // (#1465) — and grok's is partitioned by directory, so the cwd is part of that lookup too.
     const params = new URLSearchParams({ agent: agent.value });
     if (cwd.value) params.set("cwd", cwd.value);
-    const res = await fetchWithTimeout(`/api/session/${id}?${params}`);
+    const res = await fetchWithTimeout(peerApiPath(hostId.value, `/api/session/${id}?${params}`));
     if (!res.ok) return null;
     const data = await jsonBody(res);
     return id === sessionId.value ? data : null;
@@ -732,14 +741,16 @@ function watchCanvasOutput(id: string | null) {
   unsubscribeCanvas?.();
   unsubscribeCanvas = undefined;
   unseenCanvas.value = 0;
-  if (!id) return;
-  unsubscribeCanvas = subscribe(`session:${id}`, () => {
+  // Not on a peer yet: the Canvas pane reads this server's store, so a count here would open onto
+  // an empty pane. Comes with the per-cell features in a later stage (plans/feat-peer-hosts.md).
+  if (!id || hostId.value) return;
+  unsubscribeCanvas = cellPubSub().subscribe(`session:${id}`, () => {
     // Already looking at it: arrivals land in a pane the user can see, so nothing is unseen.
     if (props.paneShown && props.rightPane === "canvas") return;
     unseenCanvas.value += 1;
   });
 }
-watch(sessionId, watchCanvasOutput, { immediate: true });
+watch([sessionId, hostId], () => watchCanvasOutput(sessionId.value), { immediate: true });
 // Opening the pane on this cell clears the count — that IS having looked.
 watch(
   () => props.paneShown && props.rightPane === "canvas",
@@ -761,22 +772,36 @@ const UNTRACKED_BADGE_AGENTS = new Set(["antigravity", "grok", "muse"]);
 const UNTRACKED_BADGE_POLL_MS = 60_000;
 let badgePoll: ReturnType<typeof setInterval> | null = null;
 
-onMounted(() => {
-  unsubscribe = subscribe("sessions", (d) => {
+// Live activity for this cell's session, from the server it runs on. Re-wired when the cell's server
+// changes (a launch form switched to a peer), since the old stream will never mention the session.
+let activityWired = false;
+function wireActivity(): void {
+  unsubscribe?.();
+  offReconnect?.();
+  const pubsub = cellPubSub();
+  unsubscribe = pubsub.subscribe("sessions", (d) => {
     if (!isActivityMsg(d) || d.id !== sessionId.value) return;
     applyActivity(d);
     refreshBadgesIfModelUnknown();
   });
-  badgePoll = setInterval(() => {
-    if (UNTRACKED_BADGE_AGENTS.has(agent.value) && sessionId.value) void refreshUsage();
-  }, UNTRACKED_BADGE_POLL_MS);
   // A dropped socket misses the pushes sent while it was down, and this cell's status is
   // derived state that pub/sub only replays room membership for — not the missed events. So
   // on reconnect re-seed from the authoritative snapshot (guarded by activityGen), or a turn
   // that started during the outage stays showing idle until it ends.
-  offReconnect = onReconnect(() => {
+  offReconnect = pubsub.onReconnect(() => {
     if (sessionId.value) void loadInitial(sessionId.value);
   });
+  activityWired = true;
+}
+watch(hostId, () => {
+  if (activityWired) wireActivity();
+});
+
+onMounted(() => {
+  wireActivity();
+  badgePoll = setInterval(() => {
+    if (UNTRACKED_BADGE_AGENTS.has(agent.value) && sessionId.value) void refreshUsage();
+  }, UNTRACKED_BADGE_POLL_MS);
   if (sessionId.value) {
     void loadInitial(sessionId.value);
     void loadDiff(); // a resumed worktree cell shows its diff on restore
@@ -819,10 +844,6 @@ const launchChoice = ref<LaunchChoice | null>(props.initialLaunchChoice ?? null)
 // cell like the model choice, so a relaunch in the same cell repeats it. The server binds a session
 // to its account when it first starts, so this only ever decides a NEW session.
 const accountId = ref<string | null>(props.initialAccount ?? null);
-// The peer server the session runs on, or null for this one. Picked in the launch form; kept for the
-// life of the cell like the account, since the session id names nothing on any other server.
-const hostId = ref<string | null>(props.initialHost ?? null);
-loadPeerHosts();
 // The rotation credential the server started this session's process on (#2919) — a different
 // subscription from the cell beside it, in the same home, so it wears the same mark an account does.
 const { tokenRotation } = useAppConfig();

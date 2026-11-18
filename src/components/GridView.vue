@@ -137,7 +137,8 @@ const noRunningTerminals = computed(() => runningCount(state.value.cells) === 0)
 // `statusByUid` (reported up while a cell is mounted) is the fallback for cells with
 // no session id (command cells) and a just-launched cell before its id arrives.
 const cellSessionIds = computed(() => state.value.cells.map((c) => c.session).filter((s): s is string => !!s));
-const { activity: gridActivity } = useGridActivity(cellSessionIds);
+// A cell on a peer server (common/peers.ts) is asked about on that server.
+const { activity: gridActivity } = useGridActivity(cellSessionIds, (id) => state.value.cells.find((c) => c.session === id)?.host ?? null);
 const statusByUid = reactive<Record<number, AttentionStatus>>({});
 const onStatus = (uid: number, s: AttentionStatus) => (statusByUid[uid] = s);
 // Which cell the cursor is in, reported up from the grid. Un-zoomed this is the only notion of

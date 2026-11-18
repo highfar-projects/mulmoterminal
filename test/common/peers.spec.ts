@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isPeerId, peerWsHost, sanitizePeers, splitPeerPath } from "../../common/peers";
+import { isPeerId, peerApiPath, peerWsHost, sanitizePeers, splitPeerPath } from "../../common/peers";
 
 describe("sanitizePeers", () => {
   it("keeps a well-formed entry, with the url reduced to its origin", () => {
@@ -68,5 +68,12 @@ describe("peerWsHost", () => {
 describe("isPeerId", () => {
   it("accepts a short lowercase id", () => {
     expect(isPeerId("win-11")).toBe(true);
+  });
+});
+
+describe("peerApiPath", () => {
+  it("leaves this server's path alone and puts a peer's under its prefix", () => {
+    expect(peerApiPath(null, "/api/session/x?agent=claude")).toBe("/api/session/x?agent=claude");
+    expect(peerApiPath("win", "/api/session/x?agent=claude")).toBe("/peer/win/api/session/x?agent=claude");
   });
 });
