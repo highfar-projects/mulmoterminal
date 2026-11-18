@@ -353,7 +353,7 @@ const FEATURE_ACTIONS: Record<FeatureMenuEntry, () => void> = {
             v-if="updateStatus?.relaunch"
             type="button"
             data-testid="update-restart"
-            class="mt-2 inline-flex items-center gap-1.5 rounded border border-border px-2 py-1 text-[12px] hover:bg-selected"
+            class="mt-2 inline-flex cursor-pointer items-center gap-1.5 rounded border border-accent bg-accent-bg px-2 py-1 text-[12px] font-medium text-on-accent hover:bg-accent-bg-hover"
             @click="restartServer"
           >
             <span class="material-symbols-outlined text-[15px] leading-none" aria-hidden="true">restart_alt</span>
