@@ -42,7 +42,9 @@ describe("loadLaunchConfigs", () => {
         ],
       }`,
     );
-    expect(loadLaunchConfigs(dir)).toEqual([{ label: "Dev", command: `${q("node")} ${q(path.join(dir, "index.js"))}` }]);
+    // `${workspaceFolder}/index.js` is substituted textually, as VS Code does, so the `/` stays —
+    // on Windows that is a mixed-separator path, which node and PowerShell both accept.
+    expect(loadLaunchConfigs(dir)).toEqual([{ label: "Dev", command: `${q("node")} ${q(dir + "/index.js")}` }]);
     rmSync(dir, { recursive: true, force: true });
   });
 
@@ -54,7 +56,7 @@ describe("loadLaunchConfigs", () => {
         configurations: [{ name: "Dev server", type: "node", request: "launch", program: "${workspaceFolder}/server.js", args: ["--port", "3000"] }],
       }),
     );
-    expect(loadLaunchConfigs(dir)).toEqual([{ label: "Dev server", command: `${q("node")} ${q(path.join(dir, "server.js"))} ${q("--port")} ${q("3000")}` }]);
+    expect(loadLaunchConfigs(dir)).toEqual([{ label: "Dev server", command: `${q("node")} ${q(dir + "/server.js")} ${q("--port")} ${q("3000")}` }]);
     rmSync(dir, { recursive: true, force: true });
   });
 
@@ -99,7 +101,10 @@ describe("loadLaunchConfigs", () => {
         configurations: [{ name: "Dev", type: "node", request: "launch", program: "index.js", env: { NODE_ENV: "development", PORT: "4000" } }],
       }),
     );
-    expect(loadLaunchConfigs(dir)).toEqual([{ label: "Dev", command: `env NODE_ENV=${q("development")} PORT=${q("4000")} ${q("node")} ${q("index.js")}` }]);
+    // The prefix follows the shell that will run it: `env` on POSIX, `$env:` statements on PowerShell.
+    const envPrefix =
+      process.platform === "win32" ? `$env:NODE_ENV=${q("development")}; $env:PORT=${q("4000")};` : `env NODE_ENV=${q("development")} PORT=${q("4000")}`;
+    expect(loadLaunchConfigs(dir)).toEqual([{ label: "Dev", command: `${envPrefix} ${q("node")} ${q("index.js")}` }]);
     rmSync(dir, { recursive: true, force: true });
   });
 
