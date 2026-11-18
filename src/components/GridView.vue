@@ -404,7 +404,7 @@ const onRun = (uid: number, command: RunCommand) => (state.value = runCommand(st
 const onRunSpare = (uid: number, command: RunCommand) => (state.value = runScriptInNewCell(state.value, uid, command));
 // The empty cell launcher picked a program — a configured launch command, or the OS default
 // shell: turn it into a persistent launcher cell. Its session id arrives later via onSession.
-const onLaunch = (uid: number, pick: LaunchPick) => (state.value = launchInCell(state.value, uid, pick.launcher, pick.cwd));
+const onLaunch = (uid: number, pick: LaunchPick) => (state.value = launchInCell(state.value, uid, pick.launcher, pick.cwd, pick.host ?? null));
 const onMove = (uid: number, dir: -1 | 1) => (state.value = moveCell(state.value, uid, dir));
 // A roster row dragged by its header: an arbitrary slot rather than a step (#2126). Same flat list, so the
 // tiles re-order with it.
@@ -624,7 +624,8 @@ const placeFromPanel = (cell: Omit<Cell, "uid">) => {
 const onPanelStart = (start: PanelStart) => placeFromPanel(cellForPanelStart(start, defaultCwd.value));
 const onPanelResume = (resume: PanelResume) => placeFromPanel(cellForPanelResume(resume));
 const onPanelRun = (command: RunCommand) => placeFromPanel({ session: null, cwd: null, command });
-const onPanelLaunch = (pick: LaunchPick) => placeFromPanel({ session: null, cwd: pick.cwd, launcher: pick.launcher });
+const onPanelLaunch = (pick: LaunchPick) =>
+  placeFromPanel({ session: null, cwd: pick.cwd, launcher: pick.launcher, ...(pick.host ? { host: pick.host } : {}) });
 useCaptureKeydown(onShortcutKey);
 
 // Launch a Settings skill in a new auto-running session and show it as a GRID CELL. The button was

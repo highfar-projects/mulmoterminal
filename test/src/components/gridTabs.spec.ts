@@ -757,6 +757,17 @@ describe("setCellAgent and the custom-agent wrapper", () => {
   });
 });
 
+// A shell started on a PEER server (common/peers.ts) lives there: the cell has to say so, or a reload
+// reconnects its session id to this server. A launch here drops any peer the cell held before.
+describe("launchInCell on a peer", () => {
+  const L = { index: 0, label: "Shell", command: "zsh" };
+  it("records the peer the launcher runs on, and nothing for this server", () => {
+    expect(launchInCell(make([cell(0)]), 0, L, "/p", "win").cells[0].host).toBe("win");
+    const moved = launchInCell(make([{ ...cell(0), host: "win" }]), 0, L, "/p");
+    expect("host" in moved.cells[0]).toBe(false);
+  });
+});
+
 describe("launchInCell (persistent launcher cells)", () => {
   const L = { index: 1, label: "Shell" };
 

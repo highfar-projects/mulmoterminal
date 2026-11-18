@@ -15,6 +15,7 @@ import DirBadge from "./DirBadge.vue";
 import DirIcon from "./DirIcon.vue";
 import CellChromeButtons from "./CellChromeButtons.vue";
 import CellPathMenu from "./CellPathMenu.vue";
+import { peerLabel } from "../composables/peerHosts";
 import CockpitRowMenu from "./CockpitRowMenu.vue";
 import type { RowMenuModel } from "./thumbnailRowMenu";
 import { cellChromeBinding, type CellChromeSource } from "./cellChromeBinding";
@@ -57,6 +58,9 @@ const props = defineProps<
   CellChromeSource & {
     home: string | null;
     cwd: string | null;
+    // The peer server the cell runs on (common/peers.ts), or null/absent for this one: its directory
+    // is that machine's, so the chrome is read from there and the path menu is not offered.
+    host?: string | null;
     // The server's workspace dir, so the badge can say WORKSPACE rather than the folder's own name
     // — the same thing TerminalCell does with the prop of the same name. A command or launcher cell
     // running in the workspace is as much "the workspace" as an agent cell is.
@@ -94,7 +98,14 @@ const { chromeProps, chromeEvents } = cellChromeBinding(props, emit);
 
 // The name badge and the header/frame tints are CHROME — this cell's own header, not the terminal
 // canvas (#914). The canvas side resolves itself inside Terminal.vue (#911).
-const { config: dirConfig, cellStyle, headerStyle } = useCellChrome(toRef(() => props.cwd));
+const {
+  config: dirConfig,
+  cellStyle,
+  headerStyle,
+} = useCellChrome(
+  toRef(() => props.cwd),
+  toRef(() => props.host ?? null),
+);
 
 const dirDisplay = computed(() => formatCwd(props.cwd, props.home));
 
@@ -123,8 +134,15 @@ function onHeaderClick(event: MouseEvent) {
           :class="[CELL_DOT, finished ? `is-idle ${CELL_DOT_IDLE}` : `is-working ${CELL_DOT_WORKING}`]"
           :data-tip="finished ? idleTitle : t('tips.cell.running')"
         />
+        <span
+          v-if="host"
+          data-testid="cell-peer"
+          class="shrink-0 rounded border border-line px-1 font-sans text-[10px] leading-4 text-accent"
+          :data-tip="t('peers.runOn')"
+          >{{ peerLabel(host) }}</span
+        >
         <CellPathMenu
-          v-if="!thumbnail && dirDisplay"
+          v-if="!thumbnail && dirDisplay && !host"
           :cwd="cwd"
           :label="dirDisplay"
           :slot-key="slotKey"

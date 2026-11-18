@@ -197,8 +197,11 @@ export function runCommand(state: GridState, uid: number, command: Cell["command
 // A cell launched a configured program (shell/codex/…): attach the launcher and its
 // directory, turning the launch cell into a persistent launcher terminal. Its session
 // id arrives later from the server (setSession), so it persists and reconnects.
-export function launchInCell(state: GridState, uid: number, launcher: CellLauncher, cwd: string | null): GridState {
-  return { ...state, cells: state.cells.map((c) => (c.uid === uid ? { ...c, launcher, cwd } : c)) };
+// `host`: the peer server it runs on (common/peers.ts), null for this one — replaced, not kept, since
+// the launch form decides it afresh for this launch.
+export function launchInCell(state: GridState, uid: number, launcher: CellLauncher, cwd: string | null, host: string | null = null): GridState {
+  const placed = ({ host: _previous, ...rest }: Cell): Cell => ({ ...rest, launcher, cwd, ...(host ? { host } : {}) });
+  return { ...state, cells: state.cells.map((c) => (c.uid === uid ? placed(c) : c)) };
 }
 
 // Insert a brand-new cell immediately AFTER the cell that triggered it, so the header

@@ -1,4 +1,6 @@
-// Which server the right pane's cell runs on — this one, or a PEER (common/peers.ts).
+// Which server a part of the UI is about — this one, or a PEER (common/peers.ts). TerminalGrid provides
+// it for the right pane; TerminalCell and LaunchPanel provide the server the launch form is starting
+// on, so the form's lists (saved folders, past sessions, worktrees, suggestions) are that server's.
 //
 // Everything a pane shows about a cell is that server's: the files under its directory, the cards
 // its agent drew, the tools it ran, the prompts it was typed. TerminalGrid provides the host of the

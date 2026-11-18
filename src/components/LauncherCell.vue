@@ -24,6 +24,8 @@ const props = defineProps<
     launcher: CellLauncher;
     session: string | null;
     cwd: string | null;
+    // The peer server it runs on (common/peers.ts), or null/absent for this one.
+    host?: string | null;
     // Manual sort mode: show move buttons to swap this cell with its neighbour.
     reorderable?: boolean;
   }
@@ -68,6 +70,7 @@ function relaunch() {
     :collections-available="collectionsAvailable"
     :home="home"
     :cwd="cwd"
+    :host="host ?? null"
     :default-cwd="defaultCwd"
     :finished="finished"
     :idle-title="t('tips.cell.exited')"
@@ -95,10 +98,11 @@ function relaunch() {
       :connect-key="connectKey"
       :cwd="cwd"
       :launcher="target"
+      :host="host ?? null"
       :expanded="expanded"
       :zoomed="zoomed"
       :hide-header="thumbnail"
-      :path-menu-picker="!thumbnail"
+      :path-menu-picker="!thumbnail && !host"
       @session="onSession"
       @exit="onExit"
     />
