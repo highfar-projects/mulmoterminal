@@ -91,3 +91,20 @@ export const peerWsHost = (peer: string | null | undefined, locationHost: string
 /** An `/api/…` path as THIS server should be asked it for a cell: unchanged for this server, under the
  *  peer's prefix for a peer, so the relay hands it to the server the session actually runs on. */
 export const peerApiPath = (peer: string | null | undefined, path: string): string => (peer ? `${PEER_PATH_PREFIX}${peer}${path}` : path);
+
+// A directory as a cache or lookup KEY, for maps that hold directories from more than one server: the
+// same path on two machines is two directories. The key is the path itself for this server — so a
+// map that never sees a peer is unchanged — and a marked string for a peer. NUL cannot appear in a
+// path, so the two can never collide.
+const PEER_DIR_MARK = "\u0000peer\u0000";
+
+/** The key for `cwd` on `host` (null/absent = this server). */
+export const peerDirKey = (host: string | null | undefined, cwd: string): string => (host ? `${PEER_DIR_MARK}${host}\u0000${cwd}` : cwd);
+
+/** A `peerDirKey` back into the server and the directory, for building the request it names. */
+export function splitPeerDirKey(key: string): { host: string | null; cwd: string } {
+  if (!key.startsWith(PEER_DIR_MARK)) return { host: null, cwd: key };
+  const rest = key.slice(PEER_DIR_MARK.length);
+  const at = rest.indexOf("\u0000");
+  return { host: rest.slice(0, at), cwd: rest.slice(at + 1) };
+}

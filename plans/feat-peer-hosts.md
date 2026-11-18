@@ -53,9 +53,37 @@ Measured with two scratch servers: hooks posted to B (prompt, Notification, Stop
 cell's frame working, blocked, then done on A's page; a reload came back done from B's snapshot; the
 sound path fired for both and asked `/peer/b/api/dir-sound`.
 
+## Stage 3: a peer cell's own features
+
+Asked of the peer (`peerApiPath`, or a `host` argument threaded into the composable):
+
+- Restart the agent, the close button and the subscription switch (`/api/session/:id/terminate`,
+  `/switch-token`) — the refusal stage 1 put on restart is gone.
+- The memo, the timeline overlay, the diff badge and overlay, and the worktree actions
+  (`/api/worktrees/{diff,push,pr,remove}`).
+- The header's git chip, PR/work-item chip, configured chips and the model/context badge
+  (`useGitStatus`, `useWorkItem`, `useHeaderButtons`, `useSessionContext`).
+- The directory's config — colours, theme, icon, background — keyed by `peerDirKey`, the cwd itself
+  for this server, with its own `/api/…` links rewritten through the relay, and invalidated by the
+  peer's own `dir-config` channel. The devcontainer badge and its build/stop/fix actions.
+- A dropped file or a pasted image is uploaded to the peer, and a peer cell always uploads (like
+  `remoteServer`): the browser's path names the browser's machine.
+- The grid: "priority" order, the roster's row text, PR phase and chrome, and closing a cell.
+
+Withheld on a peer cell, because each acts on THIS machine:
+
+- The path menu (reveal, insert a path, the Files pane, a shell here) — the cell names its directory
+  instead; "new terminal here"; the Run menu and the path-menu file picker; header buttons other than
+  `run: "input"`; the Mulmo deck; Copy code block; the subscription choices on the account mark.
+- A peer's directory is never recorded among this server's presets.
+
+Measured with two scratch servers: on A's page, the peer cell's git chip read B's repo
+(`peer-branch●1`); "Restart the agent" ended B's session and started a new one on B; after a fresh
+start of A, no request about B's directory or session reached A at all.
+
 ## Not yet (later stages)
 
-3. Per-cell features against the peer: the seven `/api/session/:id/…` routes, restart, diff, files,
-   usage. Each surface that acts on "the machine" needs its own decision (see docs/file-surfaces.md).
-4. The peer's saved folders and past sessions in the launch form; a shell cell on a peer.
-5. Showing a peer that is down as such, per cell.
+4. The Canvas and the Files pane for a peer cell — a containment decision first
+   (docs/file-surfaces.md).
+5. The peer's saved folders and past sessions in the launch form; a shell cell on a peer.
+6. Showing a peer that is down as such, per cell.

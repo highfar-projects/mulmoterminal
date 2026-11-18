@@ -1,5 +1,5 @@
 import type { RunCommand } from "./runCommand";
-import { isPeerId } from "../../common/peers";
+import { isPeerId, peerDirKey } from "../../common/peers";
 import type { Translate } from "../i18n/translate";
 import type { LaunchChoice } from "./wsUrl";
 import { dirPriority } from "../../common/dirPriorityOrder";
@@ -574,7 +574,13 @@ const RANK: Record<AttentionStatus, number> = { blocked: 0, done: 1, idle: 2, wo
 const LAUNCH_RANK = 4;
 const cellRank = (c: Cell, statusByUid: Record<number, AttentionStatus>): number => (isLaunchCell(c) ? LAUNCH_RANK : RANK[statusByUid[c.uid] ?? "idle"]);
 
-const cellPriority = (c: Cell, priorityByCwd: Record<string, number>): number => dirPriority(c.cwd, priorityByCwd);
+// Keyed like the map is built (cellDirKey): a peer cell's directory is that machine's, ranked by
+// THAT directory's config even when this server has a folder at the same path.
+/** The cell's directory as a lookup key across servers (common/peers.ts `peerDirKey`): the path
+ *  itself for a cell on this server. Null for a cell with no directory. */
+export const cellDirKey = (c: Pick<Cell, "cwd" | "host">): string | null => (c.cwd ? peerDirKey(c.host, c.cwd) : null);
+
+const cellPriority = (c: Cell, priorityByCwd: Record<string, number>): number => dirPriority(cellDirKey(c), priorityByCwd);
 
 // Display order. "manual": the hand-arranged list as-is. "auto": a STABLE sort by
 // attention rank — equal-rank cells keep their manual order, so a status change

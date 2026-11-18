@@ -9,8 +9,10 @@ import { cellStyleFor, headerStyleFor } from "../components/cellHeaderStyle";
 // didn't: #902 found theme/font missing from the Shell and Command cells, #914 the name badge,
 // #1006 the six chrome colours — the same omission three times over, because "remember to wire it
 // up" WAS the design. A cell now asks for its chrome and gets all of it.
-export function useCellChrome(cwd: Ref<string | null | undefined>) {
-  const { config } = useDirConfig(cwd);
+//
+// `host` is the peer server the directory is on (common/peers.ts); absent or null for this one.
+export function useCellChrome(cwd: Ref<string | null | undefined>, host?: Ref<string | null>) {
+  const { config } = useDirConfig(cwd, host);
   return {
     config,
     // Emitted as variables rather than plain background/border, so a status tint (working /

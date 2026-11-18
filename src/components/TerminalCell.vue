@@ -248,7 +248,7 @@ const connectKey = ref(0);
 const cwd = ref<string | null>(props.initialCwd ?? props.defaultCwd);
 // Per-directory overrides (<cwd>/.mulmoterminal.json): pins this cell's terminal
 // palette and shows a project badge. Re-fetched when the effective cwd changes.
-const { config: dirConfig, cellStyle } = useCellChrome(cwd);
+const { config: dirConfig, cellStyle } = useCellChrome(cwd, hostId);
 // The server's own answer for this cwd — hasConfig/enabled/containerName — read straight from
 // here rather than from `dirConfig.devcontainer`: that flag is this app's own read of the SAME
 // file (dir-config.ts), but a build triggered from the badge below (buildDevcontainerNow) writes
@@ -263,12 +263,12 @@ async function refreshDevcontainerInfo(dir: string | null): Promise<void> {
     devcontainerInfo.value = null;
     return;
   }
-  const status = await devcontainerStatus(dir);
+  const status = await devcontainerStatus(dir, hostId.value);
   // A stale response landing after cwd moved on must not overwrite whatever the newer request is
   // about to answer with.
   if (cwd.value === dir) devcontainerInfo.value = status;
 }
-watch(cwd, (dir) => void refreshDevcontainerInfo(dir), { immediate: true });
+watch([cwd, hostId], ([dir]) => void refreshDevcontainerInfo(dir), { immediate: true });
 const devcontainerName = computed(() => devcontainerInfo.value?.containerName ?? null);
 // Copying the name, not just showing it in the tooltip: reported live — a `docker exec`/`docker
 // logs` typed by hand is exactly the friction a click should remove, and the name is exactly
@@ -339,7 +339,7 @@ async function runDevcontainerBuild(rebuild: boolean, onDone: (ok: boolean) => v
   // Only a rebuild removes a container a session may be running in; the first build leaves this
   // session on the host where it started.
   if (rebuild) beginDevcontainerOp(dir);
-  const result = await buildDevcontainer(dir, { rebuild });
+  const result = await buildDevcontainer(dir, { rebuild, host: hostId.value });
   if (rebuild) settleDevcontainerOp(dir, result.ok);
   devcontainerBuilding.value = false;
   if (devcontainerBuildTimer) {
@@ -403,7 +403,7 @@ async function stopDevcontainerNow(): Promise<void> {
   }
   devcontainerStopping.value = true;
   beginDevcontainerOp(dir);
-  const result = await stopDevcontainer(dir);
+  const result = await stopDevcontainer(dir, hostId.value);
   settleDevcontainerOp(dir, result.ok);
   devcontainerStopping.value = false;
   await refreshDevcontainerInfo(cwd.value);
@@ -427,7 +427,7 @@ async function fixClaudeJsonPersistenceNow(): Promise<void> {
     return;
   }
   devcontainerFixingPersistence.value = true;
-  const result = await fixClaudeJsonPersistence(dir);
+  const result = await fixClaudeJsonPersistence(dir, hostId.value);
   devcontainerFixingPersistence.value = false;
   await refreshDevcontainerInfo(cwd.value);
   window.alert(result.ok ? `Fixed.\n\n${result.message}` : `Could not fix it.\n\n${result.message}`);
@@ -442,13 +442,13 @@ function onDevcontainerBadgeClick(): void {
 const isWorkspace = computed(() => isSameDirPath(cwd.value, props.defaultCwd));
 // What this cell is working on (PR + issue), for the `work` chip. Same directory, same kind of
 // poll as the git status below.
-const { item: workItem, refresh: refreshWorkItem, commentFailure } = useWorkItem(cwd);
+const { item: workItem, refresh: refreshWorkItem, commentFailure } = useWorkItem(cwd, hostId);
 // "issueWorkComments is on and the issue is NOT being updated" (#1369). Outside the chip loop for
 // the same reason as the tidy prompt below: it reports on a setting, not on the work.
 const workCommentNotice = computed(() => visibleWorkCommentFailure(commentFailure.value));
 // Live git status (branch/dirty/ahead·behind) for the header chip. `refreshGit`
 // is called alongside loadDiff() so a finished turn's changes show immediately.
-const { status: gitStatus, refresh: refreshGit } = useGitStatus(cwd);
+const { status: gitStatus, refresh: refreshGit } = useGitStatus(cwd, hostId);
 // Activity timeline overlay (the header history button) — only meaningful for a Claude session.
 const timelineOpen = ref(false);
 // A small filmstrip thumbnail (some OTHER cell is zoomed): strip the header to the dir and close,
@@ -520,7 +520,13 @@ const context = ref<CellContext | null>(null);
 // below, so with no config the header is exactly as before. When configured, the built-ins listed here
 // (git/diff/ctx/usage) render in that order — others are hidden — and custom chips render as text. `dir`,
 // the project badge, the status dot/activity, and the row-2 tools timeline stay structural.
-const { chips: headerChips, env: worktreeEnv } = useHeaderButtons({ cwd, session: sessionId, agent, model: computed(() => context.value?.model ?? null) });
+const { chips: headerChips, env: worktreeEnv } = useHeaderButtons({
+  cwd,
+  session: sessionId,
+  agent,
+  model: computed(() => context.value?.model ?? null),
+  host: hostId,
+});
 // `env` is in the defaults and costs nothing to a project that declares no `worktreeEnv`: the
 // chip renders nothing when there are no values, so this only shows up where it was asked for.
 interface CellChipView {
@@ -853,8 +859,9 @@ const cellCredential = ref<CellCredential | null>(null);
 const accountMarkLabel = computed(() => (accountId.value ? accountLabel(props.accounts ?? [], accountId.value) : (cellCredential.value?.label ?? null)));
 const accountMarkDetail = computed(() => (accountId.value ? null : (cellCredential.value?.detail ?? null)));
 // Only a cell rotation placed can be moved, and only to what the config offers (#2950).
+// None on a peer: the subscriptions offered are THIS server's tokens, which the peer does not hold.
 const accountMarkChoices = computed(() =>
-  accountId.value ? [] : accountSwitchChoices(tokenRotation.value, cellCredential.value?.id ?? null, rateLimitSnapshot.value, Date.now()),
+  accountId.value || hostId.value ? [] : accountSwitchChoices(tokenRotation.value, cellCredential.value?.id ?? null, rateLimitSnapshot.value, Date.now()),
 );
 
 // Start what the Agent Picker picked, in `dir`. EVERY launch in the form goes through here: the
@@ -909,9 +916,11 @@ function onServerCwd(c: string) {
   cwd.value = c;
   // Only a user-initiated fresh launch records the dir as a preset chip — not a
   // reconnect/restore of an already-running session (see recordNextCwd).
+  // Never a peer's: the presets are THIS server's directories, and a path on another machine would
+  // become a chip that launches here, in a folder this server may not have (common/peers.ts).
   if (recordNextCwd) {
     recordNextCwd = false;
-    emit("record-cwd", c);
+    if (!hostId.value) emit("record-cwd", c);
   }
   emit("cwd", c);
 }
@@ -1070,7 +1079,7 @@ function teardown() {
   // Reap on the server over HTTP too — the WS `terminate` only reaches the server while
   // the socket is open, so a disconnected cell's close button would otherwise leave its tmux alive.
   // Not awaited, unlike the restart's: this cell is going back to its launch form either way.
-  if (id) void reapSessionOnServer(id);
+  if (id) void reapSessionOnServer(id, hostId.value);
   launched.value = false;
   recordNextCwd = false; // drop any pending fresh-launch record from a torn-down session
   sessionId.value = null;
@@ -1116,13 +1125,9 @@ function teardown() {
 const restarting = ref(false);
 const RESTART_FAILED_EN = "Couldn't end the old session, so nothing was restarted — try again, or close the cell.";
 async function restart(): Promise<void> {
-  // The reap is a request to THIS server, which holds nothing of a peer's session: it would answer
-  // "ended" and the reconnect would merely re-attach the old process. Refused out loud instead.
-  if (hostId.value) {
-    void termRef.value?.showHint(t("peers.restartOnPeer"), "restart_alt");
-    return;
-  }
-  await restartWith(reapSessionOnServer);
+  // Ended where it runs: a peer's session is that server's to reap (common/peers.ts).
+  const host = hostId.value;
+  await restartWith((sessionToReap) => reapSessionOnServer(sessionToReap, host));
 }
 
 // Move the session to the subscription picked on the account mark (#2950): the restart, with the
@@ -1130,7 +1135,8 @@ async function restart(): Promise<void> {
 async function switchSubscription(tokenId: string): Promise<void> {
   const id = sessionId.value;
   if (!id) return;
-  await restartWith((sessionToReap) => switchTokenOnServer(sessionToReap, tokenId));
+  const host = hostId.value;
+  await restartWith((sessionToReap) => switchTokenOnServer(sessionToReap, tokenId, host));
 }
 
 async function restartWith(reap: (sessionId: string) => Promise<boolean>): Promise<void> {
@@ -1380,7 +1386,7 @@ async function requestRemove(dir: string) {
   termRef.value?.terminate(); // free the worktree dir first (Windows locks a process's cwd)
   try {
     const res = await fetchWithTimeout(
-      "/api/worktrees/remove",
+      peerApiPath(hostId.value, "/api/worktrees/remove"),
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -1549,7 +1555,7 @@ async function saveMemo() {
   const previous = memo.value;
   memo.value = text || null;
   try {
-    const res = await fetchWithTimeout(`/api/session/${encodeURIComponent(id)}/memo`, {
+    const res = await fetchWithTimeout(peerApiPath(hostId.value, `/api/session/${encodeURIComponent(id)}/memo`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
@@ -1618,7 +1624,11 @@ async function loadDiff() {
   }
   const reqId = ++diffReq;
   try {
-    const res = await fetchWithTimeout(`/api/worktrees/diff?cwd=${encodeURIComponent(cwd.value)}`, undefined, SLOW_COMMAND_TIMEOUT_MS);
+    const res = await fetchWithTimeout(
+      peerApiPath(hostId.value, `/api/worktrees/diff?cwd=${encodeURIComponent(cwd.value)}`),
+      undefined,
+      SLOW_COMMAND_TIMEOUT_MS,
+    );
     if (reqId !== diffReq) return;
     const data = res.ok ? await jsonBody(res) : {};
     if (reqId !== diffReq) return;
@@ -1658,7 +1668,7 @@ async function worktreeAction(endpoint: "push" | "pr"): Promise<Record<string, u
   prMsg.value = endpoint === "push" ? "Pushing…" : "Creating PR…";
   try {
     const res = await fetchWithTimeout(
-      `/api/worktrees/${endpoint}`,
+      peerApiPath(hostId.value, `/api/worktrees/${endpoint}`),
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -2146,7 +2156,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
             </span>
           </span>
         </div>
-        <TimelineOverlay :session-id="sessionId" :cwd="cwd" :open="timelineOpen" @close="timelineOpen = false" />
+        <TimelineOverlay :session-id="sessionId" :cwd="cwd" :host="hostId" :open="timelineOpen" @close="timelineOpen = false" />
         <TerminalView
           ref="termRef"
           class="cell-term"
@@ -2164,8 +2174,8 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
           :expanded="expanded"
           :zoomed="zoomed"
           dev-terminal
-          run-menu
-          :path-menu-picker="!filmstrip"
+          :run-menu="!hostId"
+          :path-menu-picker="!filmstrip && !hostId"
           @session="onSession"
           @input="onTerminalInput"
           @cwd="onServerCwd"
@@ -2185,7 +2195,13 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
              literally the path's own click. Occasional navigations do not each deserve a permanent
              icon in a tiled cell. The menu itself is CellPathMenu, shared with every cell type. -->
           <template #header-lead>
+            <!-- On a peer, the place is named and nothing more: every entry of the menu (reveal, insert,
+                 the Files pane, a shell here) acts on THIS machine (common/peers.ts). -->
+            <span v-if="hostId" data-testid="cell-peer-dir" class="min-w-0 truncate font-mono text-[11px] text-dim" :class="DIR_TRUNCATE_FRONT">{{
+              headerDir
+            }}</span>
             <CellPathMenu
+              v-else
               :cwd="cwd"
               :label="headerDir"
               :slot-key="`cell-${uid}`"
@@ -2196,10 +2212,11 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
             />
           </template>
           <template #header-actions>
-            <CopyCodeBlock v-if="sessionId" ref="copyCodeRef" :class="CELL_BTN" :session-id="sessionId" :cwd="cwd" :agent="agent" />
+            <CopyCodeBlock v-if="sessionId && !hostId" ref="copyCodeRef" :class="CELL_BTN" :session-id="sessionId" :cwd="cwd" :agent="agent" />
             <!-- Row 2, away from close (#2353): the launch panel on this directory, with the agent to
                  pick — which the path menu's "New terminal here", a plain shell, cannot offer. -->
             <button
+              v-if="!hostId"
               class="cell-btn"
               :class="CELL_BTN"
               data-testid="cell-new-here-btn"

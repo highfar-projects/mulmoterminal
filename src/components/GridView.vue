@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { peerApiPath, splitPeerDirKey } from "../../common/peers";
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } from "vue";
 import TerminalGrid from "./TerminalGrid.vue";
 import AppSettingsModal from "./AppSettingsModal.vue";
@@ -47,6 +48,7 @@ import {
   type SortMode,
   resolveCellStatus,
   MAX_TERMINALS,
+  cellDirKey,
 } from "./gridTabs";
 import { activityStatus, type AttentionStatus } from "./attentionStatus";
 import { collectionTerminalClaim, publishGridSessions } from "../composables/collectionTerminalClaim";
@@ -155,7 +157,9 @@ const statusCounts = computed(() => countByStatus(state.value.cells, statusForSo
 const reorderable = computed(() => state.value.sortMode === "manual");
 // "priority" ranks cells by their directory's orderPriority, so like the status above it needs
 // a value for cells on pages that aren't mounted — hence the whole cwd set, not per-cell.
-const cellCwds = computed(() => [...new Set(state.value.cells.map((c) => c.cwd).filter((c): c is string => !!c))]);
+// Keyed by `cellDirKey`, so a peer cell's directory is that machine's (common/peers.ts) and is read
+// from that server — the path alone would ask this one about a folder it may not even have.
+const cellCwds = computed(() => [...new Set(state.value.cells.map(cellDirKey).filter((c): c is string => !!c))]);
 const { priorities: priorityByCwd } = useDirPriorities(cellCwds);
 // In "auto" mode the whole list is attention-sorted; "priority" orders by each directory's
 // declared rank; "manual" keeps the hand-arranged order.
@@ -187,7 +191,7 @@ const sessionMeta = reactive(new Map<string, SessionMetaView>());
 // one goes out. Only the newest may be applied: an older one describes a moment already
 // overtaken, and its fields would put back what the newer answer replaced (#620).
 const latestMetaSeed = new Map<string, number>();
-async function seedMeta(id: string, cwd: string | null, agent: TerminalAgent) {
+async function seedMeta(id: string, cwd: string | null, agent: TerminalAgent, host: string | null) {
   const seed = (latestMetaSeed.get(id) ?? 0) + 1;
   latestMetaSeed.set(id, seed);
   try {
@@ -196,7 +200,8 @@ async function seedMeta(id: string, cwd: string | null, agent: TerminalAgent) {
     // claude's transcript — where that session has no file, so both lines read empty.
     const params = new URLSearchParams({ agent });
     if (cwd) params.set("cwd", cwd);
-    const res = await fetchWithTimeout(`/api/session/${id}?${params}`);
+    // Asked of the server the session runs on: a peer's transcript is on the peer (common/peers.ts).
+    const res = await fetchWithTimeout(peerApiPath(host, `/api/session/${id}?${params}`));
     if (!res.ok || latestMetaSeed.get(id) !== seed) return;
     const d: unknown = await res.json();
     if (latestMetaSeed.get(id) !== seed) return;
@@ -208,24 +213,26 @@ async function seedMeta(id: string, cwd: string | null, agent: TerminalAgent) {
 // `asTerminalAgent`, not `c.agent`: the field is absent for claude (the default is stored as the
 // absence of the key) and equally absent on a launcher cell, which is not an agent session at all —
 // both mean claude to this route, which is what they were already getting.
-const refreshAllMeta = () => state.value.cells.forEach((c) => c.session && void seedMeta(c.session, c.cwd, asTerminalAgent(c.agent)));
+const refreshAllMeta = () => state.value.cells.forEach((c) => c.session && void seedMeta(c.session, c.cwd, asTerminalAgent(c.agent), c.host ?? null));
 // The PR workflow phase per directory (GET /api/pr-phase), shown in the roster beside the
 // agent status. Keyed by cwd, not session — the phase is the branch's, so cells sharing a dir
 // share one fetch. Best-effort and cached server-side, so the roster poll can re-fetch cheaply.
 const phaseByCwd = reactive(new Map<string, PrPhase>());
 const latestPhaseSeed = new Map<string, number>();
+// `cwd` is a `cellDirKey`: the path on this server, or a peer's directory, asked of that peer.
 async function seedPhase(cwd: string) {
   const seed = (latestPhaseSeed.get(cwd) ?? 0) + 1;
   latestPhaseSeed.set(cwd, seed);
+  const at = splitPeerDirKey(cwd);
   try {
-    const res = await fetchWithTimeout(`/api/pr-phase?cwd=${encodeURIComponent(cwd)}`, undefined, SLOW_COMMAND_TIMEOUT_MS);
+    const res = await fetchWithTimeout(peerApiPath(at.host, `/api/pr-phase?cwd=${encodeURIComponent(at.cwd)}`), undefined, SLOW_COMMAND_TIMEOUT_MS);
     if (!res.ok || latestPhaseSeed.get(cwd) !== seed) return;
     const d: unknown = await res.json();
     if (latestPhaseSeed.get(cwd) !== seed) return;
     const phase = isRecord(d) ? d.phase : undefined;
     if (isPrPhase(phase)) {
       // Before the set, so the previous value is still the one to compare against.
-      if (becameCiFailing(phaseByCwd.get(cwd), phase)) notifySound("pr-ci-failed", cwd);
+      if (becameCiFailing(phaseByCwd.get(cwd), phase)) notifySound("pr-ci-failed", at.cwd, at.host);
       phaseByCwd.set(cwd, phase);
     }
   } catch {
@@ -250,7 +257,7 @@ async function seedChrome(cwd: string) {
   chromeByCwd.set(cwd, { headerColor: config.headerColor, headerTextColor: config.headerTextColor, iconUrl: config.iconUrl });
 }
 const refreshAllChrome = () => {
-  const cwds = new Set(state.value.cells.map((c) => c.cwd).filter((c): c is string => c !== null));
+  const cwds = new Set(state.value.cells.map(cellDirKey).filter((c): c is string => c !== null));
   cwds.forEach((cwd) => void seedChrome(cwd));
 };
 // A user editing .mulmoterminal.json is announced on the dir-config channel; re-fetch that
@@ -268,7 +275,7 @@ onBeforeUnmount(unsubscribeDirConfig);
 
 const forgetClosedCells = () => {
   const sessions = new Set(state.value.cells.map((c) => c.session).filter((s): s is string => !!s));
-  const cwds = new Set(state.value.cells.map((c) => c.cwd).filter((c): c is string => c !== null));
+  const cwds = new Set(state.value.cells.map(cellDirKey).filter((c): c is string => c !== null));
   staleCacheKeys(sessionMeta.keys(), sessions).forEach((id) => {
     sessionMeta.delete(id);
     latestMetaSeed.delete(id);
@@ -298,7 +305,7 @@ watch(
 );
 
 const refreshAllPhases = () => {
-  const cwds = new Set(state.value.cells.map((c) => c.cwd).filter((c): c is string => c !== null));
+  const cwds = new Set(state.value.cells.map(cellDirKey).filter((c): c is string => c !== null));
   cwds.forEach((cwd) => void seedPhase(cwd));
 };
 
@@ -320,9 +327,14 @@ const rosterLookups = (): RosterLookups => ({
   phase: (cwd) => phaseByCwd.get(cwd),
   status: (uid) => statusForSort.value[uid],
 });
+// A row asks its directory's chrome and phase by path; the maps are keyed by `cellDirKey`, so each
+// row is handed lookups that answer for ITS server (common/peers.ts).
 const listRows = computed(() => {
   const look = rosterLookups();
-  return orderedCells.value.map((c) => rosterRow(c, look));
+  return orderedCells.value.map((c) => {
+    const key = cellDirKey(c);
+    return rosterRow(c, { ...look, chrome: () => (key ? chromeByCwd.get(key) : undefined), phase: () => (key ? phaseByCwd.get(key) : undefined) });
+  });
 });
 // Session ids currently held by cells (across all pages — off-page cells stay
 // live as background PTYs). A launcher uses this to warn before resuming a
@@ -374,7 +386,7 @@ const onClose = (uid: number) => {
     conn.terminate(slot);
     // Over HTTP as well, like TerminalCell.teardown: the WS `terminate` only reaches the server
     // while the socket it just closed was still open.
-    if (session) void fetchWithTimeout(`/api/session/${encodeURIComponent(session)}/terminate`, { method: "POST" }).catch(() => {});
+    if (session) void fetchWithTimeout(peerApiPath(closing?.host, `/api/session/${encodeURIComponent(session)}/terminate`), { method: "POST" }).catch(() => {});
   }
   state.value = closeCell(
     state.value,

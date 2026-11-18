@@ -1,4 +1,4 @@
-import { ref, shallowRef, watch, onScopeDispose, type Ref } from "vue";
+import { computed, ref, shallowRef, watch, onScopeDispose, type Ref } from "vue";
 import { usePubSub } from "./usePubSub";
 import type { ITheme } from "@xterm/xterm";
 import { isThemeIdLike } from "../../common/themeVars";
@@ -12,6 +12,8 @@ import { normalizeOrderPriority } from "../../common/orderPriority";
 import { isUsableDirIconSrc } from "../../common/dirIcon";
 import { parsePublicDirBackground, type PublicDirBackground } from "../../common/dirBackground";
 import { isRecord } from "../../common/isRecord";
+import { peerApiPath, peerDirKey, splitPeerDirKey } from "../../common/peers";
+import { subscribeEveryPeer } from "./peerHosts";
 import { dirChipColor } from "../components/dirChipColor";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
@@ -82,8 +84,20 @@ const bound = new Map<string, Set<(config: DirConfig) => void>>();
 const generation = new Map<string, number>();
 const generationOf = (cwd: string): number => generation.get(cwd) ?? 0;
 
-function parse(c: unknown): DirConfig {
+// A PEER server's directory (common/peers.ts) is cached under a key of its own (`peerDirKey`): the
+// cwd itself for this server, so every existing caller and every map below is unchanged.
+
+/** The cache key for `cwd` on `host` (null = this server). */
+export const dirConfigKey = peerDirKey;
+const splitDirKey = splitPeerDirKey;
+
+// The config's own `/api/…` links (the icon, the background) are the peer's routes, to be asked
+// through the relay like everything else about that directory.
+const onHost = (host: string | null, src: string): string => (host && src.startsWith("/api/") ? peerApiPath(host, src) : src);
+
+function parse(c: unknown, host: string | null = null): DirConfig {
   if (!isRecord(c)) return EMPTY;
+  const background = parsePublicDirBackground(c.backgroundImage);
   return {
     name: typeof c.name === "string" ? c.name : null,
     badgeColor: typeof c.badgeColor === "string" ? c.badgeColor : null,
@@ -108,19 +122,21 @@ function parse(c: unknown): DirConfig {
     hasSound: c.hasSound === true,
     // Re-checked here for the same reason `fontSize` is re-clamped: this parser is the boundary
     // between the wire and the DOM, and this value goes straight into an `<img src>`.
-    iconUrl: isUsableDirIconSrc(c.iconUrl) ? c.iconUrl : null,
+    iconUrl: isUsableDirIconSrc(c.iconUrl) ? onHost(host, c.iconUrl) : null,
     devcontainer: typeof c.devcontainer === "boolean" ? c.devcontainer : null,
-    backgroundImage: parsePublicDirBackground(c.backgroundImage),
+    backgroundImage: background ? { ...background, url: onHost(host, background.url) } : null,
   };
 }
 
+/** @param cwd a directory on this server, or a `dirConfigKey` naming one on a peer. */
 export function fetchDirConfig(cwd: string): Promise<DirConfig> {
   const cached = cache.get(cwd);
   if (cached) return cached;
   const pending = (async () => {
     try {
-      const res = await fetchWithTimeout(`/api/dir-config?cwd=${encodeURIComponent(cwd)}`);
-      const parsed = res.ok ? parse(await res.json()) : EMPTY;
+      const at = splitDirKey(cwd);
+      const res = await fetchWithTimeout(peerApiPath(at.host, `/api/dir-config?cwd=${encodeURIComponent(at.cwd)}`));
+      const parsed = res.ok ? parse(await res.json(), at.host) : EMPTY;
       resolvedConfig.set(cwd, parsed); // remember the value so a re-mount seeds it synchronously
       return parsed;
     } catch {
@@ -258,13 +274,20 @@ let subscribed = false;
 function subscribeToDirConfigChanges(): void {
   if (subscribed) return;
   subscribed = true;
+  // A peer announces writes to ITS directories on its own channel, keyed as those cells are.
+  subscribeEveryPeer("dir-config", (data, peer) => {
+    if (isRecord(data) && typeof data.cwd === "string") invalidateDirConfig(dirConfigKey(peer, data.cwd));
+  });
   usePubSub().subscribe("dir-config", (data) => {
     if (isRecord(data) && typeof data.cwd === "string") invalidateDirConfig(data.cwd);
   });
 }
 
 // set so a cell that switches directories never shows a stale badge/theme.
-export function useDirConfig(cwd: Ref<string | null | undefined>) {
+//
+// `host` is the peer server the directory is on (common/peers.ts); absent or null for this one.
+export function useDirConfig(cwdRef: Ref<string | null | undefined>, host?: Ref<string | null>) {
+  const cwd = computed(() => (cwdRef.value ? dirConfigKey(host?.value, cwdRef.value) : cwdRef.value));
   const config = ref<DirConfig>(seedConfig(cwd.value));
   subscribeToDirConfigChanges();
 

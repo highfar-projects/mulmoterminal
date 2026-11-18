@@ -108,6 +108,7 @@ function mountCell(
     initialLaunchChoice?: { provider?: string | null; model?: string | null } | null;
     autoStart?: boolean;
     rowMenu?: RowMenuModel | null;
+    initialHost?: string | null;
   } = {},
 ) {
   return mount(TerminalCell, {
@@ -118,6 +119,7 @@ function mountCell(
       ...(opts.initialLaunchChoice ? { initialLaunchChoice: opts.initialLaunchChoice } : {}),
       ...(opts.autoStart ? { autoStart: true } : {}),
       ...(opts.rowMenu ? { rowMenu: opts.rowMenu } : {}),
+      ...(opts.initialHost ? { initialHost: opts.initialHost } : {}),
       expanded: opts.expanded ?? false,
       collectionsAvailable: opts.collectionsAvailable ?? false,
       zoomed: opts.zoomed ?? false,
@@ -3794,5 +3796,50 @@ describe("the devcontainer badge — building a devcontainer a session was start
       expect(fixBtn(w).exists()).toBe(true);
       expect(fixBtn(w).attributes("disabled")).toBeUndefined();
     });
+  });
+});
+
+// A cell on a PEER server (common/peers.ts): what it reads about its session and directory is asked
+// of that server, and the menus that act on THIS machine are not offered.
+describe("TerminalCell on a peer server", () => {
+  const asked = (): string[] => vi.mocked(globalThis.fetch).mock.calls.map((call) => String(call[0]));
+
+  // Every request but the peer list itself: a new read added to the cell without a host is the leak
+  // this catches — the devcontainer badge was one, found by this very test.
+  it("asks the peer about its session and its directory, and nothing of this server", async () => {
+    mountCell("sess-on-peer", { initialCwd: "/home/them/proj", initialHost: "win" });
+    await flushPromises();
+    const reads = asked().filter((u) => u !== "/api/peers");
+    expect(reads.some((u) => u.includes("/api/session/sess-on-peer"))).toBe(true);
+    expect(reads.some((u) => u.includes("/api/dir-config"))).toBe(true);
+    expect(reads.filter((u) => !u.startsWith("/peer/win/api/"))).toEqual([]);
+  });
+
+  it("names its directory without the path menu, and offers no new terminal here", async () => {
+    const w = mountCell("sess-on-peer", { initialCwd: "/home/them/proj", initialHost: "win" });
+    await flushPromises();
+    expect(w.find('[data-testid="cell-peer-dir"]').exists()).toBe(true);
+    expect(w.find('[data-testid="cell-new-here-btn"]').exists()).toBe(false);
+  });
+
+  // The mirror of "emits record-cwd with the server-confirmed cwd of a fresh launch": the same launch
+  // on a peer records nothing, since a preset is a directory on THIS server.
+  it("does not record a peer's directory among this server's presets", async () => {
+    const w = mountCell(null, { initialHost: "win", defaultCwd: "/home/me/default" });
+    await flushPromises();
+    await w.find('[data-testid="cell-dir-input"]').setValue("/home/them/proj");
+    await w.find('[data-testid="cell-dir-input"]').trigger("keydown.enter");
+    await flushPromises();
+    w.findComponent({ name: "TerminalView" }).vm.$emit("cwd", "/home/them/proj");
+    await flushPromises();
+    expect(w.emitted("cwd")?.at(-1)).toEqual(["/home/them/proj"]);
+    expect(w.emitted("record-cwd")).toBeUndefined();
+  });
+
+  it("keeps the path menu for a cell on this server", async () => {
+    const w = mountCell("sess-here", { initialCwd: "/home/me/proj" });
+    await flushPromises();
+    expect(w.find('[data-testid="cell-peer-dir"]').exists()).toBe(false);
+    expect(w.find('[data-testid="cell-new-here-btn"]').exists()).toBe(true);
   });
 });
