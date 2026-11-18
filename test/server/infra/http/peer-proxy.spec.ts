@@ -6,7 +6,7 @@ import http from "node:http";
 import type { AddressInfo } from "node:net";
 import express from "express";
 import { WebSocket, WebSocketServer } from "ws";
-import { attachPeerUpgradeRelay, mountPeerHttpRelay, peerRequestHeaders, relayAllowed } from "../../../../server/infra/http/peer-proxy";
+import { attachPeerUpgradeRelay, mountPeerHttpRelay, peerAnswers, peerRequestHeaders, relayAllowed } from "../../../../server/infra/http/peer-proxy";
 import type { PeerHost } from "../../../../common/peers";
 
 const listen = (server: http.Server): Promise<number> =>
@@ -171,5 +171,26 @@ describe("relayAllowed", () => {
 
   it("refuses a state-changing request with no Origin", () => {
     expect(relayAllowed("POST", undefined, "127.0.0.1", isAllowedOrigin)).toBe(false);
+  });
+});
+
+// Whether a peer is up, for its cells to say so (GET /api/peers/status): any HTTP answer counts, a
+// refused connection does not.
+describe("peerAnswers", () => {
+  it("is true for a server that answers, whatever the status", async () => {
+    expect(await peerAnswers(peerUrl)).toBe(true);
+  });
+
+  it("is false for a port nothing listens on", async () => {
+    const closed = http.createServer();
+    const port = await listen(closed);
+    await new Promise<void>((resolve) => closed.close(() => resolve()));
+    expect(await peerAnswers(`http://127.0.0.1:${port}`, 500)).toBe(false);
+  });
+});
+
+describe("GET /api/peers/status", () => {
+  it("reports each configured peer as reachable or not", async () => {
+    expect(await (await relay("/api/peers/status")).json()).toEqual({ peers: [{ id: "win", reachable: true }] });
   });
 });

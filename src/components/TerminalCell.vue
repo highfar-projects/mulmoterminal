@@ -54,8 +54,9 @@ import CellPathMenu from "./CellPathMenu.vue";
 import { registerCellAction } from "../composables/useCellAction";
 import type { CellSelfAction } from "../../common/headerActions";
 import { reapSessionOnServer, restartSession, switchTokenOnServer } from "../composables/restartSession";
-import { loadPeerHosts, peerHosts, peerLabel } from "../composables/peerHosts";
+import { loadPeerHosts, peerHosts } from "../composables/peerHosts";
 import { providePaneHost } from "../composables/paneHost";
+import PeerBadge from "./PeerBadge.vue";
 import { peerApiPath } from "../../common/peers";
 import { accountSwitchChoices } from "../composables/accountSwitchChoices";
 import { useAppConfig } from "../composables/useAppConfig";
@@ -1921,13 +1922,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                  on the filmstrip thumbnail too (the CockpitHeader above), unlike the info chips
                  below, because it is identity rather than status. -->
             <CollectionMark :collection="collection" />
-            <span
-              v-if="launched && hostId"
-              data-testid="cell-peer"
-              class="shrink-0 rounded border border-line px-1 font-sans text-[10px] leading-4 text-accent"
-              :data-tip="t('peers.runOn')"
-              >{{ peerLabel(hostId) }}</span
-            >
+            <PeerBadge v-if="launched && hostId" :host="hostId" />
             <AccountMark v-if="launched" :label="accountMarkLabel" :detail="accountMarkDetail" :choices="accountMarkChoices" @switch="switchSubscription" />
             <!-- The path is NOT here any more — it is the lead item on row 2 (see the
                `header-lead` template below). It had `min-w-[16ch]`, a floor of roughly a third of

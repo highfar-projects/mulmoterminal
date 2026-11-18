@@ -3,8 +3,11 @@
 import { isRecord } from "../../common/isRecord";
 import { isPaneCommand, type PaneCheck } from "../../common/paneCommand";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
+import { peerApiPath } from "../../common/peers";
+import { sessionHostOf } from "./peerHosts";
 
-const checkUrl = (sessionId: string): string => `/api/pane/check/${encodeURIComponent(sessionId)}`;
+// On the server the session runs on (peerHosts.ts sessionHostOf, common/peers.ts).
+const checkUrl = (sessionId: string): string => peerApiPath(sessionHostOf(sessionId), `/api/pane/check/${encodeURIComponent(sessionId)}`);
 
 export async function fetchOpenCheck(sessionId: string): Promise<PaneCheck | null> {
   try {

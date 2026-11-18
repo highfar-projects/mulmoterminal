@@ -63,6 +63,7 @@ import { paneCanShowClick, paneToOpenBeside } from "./paneClickTarget";
 import { onToolGroupsAnnounced } from "../composables/useToolGroupsAnnounce";
 import { usePubSub } from "../composables/usePubSub";
 import { providePaneHost } from "../composables/paneHost";
+import { subscribeEveryPeer } from "../composables/peerHosts";
 import { peerApiPath } from "../../common/peers";
 import { isDrawnResult } from "../utils/drawnResult";
 import { hasCanvasGroup, hasCollectionsGroup } from "../../common/toolGroups";
@@ -842,7 +843,7 @@ const dropQuestion = (sessionId: string): void => {
   if (sessionId === paneCellSessionId.value && rightPane.value === "question") setRightPane(null, paneUid.value);
 };
 
-const unsubscribeQuestion = subscribeSession(ASK_QUESTION_CHANNEL, (data) => {
+const onQuestion = (data: unknown): void => {
   if (isAskQuestionEvent(data)) {
     questionBox.offer(data);
     answerFailure.value = null;
@@ -853,8 +854,15 @@ const unsubscribeQuestion = subscribeSession(ASK_QUESTION_CHANNEL, (data) => {
     return;
   }
   if (isAskQuestionDone(data) && questionBox.close(data)) dropQuestion(data.sessionId);
+};
+// This server's sessions, and every peer's (common/peers.ts): the events carry their session id, which
+// is all the box keys on.
+const unsubscribeQuestion = subscribeSession(ASK_QUESTION_CHANNEL, onQuestion);
+const unsubscribePeerQuestions = subscribeEveryPeer(ASK_QUESTION_CHANNEL, (data) => onQuestion(data));
+onBeforeUnmount(() => {
+  unsubscribeQuestion();
+  unsubscribePeerQuestions();
 });
-onBeforeUnmount(() => unsubscribeQuestion());
 
 // The question a session is blocked on, for a browser that was not listening when it arrived — a
 // reload or a socket reconnect between the question and its answer. The channel replays nothing,
@@ -937,12 +945,18 @@ const showPendingFile = (sessionId: string): void => {
   if (show) void showInFilesPane(show, show.cwd);
 };
 
-const unsubscribePaneCommands = subscribeSession(PANE_COMMAND_CHANNEL, (data) => {
+const onPaneCommand = (data: unknown): void => {
   if (!isPaneCommand(data)) return;
   paneCommands.offer(data);
   showPendingFile(data.sessionId);
+};
+// On every peer too, for an agent running there (common/peers.ts).
+const unsubscribePaneCommands = subscribeSession(PANE_COMMAND_CHANNEL, onPaneCommand);
+const unsubscribePeerPaneCommands = subscribeEveryPeer(PANE_COMMAND_CHANNEL, (data) => onPaneCommand(data));
+onBeforeUnmount(() => {
+  unsubscribePaneCommands();
+  unsubscribePeerPaneCommands();
 });
-onBeforeUnmount(() => unsubscribePaneCommands());
 
 watch(
   expandedSessionId,

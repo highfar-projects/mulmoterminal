@@ -1,6 +1,8 @@
 import { isRecord } from "../../common/isRecord";
 import { isAnswerFailure, isAskQuestionEvent, type AnswerFailure, type AnswerRequestBody, type AskQuestionEvent } from "../../common/askQuestion";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
+import { peerApiPath } from "../../common/peers";
+import { sessionHostOf } from "./peerHosts";
 
 const REQUEST_TIMEOUT_MS = 5000;
 
@@ -23,7 +25,8 @@ export type OpenQuestionLookup = { ok: true; question: AskQuestionEvent | null }
 
 export async function lookUpOpenQuestion(sessionId: string): Promise<OpenQuestionLookup> {
   try {
-    const res = await fetchWithTimeout(`/api/question/${encodeURIComponent(sessionId)}`, undefined, REQUEST_TIMEOUT_MS);
+    // Asked of the server the session runs on (peerHosts.ts sessionHostOf, common/peers.ts).
+    const res = await fetchWithTimeout(peerApiPath(sessionHostOf(sessionId), `/api/question/${encodeURIComponent(sessionId)}`), undefined, REQUEST_TIMEOUT_MS);
     if (!res.ok) return { ok: false };
     const body: unknown = await res.json();
     if (!isRecord(body)) return { ok: false };
@@ -51,7 +54,7 @@ export async function postWords(sessionId: string, toolUseId: string, text: stri
 async function postToAnswerRoute(sessionId: string, body: AnswerRequestBody): Promise<AnswerFailure | null> {
   try {
     const res = await fetchWithTimeout(
-      `/api/question/${encodeURIComponent(sessionId)}/answer`,
+      peerApiPath(sessionHostOf(sessionId), `/api/question/${encodeURIComponent(sessionId)}/answer`),
       { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) },
       REQUEST_TIMEOUT_MS,
     );

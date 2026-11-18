@@ -95,6 +95,14 @@ export function mountPeerHttpRelay(app: Express, isAllowedOrigin: OriginPredicat
     res.json({ peers: peerSummaries(peers()) });
   });
 
+  // Which peers answer right now, for the cells running there to say so when one does not: a peer
+  // cell's socket that will not reconnect looks exactly like a slow one otherwise.
+  app.get("/api/peers/status", async (_req, res) => {
+    const list = peers();
+    const answers = await Promise.all(list.map((peer) => peerAnswers(peer.url)));
+    res.json({ peers: list.map((peer, i) => ({ id: peer.id, reachable: answers[i] })) });
+  });
+
   app.use(PEER_PATH_PREFIX.slice(0, -1), (req: Request, res: Response) => {
     const split = splitPeerPath(req.originalUrl);
     const peer = split ? peers().find((p) => p.id === split.id) : undefined;
@@ -121,6 +129,23 @@ export function mountPeerHttpRelay(app: Express, isAllowedOrigin: OriginPredicat
       else res.destroy();
     });
     req.pipe(upstream);
+  });
+}
+
+const PROBE_TIMEOUT_MS = 1500;
+
+/** Whether anything answers HTTP at the peer's origin — any status at all, a 404 from an older
+ *  version included. Only a refused or silent connection reads as down. */
+export function peerAnswers(peerUrl: string, timeoutMs: number = PROBE_TIMEOUT_MS): Promise<boolean> {
+  return new Promise((resolve) => {
+    const target = new URL("/api/peers", peerUrl);
+    const probe = clientFor(target).request(target, { method: "GET", timeout: timeoutMs }, (answer) => {
+      answer.resume();
+      resolve(true);
+    });
+    probe.on("timeout", () => probe.destroy());
+    probe.on("error", () => resolve(false));
+    probe.end();
   });
 }
 
