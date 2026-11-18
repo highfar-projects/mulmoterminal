@@ -54,6 +54,7 @@ import CellPathMenu from "./CellPathMenu.vue";
 import { registerCellAction } from "../composables/useCellAction";
 import type { CellSelfAction } from "../../common/headerActions";
 import { reapSessionOnServer, restartSession, switchTokenOnServer } from "../composables/restartSession";
+import { loadPeerHosts, peerHosts, peerLabel } from "../composables/peerHosts";
 import { accountSwitchChoices } from "../composables/accountSwitchChoices";
 import { useAppConfig } from "../composables/useAppConfig";
 import { useRateLimits } from "../composables/useRateLimits";
@@ -145,6 +146,9 @@ const props = defineProps<
     // The account (second login) this cell's session runs on (#2215), restored with the cell or set
     // by the launch panel. Seeds `accountId` below.
     initialAccount?: string | null | undefined;
+    // The peer server this cell's session runs on (common/peers.ts), restored with the cell. Seeds
+    // `hostId` below.
+    initialHost?: string | null | undefined;
     // Start `initialAgent` in `initialCwd` on mount rather than opening the launcher form. Set by
     // the grid for a cell it already knows what to run — the phone's launch request (#831).
     autoStart?: boolean;
@@ -803,7 +807,7 @@ function launchIn(dir: string | null) {
   // BOTH halves. `agent` is "claude" for a custom pick, so reporting it alone reads to the grid as
   // "the user switched off the wrapper" — which is what silently dropped `customAgent` on the very
   // launch that was using it (codex + CodeRabbit, #1890).
-  emit("agent", { agent: agent.value, customAgent: customAgentId.value, account: accountId.value });
+  emit("agent", { agent: agent.value, customAgent: customAgentId.value, account: accountId.value, host: hostId.value });
   recordNextCwd = true;
   void loadDiff(); // no-op for a non-worktree dir
 }
@@ -815,6 +819,10 @@ const launchChoice = ref<LaunchChoice | null>(props.initialLaunchChoice ?? null)
 // cell like the model choice, so a relaunch in the same cell repeats it. The server binds a session
 // to its account when it first starts, so this only ever decides a NEW session.
 const accountId = ref<string | null>(props.initialAccount ?? null);
+// The peer server the session runs on, or null for this one. Picked in the launch form; kept for the
+// life of the cell like the account, since the session id names nothing on any other server.
+const hostId = ref<string | null>(props.initialHost ?? null);
+loadPeerHosts();
 // The rotation credential the server started this session's process on (#2919) — a different
 // subscription from the cell beside it, in the same home, so it wears the same mark an account does.
 const { tokenRotation } = useAppConfig();
@@ -832,6 +840,8 @@ const accountMarkChoices = computed(() =>
 // picker decides for the dir field, for a preset chip, and for a worktree alike, and a rule
 // that has to hold at three call sites belongs in one of them.
 function startPickedAgent(dir: string | null) {
+  // A shell is a launcher cell, which has no peer to run on yet; the form says so.
+  if (pickedAgent.value === "shell" && hostId.value) return;
   if (pickedAgent.value === "shell") emit("launch", { launcher: shellLauncher(), cwd: dir });
   else launchIn(dir);
 }
@@ -856,11 +866,13 @@ onMounted(() => {
 function resumeSession({ id, cwd: dir, agent: resumeAgent, account }: { id: string; cwd: string | null; agent?: TerminalAgent; account?: string | null }) {
   // The login the row was found under — what the server runs it on, whatever the picker said.
   accountId.value = account ?? null;
+  // Every row the form lists is THIS server's: it hides them while a peer is picked.
+  hostId.value = null;
   if (resumeAgent) {
     pickedAgent.value = resumeAgent;
     // A resumed session already exists; it was not started through a wrapper now, so the cell is
     // no longer running one whatever it was launched from.
-    emit("agent", { agent: resumeAgent, customAgent: null, account: accountId.value });
+    emit("agent", { agent: resumeAgent, customAgent: null, account: accountId.value, host: hostId.value });
   }
   cwd.value = dir;
   sessionId.value = id;
@@ -1083,6 +1095,12 @@ function teardown() {
 const restarting = ref(false);
 const RESTART_FAILED_EN = "Couldn't end the old session, so nothing was restarted — try again, or close the cell.";
 async function restart(): Promise<void> {
+  // The reap is a request to THIS server, which holds nothing of a peer's session: it would answer
+  // "ended" and the reconnect would merely re-attach the old process. Refused out loud instead.
+  if (hostId.value) {
+    void termRef.value?.showHint(t("peers.restartOnPeer"), "restart_alt");
+    return;
+  }
   await restartWith(reapSessionOnServer);
 }
 
@@ -1858,6 +1876,13 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                  on the filmstrip thumbnail too (the CockpitHeader above), unlike the info chips
                  below, because it is identity rather than status. -->
             <CollectionMark :collection="collection" />
+            <span
+              v-if="launched && hostId"
+              data-testid="cell-peer"
+              class="shrink-0 rounded border border-line px-1 font-sans text-[10px] leading-4 text-accent"
+              :data-tip="t('peers.runOn')"
+              >{{ peerLabel(hostId) }}</span
+            >
             <AccountMark v-if="launched" :label="accountMarkLabel" :detail="accountMarkDetail" :choices="accountMarkChoices" @switch="switchSubscription" />
             <!-- The path is NOT here any more — it is the lead item on row 2 (see the
                `header-lead` template below). It had `min-w-[16ch]`, a floor of roughly a third of
@@ -2112,6 +2137,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
           :agent="agent"
           :custom-agent="customAgentId"
           :account="accountId"
+          :host="hostId"
           :launch="launchChoice"
           :hide-header="filmstrip"
           :expanded="expanded"
@@ -2310,12 +2336,15 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
         :custom-agents="customAgents ?? []"
         :accounts="accounts ?? []"
         :account="accountId"
+        :peers="peerHosts"
+        :host="hostId"
         :open-session-ids="openSessionIds"
         :open-cwds="openCwds"
         @update:dir="onLaunchDir"
         @update:agent="choosePickedAgent"
         @update:choice="(value) => (launchChoice = value)"
         @update:account="(value) => (accountId = value)"
+        @update:host="(value) => (hostId = value)"
         @start="startPickedAgent"
         @resume="resumeSession"
         @run="(cmd) => emit('run', cmd)"

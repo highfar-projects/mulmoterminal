@@ -3444,7 +3444,7 @@ describe("TerminalCell launch target — the OS default shell (#1114)", () => {
     await w.find('[data-testid="cell-dir-go"]').trigger("click");
     await flushPromises();
     expect(w.emitted("launch")).toBeUndefined();
-    expect(w.emitted("agent")).toEqual([[{ agent: "claude", customAgent: null, account: null }]]);
+    expect(w.emitted("agent")).toEqual([[{ agent: "claude", customAgent: null, account: null, host: null }]]);
   });
 
   it("hides the model / MCP / worktree options for a shell and brings them back for an agent", async () => {
