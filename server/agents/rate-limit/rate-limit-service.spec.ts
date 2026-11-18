@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { claudeConfigProjectKey } from "../claude/config-project-key";
 
 const spawnPty = vi.hoisted(() => vi.fn());
 
@@ -88,7 +89,7 @@ describe("the usage probes run in MulmoTerminal's own folder (#3200)", () => {
   const trustedIn = (configFile: string): unknown => {
     const config: unknown = JSON.parse(readFileSync(configFile, "utf8"));
     const projects = config !== null && typeof config === "object" && "projects" in config ? config.projects : undefined;
-    const entry = projects !== null && typeof projects === "object" ? Reflect.get(projects, realpathSync.native(PROBE_CWD)) : undefined;
+    const entry = projects !== null && typeof projects === "object" ? Reflect.get(projects, claudeConfigProjectKey(realpathSync.native(PROBE_CWD))) : undefined;
     return entry !== null && typeof entry === "object" ? Reflect.get(entry, "hasTrustDialogAccepted") : undefined;
   };
 
@@ -117,7 +118,7 @@ describe("the usage probes run in MulmoTerminal's own folder (#3200)", () => {
     rmSync(account, { recursive: true, force: true });
   });
 
-  // Claude Code's own save can land on top of the write (probe-trust.ts). The service must not take
+  // Claude Code's own save can land on top of the write (own-folder-trust.ts). The service must not take
   // its write as the last word: the next probe reads again, and writes again when the key is gone.
   it("writes the trust again when a later read no longer finds it", () => {
     const account = mkdtempSync(path.join(tmpdir(), "mt-ratelimit-acct-"));

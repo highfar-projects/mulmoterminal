@@ -32,7 +32,7 @@ Codex、Antigravity、Grok、Muse、GitHub Copilot CLI、Cursor CLI。
 npx mulmoterminal@latest        # http://localhost:34567 で起動し、ブラウザが開きます
 ```
 
-**Node 22.12 以上**と、`PATH` に通ってログイン済みの
+**Node 24.15 以上**と、`PATH` に通ってログイン済みの
 [`claude`](https://claude.com/claude-code) CLI が必要です。
 `npx mulmoterminal@latest init` が、足りないものを教えてくれます。
 
@@ -222,7 +222,7 @@ Node 24.21.0 と Yarn 1.22.22 を固定しているので、チェックアウ�
 
 ## インストールと起動
 
-**Node 22.12 以上**と、`PATH` 上の以下の CLI が必要です。
+**Node 24.15 以上**と、`PATH` 上の以下の CLI が必要です。
 
 > **どれも入れたことがない場合**は、コマンドラインの経験がない前提で、macOS と Windows の
 > 両方を最初から説明したガイドがあります:

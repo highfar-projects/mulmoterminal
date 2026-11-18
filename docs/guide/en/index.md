@@ -8,9 +8,8 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **12.1.2 is out.** Token rotation no longer starts sessions on a subscription that cannot run
-> Claude Code. [Setup guide](v12.1.2.html) — and 12.1.0 added compact roster rows and a roster you
-> can fold: [12.1.0 setup guide](v12.1.0.html)
+> **13.0.0 is out.** It needs Node.js 24.15 or later, and voice input can now skip silence and
+> noise. [Setup guide](v13.0.0.html)
 
 ## What is MulmoTerminal? {#what-is}
 
@@ -250,7 +249,7 @@ The bottleneck isn't the CPU or the terminal — it's **your attention**.
 
 ## Get started {#cli-tools}
 
-If the [`claude`](https://claude.com/claude-code) CLI (Claude Code) runs on your machine and you have **Node ≥ 22.12**,
+If the [`claude`](https://claude.com/claude-code) CLI (Claude Code) runs on your machine and you have **Node ≥ 24.15**,
 one command starts it:
 
 ```bash

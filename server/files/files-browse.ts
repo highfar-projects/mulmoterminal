@@ -16,9 +16,12 @@ import { Marked, type Token, type Tokens } from "marked";
 import type { Express, Request, Response } from "express";
 import os from "node:os";
 import { hasErrnoCode } from "../errors.js";
-import { backupCurrentFile, backupHolds, listBackups, readBackup, storeBackup } from "./backup-store.js";
+import { backupHolds, listBackups, readBackup, storeBackup } from "./backup-store.js";
+import { writeVerified, type Recheck } from "./verifiedWrite.js";
+import { readVerified } from "./verifiedRead.js";
 import { losslessText } from "./editableText.js";
-import { containedPath, expandTilde, namedBase, resolveBase, resolveContained, rewriteContainerPath } from "./pathContainment.js";
+import { containedPath, expandTilde, namedBase, resolveBase, resolveContained, rewriteContainerPath, symlinkEscapeOf } from "./pathContainment.js";
+import { SYMLINK_ESCAPE, SYMLINK_ESCAPE_FIELD, SYMLINK_ESCAPE_PATH_FIELD } from "../../common/symlinkEscape.js";
 import { servedImageSrc, type ServedDoc } from "./mdImageSrc.js";
 import { forwardedPrefix } from "../infra/http/forwarded-prefix.js";
 import { loadDirConfig } from "../config/dir/dir-config.js";
@@ -62,19 +65,27 @@ export const mdToHtmlDoc = (bodyHtml: string, title: string): string => htmlDoc(
 // two sides disagree about what the file is.
 const versionOfBytes = (bytes: Buffer): string => createHash("sha256").update(bytes).digest("hex").slice(0, 16);
 
-/** The file's current version, or null when it doesn't exist — which is also what a caller
- *  passes as `baseVersion` to say "I expect to be creating this". ONLY a missing file reads
- *  as null: one that exists but can't be read (permissions, a transient I/O error) must not
- *  answer "absent", or a `baseVersion: null` write would sail past the conflict check and
- *  overwrite it. Anything else throws, and the write fails instead of guessing. */
-export function currentVersion(abs: string): string | null {
+export type OnDisk = { kind: "file"; bytes: Buffer } | { kind: "missing" } | { kind: "escaped" };
+
+/** What is at `abs` now, read only once the open file is the one `recheck` names (#3306). ONLY a
+ *  missing file reads as "missing": one that exists but can't be read (permissions, a transient I/O
+ *  error) must not answer "absent", or a `baseVersion: null` write would sail past the conflict check
+ *  and overwrite it. Anything else throws, and the caller fails instead of guessing. */
+export function readOnDisk(abs: string, recheck: Recheck): OnDisk {
   try {
-    return versionOfBytes(fs.readFileSync(abs));
+    const bytes = readVerified(abs, recheck);
+    return bytes === null ? { kind: "escaped" } : { kind: "file", bytes };
   } catch (err) {
-    if (hasErrnoCode(err) && err.code === "ENOENT") return null;
+    if (hasErrnoCode(err) && err.code === "ENOENT") return { kind: "missing" };
     throw err;
   }
 }
+
+/** The version `baseVersion` is compared against: null for a missing file, which is also what a
+ *  caller passes to say "I expect to be creating this". */
+const versionOf = (onDisk: OnDisk): string | null => (onDisk.kind === "file" ? versionOfBytes(onDisk.bytes) : null);
+
+const ESCAPES_ROOT = { error: "path escapes the project root" };
 
 const followedStat = (abs: string): fs.Stats | null => {
   try {
@@ -119,6 +130,13 @@ const browseRel = (req: Request): string => (typeof req.query.path === "string" 
 // the raw route's one-click, agent-authored path. A read also takes a path a devcontainer session
 // printed, which names ITS OWN workspaceFolder rather than `base` on the host, and rewrites it back
 // before containing (see pathContainment.ts's rewriteContainerPath). A change gets neither.
+/** `path` resolved under `base` by the rule above, with no response: also what a READ's re-check
+ *  after the open asks (#3306), so the two cannot disagree about a link the read was allowed. */
+function resolveUnder(base: string, req: Request, followLinks: boolean): string | null {
+  const rel = followLinks ? rewriteContainerPath(base, browseRel(req), loadDirConfig(base).devcontainerWorkspaceFolder) : browseRel(req);
+  return resolveContained(base, rel, os.homedir(), process.platform, { allowSymlinkEscape: followLinks });
+}
+
 /** `path` resolved under `base`, or null after answering: 404 for a base that is gone (a named
  *  directory that is not there any more), 403 for a path that escapes it. */
 function containedUnder(base: string | null, req: Request, res: Response, followLinks = false): string | null {
@@ -126,10 +144,11 @@ function containedUnder(base: string | null, req: Request, res: Response, follow
     res.status(404).json({ error: "that directory is not there any more" });
     return null;
   }
-  const rel = followLinks ? rewriteContainerPath(base, browseRel(req), loadDirConfig(base).devcontainerWorkspaceFolder) : browseRel(req);
-  const abs = resolveContained(base, rel, os.homedir(), process.platform, { allowSymlinkEscape: followLinks });
+  const abs = resolveUnder(base, req, followLinks);
   if (!abs) {
-    res.status(403).json({ error: "path escapes the project root" });
+    const throughSymlink = symlinkEscapeOf(base, browseRel(req), os.homedir());
+    const symlinkFields = throughSymlink ? { [SYMLINK_ESCAPE_FIELD]: SYMLINK_ESCAPE, [SYMLINK_ESCAPE_PATH_FIELD]: throughSymlink } : {};
+    res.status(403).json({ ...ESCAPES_ROOT, ...symlinkFields });
     return null;
   }
   return abs;
@@ -150,8 +169,41 @@ const containedFor = (req: Request, res: Response, defaultCwd: string): string |
 /** `containedFor` for a request that CHANGES a file: a cwd that was named but is no longer a
  *  directory is refused rather than read as the default workspace, where the write would land on a
  *  same-named file in another folder (Codex on #2676). */
-const containedForChange = (req: Request, res: Response, defaultCwd: string): string | null =>
-  containedUnder(namedBase(typeof req.query.cwd === "string" ? req.query.cwd : null, defaultCwd, os.homedir()), req, res);
+const changeBase = (req: Request, defaultCwd: string): string | null =>
+  namedBase(typeof req.query.cwd === "string" ? req.query.cwd : null, defaultCwd, os.homedir());
+
+const containedForChange = (req: Request, res: Response, defaultCwd: string): string | null => containedUnder(changeBase(req, defaultCwd), req, res);
+
+/** The containment check under `base`, to be asked again once the file is open (#3306). */
+const recheckUnder =
+  (base: string | null, req: Request): Recheck =>
+  () =>
+    base === null ? null : resolveContained(base, browseRel(req), os.homedir());
+
+const realPathOrNull = (abs: string | null): string | null => {
+  if (abs === null) return null;
+  try {
+    return fs.realpathSync(abs);
+  } catch {
+    return null;
+  }
+};
+
+/** Fork-only: a READ follows links (containedUnder), so asking upstream's strict check again would
+ *  refuse every link the read was let through. Instead the real location is taken NOW — before the
+ *  route opens or lists anything — and the re-check answers only while the path still leads there.
+ *  A link that was already in place reads as it did; a folder swapped for a link out after this
+ *  point leads somewhere else and is refused (#3306). Build it before the open, never after. */
+function recheckForRead(req: Request, defaultCwd: string): Recheck {
+  const base = readBase(req, defaultCwd);
+  const atCheck = base === null ? null : realPathOrNull(resolveUnder(base, req, true));
+  return () => {
+    if (base === null || atCheck === null) return null;
+    const now = resolveUnder(base, req, true);
+    return realPathOrNull(now) === atCheck ? now : null;
+  };
+}
+const recheckForChange = (req: Request, defaultCwd: string): Recheck => recheckUnder(changeBase(req, defaultCwd), req);
 
 /** The rendering of a file and its style, for whichever shell the request gets. `theme` is the
  *  app's colours when the Files pane asked for them (#2263), else null: a rendering that has no
@@ -174,7 +226,7 @@ function servedDoc(req: Request, defaultCwd: string): ServedDoc {
 
 // The file's text, or null with the response already answered. Shared by the rendered views
 // so "directory / too large / missing" reads the same from every one of them.
-function readTextOr4xx(res: Response, abs: string): string | null {
+function readTextOr4xx(res: Response, abs: string, recheck: Recheck): string | null {
   try {
     const stat = fs.statSync(abs);
     if (stat.isDirectory()) {
@@ -189,7 +241,12 @@ function readTextOr4xx(res: Response, abs: string): string | null {
     // Same rule as /text: a file whose bytes do not survive UTF-8 is not something to render as
     // a document either, and reading it here with "utf8" would put the same replaced content on
     // screen. Refused at the source so neither surface has to recognise mojibake (#2038).
-    const text = losslessText(fs.readFileSync(abs));
+    const bytes = readVerified(abs, recheck);
+    if (bytes === null) {
+      res.status(403).json(ESCAPES_ROOT);
+      return null;
+    }
+    const text = losslessText(bytes);
     if (text === null) {
       res.status(415).json({ error: "this file cannot be shown as text", kind: "binary" });
       return null;
@@ -222,7 +279,7 @@ function mountRenderedRoute(app: Express, routePath: string, defaultCwd: string,
   app.get(routePath, async (req, res) => {
     const abs = containedFor(req, res, defaultCwd);
     if (!abs) return;
-    const text = readTextOr4xx(res, abs);
+    const text = readTextOr4xx(res, abs, recheckForRead(req, defaultCwd));
     if (text === null) return;
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.setHeader("X-Content-Type-Options", "nosniff");
@@ -397,7 +454,7 @@ function mountLinesRoute(app: Express, defaultCwd: string): void {
     if (!abs) return;
     const around = wholeNumberParam(req.query.line, FIRST_LINE);
     if (around === null) return res.status(400).json({ error: "line must be a positive integer" });
-    const text = readTextOr4xx(res, abs);
+    const text = readTextOr4xx(res, abs, recheckForRead(req, defaultCwd));
     if (text === null) return;
     res.json(lineWindow(text, around, CONTEXT_RADIUS_LINES));
   });
@@ -411,7 +468,7 @@ function mountCodeBlockRoute(app: Express, defaultCwd: string): void {
     if (!abs) return;
     const index = wholeNumberParam(req.query.index, FIRST_BLOCK);
     if (index === null) return res.status(400).json({ error: "index must be a whole number" });
-    const text = readTextOr4xx(res, abs);
+    const text = readTextOr4xx(res, abs, recheckForRead(req, defaultCwd));
     if (text === null) return;
     const block = previewCodeBlocks(text)[index];
     return block ? res.json(block) : res.status(404).json({ error: "no such code block", kind: "no-block" });
@@ -489,6 +546,26 @@ function mountRenderedRoutes(app: Express, defaultCwd: string): void {
   );
 }
 
+function mountListRoute(app: Express, defaultCwd: string): void {
+  app.get("/api/files/browse/list", (req, res) => {
+    const root = browseBase(req, defaultCwd);
+    const abs = containedFor(req, res, defaultCwd);
+    if (!abs) return;
+    try {
+      if (!fs.statSync(abs).isDirectory()) return res.status(400).json({ error: "not a directory" });
+      // Node cannot list a folder through a descriptor, so the check is asked again once it has been
+      // read: a listing taken through a folder swapped for a link out, still in place, is refused
+      // rather than answered (#3306). A swap undone before then is not seen.
+      const recheck = recheckForRead(req, defaultCwd);
+      const entries = listEntries(abs);
+      if (recheck() === null) return res.status(403).json(ESCAPES_ROOT);
+      res.json({ cwd: path.resolve(root), path: browseRel(req), entries });
+    } catch {
+      res.status(404).json({ error: "not found" });
+    }
+  });
+}
+
 export function mountFilesBrowseRoutes(app: Express, deps: BrowseDeps): void {
   const { defaultCwd, backupRoot } = deps;
 
@@ -497,17 +574,7 @@ export function mountFilesBrowseRoutes(app: Express, deps: BrowseDeps): void {
   mountCodeBlockRoute(app, defaultCwd);
   mountFilesGitStatusRoute(app, { base: baseResolver(defaultCwd), maxHeadBytes: MAX_EDIT_BYTES });
 
-  app.get("/api/files/browse/list", (req, res) => {
-    const root = browseBase(req, defaultCwd);
-    const abs = containedFor(req, res, defaultCwd);
-    if (!abs) return;
-    try {
-      if (!fs.statSync(abs).isDirectory()) return res.status(400).json({ error: "not a directory" });
-      res.json({ cwd: path.resolve(root), path: browseRel(req), entries: listEntries(abs) });
-    } catch {
-      res.status(404).json({ error: "not found" });
-    }
-  });
+  mountListRoute(app, defaultCwd);
 
   // Every file in the project as one flat list, for the pane's "open by name" finder (#2099).
   // Rooted at the project base and NOT at `?path=`: the finder hands what it picks straight to
@@ -530,7 +597,8 @@ export function mountFilesBrowseRoutes(app: Express, deps: BrowseDeps): void {
       if (stat.isDirectory()) return res.status(400).json({ error: "not a file" });
       if (stat.size > MAX_EDIT_BYTES) return res.status(413).json({ error: "file too large to edit" });
       // One read for both, so the version can't describe a different revision than the text.
-      const bytes = fs.readFileSync(abs);
+      const bytes = readVerified(abs, recheckForRead(req, defaultCwd));
+      if (bytes === null) return res.status(403).json(ESCAPES_ROOT);
       // Refused rather than streamed into a textarea, which is what MAX_EDIT_BYTES' own comment
       // always claimed and only the size half of ever did. `toString("utf8")` replaces every byte
       // it cannot represent, so the file is already destroyed by the time it reaches the editor —
@@ -559,7 +627,9 @@ export function mountFilesBrowseRoutes(app: Express, deps: BrowseDeps): void {
       // open or save anyway.
       const stat = fs.statSync(abs, { throwIfNoEntry: false });
       if (stat && stat.size > MAX_EDIT_BYTES) return res.status(413).json({ error: "file too large" });
-      res.json({ version: currentVersion(abs) });
+      const onDisk = readOnDisk(abs, recheckForRead(req, defaultCwd));
+      if (onDisk.kind === "escaped") return res.status(403).json(ESCAPES_ROOT);
+      res.json({ version: versionOf(onDisk) });
     } catch {
       res.status(500).json({ error: "failed to read file" });
     }
@@ -612,22 +682,28 @@ function mountWriteRoute(app: Express, { defaultCwd, backupRoot, onDirConfigWrit
     if (Buffer.byteLength(text, "utf8") > MAX_EDIT_BYTES) return res.status(413).json({ error: "content too large" });
     try {
       if (fs.existsSync(abs) && fs.statSync(abs).isDirectory()) return res.status(400).json({ error: "path is a directory" });
+      const recheck = recheckForChange(req, defaultCwd);
+      // ONE read for the text check, the version and the backup, each of which would otherwise read
+      // whatever the path led to by then — and a backup of an outside file is served back by
+      // `GET /browse/backup` under the inside file's name.
+      const onDisk = readOnDisk(abs, recheck);
+      if (onDisk.kind === "escaped") return res.status(403).json(ESCAPES_ROOT);
       // Never write TEXT over content that is not text. This route only ever receives a string, so
       // overwriting a spreadsheet with one is always a loss — and the editor cannot be the only
       // thing stopping it: it reached here with an EMPTY buffer through Ctrl+S and "Overwrite
       // anyway", and truncated a 324-byte xlsx to 0 (CodeRabbit on #2038). Refused BEFORE
-      // `backupCurrentFile`, which reads with "utf8" and would bank a damaged copy of the very
-      // file it is meant to protect.
-      if (fs.existsSync(abs) && losslessText(fs.readFileSync(abs)) === null) {
+      // the backup below, which reads with "utf8" and would bank a damaged copy of the very file it
+      // is meant to protect.
+      if (onDisk.kind === "file" && losslessText(onDisk.bytes) === null) {
         return res.status(415).json({ error: "this file cannot be edited as text", kind: "binary" });
       }
-      const onDisk = currentVersion(abs);
-      if (onDisk !== baseVersion) return res.status(409).json({ error: "file changed on disk", version: onDisk });
+      const versionOnDisk = versionOf(onDisk);
+      if (versionOnDisk !== baseVersion) return res.status(409).json({ error: "file changed on disk", version: versionOnDisk });
       // What is about to be replaced, banked before it is. Best-effort: a backup that can't be
       // written must not turn into a refusal to save.
-      backupCurrentFile(abs, backupRoot);
+      if (onDisk.kind === "file") storeBackup(abs, onDisk.bytes.toString("utf8"), backupRoot);
       const bytes = Buffer.from(text, "utf8");
-      fs.writeFileSync(abs, bytes);
+      if (writeVerified(abs, bytes, recheck) === "escaped") return res.status(403).json(ESCAPES_ROOT);
       // The LEXICAL path, not `abs`: containment resolved symlinks to decide the write was allowed,
       // but a view is keyed by the cwd string it launched with, and the signal is matched exactly —
       // a project opened through a symlink would never hear about its own config (#1002).

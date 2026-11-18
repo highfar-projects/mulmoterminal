@@ -4,7 +4,7 @@ nav_title: 全機能リスト
 layout: default
 parent: 日本語
 nav_order: 6.5
-as_of: 12.1.2
+as_of: 13.0.0
 description: MulmoTerminal のいまある機能を、入った版つきで領域ごとに一行ずつ並べた一覧（9.1.0 時点）。
 ---
 
@@ -314,6 +314,7 @@ description: MulmoTerminal のいまある機能を、入った版つきで領�
 
 詳しく: [コレクションから作る](from-collection.html) · [MulmoCast の動画](mulmocast.html) · [表計算とグラフ](spreadsheet.html)
 
+- エージェントが作る部品のソリッドモデルを組み（replicad と OpenCascade）、Canvas が検査の報告と STEP・STL・図面のダウンロード付きで 3D 表示する（presentBrep） (v12.2.0)
 - 同梱スキル /mulmoterminal-html-plan が、計画を Canvas のページにし、未決の選択肢をモックや操作できる部品で並べる。ページのボタンで、決めた内容があなたの次のメッセージとして届く (v11.3.0)
 - 表の計算式が、隣のセルまで埋める表を返せる（SORT、FILTER、UNIQUE、GROUPBY、PIVOTBY）。LET と LAMBDA、LINEST、FREQUENCY、FORECAST.ETS、検定も増える (v11.2.0)
 - グラフに日本地図・世界地図、まとまり分け、列ごとの箱ひげ図、表を追いかける曲線とヒストグラム、ワードクラウド、3D、SVG・CSV での保存、カードの横並びが加わる (v11.1.0)
@@ -451,11 +452,12 @@ description: MulmoTerminal のいまある機能を、入った版つきで領�
 
 詳しく: [はじめに](getting-started.html)
 
+- WHISPER_SERVER_EXTRA_ARGS で音声入力の whisper-server に指定を足す（--vad で無音や雑音を飛ばす など） (v13.0.0)
 - Windows では psmux で、サーバを再起動してもセルが残る (v11.1.0)
 - 設定の「Release notes」で、動いている版までの全リリースとガイドを一覧する (v8.0.0)
 - 試験中: サーバーを別のマシンで動かし SSH トンネルでつなぐ（remoteServer、設定の入力欄） (v7.2.0)
 - 更新後に「What's new」で新しい版の日付付きガイドを画面の言語で出す (v7.2.0)
-- Node が 22.12 より古いと、npx mulmoterminal は更新手順を出して止まる (v6.6.0)
+- Node が必要なバージョンより古いと、npx mulmoterminal は更新手順を出して止まる (v6.6.0)
 - 画面を簡体字・繁体字の中国語と韓国語にもでき、言語名には英語名を添える（5.5） (v5.4.0)
 - サーバーが落ちても起動役が立て直し、ブラウザがつなぎ直す（Windows 以外） (v5.4.0)
 - mulmoterminal stop でどのターミナルからでもサーバーを止める（7.2 で --port 指定） (v4.11.0)
