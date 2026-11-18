@@ -10,11 +10,12 @@ import { currentSoundConfig } from "./useAppConfig";
 import { playNotify } from "./useAttentionSound";
 import type { NotifyKind } from "../../common/notifyKinds";
 
-export function notifySound(kind: NotifyKind, cwd: string | null): void {
+// `host`: the peer server `cwd` is on (common/peers.ts), whose directory sound it is; null for this one.
+export function notifySound(kind: NotifyKind, cwd: string | null, host: string | null = null): void {
   const { enabled } = useSoundEnabled();
   const config = currentSoundConfig();
   if (!enabled.value || !config.kinds.includes(kind)) return;
-  playNotify(kind, cwd, config);
+  playNotify(kind, cwd, config, host);
 }
 
 /** Which notification a finished Run command raises. A start failure reports no code, and is

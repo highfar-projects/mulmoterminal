@@ -13,6 +13,7 @@ import { safeHttpsUrl } from "../../common/httpsUrl";
 import { isIssueWorkCommentsEnabled } from "./issueWorkComments";
 import type { WorkCommentKind } from "../../common/workComment";
 import { isWorkCommentFailure, type WorkCommentFailure } from "../../common/workCommentFailure";
+import { peerApiPath } from "../../common/peers";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 import { fireConfettiForEvent } from "./useConfetti";
 
@@ -110,7 +111,8 @@ async function postWorkComment(cwd: string, item: WorkItem, kind: WorkCommentKin
   }
 }
 
-export function useWorkItem(cwd: Ref<string | null>) {
+// `host`: the peer server the directory is on (common/peers.ts); absent or null for this one.
+export function useWorkItem(cwd: Ref<string | null>, host?: Ref<string | null>) {
   const item = ref<WorkItem>({ ...EMPTY_WORK_ITEM });
   // Why the last attempt to update the issue failed. Held rather than logged: the user turned the
   // setting on and would otherwise see the same nothing as leaving it off (#1369).
@@ -130,7 +132,7 @@ export function useWorkItem(cwd: Ref<string | null>) {
       return;
     }
     try {
-      const res = await fetchWithTimeout(`/api/pr-phase?cwd=${encodeURIComponent(dir)}`, undefined, SLOW_COMMAND_TIMEOUT_MS);
+      const res = await fetchWithTimeout(peerApiPath(host?.value, `/api/pr-phase?cwd=${encodeURIComponent(dir)}`), undefined, SLOW_COMMAND_TIMEOUT_MS);
       if (!res.ok) return;
       const data: unknown = await res.json();
       if (my !== req) return;
@@ -163,7 +165,7 @@ export function useWorkItem(cwd: Ref<string | null>) {
   }
 
   usePollWhileVisible(() => void refresh(), POLL_MS);
-  watch(cwd, () => void refresh());
+  watch(host ? [cwd, host] : cwd, () => void refresh());
 
   return { item, refresh, commentFailure };
 }

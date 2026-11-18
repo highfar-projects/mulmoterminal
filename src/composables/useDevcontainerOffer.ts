@@ -16,6 +16,7 @@
 // `buildDevcontainer` below is the bare POST, with no confirm dialog — shared with
 // TerminalCell.vue's devcontainer badge, whose own click IS the explicit choice (recovering from
 // a session that was started before anyone answered the confirm here).
+import { peerApiPath } from "../../common/peers";
 import { fetchWithTimeout, DEVCONTAINER_UP_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 import { jsonBody } from "../jsonBody";
 import { isRecord } from "../../common/isRecord";
@@ -42,9 +43,11 @@ export interface DevcontainerStatus {
   claudeJsonPersistenceGap: boolean;
 }
 
-export async function devcontainerStatus(cwd: string): Promise<DevcontainerStatus | null> {
+// `host` on each of these: the peer server the directory is on (common/peers.ts), which is where its
+// container is built, run and stopped; null for this server.
+export async function devcontainerStatus(cwd: string, host: string | null = null): Promise<DevcontainerStatus | null> {
   try {
-    const res = await fetchWithTimeout(`/api/devcontainer/status?cwd=${encodeURIComponent(cwd)}`);
+    const res = await fetchWithTimeout(peerApiPath(host, `/api/devcontainer/status?cwd=${encodeURIComponent(cwd)}`));
     const body = await jsonBody(res);
     return {
       hasConfig: isRecord(body) && body.hasConfig === true,
@@ -66,10 +69,13 @@ export interface DevcontainerBuildResult {
 /** `rebuild: true` (TerminalCell.vue's devcontainer badge, once a directory is already enabled)
  * removes and recreates the existing container — plain `up` against one already running would
  * just reattach to it, not rebuild anything. */
-export async function buildDevcontainer(cwd: string, { rebuild = false }: { rebuild?: boolean } = {}): Promise<DevcontainerBuildResult> {
+export async function buildDevcontainer(
+  cwd: string,
+  { rebuild = false, host = null }: { rebuild?: boolean; host?: string | null } = {},
+): Promise<DevcontainerBuildResult> {
   try {
     const res = await fetchWithTimeout(
-      "/api/devcontainer/up",
+      peerApiPath(host, "/api/devcontainer/up"),
       { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ cwd, rebuild }) },
       DEVCONTAINER_UP_TIMEOUT_MS,
     );
@@ -88,10 +94,10 @@ export async function buildDevcontainer(cwd: string, { rebuild = false }: { rebu
  *  installing a package the image should have had, adding a mount, editing devcontainer.json
  *  before a rebuild. Shares DevcontainerBuildResult's shape with buildDevcontainer since
  *  TerminalCell.vue reports both the same way — ok, or a message to show. */
-export async function stopDevcontainer(cwd: string): Promise<DevcontainerBuildResult> {
+export async function stopDevcontainer(cwd: string, host: string | null = null): Promise<DevcontainerBuildResult> {
   try {
     const res = await fetchWithTimeout(
-      "/api/devcontainer/down",
+      peerApiPath(host, "/api/devcontainer/down"),
       { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ cwd }) },
       DEVCONTAINER_UP_TIMEOUT_MS,
     );
@@ -109,10 +115,10 @@ export async function stopDevcontainer(cwd: string): Promise<DevcontainerBuildRe
  *  edits this directory's devcontainer.json so the fix survives every future rebuild, and — since
  *  a config edit alone only takes effect on the NEXT rebuild — also applies it inside whatever
  *  container is running right now, if any, so a conversation history is not made to wait for one. */
-export async function fixClaudeJsonPersistence(cwd: string): Promise<DevcontainerBuildResult> {
+export async function fixClaudeJsonPersistence(cwd: string, host: string | null = null): Promise<DevcontainerBuildResult> {
   try {
     const res = await fetchWithTimeout(
-      "/api/devcontainer/fix-claude-json-persistence",
+      peerApiPath(host, "/api/devcontainer/fix-claude-json-persistence"),
       { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ cwd }) },
       DEVCONTAINER_UP_TIMEOUT_MS,
     );
