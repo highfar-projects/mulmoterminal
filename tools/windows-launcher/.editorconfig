@@ -1,0 +1,4 @@
+# Windows PowerShell 5.1 reads a BOM-less UTF-8 script as Shift_JIS and silently drops lines after
+# Japanese text, so the launcher must keep its BOM. install.ps1 is ASCII and needs none.
+[mulmoterminal-launcher.ps1]
+charset = utf-8-bom

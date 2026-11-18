@@ -90,6 +90,9 @@ you take the socket path for cleanup from what it actually created under `/tmp/t
   sides genuinely differ, share the common core and keep each side's extras local, with
   a test pinning the asymmetry (see `common/sourceExtensions.ts` + its spec).
 - `bin/` — CLI entry (`npx mulmoterminal`, `claude-ollama`, …).
+- `tools/windows-launcher/` — this fork's Windows Start-menu launcher (PowerShell). Personal values live in
+  `%LOCALAPPDATA%\MulmoTerminalLauncher\launcher.config.json`, never in the script; the script must stay
+  UTF-8 **with BOM** (PowerShell 5.1). Its README covers install, update and the config keys.
 - `docs/` — Jekyll site; bilingual guide under `docs/guide/{en,ja}` (keep both in sync).
 - `plans/` — design notes per change. `test/` — Vitest specs.
 
