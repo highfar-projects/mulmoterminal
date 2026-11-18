@@ -178,7 +178,9 @@ export function wrapWithPluginRuntime(scope: string, toolName: string, inner: Co
         // The images the view draws are built by the view itself, so on a peer they are corrected
         // in its DOM (peerImageSrc.ts). `display: contents` keeps this box out of the layout.
         const box = ref<HTMLElement | null>(null);
-        const docPath = (): string | null => documentPathOf(attrs.selectedResult);
+        // Not a declared prop here, so `attrs` keeps the spelling the parent used — and every
+        // parent writes `:selected-result` in its template.
+        const docPath = (): string | null => documentPathOf(attrs["selected-result"] ?? attrs.selectedResult);
         watchEffect((onCleanup) => {
           const el = box.value;
           const peer = host.value;
