@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { peerApiPath, splitPeerDirKey } from "../../common/peers";
+import { watchSessionHosts } from "../composables/peerHosts";
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } from "vue";
 import TerminalGrid from "./TerminalGrid.vue";
 import AppSettingsModal from "./AppSettingsModal.vue";
@@ -139,6 +140,8 @@ const noRunningTerminals = computed(() => runningCount(state.value.cells) === 0)
 // `statusByUid` (reported up while a cell is mounted) is the fallback for cells with
 // no session id (command cells) and a just-launched cell before its id arrives.
 const cellSessionIds = computed(() => state.value.cells.map((c) => c.session).filter((s): s is string => !!s));
+// Which peer each open session runs on, for the helpers handed a session id alone (peerHosts.ts).
+watchSessionHosts(() => state.value.cells);
 // A cell on a peer server (common/peers.ts) is asked about on that server.
 const { activity: gridActivity } = useGridActivity(cellSessionIds, (id) => state.value.cells.find((c) => c.session === id)?.host ?? null);
 const statusByUid = reactive<Record<number, AttentionStatus>>({});

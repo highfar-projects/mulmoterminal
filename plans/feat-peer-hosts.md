@@ -133,8 +133,26 @@ had no remove button; B's past session was listed and resuming it reconnected B'
 Shell started from the launch panel ran on B (`$HOME` was B's) with the "Server B" badge and B's git
 chip. A saw no terminal connection at all.
 
-## Not yet (later stages)
+## Stage 6: questions, pane commands, and a peer that is down
 
-4. The question pane (AskUserQuestion) and `showInPane` for a peer cell: both listen on this
-   server's channels only.
-5. Showing a peer that is down as such, per cell.
+- A session-to-server map (`peerHosts.ts` `watchSessionHosts` / `sessionHostOf`, kept by GridView from
+  its cells — session ids are UUIDs, so one map serves every server) routes the helpers handed a
+  session id alone: the question pane's read and answer (`openQuestion.ts`), a checklist's read and
+  close (`openCheck.ts`).
+- The question channel and the pane-command channel (`showInPane`) are listened to on every peer
+  too, in TerminalGrid and in GridView's reveal (`useRevealOnPaneCommand`).
+- `GET /api/peers/status` probes each peer (any HTTP answer is "up", a refused or silent connection
+  "down"); the page asks every 15s while visible and only when peers exist. `PeerBadge` — the badge
+  on a TerminalCell and on a shell/launcher cell — turns amber with `cloud_off` and says the peer is
+  not answering.
+
+Measured with two scratch servers: an AskUserQuestion hook posted to B opened the question pane on
+A's page with B's options, and picking one posted the answer to `/peer/b/api/question/<id>/answer`.
+Stopping B turned the badge to "not answering" within a poll; starting B again turned it back.
+
+## Known limits
+
+- A question or checklist that arrives while a peer's pub/sub socket is down is not re-read when
+  that socket reconnects (only this server's reconnect re-reads); enlarging the cell again does.
+- Nothing here has run against a real Claude on a real WSL + Windows pair yet — every measurement
+  above used a fake `claude` and hand-posted hooks.

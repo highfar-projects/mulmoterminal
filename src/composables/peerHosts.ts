@@ -99,3 +99,65 @@ export function usePeerLaunchDirs(peer: () => string | null) {
 }
 
 const isCwdPreset = (value: unknown): value is CwdPreset => isRecord(value) && typeof value.label === "string" && typeof value.path === "string";
+
+// Which peer each session open in the grid runs on (common/peers.ts). Session ids are UUIDs, so one
+// map serves every server; a session absent from it is this server's. Kept by GridView from its cells,
+// for the helpers that are handed a session id alone and must ask the server that holds it — the
+// question pane's read and answer, a checklist's read and close.
+const sessionHosts = new Map<string, string>();
+
+/** Keep the map in step with the grid's cells, for as long as the caller's scope lives. */
+export function watchSessionHosts(cells: () => readonly { session: string | null; host?: string | undefined }[]): void {
+  watch(
+    () => cells().flatMap((c) => (c.session && c.host ? [[c.session, c.host] as const] : [])),
+    (entries) => {
+      sessionHosts.clear();
+      for (const [session, host] of entries) sessionHosts.set(session, host);
+    },
+    { immediate: true },
+  );
+}
+
+/** The peer `sessionId` runs on, or null for this server. */
+export const sessionHostOf = (sessionId: string): string | null => sessionHosts.get(sessionId) ?? null;
+
+// Which peers answered the last time this server asked (GET /api/peers/status), for a peer cell to
+// say its server is down rather than look like a terminal that is merely slow to reconnect. A peer
+// absent from the map has not been asked yet and reads as fine. Asked while the tab is visible and
+// only when there are peers at all.
+export const peerReachable = ref<ReadonlyMap<string, boolean>>(new Map());
+const REACHABILITY_POLL_MS = 15_000;
+let polling = false;
+
+async function refreshPeerReachability(): Promise<void> {
+  try {
+    const res = await fetchWithTimeout("/api/peers/status");
+    const body: unknown = res.ok ? await res.json() : null;
+    const list = isRecord(body) && isUnknownArray(body.peers) ? body.peers : [];
+    peerReachable.value = new Map(
+      list.flatMap((row) => (isRecord(row) && isPeerId(row.id) && typeof row.reachable === "boolean" ? [[row.id, row.reachable] as const] : [])),
+    );
+  } catch {
+    // Unknown is fine: nothing is marked down on a failed ask.
+  }
+}
+
+/** Start watching the peers' reachability, once per page, as soon as there is a peer to watch. */
+export function watchPeerReachability(): void {
+  if (polling) return;
+  polling = true;
+  loadPeerHosts();
+  watch(
+    peerHosts,
+    (list) => {
+      if (list.length) void refreshPeerReachability();
+    },
+    { immediate: true },
+  );
+  setInterval(() => {
+    if (peerHosts.value.length && document.visibilityState === "visible") void refreshPeerReachability();
+  }, REACHABILITY_POLL_MS);
+}
+
+/** Whether the peer is known to be down: true only on a "no" from the last ask. */
+export const peerIsDown = (id: string): boolean => peerReachable.value.get(id) === false;

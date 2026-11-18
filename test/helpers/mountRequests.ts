@@ -10,6 +10,11 @@
 // copies would drift the moment a fourth request is added.
 import { expect, vi } from "vitest";
 
+// Asked once per PAGE rather than per session — the peer servers this one relays (common/peers.ts),
+// which the grid listens to for questions and pane commands. Answered as "none", and left out of the
+// per-session bookkeeping below: whether it goes out depends on what mounted first, not on the zoom.
+const PAGE_WIDE: ReadonlyMap<string, () => unknown> = new Map([["/api/peers", () => ({ peers: [] })]]);
+
 /** The routes a mount issues, per session, in the shape their callers read. */
 const routesFor = (session: string): [string, () => unknown][] => [
   [`/api/question/${encodeURIComponent(session)}`, () => ({ question: null })],
@@ -60,6 +65,8 @@ export function mountRequests(sessions: readonly string[], { strict = false } = 
       // node-lib test project too, where the DOM lib's alias does not exist.
       globalThis.fetch = vi.fn(async (input: Parameters<typeof fetch>[0]) => {
         const url = String(input);
+        const pageWide = PAGE_WIDE.get(url);
+        if (pageWide) return { ok: true, json: async () => pageWide() };
         const route = allowed.get(url);
         if (route && answerable(route)) {
           asked.push(url);

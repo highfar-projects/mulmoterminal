@@ -15,7 +15,7 @@ import DirBadge from "./DirBadge.vue";
 import DirIcon from "./DirIcon.vue";
 import CellChromeButtons from "./CellChromeButtons.vue";
 import CellPathMenu from "./CellPathMenu.vue";
-import { peerLabel } from "../composables/peerHosts";
+import PeerBadge from "./PeerBadge.vue";
 import CockpitRowMenu from "./CockpitRowMenu.vue";
 import type { RowMenuModel } from "./thumbnailRowMenu";
 import { cellChromeBinding, type CellChromeSource } from "./cellChromeBinding";
@@ -134,13 +134,7 @@ function onHeaderClick(event: MouseEvent) {
           :class="[CELL_DOT, finished ? `is-idle ${CELL_DOT_IDLE}` : `is-working ${CELL_DOT_WORKING}`]"
           :data-tip="finished ? idleTitle : t('tips.cell.running')"
         />
-        <span
-          v-if="host"
-          data-testid="cell-peer"
-          class="shrink-0 rounded border border-line px-1 font-sans text-[10px] leading-4 text-accent"
-          :data-tip="t('peers.runOn')"
-          >{{ peerLabel(host) }}</span
-        >
+        <PeerBadge v-if="host" :host="host" />
         <CellPathMenu
           v-if="!thumbnail && dirDisplay && !host"
           :cwd="cwd"
