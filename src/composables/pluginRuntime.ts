@@ -11,7 +11,7 @@
 //                 plugin:markdown:file:<path> — see server/backends/plugins/markdown.js).
 //   - locale    → the display language, as the plugins' table key (pluginLocale.ts).
 //   - openUrl   → scheme-allowlisted window.open.
-import { computed, defineComponent, h, markRaw, provide, type Component, type Ref } from "vue";
+import { computed, defineComponent, h, markRaw, provide, ref, watchEffect, type Component, type Ref } from "vue";
 import { PLUGIN_RUNTIME_KEY, type BrowserPluginRuntime, type SubscribeOptions } from "gui-chat-protocol/vue";
 import { usePubSub } from "./usePubSub";
 import { i18n } from "../i18n";
@@ -21,6 +21,8 @@ import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { PLUGIN_DISPATCH_TIMEOUT_MS, pluginDispatchError } from "./pluginDispatchDeadline";
 import { usePaneHost } from "./paneHost";
 import { peerApiPath } from "../../common/peers";
+import { isRecord } from "../../common/isRecord";
+import { watchPeerImages } from "./peerImageSrc";
 
 function pluginChannelName(scope: string, eventName: string): string {
   return `plugin:${scope}:${eventName}`;
@@ -151,6 +153,14 @@ export function makeBrowserPluginRuntime(deps: MakeRuntimeDeps): BrowserPluginRu
   };
 }
 
+/** The file a card is about — `docPath` for a document, `filePath` for the others — or null. */
+function documentPathOf(selectedResult: unknown): string | null {
+  const data = isRecord(selectedResult) ? selectedResult.data : undefined;
+  if (!isRecord(data)) return null;
+  const path = data.docPath ?? data.filePath;
+  return typeof path === "string" ? path : null;
+}
+
 /** Wrap a plugin view so its descendants can call useRuntime(). Mirrors
  *  MulmoClaude's wrapWithScope — builds the runtime once and provides it under
  *  PLUGIN_RUNTIME_KEY; the PluginFrame Teleport preserves Vue context, so the
@@ -162,9 +172,19 @@ export function wrapWithPluginRuntime(scope: string, toolName: string, inner: Co
       inheritAttrs: false,
       setup(_props, { attrs, slots }) {
         // A view inside a pane about a peer's cell is that peer's (paneHost.ts); elsewhere, this server.
-        const runtime = makeBrowserPluginRuntime({ scope, toolName, host: usePaneHost() });
+        const host = usePaneHost();
+        const runtime = makeBrowserPluginRuntime({ scope, toolName, host });
         provide(PLUGIN_RUNTIME_KEY, runtime);
-        return () => h(inner, attrs, slots);
+        // The images the view draws are built by the view itself, so on a peer they are corrected
+        // in its DOM (peerImageSrc.ts). `display: contents` keeps this box out of the layout.
+        const box = ref<HTMLElement | null>(null);
+        const docPath = (): string | null => documentPathOf(attrs.selectedResult);
+        watchEffect((onCleanup) => {
+          const el = box.value;
+          const peer = host.value;
+          if (el && peer) onCleanup(watchPeerImages(el, peer, docPath));
+        });
+        return () => h("div", { ref: box, style: "display: contents" }, [h(inner, attrs, slots)]);
       },
     }),
   );
