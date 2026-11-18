@@ -6,6 +6,7 @@ import { useI18n } from "vue-i18n";
 import FilesMediaView from "./FilesMediaView.vue";
 import { GALLERY_PAGE_SIZE, steppedIndex, type GalleryItem } from "./filesGallery";
 import { rawFileSrc } from "./filesPreviewSrc";
+import { usePaneHost } from "../composables/paneHost";
 import { folderTitle, withGroupHeadings } from "./folderView";
 
 // `closable` false is the gallery drawn in the empty file area (#3120), which has nothing to close
@@ -28,7 +29,9 @@ const root = useTemplateRef<HTMLElement>("root");
 const visible = computed(() => withGroupHeadings((props.items ?? []).slice(0, shown.value), props.dir));
 const more = computed(() => Math.max(0, (props.items?.length ?? 0) - shown.value));
 const current = computed(() => (enlarged.value === null ? null : (props.items?.[enlarged.value] ?? null)));
-const srcOf = (item: GalleryItem): string => rawFileSrc(props.cwd, item.pathRel);
+// From the server the pane's directory is on (paneHost.ts).
+const paneHost = usePaneHost();
+const srcOf = (item: GalleryItem): string => rawFileSrc(props.cwd, item.pathRel, null, paneHost.value);
 const title = computed(() => folderTitle(props.cwd, props.dir));
 
 // The keyboard comes here as it opens: the menu item it was opened from is gone, and Esc and the

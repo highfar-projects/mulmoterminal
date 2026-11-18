@@ -11,6 +11,9 @@ import { resolveRelativeSegments } from "../../common/resolveRelativeSegments.js
 export interface ServedDoc {
   base: string;
   dirRel: string;
+  /** The relay's prefix in front of this server's routes (infra/http/forwarded-prefix.ts), "" when
+   *  the document was asked for directly. Absent reads as "". */
+  prefix?: string;
 }
 
 const RAW_ROUTE = "/api/files/raw";
@@ -40,5 +43,5 @@ export function servedImageSrc(src: string, doc: ServedDoc): string | null {
   const rel = filePart(src);
   const resolved = rel === null ? null : joinWithinBase(doc.dirRel, rel.replace(/\\/g, "/"));
   if (resolved === null) return null;
-  return `${RAW_ROUTE}?cwd=${encodeURIComponent(doc.base)}&path=${encodeURIComponent(resolved)}`;
+  return `${doc.prefix ?? ""}${RAW_ROUTE}?cwd=${encodeURIComponent(doc.base)}&path=${encodeURIComponent(resolved)}`;
 }

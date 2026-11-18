@@ -55,6 +55,7 @@ import { useFileOutline } from "../composables/useFileOutline";
 import FilesOutlineMenu from "./FilesOutlineMenu.vue";
 import FilesViewModeButtons from "./FilesViewModeButtons.vue";
 import { previewTabUrl } from "./filesPreviewSrc";
+import { usePaneHost } from "../composables/paneHost";
 import { isOutsidePath } from "./filesOutsidePath";
 import { underRootAsWritten } from "../composables/pathWithinCwd";
 import FilesCanvasView from "./FilesCanvasView.vue";
@@ -116,7 +117,9 @@ const { openPath, openName, dirty, editSeq, saving, fileError, unpreviewable, co
 const outsideFile = computed(() => openPath.value !== null && isOutsidePath(openPath.value));
 const pathUnderRoot = computed(() => (outsideFile.value ? null : openPath.value));
 // The open file's Preview as a tab of its own, with the toolbar the pane has no need of (#3238).
-const previewTab = computed(() => (openPath.value && previewKind.value ? previewTabUrl(previewKind.value, props.cwd, openPath.value) : null));
+// The server this pane's directory is on (paneHost.ts): this one, or a peer it relays.
+const paneHost = usePaneHost();
+const previewTab = computed(() => (openPath.value && previewKind.value ? previewTabUrl(previewKind.value, props.cwd, openPath.value, paneHost.value) : null));
 const openPreviewTab = (): void => {
   if (previewTab.value) window.open(previewTab.value, "_blank", "noopener,noreferrer");
 };
@@ -229,7 +232,16 @@ async function openAsSpreadsheet(pathRel: string): Promise<void> {
 }
 
 /** What picking one does — the other end that belongs to this pane, because it emits. */
+// On a peer's directory, the three that would act on THIS server instead: the file manager opens on
+// this machine, and the Canvas card would be made and stored by this server for a session it does
+// not hold (common/peers.ts).
+const ACTIONS_NOT_ON_A_PEER = new Set<FilesRowAction["id"]>(["reveal", "open-canvas", "open-spreadsheet"]);
+
 function runRowAction(action: FilesRowAction): void {
+  if (paneHost.value && ACTIONS_NOT_ON_A_PEER.has(action.id)) {
+    fileError.value = t("peers.paneActionOnPeer");
+    return;
+  }
   if (action.id === "open-canvas") void canvasMode.open(action.pathRel);
   else if (action.id === "open-spreadsheet") void openAsSpreadsheet(action.pathRel);
   else if (action.id === "open-tab") void tabs.open(action.pathRel, true);

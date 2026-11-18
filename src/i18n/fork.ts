@@ -22,12 +22,14 @@ const restartHints = {
 // The peer-server picker in the launch form (common/peers.ts). Fork-only while it is a prototype.
 const peerMessages = {
   en: {
+    paneActionOnPeer: "This acts on this machine, and the folder is on another server — not available there yet.",
     runOn: "Run on",
     thisServer: "This server",
     peerNote: "Runs on another MulmoTerminal server. Type the folder as that machine names it; its saved folders and past sessions are not listed here yet.",
     shellOnPeer: "A shell cannot run on another server yet. Pick an agent, or switch back to this server.",
   },
   ja: {
+    paneActionOnPeer: "この操作はこのマシンで動くため、別のサーバーのフォルダではまだ使えません。",
     runOn: "実行先",
     thisServer: "このサーバー",
     peerNote:
@@ -35,18 +37,21 @@ const peerMessages = {
     shellOnPeer: "シェルはまだ別のサーバーでは動かせません。エージェントを選ぶか、実行先をこのサーバーに戻してください。",
   },
   ko: {
+    paneActionOnPeer: "이 작업은 이 컴퓨터에서 동작하므로, 다른 서버의 폴더에서는 아직 쓸 수 없습니다.",
     runOn: "실행 위치",
     thisServer: "이 서버",
     peerNote: "다른 MulmoTerminal 서버에서 실행합니다. 폴더는 그 컴퓨터의 경로로 입력하세요. 그쪽의 저장된 폴더와 지난 세션은 아직 여기에 표시되지 않습니다.",
     shellOnPeer: "셸은 아직 다른 서버에서 실행할 수 없습니다. 에이전트를 고르거나 이 서버로 되돌리세요.",
   },
   "zh-CN": {
+    paneActionOnPeer: "此操作在本机上进行，暂时不能用于另一台服务器上的文件夹。",
     runOn: "运行于",
     thisServer: "本服务器",
     peerNote: "在另一台 MulmoTerminal 服务器上运行。请按那台机器上的路径输入文件夹；它保存的文件夹和过去的会话暂时不会列在这里。",
     shellOnPeer: "暂时无法在另一台服务器上运行 Shell。请选择一个智能体，或改回本服务器。",
   },
   "zh-TW": {
+    paneActionOnPeer: "此操作在這台機器上進行，暫時不能用於另一台伺服器上的資料夾。",
     runOn: "執行於",
     thisServer: "這台伺服器",
     peerNote: "在另一台 MulmoTerminal 伺服器上執行。請依那台機器上的路徑輸入資料夾；它儲存的資料夾和過去的工作階段暫時不會列在這裡。",

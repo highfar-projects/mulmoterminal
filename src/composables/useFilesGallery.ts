@@ -1,10 +1,13 @@
 // The folder a Files pane is showing as a gallery (#3079), and what is in it. One folder at a time;
 // opening another, or closing, drops a listing still on its way.
+import { usePaneDirKey } from "./paneHost";
 import { ref, watch } from "vue";
 import { galleryAfterTreeOp, galleryItems, type GalleryItem, type TreeOp } from "../components/filesGallery";
 import { fetchListing } from "./useFilesTree";
 
-export function useFilesGallery(cwd: () => string | null) {
+export function useFilesGallery(rootCwd: () => string | null) {
+  // On the pane's server, as a key fetchListing decodes (paneHost.ts).
+  const cwd = usePaneDirKey(rootCwd);
   /** The folder on show, relative to the pane's root; null when no gallery is open. */
   const dir = ref<string | null>(null);
   const items = ref<GalleryItem[] | null>(null);

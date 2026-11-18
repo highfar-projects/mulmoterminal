@@ -793,7 +793,6 @@ onBeforeUnmount(() => {
 // nothing here is being read, and rearranging the grid they left would greet them on the way back
 // with a zoom they did not ask for. That drawing keeps the chip, which is where it was already.
 const drawnUnsubscribes = new Map<string, () => void>();
-const { subscribe: subscribeDrawn } = usePubSub();
 function stopWatchingDrawing(): void {
   for (const off of drawnUnsubscribes.values()) off();
   drawnUnsubscribes.clear();
@@ -814,9 +813,11 @@ watch(
     }
     for (const id of live) {
       if (drawnUnsubscribes.has(id)) continue;
+      // On the server the session runs on: a peer's cards are published on its own channel.
+      const host = state.value.cells.find((cell) => cell.session === id)?.host ?? null;
       drawnUnsubscribes.set(
         id,
-        subscribeDrawn(`session:${id}`, (data) => {
+        usePubSub(host).subscribe(`session:${id}`, (data) => {
           // Re-checked at fire time, not just at subscribe time: a zoom or a route change between
           // the two is exactly the state this must not fight.
           if (expandedUid.value !== null || !onTerminalsRoute()) return;

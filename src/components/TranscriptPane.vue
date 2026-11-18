@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { peerApiPath } from "../../common/peers";
+import { usePaneHost } from "../composables/paneHost";
 // The session's own conversation, read as turns rather than as the screen (#2112).
 //
 // A claude cell runs on the alternate screen, so the terminal holds no scrollback worth scrolling:
@@ -19,6 +21,9 @@ import { jsonBody } from "../jsonBody";
 import { clockLabel } from "./clockLabel";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { useI18n } from "vue-i18n";
+
+// The server the pane's cell runs on (paneHost.ts): this one, or a peer it relays.
+const paneHost = usePaneHost();
 
 const { t } = useI18n();
 
@@ -109,7 +114,7 @@ const url = (sessionId: string, before: string | null): string => {
   const params = new URLSearchParams({ session: sessionId });
   if (props.cwd) params.set("cwd", props.cwd);
   if (before !== null) params.set("before", before);
-  return `/api/transcript/view?${params.toString()}`;
+  return peerApiPath(paneHost.value, `/api/transcript/view?${params.toString()}`);
 };
 
 /** The newest page and then enough older ones to fill the viewport — what "open this conversation"

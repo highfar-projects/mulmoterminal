@@ -2195,11 +2195,20 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
              literally the path's own click. Occasional navigations do not each deserve a permanent
              icon in a tiled cell. The menu itself is CellPathMenu, shared with every cell type. -->
           <template #header-lead>
-            <!-- On a peer, the place is named and nothing more: every entry of the menu (reveal, insert,
-                 the Files pane, a shell here) acts on THIS machine (common/peers.ts). -->
-            <span v-if="hostId" data-testid="cell-peer-dir" class="min-w-0 truncate font-mono text-[11px] text-dim" :class="DIR_TRUNCATE_FRONT">{{
-              headerDir
-            }}</span>
+            <!-- On a peer, the place opens the Files pane — which reads the peer's directory (paneHost.ts)
+                 — and nothing more: the menu's other entries (reveal, insert, a shell here) act on THIS
+                 machine (common/peers.ts). -->
+            <button
+              v-if="hostId"
+              type="button"
+              data-testid="cell-peer-dir"
+              class="min-w-0 cursor-pointer truncate border-0 bg-transparent p-0 text-left font-mono text-[11px] text-dim hover:text-fg"
+              :class="DIR_TRUNCATE_FRONT"
+              :data-tip="t('pathMenu.browseFiles')"
+              @click="emit('open-files')"
+            >
+              {{ headerDir }}
+            </button>
             <CellPathMenu
               v-else
               :cwd="cwd"

@@ -24,6 +24,7 @@ import type { Express, Request, Response } from "express";
 import { PEER_PATH_PREFIX, sanitizePeers, splitPeerPath, type PeerHost, type PeerSummary } from "../../../common/peers.js";
 import { MULMOTERMINAL_HOME } from "../../config/env.js";
 import { messageOf } from "../../errors.js";
+import { FORWARDED_PREFIX_HEADER } from "./forwarded-prefix.js";
 import { isRecord } from "../../../common/isRecord.js";
 
 type OriginPredicate = (origin: string | undefined, remoteAddress: string | undefined) => boolean;
@@ -58,10 +59,19 @@ const HOP_BY_HOP = ["connection", "keep-alive", "proxy-connection", "transfer-en
 /** The headers the peer is sent: the browser's, with `Host` and `Origin` saying the peer's own
  *  origin (see the header comment for why that is safe here) and `Referer` dropped, since it names
  *  this server's page and means nothing to the peer. */
-export function peerRequestHeaders(headers: IncomingHttpHeaders, peerUrl: string, { upgrade }: { upgrade: boolean }): IncomingHttpHeaders {
-  const dropped = new Set(["referer", ...(upgrade ? [] : HOP_BY_HOP)]);
+//
+// `prefix` is where this relay mounts the peer (`/peer/<id>`), told to the peer as X-Forwarded-Prefix so
+// the documents it renders link back through here. Whatever the browser sent under that name is
+// replaced, never passed on.
+export function peerRequestHeaders(
+  headers: IncomingHttpHeaders,
+  peerUrl: string,
+  { upgrade, prefix }: { upgrade: boolean; prefix?: string },
+): IncomingHttpHeaders {
+  const dropped = new Set(["referer", FORWARDED_PREFIX_HEADER, ...(upgrade ? [] : HOP_BY_HOP)]);
   const out: IncomingHttpHeaders = Object.fromEntries(Object.entries(headers).filter(([name]) => !dropped.has(name)));
   out.host = new URL(peerUrl).host;
+  if (prefix) out[FORWARDED_PREFIX_HEADER] = prefix;
   if (headers.origin !== undefined) out.origin = peerUrl;
   return out;
 }
@@ -99,7 +109,7 @@ export function mountPeerHttpRelay(app: Express, isAllowedOrigin: OriginPredicat
     const target = new URL(split.rest, peer.url);
     const upstream = clientFor(target).request(
       target,
-      { method: req.method, headers: peerRequestHeaders(req.headers, peer.url, { upgrade: false }) },
+      { method: req.method, headers: peerRequestHeaders(req.headers, peer.url, { upgrade: false, prefix: `${PEER_PATH_PREFIX}${peer.id}` }) },
       (answer) => {
         res.writeHead(answer.statusCode ?? 502, answer.statusMessage, answer.headers);
         answer.pipe(res);

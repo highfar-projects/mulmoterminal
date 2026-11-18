@@ -1,6 +1,7 @@
 // The folder the Files pane shows while no file is open (#3120), and the listings read for it. A
 // folder is only read while it is seen: a tree click with a file open is remembered, and costs a
 // request when the last tab closes.
+import { usePaneDirKey } from "./paneHost";
 import { ref, watch, type Ref } from "vue";
 import {
   FOLDER_VIEW_MAX_DIRS,
@@ -94,7 +95,9 @@ function folderReads(cwd: () => string | null, dir: Ref<string>, withSubfolders:
   return { groups, error, load, overtake, forget, unread, inFlight: (): boolean => reading };
 }
 
-export function useFolderView(cwd: () => string | null, visible: () => boolean) {
+export function useFolderView(rootCwd: () => string | null, visible: () => boolean) {
+  // On the pane's server, as a key fetchListing decodes (paneHost.ts).
+  const cwd = usePaneDirKey(rootCwd);
   const dir = ref("");
   const withSubfolders = ref(false);
   const mode = ref<FolderViewMode>(parseFolderViewMode(readStored(MODE_KEY)));

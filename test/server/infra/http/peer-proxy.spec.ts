@@ -16,7 +16,15 @@ let peerServer: http.Server;
 let relayServer: http.Server;
 let relayPort = 0;
 let peerUrl = "";
-const seen: Array<{ url: string; method: string; host: string | undefined; origin: string | undefined; referer: string | undefined; body: string }> = [];
+const seen: Array<{
+  url: string;
+  method: string;
+  host: string | undefined;
+  origin: string | undefined;
+  referer: string | undefined;
+  prefix: string | undefined;
+  body: string;
+}> = [];
 
 // Our own page's origin, as the relay's guard would see it.
 const OURS = "http://ours.test";
@@ -27,7 +35,16 @@ beforeAll(async () => {
     let body = "";
     req.on("data", (chunk: Buffer) => (body += chunk.toString()));
     req.on("end", () => {
-      seen.push({ url: req.url ?? "", method: req.method ?? "", host: req.headers.host, origin: req.headers.origin, referer: req.headers.referer, body });
+      const prefix = req.headers["x-forwarded-prefix"];
+      seen.push({
+        url: req.url ?? "",
+        method: req.method ?? "",
+        host: req.headers.host,
+        origin: req.headers.origin,
+        referer: req.headers.referer,
+        prefix: typeof prefix === "string" ? prefix : undefined,
+        body,
+      });
       res.setHeader("content-type", "application/json");
       res.end(JSON.stringify({ path: req.url }));
     });
@@ -87,6 +104,14 @@ describe("the HTTP relay", () => {
     const res = await relay("/peer/win/api/thing", { method: "POST", headers: { origin: "http://evil.test" }, body: "{}" });
     expect(res.status).toBe(403);
     expect(seen).toHaveLength(0);
+  });
+
+  // So a page the peer renders links its own images and modules back through this relay — and a
+  // browser cannot make the peer believe it is mounted somewhere else.
+  it("tells the peer where it is mounted, replacing whatever the browser sent", async () => {
+    seen.length = 0;
+    await relay("/peer/win/api/files/browse/md?path=a.md", { headers: { "x-forwarded-prefix": "/peer/evil" } });
+    expect(seen[0]?.prefix).toBe("/peer/win");
   });
 
   it("answers 404 for a peer that is not configured", async () => {

@@ -8,6 +8,7 @@
 //     gives the page an opaque origin and no network. Anything else under the page's directory —
 //     the image it links relatively — is handed to the raw route, which already serves it with the
 //     right type, the sandbox and Range support; one implementation of that, not two.
+import { forwardedPrefix } from "../../infra/http/forwarded-prefix.js";
 import path from "node:path";
 import os from "node:os";
 import type { Express, Request, Response } from "express";
@@ -38,7 +39,8 @@ export function mountFilesPageRoute(app: Express, deps: { workspace: string; ses
     } else if (base === null) {
       res.status(403).json({ error: "cwd is not an active session directory" });
     } else if (!HTML_FILE_NAME.test(request.pathRel)) {
-      res.redirect(302, rawUrl(request.cwd, request.pathRel));
+      // Under the relay's prefix when this server is a peer, or the browser follows it to the other one.
+      res.redirect(302, `${forwardedPrefix(req)}${rawUrl(request.cwd, request.pathRel)}`);
     } else {
       sendContainedPage(res, base, request.pathRel);
     }
