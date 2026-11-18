@@ -1,0 +1,7 @@
+{
+  "DefaultRuntime": "both",
+  "WorkDir": "%USERPROFILE%\\workspace",
+  "NodeVersion": "24.21.0",
+  "WslWorkDir": "~/workspace",
+  "WslNodeVersion": "24.21.0"
+}
