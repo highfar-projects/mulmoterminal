@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { peerApiPath } from "../../common/peers";
+import { usePaneHost } from "../composables/paneHost";
 import { ref, computed, watch, nextTick, onBeforeUnmount } from "vue";
 import { useSessionFeed } from "../composables/useSessionFeed";
 import { onToolGroupsAnnounced } from "../composables/useToolGroupsAnnounce";
@@ -17,6 +19,9 @@ import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { pushCollectionSurface, popCollectionSurface, type CollectionSurface } from "../composables/collectionSurface";
 import { cachedProjectIdForCwd, projectIdForCwd } from "../composables/collectionProject";
 import { useI18n } from "vue-i18n";
+
+// The server the pane's cell runs on (paneHost.ts): this one, or a peer it relays.
+const paneHost = usePaneHost();
 
 const { t } = useI18n();
 
@@ -84,6 +89,7 @@ const NEAR_BOTTOM_THRESHOLD_PX = 80;
 // Deduping by uuid mirrors applyToolResultToSession.
 const { upsert } = useSessionFeed(results, {
   sessionId: () => props.sessionId,
+  host: () => paneHost.value,
   historyUrl: (id) => `/api/agent/toolResults/${encodeURIComponent(id)}`,
   historyKey: "toolResults",
   channel: (id) => `session:${id}`,
@@ -126,7 +132,7 @@ async function onUpdateResult(existing: ToolResult, update: Partial<ToolResult>)
   upsert(merged);
   if (!props.sessionId) return;
   try {
-    await fetchWithTimeout("/api/agent/toolResult", {
+    await fetchWithTimeout(peerApiPath(paneHost.value, "/api/agent/toolResult"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ ...merged, sessionId: props.sessionId, persistOnly: true }),
@@ -275,7 +281,7 @@ const availableTools = ref<string[] | null>(null);
 async function loadAvailableTools(sessionId: string | null) {
   availableTools.value = null;
   try {
-    const res = await fetchWithTimeout(sessionId ? `/api/tools?sessionId=${encodeURIComponent(sessionId)}` : "/api/tools");
+    const res = await fetchWithTimeout(peerApiPath(paneHost.value, sessionId ? `/api/tools?sessionId=${encodeURIComponent(sessionId)}` : "/api/tools"));
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const body = await jsonBody(res);
     // Late reply for a session we have since walked away from would list another cell's tools.

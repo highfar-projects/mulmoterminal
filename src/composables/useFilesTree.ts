@@ -5,6 +5,8 @@
 // It owns three pieces of state that only make sense together: the forest (`null` until a listing
 // comes back, because an empty ARRAY has to mean "the directory is empty"), the error that replaces
 // it, and the request generation that decides which answer is still wanted.
+import { peerApiPath, splitPeerDirKey } from "../../common/peers";
+import { usePaneDirKey } from "./paneHost";
 import { computed, ref, type ComputedRef, type Ref } from "vue";
 import { cacheListing, cachedListingFor, type ListingEntry } from "../components/filesTreeCache";
 import { browseQuery } from "../components/filesPaneApi";
@@ -141,9 +143,14 @@ async function toggleDir(cwd: () => string | null, node: TreeNode): Promise<void
   }
 }
 
-/** One directory's listing, off the wire. */
+/** One directory's listing, off the wire.
+ *
+ *  `cwd` may be a `peerDirKey` naming a directory on a PEER server (common/peers.ts), which is how
+ *  every caller below threads the server through without a second argument at each hop: the key is
+ *  the plain path for this server, and decoded only here, where the request is built. */
 export async function fetchListing(cwd: string | null, pathRel: string): Promise<ListingEntry[]> {
-  const res = await fetchWithTimeout(`/api/files/browse/list?${browseQuery(cwd, pathRel)}`);
+  const at = cwd === null ? { host: null, cwd: null } : splitPeerDirKey(cwd);
+  const res = await fetchWithTimeout(peerApiPath(at.host, `/api/files/browse/list?${browseQuery(at.cwd, pathRel)}`));
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await jsonBody(res);
   // A directory with no children answers `{ entries: [] }`, so an ABSENT array is a body we could
@@ -173,7 +180,9 @@ export interface FilesTree {
   reset: () => void;
 }
 
-export function useFilesTree(cwd: () => string | null): FilesTree {
+export function useFilesTree(rootCwd: () => string | null): FilesTree {
+  // On the pane's server, as a key fetchListing decodes (paneHost.ts).
+  const cwd = usePaneDirKey(rootCwd);
   const roots = ref<TreeNode[] | null>(null);
   const error = ref<string | null>(null);
   let reqId = 0;

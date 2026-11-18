@@ -20,6 +20,10 @@ export const EXTERNAL_CHECK_MS = 30_000;
 export interface ExternalFileChangesDeps {
   /** The pane's project root — half of what says whether a reported write is the open file. */
   cwd: () => string | null;
+  /** The peer server `cwd` is on (common/peers.ts), whose channels announce its writes; absent or
+   *  null for this one. Read once, when the listening starts: a pane moved to another server is a
+   *  new mount (TerminalGrid keys the files pane by host). */
+  host?: () => string | null;
   openPath: () => string | null;
   /** The open document's own channel, or null for a file the server does not watch. */
   docChannel: () => string | null;
@@ -29,7 +33,7 @@ export interface ExternalFileChangesDeps {
 
 /** Start listening; the returned function stops everything it started. */
 export function watchExternalFileChanges(deps: ExternalFileChangesDeps): () => void {
-  const pubsub = usePubSub();
+  const pubsub = usePubSub(deps.host?.() ?? null);
   const timer = setInterval(deps.recheck, EXTERNAL_CHECK_MS);
   const unsubscribeWrites = pubsub.subscribe(FILE_WRITE_CHANNEL, (data) => {
     if (isFileWriteEvent(data) && isWriteToOpenFile(data.file, deps.cwd(), deps.openPath())) deps.recheck();

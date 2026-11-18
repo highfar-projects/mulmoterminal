@@ -11,6 +11,7 @@ import { isRecord } from "../../common/isRecord";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { readDirConfigSaveReport, type DirConfigSaveReport } from "../../common/dirConfigSaveReport";
 import { isOutsidePath, outsideFileTarget } from "./filesOutsidePath";
+import { peerApiPath } from "../../common/peers";
 
 /** The `?cwd=&path=` every `/api/files/browse/*` route takes. `cwd` is omitted when the pane has
  *  no root of its own, which is how the server is told to use its default workspace.
@@ -35,9 +36,12 @@ export type WriteOutcome =
 /** One conditional write, reported as a value rather than through component state. Leaving has to
  *  keep working while the pane is being torn down, and anything read from a ref AFTER an await may
  *  already be gone by then. */
-export async function writeBuffer(query: string, text: string, base: string | null, keepalive = false): Promise<WriteOutcome> {
+//
+// `host` here and below: the peer server the pane's directory is on (common/peers.ts, paneHost.ts),
+// null for this one.
+export async function writeBuffer(query: string, text: string, base: string | null, keepalive = false, host: string | null = null): Promise<WriteOutcome> {
   try {
-    const res = await fetchWithTimeout(`/api/files/browse/write?${query}`, {
+    const res = await fetchWithTimeout(peerApiPath(host, `/api/files/browse/write?${query}`), {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ text, baseVersion: base }),
@@ -54,9 +58,9 @@ export async function writeBuffer(query: string, text: string, base: string | nu
 }
 
 /** Hand a copy to the backup store — content that exists nowhere else once the editor is gone. */
-export async function bankText(query: string, text: string, keepalive = false): Promise<boolean> {
+export async function bankText(query: string, text: string, keepalive = false, host: string | null = null): Promise<boolean> {
   try {
-    const res = await fetchWithTimeout(`/api/files/browse/backup?${query}`, {
+    const res = await fetchWithTimeout(peerApiPath(host, `/api/files/browse/backup?${query}`), {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ text }),

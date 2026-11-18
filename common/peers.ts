@@ -108,3 +108,9 @@ export function splitPeerDirKey(key: string): { host: string | null; cwd: string
   const at = rest.indexOf("\u0000");
   return { host: rest.slice(0, at), cwd: rest.slice(at + 1) };
 }
+
+/** The path prefix the relay puts in front of a peer's routes, as it tells the peer in
+ *  `X-Forwarded-Prefix` — so a page the peer renders can write its OWN links (an image, a module)
+ *  under it and have them come back through the relay. Anything else is not a prefix the relay sent. */
+export const isPeerPathPrefix = (value: unknown): value is string =>
+  typeof value === "string" && value.startsWith(PEER_PATH_PREFIX) && isPeerId(value.slice(PEER_PATH_PREFIX.length));

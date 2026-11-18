@@ -81,9 +81,40 @@ Measured with two scratch servers: on A's page, the peer cell's git chip read B'
 (`peer-branch●1`); "Restart the agent" ended B's session and started a new one on B; after a fresh
 start of A, no request about B's directory or session reached A at all.
 
+## Stage 4: the right pane for a peer cell
+
+**The containment decision** (docs/file-surfaces.md): reach is set by who chose the path. For a peer
+cell that is unchanged — the user, by opening the pane on that cell — and the root is that cell's
+directory, which on the PEER is a live session directory. The relay only carries the request; every
+containment rule (`resolveContained`, `authorizedServingBase`, the one-file grant) is applied by the
+peer's own routes, exactly as for a browser talking to it directly. So no surface reaches further
+than it did; the pane is simply asked of the server the directory is on.
+
+- `paneHost.ts`: TerminalGrid provides the host of the cell each pane answers for — the files pane's
+  root cell while it is the pane (declining a re-root can leave it behind), otherwise the pane cell.
+  Components and the composables they call in setup inject it; outside setup it is this server.
+- Files pane: every `/api/files/*` request goes through `peerApiPath`; the listings take the root as
+  a `peerDirKey` (`usePaneDirKey`), so their cache is per server. The pane is keyed by host in
+  TerminalGrid, so a pane moved to another server is a fresh mount. Withheld on a peer: reveal,
+  open in an application, open on the Canvas, open as a spreadsheet (each acts on, or stores into,
+  THIS server).
+- Previews: a document the peer renders writes root-relative links of its own (a Markdown image,
+  the mermaid module, an HTML page's redirect). The relay sends `X-Forwarded-Prefix: /peer/<id>`
+  (replacing anything the browser sent), and the peer puts it in front of those links
+  (`infra/http/forwarded-prefix.ts`, exact `/peer/<id>` shape only). A peer on an older version
+  ignores the header: its previews then show text but not images.
+- Canvas, Tools, Prompts, Transcript: history, live channel (`useSessionFeed`'s `host`), tool lists
+  and the stored-card check go to the peer; the grid's "a card was drawn" reveal listens on the
+  cell's own server. The peer cell's directory label opens the Files pane.
+
+Measured with two scratch servers: on A's page, the Files pane for a peer cell listed B's folder with
+B's git marks, previewed B's README through `/peer/b/api/files/browse/md` with its image loaded from
+`/peer/b/api/files/raw`, and a card POSTed to B opened the Canvas on A by itself and drew
+"Hello from server B". No file or canvas request reached A.
+
 ## Not yet (later stages)
 
-4. The Canvas and the Files pane for a peer cell — a containment decision first
-   (docs/file-surfaces.md).
+4. The question pane (AskUserQuestion) and `showInPane` for a peer cell: both listen on this
+   server's channels only.
 5. The peer's saved folders and past sessions in the launch form; a shell cell on a peer.
 6. Showing a peer that is down as such, per cell.

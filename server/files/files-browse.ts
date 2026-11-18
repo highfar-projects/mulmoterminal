@@ -20,6 +20,7 @@ import { backupCurrentFile, backupHolds, listBackups, readBackup, storeBackup } 
 import { losslessText } from "./editableText.js";
 import { containedPath, expandTilde, namedBase, resolveBase, resolveContained, rewriteContainerPath } from "./pathContainment.js";
 import { servedImageSrc, type ServedDoc } from "./mdImageSrc.js";
+import { forwardedPrefix } from "../infra/http/forwarded-prefix.js";
 import { loadDirConfig } from "../config/dir/dir-config.js";
 import { listProjectFiles } from "./project-files.js";
 import { browseEntryOf, type BrowseEntry } from "./browseEntry.js";
@@ -168,7 +169,7 @@ function servedDoc(req: Request, defaultCwd: string): ServedDoc {
   const base = browseBase(req, defaultCwd);
   const lexical = containedPath(base, expandTilde(browseRel(req), os.homedir())) ?? path.resolve(base);
   const dirRel = path.relative(path.resolve(base), path.dirname(lexical)).split(path.sep).join("/");
-  return { base, dirRel };
+  return { base, dirRel, prefix: forwardedPrefix(req) };
 }
 
 // The file's text, or null with the response already answered. Shared by the rendered views
@@ -469,7 +470,9 @@ const embedMdWith =
   (mermaidEntryUrl: string): EmbedDoc =>
   async (text, title, nonce, doc, theme, token) => {
     const { html, diagrams, style: mathStyle } = await mdRender(text, doc, true);
-    const diagramsScript = diagrams ? mermaidBootstrapTag(nonce, mermaidEntryUrl, mermaidThemeFor(theme)) : "";
+    // Under the relay's prefix when this server is a peer: the module is imported from the page's
+    // origin, which is the relaying server's.
+    const diagramsScript = diagrams ? mermaidBootstrapTag(nonce, `${doc.prefix ?? ""}${mermaidEntryUrl}`, mermaidThemeFor(theme)) : "";
     const style = (theme ? themeStyle(theme) : "") + (diagrams ? MERMAID_STYLE : "") + mathStyle;
     return htmlDoc(html + mdPreviewReporterTag(nonce, token) + diagramsScript, title, style);
   };
