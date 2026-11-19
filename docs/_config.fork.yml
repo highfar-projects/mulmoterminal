@@ -1,0 +1,16 @@
+# This fork's overrides, layered over _config.yml by .github/workflows/pages.yml
+# (`--config _config.yml,_config.fork.yml`). Kept in a file of its own so upstream's _config.yml
+# merges in unchanged.
+#
+# The fork's guide is served at https://highfar-projects.github.io/mulmoterminal/. `url` is the
+# origin only: the workflow supplies --baseurl (/mulmoterminal) from the Pages configuration, and
+# every absolute URL the site writes (canonical, og:url, hreflang, the sitemap, the structured data)
+# is url + baseurl. Left at upstream's www.mulmoterminal.com, they named
+# https://www.mulmoterminal.com/mulmoterminal/…, which exists nowhere.
+url: https://highfar-projects.github.io
+
+# Jekyll merges a hash key by key, so only the GitHub entry changes and the others stay as upstream
+# wrote them.
+aux_links:
+  "GitHub":
+    - "https://github.com/highfar-projects/mulmoterminal"
