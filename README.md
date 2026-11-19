@@ -490,6 +490,10 @@ is inside WSL (`~/.volta/bin/node`), not `/mnt/c/...`: WSL appends the Windows `
 `node` builds native modules for the wrong OS. Keep projects on the Linux side (`~/...`) — git and
 file search are slow under `/mnt/c`. `~/.mulmoterminal/config.json` there is a new, separate file.
 
+To run it beside the Windows server and open both kinds of cell from one window, use the launcher's
+`-Runtime both`; how the two servers fit together is in
+[Windows + WSL2: one window, two servers](#windows--wsl2-one-window-two-servers-this-fork).
+
 ### Working on this fork
 
 The lockfile is Yarn classic (v1). `package.json` pins Node 24.21.0 and Yarn 1.22.22 for
@@ -692,6 +696,60 @@ The launcher detects it and prints the exact, OS-appropriate removal command; ru
   (`PORT`, default `34567`) — so you open the Vite port (e.g. `http://localhost:6856`).
   In production the backend serves the built client from `dist/` on `PORT`, and you open
   that.
+
+### Windows + WSL2: one window, two servers (this fork)
+
+Started as `-Runtime both` by the [Start-menu launcher](#windows-the-start-menu-launcher), a Windows
+machine runs **two complete servers**, one per OS, and the browser talks to only one of them. The
+Windows server **relays** the WSL one as a **peer**: `/peer/wsl/…` on the Windows server is `/…` on
+the WSL server, for HTTP and WebSocket alike.
+
+```
+┌──────────────────────────────┐   ┌──────────────────────────────────┐   ┌──────────────────────────────────┐
+│ Edge / Chrome app window      │   │ Windows server  :34568 (parent)  │   │ WSL2 server  :34567 (peer "wsl") │
+│                               │   │                                  │   │                                  │
+│ Windows cell ── /ws ──────────┼──►│ ws ─► node-pty ─► claude.exe     │   │                                  │
+│                               │   │       (psmux if installed)       │   │                                  │
+│ WSL cell ── /peer/wsl/ws ─────┼──►│ peer relay ── /ws ───────────────┼──►│ ws ─► node-pty ─► tmux ─► claude │
+│                               │   │  (HTTP + WS upgrade, piped       │   │                                  │
+│ /api/…, /ws/pubsub ───────────┼──►│   byte for byte)                 │   │                                  │
+│ /peer/wsl/api/…, …/ws/pubsub ─┼──►│ ─────────────────────────────────┼──►│ /api/…, /ws/pubsub               │
+└──────────────────────────────┘   └──────────────────────────────────┘   └──────────────────────────────────┘
+        ▲                                   ▲            own: ~/.mulmoterminal, ~/.claude, accounts,
+        │ one window                        │                  token rotation, sessions, tmux
+        └──── tray launcher (PowerShell) ───┴── starts / restarts / stops both ──► (WSL side via wsl.exe)
+```
+
+- **The page stays same-origin with the Windows server.** The relay rewrites `Origin` / `Host` to
+  the peer's after applying the Windows server's own origin guard, so neither server relaxes its
+  check or speaks CORS (`server/infra/http/peer-proxy.ts`). WebSocket frames are not decoded, so
+  every terminal endpoint (`/ws`, `/ws/codex`, `/ws/launch`, …) works through it unchanged.
+- **A peer exists only because `~/.mulmoterminal/config.json` on the Windows side says so** —
+  the browser names it by id, never by URL. The launcher adds it for you (`EnsurePeer`):
+
+  ```json
+  "peers": [{ "id": "wsl", "label": "WSL", "url": "http://127.0.0.1:34567" }]
+  ```
+
+- **Every cell belongs to one server.** The launch form's **Run on** picker chooses it, and a peer
+  cell wears the peer's badge. Everything about that cell — its terminal, transcript, worktrees,
+  resume list, memo, question pane — is asked of the server it runs on (`peerApiPath`), and the
+  same path on the two machines is two different directories. Command cells (Run-menu scripts,
+  launch configs, configured launchers) run on the Windows server only.
+- **Nothing is shared between the two servers.** Each has its own `~/.mulmoterminal/config.json`,
+  its own `~/.claude` (log in to Claude Code on each side), its own `accounts` and `tokenRotation`,
+  sessions and tmux server. The launch form shows the peer's saved folders and accounts when it is
+  picked, a peer cell's account mark offers the peer's tokens, and the header's usage gauge shows
+  the peer's readings after its label (`WSL 5h 12% 7d 26%`), each asked of that server.
+- **Activity and attention reach the one tab from both.** The page subscribes to `/ws/pubsub` on
+  each peer as well as its own, so the favicon, the attention sound and the working/waiting dots
+  cover WSL cells too. A peer that stops answering marks its cells as unreachable rather than
+  leaving them looking slow (`/api/peers/status`).
+- **Lifecycle is the launcher's.** It starts both (`npx` on Windows, `wsl.exe … npx` on the WSL
+  side), stops both when the window has been closed for 15 seconds, and — since the browser's
+  **Restart MulmoTerminal** reaches only the Windows server — restarts the WSL server too when the
+  Windows one exits with code 76, so both re-run `npx` and update together. A WSL failure does not
+  stop the Windows side.
 
 ---
 
