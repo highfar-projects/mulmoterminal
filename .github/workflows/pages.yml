@@ -33,7 +33,8 @@ jobs:
         working-directory: docs
         env:
           JEKYLL_ENV: production
-        run: bundle exec jekyll build --baseurl "${{ steps.pages.outputs.base_path }}"
+        # _config.fork.yml: this fork's site url and GitHub link, over upstream's _config.yml.
+        run: bundle exec jekyll build --config _config.yml,_config.fork.yml --baseurl "${{ steps.pages.outputs.base_path }}"
       - uses: actions/upload-pages-artifact@v3
         with:
           path: docs/_site
