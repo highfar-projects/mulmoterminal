@@ -348,6 +348,54 @@ npx github:highfar-projects/mulmoterminal#main     # the same, pinned to the new
   still overrides it, and a variable set in the shell still beats both. `yarn dev` reads the same
   file before the repo root's `.env`.
 
+### Windows: the Start-menu launcher
+
+On Windows, [`tools/windows-launcher/`](tools/windows-launcher/README.md) does all of the above for
+you: it starts the server with no console window, opens it in an Edge or Chrome app window, shows its
+state in the tray, stops the server when the window closes, and re-runs `npx` on a restart from the
+browser (so you do not need the loop in the next section). Pick where the server runs with
+`-Runtime`:
+
+| `-Runtime` | Start-menu entry | Runs |
+| --- | --- | --- |
+| `windows` | MulmoTerminal | the Windows server only |
+| `wsl` | MulmoTerminal (WSL) | the WSL2 server only |
+| `both` | MulmoTerminal (Windows + WSL) | both, with WSL's cells opened from the one Windows window |
+
+There are two ways to install it. Either way the files land in
+`%LOCALAPPDATA%\MulmoTerminalLauncher` and the Start-menu shortcut points at that copy.
+
+**Run it straight from GitHub.** Paste this into PowerShell (change `-Runtime` to suit):
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/highfar-projects/mulmoterminal/main/tools/windows-launcher/install.ps1))) -Runtime both
+```
+
+It fetches the launcher files into a temporary folder and installs them. Running the same line again
+is the update. Add `-Ref <branch or tag>` to install from somewhere other than `main`.
+
+**Download it, then run it.** Save these three files into one folder (or use
+`tools\windows-launcher` in a clone of this repository, or in the repository's ZIP from
+**Code → Download ZIP**):
+
+- [`mulmoterminal-launcher.ps1`](https://raw.githubusercontent.com/highfar-projects/mulmoterminal/main/tools/windows-launcher/mulmoterminal-launcher.ps1)
+- [`ensure-peer.mjs`](https://raw.githubusercontent.com/highfar-projects/mulmoterminal/main/tools/windows-launcher/ensure-peer.mjs) — `both` uses it to add WSL to `peers`
+- [`launcher.config.example.json`](https://raw.githubusercontent.com/highfar-projects/mulmoterminal/main/tools/windows-launcher/launcher.config.example.json) — a sample of the settings file
+
+Then, in PowerShell in that folder:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\mulmoterminal-launcher.ps1 -Install -Runtime both
+```
+
+To update, download the files again and run the same command. Save `mulmoterminal-launcher.ps1`
+as it is (UTF-8 **with BOM**): an editor that drops the BOM makes Windows PowerShell 5.1 misread it.
+
+**Your own values** — ports, the workspace folder, the Node version, the browser — go in
+`%LOCALAPPDATA%\MulmoTerminalLauncher\launcher.config.json`, which neither way of updating touches.
+The launcher's [README](tools/windows-launcher/README.md) lists every key, how to check what took
+effect (`-ShowConfig`), how to uninstall (`-Uninstall`) and where its log is.
+
 ### Restart and update from the browser
 
 Settings → Quit has a **Restart MulmoTerminal** button above Quit, and the header's update badge
