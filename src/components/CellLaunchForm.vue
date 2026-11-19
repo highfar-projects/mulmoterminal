@@ -848,6 +848,17 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
       Couldn't reach the server, so your saved directories aren't listed.
       <button type="button" class="underline underline-offset-2 hover:opacity-100" @click="emit('retry-config')">Try again</button>
     </p>
+    <!-- Where the session runs: this server, or a peer it relays (common/peers.ts). Absent for a user
+         who configured no peers, which is everyone who has not written one into config.json.
+         Fork: the first row, since it decides which machine every row below it refers to. -->
+    <label v-if="peers && peers.length" data-testid="cell-peer-picker" class="flex items-center gap-2 font-sans text-[12px] text-dim" :class="LAUNCH_ROW">
+      <span>{{ t("peers.runOn") }}</span>
+      <select class="rounded-md border border-border bg-elevated px-1.5 py-0.5 text-[12px] text-fg" :value="host ?? ''" @change="onHostChange">
+        <option value="">{{ t("peers.thisServer") }}</option>
+        <option v-for="peer in peers" :key="peer.id" :value="peer.id">{{ peer.label }}</option>
+      </select>
+    </label>
+    <span v-if="host" data-testid="cell-peer-note" class="font-sans text-[11px] leading-snug text-dim" :class="LAUNCH_ROW">{{ t("peers.peerNote") }}</span>
     <div v-if="chips.length" class="flex w-full flex-wrap justify-center gap-1.5">
       <span
         v-for="p in chips"
@@ -1060,16 +1071,6 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
       :model-value="account ?? null"
       @update:model-value="(value) => emit('update:account', value)"
     />
-    <!-- Where the session runs: this server, or a peer it relays (common/peers.ts). Absent for a user
-         who configured no peers, which is everyone who has not written one into config.json. -->
-    <label v-if="peers && peers.length" data-testid="cell-peer-picker" class="flex items-center gap-2 font-sans text-[12px] text-dim" :class="LAUNCH_ROW">
-      <span>{{ t("peers.runOn") }}</span>
-      <select class="rounded-md border border-border bg-elevated px-1.5 py-0.5 text-[12px] text-fg" :value="host ?? ''" @change="onHostChange">
-        <option value="">{{ t("peers.thisServer") }}</option>
-        <option v-for="peer in peers" :key="peer.id" :value="peer.id">{{ peer.label }}</option>
-      </select>
-    </label>
-    <span v-if="host" data-testid="cell-peer-note" class="font-sans text-[11px] leading-snug text-dim" :class="LAUNCH_ROW">{{ t("peers.peerNote") }}</span>
     <!-- A GUI tool group is a per-DIRECTORY registration in Claude Code's own MCP config, not
          a per-launch choice — but it only takes effect when a session starts, so this is
          where it belongs: decided before the thing it configures exists.
