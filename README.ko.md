@@ -2,6 +2,10 @@
 
 [English](README.md) · [日本語](README.ja.md) · [简体中文](README.zh.md) · [繁體中文](README.zh-TW.md) · **한국어**
 
+> **이 저장소는 포크입니다.** [highfar-projects/mulmoterminal](https://github.com/highfar-projects/mulmoterminal)은
+> [receptron/mulmoterminal](https://github.com/receptron/mulmoterminal)의 릴리스를 매번 따라갑니다.
+> 이 포크의 문서 사이트: **[highfar-projects.github.io/mulmoterminal](https://highfar-projects.github.io/mulmoterminal/)**
+
 **여러 코딩 에이전트 세션을 나란히 돌리고 —— 어느 것이 당신을 기다리는지 한눈에.**
 
 **병렬 AI 코딩 에이전트**를 위한 **브라우저 터미널**입니다. 여러 세션이 한 칸씩 나란히 놓이고,
@@ -156,6 +160,9 @@ mulmoterminal
 
 **[receptron.github.io/mulmoterminal](https://receptron.github.io/mulmoterminal/)**
 
+- **이 포크의 가이드:** [highfar-projects.github.io/mulmoterminal](https://highfar-projects.github.io/mulmoterminal/) ——
+  이 저장소에서 빌드한 같은 가이드이며, 이 포크만의 페이지도 들어 있습니다:
+  [Windows and WSL2 in one window](https://highfar-projects.github.io/mulmoterminal/guide/en/windows-wsl.html) · [日本語](https://highfar-projects.github.io/mulmoterminal/guide/ja/windows-wsl.html)
 - **사용자 가이드(영문):** [English](https://receptron.github.io/mulmoterminal/guide/en/) ——
   그리드 화면, 일상 작업 흐름, 전체 기능 목록, 설정, 휴대폰 푸시
 - **사용자 가이드(일문):** [日本語](https://receptron.github.io/mulmoterminal/guide/ja/)

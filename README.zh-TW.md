@@ -2,6 +2,10 @@
 
 [English](README.md) · [日本語](README.ja.md) · [简体中文](README.zh.md) · **繁體中文** · [한국어](README.ko.md)
 
+> **這是一個 fork。** [highfar-projects/mulmoterminal](https://github.com/highfar-projects/mulmoterminal)
+> 跟隨 [receptron/mulmoterminal](https://github.com/receptron/mulmoterminal) 的每個版本。
+> 本 fork 的文件網站：**[highfar-projects.github.io/mulmoterminal](https://highfar-projects.github.io/mulmoterminal/)**
+
 **並行跑多個編碼代理程式的工作階段 —— 一眼看出哪一個在等你。**
 
 一個給**並行 AI 編碼代理程式**用的**瀏覽器終端機**：多個工作階段並排，每個佔一格，
@@ -146,6 +150,9 @@ mulmoterminal
 
 **[receptron.github.io/mulmoterminal](https://receptron.github.io/mulmoterminal/)**
 
+- **本 fork 的指南:** [highfar-projects.github.io/mulmoterminal](https://highfar-projects.github.io/mulmoterminal/) ——
+  由本儲存庫建置的同一份指南，也包含本 fork 獨有的頁面：
+  [Windows and WSL2 in one window](https://highfar-projects.github.io/mulmoterminal/guide/en/windows-wsl.html) · [日本語](https://highfar-projects.github.io/mulmoterminal/guide/ja/windows-wsl.html)
 - **使用者指南（英文）:** [English](https://receptron.github.io/mulmoterminal/guide/en/) ——
   網格檢視、日常工作流程、完整功能列表、設定、手機推播
 - **使用者指南（日文）:** [日本語](https://receptron.github.io/mulmoterminal/guide/ja/)

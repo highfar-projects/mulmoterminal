@@ -2,6 +2,10 @@
 
 [English](README.md) · [日本語](README.ja.md) · **简体中文** · [繁體中文](README.zh-TW.md) · [한국어](README.ko.md)
 
+> **这是一个 fork。** [highfar-projects/mulmoterminal](https://github.com/highfar-projects/mulmoterminal)
+> 跟随 [receptron/mulmoterminal](https://github.com/receptron/mulmoterminal) 的每个版本。
+> 本 fork 的文档站点：**[highfar-projects.github.io/mulmoterminal](https://highfar-projects.github.io/mulmoterminal/)**
+
 **并行跑多个编码智能体会话 —— 一眼看出哪一个在等你。**
 
 一个给**并行 AI 编码智能体**用的**浏览器终端**：多个会话并排，每个占一格，
@@ -146,6 +150,9 @@ mulmoterminal
 
 **[receptron.github.io/mulmoterminal](https://receptron.github.io/mulmoterminal/)**
 
+- **本 fork 的指南:** [highfar-projects.github.io/mulmoterminal](https://highfar-projects.github.io/mulmoterminal/) ——
+  由本仓库构建的同一份指南，也包含本 fork 独有的页面：
+  [Windows and WSL2 in one window](https://highfar-projects.github.io/mulmoterminal/guide/en/windows-wsl.html) · [日本語](https://highfar-projects.github.io/mulmoterminal/guide/ja/windows-wsl.html)
 - **用户指南（英文）:** [English](https://receptron.github.io/mulmoterminal/guide/en/) ——
   网格视图、日常工作流、完整功能列表、配置、手机推送
 - **用户指南（日文）:** [日本語](https://receptron.github.io/mulmoterminal/guide/ja/)
