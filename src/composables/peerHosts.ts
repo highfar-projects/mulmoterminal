@@ -1,8 +1,10 @@
 // The peer servers this one relays (common/peers.ts), as the browser may know them: ids and labels.
 // Read once per page and shared by every cell; the list only changes when the user edits config.json,
 // and a reload picks that up.
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { isPeerId, peerApiPath, type PeerSummary } from "../../common/peers";
+import { isAgentAccount, type AgentAccount } from "../../common/agentAccounts";
+import { sanitizeTokenRotation, type TokenRotation } from "../../common/tokenRotation";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import type { CwdPreset } from "../components/presets";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
@@ -69,33 +71,71 @@ export function subscribeEveryPeer(channel: string, callback: (data: unknown, pe
   };
 }
 
-/** A peer's own saved directories and default workspace (its `/api/config`), for the launch form
- *  starting a session there: the chips must name folders on THAT machine. Empty while unknown, or
- *  for this server (whose own come in as props); re-read whenever the picked peer changes. */
+/** What the browser needs from a peer's own `/api/config`: the folders a launch there offers, and
+ *  the logins a session there can run on. A peer keeps its OWN accounts and token rotation — its own
+ *  `~/.mulmoterminal/config.json`, its own `~/.claude` — so this server's lists name nothing it has. */
+export interface PeerConfig {
+  presets: CwdPreset[];
+  defaultCwd: string | null;
+  accounts: AgentAccount[];
+  tokenRotation: TokenRotation;
+}
+
+export const peerConfigOf = (body: unknown): PeerConfig | null =>
+  isRecord(body)
+    ? {
+        presets: isUnknownArray(body.cwdPresets) ? body.cwdPresets.filter(isCwdPreset) : [],
+        defaultCwd: typeof body.cwd === "string" ? body.cwd : null,
+        accounts: isUnknownArray(body.accounts) ? body.accounts.filter(isAgentAccount) : [],
+        tokenRotation: sanitizeTokenRotation(body.tokenRotation),
+      }
+    : null;
+
+/** Each peer's config as last read, shared by every cell and form that asks about that peer. */
+export const peerConfigs = ref<Readonly<Record<string, PeerConfig>>>({});
+const peerConfigAsked = new Map<string, Promise<void>>();
+
+/** Read a peer's config into `peerConfigs`. Once per page unless `fresh` — the launch form asks
+ *  fresh each time the peer is picked, so a folder or login added there shows without a reload.
+ *  A failure leaves what was held: no chips and no logins is what an unread peer already shows. */
+export function loadPeerConfig(id: string, fresh = false): Promise<void> {
+  const asked = peerConfigAsked.get(id);
+  if (asked && !fresh) return asked;
+  const reading = (async () => {
+    try {
+      const res = await fetchWithTimeout(peerApiPath(id, "/api/config"));
+      const config = peerConfigOf(res.ok ? await res.json() : null);
+      if (config) peerConfigs.value = { ...peerConfigs.value, [id]: config };
+    } catch {
+      // as above
+    }
+  })();
+  peerConfigAsked.set(id, reading);
+  return reading;
+}
+
+/** A peer's own saved directories, default workspace and accounts, for the launch form starting a
+ *  session there: the chips must name folders on THAT machine, and the account picked is bound
+ *  against THAT server's list — an id from this server's would be ignored there, and the session
+ *  would start on the default login with nothing said. Empty while unknown, or for this server
+ *  (whose own come in as props); re-read whenever the picked peer changes. */
 export function usePeerLaunchDirs(peer: () => string | null) {
-  const presets = ref<CwdPreset[]>([]);
-  const defaultCwd = ref<string | null>(null);
-  let asked = 0;
   watch(
     peer,
-    async (id) => {
-      const my = ++asked;
-      presets.value = [];
-      defaultCwd.value = null;
-      if (!id) return;
-      try {
-        const res = await fetchWithTimeout(peerApiPath(id, "/api/config"));
-        const body: unknown = res.ok ? await res.json() : null;
-        if (my !== asked || !isRecord(body)) return;
-        presets.value = isUnknownArray(body.cwdPresets) ? body.cwdPresets.filter(isCwdPreset) : [];
-        defaultCwd.value = typeof body.cwd === "string" ? body.cwd : null;
-      } catch {
-        // No chips: the field still takes a typed path.
-      }
+    (id) => {
+      if (id) void loadPeerConfig(id, true);
     },
     { immediate: true },
   );
-  return { presets, defaultCwd };
+  const config = computed(() => {
+    const id = peer();
+    return id ? (peerConfigs.value[id] ?? null) : null;
+  });
+  return {
+    presets: computed(() => config.value?.presets ?? []),
+    defaultCwd: computed(() => config.value?.defaultCwd ?? null),
+    accounts: computed(() => config.value?.accounts ?? []),
+  };
 }
 
 const isCwdPreset = (value: unknown): value is CwdPreset => isRecord(value) && typeof value.label === "string" && typeof value.path === "string";

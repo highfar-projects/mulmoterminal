@@ -54,7 +54,8 @@ import CellPathMenu from "./CellPathMenu.vue";
 import { registerCellAction } from "../composables/useCellAction";
 import type { CellSelfAction } from "../../common/headerActions";
 import { reapSessionOnServer, restartSession, switchTokenOnServer } from "../composables/restartSession";
-import { loadPeerHosts, peerHosts } from "../composables/peerHosts";
+import { loadPeerConfig, loadPeerHosts, peerConfigs, peerHosts } from "../composables/peerHosts";
+import { TOKEN_ROTATION_OFF } from "../../common/tokenRotation";
 import { providePaneHost } from "../composables/paneHost";
 import PeerBadge from "./PeerBadge.vue";
 import { peerApiPath } from "../../common/peers";
@@ -859,14 +860,27 @@ const accountId = ref<string | null>(props.initialAccount ?? null);
 // subscription from the cell beside it, in the same home, so it wears the same mark an account does.
 const { tokenRotation } = useAppConfig();
 // Read, never started here: the toolbar gauge polls, and a cell must not add a probe per token (#2954).
-const { snapshot: rateLimitSnapshot } = useRateLimits();
+const { snapshot: rateLimitSnapshot, peerSnapshots: peerRateLimitSnapshots } = useRateLimits();
+// On a peer (common/peers.ts) every one of these is THAT server's: its accounts, its token rotation
+// and its usage readings. The switch itself already goes to the peer (switchTokenOnServer), which
+// moves the session to one of its own tokens — offering this server's would name ids it does not hold.
+watch(
+  hostId,
+  (id) => {
+    if (id) void loadPeerConfig(id);
+  },
+  { immediate: true },
+);
+const hostConfig = computed(() => (hostId.value ? (peerConfigs.value[hostId.value] ?? null) : null));
+const hostAccounts = computed(() => (hostId.value ? (hostConfig.value?.accounts ?? []) : (props.accounts ?? [])));
+const hostTokenRotation = computed(() => (hostId.value ? (hostConfig.value?.tokenRotation ?? TOKEN_ROTATION_OFF) : tokenRotation.value));
+const hostRateLimits = computed(() => (hostId.value ? (peerRateLimitSnapshots.value[hostId.value] ?? null) : rateLimitSnapshot.value));
 const cellCredential = ref<CellCredential | null>(null);
-const accountMarkLabel = computed(() => (accountId.value ? accountLabel(props.accounts ?? [], accountId.value) : (cellCredential.value?.label ?? null)));
+const accountMarkLabel = computed(() => (accountId.value ? accountLabel(hostAccounts.value, accountId.value) : (cellCredential.value?.label ?? null)));
 const accountMarkDetail = computed(() => (accountId.value ? null : (cellCredential.value?.detail ?? null)));
 // Only a cell rotation placed can be moved, and only to what the config offers (#2950).
-// None on a peer: the subscriptions offered are THIS server's tokens, which the peer does not hold.
 const accountMarkChoices = computed(() =>
-  accountId.value || hostId.value ? [] : accountSwitchChoices(tokenRotation.value, cellCredential.value?.id ?? null, rateLimitSnapshot.value, Date.now()),
+  accountId.value ? [] : accountSwitchChoices(hostTokenRotation.value, cellCredential.value?.id ?? null, hostRateLimits.value, Date.now()),
 );
 
 // Start what the Agent Picker picked, in `dir`. EVERY launch in the form goes through here: the

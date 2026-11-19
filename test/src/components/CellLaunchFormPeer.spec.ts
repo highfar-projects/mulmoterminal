@@ -15,7 +15,14 @@ beforeEach(() => {
     const u = String(url);
     asked.push(u);
     if (u.startsWith("/peer/win/api/config"))
-      return { ok: true, json: async () => ({ cwd: "/home/them", cwdPresets: [{ label: "theirs", path: "/home/them/proj" }] }) };
+      return {
+        ok: true,
+        json: async () => ({
+          cwd: "/home/them",
+          cwdPresets: [{ label: "theirs", path: "/home/them/proj" }],
+          accounts: [{ id: "their-work", label: "Their work", agent: "claude", home: "~/.claude-work" }],
+        }),
+      };
     if (u.startsWith("/peer/win/api/sessions"))
       return { ok: true, json: async () => ({ cwd: "/home/them/proj", sessions: [{ id: "s-peer", title: "on the peer", mtime: 1 }] }) };
     if (u.startsWith("/peer/win/api/worktrees")) return { ok: true, json: async () => ({ isGit: false, worktrees: [] }) };
@@ -37,6 +44,7 @@ function mountOnPeer() {
             choice: null,
             defaultCwd: "/home/me/ws",
             presets: [{ label: "mine", path: "/home/me/local" }],
+            accounts: [{ id: "my-work", label: "My work", agent: "claude", home: "~/.claude-mine" }],
             peers: [{ id: "win", label: "Windows" }],
             host: "win",
             onResume: (value: unknown) => events.resume.push(value),
@@ -69,6 +77,16 @@ describe("the launch form on a peer", () => {
     expect(row.text()).toContain("on the peer");
     await row.trigger("click");
     expect(events.resume).toEqual([{ id: "s-peer", cwd: "/home/them/proj", agent: "claude", account: null, host: "win" }]);
+  });
+
+  // The id picked travels to the peer, which binds it against ITS accounts: one of this server's
+  // would be ignored there and the session would start on the default login, silently.
+  it("offers the peer's accounts, not this server's", async () => {
+    const { wrapper } = mountOnPeer();
+    await flushPromises();
+    const options = wrapper.findAll('[data-testid="cell-account-select"] option').map((el) => el.text());
+    expect(options).toContain("Their work");
+    expect(options).not.toContain("My work");
   });
 
   // A new read in the form that forgets the server is the leak this catches.
