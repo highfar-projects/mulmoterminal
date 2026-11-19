@@ -121,6 +121,9 @@ const emit = defineEmits<{
 const peerDirs = usePeerLaunchDirs(() => props.host ?? null);
 const shownPresets = computed(() => (props.host ? peerDirs.presets.value : props.presets));
 const shownDefaultCwd = computed(() => (props.host ? peerDirs.defaultCwd.value : props.defaultCwd));
+// The logins a session can start on are the SERVER's it runs on, like its folders: a peer binds the
+// picked id against its own `accounts`, never this server's.
+const shownAccounts = computed(() => (props.host ? peerDirs.accounts.value : (props.accounts ?? [])));
 // A directory as the key the colour / icon / rank maps are built on: the same path on two servers is
 // two directories (peerDirKey).
 const dirKey = (path: string): string => peerDirKey(props.host, path);
@@ -351,7 +354,7 @@ const listAgent = computed<TerminalAgent | null>(() => {
 
 // The accounts the picked agent can start on (#2215): Claude's for a custom agent too, since that
 // is what it runs — the same `listAgent` the resume list is keyed on. None → no picker at all.
-const accountChoices = computed(() => accountsForAgent(props.accounts ?? [], listAgent.value));
+const accountChoices = computed(() => accountsForAgent(shownAccounts.value, listAgent.value));
 
 // A pick that belongs to another agent (the picker moved from Codex to Claude) is dropped rather
 // than carried: sending it would name an account the server does not bind for this agent, and the
@@ -1272,8 +1275,8 @@ async function requestRemove(repoDir: string | null, w: Worktree): Promise<void>
               v-if="s.account"
               data-testid="ri-account"
               class="flex-none whitespace-nowrap text-[11px] text-dim"
-              :data-tip="t('tips.launch.onAccount', { account: accountLabel(accounts ?? [], s.account) })"
-              >{{ accountLabel(accounts ?? [], s.account) }}</span
+              :data-tip="t('tips.launch.onAccount', { account: accountLabel(shownAccounts, s.account) })"
+              >{{ accountLabel(shownAccounts, s.account) }}</span
             >
             <!-- A background worker is not the user's own chat, and a FAILED one is the only thing
                here nobody was ever told about: it ran invisibly, ended badly, and pulled no
