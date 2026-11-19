@@ -4,6 +4,8 @@
 
 > **这是一个 fork。** [highfar-projects/mulmoterminal](https://github.com/highfar-projects/mulmoterminal)
 > 跟随 [receptron/mulmoterminal](https://github.com/receptron/mulmoterminal) 的每个版本。
+> 启动命令是 **`npx github:highfar-projects/mulmoterminal`**。`npx mulmoterminal@latest` 启动的是
+> 上游版本，而不是本 fork（下文的命令请照此替换）。
 > 本 fork 的文档站点：**[highfar-projects.github.io/mulmoterminal](https://highfar-projects.github.io/mulmoterminal/)**
 
 **并行跑多个编码智能体会话 —— 一眼看出哪一个在等你。**
