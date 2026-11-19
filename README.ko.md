@@ -4,6 +4,8 @@
 
 > **이 저장소는 포크입니다.** [highfar-projects/mulmoterminal](https://github.com/highfar-projects/mulmoterminal)은
 > [receptron/mulmoterminal](https://github.com/receptron/mulmoterminal)의 릴리스를 매번 따라갑니다.
+> 실행 명령은 **`npx github:highfar-projects/mulmoterminal`**입니다. `npx mulmoterminal@latest`는
+> 이 포크가 아니라 원본을 실행합니다(아래의 명령도 이렇게 바꿔 읽으세요).
 > 이 포크의 문서 사이트: **[highfar-projects.github.io/mulmoterminal](https://highfar-projects.github.io/mulmoterminal/)**
 
 **여러 코딩 에이전트 세션을 나란히 돌리고 —— 어느 것이 당신을 기다리는지 한눈에.**
