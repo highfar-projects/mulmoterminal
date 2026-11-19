@@ -7,6 +7,7 @@
 > adds persistent sessions on native Windows (psmux) and devcontainer sessions.
 > Start it with **`npx github:highfar-projects/mulmoterminal`** — `npx mulmoterminal@latest` starts
 > upstream, not this fork. See [This fork](#this-fork) for Windows and WSL2.
+> This fork's documentation site: **[highfar-projects.github.io/mulmoterminal](https://highfar-projects.github.io/mulmoterminal/)**.
 
 **Run multiple coding-agent sessions in parallel — and see which one needs you.**
 
@@ -297,6 +298,13 @@ more.
 
 ### 📖 Documentation — **[receptron.github.io/mulmoterminal](https://receptron.github.io/mulmoterminal/)**
 
+- **This fork's guide / このフォークのガイド:**
+  [highfar-projects.github.io/mulmoterminal](https://highfar-projects.github.io/mulmoterminal/) —
+  the same guide built from this repository, so it also has this fork's own pages:
+  [Windows and WSL2 in one window](https://highfar-projects.github.io/mulmoterminal/guide/en/windows-wsl.html)
+  ·
+  [Windows と WSL2 を 1 つの窓で](https://highfar-projects.github.io/mulmoterminal/guide/ja/windows-wsl.html)。
+  このリポジトリからビルドした同じガイドで、このフォーク独自のページも入っています。
 - **User guide:** [English](https://receptron.github.io/mulmoterminal/guide/en/) — the grid
   view, everyday workflows, the full feature list, configuration, and mobile push notifications.
 - **ユーザーガイド:** [日本語](https://receptron.github.io/mulmoterminal/guide/ja/) —
@@ -312,6 +320,13 @@ more.
 
 Everything below this section is upstream's documentation and applies here unchanged, except where
 it says Windows has no tmux: on this fork it can use psmux.
+
+This fork's user guide is published at
+**[highfar-projects.github.io/mulmoterminal](https://highfar-projects.github.io/mulmoterminal/)**
+([English](https://highfar-projects.github.io/mulmoterminal/guide/en/) ·
+[日本語](https://highfar-projects.github.io/mulmoterminal/guide/ja/)), built from `docs/` on `main`.
+It is upstream's guide plus this fork's pages, such as
+[Windows and WSL2 in one window](https://highfar-projects.github.io/mulmoterminal/guide/en/windows-wsl.html).
 
 ### Start it
 
