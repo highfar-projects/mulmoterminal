@@ -255,6 +255,9 @@ distribution's package is often older, so run `tmux -V` and, if it is, take a ne
 npx mulmoterminal@latest
 ```
 
+- **On Windows with this fork**, the Start-menu launcher can do this for you — no console window,
+  updates on restart, and Windows and WSL2 together in one window:
+  [Windows and WSL2 in one window](windows-wsl.html)
 - The first run spends a few tens of seconds downloading
 - It prints `✓ MulmoTerminal is ready` and opens your browser
 - If nothing opens, go to `http://localhost:34567` yourself

@@ -303,6 +303,7 @@ npx mulmoterminal@latest    # → http://localhost:34567 が開く
 10. [スマホ通知（Web Push）](notifications.html)（iPhone / Android の設定）
 11. [スマホから使う](phone.html)（閲覧・自分のチップで返信・ターミナル起動）
 12. [サーバーを別のマシンで動かす](remote.html)（Linux のマシン・VPS・Docker を SSH トンネルで使う）
+    - [Windows と WSL2 を 1 つの窓で](windows-wsl.html)（このフォークのスタートメニュー用ランチャー。入れ方と、Windows 側・WSL 側のサーバーのつながり方）
 13. [共有アプリ](shared-apps.html)（他の人が使うフォーム・出欠表・予約ページ。他の人のアプリへの参加も）
     - [コレクションからアプリにする](from-collection.html)（コレクションや共有アプリを、設計図で自分のアプリにする）
     - [設計図（試験中）](blueprints.html)（試してくれる人向けの案内）

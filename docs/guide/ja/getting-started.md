@@ -258,6 +258,8 @@ MulmoTerminal は**この `gh` のログインをそのまま使います**。�
 npx mulmoterminal@latest
 ```
 
+- **このフォークを Windows で使うなら**、スタートメニューのランチャーで起動することもできます。コンソール窓なしで起動し、
+  再起動すると更新され、Windows と WSL2 を 1 つの窓で使えます: [Windows と WSL2 を 1 つの窓で](windows-wsl.html)
 - 初回はダウンロードに数十秒かかります
 - `✓ MulmoTerminal is ready` と出て、ブラウザが自動で開きます
 - 開かなければ、自分で `http://localhost:34567` を開いてください
