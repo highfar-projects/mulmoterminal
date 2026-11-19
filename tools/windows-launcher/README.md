@@ -75,6 +75,7 @@ powershell -ExecutionPolicy Bypass -File .\mulmoterminal-launcher.ps1 -Install -
 | `Browser` | `edge` | `edge` または `chrome` |
 | `BrowserPath` | 空（自動で探す） | 見つからないときだけ exe のフルパス |
 | `UseDedicatedProfile` | `false` | `true` で普段のブラウザのプロファイルと分けて開く |
+| `BrowserProfile` | 空（ブラウザ任せ） | 開くプロファイル。表示名（例: `仕事`）かフォルダ名（例: `Profile 1`）。一覧は `-ShowConfig` で出る |
 | `StopWithWindow` | `true` | 窓を閉じたらサーバーも止める |
 | `Port` | `34568` | Windows 側のポート |
 | `WorkDir` | 空（ユーザーフォルダ） | Windows 側の作業フォルダ（`--cwd`） |

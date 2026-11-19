@@ -46,6 +46,7 @@ param([switch]$Install, [switch]$Uninstall, [switch]$ShowConfig, [ValidateSet('w
 $Browser             = 'edge'        # 'edge' または 'chrome'
 $BrowserPath         = ''            # 空なら自動で探す。見つからないときだけ exe のフルパスを書く
 $UseDedicatedProfile = $false        # true にすると普段のプロファイルと分けて開く（ログイン状態は共有されない）
+$BrowserProfile      = ''            # 開くプロファイル。表示名（例: "仕事"）かフォルダ名（例: "Profile 1"）。空ならブラウザ任せ
 $Package             = 'github:highfar-projects/mulmoterminal'   # npx で起動するもの。本家は 'mulmoterminal'
 $StopWithWindow      = $true         # MulmoTerminal の窓を閉じたらサーバーも止める
 $DefaultRuntime      = 'windows'     # -Runtime を付けずに起動・登録したとき: 'both' / 'windows' / 'wsl'
@@ -77,7 +78,7 @@ New-Item -ItemType Directory -Force $appDir | Out-Null
 
 # --- 個別の設定（launcher.config.json）を既定値に重ねる -----------------------------------------
 $configFile = Join-Path $appDir 'launcher.config.json'
-$settingNames = @('Browser', 'BrowserPath', 'UseDedicatedProfile', 'Package', 'StopWithWindow', 'DefaultRuntime',
+$settingNames = @('Browser', 'BrowserPath', 'UseDedicatedProfile', 'BrowserProfile', 'Package', 'StopWithWindow', 'DefaultRuntime',
                   'Port', 'WorkDir', 'NodeVersion', 'WslPort', 'WslDistro', 'WslWorkDir', 'WslNodeVersion',
                   'EnsurePeer', 'PeerId', 'PeerLabel')
 # ショートカットから起動したときはコンソールが見えないので、窓で知らせる
@@ -116,10 +117,30 @@ if ($DefaultRuntime -notin @('windows', 'wsl', 'both')) { Show-ConfigError "laun
 if (-not $Runtime) { $Runtime = $DefaultRuntime }
 $appName = switch ($Runtime) { 'wsl' { 'MulmoTerminal (WSL)' } 'both' { 'MulmoTerminal (Windows + WSL)' } default { 'MulmoTerminal' } }
 
+# ブラウザのプロファイルの一覧（フォルダ名と表示名）は、ユーザーデータのフォルダの Local State にある。
+# BrowserPath で Beta / Dev 版などを指したときは場所が違うので読めない（そのときは BrowserProfile をフォルダ名として渡す）
+$userDataDir = if ($UseDedicatedProfile) { Join-Path $appDir "profile-$Browser" }
+               elseif ($Browser -eq 'chrome') { Join-Path $env:LOCALAPPDATA 'Google\Chrome\User Data' }
+               else { Join-Path $env:LOCALAPPDATA 'Microsoft\Edge\User Data' }
+function Get-BrowserProfiles {
+    $state = Join-Path $userDataDir 'Local State'
+    if (-not (Test-Path $state)) { return @() }
+    try { $cache = ([IO.File]::ReadAllText($state) | ConvertFrom-Json).profile.info_cache } catch { return @() }
+    if (-not $cache) { return @() }
+    @($cache.PSObject.Properties | ForEach-Object { [pscustomobject]@{ Dir = $_.Name; Name = [string]$_.Value.name } })
+}
+
 if ($ShowConfig) {
     Write-Host "個別の設定: $configFile $(if (Test-Path $configFile) { '（読み込んだ）' } else { '（無い。すべて既定値）' })"
     Write-Host "Runtime = $Runtime"
     foreach ($n in $settingNames) { Write-Host ("{0,-20} = {1}" -f $n, (Get-Variable -Name $n -ValueOnly)) }
+    $profiles = Get-BrowserProfiles
+    if ($profiles.Count) {
+        Write-Host "`n$Browser のプロファイル（BrowserProfile には表示名かフォルダ名を書く）:"
+        foreach ($p in $profiles) { Write-Host ("  {0,-12} {1}" -f $p.Dir, $p.Name) }
+    } else {
+        Write-Host "`n$Browser のプロファイルの一覧を読めません（$userDataDir\Local State）"
+    }
     exit
 }
 
@@ -263,8 +284,23 @@ if (-not $BrowserPath) { $BrowserPath = $candidates[$Browser] | Where-Object { T
 if (-not $BrowserPath -or -not (Test-Path $BrowserPath)) { Show-Error "$Browser が見つかりません。launcher.config.json の BrowserPath に exe のフルパスを書いてください。"; exit 1 }
 $browserProcess = [IO.Path]::GetFileNameWithoutExtension($BrowserPath)
 $browserArgs = @("--app=$url")
+if ($BrowserProfile) {
+    # フォルダ名が先: 表示名が別のプロファイルのフォルダ名と同じでも、フォルダ名で書いた人の意図どおりになる
+    $profiles = Get-BrowserProfiles
+    $match = @($profiles | Where-Object { $_.Dir -eq $BrowserProfile })
+    if (-not $match.Count) { $match = @($profiles | Where-Object { $_.Name -eq $BrowserProfile }) }
+    if ($match.Count -eq 1) { $profileDir = $match[0].Dir }
+    elseif (-not $profiles.Count) { $profileDir = $BrowserProfile }   # 一覧が読めない（専用プロファイルの初回など）。フォルダ名として渡す
+    else {
+        $list = ($profiles | ForEach-Object { "- $($_.Name)（フォルダ名: $($_.Dir)）" }) -join "`n"
+        $why = if ($match.Count) { "同じ表示名のプロファイルが複数あります。フォルダ名で書いてください" } else { "そのプロファイルがありません" }
+        Show-Error "launcher.config.json の BrowserProfile '$BrowserProfile': $why。`n$Browser のプロファイル:`n$list"
+        exit 1
+    }
+    $browserArgs = @("--profile-directory=`"$profileDir`"") + $browserArgs
+}
 if ($UseDedicatedProfile) {
-    $browserArgs = @("--user-data-dir=`"$(Join-Path $appDir "profile-$Browser")`"", '--no-first-run') + $browserArgs
+    $browserArgs = @("--user-data-dir=`"$userDataDir`"", '--no-first-run') + $browserArgs
 }
 
 function Test-Port([int]$p) {
