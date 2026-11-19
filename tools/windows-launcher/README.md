@@ -14,26 +14,46 @@ MulmoTerminal をコンソール窓なしで起動し、Edge か Chrome のア�
 
 ## 入れる・更新する
 
-PowerShell で次の 1 行を実行します（`-Runtime` は上の表から選ぶ）。
+入れ方は 2 通りです（`-Runtime` は上の表から選ぶ）。どちらの方法でも、ファイルは `%LOCALAPPDATA%\MulmoTerminalLauncher`
+に入り、スタートメニューに登録されます。右クリックの「タスクバーにピン留め」も使えます。
+個別の設定 `launcher.config.json` は、どちらで更新しても上書きしません。動いているランチャーは、次に起動したときから新しい版になります。
+
+### GitHub から直接実行する
+
+PowerShell で次の 1 行を実行します。
 
 ```powershell
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/highfar-projects/mulmoterminal/main/tools/windows-launcher/install.ps1))) -Runtime both
 ```
 
-- ファイルは `%LOCALAPPDATA%\MulmoTerminalLauncher` に入り、スタートメニューに登録されます。
-  右クリックの「タスクバーにピン留め」も使えます。
-- **更新も同じ 1 行**です。個別の設定 `launcher.config.json` は上書きしません。
-  動いているランチャーは、次に起動したときから新しい版になります。
+- 一時フォルダにファイルを取ってきて登録し、一時フォルダは消します。
+- **更新も同じ 1 行**です。
 - 特定のブランチやタグから入れるときは `-Ref <ブランチ名>` を足します。
 
-このリポジトリを clone してあるなら、手元のファイルからも登録できます。
+### ダウンロードしてから実行する
+
+次の 3 つのファイルを、同じフォルダに保存します。
+
+- [`mulmoterminal-launcher.ps1`](https://raw.githubusercontent.com/highfar-projects/mulmoterminal/main/tools/windows-launcher/mulmoterminal-launcher.ps1) — ランチャー本体
+- [`ensure-peer.mjs`](https://raw.githubusercontent.com/highfar-projects/mulmoterminal/main/tools/windows-launcher/ensure-peer.mjs) — `both` で `peers` に WSL 側を足すのに使う
+- [`launcher.config.example.json`](https://raw.githubusercontent.com/highfar-projects/mulmoterminal/main/tools/windows-launcher/launcher.config.example.json) — 設定ファイルの見本
+
+リポジトリを clone してあるか、GitHub の **Code → Download ZIP** で取って展開したなら、`tools\windows-launcher` フォルダにそろっています。
+
+そのフォルダで PowerShell を開き、次を実行します。
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools\windows-launcher\mulmoterminal-launcher.ps1 -Install -Runtime both
+powershell -ExecutionPolicy Bypass -File .\mulmoterminal-launcher.ps1 -Install -Runtime both
 ```
 
-どちらの方法でも、ショートカットが指すのは `%LOCALAPPDATA%` のコピーです。リポジトリでブランチを切り替えても、
-普段使いのランチャーは `-Install` し直すまで変わりません。
+- **更新するときは、もう一度ダウンロードして同じコマンド**を実行します。
+- `mulmoterminal-launcher.ps1` は**そのまま保存**してください。エディタで開いて保存し直し、BOM が外れると、
+  Windows PowerShell 5.1 が正しく読めなくなります（[編集するとき](#編集するとき)）。
+- ブラウザで保存すると「インターネットから来たファイル」の印が付きますが、`-ExecutionPolicy Bypass` で実行するので
+  そのまま動きます。スタートメニューのショートカットも同じ指定で起動します。
+
+ショートカットが指すのは `%LOCALAPPDATA%` のコピーです。ダウンロードしたフォルダや、リポジトリでブランチを切り替えても、
+普段使いのランチャーは `-Install` し直すまで変わりません。ダウンロードしたフォルダは、登録が済めば消してかまいません。
 
 ## 自分の環境に合わせる
 
