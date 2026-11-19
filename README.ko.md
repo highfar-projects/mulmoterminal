@@ -158,6 +158,35 @@ mulmoterminal
 `~/.mulmoterminal/config.json`에 씁니다. **멱등**이므로 프리셋을 새로 고치고 싶으면
 언제든 다시 돌려도 됩니다.
 
+### Windows: 시작 메뉴 런처 (이 포크)
+
+Windows에서는 [`tools/windows-launcher/`](tools/windows-launcher/README.md)의 런처가 위의 실행 과정을 대신해 줍니다.
+콘솔 창 없이 서버를 실행하고 Edge나 Chrome의 앱 창으로 엽니다. 상태는 작업 표시줄 트레이에 표시되고,
+창을 닫으면 서버도 멈춥니다. 브라우저에서 다시 시작하면 `npx`를 다시 실행하므로 업데이트도 자동입니다. 서버를 어디서 실행할지는 `-Runtime`으로 고릅니다.
+
+| `-Runtime` | 시작 메뉴 이름 | 실행하는 것 |
+| --- | --- | --- |
+| `windows` | MulmoTerminal | Windows 쪽만 |
+| `wsl` | MulmoTerminal (WSL) | WSL2 쪽만 |
+| `both` | MulmoTerminal (Windows + WSL) | 둘 다. WSL 쪽 칸도 Windows 창 하나에서 열 수 있음 |
+
+**GitHub에서 바로 실행**: 아래 한 줄을 PowerShell에 붙여 넣습니다. 같은 한 줄로 업데이트도 됩니다.
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/highfar-projects/mulmoterminal/main/tools/windows-launcher/install.ps1))) -Runtime both
+```
+
+**내려받은 뒤 실행**: [`mulmoterminal-launcher.ps1`](https://raw.githubusercontent.com/highfar-projects/mulmoterminal/main/tools/windows-launcher/mulmoterminal-launcher.ps1), [`ensure-peer.mjs`](https://raw.githubusercontent.com/highfar-projects/mulmoterminal/main/tools/windows-launcher/ensure-peer.mjs), [`launcher.config.example.json`](https://raw.githubusercontent.com/highfar-projects/mulmoterminal/main/tools/windows-launcher/launcher.config.example.json) 세 파일을 같은 폴더에 저장하고(clone이나 ZIP이라면 `tools\windows-launcher`에 있습니다),
+그 폴더에서 다음을 실행합니다.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\mulmoterminal-launcher.ps1 -Install -Runtime both
+```
+
+개인 설정(포트, 작업 폴더, Node 버전 등)은 `%LOCALAPPDATA%\MulmoTerminalLauncher\launcher.config.json`에 씁니다.
+어느 방법으로 업데이트해도 덮어쓰지 않습니다. 자세한 내용은 [런처의 README](tools/windows-launcher/README.md)(일본어)와
+가이드 [Windows and WSL2 in one window](https://highfar-projects.github.io/mulmoterminal/guide/en/windows-wsl.html) · [日本語](https://highfar-projects.github.io/mulmoterminal/guide/ja/windows-wsl.html)를 보세요.
+
 ## 문서
 
 **[receptron.github.io/mulmoterminal](https://receptron.github.io/mulmoterminal/)**

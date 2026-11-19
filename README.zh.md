@@ -148,6 +148,35 @@ mulmoterminal
 从你的 Claude Code 历史里生成启动器的**目录预设**，并写入 `~/.mulmoterminal/config.json`。
 它是**幂等的**，想刷新预设随时可以再跑一次。
 
+### Windows：开始菜单启动器（本 fork）
+
+在 Windows 上，[`tools/windows-launcher/`](tools/windows-launcher/README.md) 里的启动器可以替你完成上面的启动步骤：
+不弹出控制台窗口就启动服务器，并在 Edge 或 Chrome 的应用窗口中打开；状态显示在任务栏托盘里，
+关闭窗口时服务器也会停止；从浏览器重启时会重新运行 `npx`，因此会自动更新。服务器在哪里运行由 `-Runtime` 决定。
+
+| `-Runtime` | 开始菜单中的名称 | 运行什么 |
+| --- | --- | --- |
+| `windows` | MulmoTerminal | 只运行 Windows 端 |
+| `wsl` | MulmoTerminal (WSL) | 只运行 WSL2 端 |
+| `both` | MulmoTerminal (Windows + WSL) | 两者都运行。WSL 端的格子也能在同一个 Windows 窗口里打开 |
+
+**直接从 GitHub 运行**：把下面这一行粘贴到 PowerShell。再次运行同一行即可更新。
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/highfar-projects/mulmoterminal/main/tools/windows-launcher/install.ps1))) -Runtime both
+```
+
+**先下载再运行**：把 [`mulmoterminal-launcher.ps1`](https://raw.githubusercontent.com/highfar-projects/mulmoterminal/main/tools/windows-launcher/mulmoterminal-launcher.ps1)、[`ensure-peer.mjs`](https://raw.githubusercontent.com/highfar-projects/mulmoterminal/main/tools/windows-launcher/ensure-peer.mjs)、[`launcher.config.example.json`](https://raw.githubusercontent.com/highfar-projects/mulmoterminal/main/tools/windows-launcher/launcher.config.example.json) 这三个文件保存到同一个文件夹（clone 或 ZIP 里在 `tools\windows-launcher`），
+然后在该文件夹中运行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\mulmoterminal-launcher.ps1 -Install -Runtime both
+```
+
+个人设置（端口、工作目录、Node 版本等）写在 `%LOCALAPPDATA%\MulmoTerminalLauncher\launcher.config.json`，
+两种方式更新时都不会覆盖它。详见[启动器的 README](tools/windows-launcher/README.md)（日文）
+以及指南 [Windows and WSL2 in one window](https://highfar-projects.github.io/mulmoterminal/guide/en/windows-wsl.html) · [日本語](https://highfar-projects.github.io/mulmoterminal/guide/ja/windows-wsl.html)。
+
 ## 文档
 
 **[receptron.github.io/mulmoterminal](https://receptron.github.io/mulmoterminal/)**
