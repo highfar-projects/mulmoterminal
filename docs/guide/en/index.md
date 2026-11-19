@@ -278,6 +278,7 @@ installing Node.js / Claude Code / git / gh on macOS and Windows, the
 10. [Mobile notifications (Web Push)](notifications.html) (iPhone / Android setup)
 11. [From your phone](phone.html) (watch, reply with your own chips, start a terminal)
 12. [Run the server on another machine](remote.html) (a Linux box, a VPS or Docker, reached over an SSH tunnel)
+    - [Windows and WSL2 in one window](windows-wsl.html) (this fork's Start-menu launcher: install it, and how the Windows and WSL servers fit together)
 13. [Shared apps](shared-apps.html) (a form, a sign-up sheet or a booking page other people use — and taking part in someone else's)
     - [From a collection to an app](from-collection.html) (turn a collection or a shared app into an app you own, with Blueprints)
     - [Blueprints (experimental)](blueprints.html) (a guide for testers)
