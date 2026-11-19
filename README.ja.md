@@ -177,6 +177,39 @@ npx github:highfar-projects/mulmoterminal#main     # 同じく、main の最新�
   ほうが優先され、シェルで設定した環境変数はどちらよりも優先されます。`yarn dev` も、リポジトリの
   `.env` より先に同じファイルを読みます。
 
+### Windows: スタートメニューのランチャー
+
+Windows では [`tools/windows-launcher/`](tools/windows-launcher/README.md) のランチャーを使うと、ここまでの起動を
+まとめて任せられます。コンソール窓なしでサーバーを起動し、Edge か Chrome のアプリ窓で開きます。状態はタスクトレイに出て、
+窓を閉じるとサーバーも止まります。ブラウザから再起動すると `npx` をやり直すので、更新も自動です。
+サーバーを動かす場所は `-Runtime` で選びます。
+
+| `-Runtime` | スタートメニューの名前 | 動かすもの |
+| --- | --- | --- |
+| `windows` | MulmoTerminal | Windows 側だけ |
+| `wsl` | MulmoTerminal (WSL) | WSL2 側だけ |
+| `both` | MulmoTerminal (Windows + WSL) | 両方。WSL 側のセルも Windows 側の窓 1 つで開ける |
+
+**GitHub から直接実行する**: PowerShell に次の 1 行を貼ります。同じ 1 行で更新もできます。
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/highfar-projects/mulmoterminal/main/tools/windows-launcher/install.ps1))) -Runtime both
+```
+
+**ダウンロードしてから実行する**: [`mulmoterminal-launcher.ps1`](https://raw.githubusercontent.com/highfar-projects/mulmoterminal/main/tools/windows-launcher/mulmoterminal-launcher.ps1)・
+[`ensure-peer.mjs`](https://raw.githubusercontent.com/highfar-projects/mulmoterminal/main/tools/windows-launcher/ensure-peer.mjs)・
+[`launcher.config.example.json`](https://raw.githubusercontent.com/highfar-projects/mulmoterminal/main/tools/windows-launcher/launcher.config.example.json)
+の 3 つを同じフォルダに保存し（clone や ZIP なら `tools\windows-launcher` にあります）、そのフォルダで次を実行します。
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\mulmoterminal-launcher.ps1 -Install -Runtime both
+```
+
+自分の設定（ポート・作業フォルダ・Node のバージョンなど）は `%LOCALAPPDATA%\MulmoTerminalLauncher\launcher.config.json`
+に書きます。どちらの方法で更新しても上書きされません。詳しくは
+[ランチャーの README](tools/windows-launcher/README.md) と、ガイドの
+[Windows と WSL2 を 1 つの窓で](https://highfar-projects.github.io/mulmoterminal/guide/ja/windows-wsl.html) を見てください。
+
 ### Windows で psmux を使う
 
 [psmux](https://github.com/psmux/psmux) は Windows ネイティブの tmux です。`tmux.exe` として
