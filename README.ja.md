@@ -7,6 +7,7 @@
 > Windows ネイティブでのセッション永続化（psmux）と devcontainer セッションを加えたものです。
 > 起動は **`npx github:highfar-projects/mulmoterminal`** です。`npx mulmoterminal@latest` では
 > フォークではなく本家が起動します。Windows と WSL2 については[このフォークについて](#このフォークについて)を参照してください。
+> このフォークのドキュメントサイト: **[highfar-projects.github.io/mulmoterminal](https://highfar-projects.github.io/mulmoterminal/)**
 
 **コーディングエージェントのセッションを並列で走らせ、どれが自分を待っているかを見る。**
 
@@ -133,6 +134,13 @@ N 個の文脈を頭に保持しなければならない**ことです。状態�
 
 以降の説明は本家のもので、そのままこのフォークにも当てはまります。ただし「Windows には tmux が
 ない」という部分だけは違い、このフォークでは psmux を使えます。
+
+このフォークのユーザーガイドは
+**[highfar-projects.github.io/mulmoterminal](https://highfar-projects.github.io/mulmoterminal/)**
+（[日本語](https://highfar-projects.github.io/mulmoterminal/guide/ja/) ·
+[English](https://highfar-projects.github.io/mulmoterminal/guide/en/)）で公開しています。`main` の `docs/` から作っています。
+本家のガイドに、このフォーク独自のページ（たとえば
+[Windows と WSL2 を 1 つの窓で](https://highfar-projects.github.io/mulmoterminal/guide/ja/windows-wsl.html)）を加えたものです。
 
 ### 起動
 
@@ -262,6 +270,12 @@ Claude Code の履歴からランチャーの**ディレクトリ候補**を作�
 
 **[receptron.github.io/mulmoterminal](https://receptron.github.io/mulmoterminal/)**
 
+- **このフォークのガイド:**
+  [highfar-projects.github.io/mulmoterminal](https://highfar-projects.github.io/mulmoterminal/) —
+  このリポジトリから作った同じガイドで、このフォーク独自のページも入っています:
+  [Windows と WSL2 を 1 つの窓で](https://highfar-projects.github.io/mulmoterminal/guide/ja/windows-wsl.html)
+  ·
+  [English](https://highfar-projects.github.io/mulmoterminal/guide/en/windows-wsl.html)
 - **ユーザーガイド:** [日本語](https://receptron.github.io/mulmoterminal/guide/ja/) —
   グリッドの使い方・日々のワークフロー・機能一覧・設定・スマホ通知
 - **User guide:** [English](https://receptron.github.io/mulmoterminal/guide/en/)
