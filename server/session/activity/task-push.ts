@@ -7,14 +7,28 @@ import { getPushEnabled, getPushKinds } from "../../config/config-routes.js";
 import { sendWebPush } from "../../infra/http/web-push.js";
 import { currentHostId as currentRemoteHostId } from "../../backends/remoteHost/index.js";
 import { buildPushText } from "./activity-hook.js";
-import type { PushKind } from "../../../common/pushKinds.js";
+import { isPushKind, type PushKind } from "../../../common/pushKinds.js";
 import { asTerminalAgent } from "../../../common/sessionAgent.js";
 import { aiTitles, lastResponses, ptys, pushClassification, translationWorkerIds } from "../registry.js";
 import { transcriptIdOf } from "../transcript/cleared-transcripts.js";
 import { claudeCurrentTurnReply, sessionLastTurn, LAST_RESPONSE_MAX } from "../session-reads.js";
 import { buildPushDetail, pushWhere, shouldSuppressPush, wantsPushKind } from "./taskPushRules.js";
+import type { PeerPushEvent } from "../../backends/remoteHost/peerProtocol.js";
 
 const PUSH_TITLE_MAX = 80;
+
+/** Where this server hands a push to a PARENT that relays it (backends/remoteHost/peerProtocol.ts).
+ *  A peer usually holds no Firebase session of its own, so without this its turns reach no phone. */
+export interface PeerPushSink {
+  /** Whether any parent is listening — the reply read below is not free, so it is skipped otherwise. */
+  wanted: () => boolean;
+  publish: (event: PeerPushEvent) => void;
+}
+
+let peerPushSink: PeerPushSink | null = null;
+export const setPeerPushSink = (sink: PeerPushSink): void => {
+  peerPushSink = sink;
+};
 const PUSH_BODY_MAX = 160;
 
 /** What the event that triggered this push already carried, so the body doesn't have to be
@@ -72,7 +86,11 @@ async function finishedReply(sessionId: string, cwd: string | null, hookReply: s
 // Notify the user's devices that a turn finished or is blocked, when Web Push is enabled.
 // Fire-and-forget; sendWebPush no-ops when RemoteHost (its Firebase auth) isn't connected.
 export async function notifyTaskFinished(sessionId: string, kind: PushKind, hookText: PushHookText, uiPort: string): Promise<void> {
-  if (!wantsPushKind(getPushEnabled(), getPushKinds(), kind)) return;
+  // Our own settings decide our own push; a listening parent applies ITS settings to the copy it
+  // is handed, since the phone and its preferences belong to the parent (task-push on that side).
+  const ownWanted = wantsPushKind(getPushEnabled(), getPushKinds(), kind);
+  const parentWanted = peerPushSink?.wanted() ?? false;
+  if (!ownWanted && !parentWanted) return;
   // Internal helper turns flow through /api/hook with active=false too — the suppression gate
   // keeps those (background workers, translation workers) from ever reaching the phone. Asked
   // of the DURABLE predicate, not the live set: tmux keeps a worker's agent running across a
@@ -99,6 +117,20 @@ export async function notifyTaskFinished(sessionId: string, kind: PushKind, hook
   // phone — so the receiver has to treat it as optional and keep the existing routing.
   // No host id before this machine's channel is decided for the account: the tap then
   // opens the phone's picker rather than a channel that may belong to another machine.
+  if (parentWanted) peerPushSink?.publish({ sessionId, kind, title, body });
+  if (!ownWanted) return;
   const hostId = currentRemoteHostId();
   void sendWebPush(title, body, { sessionId, ...(hostId ? { hostId } : {}), port: uiPort });
+}
+
+// The PARENT's side of a peer's push (backends/remoteHost/peerEvents.ts): the peer built the text,
+// with what only it can read, and this server sends it under its own Firebase session and host id —
+// the phone's channel is ours. Our push settings decide, as for any session of our own; the peer's
+// background-session suppression has already run over there. The title says which server, since
+// the phone shows the push with no other place for it.
+export function relayPeerPush(peerLabel: string, event: PeerPushEvent, uiPort: string): void {
+  if (!isPushKind(event.kind) || !wantsPushKind(getPushEnabled(), getPushKinds(), event.kind)) return;
+  const title = `[${peerLabel}] ${event.title}`.slice(0, PUSH_TITLE_MAX);
+  const hostId = currentRemoteHostId();
+  void sendWebPush(title, event.body.slice(0, PUSH_BODY_MAX), { sessionId: event.sessionId, ...(hostId ? { hostId } : {}), port: uiPort });
 }
