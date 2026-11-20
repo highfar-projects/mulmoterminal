@@ -100,6 +100,7 @@ import { mountWhatsNewRoutes } from "../whatsNew/routes.js";
 import { mountHelpRoutes } from "../help/routes.js";
 import { mountRoomRoutes } from "./room-routes.js";
 import { mountSkillCatalogRoutes } from "./skill-catalog-routes.js";
+import { mountLibraryRoutes } from "./library-routes.js";
 import { mountTranslationRoutes } from "../backends/media/translation.js";
 import { mountHtmlDispatchRoute, mountHtmlFileRoute, mountHtmlPreviewRoute } from "../backends/plugins/html.js";
 import { mountShapeScriptDispatchRoute } from "../backends/plugins/shapescript.js";
@@ -408,6 +409,19 @@ function mountBrowserFileWrites(app: Express, publish: AppRouteDeps["publish"]):
   mountDirConfigEntriesRoute(app, { backupRoot, onDirConfigWritten });
 }
 
+// Where a cell's work happens: the worktrees it launches into and the devcontainer it can run in.
+// Its own function so mountSessionFacingRoutes stays under the length limit with this fork's
+// devcontainer route added to upstream's list.
+function mountWorkingTreeRoutes(app: Express, isAllowedOrigin: AppRouteDeps["isAllowedOrigin"]): void {
+  // GRID-ONLY (dev_tool): /api/worktrees — detect a git repo, list/create/remove the
+  // per-agent worktrees a cell launches into, so several agents work one repo in
+  // isolated working trees.
+  mountWorktreeRoutes(app, { isAllowedOrigin });
+  // /api/devcontainer — detect + build/start a devcontainer for any directory this app can
+  // already reach a git repo from (a worktree or a plain checkout alike), not just worktrees.
+  mountDevcontainerRoutes(app, { isAllowedOrigin });
+}
+
 function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
   mountHookRoute(app, {
     setWorking: deps.setWorking,
@@ -470,6 +484,7 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
   mountDirSuggestRoute(app);
   mountPlayfulMediaRoutes(app);
   mountSkillCatalogRoutes(app);
+  mountLibraryRoutes(app);
   mountGuiMcpRoutes(app);
 
   // GRID-ONLY (dev_tool): POST /api/open-dir reveals a cell's working directory in the
@@ -486,13 +501,7 @@ function mountSessionFacingRoutes(app: Express, deps: AppRouteDeps): void {
   // URL (null if it isn't a GitHub repo), so the header can offer an "open on GitHub" link.
   mountGitRemoteRoute(app, { isAllowedOrigin: deps.isAllowedOrigin });
 
-  // GRID-ONLY (dev_tool): /api/worktrees — detect a git repo, list/create/remove the
-  // per-agent worktrees a cell launches into, so several agents work one repo in
-  // isolated working trees.
-  mountWorktreeRoutes(app, { isAllowedOrigin: deps.isAllowedOrigin });
-  // /api/devcontainer — detect + build/start a devcontainer for any directory this app can
-  // already reach a git repo from (a worktree or a plain checkout alike), not just worktrees.
-  mountDevcontainerRoutes(app, { isAllowedOrigin: deps.isAllowedOrigin });
+  mountWorkingTreeRoutes(app, deps.isAllowedOrigin);
   mountRoomRoutes(app, { isAllowedOrigin: deps.isAllowedOrigin });
 
   // POST /api/pick-file opens the OS file dialog and returns the chosen absolute

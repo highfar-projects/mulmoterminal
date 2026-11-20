@@ -14,29 +14,46 @@ import { clearedTranscripts } from "../../../server/session/transcript/cleared-t
 
 // The prompt seed reads the transcript for a session this process has no prompt for; the tests
 // stand in for that read so the seeding branch can be observed without a transcript on disk.
-vi.mock("../../../server/session/session-reads.js", () => ({ latestUserPrompt: vi.fn(async () => "continue GitHub issue 1048") }));
+// Keyed by transcript id: our own holds the pre-move task, the picked one its own last exchange.
+const PICKED_PROMPT = "pick up the release notes";
+const PICKED_REPLY = "The release notes are drafted.";
+// `pickedRead` lets a test hold the picked conversation's read open, to overlap two moves.
+const pickedRead = vi.hoisted(() => ({ gate: Promise.resolve() }));
+vi.mock("../../../server/session/session-reads.js", () => ({
+  latestUserPrompt: vi.fn(async (_cwd: string, id: string) => {
+    if (id !== "22222222-3333-4444-8555-666666666666") return "continue GitHub issue 1048";
+    await pickedRead.gate;
+    return PICKED_PROMPT;
+  }),
+  readLatestResponse: vi.fn((id: string) => (id === "22222222-3333-4444-8555-666666666666" ? PICKED_REPLY : null)),
+}));
 
 // The mark's durable half has its own spec; what this one must not do is write into the real
 // ~/.mulmoterminal. Stubbing the writer keeps the route's own behaviour — including WHICH cwd it
 // hands over, which is the wiring that decides whether the mark can survive a restart at all.
-const markCalls: Array<[string, string | undefined]> = [];
-const claudeIds: Array<string | undefined> = [];
-const successors = new Map<string, string | undefined>();
+const markCalls: Array<[string, string | undefined, string | undefined]> = [];
+const successors = new Map<string, string>();
 vi.mock("../../../server/session/transcript/cleared-transcripts", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../../server/session/transcript/cleared-transcripts")>();
   return {
     ...actual,
     markTranscriptCleared: async (id: string, cwd: string | undefined, claudeId?: string) => {
-      markCalls.push([id, cwd]);
-      claudeIds.push(claudeId);
+      markCalls.push([id, cwd, claudeId]);
       actual.clearedTranscripts.add(id);
-      successors.set(id, claudeId);
+      if (claudeId) successors.set(id, claudeId);
     },
     clearedClaudeIdOf: (id: string) => successors.get(id),
+    transcriptIdOf: (id: string) => (actual.clearedTranscripts.has(id) ? (successors.get(id) ?? null) : id),
+    forgetClearedTranscript: async (id: string) => {
+      actual.clearedTranscripts.delete(id);
+      successors.delete(id);
+      return true;
+    },
   };
 });
 
 const ID = "11111111-2222-4333-8444-555555555555";
+const PICKED = "22222222-3333-4444-8555-666666666666";
 
 const deps = {
   setWorking: vi.fn(),
@@ -72,9 +89,8 @@ beforeEach(() => {
   lastPrompts.delete(ID);
   lastResponses.delete(ID);
   clearedTranscripts.delete(ID);
-  markCalls.length = 0;
-  claudeIds.length = 0;
   successors.clear();
+  markCalls.length = 0;
   vi.clearAllMocks();
 });
 
@@ -110,53 +126,73 @@ describe("SessionStart source=clear", () => {
   // that has cd'd would otherwise be sized against a file in the wrong project.
   it("hands the mark the cwd the hook reported", async () => {
     await postHook({ hook_event_name: "SessionStart", source: "clear", cwd: "/work/other-project" });
-    expect(markCalls).toEqual([[ID, "/work/other-project"]]);
+    expect(markCalls).toEqual([[ID, "/work/other-project", undefined]]);
   });
 });
 
-// `/resume` typed inside the cell moves claude to ANOTHER conversation's transcript while the
-// session keeps its id. Left in memory, a restart then resumed the session's own id — abandoned, or
-// never written at all — and the cell came back as a brand-new conversation.
+// An in-session `/resume` moves claude off our transcript exactly as `/clear` does (#3325).
 describe("SessionStart source=resume", () => {
-  const OTHER = "99999999-8888-4777-8666-555555555555";
+  // The header follows the cell to the conversation it picked, rather than going blank (#3347).
+  it("marks the transcript with the picked conversation and shows that conversation's last exchange", async () => {
+    lastPrompts.set(ID, "continue GitHub issue 1048");
 
-  it("marks the session moved, with the conversation claude resumed as its successor", async () => {
-    lastPrompts.set(ID, "the abandoned task");
-    await postHook({ hook_event_name: "SessionStart", source: "resume", session_id: OTHER, cwd: "/work" });
+    await postHook({ hook_event_name: "SessionStart", source: "resume", session_id: PICKED, cwd: "/work" });
 
-    expect(markCalls).toEqual([[ID, "/work"]]);
-    expect(claudeIds).toEqual([OTHER]);
-    expect(lastPrompts.get(ID)).toBe("");
+    expect(markCalls).toEqual([[ID, "/work", PICKED]]);
+    expect(lastPrompts.get(ID)).toBe(PICKED_PROMPT);
+    expect(lastResponses.get(ID)).toBe(PICKED_REPLY);
     expect(deps.forgetTitle).toHaveBeenCalledWith(ID);
   });
 
-  // Every ordinary restart: claude resumes the session's own transcript.
-  it("leaves a session alone when claude resumed its own transcript", async () => {
-    lastPrompts.set(ID, "still the task");
+  // Our own `--resume <successor>` after a restart reports the same thing; re-marking it would
+  // blank the header on every restart.
+  it("leaves the session alone when claude is on the recorded successor", async () => {
+    await postHook({ hook_event_name: "SessionStart", source: "resume", session_id: PICKED });
+    markCalls.length = 0;
+    lastPrompts.set(ID, "the successor's task");
+
+    await postHook({ hook_event_name: "SessionStart", source: "resume", session_id: PICKED });
+
+    expect(markCalls).toEqual([]);
+    expect(lastPrompts.get(ID)).toBe("the successor's task");
+  });
+
+  it("unmarks when claude comes back to our own transcript", async () => {
+    await postHook({ hook_event_name: "SessionStart", source: "resume", session_id: PICKED });
+
     await postHook({ hook_event_name: "SessionStart", source: "resume", session_id: ID, cwd: "/work" });
 
-    expect(markCalls).toEqual([]);
-    expect(lastPrompts.get(ID)).toBe("still the task");
-    expect(deps.forgetTitle).not.toHaveBeenCalled();
+    expect(clearedTranscripts.has(ID)).toBe(false);
+    // The header was the picked conversation's; it is read again from ours (#3347).
+    expect(lastPrompts.get(ID)).toBe("continue GitHub issue 1048");
+    expect(lastResponses.get(ID)).toBe("");
+    expect(deps.forgetTitle).toHaveBeenCalledTimes(2);
   });
 
-  // The restart that resumes the successor fires the hook again; re-marking would blank the header
-  // on every restart.
-  it("does not mark again when claude resumed the successor already recorded", async () => {
-    await postHook({ hook_event_name: "SessionStart", source: "resume", session_id: OTHER, cwd: "/work" });
-    lastPrompts.set(ID, "the resumed task");
-    vi.clearAllMocks();
-
-    await postHook({ hook_event_name: "SessionStart", source: "resume", session_id: OTHER, cwd: "/work" });
-
-    expect(markCalls).toHaveLength(1);
-    expect(lastPrompts.get(ID)).toBe("the resumed task");
-    expect(deps.forgetTitle).not.toHaveBeenCalled();
+  // Two moves arriving together: the first one's read of the picked conversation must not land
+  // after the second has brought the cell back, or the header shows a conversation it left.
+  it("does not let an earlier move's header read land after a later move", async () => {
+    let release = () => {};
+    pickedRead.gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    try {
+      const away = postHook({ hook_event_name: "SessionStart", source: "resume", session_id: PICKED, cwd: "/work" });
+      const back = postHook({ hook_event_name: "SessionStart", source: "resume", session_id: ID, cwd: "/work" });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      release();
+      await Promise.all([away, back]);
+    } finally {
+      pickedRead.gate = Promise.resolve();
+    }
+    expect(clearedTranscripts.has(ID)).toBe(false);
+    expect(lastPrompts.get(ID)).toBe("continue GitHub issue 1048");
   });
 
-  it("ignores a resume that names no usable id", async () => {
-    await postHook({ hook_event_name: "SessionStart", source: "resume", session_id: "not-a-uuid", cwd: "/work" });
+  it("does nothing when the hook names no usable id", async () => {
+    await postHook({ hook_event_name: "SessionStart", source: "resume", session_id: "not-a-uuid" });
     expect(markCalls).toEqual([]);
+    expect(clearedTranscripts.has(ID)).toBe(false);
   });
 });
 
@@ -168,6 +204,14 @@ describe("UserPromptSubmit after a restart", () => {
   it("seeds the header from the transcript for an ordinary session", async () => {
     await postHook({ hook_event_name: "UserPromptSubmit", prompt: "ok", cwd: "/work" });
     expect(lastPrompts.get(ID)).toBe("continue GitHub issue 1048");
+  });
+
+  // After a move the cell is in the successor's conversation, so that is what seeds it (#3347).
+  it("seeds a moved session from its successor's transcript", async () => {
+    clearedTranscripts.add(ID);
+    successors.set(ID, PICKED);
+    await postHook({ hook_event_name: "UserPromptSubmit", prompt: "ok", cwd: "/work" });
+    expect(lastPrompts.get(ID)).toBe(PICKED_PROMPT);
   });
 
   it("does not seed a cleared session — it takes the new prompt as-is", async () => {

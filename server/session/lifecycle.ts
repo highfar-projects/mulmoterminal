@@ -33,7 +33,7 @@ import {
   isFailedWorker,
   isPinnedSession,
 } from "./registry.js";
-import { clearedTranscripts } from "./transcript/cleared-transcripts.js";
+import { transcriptIdOf } from "./transcript/cleared-transcripts.js";
 import { forgetEntitledToolGroups } from "./bridge-session.js";
 import { forgetCursorBadges } from "../agents/cursor/cursor-usage.js";
 import { parseWaitGraceMs, reapDecisionFor, reapTimerDelay, shouldForgetActivity } from "./reaping/reap-policy.js";
@@ -78,8 +78,8 @@ export interface SessionLifecycleDeps {
 // Timers live per process, not per factory call — there is one server.
 const reapTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-function refreshLastResponse(id: string, cwd: string): void {
-  const text = readLatestResponse(id, cwd);
+function refreshLastResponse(id: string, transcriptId: string, cwd: string): void {
+  const text = readLatestResponse(transcriptId, cwd);
   if (text) lastResponses.set(id, text); // a failed read leaves any prior value
 }
 
@@ -185,23 +185,15 @@ function reap(deps: SessionLifecycleDeps, id: string) {
   // The resumed prompt-history scan is only true of the ids and the floor it was taken under, both
   // of which die with the session (#1750).
   forgetHistoryMemo(id);
-  // NOT the cleared mark (cleared-transcripts.ts). It is what the NEXT spawn on this id reads to
-  // decide what to `--resume`, and reap is exactly what runs between the two halves of a Restart
-  // (and of an idle reap or an `/exit` followed by reopening the cell). Dropping it here made that
-  // spawn `--resume` our own id — the conversation the user ended with `/clear`, or the one a
-  // `/resume` inside the cell moved away from — rather than the one they were having.
-  //
-  // Nothing un-freezes the file in the meantime: resolveSession never resumes a cleared id's own
-  // transcript, only its successor, so the file stays exactly as frozen as the mark says. If
-  // something outside this server resumes it anyway, the size check drops the mark at the next
-  // boot, and a mark whose transcripts are all gone is pruned there too.
+  // Not the cleared mark: the next spawn on this id reads it to resume the successor, so the frozen
+  // file is never appended to again (#3325). Boot prunes marks whose transcripts are gone.
   deps.forgetTitle(id);
   deps.sessionActivityPublisher.forget(id); // drop the phone's copy so its picker has no ghosts
   deps.forgetWorkPhase(id); // the live turn dies with the session
   deps.forgetTerminalSize(id);
   deps.forgetPaneMode(id);
   titleInFlight.delete(id);
-  lastTitledUserTurns.delete(id); // teardown only — kept across /clear as the re-title baseline
+  lastTitledUserTurns.delete(id);
   lastTitleAttemptMs.delete(id);
   if (shouldForgetActivity(activity.get(id))) {
     activity.delete(id);
@@ -249,7 +241,8 @@ function publishActivity(deps: SessionLifecycleDeps, id: string) {
   // sound (<cwd>/.mulmoterminal.json). Null for a session with no live PTY.
   const entry = ptys.get(id);
   const cwd = entry?.cwd ?? null;
-  if (shouldRefreshReply(a, cwd, clearedTranscripts.has(id), entry?.agent)) refreshLastResponse(id, cwd);
+  const transcriptId = transcriptIdOf(id);
+  if (shouldRefreshReply(a, cwd, transcriptId === null, entry?.agent) && transcriptId !== null) refreshLastResponse(id, transcriptId, cwd);
   const row = sessionRow(id, a, cwd, {
     lastPrompt: lastPrompts.get(id),
     aiTitle: aiTitles.get(id),

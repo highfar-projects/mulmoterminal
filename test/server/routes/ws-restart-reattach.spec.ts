@@ -9,12 +9,10 @@
 // clientStillConnected after its admission awaits, so a client that left mid-admission still got
 // a pty — spawned after the socket's close event, which no later close handler can reap.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
-import os, { tmpdir } from "node:os";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import type { WebSocket } from "ws";
-import { forgetClearedTranscript, markTranscriptCleared } from "../../../server/session/transcript/cleared-transcripts.js";
-import { projectSessionsDir } from "../../../server/session/project-dir.js";
 
 const mocks = vi.hoisted(() => ({
   // Whether tmux still holds the requested session — the restart-survivor case.
@@ -31,6 +29,10 @@ const mocks = vi.hoisted(() => ({
   // never reads them before they exist.
   ptys: new Map<string, unknown>(),
   codexRollouts: new Map<string, unknown>(),
+  // Claude transcripts on disk, as `<cwd>:<id>` — what the connect asks before it resumes.
+  transcripts: [] as string[],
+  // The successor each cleared session's mark records (#3325).
+  successors: new Map<string, string>(),
 }));
 
 // Replaced by a test that holds the GUI tool restriction log back, as a restart can.
@@ -55,10 +57,24 @@ vi.mock("../../../server/session/registry.js", () => ({
 
 // The #1537 guard's other evidence probes walk the developer's real home directories; each is
 // pinned so a survivor's identity in these tests comes only from what a test declares.
-vi.mock("../../../server/session/session-reads.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../../server/session/session-reads.js")>()),
-  claudeOnDiskSessionIds: () => new Set(mocks.claudeOnDisk),
-}));
+vi.mock("../../../server/session/session-reads.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../server/session/session-reads.js")>();
+  return {
+    ...actual,
+    claudeOnDiskSessionIds: () => new Set(mocks.claudeOnDisk),
+    sessionExistsOnDisk: (id: string, cwd: string) => mocks.transcripts.includes(`${cwd}:${id}`) || actual.sessionExistsOnDisk(id, cwd),
+  };
+});
+
+// The marks live in the real home; the connect only asks which sessions are cleared and to what.
+vi.mock("../../../server/session/transcript/cleared-transcripts.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../server/session/transcript/cleared-transcripts.js")>();
+  return {
+    ...actual,
+    clearedTranscripts: { has: (id: string) => mocks.successors.has(id) },
+    clearedClaudeIdOf: (id: string) => mocks.successors.get(id),
+  };
+});
 vi.mock("../../../server/agents/antigravity/antigravity-session.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../server/agents/antigravity/antigravity-session.js")>()),
   antigravityConversationExists: () => false,
@@ -159,6 +175,8 @@ beforeEach(() => {
   mocks.claudeOnDisk = [];
   mocks.grokHas = false;
   mocks.onEnsureWorktreeEnv = () => {};
+  mocks.transcripts = [];
+  mocks.successors.clear();
   nowMs += 60_000;
   registeredGuiMcpGroups.mockResolvedValue(["render"]);
   account.bound = false;
@@ -292,69 +310,6 @@ describe("tmux survivor identity (#1537)", () => {
   });
 });
 
-// A different fix on the same connect path, through the same real handler: /clear moves a
-// session's live conversation to a NEW id claude mints for itself (cleared-transcripts.ts), while
-// OUR id stays frozen on the one that just ended. A tmux/live-pty reattach never notices — the
-// running process just carries on past its own /clear — but a pure on-disk resume (no live pty, no
-// tmux: every reconnect on Windows, or any reconnect after this server itself restarted) used to
-// always `--resume` OUR id, reopening the ended conversation instead of the one still going.
-describe("/ws (claude) resume after a /clear", () => {
-  const CLAUDE_ID = "cccccccc-dddd-4eee-8fff-000000000099";
-  let home = "";
-  let marksDir = "";
-  let realHome: string | undefined;
-  let homedirSpy: ReturnType<typeof vi.spyOn> | undefined;
-
-  beforeEach(() => {
-    home = mkdtempSync(path.join(tmpdir(), "mt-ws-resume-cleared-"));
-    marksDir = path.join(home, "marks");
-    realHome = process.env.HOME;
-    process.env.HOME = home;
-    // A local spy, restored by name below — vi.restoreAllMocks() would also undo this file's own
-    // module-level Date.now spy (the reconnect-burst evidence-snapshot clock), which other describe
-    // blocks here depend on regardless of run order.
-    homedirSpy = vi.spyOn(os, "homedir").mockReturnValue(home);
-  });
-  afterEach(() => {
-    homedirSpy?.mockRestore();
-    if (realHome === undefined) delete process.env.HOME;
-    else process.env.HOME = realHome;
-    rmSync(home, { recursive: true, force: true });
-    forgetClearedTranscript(SID, marksDir);
-  });
-
-  function writeTranscript(id: string, cwd: string, text = "{}\n") {
-    const sessDir = projectSessionsDir(cwd);
-    mkdirSync(sessDir, { recursive: true });
-    writeFileSync(path.join(sessDir, `${id}.jsonl`), text);
-  }
-
-  it("resumes under the claude id a /clear minted, not our own frozen id", async () => {
-    writeTranscript(SID, dir); // the frozen pre-clear transcript — resolveSession needs OUR id on disk too, or it mints fresh instead of resuming at all
-    writeTranscript(CLAUDE_ID, dir);
-    await markTranscriptCleared(SID, dir, CLAUDE_ID, marksDir);
-    await handleClaudeConnection(makeDeps(), fakeWs() as unknown as WebSocket, request(`&session=${SID}`));
-    expect(spawnClaudePty).toHaveBeenCalledWith(SID, CLAUDE_ID, expect.anything(), expect.objectContaining({ cwd: dir }));
-  });
-
-  // --resume refuses an id it cannot find, so a mark that never actually flushed a transcript (or
-  // whose file is gone since) leaves nothing to resume in place of the frozen one — and OUR id is
-  // the frozen one, the conversation the user ended, which resuming would put back in the next
-  // turn's request (#2013). So this connection resumes nothing and runs as a fresh session.
-  it("starts a fresh session when the cleared claude id has no transcript on disk", async () => {
-    writeTranscript(SID, dir);
-    await markTranscriptCleared(SID, dir, CLAUDE_ID, marksDir); // CLAUDE_ID's own file was never written
-    await handleClaudeConnection(makeDeps(), fakeWs() as unknown as WebSocket, request(`&session=${SID}`));
-    expect(spawnClaudePty).toHaveBeenCalledWith(expect.not.stringMatching(SID), null, expect.anything(), expect.objectContaining({ cwd: dir }));
-  });
-
-  it("resumes under our own id when the session was never cleared", async () => {
-    writeTranscript(SID, dir);
-    await handleClaudeConnection(makeDeps(), fakeWs() as unknown as WebSocket, request(`&session=${SID}`));
-    expect(spawnClaudePty).toHaveBeenCalledWith(SID, SID, expect.anything(), expect.objectContaining({ cwd: dir }));
-  });
-});
-
 // A grid cell on a second login reads its account's `.claude.json`, which has none of the
 // launcher's per-directory switches — so the handler reads them and passes them to the spawn.
 describe("/ws (claude) on a second login (#2215)", () => {
@@ -372,5 +327,41 @@ describe("/ws (claude) on a second login (#2215)", () => {
   it("hands none on the default login, where the cell reads them itself", async () => {
     await handleClaudeConnection(makeDeps(), fakeWs() as unknown as WebSocket, request("&gui=0"));
     expect(groupsPassed()).toMatchObject({ directoryMcpGroups: [] });
+  });
+});
+
+// Restart after a `/clear` or an in-cell `/resume` reconnects under the cell's own id; the spawn
+// must resume the conversation the cell moved to, never the frozen one (#3325).
+describe("/ws (claude) reconnect of a cleared session", () => {
+  const SUCCESSOR = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeee03";
+  const resumed = (): unknown[] | undefined => {
+    const calls: unknown[][] = spawnClaudePty.mock.calls;
+    return calls.at(-1)?.slice(0, 2);
+  };
+
+  it.each([
+    ["with its own transcript on disk", true],
+    ["moved before its first turn", false],
+  ])("resumes the successor under the cell's id (%s)", async (_label, ownOnDisk) => {
+    mocks.successors.set(SID, SUCCESSOR);
+    mocks.transcripts = [`${dir}:${SUCCESSOR}`, ...(ownOnDisk ? [`${dir}:${SID}`] : [])];
+    await handleClaudeConnection(makeDeps(), fakeWs() as unknown as WebSocket, request(`&session=${SID}`));
+    expect(resumed()).toEqual([SID, SUCCESSOR]);
+  });
+
+  // claude looks a `--resume` target up under the cwd it is launched in.
+  it("does not resume a successor whose transcript is not under the connect's cwd", async () => {
+    mocks.successors.set(SID, SUCCESSOR);
+    mocks.transcripts = [`${dir}:${SID}`, `/somewhere-else:${SUCCESSOR}`];
+    await handleClaudeConnection(makeDeps(), fakeWs() as unknown as WebSocket, request(`&session=${SID}`));
+    const [sessionId, resume] = resumed() ?? [];
+    expect(resume).toBeNull();
+    expect(sessionId).not.toBe(SID);
+  });
+
+  it("resumes its own transcript when the session is not cleared", async () => {
+    mocks.transcripts = [`${dir}:${SID}`, `${dir}:${SUCCESSOR}`];
+    await handleClaudeConnection(makeDeps(), fakeWs() as unknown as WebSocket, request(`&session=${SID}`));
+    expect(resumed()).toEqual([SID, SID]);
   });
 });

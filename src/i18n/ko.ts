@@ -23,6 +23,7 @@ import { filesTreeKo } from "./filesTree/ko";
 import { previewCodeCopyKo } from "./previewCodeCopy/ko";
 import { fileLinksKo } from "./fileLinks/ko";
 import { skillsViewKo } from "./skillsView/ko";
+import { libraryViewKo } from "./libraryView/ko";
 import { processesViewKo } from "./processesView/ko";
 import { githubBoardKo } from "./githubBoard/ko";
 
@@ -514,6 +515,7 @@ export const ko: Messages = {
       prompts: { label: "보낸 프롬프트", detail: "이 세션에서 직접 입력한 지시" },
       transcript: { label: "대화", detail: "내 지시와 에이전트의 답변 전체" },
       timeline: { label: "작업 기록", detail: "에이전트가 한 일(읽은 파일, 실행한 명령)을 시간순으로" },
+      library: { label: "라이브러리에서 열기", detail: "이 대화를 라이브러리에서 (검색, 고정, 이름 바꾸기)" },
       tools: { label: "사용한 도구", detail: "에이전트가 호출한 도구와 그 결과" },
       canvas: { label: "캔버스", detail: "에이전트가 그린 차트·문서·카드" },
       collections: { label: "컬렉션", detail: "이 폴더의 컬렉션" },
@@ -604,6 +606,7 @@ export const ko: Messages = {
     items: {
       rooms: { label: "Rooms", detail: "터미널끼리 나눈 원탁 대화" },
       blueprints: { label: "설계도", detail: "템플릿으로 앱이나 문서를 단계별로 만들기" },
+      library: { label: "라이브러리", detail: "모든 Claude 대화를 검색하고 바로 재개" },
       skills: { label: "Skills", detail: "~/.claude/skills 와 각 폴더의 스킬을 목록·검색" },
       processes: { label: "프로세스", detail: "각 세션에서 실행 중인 프로세스와 지울 수 있는 worktree" },
       worklog: { label: "Worklog", detail: "wiki에 있는 개발 작업 로그 (#worklog)" },
@@ -641,6 +644,7 @@ export const ko: Messages = {
   ...previewCodeCopyKo,
   ...fileLinksKo,
   ...skillsViewKo,
+  ...libraryViewKo,
   ...processesViewKo,
   ...githubBoardKo,
   tips: tipsKo,

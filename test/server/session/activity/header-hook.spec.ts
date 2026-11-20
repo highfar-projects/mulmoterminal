@@ -31,19 +31,9 @@ describe("headerHookEffect", () => {
     expect(headerHookEffect("UserPromptSubmit", { prompt })).toBeNull();
   });
 
-  it("clears the header when /clear restarts the conversation", () => {
-    expect(headerHookEffect("SessionStart", { source: "clear" })).toEqual({ kind: "clear" });
-  });
-
-  // The distinction this rule exists for: /compact also arrives as SessionStart. Clearing on
-  // it would wipe the user's task line and AI title mid-conversation.
-  it.each([["compact"], ["startup"], [undefined], [null], ["CLEAR"]])("does not clear on SessionStart source %j", (source) => {
+  // conversationMove decides every SessionStart, so this one must not act on any of them too.
+  it.each([["clear"], ["compact"], ["startup"], ["resume"], [undefined], [null], ["CLEAR"]])("leaves SessionStart source %j to conversationMove", (source) => {
     expect(headerHookEffect("SessionStart", { source })).toBeNull();
-  });
-
-  // Whether a resume moved the session off its own transcript depends on ids only the route has.
-  it("hands a resume up for the route to judge", () => {
-    expect(headerHookEffect("SessionStart", { source: "resume" })).toEqual({ kind: "resume" });
   });
 
   it("regenerates the title once a turn's reply is on disk", () => {
@@ -62,7 +52,7 @@ describe("headerHookEffect", () => {
   // must be judged by its EVENT, never by whichever field is present.
   it("decides on the event, not on stray payload fields", () => {
     expect(headerHookEffect("Stop", { prompt: "still here", source: "clear" })).toEqual({ kind: "title" });
-    expect(headerHookEffect("SessionStart", { prompt: "still here", source: "clear" })).toEqual({ kind: "clear" });
+    expect(headerHookEffect("SessionStart", { prompt: "still here", source: "clear" })).toBeNull();
   });
 
   it("honours an explicit cap over the default", () => {

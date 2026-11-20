@@ -36,6 +36,7 @@ import { filesTreeEn } from "./filesTree/en";
 import { previewCodeCopyEn } from "./previewCodeCopy/en";
 import { fileLinksEn } from "./fileLinks/en";
 import { skillsViewEn } from "./skillsView/en";
+import { libraryViewEn } from "./libraryView/en";
 import { processesViewEn } from "./processesView/en";
 import { githubBoardEn } from "./githubBoard/en";
 export const en = {
@@ -527,6 +528,7 @@ export const en = {
       prompts: { label: "Prompts you sent", detail: "Everything you typed in this session" },
       transcript: { label: "Conversation", detail: "Your prompts and the agent's replies, in full" },
       timeline: { label: "Activity timeline", detail: "What the agent ran, in order: files read, commands run" },
+      library: { label: "Open in Library", detail: "This conversation in the Library: search, pin, rename" },
       tools: { label: "Tools used", detail: "The tools the agent called, with their results" },
       canvas: { label: "Canvas", detail: "Charts, documents and cards the agent drew" },
       collections: { label: "Collections", detail: "This folder's collections" },
@@ -627,6 +629,7 @@ export const en = {
     items: {
       rooms: { label: "Rooms", detail: "Round-table conversations between terminals" },
       blueprints: { label: "Blueprints", detail: "Build an app or documents step by step from a template" },
+      library: { label: "Library", detail: "Every Claude conversation, searchable, ready to resume" },
       skills: { label: "Skills", detail: "Every skill in ~/.claude/skills and in your folders, with search" },
       processes: { label: "Processes", detail: "What each session is running, and worktrees that can go" },
       worklog: { label: "Worklog", detail: "The dev work log in the wiki (#worklog)" },
@@ -664,6 +667,7 @@ export const en = {
   ...previewCodeCopyEn,
   ...fileLinksEn,
   ...skillsViewEn,
+  ...libraryViewEn,
   ...processesViewEn,
   ...githubBoardEn,
   tips: tipsEn,

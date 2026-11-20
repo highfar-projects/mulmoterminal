@@ -23,6 +23,7 @@ import { filesTreeZhTW } from "./filesTree/zh-TW";
 import { previewCodeCopyZhTW } from "./previewCodeCopy/zh-TW";
 import { fileLinksZhTW } from "./fileLinks/zh-TW";
 import { skillsViewZhTW } from "./skillsView/zh-TW";
+import { libraryViewZhTW } from "./libraryView/zh-TW";
 import { processesViewZhTW } from "./processesView/zh-TW";
 import { githubBoardZhTW } from "./githubBoard/zh-TW";
 
@@ -507,6 +508,7 @@ export const zhTW: Messages = {
       prompts: { label: "送出的提示", detail: "本工作階段中你輸入的指令" },
       transcript: { label: "對話", detail: "你的指令與代理回覆的全文" },
       timeline: { label: "活動時間軸", detail: "代理做過的事（讀取的檔案、執行的指令），依時間排序" },
+      library: { label: "在資料庫中開啟", detail: "在資料庫中查看此對話（搜尋、釘選、重新命名）" },
       tools: { label: "使用的工具", detail: "代理呼叫的工具及其結果" },
       canvas: { label: "畫布", detail: "代理繪製的圖表、文件與卡片" },
       collections: { label: "集合", detail: "此資料夾的集合" },
@@ -595,6 +597,7 @@ export const zhTW: Messages = {
     items: {
       rooms: { label: "Rooms", detail: "終端機之間的圓桌對話" },
       blueprints: { label: "藍圖", detail: "依範本逐步建置應用程式或文件" },
+      library: { label: "資料庫", detail: "搜尋所有 Claude 對話，並可直接繼續" },
       skills: { label: "Skills", detail: "列出並搜尋 ~/.claude/skills 與各資料夾中的技能" },
       processes: { label: "處理程序", detail: "各工作階段中執行的處理程序，以及可刪除的 worktree" },
       worklog: { label: "Worklog", detail: "wiki 中的開發工作紀錄（#worklog）" },
@@ -632,6 +635,7 @@ export const zhTW: Messages = {
   ...previewCodeCopyZhTW,
   ...fileLinksZhTW,
   ...skillsViewZhTW,
+  ...libraryViewZhTW,
   ...processesViewZhTW,
   ...githubBoardZhTW,
   tips: tipsZhTW,
