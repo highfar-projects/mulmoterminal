@@ -23,6 +23,7 @@ import { filesTreeJa } from "./filesTree/ja";
 import { previewCodeCopyJa } from "./previewCodeCopy/ja";
 import { fileLinksJa } from "./fileLinks/ja";
 import { skillsViewJa } from "./skillsView/ja";
+import { libraryViewJa } from "./libraryView/ja";
 import { processesViewJa } from "./processesView/ja";
 import { githubBoardJa } from "./githubBoard/ja";
 
@@ -517,6 +518,7 @@ export const ja: Messages = {
       prompts: { label: "送ったプロンプト", detail: "このセッションで自分が打ち込んだ指示" },
       transcript: { label: "会話", detail: "自分の指示とエージェントの返事の全文" },
       timeline: { label: "作業の履歴", detail: "エージェントがしたこと（読んだファイル、実行したコマンド）を時刻順に" },
+      library: { label: "ライブラリで開く", detail: "この会話をライブラリで（探す・ピン留め・名前を変える）" },
       tools: { label: "使ったツール", detail: "エージェントが呼んだツールと、その結果" },
       canvas: { label: "キャンバス", detail: "エージェントが描いたグラフ・文書・カード" },
       collections: { label: "コレクション", detail: "このフォルダのコレクション" },
@@ -607,6 +609,7 @@ export const ja: Messages = {
     items: {
       rooms: { label: "Rooms", detail: "端末どうしの円卓の会話" },
       blueprints: { label: "設計図", detail: "テンプレートからアプリや文書を段階的に作る" },
+      library: { label: "ライブラリ", detail: "Claude の会話をすべて探せて、そのまま再開できる" },
       skills: { label: "Skills", detail: "~/.claude/skills と各フォルダのスキルを一覧・検索" },
       processes: { label: "プロセス", detail: "各セッションで動いているプロセスと、消せる worktree" },
       worklog: { label: "Worklog", detail: "wiki にある開発作業ログ（#worklog）" },
@@ -644,6 +647,7 @@ export const ja: Messages = {
   ...previewCodeCopyJa,
   ...fileLinksJa,
   ...skillsViewJa,
+  ...libraryViewJa,
   ...processesViewJa,
   ...githubBoardJa,
   tips: tipsJa,

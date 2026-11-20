@@ -23,6 +23,7 @@ import { filesTreeZhCN } from "./filesTree/zh-CN";
 import { previewCodeCopyZhCN } from "./previewCodeCopy/zh-CN";
 import { fileLinksZhCN } from "./fileLinks/zh-CN";
 import { skillsViewZhCN } from "./skillsView/zh-CN";
+import { libraryViewZhCN } from "./libraryView/zh-CN";
 import { processesViewZhCN } from "./processesView/zh-CN";
 import { githubBoardZhCN } from "./githubBoard/zh-CN";
 
@@ -502,6 +503,7 @@ export const zhCN: Messages = {
       prompts: { label: "发送的提示", detail: "本会话中你输入的指令" },
       transcript: { label: "对话", detail: "你的指令与代理回复的全文" },
       timeline: { label: "活动时间线", detail: "代理做过的事（读取的文件、运行的命令），按时间排序" },
+      library: { label: "在资料库中打开", detail: "在资料库中查看此对话（搜索、置顶、重命名）" },
       tools: { label: "使用的工具", detail: "代理调用的工具及其结果" },
       canvas: { label: "画布", detail: "代理绘制的图表、文档和卡片" },
       collections: { label: "集合", detail: "此文件夹的集合" },
@@ -590,6 +592,7 @@ export const zhCN: Messages = {
     items: {
       rooms: { label: "Rooms", detail: "终端之间的圆桌对话" },
       blueprints: { label: "蓝图", detail: "按模板逐步构建应用或文档" },
+      library: { label: "资料库", detail: "搜索所有 Claude 对话，并可直接继续" },
       skills: { label: "Skills", detail: "列出并搜索 ~/.claude/skills 和各文件夹中的技能" },
       processes: { label: "进程", detail: "各会话中运行的进程，以及可删除的 worktree" },
       worklog: { label: "Worklog", detail: "wiki 中的开发工作日志（#worklog）" },
@@ -627,6 +630,7 @@ export const zhCN: Messages = {
   ...previewCodeCopyZhCN,
   ...fileLinksZhCN,
   ...skillsViewZhCN,
+  ...libraryViewZhCN,
   ...processesViewZhCN,
   ...githubBoardZhCN,
   tips: tipsZhCN,

@@ -10,7 +10,34 @@ import {
 
 const FIXED = "fresh-minted-id";
 const mint = () => FIXED;
-const facts = (over: Partial<SessionFacts> = {}): SessionFacts => ({ hasLivePty: false, tmuxAlive: false, onDisk: false, cleared: false, ...over });
+const facts = (over: Partial<SessionFacts> = {}): SessionFacts => ({
+  hasLivePty: false,
+  tmuxAlive: false,
+  onDisk: false,
+  cleared: false,
+  successorOnDisk: null,
+  ...over,
+});
+const SUCCESSOR = "s2";
+
+// Every combination of the facts, expanded one field at a time.
+const BOOLS = [false, true];
+const AXES: Array<[keyof SessionFacts, Array<boolean | string | null>]> = [
+  ["hasLivePty", BOOLS],
+  ["tmuxAlive", BOOLS],
+  ["onDisk", BOOLS],
+  ["cleared", BOOLS],
+  ["successorOnDisk", [null, SUCCESSOR]],
+];
+const expand = (partial: Partial<SessionFacts>[], [key, values]: [keyof SessionFacts, Array<boolean | string | null>]): Partial<SessionFacts>[] =>
+  partial.flatMap((done) => values.map((value) => ({ ...done, [key]: value })));
+const ALL_FACTS: SessionFacts[] = AXES.reduce(expand, [{}]).map((over) => facts(over));
+
+function expectedResumeOf(given: SessionFacts): string | null {
+  if (given.hasLivePty) return null;
+  if (given.cleared) return given.successorOnDisk;
+  return given.onDisk ? "s1" : null;
+}
 
 describe("resolveSession", () => {
   it("mints a fresh id when nothing is requested", () => {
@@ -74,54 +101,49 @@ describe("resolveSession", () => {
   it("prefers a live pty over tmux/disk", () => {
     expect(resolveSession("s1", facts({ hasLivePty: true, tmuxAlive: true, onDisk: true }), mint)).toEqual({ reattachId: "s1", resume: null, sessionId: "s1" });
   });
-});
 
-// /clear moves a session's live conversation to a NEW id claude mints for itself, while OUR id
-// stays frozen on the one that just ended (cleared-transcripts.ts). Resuming from disk reaches for
-// that new conversation rather than reopening the ended one — and the id the session RUNS as stays
-// ours, so nothing the grid, the hooks or the activity state file under it moves.
-describe("resolveSession after a /clear that moved the conversation", () => {
-  it("resumes the successor, under our own id", () => {
-    expect(resolveSession("s1", facts({ onDisk: true, cleared: true, clearedSuccessor: "claude-id" }), mint)).toEqual({
+  // The conversation the cell went on to show after `/clear` or an in-session `/resume` is the
+  // successor's. Resuming it under our id keeps the hooks and the cell where they were (#3325).
+  it.each([
+    ["own transcript on disk", { onDisk: true }],
+    ["no own transcript (moved before the first turn)", { onDisk: false }],
+    ["tmux alive", { onDisk: true, tmuxAlive: true }],
+  ])("resumes the successor of a cleared session and keeps the id (%s)", (_label, over) => {
+    expect(resolveSession("s1", facts({ ...over, cleared: true, successorOnDisk: SUCCESSOR }), mint)).toEqual({
       reattachId: null,
-      resume: "claude-id",
+      resume: SUCCESSOR,
       sessionId: "s1",
     });
   });
 
-  // Our own transcript is not what gets resumed here, so whether it exists decides nothing — a
-  // session cleared before its first turn ever flushed still has a conversation to come back to.
-  it("resumes the successor even with no transcript of our own on disk", () => {
-    expect(resolveSession("s1", facts({ cleared: true, clearedSuccessor: "claude-id" }), mint)).toEqual({
-      reattachId: null,
-      resume: "claude-id",
-      sessionId: "s1",
-    });
-  });
-
-  // A clear that (somehow) recorded our own id names the FROZEN file, which is the one thing this
-  // decision exists to keep out of `--resume`. It is no successor, so the cleared rule stands.
-  it("ignores a successor that is our own id", () => {
-    expect(resolveSession("s1", facts({ onDisk: true, cleared: true, clearedSuccessor: "s1" }), mint)).toEqual({
-      reattachId: null,
-      resume: null,
-      sessionId: FIXED,
-    });
-  });
-
-  // The running pty IS the post-clear conversation; reattaching it reads no transcript at all.
   it("reattaches a live pty rather than resuming the successor", () => {
-    expect(resolveSession("s1", facts({ hasLivePty: true, onDisk: true, cleared: true, clearedSuccessor: "claude-id" }), mint)).toEqual({
+    expect(resolveSession("s1", facts({ hasLivePty: true, cleared: true, successorOnDisk: SUCCESSOR }), mint)).toEqual({
       reattachId: "s1",
       resume: null,
       sessionId: "s1",
     });
   });
 
-  // Nothing was cleared, so there is no frozen file to step around: our own transcript is the
-  // conversation, and a stray successor says nothing about it.
-  it("ignores a successor on a session that was never cleared", () => {
-    expect(resolveSession("s1", facts({ onDisk: true, clearedSuccessor: "claude-id" }), mint)).toEqual({ reattachId: null, resume: "s1", sessionId: "s1" });
+  // A successor is only meaningful through the mark; without one the id names our own file.
+  it("ignores a successor on a session that is not cleared", () => {
+    expect(resolveSession("s1", facts({ onDisk: true, successorOnDisk: SUCCESSOR }), mint)).toEqual({ reattachId: null, resume: "s1", sessionId: "s1" });
+  });
+
+  it("mints a fresh id for nothing requested, whatever the facts say", () => {
+    expect(resolveSession(null, facts({ cleared: true, successorOnDisk: SUCCESSOR, onDisk: true, tmuxAlive: true }), mint)).toEqual({
+      reattachId: null,
+      resume: null,
+      sessionId: FIXED,
+    });
+  });
+
+  it.each(ALL_FACTS)("never resumes a cleared transcript, and keeps the id exactly when something serves it: %j", (given) => {
+    const { reattachId, resume, sessionId } = resolveSession("s1", given, mint);
+    if (given.cleared) expect(resume).not.toBe("s1");
+    expect(reattachId).toBe(given.hasLivePty ? "s1" : null);
+    const expectedResume = expectedResumeOf(given);
+    expect(resume).toBe(expectedResume);
+    expect(sessionId).toBe(given.hasLivePty || given.tmuxAlive || expectedResume ? "s1" : FIXED);
   });
 });
 

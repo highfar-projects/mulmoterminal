@@ -1121,6 +1121,15 @@ The one exception is the **managed** workspace named by `MULMOCLAUDE_WORKSPACE_P
 (`~/mulmoclaude` by default), where that state stays in the workspace — MulmoClaude reads the
 same files there, and splitting them would give the two apps different answers.
 
+**Run one version per home.** Every server started with the same `HOME` shares `~/.mulmoterminal`,
+including the record of which sessions a `/clear` or an in-session `/resume` moved to another
+conversation (`cleared-transcripts/`). A release from before #3340 deletes that record whenever it
+ends a session, so a newer server sharing the home then reopens the conversation the cell had left
+(#3325, #3348). Running two versions side by side — an `npx mulmoterminal@<older>` next to a checkout,
+say — is therefore not supported; give one of them its own `HOME` (it then gets its own tmux server
+too). Rolling back to an older release brings back that release's behaviour and damages nothing on
+disk.
+
 If you ran an older version in a project directory, what it left behind is inert and nothing
 recreates it — but delete the generated files, **not** the whole directory:
 `config/scheduler/state.json`, `data/scheduler/`, `data/notifier/`. Leave
@@ -2136,6 +2145,23 @@ narrow and tall for one record you are discussing — and each position keeps it
 
 ## More features
 
+- **Library** — **More features** → **Library** (or a Claude cell's **History** menu → **Open in Library**, which opens on that conversation) lists every Claude conversation on this machine,
+  newest first, across all projects: its title, then the project, branch, PRs and when. Type to
+  search the conversations' text and titles (Japanese included); pick one to read it, and press
+  **Resume** (or `Enter`) to open it in a terminal in the directory it ran in. `/` focuses the
+  search, the arrow keys move. The **⋯** menu pins a conversation to the top of the list or renames
+  it; pins and names are MulmoTerminal's own (`~/.mulmoterminal/library/marks.json`) and the
+  conversation's file is never written. `claude -p` and SDK runs, and runs from temp directories, are left
+  out. The index behind it is built in the background the first time you open it and kept up to
+  date from what is appended; it is `~/.mulmoterminal/library/index.db` and can be deleted at any
+  time (it is rebuilt). `marks.json` beside it holds your pins and names and is not rebuilt.
+  A conversation's PR numbers open the PR; in the GitHub view, a PR a conversation made has a
+  `local_library` button beside it that opens that conversation in the Library. **Changed files**
+  under a conversation lists the files it edited with Claude Code's edit tools, each with a diff of
+  the whole change or of one turn's (read only; read from Claude Code's own file history).
+  **Memory** beside **Conversations** lists Claude Code's auto memory for every project, with how
+  full each `MEMORY.md` is against what Claude Code loads (200 lines / 25,000 bytes); a memory
+  reads as Markdown and its `[[name]]` links open the memory they name (read only for now). Design: [`docs/library-design.md`](docs/library-design.md).
 - **Skills viewer** — **More features** → **Skills** lists every Claude skill on disk in three
   columns — where it lives, its skills, its `SKILL.md`. The places are your `~/.claude/skills`,
   each enabled plugin (skills shown as `plugin:skill`), and the `.claude/skills` of each folder a
