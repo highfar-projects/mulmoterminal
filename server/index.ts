@@ -38,7 +38,7 @@ import { createTranslationWorker } from "./session/scheduled/translation-worker.
 import { createTitleManager } from "./session/list/session-title.js";
 import { resolveSessionTitle } from "./config/header/header-title.js";
 import { mountTerminalWebSockets } from "./routes/ws-routes.js";
-import { attachPeerUpgradeRelay } from "./infra/http/peer-proxy.js";
+import { attachPeerUpgradeRelay, configuredPeers } from "./infra/http/peer-proxy.js";
 import { createConnectionHandlers } from "./session/pty/pty-connection.js";
 import { createTmuxSizeSync } from "./session/pty/tmux-size-sync.js";
 import { createIssueSessionSpawner } from "./session/spawn/issue-session-spawn.js";
@@ -72,6 +72,9 @@ import { createCursorSpawner } from "./session/spawn/agents/spawn-cursor.js";
 import { currentHostId as currentRemoteHostId } from "./backends/remoteHost/index.js";
 import { initRemoteHost } from "./backends/remoteHost/hostBindings.js";
 import { createSessionActivityPublisher, firestoreSessionActivityStore } from "./backends/remoteHost/sessionActivity.js";
+import { startPeerEventRelay } from "./backends/remoteHost/peerEvents.js";
+import { PEER_PUSH_CHANNEL } from "./backends/remoteHost/peerProtocol.js";
+import { relayPeerPush, setPeerPushSink } from "./session/activity/task-push.js";
 import { createWorkPhaseTracker } from "./session/activity/work-phase-tracker.js";
 import { currentFirestore, currentUid } from "./backends/remoteHost/session.js";
 import { initWorkspaceSetup } from "./backends/workspaceSetup.js";
@@ -504,6 +507,20 @@ initRemoteHost({
   outputBufferLimit: OUTPUT_BUFFER_LIMIT,
   publishToOne: (channel, data) => pubsub?.publishToOne(channel, data) ?? false,
   subscriberCount: (channel) => pubsub?.subscriberCount(channel) ?? 0,
+});
+
+// The phone reaching a PEER's cells (backends/remoteHost/peerProtocol.ts). As a peer: hand what we
+// would push to whichever parent is listening. As a parent: send each peer's pushes under our own
+// channel, and mirror its sessions' status to the phone the same way ours are (#439).
+setPeerPushSink({
+  wanted: () => (pubsub?.subscriberCount(PEER_PUSH_CHANNEL) ?? 0) > 0,
+  publish: (event) => pubsub?.publish(PEER_PUSH_CHANNEL, event),
+});
+startPeerEventRelay({
+  peers: configuredPeers,
+  sessionsChannel: SESSIONS_CHANNEL,
+  onPush: (peer, event) => relayPeerPush(peer.label, event, String(process.env.CLIENT_PORT || PORT)),
+  onSessionStatus: (_peer, { id, working, waiting, event }) => sessionActivityPublisher.publish(id, { working, waiting, event }),
 });
 
 // Mount per-collection fs.watchers → completion bells via the notifier. After the
