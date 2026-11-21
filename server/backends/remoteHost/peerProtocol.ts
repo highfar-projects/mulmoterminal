@@ -27,7 +27,8 @@ export const PEER_PUSH_CHANNEL = "peer-push";
 
 /** The phone commands that name a session and therefore go to whichever server holds it. Every
  *  one reads `params.sessionId`. `listTerminalSessions` is not here: it names none, and is MERGED
- *  rather than forwarded. */
+ *  rather than forwarded. `listSkills` names one only optionally (#2358): with it, the list is what
+ *  THAT session can run, which only the server holding it can tell; without it, ours answers. */
 export const PEER_SESSION_COMMANDS = [
   "getTerminalScreen",
   "getTerminalTranscript",
@@ -37,6 +38,7 @@ export const PEER_SESSION_COMMANDS = [
   "launchTerminal",
   "listPastSessions",
   "getPastTranscript",
+  "listSkills",
 ] as const;
 
 /** Every command a peer answers on PEER_COMMAND_PATH. */
