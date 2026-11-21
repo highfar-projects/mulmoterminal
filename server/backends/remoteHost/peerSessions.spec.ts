@@ -111,6 +111,17 @@ describe("withPeerSessions — a session-scoped command", () => {
     await expect(run(wrapped, "sendTerminalInput", { sessionId: PEER_ID, text: "x" })).rejects.toThrow("That question was already answered.");
   });
 
+  // The slash-command chips under a peer cell: only the peer knows that cell's directory and
+  // plugins, and ours refused it as "unknown session". Without a session, the list is ours.
+  it("asks the peer for the skills of its session, and keeps the plain list here", async () => {
+    const handlers: CommandHandlers = { ...localHandlers(), listSkills: vi.fn(() => ({ skills: ["local"] })) };
+    const { deps, call } = setup();
+    const wrapped = withPeerSessions(handlers, deps);
+    expect(await run(wrapped, "listSkills", { sessionId: PEER_ID })).toEqual({ from: "peer", name: "listSkills", sessionId: PEER_ID });
+    expect(await run(wrapped, "listSkills", {})).toEqual({ skills: ["local"] });
+    expect(call).not.toHaveBeenCalledWith(WSL, "listSkills", {});
+  });
+
   it("leaves commands that name no session alone", () => {
     const { handlers, wrapped } = setup();
     expect(wrapped.listFeeds).toBe(handlers.listFeeds);
