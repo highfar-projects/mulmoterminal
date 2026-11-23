@@ -7,7 +7,7 @@ import { toJsonObject, type CommandHandler, type CommandHandlers, type JsonObjec
 import type { PeerHost } from "../../../common/peers.js";
 import { isRecord } from "../../../common/isRecord.js";
 import { DIR_ICONS_MAX_CHARS } from "./dirIcons.js";
-import { PEER_SESSION_COMMANDS } from "./peerProtocol.js";
+import { PEER_COMMANDS, PEER_SESSION_COMMANDS } from "./peerProtocol.js";
 
 export interface PeerSessionDeps {
   /** The peers configured right now (config.json's `peers`), read per command. */
@@ -59,6 +59,11 @@ export function mergeListing(into: Listing, peerListing: Listing, peer: PeerHost
     into.sessions.push(peerRow(kept, peer));
   }
 }
+
+/** What this server answers a relaying parent on PEER_COMMAND_PATH: the PEER_COMMANDS of its own,
+ *  unwrapped table — the one the phone is served before withPeerSessions — and nothing else. */
+export const peerCommandTable = (own: CommandHandlers): CommandHandlers =>
+  Object.fromEntries(Object.entries(own).filter(([name]) => PEER_COMMANDS.includes(name)));
 
 const sessionIdParam = (params: JsonObject): string | null => (typeof params.sessionId === "string" && params.sessionId ? params.sessionId : null);
 
