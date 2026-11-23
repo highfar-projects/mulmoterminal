@@ -1,9 +1,9 @@
-// The GitHub board's inputs (#3172): per configured repo, its open and recently merged PRs and its
+// The GitHub board's inputs (#3172): per configured repo (and per GitHub repo a live cell is in, #3372), its open and recently merged PRs and its
 // open issues through `gh`, and the live cells whose directory is a checkout of it. The decisions
 // are in board.ts; this file only gathers.
 import type { BoardCell, BoardDetailResponse, BoardIssue, RepoBoard } from "../../common/githubBoard.js";
 import { runGh } from "./gh.js";
-import { buildRepoBoard, parseBoardPr, type BoardPrRow, type CellOnBranch } from "./board.js";
+import { buildRepoBoard, mainlineCells, parseBoardPr, type BoardPrRow, type CellOnBranch } from "./board.js";
 import { ISSUE_DETAIL_FIELDS, PR_DETAIL_FIELDS, parseIssueDetail, parsePrDetail } from "./board-detail.js";
 import { currentBranch } from "./git-status.js";
 import { isSupported, repoForDir, repoSupport } from "./forge-support.js";
@@ -12,6 +12,7 @@ import { isRecord } from "../../common/isRecord.js";
 import { readString } from "../../common/readString.js";
 import { isUnknownArray } from "../../common/isUnknownArray.js";
 import { repoIdentity } from "../../common/repoEntry.js";
+import { unconfiguredRepos } from "./board-repos.js";
 
 export const BOARD_OPEN_LIMIT = 50;
 export const BOARD_MERGED_LIMIT = 10;
@@ -58,22 +59,43 @@ const defaultBranchOf = async (repo: string): Promise<string | null> => {
   return res.ok && res.stdout.trim() ? res.stdout.trim() : null;
 };
 
+interface PlacedCells {
+  cellsByRepo: Map<string, CellOnBranch[]>;
+  /** Every repo a cell is in that is on GitHub, by `owner/repo`. */
+  githubRepos: string[];
+}
+
+interface CellPlace {
+  repo: string;
+  /** Null when HEAD is detached. */
+  branch: string | null;
+  github: boolean;
+}
+
+const NO_HEAD = { branch: null, detached: false };
+
+// A detached HEAD still places the cell, on no branch; a directory git cannot read a HEAD in does not.
+const placeOf = async (cwd: string): Promise<CellPlace | null> => {
+  const [dirRepo, head] = await Promise.all([repoForDir(cwd).catch(() => null), currentBranch(cwd).catch(() => NO_HEAD)]);
+  if (!dirRepo?.repo || (!head.branch && !head.detached)) return null;
+  return { repo: dirRepo.repo, branch: head.branch, github: dirRepo.forge.kind === "github" };
+};
+
 // Which repo and branch each cell's directory is on, resolved once per directory.
-async function placeCells(cells: readonly LiveCell[]): Promise<Map<string, CellOnBranch[]>> {
-  const byCwd = new Map<string, { repo: string; branch: string } | null>();
-  await Promise.all(
-    [...new Set(cells.map((cell) => cell.cwd))].map(async (cwd) => {
-      const [dirRepo, head] = await Promise.all([repoForDir(cwd).catch(() => null), currentBranch(cwd).catch(() => ({ branch: null }))]);
-      byCwd.set(cwd, dirRepo?.repo && head.branch ? { repo: dirRepo.repo, branch: head.branch } : null);
-    }),
-  );
-  const out = new Map<string, CellOnBranch[]>();
+async function placeCells(cells: readonly LiveCell[]): Promise<PlacedCells> {
+  const byCwd = new Map<string, CellPlace | null>();
+  await Promise.all([...new Set(cells.map((cell) => cell.cwd))].map(async (cwd) => byCwd.set(cwd, await placeOf(cwd))));
+  const cellsByRepo = new Map<string, CellOnBranch[]>();
   cells.forEach((cell) => {
     const place = byCwd.get(cell.cwd);
-    if (place) out.set(repoIdentity(place.repo), [...(out.get(repoIdentity(place.repo)) ?? []), { ...cell, branch: place.branch }]);
+    if (place) cellsByRepo.set(repoIdentity(place.repo), [...(cellsByRepo.get(repoIdentity(place.repo)) ?? []), { ...cell, branch: place.branch }]);
   });
-  return out;
+  const githubRepos = [...byCwd.values()].flatMap((place) => (place?.github ? [place.repo] : []));
+  return { cellsByRepo, githubRepos };
 }
+
+/** The GitHub repos a live cell is in, by `owner/repo`. */
+export const liveCellRepos = async (liveCells: readonly LiveCell[]): Promise<string[]> => (await placeCells(liveCells)).githubRepos;
 
 async function repoBoard(repo: string, cells: readonly CellOnBranch[]): Promise<RepoBoard> {
   try {
@@ -83,7 +105,9 @@ async function repoBoard(repo: string, cells: readonly CellOnBranch[]): Promise<
       listIssues(repo),
       defaultBranchOf(repo),
     ]);
-    return { repo, cards: buildRepoBoard({ repo, defaultBranch, openPrs, mergedPrs, openIssues, cells }) };
+    const cards = buildRepoBoard({ repo, defaultBranch, openPrs, mergedPrs, openIssues, cells });
+    const mainline = mainlineCells(cells, defaultBranch);
+    return mainline.length > 0 ? { repo, cards, mainlineCells: mainline } : { repo, cards };
   } catch (err) {
     return { repo, error: errorText(err) };
   }
@@ -119,16 +143,27 @@ export async function boardDetail(repo: string, configured: readonly string[], i
   return { issue: issueDetail, pr: prDetail, errors };
 }
 
-/** One board per repo. A repo that is not on GitHub, or that `gh` cannot read, carries an error. */
+const configuredBoard = async (repo: string, cellsByRepo: Map<string, CellOnBranch[]>): Promise<RepoBoard> => {
+  const support = repoSupport(repo);
+  if (!isSupported(support)) return { repo, error: support.error };
+  const project = support.forge.kind === "github" ? projectPath(support.forge) : null;
+  if (!project) return { repo, error: "only GitHub repositories are shown on the board" };
+  return repoBoard(project, cellsByRepo.get(repoIdentity(repo)) ?? []);
+};
+
+// One the user never asked for: when it cannot be read it is left out rather than shown as an error.
+const unregisteredBoards = async (repos: readonly string[], cellsByRepo: Map<string, CellOnBranch[]>): Promise<RepoBoard[]> => {
+  const boards = await Promise.all(repos.map((repo) => repoBoard(repo, cellsByRepo.get(repoIdentity(repo)) ?? [])));
+  return boards.flatMap((board) => (board.error === undefined ? [{ ...board, unregistered: true }] : []));
+};
+
+/** One board per configured repo, then one per unconfigured GitHub repo a live cell is in. A configured
+ *  repo that is not on GitHub, or that `gh` cannot read, carries an error. */
 export async function boardAcrossRepos(repos: readonly string[], liveCells: readonly LiveCell[]): Promise<RepoBoard[]> {
-  const cellsByRepo = await placeCells(liveCells);
-  return Promise.all(
-    repos.map(async (repo): Promise<RepoBoard> => {
-      const support = repoSupport(repo);
-      if (!isSupported(support)) return { repo, error: support.error };
-      const project = support.forge.kind === "github" ? projectPath(support.forge) : null;
-      if (!project) return { repo, error: "only GitHub repositories are shown on the board" };
-      return repoBoard(project, cellsByRepo.get(repoIdentity(repo)) ?? []);
-    }),
-  );
+  const { cellsByRepo, githubRepos } = await placeCells(liveCells);
+  const [configured, unregistered] = await Promise.all([
+    Promise.all(repos.map((repo) => configuredBoard(repo, cellsByRepo))),
+    unregisteredBoards(unconfiguredRepos(repos, githubRepos), cellsByRepo),
+  ]);
+  return [...configured, ...unregistered];
 }

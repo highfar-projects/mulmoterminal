@@ -272,6 +272,8 @@ export const zhCN: Messages = {
       noChips: "没有信息条（已全部移除）",
       someChips: "{count} 个信息条",
       setUp: "设置头部按钮…",
+      sendButton: "每个终端的发送按钮",
+      sendButtonHint: "在终端标题栏第二行显示一个按钮，把最后一轮对话发送给同一仓库中的另一个代理终端，按钮上显示对方名称。仅在有对方时出现。",
     },
 
     models: {
@@ -596,7 +598,7 @@ export const zhCN: Messages = {
       skills: { label: "Skills", detail: "列出并搜索 ~/.claude/skills 和各文件夹中的技能" },
       processes: { label: "进程", detail: "各会话中运行的进程，以及可删除的 worktree" },
       worklog: { label: "Worklog", detail: "wiki 中的开发工作日志（#worklog）" },
-      usage: { label: "令牌用量", detail: "轮换中每个令牌剩余的 5 小时窗口和每周窗口" },
+      usage: { label: "用量", detail: "最近几周用在了什么上（按周、项目、代理）以及轮换中每个令牌的剩余" },
     },
   },
   usageView: usageViewZhCN,

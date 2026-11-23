@@ -1,5 +1,8 @@
 // Reading the Library's index (#3328): the list, one conversation, and search. The tables are
 // index-store.ts's; this file only selects from them, and reads every column back through a guard.
+import type { RetrospectiveRow } from "./retrospective.js";
+import type { SpendInputs } from "./spend-split.js";
+import { parseSpendTotals } from "./spend-fold.js";
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { isRecord } from "../../../common/isRecord.js";
 import { readString } from "../../../common/readString.js";
@@ -59,6 +62,73 @@ export function prCreatorsQuery(repository: string, numbers: readonly number[]):
     where c.prs != '[]' and lower(json_extract(j.value, '$.repository')) = lower(?)
       and json_extract(j.value, '$.number') in (select value from json_each(?)) and ${where.sql}`;
   return { sql: `select * from (${linked}) where rank = 1 order by pr_number`, params: [repository, JSON.stringify(numbers), ...where.params] };
+}
+
+/** The conversation that last wrote a memory file (by its path), of those the Library lists — the
+ *  link opens it there, so a `claude -p` run or a sidechain that wrote it is passed over, as for PRs. */
+export function memorySource(db: DatabaseSync, file: string): Record<string, unknown> | null {
+  const query = memorySourceQuery(file);
+  return db.prepare(query.sql).get(...query.params) ?? null;
+}
+
+/** The statement `memorySource` runs, apart so its plan can be checked against the partial index. */
+export function memorySourceQuery(file: string): { sql: string; params: SQLInputValue[] } {
+  const where = filterClause({});
+  const sql = `select c.* from conversations c where c.memory_writes != '[]'
+      and exists (select 1 from json_each(c.memory_writes) j where j.value = ?) and ${where.sql}
+    order by c.ended_at desc nulls last, c.path limit 1`;
+  return { sql, params: [file, ...where.params] };
+}
+
+/** What the retrospective counts for each conversation the Library lists that started at or after
+ *  `since_ms`: its directory, agent, start and how many PRs it recorded. */
+export function retrospectiveRows(db: DatabaseSync, since_ms: number): RetrospectiveRow[] {
+  const where = filterClause({});
+  const sql = `select c.cwd, c.agent, c.started_at, json_array_length(c.prs) as pr_count from conversations c
+    where c.started_at >= ? and ${where.sql}`;
+  return db
+    .prepare(sql)
+    .all(since_ms, ...where.params)
+    .map((row) => ({
+      cwd: typeof row.cwd === "string" ? row.cwd : null,
+      agent: typeof row.agent === "string" ? row.agent : "",
+      startedAt: typeof row.started_at === "number" ? row.started_at : null,
+      prs: typeof row.pr_count === "number" ? row.pr_count : 0,
+    }));
+}
+
+/** What splitting the spending of the slots at or after `since_ms` needs (spend-split.ts): the replies'
+ *  weights in those slots, each such conversation's whole weight per model, and its per-model totals —
+ *  with the conversations that started then and have no reply weighed at all. */
+export function retrospectiveSpendInputs(db: DatabaseSync, since_ms: number): SpendInputs {
+  const where = filterClause({});
+  const shown = `select distinct r.path from replies r where r.at >= ?`;
+  const number = (value: unknown): number => (typeof value === "number" ? value : 0);
+  const slots = db
+    .prepare(
+      `select r.path, r.at, r.model, sum(r.weight) as weight from replies r join conversations c on c.path = r.path
+      where r.at >= ? and ${where.sql} group by r.path, r.at, r.model`,
+    )
+    .all(since_ms, ...where.params)
+    .map((row) => ({ path: readString(row.path), at_ms: number(row.at), model: readString(row.model), weight: number(row.weight) }));
+  const wholeWeights = db
+    .prepare(`select r.path, r.model, sum(r.weight) as weight from replies r where r.path in (${shown}) group by r.path, r.model`)
+    .all(since_ms)
+    .map((row) => ({ path: readString(row.path), model: readString(row.model), weight: number(row.weight) }));
+  const conversations = db
+    .prepare(
+      `select c.path, c.cwd, c.agent, c.started_at, c.spend_models from conversations c where c.spend_models != '{}' and ${where.sql}
+      and (c.path in (${shown}) or (c.started_at >= ? and not exists (select 1 from replies r where r.path = c.path)))`,
+    )
+    .all(...where.params, since_ms, since_ms)
+    .map((row) => ({
+      path: readString(row.path),
+      cwd: typeof row.cwd === "string" ? row.cwd : null,
+      agent: readString(row.agent),
+      startedAt: typeof row.started_at === "number" ? row.started_at : null,
+      totals: parseSpendTotals(row.spend_models),
+    }));
+  return { conversations, slots, wholeWeights };
 }
 
 /** Every directory a conversation ran in — what names a project's memory folder. */

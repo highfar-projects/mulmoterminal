@@ -288,6 +288,9 @@ export const en = {
       noChips: "no chips (all removed)",
       someChips: "{count} chip | {count} chips",
       setUp: "Set up header buttons…",
+      sendButton: "Send button on each terminal",
+      sendButtonHint:
+        "Shows a button on the second row of a terminal's header that sends its last exchange to another agent terminal of the same repo, named on the button. It appears only while there is one.",
     },
 
     models: {
@@ -633,7 +636,7 @@ export const en = {
       skills: { label: "Skills", detail: "Every skill in ~/.claude/skills and in your folders, with search" },
       processes: { label: "Processes", detail: "What each session is running, and worktrees that can go" },
       worklog: { label: "Worklog", detail: "The dev work log in the wiki (#worklog)" },
-      usage: { label: "Token usage", detail: "What each rotation token has left of its 5h and weekly windows" },
+      usage: { label: "Usage", detail: "What the last weeks went on — by week, project and agent — and what each rotation token has left" },
     },
   },
   usageView: usageViewEn,

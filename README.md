@@ -1217,7 +1217,8 @@ it again in the same cell on the same conversation, which is how an MCP / config
 takes effect; it costs a resume and asks nothing first. `"terminal-new-here"` opens the launch panel
 on the cell's directory, and `"pane-files"` / `"pane-prompts"` / … / `"terminal-timeline"` /
 `"terminal-talk"` / `"terminal-park"` / `"terminal-copy-code"` / `"terminal-insert-path"` / `"terminal-reveal"` /
-`"terminal-voice"` / `"terminal-diff"` / `"terminal-note"` do what the cell's menus and buttons do, and `"screen-*"` / `"settings-open"` /
+`"terminal-voice"` / `"terminal-diff"` / `"terminal-note"` / `"terminal-send-turn"` / `"terminal-send-since"` /
+`"terminal-bring-turn"` / `"terminal-bring-since"` do what the cell's menus and buttons do, and `"screen-*"` / `"settings-open"` /
 `"sound-toggle"` / `"confetti"` / `"view-toggle"` / `"order-*"` / `"page-next"` / `"page-prev"` do what the toolbar and the page tabs do; the old name `"restart"` still works). An `open` button targets one of `url` / `reveal` (OS file manager) / `files`
 (in-app explorer) / `view` (a built-in overlay) / `terminal` (a dir → a new cell running `$SHELL`,
 opened next to the current one) / `pr: true` (open the current branch's PR — the button is hidden when
@@ -2151,8 +2152,12 @@ narrow and tall for one record you are discussing — and each position keeps it
   **Resume** (or `Enter`) to open it in a terminal in the directory it ran in. `/` focuses the
   search, the arrow keys move. The **⋯** menu pins a conversation to the top of the list or renames
   it; pins and names are MulmoTerminal's own (`~/.mulmoterminal/library/marks.json`) and the
-  conversation's file is never written. `claude -p` and SDK runs, and runs from temp directories, are left
-  out. The index behind it is built in the background the first time you open it and kept up to
+  conversation's file is never written. **⋯** → **Promote to** turns the conversation into a memory,
+  a `CLAUDE.md` rule, a plan under `plans/`, an issue or a skill: it opens a Claude cell in plan mode in the
+  directory the conversation ran in, running the bundled `mulmoterminal-library` skill, which reads
+  the conversation, shows the change as a diff, and writes nothing until you approve its plan (it backs up every
+  file it changes first, and says how to undo). **Repeats** lists instructions you typed 3 times or more, in 2 conversations or more, in the last 90 days, read from `~/.claude/history.jsonl` (commands, pastes, automated runs and one-prompt sessions left out; short ones alike in a project grouped), with the conversations each was typed in lately; **Make a rule** / **Make a skill** start the same skill on it, in plan mode. **Storage** shows what each entry of `~/.claude` (or `CLAUDE_CONFIG_DIR`) takes on disk, and under `projects/` each project, largest first, with temp-directory ones marked; it is measured in the background and measured again when the last one is over an hour old, and it says what `cleanupPeriodDays` is set to. The conversation list leaves out `claude -p` and SDK runs, and runs from temp
+  directories. The index behind it is built in the background the first time you open it and kept up to
   date from what is appended; it is `~/.mulmoterminal/library/index.db` and can be deleted at any
   time (it is rebuilt). `marks.json` beside it holds your pins and names and is not rebuilt.
   A conversation's PR numbers open the PR; in the GitHub view, a PR a conversation made has a
@@ -2161,12 +2166,51 @@ narrow and tall for one record you are discussing — and each position keeps it
   the whole change or of one turn's (read only; read from Claude Code's own file history).
   **Memory** beside **Conversations** lists Claude Code's auto memory for every project, with how
   full each `MEMORY.md` is against what Claude Code loads (200 lines / 25,000 bytes); a memory
-  reads as Markdown and its `[[name]]` links open the memory they name (read only for now). Design: [`docs/library-design.md`](docs/library-design.md).
+  reads as Markdown and its `[[name]]` links open the memory they name (read only for now).
+  Memory that can be tidied is marked with a dot and counted above the list (**Show** narrows to
+  it): a memory missing from `MEMORY.md`, missing frontmatter, a `[[link]]` to no memory, a file it
+  names that is gone, a memory of the same name in another work copy of the repository (a directory
+  whose `origin` is the same remote; the reader says which copies hold the same text), or an index
+  that is missing, overfull or pointing at a file that is gone. For a copy that differs, the reader
+  offers **Add its text here** (opens the editor with that copy's body added; saving writes this
+  memory only) and **Write this text there** (writes this memory's text over that copy, refused if
+  it changed since it was read, with **Undo**), so the copies can be made one. Under a memory's title,
+  **Written in** names the conversation that last wrote it (from the file writes its transcript
+  recorded) and opens it. Each project heading has a tidy-up button: it opens Claude in plan mode in
+  the project's directory with the `mulmoterminal-library` skill, which proposes merging duplicate
+  memories, removing ones the code shows no longer hold, fixing what the health check found and
+  moving standing rules into a `CLAUDE.md` or a skill, backs up every file it changes, and writes
+  nothing until you approve.
+  **Edit** (`Enter`) changes a memory's whole text in place (`⌘Enter` saves, `Esc` cancels); a save
+  is refused when the file changed on disk since it was opened, and a running session there is warned of.
+  **⋯** → **Move to Trash** moves a memory to the system Trash with its lines in `MEMORY.md`, and
+  **Undo** in the notice puts both back. **⋯** → **Merge into another memory** picks another memory of
+  the same project and opens it in the editor with this one's body added at its end; saving writes it
+  and moves this one to the Trash with its lines. It also points the `[[links]]` to this memory, in
+  the merged text and in the project's other memories (as listed when the merge starts), at the one kept (never one inside code or by
+  a name another memory also has; how many is said before saving, and a link that cannot be rewritten exactly stops the merge). **Undo**
+  puts all of it back. **Tools** picks a directory a conversation ran in and lists the instruction
+  files Claude Code loads there, in the order it loads them: the managed `CLAUDE.md`, yours and your
+  `~/.claude/rules`, every `CLAUDE.md` / `.claude/CLAUDE.md` / `CLAUDE.local.md` from the filesystem root
+  down, the project's `.claude/rules` (a rule with `paths` marked as loading only for matching files),
+  and what their `@path` imports bring in — or `AGENTS.md` where no `CLAUDE.md` counts. Each is read
+  beside the list, with the paths it names (Markdown links, code-span paths) that are not there. Above them, **Settings, laid over each other** reads the user, project, local and
+  managed `settings.json` files in Claude Code's order and shows the permission rules (every file's,
+  added up), environment variables, hooks and other keys in effect, each naming the file that set it.
+  Read only. **More features** → **Usage** adds a retrospective of the last twelve weeks from the
+  same index: money, tokens, conversations and the PRs they made, by week, project, agent and model.
+  Money and tokens count in the week they were spent — Claude Code records cost only as running totals
+  with no time, so each model's cost is split over the conversation's replies by their tokens — and
+  every time Claude Code started counting again is added in; a conversation and its PRs count in the
+  week it started. The token windows appear above it while token rotation is on. Design: [`docs/library-design.md`](docs/library-design.md).
 - **Skills viewer** — **More features** → **Skills** lists every Claude skill on disk in three
   columns — where it lives, its skills, its `SKILL.md`. The places are your `~/.claude/skills`,
   each enabled plugin (skills shown as `plugin:skill`), and the `.claude/skills` of each folder a
   terminal has run in (folders with none are left out). A project skill with the same name as one
   of yours is marked as overriding it. The search (name, description or folder) narrows both lists.
+  **Edit** changes one of your own or a project's `SKILL.md` in place (`⌘Enter` saves, `Esc`
+  cancels), refused if it changed on disk since it was opened; a plugin's skills and the ones
+  MulmoTerminal ships (copied over at every start) are read only.
   Switch to **skills.sh** to search the public directory at [skills.sh](https://skills.sh) for
   skills you do not have yet and read one before installing it: its `SKILL.md`, every file it would
   bring, and a warning listing the files that can run code. Nothing is installed from the viewer —
@@ -2247,7 +2291,7 @@ narrow and tall for one record you are discussing — and each position keeps it
   - **Tool traffic is folded away**, one line saying what ran (`Bash · Read`); click to open it.
     It is most of a turn's bulk and almost none of what you came back to read.
   - A **snapshot**, not a live tail — the terminal beside it is the live view — and the header's
-    reload fetches the newest turns again. Claude, Codex, Cursor and Copilot; an agent whose
+    reload fetches the newest turns again. Claude, Codex, Cursor, Copilot, Grok and Antigravity; an agent whose
     conversation no reader here can read yet says so rather than showing an empty pane.
 - **Notifications** (🔔) — a toolbar bell with an unread badge and a dropdown of active
   notifications; click a row to jump to its session.
@@ -2468,6 +2512,8 @@ name in `MULMOTERMINAL_HOST` / `MULMOTERMINAL_ALLOWED_ORIGINS`, against DNS rebi
 | `GET /api/cursor/sessions?cwd=` | Cursor chats for the project, newest first. Cursor's project directory name is a truncated-and-hashed slug of the path, so this reads each directory's own `.workspace-trusted` to learn which one it stands for and omits any that does not say. |
 | `GET /api/cost?cwd=&session=` | Estimated $ cost — session / today / month. |
 | `GET /api/transcript/timeline?session=&cwd=` | Per-session activity timeline (tools run). |
+| `GET /api/transcript/relay?session=&cwd=&agent=&dest=` | Every exchange of that session since the last relay to directory `dest`: `status` (`ok` / `nothing-new` / `no-turn`), the `text` to paste, and the `mark` to record. |
+| `POST /api/transcript/relay-mark?session=&cwd=&agent=&dest=` | Body `{ mark }`. Records where the relay to `dest` ended, once the text was pasted. |
 | `GET /api/transcript/last-turn?session=&cwd=&agent=` | A session's last completed exchange (`prompt`, `reply`) plus the `text` to paste into another terminal. `agent=codex` reads the codex rollout instead of the Claude transcript. |
 | `GET /api/decisions?cwd=&limit=` | The decisions a human was asked to make in this project, newest first — each question with the options it offered, their descriptions, and the answer. `answerKind` says whether the answer was one of the options, text the user wrote instead (the question was wrong), or never given. Read out of Claude's own transcripts; writes nothing. `scanned` reports how many transcripts were read (the scan is capped) and `unreadable` how many could not be, so a partial answer is visible rather than implied. A `cwd` that is not an existing directory answers an empty response rather than falling back to the default workspace. |
 | `GET /api/decisions/digest?cwd=` | The same decisions as Markdown, for an agent to read (`{ enabled, markdown }`). `enabled: false` means the `decisionDigest` setting is off — a different answer from an empty digest, so a reader can tell "switched off" from "nothing decided here". |

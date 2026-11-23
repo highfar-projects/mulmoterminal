@@ -3,12 +3,16 @@
 // memory file in a memory folder.
 import { describe, it, expect, afterEach } from "vitest";
 import express from "express";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, mkdtempSync, renameSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { routeCall } from "../../helpers/routeCall";
 import { mountLibraryRoutes } from "../../../server/routes/library-routes";
+import { MEMORY_EDIT_MAX_BYTES } from "../../../common/libraryMemory";
+import { memoryVersion } from "../../../server/backends/library/memory-write";
+import { encodeProjectDirName } from "../../../server/session/project-dir";
 import {
+  inBatches,
   isSameFile,
   listMemoryProjects,
   openRegularFile,
@@ -20,9 +24,15 @@ import {
 const dirs: string[] = [];
 afterEach(() => dirs.splice(0).forEach((dir) => rmSync(dir, { recursive: true, force: true })));
 
+const json = (body: unknown) => ({ method: "PUT" as const, headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+
 const INDEX = "- [A](a.md) — one\n- [B](b.md) — two\n";
 
-function setup(directories: string[] = ["/w/app"]) {
+// A made-up directory as this platform spells it absolutely (`D:\w\app` on Windows), and its folder.
+const absolute = (posix: string): string => path.resolve(posix);
+const folderOf = (posix: string): string => encodeProjectDirName(absolute(posix));
+
+function setup(directories: string[] = ["/w/app"], trash: "here" | "none" = "here") {
   const root = mkdtempSync(path.join(tmpdir(), "mt-memory-routes-"));
   dirs.push(root);
   const write = (relative: string, text: string, mtime_s = 1_700_000_000): void => {
@@ -40,18 +50,25 @@ function setup(directories: string[] = ["/w/app"]) {
   mkdirSync(path.join(root, "-w-empty", "memory"), { recursive: true });
   write("-w-app/secret.md", "outside the memory folder");
   const app = express();
-  mountLibraryRoutes(app, { call: () => Promise.resolve(directories), projectsRoot: root });
-  return { call: routeCall(app), root };
+  app.use(express.json({ limit: "25mb" })); // as the server's app does
+  const trashFiles = path.join(root, "Trash");
+  mountLibraryRoutes(app, {
+    call: () => Promise.resolve(directories),
+    projectsRoot: root,
+    trash: () => (trash === "here" ? { kind: "mac", files: trashFiles } : null),
+  });
+  return { call: routeCall(app), root, trashFiles };
 }
 
 describe("/api/library/memory", () => {
   it("lists the folders that hold memory, named by their directory, the newest written first", async () => {
-    const { call } = setup();
+    const { call, root } = setup([absolute("/w/app")]);
+    if (folderOf("/w/app") !== "-w-app") renameSync(path.join(root, "-w-app"), path.join(root, folderOf("/w/app")));
     const projects = (await call("/api/library/memory")).body.projects;
     expect(projects).toEqual([
       {
-        slug: "-w-app",
-        cwd: "/w/app",
+        slug: folderOf("/w/app"),
+        cwd: absolute("/w/app"),
         index: { lines: 2, bytes: Buffer.byteLength(INDEX) },
         files: [
           { file: "b.md", name: null, description: null, type: null, updatedAt: 1_700_000_100_000 },
@@ -86,6 +103,21 @@ describe("/api/library/memory", () => {
       expect.objectContaining({ slug: "-w-app", files: [expect.objectContaining({ file: "b.md" }), expect.objectContaining({ file: "a.md" })] }),
       expect.objectContaining({ slug: "-w-other" }),
     ]);
+  });
+});
+
+describe("naming a folder by its directory", () => {
+  it("uses Claude Code's folder rule, and names no directory when two share the folder", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "mt-memory-naming-"));
+    dirs.push(root);
+    [folderOf("/w/my-app"), folderOf("/w/a-b")].forEach((slug) => {
+      mkdirSync(path.join(root, slug, "memory"), { recursive: true });
+      writeFileSync(path.join(root, slug, "memory", "x.md"), "x");
+    });
+    const projects = await listMemoryProjects(root, ["/w/my_app", "/w/a.b", "/w/a_b"].map(absolute), 0);
+    const cwdOf = (slug: string) => projects.find((project) => project.slug === slug)?.cwd;
+    expect(cwdOf(folderOf("/w/my-app"))).toBe(absolute("/w/my_app"));
+    expect(cwdOf(folderOf("/w/a-b"))).toBeNull();
   });
 });
 
@@ -138,6 +170,22 @@ describe("a frontmatter longer than one read", () => {
     expect(files.find((file) => file.file === "long.md")).toEqual(expect.objectContaining({ name: "found", type: "project" }));
     expect(files.find((file) => file.file === "too-long.md")).toEqual(expect.objectContaining({ name: null }));
     expect(files.find((file) => file.file === "marked.md")).toEqual(expect.objectContaining({ name: "found" })); // behind a byte-order mark
+  });
+});
+
+describe("inBatches", () => {
+  it("never has more than the batch size running, and keeps the order", async () => {
+    let running = 0;
+    let most = 0;
+    const results = await inBatches([...Array(40).keys()], 16, async (item) => {
+      running += 1;
+      most = Math.max(most, running);
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      running -= 1;
+      return item * 2;
+    });
+    expect(most).toBe(16);
+    expect(results).toEqual([...Array(40).keys()].map((item) => item * 2));
   });
 });
 
@@ -202,7 +250,7 @@ describe("finding the folders that hold memory", () => {
 describe("/api/library/memory/:slug/:file", () => {
   it("answers a memory file and the index", async () => {
     const { call } = setup();
-    expect((await call("/api/library/memory/-w-app/b.md")).body).toEqual({ text: "plain, no frontmatter" });
+    expect((await call("/api/library/memory/-w-app/b.md")).body).toEqual({ text: "plain, no frontmatter", version: memoryVersion("plain, no frontmatter") });
     expect((await call("/api/library/memory/-w-app/MEMORY.md")).body.text).toContain("[A](a.md)");
   });
 
@@ -214,5 +262,245 @@ describe("/api/library/memory/:slug/:file", () => {
     expect(await status("/api/library/memory/-w-app/..%2Fsecret.md")).toBe(400);
     expect(await status("/api/library/memory/..%2F-w-app/a.md")).toBe(400);
     expect(await status("/api/library/memory/-w-app/.hidden.md")).toBe(400);
+  });
+});
+
+describe("editing a memory", () => {
+  it("answers the version with the text, and writes only over that version", async () => {
+    const { call, root } = setup();
+    const opened = (await call("/api/library/memory/-w-app/b.md")).body;
+    expect(opened.version).toMatch(/^[0-9a-f]{64}$/);
+    const put = (version: unknown, text: unknown = "edited") => call("/api/library/memory/-w-app/b.md", json({ text, version }));
+    const saved = await put(opened.version);
+    expect(saved.status).toBe(200);
+    expect(readFileSync(path.join(root, "-w-app", "memory", "b.md"), "utf8")).toBe("edited");
+    const stale = await put(opened.version, "over a change");
+    expect(stale.status).toBe(409);
+    expect(stale.body.version).toBe(saved.body.version);
+  });
+
+  it("refuses a malformed edit, an oversized one, and a name that is not a memory file", async () => {
+    const { call, root } = setup();
+    const version = "0".repeat(64);
+    const status = async (url: string, body: unknown) => (await call(url, json(body))).status;
+    expect(await status("/api/library/memory/-w-app/b.md", { text: "x" })).toBe(400);
+    expect(await status("/api/library/memory/-w-app/b.md", { text: 1, version })).toBe(400);
+    expect(await status("/api/library/memory/-w-app/b.md", { text: "x".repeat(MEMORY_EDIT_MAX_BYTES + 1), version })).toBe(400);
+    expect(await status("/api/library/memory/-w-app/notes.txt", { text: "x", version })).toBe(400);
+    expect(await status("/api/library/memory/-w-app/b.md", { text: "nul \u0000 inside", version })).toBe(400);
+    expect(await status("/api/library/memory/-w-app/b.md", { text: "replacement \uFFFD inside", version })).toBe(400);
+    expect(await status("/api/library/memory/-w-app/b.md", { text: "lone \ud800 surrogate", version })).toBe(400);
+    expect(await status("/api/library/memory/-w-app/MEMORY.md", { text: "x", version })).toBe(400); // the index is not edited by hand
+    // …nor under another spelling, where the disk makes that the same file.
+    const lower = (await call("/api/library/memory/-w-app/memory.md", json({ text: "x", version }))).status;
+    expect(lower).toBe(existsSync(path.join(root, "-w-app", "memory", "memory.md")) ? 400 : 409);
+    expect(await status("/api/library/memory/..%2F-w-app/b.md", { text: "x", version })).toBe(400);
+  });
+
+  it("gives no version to a file whose bytes are not text it could write back unchanged", async () => {
+    const { call, root } = setup();
+    writeFileSync(path.join(root, "-w-app", "memory", "latin1.md"), Buffer.from([0x63, 0x61, 0x66, 0xe9])); // "café" in Latin-1
+    const read = (await call("/api/library/memory/-w-app/latin1.md")).body;
+    expect(read.text).toContain("\uFFFD");
+    expect(read.version).toBeUndefined();
+    // …and a request naming the version of the replaced text is refused too: the rule is the write's.
+    const forced = await call("/api/library/memory/-w-app/latin1.md", json({ text: "café", version: memoryVersion(String(read.text)) }));
+    expect(forced.status).toBe(400);
+    expect(readFileSync(path.join(root, "-w-app", "memory", "latin1.md"))).toEqual(Buffer.from([0x63, 0x61, 0x66, 0xe9]));
+  });
+});
+
+describe("deleting a memory to the Trash and undoing it", () => {
+  const post = (body: unknown) => ({ ...json(body), method: "POST" as const });
+  const versionOf = (text: string) => ({ version: memoryVersion(text) });
+  const A_TEXT = "---\nname: alpha\ndescription: first\nmetadata:\n  type: feedback\n---\nBody [[beta]].";
+
+  it("moves the memory and its index line, and puts both back", async () => {
+    const { call, root, trashFiles } = setup();
+    const memory = path.join(root, "-w-app", "memory");
+    const trashed = await call("/api/library/memory/-w-app/a.md/trash", post(versionOf(A_TEXT)));
+    expect(trashed.status).toBe(200);
+    expect(existsSync(path.join(memory, "a.md"))).toBe(false);
+    expect(existsSync(path.join(trashFiles, "a.md"))).toBe(true);
+    expect(readFileSync(path.join(memory, "MEMORY.md"), "utf8")).toBe("- [B](b.md) — two\n");
+    const undone = await call("/api/library/memory-undo", post({ undo: trashed.body.undo }));
+    expect(undone.status).toBe(200);
+    expect(readFileSync(path.join(memory, "a.md"), "utf8")).toBe(A_TEXT);
+    expect(readFileSync(path.join(memory, "MEMORY.md"), "utf8")).toBe(INDEX);
+    expect((await call("/api/library/memory-undo", post({ undo: trashed.body.undo }))).status).toBe(410);
+  });
+  it("answers 409 with the current version when the memory changed since it was opened", async () => {
+    const { call } = setup();
+    const answer = await call("/api/library/memory/-w-app/b.md/trash", post(versionOf("older")));
+    expect(answer.status).toBe(409);
+    expect(answer.body.version).toBe(memoryVersion("plain, no frontmatter"));
+  });
+  it("deletes a memory only by its name as spelt on disk, which is what the index links to", async () => {
+    const { call, root } = setup();
+    const memory = path.join(root, "-w-app", "memory");
+    const answer = await call("/api/library/memory/-w-app/A.md/trash", post(versionOf(A_TEXT)));
+    expect(answer.status).toBe(409);
+    expect(answer.body.version).toBeNull();
+    expect(readFileSync(path.join(memory, "a.md"), "utf8")).toBe(A_TEXT);
+    expect(readFileSync(path.join(memory, "MEMORY.md"), "utf8")).toBe(INDEX);
+  });
+  it("answers 409 on undo when a file of that name was made since", async () => {
+    const { call, root } = setup();
+    const trashed = await call("/api/library/memory/-w-app/b.md/trash", post(versionOf("plain, no frontmatter")));
+    writeFileSync(path.join(root, "-w-app", "memory", "b.md"), "new");
+    expect((await call("/api/library/memory-undo", post({ undo: trashed.body.undo }))).status).toBe(409);
+  });
+  it("never deletes the index, outside the memory folder, or without a version", async () => {
+    const { call, root } = setup();
+    const index = readFileSync(path.join(root, "-w-app", "memory", "MEMORY.md"), "utf8");
+    for (const url of ["/api/library/memory/-w-app/MEMORY.md/trash", "/api/library/memory/-w-app/notes.txt/trash", "/api/library/memory/..%2Fx/a.md/trash"]) {
+      expect((await call(url, post(versionOf(index)))).status).toBe(400);
+    }
+    // On a case-insensitive disk `memory.md` IS the index; elsewhere it is a memory that is not there.
+    const lower = (await call("/api/library/memory/-w-app/memory.md/trash", post(versionOf(index)))).status;
+    expect(lower).toBe(existsSync(path.join(root, "-w-app", "memory", "memory.md")) ? 400 : 409);
+    expect((await call("/api/library/memory/-w-app/a.md/trash", post({ version: "nope" }))).status).toBe(400);
+    expect(readFileSync(path.join(root, "-w-app", "memory", "MEMORY.md"), "utf8")).toBe(index);
+  });
+  it("answers 501 when this system has no Trash, leaving the memory", async () => {
+    const { call, root } = setup(["/w/app"], "none");
+    expect((await call("/api/library/memory/-w-app/b.md/trash", post(versionOf("plain, no frontmatter")))).status).toBe(501);
+    expect(existsSync(path.join(root, "-w-app", "memory", "b.md"))).toBe(true);
+  });
+  it("answers 400 for an undo that is not an id", async () => {
+    const { call } = setup();
+    expect((await call("/api/library/memory-undo", post({ undo: "../x" }))).status).toBe(400);
+    expect((await call("/api/library/memory-undo", post({}))).status).toBe(400);
+  });
+});
+
+describe("POST /api/library/memory/:slug/:file/merge", () => {
+  const post = (body: unknown) => ({ method: "POST" as const, headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const A_TEXT = "---\nname: alpha\ndescription: first\nmetadata:\n  type: feedback\n---\nBody [[beta]].";
+  const B_TEXT = "plain, no frontmatter";
+  const merging = (overrides: Record<string, unknown> = {}) =>
+    post({ text: "merged", version: memoryVersion(B_TEXT), from: "a.md", fromVersion: memoryVersion(A_TEXT), ...overrides });
+
+  it("writes the merged memory, moves the other to the Trash with its index line, and one undo puts both back", async () => {
+    const { call, root } = setup();
+    const memory = path.join(root, "-w-app", "memory");
+    const merged = await call("/api/library/memory/-w-app/b.md/merge", merging());
+    expect(merged.status).toBe(200);
+    expect(merged.body.version).toBe(memoryVersion("merged"));
+    expect(readFileSync(path.join(memory, "b.md"), "utf8")).toBe("merged");
+    expect(existsSync(path.join(memory, "a.md"))).toBe(false);
+    expect(readFileSync(path.join(memory, "MEMORY.md"), "utf8")).toBe("- [B](b.md) — two\n");
+    expect((await call("/api/library/memory-undo", post({ undo: merged.body.undo }))).status).toBe(200);
+    expect(readFileSync(path.join(memory, "b.md"), "utf8")).toBe(B_TEXT);
+    expect(readFileSync(path.join(memory, "a.md"), "utf8")).toBe(A_TEXT);
+    expect(readFileSync(path.join(memory, "MEMORY.md"), "utf8")).toBe(INDEX);
+  });
+  it("answers 409 naming the memory that changed, and changes nothing", async () => {
+    const { call, root } = setup();
+    const into = await call("/api/library/memory/-w-app/b.md/merge", merging({ version: memoryVersion("older") }));
+    expect([into.status, into.body.file]).toEqual([409, "into"]);
+    const from = await call("/api/library/memory/-w-app/b.md/merge", merging({ fromVersion: memoryVersion("older") }));
+    expect([from.status, from.body.file]).toEqual([409, "from"]);
+    expect(readFileSync(path.join(root, "-w-app", "memory", "b.md"), "utf8")).toBe(B_TEXT);
+    expect(existsSync(path.join(root, "-w-app", "memory", "a.md"))).toBe(true);
+  });
+  it("refuses one memory merged into itself, the index, another project's memory, or a name not spelt as on disk", async () => {
+    const { call } = setup();
+    for (const [url, from] of [
+      ["/api/library/memory/-w-app/b.md/merge", "b.md"],
+      ["/api/library/memory/-w-app/b.md/merge", "MEMORY.md"],
+      ["/api/library/memory/-w-app/MEMORY.md/merge", "a.md"],
+      ["/api/library/memory/-w-app/b.md/merge", "../../-w-other/memory/top.md"],
+      ["/api/library/memory/-w-app/b.md/merge", "A.md"],
+      ["/api/library/memory/-w-app/B.md/merge", "a.md"],
+    ] as const) {
+      expect((await call(url, merging({ from }))).status, `${url} from ${from}`).toBe(400);
+    }
+    expect((await call("/api/library/memory/-w-app/b.md/merge", merging({ fromVersion: "nope" }))).status).toBe(400);
+  });
+  it("points the links to the merged memory at the one kept, says how many first, and answers the text written", async () => {
+    const { call, root } = setup();
+    const memory = path.join(root, "-w-app", "memory");
+    writeFileSync(path.join(memory, "c.md"), "See [[alpha]], not `[[alpha]]`.\n");
+    expect((await call("/api/library/memory/-w-app/b.md/links?from=a.md")).body).toEqual({ count: 1, unplaceable: [] });
+    const merged = await call("/api/library/memory/-w-app/b.md/merge", merging({ text: "merged, as [[a]] said" }));
+    expect([merged.status, merged.body.links, merged.body.text]).toEqual([200, 2, "merged, as [[b]] said"]);
+    expect(merged.body.version).toBe(memoryVersion("merged, as [[b]] said"));
+    expect(readFileSync(path.join(memory, "c.md"), "utf8")).toBe("See [[b]], not `[[alpha]]`.\n");
+    expect((await call("/api/library/memory-undo", post({ undo: merged.body.undo }))).status).toBe(200);
+    expect(readFileSync(path.join(memory, "c.md"), "utf8")).toBe("See [[alpha]], not `[[alpha]]`.\n");
+  });
+  it("answers 422 naming the memories whose links it could not rewrite exactly, changing nothing", async () => {
+    const { call, root } = setup();
+    const memory = path.join(root, "-w-app", "memory");
+    writeFileSync(path.join(memory, "c.md"), "[[alpha]]\r\n`[[alpha]]`\n");
+    expect((await call("/api/library/memory/-w-app/b.md/links?from=a.md")).body).toEqual({ count: 0, unplaceable: ["c.md"] });
+    const answer = await call("/api/library/memory/-w-app/b.md/merge", merging());
+    expect([answer.status, answer.body.files]).toEqual([422, ["c.md"]]);
+    expect(readFileSync(path.join(memory, "b.md"), "utf8")).toBe(B_TEXT);
+    expect(existsSync(path.join(memory, "a.md"))).toBe(true);
+  });
+  it("counts links only between two memories of the project, named as spelt on disk", async () => {
+    const { call } = setup();
+    for (const query of ["", "?from=b.md", "?from=MEMORY.md", "?from=A.md", "?from=../../-w-other/memory/top.md"]) {
+      expect((await call(`/api/library/memory/-w-app/b.md/links${query}`)).status, query).toBe(400);
+    }
+  });
+  it("answers 501 when this system has no Trash, changing nothing", async () => {
+    const { call, root } = setup(["/w/app"], "none");
+    expect((await call("/api/library/memory/-w-app/b.md/merge", merging())).status).toBe(501);
+    expect(readFileSync(path.join(root, "-w-app", "memory", "b.md"), "utf8")).toBe(B_TEXT);
+  });
+});
+
+describe("GET /api/library/memory/:slug/:file/source", () => {
+  const asked: unknown[][] = [];
+  const conversation = { id: "s1", title: "wrote it" };
+  const app = express();
+  mountLibraryRoutes(app, {
+    call: (method, args) => (
+      asked.push([method, ...args]),
+      Promise.resolve(args[0] === path.join("/nowhere", "-w-app", "memory", "a.md") ? conversation : null)
+    ),
+    projectsRoot: "/nowhere",
+  });
+  const call = routeCall(app);
+
+  it("asks the index for the conversation that wrote the memory, by its path under the projects root", async () => {
+    asked.length = 0;
+    expect((await call("/api/library/memory/-w-app/a.md/source")).body).toEqual({ conversation });
+    expect((await call("/api/library/memory/-w-app/b.md/source")).body).toEqual({ conversation: null });
+    expect(asked).toEqual([
+      ["memorySource", path.join("/nowhere", "-w-app", "memory", "a.md")],
+      ["memorySource", path.join("/nowhere", "-w-app", "memory", "b.md")],
+    ]);
+  });
+  it("refuses what is not a memory's folder and name, asking nothing", async () => {
+    asked.length = 0;
+    for (const url of [
+      "/api/library/memory/-w-app/notes.txt/source",
+      "/api/library/memory/bad%20slug/a.md/source",
+      "/api/library/memory/-w-app/..%2Fa.md/source",
+      "/api/library/memory/-w-app/MEMORY.md/source",
+    ]) {
+      expect((await call(url)).status, url).toBe(400);
+    }
+    expect(asked).toEqual([]);
+  });
+});
+describe("GET /api/library/memory/:slug/:file/source, on the disk", () => {
+  it("refuses a name that is the index on this disk, and asks nothing", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "mt-memory-source-"));
+    dirs.push(root);
+    mkdirSync(path.join(root, "-w-app", "memory"), { recursive: true });
+    writeFileSync(path.join(root, "-w-app", "memory", "MEMORY.md"), "- [A](a.md)\n");
+    const asked: unknown[] = [];
+    const app = express();
+    mountLibraryRoutes(app, { call: (method) => (asked.push(method), Promise.resolve(null)), projectsRoot: root });
+    const lower = (await routeCall(app)("/api/library/memory/-w-app/memory.md/source")).status;
+    // On a case-insensitive disk `memory.md` IS the index; elsewhere it is a memory, asked for.
+    const caseInsensitive = existsSync(path.join(root, "-w-app", "memory", "memory.md"));
+    expect(lower).toBe(caseInsensitive ? 400 : 200);
+    expect(asked).toEqual(caseInsensitive ? [] : ["memorySource"]);
   });
 });

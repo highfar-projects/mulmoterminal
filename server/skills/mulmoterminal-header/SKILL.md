@@ -186,6 +186,7 @@ button the header used to have:
 | `"mark-unread"` / `"terminal-park"` | Mark unread-read / set aside-wake |
 | `"terminal-timeline"` / `"terminal-talk"` | Activity timeline (Claude only) / talk to another terminal |
 | `"terminal-copy-code"` / `"terminal-insert-path"` / `"terminal-reveal"` / `"terminal-voice"` / `"terminal-diff"` / `"terminal-note"` | Copy the last code block / insert a file path / reveal the directory / mic on-off / changes panel / note |
+| `"terminal-send-turn"` / `"terminal-send-since"` / `"terminal-bring-turn"` / `"terminal-bring-since"` | Send this terminal's last exchange / everything since the last relay to its partner and go there, or bring the partner's here (partner: another agent terminal in the same directory or another worktree of the same repo) |
 | `"pane-files"` | The files PANE beside this cell (not the full-screen view `open.files` gives) |
 | `"pane-prompts"` / `"pane-transcript"` / `"pane-tools"` / `"pane-canvas"` / `"pane-collections"` | The History / Tools menu panes |
 | `"screen-*"` (e.g. `"screen-wiki"`), `"settings-open"`, `"sound-toggle"`, `"confetti"`, `"view-toggle"`, `"order-auto"` / `"-manual"` / `"-priority"`, `"page-next"` / `"page-prev"`, `"terminal-reopen"` | The toolbar's operations — act on the app, not this cell; a screen not set up (prs / rooms / worklog) shows a hint instead |
@@ -216,6 +217,19 @@ Three things to say when you offer it:
 
 It is also an item in the cell's Tools menu, and the `terminal-restart` shortcut (the
 `mulmoterminal-keys` skill, no default binding) does the same; this button is for one click.
+
+## `cellSendButton` — the send button the cell shows by itself
+
+Not a header button and not in `buttons`: every terminal shows a **send** button on header row 2,
+named after its partner (`codex #4`), while another agent terminal of the same repo is open. It runs
+`terminal-send-turn`. A user who does not want it sets this in `~/.mulmoterminal/config.json`
+(global only), or unticks it in Settings → Header buttons and chips:
+
+```json
+{ "cellSendButton": false }
+```
+
+On unless set to `false`. Listing `buttons` does not hide it, so "remove the send button" is this key.
 
 ## `commands` — entries for the command palette only
 

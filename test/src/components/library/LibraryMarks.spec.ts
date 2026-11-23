@@ -35,13 +35,20 @@ let pageFinished: number | null = 1;
 /** First pages that fail before one succeeds. */
 let pageFailures = 0;
 let firstHasMore = false;
+const memorySourceAnswer: unknown = null;
 vi.mock("../../../../src/composables/libraryApi", () => ({
+  loadLibraryMemorySource: () => Promise.resolve(memorySourceAnswer),
   LIBRARY_PAGE: 50,
   // The reader's changed-files strip, which these specs do not look at.
   loadLibraryFiles: () => Promise.resolve([]),
   loadLibraryFileText: () => Promise.resolve(null),
   loadLibraryMemory: () => Promise.resolve(memoryProjects),
-  loadLibraryMemoryFile: (slug: string, file: string) => Promise.resolve(memoryTexts[`${slug}/${file}`] ?? null),
+  loadLibraryMemoryHealth: () => Promise.resolve([]),
+  loadLibraryMemoryFile: (slug: string, file: string) => {
+    const read = memoryTexts[`${slug}/${file}`];
+    return Promise.resolve(read === undefined ? null : { ...read, version: "v1" });
+  },
+  saveLibraryMemoryFile: () => Promise.resolve({ kind: "saved", version: "v2" }),
   loadLibraryPage: (offset: number) => {
     if (offset === 0 && pageFailures > 0) {
       pageFailures--;
@@ -152,6 +159,7 @@ beforeEach(() => {
   hits = [];
   opened.length = 0;
   openIds.length = 0;
+
   resumableList = { sessions: [], cwd: null };
   loadGate = Promise.resolve();
   statusGate = Promise.resolve();
@@ -369,8 +377,9 @@ describe("LibraryOverlay pins and names", () => {
     expect(document.activeElement).toBe(items[0]?.element);
     await wrapper.find("[role=menu]").trigger("keydown", { key: "ArrowDown" });
     expect(document.activeElement).toBe(items[1]?.element);
-    await wrapper.find("[role=menu]").trigger("keydown", { key: "ArrowDown" });
-    expect(document.activeElement).toBe(items[0]?.element); // wraps
+    await wrapper.find("[role=menu]").trigger("keydown", { key: "ArrowUp" });
+    await wrapper.find("[role=menu]").trigger("keydown", { key: "ArrowUp" });
+    expect(document.activeElement).toBe(items.at(-1)?.element); // wraps
     expect(wrapper.find("[data-testid=library-reader] h2").text()).toContain("Burn subtitles"); // the list did not move
     await wrapper.find("[role=menu]").trigger("keydown", { key: "Tab" });
     expect(wrapper.find("[role=menu]").exists()).toBe(false);

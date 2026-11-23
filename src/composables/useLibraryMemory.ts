@@ -1,14 +1,34 @@
 // The Library's memory list (#3331), read each time the Library opens: memory changes while the
 // agent works, and a list kept from the last open would show files that have moved on.
 import { ref, watch, type Ref } from "vue";
-import type { LibraryMemoryProject } from "../../common/libraryMemory";
-import { loadLibraryMemory } from "./libraryApi";
+import type { LibraryMemoryHealth, LibraryMemoryProject } from "../../common/libraryMemory";
+import { loadLibraryMemory, loadLibraryMemoryHealth } from "./libraryApi";
 
 export function useLibraryMemory(isOpen: Ref<boolean>) {
   const projects = ref<LibraryMemoryProject[]>([]);
   const loaded = ref(false);
   const failed = ref(false);
+  /** What can be tidied, by project. Read beside the list and not waited for: the list shows first. */
+  const health = ref(new Map<string, LibraryMemoryHealth>());
+  /** The health check could not be read: not the same as nothing to tidy. */
+  const healthFailed = ref(false);
   let reads = 0;
+
+  /** The list and its health, read again; the last answer to a newer read wins. */
+  async function read(mine: number): Promise<void> {
+    void (async () => {
+      const judged = await loadLibraryMemoryHealth();
+      if (mine !== reads) return;
+      healthFailed.value = judged === null;
+      health.value = new Map((judged ?? []).map((project) => [project.slug, project]));
+    })();
+    const found = await loadLibraryMemory();
+    if (mine !== reads) return;
+    failed.value = found === null;
+    projects.value = found ?? [];
+    loaded.value = true;
+  }
+
   watch(
     isOpen,
     async (open) => {
@@ -18,13 +38,15 @@ export function useLibraryMemory(isOpen: Ref<boolean>) {
       loaded.value = false;
       failed.value = false;
       projects.value = [];
-      const found = await loadLibraryMemory();
-      if (mine !== reads) return;
-      failed.value = found === null;
-      projects.value = found ?? [];
-      loaded.value = true;
+      health.value = new Map();
+      healthFailed.value = false;
+      await read(mine);
     },
     { immediate: true },
   );
-  return { projects, loaded, failed };
+
+  /** After a change made here (an edit): read again, keeping what is shown until the answer comes. */
+  const refresh = (): Promise<void> => read(++reads);
+
+  return { projects, loaded, failed, health, healthFailed, refresh };
 }

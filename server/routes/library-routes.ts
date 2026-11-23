@@ -11,7 +11,13 @@ import { isRepositoryName, LIBRARY_NAME_MAX, PR_CREATORS_MAX, type LibraryMarkCh
 import { requestBody } from "./requestBody.js";
 import { claudeFileHistoryRoot, mountFileRoutes } from "./library-file-routes.js";
 import { mountMemoryRoutes } from "./library-memory-routes.js";
+import { mountToolsRoutes, type ToolsRouteDeps } from "./library-tools-routes.js";
+import { mountLibraryPromoteRoute, type LibraryPromoteDeps } from "./library-promote-routes.js";
+import { mountStorageRoutes, type LibraryStorageDeps } from "./library-storage-routes.js";
+import { mountRepeatRoutes } from "./library-repeat-routes.js";
+import { mountMemoryTidyRoute } from "./library-memory-tidy-routes.js";
 import { claudeProjectsRoot } from "../session/project-dir.js";
+import type { TrashLayout } from "../files/tree-ops.js";
 
 /** Path-safe and short: what a transcript's file name can be. Whether it names a conversation is the
  *  index's to say (a 404), since the index takes any `.jsonl` name, subagents' included. */
@@ -29,6 +35,14 @@ export interface LibraryRouteDeps {
   fileHistoryRoot?: string;
   /** Override Claude Code's projects directory (where the memory folders are), for tests. */
   projectsRoot?: string;
+  /** Override where a deleted memory goes; the machine's own Trash otherwise. */
+  trash?: () => TrashLayout;
+  /** Override Claude Code's config folder and the home, for the tools kind's tests. */
+  tools?: ToolsRouteDeps;
+  /** Starting a session to promote a conversation; the route is left unmounted without it. */
+  promote?: LibraryPromoteDeps;
+  /** Override Claude Code's home and the measurement, for tests. */
+  storage?: LibraryStorageDeps;
 }
 
 const flag = (value: unknown): boolean => value === "1" || value === "true";
@@ -63,6 +77,11 @@ export async function answer(res: Response, call: LibraryCaller, method: Library
 export function mountLibraryRoutes(app: Express, deps: LibraryRouteDeps = {}): void {
   const call = deps.call ?? sharedCaller;
   const pageLimit = (value: unknown): number => queryCount(value, LIBRARY_PAGE_DEFAULT, LIBRARY_PAGE_MAX);
+  // The retrospective in /usage (#3335): the last weeks by week, project and agent, from the index.
+  app.get("/api/library/retrospective", async (_req, res) => {
+    const totals = await answer(res, call, "retrospective", [Date.now()]);
+    if (totals !== undefined) res.json(totals);
+  });
   app.get("/api/library/status", async (_req, res) => {
     const status = await answer(res, call, "status", []);
     if (status !== undefined) res.json(status);
@@ -80,7 +99,12 @@ export function mountLibraryRoutes(app: Express, deps: LibraryRouteDeps = {}): v
   });
   mountMarkRoutes(app, call, deps.marksFile);
   mountFileRoutes(app, call, deps.fileHistoryRoot ?? claudeFileHistoryRoot());
-  mountMemoryRoutes(app, call, deps.projectsRoot ?? claudeProjectsRoot());
+  mountMemoryRoutes(app, call, deps.projectsRoot ?? claudeProjectsRoot(), deps.trash);
+  mountToolsRoutes(app, call, deps.tools);
+  if (deps.promote !== undefined) mountLibraryPromoteRoute(app, call, deps.promote);
+  if (deps.promote !== undefined) mountMemoryTidyRoute(app, call, deps.projectsRoot ?? claudeProjectsRoot(), deps.promote);
+  mountStorageRoutes(app, call, deps.storage);
+  mountRepeatRoutes(app, call, deps.promote);
   app.get("/api/library/search", async (req, res) => {
     const query = typeof req.query.q === "string" ? req.query.q.trim() : "";
     if (query === "" || query.length > MAX_QUERY_CHARS) {

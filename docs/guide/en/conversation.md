@@ -17,19 +17,57 @@ Two agents in the grid, both looking at the same problem, and the only thing mov
 you — copying a paragraph out of one and pasting it into the other. This page is how to stop doing
 that by hand.
 
-Three things, from smallest to largest:
+Six things, from smallest to largest:
 
 | | What it does |
 | --- | --- |
 | **Bring that turn here** | Copies another cell's last answer into this one's input box. You still press Enter. |
+| **Bring everything since last time** | The list icon beside a terminal. Copies every exchange that terminal's conversation has had since the last time this directory brought it over — prompts and the agent's text, without tool output. The first time, it brings what fits. You still press Enter. |
+| **Send this turn there** | The send icon beside a terminal. The other way round: this cell's last exchange goes into THAT one's input box, and that cell comes forward so you can read it, add a line, and press Enter there. |
+| **Send everything since last time** | The inbox icon beside a terminal. This cell's exchanges since the last time it was relayed to that directory. You still press Enter. |
 | **Exchange** | Sends this cell's turn there, waits, brings the answer back. One round trip, automatic. |
 | **Round table** | Passes the turn around a ring of up to five cells until the group says it is done. |
 
-All three live in one place: **Talk to another terminal…** in a cell's **Tools** menu (the wrench in its header). The row appears only while another terminal is open.
+All of them live in one place: **Talk to another terminal…** in a cell's **Tools** menu (the wrench in its header). The row appears only while another terminal is open.
 
 > **An agent can never start any of this.** It has no tool for it, cannot see the other cells, and
 > cannot join anything. A human ticks the boxes and presses the button, and the browser types the
 > turns in. That is the whole admission control, and it is why the feature needs no MCP server.
+
+## A button for the hand-off you do all day {#send}
+
+The four copies above are also **cell actions**, so a header button or a key can run them without
+opening the menu:
+
+| action | what it does |
+| --- | --- |
+| `terminal-send-turn` | this terminal's last exchange, into its partner |
+| `terminal-send-since` | everything since the last relay to the partner's directory, into the partner |
+| `terminal-bring-turn` | the partner's last exchange, into this terminal |
+| `terminal-bring-since` | everything since the partner's last relay here, into this terminal |
+
+Without any of that, a terminal already offers the first one: while a partner is open it shows a
+button named after it (**codex #4**) on the second row of its header — see
+[`cellSendButton`](config.html#cell-send-button).
+
+The **partner** is another agent terminal in the same repo: the same directory, or anywhere inside
+one of its worktrees, this checkout's own subdirectories included (outside git, only the same
+directory). With one, the button acts on it. With several, it opens **Talk to another terminal…** so you
+pick. With none, it says so on the cell. After a send, the partner comes forward and takes the
+keyboard; nothing is ever submitted for you.
+
+```json
+{ "buttons": [
+  { "id": "send", "icon": "send", "label": "Send this turn to my partner", "run": "action", "action": "terminal-send-turn" }
+] }
+```
+
+Two things the text does for the reader. The origin line names the branch as well as the directory,
+because a partner in another worktree does not have your files. And a prompt that was itself a
+hand-off is not sent back: only what you typed after the pasted block goes. That covers the pasted
+prompt only — if the agent quotes its partner in its reply, the quote travels with the reply.
+
+---
 
 ## Which release has what {#releases}
 
@@ -44,6 +82,8 @@ a button.
 | The Rooms view — read it, post into it yourself, delete it | no | yes |
 | `mulmoterminal room` on the command line | no | yes |
 | A seat that uses tools before answering contributes its real answer | **no — see the note under [Try it](#try-it)** | yes |
+
+**Bring everything since last time** is in neither: it arrives in the release after 13.2.0.
 
 Everything else on this page applies to both.
 
