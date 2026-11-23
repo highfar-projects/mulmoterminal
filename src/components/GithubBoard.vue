@@ -4,7 +4,7 @@
 // (#3182); the column rules are the server's (server/git/board.ts).
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { BOARD_COLUMNS, type BoardCard, type BoardColumn, type RepoBoard } from "../../common/githubBoard";
+import { type BoardCard, type BoardColumn, type RepoBoard } from "../../common/githubBoard";
 import { isRecord } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
@@ -12,19 +12,28 @@ import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTim
 import { useAppConfig } from "../composables/useAppConfig";
 import GithubBoardCard from "./GithubBoardCard.vue";
 import GithubBoardDetail from "./GithubBoardDetail.vue";
+import GithubLoading from "./GithubLoading.vue";
+import GithubBoardCells from "./GithubBoardCells.vue";
+import { mainlineGroups } from "./boardMainline";
 import IssueStartAgentPicker from "./IssueStartAgentPicker.vue";
 import { useIssueStart } from "../composables/useIssueStart";
 import { boardSelection, type BoardSelection } from "../composables/useGithubBoardView";
 import { useGithubBoardLive } from "../composables/useGithubBoardLive";
+import { useBoardOpenWorkOnly } from "../composables/useBoardOpenWorkOnly";
+import { openWorkOnly, registeredOnly, visibleColumns } from "./boardOpenWork";
+import GithubUnregisteredTag from "./GithubUnregisteredTag.vue";
 
 const emit = defineEmits<{ (e: "close" | "list"): void }>();
 
 const { t } = useI18n();
 const { home } = useAppConfig();
 const { loadRepoDirs, startError } = useIssueStart();
+const { boardOpenWorkOnly, setBoardOpenWorkOnly } = useBoardOpenWorkOnly();
 
 const repos = ref<RepoBoard[]>([]);
 const loading = ref(false);
+// Until the first read answers there is nothing to show yet, which is not the same as nothing open.
+const loaded = ref(false);
 const failed = ref(false);
 let requestId = 0;
 
@@ -32,6 +41,7 @@ const isRepoBoard = (row: unknown): row is RepoBoard => isRecord(row) && typeof 
 
 async function load(): Promise<void> {
   const id = ++requestId;
+  const startedAt = readStarted();
   loading.value = true;
   try {
     const res = await fetchWithTimeout("/api/github/board", {}, SLOW_COMMAND_TIMEOUT_MS);
@@ -41,16 +51,28 @@ async function load(): Promise<void> {
     failed.value = rows === null;
     // A failed read keeps the cards on screen: with the board reading itself every minute, one
     // dropped request would otherwise blank it until the next.
-    if (rows) repos.value = rows.filter(isRepoBoard);
+    if (rows) {
+      repos.value = rows.filter(isRepoBoard);
+      readApplied(startedAt);
+    }
   } catch {
     if (id === requestId) failed.value = true;
   } finally {
-    if (id === requestId) loading.value = false;
+    if (id === requestId) {
+      loading.value = false;
+      loaded.value = true;
+    }
   }
 }
 
 // The cards with their cells' state as it is now, which is what every view below reads.
-const liveRepos = useGithubBoardLive(repos, () => void load());
+const { liveRepos, readStarted, readApplied } = useGithubBoardLive(repos, () => void load());
+const shownRepos = computed(() => (boardOpenWorkOnly.value ? openWorkOnly(liveRepos.value) : registeredOnly(liveRepos.value)));
+const onOpenWorkOnlyChange = (event: Event): void => {
+  if (event.target instanceof HTMLInputElement) setBoardOpenWorkOnly(event.target.checked);
+};
+const noRepos = computed(() => registeredOnly(repos.value).length === 0 && shownRepos.value.length === 0);
+const nothingOpen = computed(() => boardOpenWorkOnly.value && !noRepos.value && shownRepos.value.length === 0);
 
 const cardsIn = (repo: RepoBoard, column: BoardColumn): BoardCard[] => (repo.cards ?? []).filter((card) => card.column === column);
 
@@ -61,7 +83,7 @@ const select = (repo: RepoBoard, card: BoardCard): void => {
 };
 
 const selectedCard = (selection: BoardSelection | null): BoardCard | null =>
-  liveRepos.value.find((repo) => repo.repo === selection?.repo)?.cards?.find((candidate) => candidate.key === selection?.key) ?? null;
+  shownRepos.value.find((repo) => repo.repo === selection?.repo)?.cards?.find((candidate) => candidate.key === selection?.key) ?? null;
 
 // Looked up in the latest load, so the panel follows a card's cells across a refresh.
 const selected = computed(() => {
@@ -70,7 +92,7 @@ const selected = computed(() => {
 });
 
 // A card that has left the board takes its panel with it, so Escape is not spent on a hidden one.
-watch(repos, () => {
+watch(shownRepos, () => {
   if (boardSelection.value && !selectedCard(boardSelection.value)) boardSelection.value = null;
 });
 
@@ -89,11 +111,16 @@ onBeforeUnmount(() => (boardSelection.value = null));
         :disabled="loading"
         :data-tip="t('githubBoard.refresh')"
         :aria-label="t('githubBoard.refresh')"
+        :aria-busy="loading"
+        data-testid="board-refresh"
         @click="load"
       >
-        <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+        <span class="material-symbols-outlined" :class="{ 'animate-spin': loading }" aria-hidden="true">refresh</span>
       </button>
-      <span v-if="loading" class="text-[12px] text-muted">{{ t("githubBoard.loading") }}</span>
+      <label class="flex cursor-pointer items-center gap-1.5 text-[12px] text-secondary">
+        <input type="checkbox" data-testid="board-open-work-only" :checked="boardOpenWorkOnly" @change="onOpenWorkOnlyChange" />
+        {{ t("githubBoard.openWorkOnly") }}
+      </label>
       <div class="ml-auto flex items-center gap-1">
         <button
           type="button"
@@ -121,14 +148,38 @@ onBeforeUnmount(() => (boardSelection.value = null));
       <div class="min-w-0 flex-auto overflow-auto px-4 pb-16 pt-3">
         <p class="mb-3 text-[12px] text-muted">{{ t("githubBoard.rule") }}</p>
         <p v-if="startError" data-testid="issue-start-error" class="mb-3 text-[13px] text-err">{{ startError }}</p>
-        <p v-if="failed" class="px-1 py-6 text-[13px] text-err">{{ t("githubBoard.loadFailed") }}</p>
-        <p v-else-if="!loading && repos.length === 0" class="px-1 py-6 text-[13px] text-muted">{{ t("githubBoard.noRepos") }}</p>
-        <section v-for="repo in liveRepos" :key="repo.repo" data-testid="board-repo" class="mb-6">
-          <h3 class="my-1.5 border-b border-border pb-1 font-mono text-[13px] font-semibold text-fg">{{ repo.repo }}</h3>
+        <GithubLoading v-if="!loaded" />
+        <p v-else-if="failed" class="px-1 py-6 text-[13px] text-err">{{ t("githubBoard.loadFailed") }}</p>
+        <p v-else-if="!loading && noRepos" class="px-1 py-6 text-[13px] text-muted">{{ t("githubBoard.noRepos") }}</p>
+        <p v-else-if="nothingOpen" data-testid="board-nothing-open" class="px-1 py-6 text-[13px] text-muted">
+          {{ t("githubBoard.nothingOpen") }}
+          <button type="button" class="ml-1 cursor-pointer text-accent underline" @click="setBoardOpenWorkOnly(false)">
+            {{ t("githubBoard.showAll") }}
+          </button>
+        </p>
+        <section v-for="repo in shownRepos" :key="repo.repo" data-testid="board-repo" class="mb-6">
+          <h3 class="my-1.5 flex items-center gap-2 border-b border-border pb-1 font-mono text-[13px] font-semibold text-fg">
+            {{ repo.repo }}
+            <GithubUnregisteredTag v-if="repo.unregistered" data-testid="board-repo-unregistered" />
+          </h3>
           <p v-if="repo.error" class="px-1 py-3 text-[13px] text-err">{{ repo.error }}</p>
-          <div v-else class="grid min-w-[900px] grid-cols-5 gap-2.5">
+          <div v-if="repo.mainlineCells?.length" data-testid="board-mainline" class="mb-2.5 flex flex-wrap gap-2.5">
             <div
-              v-for="column in BOARD_COLUMNS"
+              v-for="group in mainlineGroups(repo.mainlineCells)"
+              :key="group.branch ?? ''"
+              data-testid="board-mainline-group"
+              class="flex min-w-[220px] flex-col gap-1 rounded-md bg-base p-2"
+            >
+              <span class="text-[11px] font-bold tracking-[0.06em] text-muted">
+                {{ group.branch === null ? t("githubBoard.noBranch") : t("githubBoard.onBranch", { branch: group.branch }) }}
+              </span>
+              <GithubBoardCells :cells="group.cells" :home="home" />
+            </div>
+          </div>
+          <!-- Five tracks whatever is shown, so a column keeps its width when the switch drops the others. -->
+          <div v-if="!repo.error" class="grid min-w-[900px] grid-cols-5 gap-2.5">
+            <div
+              v-for="column in visibleColumns(repo, boardOpenWorkOnly)"
               :key="column"
               :data-testid="`board-column-${column}`"
               class="flex min-w-0 flex-col gap-1.5 rounded-md bg-base p-2"

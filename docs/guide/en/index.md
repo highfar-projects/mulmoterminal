@@ -8,8 +8,9 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **13.1.0 is out.** The new Library lists every Claude conversation on this machine, searchable
-> and resumable, and Restart now keeps the conversation you moved to. [Setup guide](v13.1.0.html)
+> **13.6.0 is out.** Each terminal has a send button that pastes its last exchange into another
+> agent's terminal in the same repository and takes you there — you press Enter.
+> [Setup guide](v13.6.0.html)
 
 ## What is MulmoTerminal? {#what-is}
 

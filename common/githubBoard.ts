@@ -49,6 +49,11 @@ export interface BoardCell {
   waiting: boolean;
 }
 
+/** A live cell on no piece of work: on the default branch, which `branch` names, or on no branch (null). */
+export interface BoardMainlineCell extends BoardCell {
+  branch: string | null;
+}
+
 export interface BoardCard {
   /** Stable within a repo: `pr-N`, `issue-N` or `branch-<name>`. */
   key: string;
@@ -64,6 +69,10 @@ export interface RepoBoard {
   repo: string;
   cards?: BoardCard[];
   error?: string;
+  /** Read only because a live cell is in it: not in `prRepos`. */
+  unregistered?: boolean;
+  /** The cells on the default branch or on no branch, which belong to no card. Absent when none. */
+  mainlineCells?: BoardMainlineCell[];
 }
 
 export interface BoardResponse {

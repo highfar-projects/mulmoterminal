@@ -11,6 +11,8 @@ import { readString } from "../../../common/readString.js";
 import { finiteNumber } from "../../../common/finiteNumber.js";
 import type { LibraryConversation, LibraryPrLink } from "../../../common/library.js";
 import { conversationTurnsFromParsed, customTitleOfRecord } from "../../session/transcript/transcript.js";
+import { memoryWritesOf } from "./memory-source.js";
+import { emptySpendState, foldSpendRecord, isSpendState, spentUsd, type SpendState } from "./spend-fold.js";
 
 /** A turn's text is searched from its start; past this it is long pasted material, not the ask. */
 export const TURN_TEXT_CAP = 1000;
@@ -32,6 +34,10 @@ export type ConversationState = Omit<LibraryConversation, "id" | "agent" | "titl
   aiTitle: string | null;
   customTitle: string | null;
   firstPrompt: string | null;
+  /** The memory files this conversation wrote, by the path written, the most recently written last. */
+  memoryWrites: string[];
+  /** What it spent, when and on which model. */
+  spend: SpendState;
 };
 
 export interface IndexedTurn {
@@ -44,6 +50,8 @@ export const emptyConversationState = (): ConversationState => ({
   aiTitle: null,
   customTitle: null,
   firstPrompt: null,
+  memoryWrites: [],
+  spend: emptySpendState(),
   cwd: null,
   gitBranch: null,
   prs: [],
@@ -77,6 +85,7 @@ export function foldConversationRecord(state: ConversationState, record: Record<
   foldPr(state, record);
   foldCost(state, record);
   foldActivity(state, record);
+  foldMemoryWrites(state, record);
   return foldTurn(state, record);
 }
 
@@ -114,10 +123,12 @@ export function prLinkOf(record: Record<string, unknown>): LibraryPrLink | null 
   return { number, url, repository: readString(record.prRepository) };
 }
 
-// `cost-state` is a running total the agent rewrites, so the last one is the answer.
+// `cost-state` is a running total the agent rewrites, so the last one is the answer for the lines; the
+// cost adds up every count the agent started over (spend-fold.ts).
 function foldCost(state: ConversationState, record: Record<string, unknown>): void {
+  foldSpendRecord(state.spend, record, recordTime(record));
   if (record.type !== "cost-state") return;
-  state.costUsd = finiteNumber(record.totalCostUSD) ?? state.costUsd;
+  state.costUsd = spentUsd(state.spend) ?? state.costUsd;
   state.linesAdded = finiteNumber(record.totalLinesAdded) ?? state.linesAdded;
   state.linesRemoved = finiteNumber(record.totalLinesRemoved) ?? state.linesRemoved;
 }
@@ -126,6 +137,15 @@ function foldActivity(state: ConversationState, record: Record<string, unknown>)
   const skill = nonEmpty(record.attributionSkill);
   if (skill !== null) pushCapped(state.skills, skill, (a, b) => a === b);
   if (Array.isArray(record.hookErrors)) state.hookErrors += record.hookErrors.length;
+}
+
+// Written again later moves it last, so the cap drops the memories this conversation touched longest ago.
+function foldMemoryWrites(state: ConversationState, record: Record<string, unknown>): void {
+  memoryWritesOf(record).forEach((written) => {
+    const at = state.memoryWrites.indexOf(written);
+    if (at >= 0) state.memoryWrites.splice(at, 1);
+    pushCapped(state.memoryWrites, written, (a, b) => a === b);
+  });
 }
 
 function foldTurn(state: ConversationState, record: Record<string, unknown>): IndexedTurn | null {
@@ -161,6 +181,9 @@ export function isConversationState(value: unknown): value is ConversationState 
     value.prs.every(isPrLink) &&
     Array.isArray(value.skills) &&
     value.skills.every((skill) => typeof skill === "string") &&
+    isSpendState(value.spend) &&
+    Array.isArray(value.memoryWrites) &&
+    value.memoryWrites.every((key) => typeof key === "string") &&
     typeof value.hookErrors === "number" &&
     typeof value.userTurns === "number" &&
     typeof value.isSidechain === "boolean"

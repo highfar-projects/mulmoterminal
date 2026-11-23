@@ -1,8 +1,11 @@
 // The Library's reads (#3329): /api/library/* answered as checked values, or null for any failure —
 // a 503 while the index cannot be opened, a timeout, or a body that is not the wire shape.
 import { isUnknownArray } from "../../common/isUnknownArray";
+import { isLibraryRetrospective, type LibraryRetrospective } from "../../common/libraryRetrospective";
+import { isLibraryInstructions, type LibraryInstructions } from "../../common/libraryTools";
+import { isLibrarySettings, type LibrarySettings } from "../../common/librarySettings";
 import { isLibraryFileText, isLibraryTrackedFile, type LibraryFileText, type LibraryTrackedFile } from "../../common/libraryFiles";
-import { isLibraryMemoryProject, type LibraryMemoryProject } from "../../common/libraryMemory";
+import { isLibraryMemoryHealth, isLibraryMemoryProject, type LibraryMemoryHealth, type LibraryMemoryProject } from "../../common/libraryMemory";
 import {
   isLibraryConversation,
   isLibraryPrCreator,
@@ -18,7 +21,10 @@ import {
   type LibrarySearchHit,
 } from "../../common/library";
 import { jsonBody } from "../jsonBody";
-import { fetchWithTimeout } from "../utils/fetchWithTimeout";
+import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
+import type { PromoteTarget } from "../../common/libraryPromote";
+import { isLibraryStorageAnswer, type LibraryStorageAnswer } from "../../common/libraryStorage";
+import { isRepeatDetail, isRepeatList, type RepeatDetail, type RepeatList, type RepeatTarget } from "../../common/libraryRepeats";
 
 /** The index answers a page from what it holds, but a first open also starts the worker. */
 const LIBRARY_READ_TIMEOUT_MS = 15_000;
@@ -79,10 +85,158 @@ export async function loadLibraryMemory(): Promise<LibraryMemoryProject[] | null
   return body !== null && isUnknownArray(body.projects) ? body.projects.filter(isLibraryMemoryProject) : null;
 }
 
-/** One memory file's text (or the index's). */
-export async function loadLibraryMemoryFile(slug: string, file: string): Promise<LibraryFileText | null> {
-  const body = await readJson(`/api/library/memory/${encodeURIComponent(slug)}/${encodeURIComponent(file)}`);
-  return isLibraryFileText(body) ? body : null;
+/** What can be tidied in every project's memory, by rule. */
+export async function loadLibraryMemoryHealth(): Promise<LibraryMemoryHealth[] | null> {
+  const body = await readJson("/api/library/memory-health");
+  return body !== null && isUnknownArray(body.projects) ? body.projects.filter(isLibraryMemoryHealth) : null;
+}
+
+const memoryFileUrl = (slug: string, file: string): string => `/api/library/memory/${encodeURIComponent(slug)}/${encodeURIComponent(file)}`;
+
+/** One memory file's text (or the index's), with the version an edit must name. */
+export async function loadLibraryMemoryFile(slug: string, file: string): Promise<(LibraryFileText & { version?: string }) | null> {
+  const body = await readJson(memoryFileUrl(slug, file));
+  if (!isLibraryFileText(body)) return null;
+  return typeof body.version === "string" ? { ...body, version: body.version } : body;
+}
+
+/** The outcome of saving a memory: its new version, a change made on disk since it was opened, or a
+ *  failure (a refusal, or no answer). */
+export type MemorySaveResult = { kind: "saved"; version: string } | { kind: "changed" } | { kind: "failed" };
+
+export async function saveLibraryMemoryFile(slug: string, file: string, text: string, version: string): Promise<MemorySaveResult> {
+  try {
+    const response = await fetchWithTimeout(
+      memoryFileUrl(slug, file),
+      { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ text, version }) },
+      LIBRARY_READ_TIMEOUT_MS,
+    );
+    if (response.status === 409) return { kind: "changed" };
+    const body = response.ok ? await jsonBody(response) : null;
+    return body !== null && typeof body.version === "string" ? { kind: "saved", version: body.version } : { kind: "failed" };
+  } catch {
+    return { kind: "failed" };
+  }
+}
+
+export type MemoryTrashResult = { kind: "trashed"; undo: string } | { kind: "changed" } | { kind: "failed" };
+
+/** Moves a memory to the Trash, with its lines in MEMORY.md, while it is still the text read. */
+export async function trashLibraryMemoryFile(slug: string, file: string, version: string): Promise<MemoryTrashResult> {
+  try {
+    const response = await fetchWithTimeout(`${memoryFileUrl(slug, file)}/trash`, postJson({ version }), LIBRARY_READ_TIMEOUT_MS);
+    if (response.status === 409) return { kind: "changed" };
+    const body = response.ok ? await jsonBody(response) : null;
+    return body !== null && typeof body.undo === "string" ? { kind: "trashed", undo: body.undo } : { kind: "failed" };
+  } catch {
+    return { kind: "failed" };
+  }
+}
+
+/** "changed" names the memory that changed since it was opened: the one kept, or the one merged into it —
+ *  or "links", one whose links the merge was rewriting, changed meanwhile (trying again is safe).
+ *  "merged" carries the text as written — its own links to the merged memory point at it now — and how
+ *  many links were; "unplaceable" names the memories whose links could not be rewritten exactly. */
+export type MemoryMergeResult =
+  | { kind: "merged"; version: string; undo: string; text: string; links: number }
+  | { kind: "changed"; file: "into" | "from" | "links" }
+  | { kind: "unplaceable"; files: string[] }
+  | { kind: "failed" };
+
+const stringsIn = (value: unknown): string[] => (Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []);
+
+export interface MemoryMergeRequest {
+  slug: string;
+  into: string;
+  text: string;
+  version: string;
+  from: string;
+  fromVersion: string;
+}
+
+/** Writes `text` over `into` and moves `from` to the Trash with its lines in MEMORY.md, as one change. */
+export async function mergeLibraryMemoryFiles({ slug, into, text, version, from, fromVersion }: MemoryMergeRequest): Promise<MemoryMergeResult> {
+  try {
+    const response = await fetchWithTimeout(`${memoryFileUrl(slug, into)}/merge`, postJson({ text, version, from, fromVersion }), LIBRARY_READ_TIMEOUT_MS);
+    const body = await jsonBody(response);
+    if (response.status === 409) return { kind: "changed", file: body.file === "from" || body.file === "links" ? body.file : "into" };
+    if (response.status === 422) return { kind: "unplaceable", files: stringsIn(body.files) };
+    const { version: written, undo, text: writtenText, links } = body;
+    if (!response.ok || typeof written !== "string" || typeof undo !== "string" || typeof writtenText !== "string" || typeof links !== "number")
+      return { kind: "failed" };
+    return { kind: "merged", version: written, undo, text: writtenText, links };
+  } catch {
+    return { kind: "failed" };
+  }
+}
+
+/** How many links merging `from` into `into` would point at `into`, or which memories' links could not be. */
+export async function loadLibraryMemoryLinks(slug: string, into: string, from: string): Promise<{ count: number; unplaceable: string[] } | null> {
+  const body = await readJson(`${memoryFileUrl(slug, into)}/links?from=${encodeURIComponent(from)}`);
+  return body !== null && typeof body.count === "number" ? { count: body.count, unplaceable: stringsIn(body.unplaceable) } : null;
+}
+
+/** "taken": a file of that name was made since; "gone": too late to undo here (it is in the Trash). */
+export type MemoryUndoResult = "restored" | "taken" | "gone" | "failed";
+
+export async function undoLibraryMemoryTrash(undo: string): Promise<MemoryUndoResult> {
+  try {
+    const response = await fetchWithTimeout("/api/library/memory-undo", postJson({ undo }), LIBRARY_READ_TIMEOUT_MS);
+    if (response.ok) return "restored";
+    if (response.status === 409) return "taken";
+    return response.status === 410 ? "gone" : "failed";
+  } catch {
+    return "failed";
+  }
+}
+
+const postJson = (body: Record<string, unknown>): RequestInit => ({
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify(body),
+});
+
+/** The session started to promote a conversation; or why none was: it is no longer in the index
+ *  ("gone"), the directory it ran in is not on this machine ("no-dir"), or the start failed. */
+export type LibraryPromoteResult = { kind: "started"; chatId: string } | { kind: "gone" | "no-dir" | "failed" };
+
+/** Starts a Claude session in the conversation's directory, asking the bundled skill to promote it. */
+export async function promoteLibraryConversation(id: string, cwd: string | null, target: PromoteTarget): Promise<LibraryPromoteResult> {
+  return postPromote(`/api/library/conversations/${encodeURIComponent(id)}/promote`, { cwd, target });
+}
+
+/** The session started to make a repeated instruction a rule or a skill (#3334); or why none was. */
+export async function promoteLibraryRepeat(id: string, target: RepeatTarget): Promise<LibraryPromoteResult> {
+  return postPromote(`/api/library/repeats/${encodeURIComponent(id)}/promote`, { target });
+}
+
+/** One repeated instruction with each time it was typed, newest first; null when it is gone. */
+export async function loadLibraryRepeat(id: string): Promise<RepeatDetail | null> {
+  const body = await readJson(`/api/library/repeats/${encodeURIComponent(id)}`);
+  return isRepeatDetail(body) ? body : null;
+}
+
+/** The session started to propose how to tidy one project's memory (#3334); or why none was. */
+export async function askLibraryMemoryTidy(slug: string): Promise<LibraryPromoteResult> {
+  return postPromote(`/api/library/memory/${encodeURIComponent(slug)}/tidy`, {});
+}
+
+/** Instructions typed again and again, the most typed first, and how many there are (#3334). */
+export async function loadLibraryRepeats(): Promise<RepeatList | null> {
+  const body = await readJson("/api/library/repeats");
+  return isRepeatList(body) ? body : null;
+}
+
+async function postPromote(url: string, body: Record<string, unknown>): Promise<LibraryPromoteResult> {
+  try {
+    const response = await fetchWithTimeout(url, postJson(body), SLOW_COMMAND_TIMEOUT_MS);
+    if (response.status === 404) return { kind: "gone" };
+    if (response.status === 409) return { kind: "no-dir" };
+    const answer = await jsonBody(response);
+    return response.ok && typeof answer.chatId === "string" ? { kind: "started", chatId: answer.chatId } : { kind: "failed" };
+  } catch {
+    return { kind: "failed" };
+  }
 }
 
 /** The conversation that made each of these PRs in `repository`, for those the Library knows. */
@@ -97,6 +251,44 @@ export async function loadLibraryConversation(id: string, cwd: string | null = n
   const query = cwd === null ? "" : `?cwd=${encodeURIComponent(cwd)}`;
   const body = await readJson(`/api/library/conversations/${encodeURIComponent(id)}${query}`);
   return isLibraryConversation(body) ? body : null;
+}
+
+/** The conversation that last wrote a memory, when the index knows one the Library lists. */
+export async function loadLibraryMemorySource(slug: string, file: string): Promise<LibraryConversation | null> {
+  const body = await readJson(`${memoryFileUrl(slug, file)}/source`);
+  return isLibraryConversation(body?.conversation) ? body.conversation : null;
+}
+
+/** Every directory a conversation ran in, for the tools kind to choose among. */
+export async function loadToolDirectories(): Promise<string[] | null> {
+  const body = await readJson("/api/library/tools/directories");
+  return isUnknownArray(body?.directories) ? body.directories.filter((cwd): cwd is string => typeof cwd === "string") : null;
+}
+
+/** The instruction files Claude Code loads in a directory, in its order. */
+export async function loadInstructions(cwd: string): Promise<LibraryInstructions | null> {
+  const body = await readJson(`/api/library/tools/instructions?cwd=${encodeURIComponent(cwd)}`);
+  return isLibraryInstructions(body) ? body : null;
+}
+
+/** Claude Code's settings files for a directory, laid over each other. */
+export async function loadToolSettings(cwd: string): Promise<LibrarySettings | null> {
+  const body = await readJson(`/api/library/tools/settings?cwd=${encodeURIComponent(cwd)}`);
+  return isLibrarySettings(body) ? body : null;
+}
+
+/** One of those files' text, and the paths it names that are not there. */
+export async function loadInstruction(cwd: string, file: string): Promise<(LibraryFileText & { missing: string[] }) | null> {
+  const body = await readJson(`/api/library/tools/instruction?cwd=${encodeURIComponent(cwd)}&path=${encodeURIComponent(file)}`);
+  if (!isLibraryFileText(body)) return null;
+  const missing = isUnknownArray(body.missing) ? body.missing.filter((reference): reference is string => typeof reference === "string") : [];
+  return { ...body, missing };
+}
+
+/** The retrospective's totals for the last weeks, from the Library's index (#3335). */
+export async function loadRetrospective(): Promise<LibraryRetrospective | null> {
+  const body = await readJson("/api/library/retrospective");
+  return isLibraryRetrospective(body) ? body : null;
 }
 
 export async function loadLibraryMarks(): Promise<LibraryMarks | null> {
@@ -116,5 +308,20 @@ export async function saveLibraryMark(id: string, change: LibraryMarkChange): Pr
     return isLibraryMarks(body) ? body : null;
   } catch {
     return null;
+  }
+}
+
+/** The Storage view's last measurement, the one running now, and `cleanupPeriodDays` (#3333). */
+export async function loadLibraryStorage(query: string): Promise<LibraryStorageAnswer | null> {
+  const body = await readJson(`/api/library/storage?${new URLSearchParams({ q: query }).toString()}`);
+  return isLibraryStorageAnswer(body) ? body : null;
+}
+
+/** Ask for a measurement of Claude Code's home; one already running is joined. False when refused. */
+export async function measureLibraryStorage(): Promise<boolean> {
+  try {
+    return (await fetchWithTimeout("/api/library/storage/measure", postJson({}), LIBRARY_READ_TIMEOUT_MS)).ok;
+  } catch {
+    return false;
   }
 }

@@ -32,13 +32,24 @@ let pageFinished: number | null = 1;
 /** First pages that fail before one succeeds. */
 let pageFailures = 0;
 let firstHasMore = false;
+let memorySourceAnswer: unknown = null;
 vi.mock("../../../../src/composables/libraryApi", () => ({
+  loadToolDirectories: () => Promise.resolve(["/w/app"]),
+  loadToolSettings: () => Promise.resolve(null),
+  loadInstructions: () => Promise.resolve({ cwd: "/w/app", files: [], agentsMd: false, truncated: false }),
+  loadInstruction: () => Promise.resolve({ text: "" }),
+  loadLibraryMemorySource: () => Promise.resolve(memorySourceAnswer),
   LIBRARY_PAGE: 50,
   // The reader's changed-files strip, which these specs do not look at.
   loadLibraryFiles: () => Promise.resolve([]),
   loadLibraryFileText: () => Promise.resolve(null),
   loadLibraryMemory: () => Promise.resolve(memoryProjects),
-  loadLibraryMemoryFile: (slug: string, file: string) => Promise.resolve(memoryTexts[`${slug}/${file}`] ?? null),
+  loadLibraryMemoryHealth: () => Promise.resolve([]),
+  loadLibraryMemoryFile: (slug: string, file: string) => {
+    const read = memoryTexts[`${slug}/${file}`];
+    return Promise.resolve(read === undefined ? null : { ...read, version: "v1" });
+  },
+  saveLibraryMemoryFile: () => Promise.resolve({ kind: "saved", version: "v2" }),
   loadLibraryPage: (offset: number) => {
     if (offset === 0 && pageFailures > 0) {
       pageFailures--;
@@ -89,6 +100,7 @@ vi.mock("../../../../src/composables/useDirLists", () => ({
 const openIds: string[] = [];
 vi.mock("../../../../src/composables/commandPalette", () => ({ paletteTerminals: { value: { openSessionIds: () => openIds } } }));
 
+const { resetImeComposition } = await import("../../../../src/composables/imeComposition");
 const LibraryOverlay = (await import("../../../../src/components/library/LibraryOverlay.vue")).default;
 const { LIBRARY_STATUS_POLL_MS } = await import("../../../../src/composables/useLibraryData");
 
@@ -524,6 +536,45 @@ describe("LibraryOverlay", () => {
     ]);
   });
 
+  it("opens the conversation that wrote a memory from the memory reader, on the conversations", async () => {
+    const memory = (file: string) => ({ file, name: file.replace(".md", ""), description: null, type: null, updatedAt: NOW });
+    memoryProjects = [{ slug: "-w-app", cwd: "/w/app", index: null, files: [memory("one.md")] }];
+    memoryTexts = { "-w-app/one.md": { text: "first" } };
+    memorySourceAnswer = conversation("wrote", "The one that wrote it");
+    const wrapper = await mountLibrary();
+    await wrapper.find("[data-testid=library-kind-memory]").trigger("click");
+    await flushPromises();
+    await wrapper.find("[data-testid=library-search]").setValue("one"); // a memory search, left behind
+    await flushPromises();
+    await wrapper.find("[data-testid=memory-source]").trigger("click");
+    await flushPromises();
+    expect(wrapper.find("[data-testid=library-memory]").exists()).toBe(false);
+    expect(wrapper.find("[data-testid=library-kind-conversations]").attributes("aria-pressed")).toBe("true");
+    expect(wrapper.find("[data-testid=library-reader] h2").text()).toBe("The one that wrote it");
+    expect(wrapper.find<HTMLInputElement>("[data-testid=library-search]").element.value).toBe("");
+    memorySourceAnswer = null;
+  });
+
+  it("in Tools, leaves the arrows to the directory picker while it has focus", async () => {
+    const wrapper = await mountLibrary();
+    await wrapper.find("[data-testid=library-kind-tools]").trigger("click");
+    await flushPromises();
+    const picker = wrapper.find("[data-testid=library-tools-cwd]").element;
+    const down = new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true });
+    picker.dispatchEvent(down);
+    expect(down.defaultPrevented).toBe(false);
+  });
+
+  it("in Tools, leaves Enter to the focused control and does not offer it in the keys line", async () => {
+    const wrapper = await mountLibrary();
+    await wrapper.find("[data-testid=library-kind-tools]").trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).not.toContain("Enter resume");
+    const enter = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+    window.dispatchEvent(enter);
+    expect(enter.defaultPrevented).toBe(false);
+  });
+
   it("switches to memory and back, the arrows moving through the memories there", async () => {
     const memory = (file: string) => ({ file, name: file.replace(".md", ""), description: null, type: null, updatedAt: NOW });
     memoryProjects = [{ slug: "-w-app", cwd: "/w/app", index: null, files: [memory("one.md"), memory("two.md")] }];
@@ -550,6 +601,21 @@ describe("LibraryOverlay", () => {
     const enter = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
     wrapper.findAll("[data-testid=memory-row]")[0]?.element.dispatchEvent(enter);
     expect(enter.defaultPrevented).toBe(false);
+    // Not the Enter that confirms an IME candidate, Safari's late compositionend included.
+    window.dispatchEvent(new CompositionEvent("compositionstart"));
+    window.dispatchEvent(new CompositionEvent("compositionend"));
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", keyCode: 229 }));
+    await flushPromises();
+    expect(wrapper.find("[data-testid=memory-editor]").exists()).toBe(false);
+    resetImeComposition();
+    // Enter elsewhere in Memory is the primary action: editing.
+    await press("Enter");
+    await flushPromises();
+    expect(wrapper.find("[data-testid=memory-editor]").exists()).toBe(true);
+    wrapper.find("[data-testid=memory-editor-field]").element.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await flushPromises();
+    expect(wrapper.find("[data-testid=memory-editor]").exists()).toBe(false);
+    expect(closeLibrary).not.toHaveBeenCalled(); // Esc ended the edit, not the Library
     // On a link in the body, the arrows are the link's, not the list's.
     const link = wrapper.find("[data-testid=memory-body] span[data-page]");
     link.element.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));

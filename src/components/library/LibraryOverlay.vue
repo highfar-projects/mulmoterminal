@@ -8,12 +8,14 @@ import FullScreenOverlay from "../FullScreenOverlay.vue";
 import LibraryList from "./LibraryList.vue";
 import LibraryReader from "./LibraryReader.vue";
 import LibraryMemory from "./LibraryMemory.vue";
+import LibraryTools from "./LibraryTools.vue";
 import { filterMemory } from "./memoryRows";
 import { useLibraryMemory } from "../../composables/useLibraryMemory";
 import { libraryRequested, useLibraryView } from "../../composables/useLibraryView";
 import { loadLibraryConversation } from "../../composables/libraryApi";
 import { router } from "../../router";
 import { useEscapeToClose } from "../../composables/useEscapeToClose";
+import { isImeConfirming } from "../../composables/imeComposition";
 import { useLibraryData } from "../../composables/useLibraryData";
 import { readResumableList } from "../../composables/useDirLists";
 import { openCellAt } from "../../composables/useNewTerminal";
@@ -22,20 +24,53 @@ import { cellForPanelResume } from "../launchCell";
 import { isEditableTarget } from "../../composables/gridShortcut";
 import { libraryKeyAction, movedFromGap, movedIndex } from "./libraryKeys";
 import { libraryResume, type LibraryResume } from "./libraryResume";
+import { startPromote } from "./libraryPromoteStart";
+import type { PromoteTarget } from "../../../common/libraryPromote";
 import { conversationKey, groupConversations, listedInOrder } from "./libraryRows";
 import { useLibraryMarks } from "../../composables/useLibraryMarks";
 import type { LibraryConversation } from "../../../common/library";
+import LibraryStorage from "./LibraryStorage.vue";
+import LibraryRepeats from "./LibraryRepeats.vue";
+import { useLibraryStorage } from "../../composables/useLibraryStorage";
 
 const { t } = useI18n();
 const { isOpen, close } = useLibraryView();
 useEscapeToClose(isOpen, close);
 const { conversations, hasMore, loaded, loadFailed, status, query, hits, searching, searchFailed, loadMore } = useLibraryData(isOpen);
-const { projects: memoryProjects, loaded: memoryLoaded, failed: memoryFailed } = useLibraryMemory(isOpen);
+const {
+  projects: memoryProjects,
+  loaded: memoryLoaded,
+  failed: memoryFailed,
+  health: memoryHealth,
+  healthFailed: memoryHealthFailed,
+  refresh: refreshMemory,
+} = useLibraryMemory(isOpen);
 const memoryCount = computed(() => filterMemory(memoryProjects.value, query.value).reduce((sum, project) => sum + project.files.length, 0));
-/** Which kind the list shows: the conversations, or Claude Code's memory. */
-const kind = ref<"conversations" | "memory">("conversations");
-const searchLabel = computed(() => (kind.value === "memory" ? t("libraryView.memory.search") : t("libraryView.search")));
-const memoryView = useTemplateRef<{ move(by: number): Promise<void> }>("memoryView");
+/** Which kind the list shows: the conversations, Claude Code's memory, its tools, or what its home takes. */
+const kind = ref<"conversations" | "memory" | "repeats" | "tools" | "storage">("conversations");
+const SHORTCUTS = {
+  conversations: "libraryView.shortcuts",
+  memory: "libraryView.memory.shortcuts",
+  repeats: "libraryView.repeats.shortcuts",
+  tools: "libraryView.tools.shortcuts",
+  storage: "libraryView.storage.shortcuts",
+} as const;
+const SEARCH_LABELS = {
+  conversations: "libraryView.search",
+  memory: "libraryView.memory.search",
+  repeats: "libraryView.repeats.search",
+  tools: "libraryView.tools.search",
+  storage: "libraryView.storage.search",
+} as const;
+const searchLabel = computed(() => t(SEARCH_LABELS[kind.value]));
+const memoryView = useTemplateRef<{ move(by: number): Promise<void>; startEdit(): void }>("memoryView");
+const toolsView = useTemplateRef<{ move(by: number): Promise<void> }>("toolsView");
+const repeatsView = useTemplateRef<{ move(by: number): Promise<void> }>("repeatsView");
+const storageView = useTemplateRef<{ move(by: number): Promise<void> }>("storageView");
+const storage = useLibraryStorage(
+  computed(() => isOpen.value && kind.value === "storage"),
+  query,
+);
 const { marks, pinned, saveFailedFor, loadFailed: marksFailed, change: changeMark } = useLibraryMarks(isOpen);
 
 const searchField = ref<HTMLInputElement | null>(null);
@@ -144,6 +179,21 @@ const RESUME_REFUSALS: Record<Exclude<LibraryResume["kind"], "open">, string> = 
   unchecked: "libraryView.resumeUnchecked",
 };
 
+/** One promote at a time: a second press while the first is starting would open two sessions. */
+let promoting = false;
+async function promoteSelected(target: PromoteTarget): Promise<void> {
+  const conversation = selected.value;
+  if (conversation === null || promoting) return;
+  promoting = true;
+  const key = conversationKey(conversation);
+  try {
+    const refused = await startPromote(conversation, target);
+    if (refused !== null && selectedKey.value === key) notice.value = t(refused);
+  } finally {
+    promoting = false;
+  }
+}
+
 function pinSelected(pin: boolean): void {
   const conversation = selected.value;
   if (conversation === null) return;
@@ -155,6 +205,14 @@ function pinSelected(pin: boolean): void {
 }
 function renameConversation(id: string, name: string | null): void {
   void changeMark(id, { name });
+}
+
+/** A memory's source, opened from the memory reader: the conversations, on that one. */
+function openFromMemory(conversation: LibraryConversation): void {
+  // A search typed for memory would hide the conversation among its results: leave it, as a request does.
+  query.value = "";
+  kind.value = "conversations";
+  select(conversation);
 }
 
 function select(conversation: LibraryConversation): void {
@@ -224,9 +282,22 @@ function onKey(event: KeyboardEvent): void {
   const editable = target !== null && isEditableTarget(target.tagName, [...target.classList]);
   const modified = event.metaKey || event.ctrlKey || event.altKey;
   const onOtherControl = target?.closest(OTHER_CONTROLS) != null && target.closest("[data-library-row]") === null;
-  const action = libraryKeyAction({ key: event.key, inSearch, inOtherField: editable && !inSearch, onOtherControl, composing: event.isComposing, modified });
-  // Enter does nothing of the Library's own in Memory yet: left to the focused control (a row presses).
-  if (action === null || (action === "primary" && kind.value === "memory")) return;
+  const action = libraryKeyAction({
+    key: event.key,
+    inSearch,
+    inOtherField: editable && !inSearch,
+    onOtherControl,
+    composing: isImeConfirming(event),
+    modified,
+  });
+  // In Memory, Enter on a focused row is the row's own (it presses); elsewhere it edits.
+  const onMemoryRow = target?.closest("[data-memory-row]") != null;
+  // Repeats, Tools and Storage have no primary action: Enter stays the focused control's own.
+  if (
+    action === null ||
+    (action === "primary" && ((kind.value === "memory" && onMemoryRow) || kind.value === "repeats" || kind.value === "tools" || kind.value === "storage"))
+  )
+    return;
   event.preventDefault();
   runKeyAction(action);
 }
@@ -234,8 +305,16 @@ function onKey(event: KeyboardEvent): void {
 function runKeyAction(action: NonNullable<ReturnType<typeof libraryKeyAction>>): void {
   const by = action === "up" ? -1 : 1;
   if (action === "focus-search") searchField.value?.focus();
-  else if (kind.value === "memory") void memoryView.value?.move(by);
-  else if (action === "primary") void resume();
+  else if (kind.value === "storage") {
+    if (action !== "primary") void storageView.value?.move(by);
+  } else if (kind.value === "memory") {
+    if (action === "primary") memoryView.value?.startEdit();
+    else void memoryView.value?.move(by);
+  } else if (kind.value === "repeats") {
+    if (action !== "primary") void repeatsView.value?.move(by);
+  } else if (kind.value === "tools") {
+    void toolsView.value?.move(by);
+  } else if (action === "primary") void resume();
   else void move(by);
 }
 window.addEventListener("keydown", onKey);
@@ -249,9 +328,7 @@ onBeforeUnmount(() => {
   <FullScreenOverlay v-if="isOpen" :region-label="t('libraryView.region')" :close-label="t('libraryView.close')" @close="close">
     <template #header>
       <span class="font-sans text-[14px] font-[650] text-fg">{{ t("libraryView.title") }}</span>
-      <span class="hidden font-sans text-[12px] text-dim sm:inline">{{
-        kind === "memory" ? t("libraryView.memory.shortcuts") : t("libraryView.shortcuts")
-      }}</span>
+      <span class="hidden font-sans text-[12px] text-dim sm:inline">{{ t(SHORTCUTS[kind]) }}</span>
     </template>
 
     <div class="flex min-h-0 flex-1 flex-col">
@@ -292,19 +369,65 @@ onBeforeUnmount(() => {
             {{ t("libraryView.memory.kind") }}
             <span class="text-dim">{{ memoryCount }}</span>
           </button>
+          <button
+            type="button"
+            data-testid="library-kind-repeats"
+            class="cursor-pointer rounded border-0 px-2 py-1"
+            :class="kind === 'repeats' ? 'bg-hover text-fg' : 'bg-transparent text-secondary hover:text-fg'"
+            :aria-pressed="kind === 'repeats'"
+            @click="kind = 'repeats'"
+          >
+            {{ t("libraryView.repeats.kind") }}
+          </button>
+          <button
+            type="button"
+            data-testid="library-kind-tools"
+            class="cursor-pointer rounded border-0 px-2 py-1"
+            :class="kind === 'tools' ? 'bg-hover text-fg' : 'bg-transparent text-secondary hover:text-fg'"
+            :aria-pressed="kind === 'tools'"
+            @click="kind = 'tools'"
+          >
+            {{ t("libraryView.tools.kind") }}
+          </button>
+          <button
+            type="button"
+            data-testid="library-kind-storage"
+            class="cursor-pointer rounded border-0 px-2 py-1"
+            :class="kind === 'storage' ? 'bg-hover text-fg' : 'bg-transparent text-secondary hover:text-fg'"
+            :aria-pressed="kind === 'storage'"
+            @click="kind = 'storage'"
+          >
+            {{ t("libraryView.storage.kind") }}
+          </button>
           <span v-if="progress" class="text-dim" role="status" data-testid="library-progress">{{ progress }}</span>
           <span v-else-if="searching" class="text-dim">{{ t("libraryView.searching") }}</span>
         </div>
       </div>
 
+      <LibraryRepeats v-if="kind === 'repeats'" ref="repeatsView" :query="query" :now="now" @open-conversation="openFromMemory" />
+      <LibraryTools v-else-if="kind === 'tools'" ref="toolsView" :query="query" :initial-cwd="selected?.cwd ?? null" />
+      <LibraryStorage
+        v-else-if="kind === 'storage'"
+        ref="storageView"
+        :answer="storage.answer.value"
+        :loaded="storage.loaded.value"
+        :failed="storage.failed.value"
+        :start-refused="storage.startRefused.value"
+        :now="now"
+        @remeasure="storage.remeasure"
+      />
       <LibraryMemory
-        v-if="kind === 'memory'"
+        v-else-if="kind === 'memory'"
         ref="memoryView"
         :projects="memoryProjects"
         :loaded="memoryLoaded"
         :failed="memoryFailed"
         :query="query"
         :now="now"
+        :health="memoryHealth"
+        :health-failed="memoryHealthFailed"
+        @changed="refreshMemory"
+        @open-conversation="openFromMemory"
       />
       <p v-else-if="loadFailed" class="m-0 px-4 py-6 font-sans text-[13px] text-err-text">{{ t("libraryView.loadFailed") }}</p>
       <p v-else-if="!loaded" class="m-0 px-4 py-6 font-sans text-[13px] text-dim">{{ t("libraryView.loading") }}</p>
@@ -361,6 +484,7 @@ onBeforeUnmount(() => {
             @resume="resume"
             @pin="pinSelected"
             @rename="renameConversation"
+            @promote="promoteSelected"
           />
           <p v-else class="m-0 p-6 font-sans text-[13px] text-dim">{{ t("libraryView.pick") }}</p>
         </div>

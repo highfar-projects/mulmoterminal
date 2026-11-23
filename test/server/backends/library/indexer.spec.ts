@@ -8,7 +8,19 @@ import { appendFileSync, chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { prepareLibraryStore, readFileMark, takeLease } from "../../../../server/backends/library/index-store";
-import { conversationOfRow, findConversation, listConversations, prCreators, prCreatorsQuery } from "../../../../server/backends/library/index-queries";
+import {
+  conversationOfRow,
+  findConversation,
+  listConversations,
+  memorySource,
+  memorySourceQuery,
+  prCreators,
+  prCreatorsQuery,
+  retrospectiveRows,
+  retrospectiveSpendInputs,
+} from "../../../../server/backends/library/index-queries";
+import { retrospective } from "../../../../server/backends/library/retrospective";
+import { splitSpend } from "../../../../server/backends/library/spend-split";
 import { searchLibrary } from "../../../../server/backends/library/library-search";
 import { runIndexPass, type IndexPassDeps } from "../../../../server/backends/library/indexer";
 import { HEAD_BYTES } from "../../../../server/backends/library/opened-file";
@@ -109,6 +121,126 @@ describe("runIndexPass", () => {
       .all(...query.params)
       .map((row) => String(row.detail));
     expect(plan.join("\n")).toContain("USING INDEX conversations_with_prs");
+  });
+
+  it("finds the conversation that last wrote a memory, of those the Library lists, and follows what is appended", async () => {
+    const { db, deps, transcript } = setup();
+    const opened = (day: number, entrypoint = "cli"): string =>
+      line({ type: "user", cwd: "/w/app", entrypoint, timestamp: `2026-11-${String(day)}T08:00:00.000Z`, message: { content: "x" } });
+    const writes = (file: string, tool = "Write"): string =>
+      line({
+        type: "assistant",
+        message: { content: [{ type: "tool_use", id: "t", name: tool, input: { file_path: `/h/.claude/projects/-w-app/memory/${file}` } }] },
+      });
+    transcript("early", opened(10) + writes("a.md"));
+    const late = transcript("late", opened(12) + writes("a.md", "Edit"));
+    transcript("scripted", opened(14, "sdk-cli") + writes("a.md"));
+    const elsewhere = line({
+      type: "assistant",
+      message: { content: [{ type: "tool_use", id: "t", name: "Write", input: { file_path: "/tmp/projects/-w-app/memory/c.md" } }] },
+    });
+    transcript("lookalike", opened(13) + elsewhere);
+    await runIndexPass(deps);
+    const source = (file: string) => memorySource(db, `/h/.claude/projects/-w-app/memory/${file}`)?.id ?? null;
+    expect(source("a.md")).toBe("late");
+    expect([source("b.md"), source("MEMORY.md")]).toEqual([null, null]);
+    // A folder elsewhere that only looks like a memory folder is not this one.
+    expect(source("c.md")).toBeNull();
+    expect(memorySource(db, "/tmp/projects/-w-app/memory/c.md")?.id).toBe("lookalike");
+    appendFileSync(late, writes("b.md"));
+    await runIndexPass(deps);
+    expect(source("b.md")).toBe("late");
+  });
+
+  it("looks a memory's writer up through the partial index", () => {
+    const { db } = setup();
+    const query = memorySourceQuery("/h/.claude/projects/-w-app/memory/a.md");
+    const plan = db
+      .prepare(`explain query plan ${query.sql}`)
+      .all(...query.params)
+      .map((row) => String(row.detail));
+    expect(plan.join("\n")).toContain("conversations_with_memory");
+  });
+
+  describe("what was spent", () => {
+    const NOW = Date.parse("2026-11-21T12:00:00");
+    const opened = (iso: string): string => line({ type: "user", cwd: "/w/app", entrypoint: "cli", timestamp: iso, message: { content: "x" } });
+    const answer = (iso: string, id: string, output: number): string =>
+      line({
+        type: "assistant",
+        timestamp: iso,
+        message: { id, model: "claude-opus-5", content: [{ type: "text", text: id }], usage: { output_tokens: output } },
+      });
+    const cost = (startTime: number, usd: number, output: number): string =>
+      line({ type: "cost-state", startTime, totalCostUSD: usd, modelUsage: { "claude-opus-5[1m]": { costUSD: usd, outputTokens: output } } });
+    const totalsOf = (db: DatabaseSync) => retrospective(retrospectiveRows(db, 0), splitSpend(retrospectiveSpendInputs(db, 0)), NOW);
+
+    it("adds up to every count's highest cost-state, each share in the week its replies were written", async () => {
+      const { db, deps, transcript } = setup();
+      const reply1 = answer("2026-11-04T08:00:00", "m1", 100);
+      transcript("one", opened("2026-11-04T07:00:00") + reply1 + reply1 + answer("2026-11-12T08:00:00", "m2", 300) + cost(1, 4, 400));
+      transcript(
+        "two",
+        opened("2026-11-19T08:00:00") +
+          line({ type: "cost-state", totalCostUSD: 2.5 }) +
+          line({ type: "pr-link", prNumber: 4, prUrl: "u4", prRepository: "o/r" }),
+      );
+      await runIndexPass(deps);
+      const after = (file: string, body: string): void => appendFileSync(path.join(deps.projectsRoot, "-w-app", `${file}.jsonl`), body);
+      after("one", answer("2026-11-18T08:00:00", "m3", 100) + cost(2, 1, 100)); // Claude Code started counting again
+      await runIndexPass(deps);
+      const totals = totalsOf(db);
+      expect(totals.weeks.slice(-3).map((week) => week.costUsd)).toEqual([1, 3, 1 + 2.5]);
+      expect(totals.total).toEqual({ costUsd: 4 + 1 + 2.5, conversations: 2, prs: 1, tokens: { input: 0, output: 500, cacheRead: 0, cacheWrite: 0 } });
+      expect(totals.models).toEqual([
+        { model: "claude-opus-5", costUsd: 5, tokens: { input: 0, output: 500, cacheRead: 0, cacheWrite: 0 } },
+        { model: "", costUsd: 2.5, tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } },
+      ]);
+      expect(conversationOfRow(findConversation(db, "one") ?? {}).costUsd).toBe(5);
+      const since_ms = Date.parse("2026-11-09T00:00:00");
+      const recent = splitSpend(retrospectiveSpendInputs(db, since_ms)).reduce((sum, share) => sum + share.costUsd, 0);
+      expect(recent).toBeCloseTo(3 + 1 + 2.5, 9); // the first week's dollar stays outside, weighed against the whole
+    });
+
+    it("keeps one weight per reply however far apart its records are, the newest standing", async () => {
+      const { db, deps, transcript } = setup();
+      const others = Array.from({ length: 40 }, (_, n) => answer("2026-11-10T09:00:00", `o${String(n)}`, 1)).join("");
+      const file = transcript("one", opened("2026-11-10T07:00:00") + answer("2026-11-10T08:00:00", "m1", 10) + others);
+      await runIndexPass(deps);
+      appendFileSync(file, answer("2026-11-10T08:00:00", "m1", 30));
+      await runIndexPass(deps);
+      expect(
+        db
+          .prepare("select weight from replies where id = 'm1'")
+          .all()
+          .map((row) => row.weight),
+      ).toEqual([150]);
+    });
+
+    it("counts a transcript read again from the start once", async () => {
+      const { db, deps, transcript } = setup();
+      const rest = answer("2026-11-10T08:00:00", "m1", 100) + cost(1, 2, 100);
+      const file = transcript("one", opened("2026-11-10T07:00:00") + rest);
+      await runIndexPass(deps);
+      writeFileSync(file, opened("2026-11-10T07:30:00") + rest + opened("2026-11-11T08:00:00"));
+      await runIndexPass(deps);
+      expect(totalsOf(db).total.costUsd).toBe(2);
+      expect(totalsOf(db).weeks.at(-2)?.costUsd).toBe(2);
+    });
+
+    it("forgets the replies of a transcript replaced by another", async () => {
+      const { db, deps, transcript } = setup();
+      const file = transcript("one", opened("2026-11-10T07:00:00") + answer("2026-11-10T08:00:00", "m1", 100));
+      await runIndexPass(deps);
+      writeFileSync(file, opened("2026-11-12T07:00:00") + answer("2026-11-12T08:00:00", "m2", 100));
+      await runIndexPass(deps);
+      expect(
+        db
+          .prepare("select id from replies")
+          .all()
+          .map((row) => row.id),
+      ).toEqual(["m2"]);
+    });
   });
 
   it("does not prefer a copy with no project recorded when no project is asked for", async () => {

@@ -275,6 +275,8 @@ export const zhTW: Messages = {
       noChips: "沒有資訊標籤（已全部移除）",
       someChips: "{count} 個資訊標籤",
       setUp: "設定標頭按鈕…",
+      sendButton: "每個終端機的傳送按鈕",
+      sendButtonHint: "在終端機標題列第二行顯示一個按鈕，把最後一輪對話傳送給同一儲存庫中的另一個代理終端機，按鈕上顯示對方名稱。僅在有對方時出現。",
     },
 
     models: {
@@ -601,7 +603,7 @@ export const zhTW: Messages = {
       skills: { label: "Skills", detail: "列出並搜尋 ~/.claude/skills 與各資料夾中的技能" },
       processes: { label: "處理程序", detail: "各工作階段中執行的處理程序，以及可刪除的 worktree" },
       worklog: { label: "Worklog", detail: "wiki 中的開發工作紀錄（#worklog）" },
-      usage: { label: "權杖用量", detail: "輪換中每個權杖剩餘的 5 小時視窗與每週視窗" },
+      usage: { label: "用量", detail: "最近幾週用在了什麼上（依週、專案、代理）以及輪換中每個權杖的剩餘" },
     },
   },
   usageView: usageViewZhTW,

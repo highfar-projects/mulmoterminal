@@ -5,7 +5,19 @@ import { PR_CREATORS_MAX } from "../../../common/library.js";
 import type { ConversationFilter } from "./index-queries.js";
 import type { LibraryCaller, LibraryMethod, LibraryRequest, LibraryService } from "./library-service.js";
 
-const METHODS: readonly LibraryMethod[] = ["status", "list", "conversation", "search", "transcript", "directories", "prCreators"];
+const METHODS: readonly LibraryMethod[] = [
+  "status",
+  "list",
+  "conversation",
+  "search",
+  "transcript",
+  "directories",
+  "prCreators",
+  "memorySource",
+  "repeats",
+  "repeat",
+  "retrospective",
+];
 
 export const isLibraryRequest = (value: unknown): value is LibraryRequest =>
   isRecord(value) && typeof value.id === "string" && METHODS.some((method) => method === value.method) && Array.isArray(value.args);
@@ -43,6 +55,14 @@ export function dispatchLibraryRequest(service: LibraryService, request: Library
       return service.directories();
     case "prCreators":
       return service.prCreators(text(first), prNumbers(second));
+    case "memorySource":
+      return service.memorySource(text(first));
+    case "repeats":
+      return service.repeats();
+    case "repeat":
+      return service.repeat(text(first));
+    case "retrospective":
+      return service.retrospective(typeof first === "number" && Number.isFinite(first) ? first : Date.now());
   }
 }
 

@@ -87,6 +87,8 @@ import { initScheduling } from "./backends/scheduler/scheduler-boot.js";
 import { listProjectRoots } from "./infra/fs/project-root.js";
 import { createSessionLifecycle, SESSIONS_CHANNEL } from "./session/lifecycle.js";
 import { PROMPT_SUBMITTED_CHANNEL, type PromptSubmittedEvent } from "../common/promptChannel.js";
+import { PTY_OPENED_CHANNEL, type PtyOpenedEvent } from "../common/ptyOpenedChannel.js";
+import { onPtyRegistered } from "./session/pty/pty-register.js";
 import { mountAppRoutes } from "./routes/app-routes.js";
 import { GUI_SERVER_ID } from "../common/toolGroups.js";
 import { onListening } from "./infra/http/on-listening.js";
@@ -481,6 +483,7 @@ const server = http.createServer(app);
 const loopbackServers = [http.createServer(app), http.createServer(app)] as const;
 const listeners: readonly [http.Server, http.Server, http.Server] = [server, ...loopbackServers];
 pubsub = createPubSub(listeners, isAllowedOrigin);
+onPtyRegistered((sessionId, entry) => pubsub?.publish(PTY_OPENED_CHANNEL, { sessionId, cwd: entry.cwd } satisfies PtyOpenedEvent));
 // A fourth-ish listener, on a Unix socket rather than a port — the only way a devcontainer
 // session's hook can reach this server at all, since its network namespace has no path to
 // loopback (see infra/hook-socket.ts). Not part of `listeners`/pubsub: nothing sockets a

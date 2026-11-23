@@ -6,12 +6,14 @@ import { isRecord } from "./isRecord.js";
  *  bytes). Past either, the rest of the index is not in the agent's context. */
 export const MEMORY_INDEX_LINES_MAX = 200;
 export const MEMORY_INDEX_BYTES_MAX = 25_000;
+/** The most a memory edit may write: far past any real memory, and what the editor refuses to send. */
+export const MEMORY_EDIT_MAX_BYTES = 256 * 1024;
+
 /** The index's own name in a memory folder. */
 export const MEMORY_INDEX_FILE = "MEMORY.md";
 
-/** The folder Claude Code keeps a directory's data under: every character outside `[A-Za-z0-9_-]`
- *  becomes `-` (its own rule, so a directory is matched to its memory without guessing). */
-export const projectSlug = (cwd: string): string => cwd.replace(/[^a-zA-Z0-9\-_]/g, "-") || "unknown";
+/** A project folder's name as Claude Code makes them (`encodeProjectDirName`, server/session/project-dir.ts). */
+export const isProjectSlug = (slug: string): boolean => /^[A-Za-z0-9_-]{1,255}$/.test(slug);
 
 export interface LibraryMemoryFile {
   /** The file's name in the folder. */
@@ -76,6 +78,28 @@ export function frontmatterStillOpen(text: string): boolean {
   return normalized.startsWith("---\n") && frontmatterEnd(normalized) === -1;
 }
 
+/** Where a memory's body starts in its text as written — after the frontmatter's closing line, or 0 when
+ *  there is none — found as `parseMemoryFrontmatter` finds it, but on the text itself rather than its
+ *  normalised copy, so the body can be edited and the frontmatter left byte for byte. */
+export function memoryBodyStart(text: string): number {
+  const open = /^\uFEFF?---\r?\n/.exec(text);
+  if (open === null) return 0;
+  const close = /\r?\n---(?:\r?\n|$)/.exec(text.slice(open[0].length - 1));
+  return close === null ? 0 : open[0].length - 1 + close.index + close[0].length;
+}
+
+/** Whether a `[[link]]` names a memory: by its file name without `.md`, or by its frontmatter `name`,
+ *  either side's surrounding spaces aside (a link's own are, and a quoted value can carry some). The one
+ *  rule the reader, the health check and a merge's rewrite all decide a link's memory by. */
+export const linkNamesMemory = (link: string, memory: { file: string; name: string | null }): boolean => {
+  const wanted = link.trim();
+  return wanted !== "" && (wanted === memory.file.replace(/\.md$/, "") || wanted === (memory.name ?? "").trim());
+};
+
+/** The names a `[[link]]` reaches a memory by, as `linkNamesMemory` decides it. */
+export const memoryLinkNames = (memory: { file: string; name: string | null }): string[] =>
+  [memory.file.replace(/\.md$/, ""), (memory.name ?? "").trim()].filter((name, at, all) => name !== "" && all.indexOf(name) === at);
+
 export function parseMemoryFrontmatter(text: string): MemoryFrontmatter {
   const normalized = normalizedMemory(text);
   const end = frontmatterEnd(normalized);
@@ -115,3 +139,52 @@ export const isLibraryMemoryProject = (value: unknown): value is LibraryMemoryPr
   (value.index === null || (isRecord(value.index) && typeof value.index.lines === "number" && typeof value.index.bytes === "number")) &&
   Array.isArray(value.files) &&
   value.files.every(isMemoryFile);
+
+/** A memory's type: `metadata.type`, or a top-level `type` as some memory files write it — an empty one
+ *  falls through. The list and the health check both decide it here. */
+export const memoryType = (frontmatter: Pick<MemoryFrontmatter, "fields" | "metadata">): string | null =>
+  frontmatter.metadata.type?.trim() || frontmatter.fields.type?.trim() || null;
+
+/** What can be tidied in one memory file (#3331). */
+export type MemoryFileIssue =
+  | { kind: "not-in-index" }
+  | { kind: "no-frontmatter"; missing: string[] }
+  | { kind: "broken-link"; names: string[] }
+  | { kind: "missing-path"; paths: string[] }
+  /** A memory of the same name in other work copies of the repository, each the same text or not. */
+  | { kind: "in-work-copies"; copies: { slug: string; same: boolean }[] };
+
+/** What can be tidied in a project's memory as a whole: its index. */
+export type MemoryProjectIssue = { kind: "index-over-limit" } | { kind: "no-index" } | { kind: "dead-index-entry"; files: string[] };
+
+export interface LibraryMemoryHealth {
+  slug: string;
+  issues: MemoryProjectIssue[];
+  /** By file name; a file with nothing to tidy is not listed. */
+  files: Record<string, MemoryFileIssue[]>;
+}
+
+const isStringList = (value: unknown): value is string[] => Array.isArray(value) && value.every((item) => typeof item === "string");
+
+const isFileIssue = (value: unknown): value is MemoryFileIssue => {
+  if (!isRecord(value)) return false;
+  if (value.kind === "not-in-index") return true;
+  if (value.kind === "no-frontmatter") return isStringList(value.missing);
+  if (value.kind === "broken-link") return isStringList(value.names);
+  if (value.kind === "in-work-copies") return Array.isArray(value.copies) && value.copies.length > 0 && value.copies.every(isWorkCopy);
+  return value.kind === "missing-path" && isStringList(value.paths);
+};
+
+const isWorkCopy = (value: unknown): value is { slug: string; same: boolean } =>
+  isRecord(value) && typeof value.slug === "string" && typeof value.same === "boolean";
+
+const isProjectIssue = (value: unknown): value is MemoryProjectIssue =>
+  isRecord(value) && (value.kind === "index-over-limit" || value.kind === "no-index" || (value.kind === "dead-index-entry" && isStringList(value.files)));
+
+export const isLibraryMemoryHealth = (value: unknown): value is LibraryMemoryHealth =>
+  isRecord(value) &&
+  typeof value.slug === "string" &&
+  Array.isArray(value.issues) &&
+  value.issues.every(isProjectIssue) &&
+  isRecord(value.files) &&
+  Object.values(value.files).every((issues) => Array.isArray(issues) && issues.every(isFileIssue));

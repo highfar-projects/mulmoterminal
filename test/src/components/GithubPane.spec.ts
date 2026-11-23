@@ -9,8 +9,8 @@ vi.mock("../../../src/composables/useGithubView", () => ({
   useGithubView: () => ({ isOpen: ref(true), close: vi.fn() }),
 }));
 
-type Repo = { repo: string; prs?: unknown[]; error?: string; truncated?: boolean };
-type IssueRepo = { repo: string; issues?: unknown[]; error?: string; truncated?: boolean; url?: string };
+type Repo = { repo: string; prs?: unknown[]; error?: string; truncated?: boolean; unregistered?: boolean };
+type IssueRepo = { repo: string; issues?: unknown[]; error?: string; truncated?: boolean; url?: string; unregistered?: boolean };
 
 // The overlay fetches /api/prs and /api/issues in parallel; route the mock by path.
 // opts.failPrs / opts.failIssues make that endpoint return a non-ok response.
@@ -122,6 +122,63 @@ describe("GithubPane", () => {
     const w = mount(GithubPane);
     await flushPromises();
     expect(w.text()).toContain("No repositories configured");
+  });
+
+  it("shows the loading state where the lists go until the first read answers", async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    mockFetch([{ repo: "octo/a", prs: [pr(1, "first")] }]);
+    const answer = globalThis.fetch;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        await gate;
+        return answer(input);
+      }),
+    );
+    const w = mount(GithubPane);
+    await flushPromises();
+    expect(w.find('[data-testid="github-loading"]').exists()).toBe(true);
+    expect(w.text()).not.toContain("No repositories configured");
+    expect(w.get('[data-testid="github-refresh"] .material-symbols-outlined').classes()).toContain("animate-spin");
+    release();
+    await flushPromises();
+    expect(w.find('[data-testid="github-loading"]').exists()).toBe(false);
+    expect(w.get('[data-testid="github-refresh"] .material-symbols-outlined').classes()).not.toContain("animate-spin");
+    expect(w.text()).toContain("first");
+  });
+
+  it("keeps the lists on screen while reading again, spinning the reload button", async () => {
+    mockFetch([{ repo: "octo/a", prs: [pr(1, "first")] }]);
+    const w = mount(GithubPane);
+    await flushPromises();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Promise<Response>(() => {})),
+    );
+    await w.get('[data-testid="github-refresh"]').trigger("click");
+    expect(w.find('[data-testid="github-loading"]').exists()).toBe(false);
+    expect(w.text()).toContain("first");
+    expect(w.get('[data-testid="github-refresh"]').attributes("aria-busy")).toBe("true");
+    expect(w.get('[data-testid="github-refresh"] .material-symbols-outlined').classes()).toContain("animate-spin");
+  });
+
+  it("tags an unregistered repo in both lists, and only that one", async () => {
+    mockFetch(
+      [
+        { repo: "octo/hello", prs: [] },
+        { repo: "octo/live", prs: [], unregistered: true },
+      ],
+      [
+        { repo: "octo/hello", issues: [] },
+        { repo: "octo/live", issues: [], unregistered: true },
+      ],
+    );
+    const w = mount(GithubPane);
+    await flushPromises();
+    const headingOf = (tag: string): string[] => w.findAll(`[data-testid="${tag}"]`).map((t) => t.element.parentElement?.textContent ?? "");
+    expect(headingOf("prs-repo-unregistered")).toEqual([expect.stringContaining("octo/live")]);
+    expect(headingOf("issues-repo-unregistered")).toEqual([expect.stringContaining("octo/live")]);
   });
 
   it("lists repos in the configured order", async () => {

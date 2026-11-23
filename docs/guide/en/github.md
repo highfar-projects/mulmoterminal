@@ -57,7 +57,7 @@ From there, [the ▶ on an issue row](#start-from-issue) starts the work.
 
 ## 1. Register the repos you want to see {#register}
 
-Only the repos you **register** appear (nothing is auto-added from worktrees or sessions). Two ways;
+The repos you **register** appear. The one exception: a GitHub repo you have not registered shows, tagged **not registered**, while a terminal is open in a clone of it ([the lists](#read-the-view), [the board](#board)). Two ways;
 a repo added in Settings takes effect **immediately** (no restart).
 
 ### From the Settings modal (recommended)
@@ -90,6 +90,7 @@ GitLab projects can be listed too. → [Using GitLab](#gitlab)
 - A **Pull requests** section on top, an **Issues** section below. Both are grouped **per repository**
   (an `owner/repo` heading with a count).
 - Only **open** items are shown. Order is your registration order (repos) and whatever `gh` returns (items).
+- A GitHub repo you have not registered shows too while a terminal is open in a clone of it (on any branch), after the registered ones and tagged **not registered**. One `gh` cannot read is left out with no error, and it leaves on the next read after its last terminal closes. The command palette's PR / issue entries include it as well, a little later, since the palette keeps what it read for a few minutes.
 - **Clicking a row opens it on GitHub in a new tab** (nothing opens in-app).
 - **↻ (Reload)** at the top re-fetches. **There is no auto-refresh** — it loads once when you open the
   view, then only on Reload.
@@ -144,6 +145,23 @@ session is still open in another terminal, nothing happens and the button says s
 > The issue body is text written by whoever opened the issue, which is often not you. That is why it
 > is left in the input box rather than sent: the Enter is yours. A **resumed** session gets nothing
 > typed into it — it already has a conversation of its own.
+
+## The board (experimental) {#board}
+
+**Open the board (experimental)**, above the list, opens a board with one card per piece of work in
+the columns **To do / Implementing / In review / Ready (QA) / Merged**. A card carries the issue, the
+PR that closes it, the branch, and the terminals open on that branch.
+
+**Only work with an open terminal**, in the board's header, is **on from the start**. While it is on,
+only the cards with a terminal open are shown, and columns and repositories with no card are hidden (a repository with a terminal on its default branch stays, for its row — see below).
+A merged card still shows while a terminal is left on it, so you notice what is left to tidy. Turn it
+off to see everything, the unstarted issues included. This browser remembers the choice.
+
+- A terminal open in a clone of a GitHub repository you have not added under **Pull request repos** shows too (when `gh` can read that repository; otherwise it is left out with no error), with that repository tagged **not registered**. It is listed after the registered ones, only while the switch is on, and leaves with its last terminal.
+- A terminal on the default branch (`main` and so on, when GitHub tells the board which it is), or on no branch at all, is on no card: it shows in a row above that repository's columns, grouped by branch.
+- A terminal you close leaves its card at once. One you open shows a few seconds later, when the board reads itself again — wherever it was opened, the phone included.
+- A terminal whose browser went away stays on its card while the server still runs it, until it is reaped.
+- GitHub repositories only.
 
 ## Using GitLab {#gitlab}
 

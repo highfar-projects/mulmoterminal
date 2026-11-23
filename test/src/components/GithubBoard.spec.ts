@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import GithubBoard from "../../../src/components/GithubBoard.vue";
 import { defineComponent, h, nextTick, ref } from "vue";
@@ -6,6 +6,9 @@ import { gridSessionJump, useGridSessionJump } from "../../../src/composables/gr
 import type { GridState } from "../../../src/components/gridTabs";
 import type { BoardCard, BoardDetailResponse, BoardResponse } from "../../../common/githubBoard";
 import { boardSelection } from "../../../src/composables/useGithubBoardView";
+import { useBoardOpenWorkOnly } from "../../../src/composables/useBoardOpenWorkOnly";
+
+const { boardOpenWorkOnly, setBoardOpenWorkOnly } = useBoardOpenWorkOnly();
 
 const card = (over: Partial<BoardCard>): BoardCard => ({ key: "k", column: "todo", issue: null, pr: null, branch: null, cells: [], ...over });
 
@@ -73,6 +76,9 @@ afterEach(() => {
 });
 
 describe("GithubBoard", () => {
+  // These read the whole board; the switch narrowing it has its own describe below.
+  beforeEach(() => setBoardOpenWorkOnly(false));
+
   it("places each card in its column, with the issue, the PR and its review round", async () => {
     serve({ repos: [{ repo: "o/r", cards: [card({ key: "issue-1", issue: { number: 1, title: "todo thing", url: "u" } }), prCard] }] });
     const w = mount(GithubBoard);
@@ -115,7 +121,7 @@ describe("GithubBoard", () => {
 
   it("jumps to a cell the grid holds and disables one it does not", async () => {
     const goTo = vi.fn();
-    gridSessionJump.value = { has: (session) => session === "in-grid", goTo };
+    gridSessionJump.value = { has: (session) => session === "in-grid", goTo, goToSlot: () => undefined };
     serve({ repos: [{ repo: "o/r", cards: [prCard] }] });
     const w = mount(GithubBoard);
     await flushPromises();
@@ -271,10 +277,167 @@ describe("GithubBoard", () => {
     expect(w.find('[data-testid="board-column-todo"]').exists()).toBe(false);
   });
 
+  it("shows the loading state where the cards go until the first read answers", async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        await gate;
+        return new Response(JSON.stringify({ repos: [{ repo: "o/r", cards: [prCard] }] }));
+      }),
+    );
+    const w = mount(GithubBoard);
+    await flushPromises();
+    expect(w.find('[data-testid="github-loading"]').exists()).toBe(true);
+    expect(w.get('[data-testid="board-refresh"] .material-symbols-outlined').classes()).toContain("animate-spin");
+    release();
+    await flushPromises();
+    expect(w.find('[data-testid="github-loading"]').exists()).toBe(false);
+    expect(w.get('[data-testid="board-column-review"]').text()).toContain("feat: it works");
+    w.unmount();
+  });
+
+  it("keeps the cards on screen while reading again, spinning the refresh button", async () => {
+    serve({ repos: [{ repo: "o/r", cards: [prCard] }] });
+    const w = mount(GithubBoard);
+    await flushPromises();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Promise<Response>(() => {})),
+    );
+    await w.get('[data-testid="board-refresh"]').trigger("click");
+    expect(w.find('[data-testid="github-loading"]').exists()).toBe(false);
+    expect(w.get('[data-testid="board-column-review"]').text()).toContain("feat: it works");
+    expect(w.get('[data-testid="board-refresh"]').attributes("aria-busy")).toBe("true");
+    expect(w.get('[data-testid="board-refresh"] .material-symbols-outlined').classes()).toContain("animate-spin");
+    w.unmount();
+  });
+
+  it("drops the loading state for the failure line when the first read fails", async () => {
+    serve(null);
+    const w = mount(GithubBoard);
+    await flushPromises();
+    expect(w.find('[data-testid="github-loading"]').exists()).toBe(false);
+    expect(w.text()).toContain("Could not read the board.");
+    w.unmount();
+  });
+
   it("says the board could not be read when the request fails", async () => {
     serve(null);
     const w = mount(GithubBoard);
     await flushPromises();
     expect(w.text()).toContain("Could not read the board.");
+  });
+});
+
+describe("GithubBoard with only the work a terminal is open on", () => {
+  const todo = card({ key: "issue-1", issue: { number: 1, title: "todo thing", url: "u" } });
+  const mergedWithCell = card({ key: "pr-3", column: "merged", branch: "feat/3", cells: [{ session: "s3", cwd: "/w/c", working: false, waiting: false }] });
+
+  beforeEach(() => setBoardOpenWorkOnly(true));
+
+  it("hides cards with no terminal, and the columns and repos left empty", async () => {
+    serve({
+      repos: [
+        { repo: "o/r", cards: [todo, prCard, mergedWithCell] },
+        { repo: "o/idle", cards: [todo] },
+      ],
+    });
+    const w = mount(GithubBoard);
+    await flushPromises();
+    expect(w.findAll('[data-testid="board-repo"]').map((repo) => repo.find("h3").text())).toEqual(["o/r"]);
+    expect(w.find('[data-testid="board-column-todo"]').exists()).toBe(false);
+    expect(w.get('[data-testid="board-column-review"]').text()).toContain("feat: it works");
+    expect(w.find('[data-testid="board-column-merged"]').exists()).toBe(true);
+    expect(w.text()).not.toContain("todo thing");
+  });
+
+  it("keeps a repo's error on screen", async () => {
+    serve({ repos: [{ repo: "o/broken", error: "gh: not logged in" }] });
+    const w = mount(GithubBoard);
+    await flushPromises();
+    expect(w.text()).toContain("gh: not logged in");
+    expect(w.find('[data-testid="board-nothing-open"]').exists()).toBe(false);
+  });
+
+  it("says nothing is open, and shows everything from there", async () => {
+    serve({ repos: [{ repo: "o/r", cards: [todo] }] });
+    const w = mount(GithubBoard);
+    await flushPromises();
+    await w.get('[data-testid="board-nothing-open"] button').trigger("click");
+    expect(boardOpenWorkOnly.value).toBe(false);
+    expect(w.get('[data-testid="board-column-todo"]').text()).toContain("todo thing");
+  });
+
+  it("follows the header checkbox both ways", async () => {
+    serve({ repos: [{ repo: "o/r", cards: [todo, prCard] }] });
+    const w = mount(GithubBoard);
+    await flushPromises();
+    const box = w.get<HTMLInputElement>('[data-testid="board-open-work-only"]');
+    expect(box.element.checked).toBe(true);
+    await box.setValue(false);
+    expect(w.text()).toContain("todo thing");
+    await box.setValue(true);
+    expect(w.text()).not.toContain("todo thing");
+  });
+
+  it("shows a repo no one registered while a terminal is open in it, tagged, and only with the switch on", async () => {
+    serve({
+      repos: [
+        { repo: "o/r", cards: [prCard] },
+        { repo: "x/y", unregistered: true, cards: [mergedWithCell] },
+      ],
+    });
+    const w = mount(GithubBoard);
+    await flushPromises();
+    const repos = () => w.findAll('[data-testid="board-repo"]');
+    expect(repos().map((repo) => repo.find("h3").text())).toEqual(["o/r", "x/y not registered"]);
+    expect(repos()[0]?.find('[data-testid="board-repo-unregistered"]').exists()).toBe(false);
+    expect(repos()[1]?.find('[data-testid="board-repo-unregistered"]').exists()).toBe(true);
+    await w.get<HTMLInputElement>('[data-testid="board-open-work-only"]').setValue(false);
+    expect(repos().map((repo) => repo.find("h3").text())).toEqual(["o/r"]);
+  });
+
+  it("says no repo is configured when only an unregistered one came back and the switch is off", async () => {
+    serve({ repos: [{ repo: "x/y", unregistered: true, cards: [mergedWithCell] }] });
+    setBoardOpenWorkOnly(false);
+    const w = mount(GithubBoard);
+    await flushPromises();
+    expect(w.findAll('[data-testid="board-repo"]')).toHaveLength(0);
+    expect(w.text()).toContain("No repositories configured");
+    expect(w.find('[data-testid="board-nothing-open"]').exists()).toBe(false);
+  });
+
+  it("shows the terminals on the default branch or on no branch in a row above the columns", async () => {
+    const main = { session: "m1", cwd: "/w/main", working: false, waiting: false, branch: "main" };
+    const detached = { session: "d1", cwd: "/w/detached", working: false, waiting: false, branch: null };
+    serve({ repos: [{ repo: "o/r", cards: [todo], mainlineCells: [detached, main] }] });
+    const w = mount(GithubBoard);
+    await flushPromises();
+    const groups = w.findAll('[data-testid="board-mainline-group"]');
+    expect(groups.map((group) => group.find("span").text())).toEqual(["On main", "On no branch"]);
+    expect(groups.map((group) => group.findAll('[data-testid="board-cell"]').length)).toEqual([1, 1]);
+    // With nothing else open the repo still shows, with its row and no empty columns.
+    expect(w.findAll('[data-testid="board-repo"]')).toHaveLength(1);
+    expect(w.find('[data-testid^="board-column-"]').exists()).toBe(false);
+    expect(w.find('[data-testid="board-nothing-open"]').exists()).toBe(false);
+    await w.get<HTMLInputElement>('[data-testid="board-open-work-only"]').setValue(false);
+    expect(w.find('[data-testid="board-mainline"]').exists()).toBe(true);
+    expect(w.get('[data-testid="board-column-todo"]').text()).toContain("todo thing");
+    w.unmount();
+  });
+
+  it("closes the panel of a card the switch hides", async () => {
+    serveBoardAndDetail({ repos: [{ repo: "o/r", cards: [todo, prCard] }] });
+    setBoardOpenWorkOnly(false);
+    const w = mount(GithubBoard);
+    await flushPromises();
+    boardSelection.value = { repo: "o/r", key: "issue-1" };
+    await nextTick();
+    setBoardOpenWorkOnly(true);
+    await nextTick();
+    expect(boardSelection.value).toBeNull();
+    w.unmount();
   });
 });

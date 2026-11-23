@@ -47,7 +47,12 @@ import {
   sessionTimeline,
   type SessionSummary,
 } from "../session/session-reads.js";
-import { formatHandoff, type HandoffShape } from "../session/transcript/handoff-text.js";
+import { formatHandoff, formatRelay, type HandoffShape } from "../session/transcript/handoff-text.js";
+import { DEFAULT_RELAY_LIMITS, isRelayMark } from "../session/transcript/relay-range.js";
+import { readRelay } from "../session/transcript/relay-read.js";
+import { isRelayDest, type RelayMarkKey } from "../session/transcript/relay-marks.js";
+import { relayMarkOf, setRelayMark } from "../session/transcript/relay-mark-store.js";
+import { currentBranch } from "../git/git-status.js";
 import { agentHomeChoices, claudeTranscriptFile, codexSessionsUnder } from "../session/session-home.js";
 import { accountSessionsHydrated } from "../session/accounts/account-sessions.js";
 import { runningKeyOf, runningSessionKeys, sessionAttached, survivorSnapshot } from "../session/dir-session.js";
@@ -354,6 +359,13 @@ async function transcriptPage(req: Request, res: Response, agentOfSession: Sessi
   res.json(await sessionTranscriptPage(cwd, session, before, { agentOf: agentOfSession }));
 }
 
+// How a handoff names where it came from. The branch is in it because a reader in another worktree
+// of the same repo does not have the sender's files (#3397).
+async function originLabel(agent: string, cwd: string): Promise<string> {
+  const { branch } = await currentBranch(cwd);
+  return branch ? `${agent} · ${branch}` : agent;
+}
+
 // A session's last completed exchange, already rendered as the text to paste into ANOTHER
 // session's input box (#550). Reading the agent's own log instead of the terminal's screen
 // buffer is the whole point: no ANSI frames, no spinner debris, no lines lost to scrollback,
@@ -372,7 +384,62 @@ async function lastTurn(req: Request, res: Response) {
   // ?as=reply drops the prompt block: the caller is relaying an ANSWER back to whoever
   // asked, and that prompt is the asker's own text coming home.
   const shape: HandoffShape = req.query.as === "reply" ? "reply" : "exchange";
-  res.json({ ...turn, text: formatHandoff({ label: agent, cwd }, turn, undefined, shape) });
+  res.json({ ...turn, text: formatHandoff({ label: await originLabel(agent, cwd), cwd }, turn, undefined, shape) });
+}
+
+// Every exchange since the last relay to the asking cell's directory (#3389). Answers the text and
+// the marker to record; the marker moves only through relay-mark, once the browser has pasted.
+async function relaySince(req: Request, res: Response) {
+  const source = await relaySourceOf(req, res);
+  if (source === null) return;
+  const { cwd, session, key } = source;
+  const selection = await readRelay(
+    {
+      readPage: (before) => sessionTranscriptPage(cwd, session, before),
+      lastCompletedPrompt: async () => (await sessionLastTurn(cwd, key.conversation, key.agent)).prompt,
+    },
+    await relayMarkOf(key),
+    DEFAULT_RELAY_LIMITS,
+  );
+  if (selection.status !== "ok") return res.json({ status: selection.status, text: "", mark: null, count: 0 });
+  res.json({
+    status: "ok",
+    text: formatRelay({ label: await originLabel(key.agent, cwd), cwd }, selection),
+    mark: selection.mark,
+    count: selection.turns.length,
+  });
+}
+
+async function relayMark(req: Request, res: Response) {
+  const source = await relaySourceOf(req, res);
+  if (source === null) return;
+  const { mark } = requestBody(req.body);
+  if (!isRelayMark(mark)) return res.status(400).json({ error: "invalid relay mark" });
+  try {
+    await setRelayMark({ ...source.key, mark });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[api] /api/transcript/relay-mark failed:", err);
+    res.status(500).json({ error: "failed to record where the relay ended" });
+  }
+}
+
+// The relay's source and destination, all from the query. The conversation is the one the cell is
+// in now, as for last-turn; `dest` is only ever a key, never a path that is read.
+async function relaySourceOf(req: Request, res: Response): Promise<{ cwd: string; session: string; key: RelayMarkKey } | null> {
+  const target = await sessionRouteTarget(req, res);
+  if (target === null) return null;
+  const { dest } = req.query;
+  if (!isRelayDest(dest)) {
+    res.status(400).json({ error: "invalid destination directory" });
+    return null;
+  }
+  const conversation = transcriptIdOf(target.session);
+  if (conversation === null) {
+    res.json({ status: "no-turn", text: "", mark: null, count: 0 });
+    return null;
+  }
+  return { ...target, key: { agent: normalizeAgent(req.query.agent), conversation, dest } };
 }
 
 // List the chat sessions for the current project (CLAUDE_CWD), including
@@ -638,6 +705,8 @@ export function mountSessionRoutes(app: Express, deps: SessionRouteDeps): void {
   app.get("/api/transcript/timeline", toolTimeline);
   app.get("/api/transcript/prompts", userPrompts);
   app.get("/api/transcript/last-turn", lastTurn);
+  app.get("/api/transcript/relay", relaySince);
+  app.post("/api/transcript/relay-mark", relayMark);
   app.get("/api/transcript/view", (req, res) => transcriptPage(req, res, deps.agentOfSession));
   // The sessions a loading grid should adopt: spawned VISIBLE by the server and never taken by a
   // cell (a scheduled task's chat, one the phone started, one an agent started from another
