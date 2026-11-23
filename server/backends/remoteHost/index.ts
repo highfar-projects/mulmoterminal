@@ -41,10 +41,8 @@ import { mountRemoteHostRoutes as mountRoutes } from "./routes.js";
 import { LEGACY_HOST_ID, legacyHostDocOf } from "./hostIdentity.js";
 import { readHostIdentityFile, writeHostIdentityFile } from "./hostIdentityFile.js";
 import { createHostIdentityResolver } from "./hostIdentityResolver.js";
-import { createTerminalSessionHandlers } from "./handlers/terminalSession.js";
-import { createPastSessionHandlers } from "./handlers/pastSessions.js";
 import { PEER_COMMAND_PATH, PEER_COMMANDS } from "./peerProtocol.js";
-import { withPeerSessions } from "./peerSessions.js";
+import { peerCommandTable, withPeerSessions } from "./peerSessions.js";
 import { callPeerCommand } from "./peerClient.js";
 import { configuredPeers } from "../../infra/http/peer-proxy.js";
 import { requestOriginAllowed } from "../../routes/same-origin-guard.js";
@@ -94,28 +92,29 @@ export interface RemoteHostPeerOptions {
   isLocalSession: (sessionId: string) => Promise<boolean>;
 }
 
-const ownPeerCommands = (deps: RemoteHostBackendDeps): CommandHandlers => {
-  const own: CommandHandlers = { ...createTerminalSessionHandlers(deps), ...createPastSessionHandlers(deps) };
-  return Object.fromEntries(Object.entries(own).filter(([name]) => PEER_COMMANDS.includes(name)));
-};
-
 // The table the Firestore runner serves: every handler, wrapped so the phone also reaches the cells
 // of every configured peer (peerSessions.ts). A host with no peers behaves exactly as before.
+//
+// The peer table is cut from the SAME unwrapped table, so a command added to PEER_COMMANDS answers
+// on the peer exactly as it does for the phone. It was once assembled from two handler files
+// instead, and `listSkills`, which lives in neither, answered a relaying parent 404.
 const phoneHandlers = (
   deps: RemoteHostBackendDeps,
   live: Pick<RemoteHostHandlerDeps, "ingest" | "mobileFileStager">,
   peerOptions: RemoteHostPeerOptions,
   warn: (message: string) => void,
-): CommandHandlers =>
-  withPeerSessions(createRemoteHostHandlers({ ...deps, ...live }), {
+): CommandHandlers => {
+  const own = createRemoteHostHandlers({ ...deps, ...live });
+  peerCommandHandlers = peerCommandTable(own);
+  return withPeerSessions(own, {
     peers: configuredPeers,
     call: callPeerCommand,
     isLocal: peerOptions.isLocalSession,
     warn,
   });
+};
 
 export function initRemoteHostBackend(deps: RemoteHostBackendDeps, peerOptions: RemoteHostPeerOptions): void {
-  peerCommandHandlers = ownPeerCommands(deps);
   // Ingest pulls the phone's staged uploads (Firebase Storage, signed in as the
   // user) into data/attachments/ and hands startChat path-only attachments. Reads
   // the LIVE session's storage/uid (both change per (re)connect — see session.ts).
