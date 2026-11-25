@@ -139,11 +139,7 @@ async function staleOwnerOf(lock: string): Promise<string | null> {
  *  even the put-back lose a race, the holder whose lock moved is refused at its write (`stillHeld`). */
 export async function removeIfOwnedBy(lock: string, owner: string, options: { onlyIfStale?: boolean } = {}): Promise<void> {
   const aside = `${lock}.${randomUUID()}.aside`;
-  try {
-    await fs.rename(lock, aside);
-  } catch {
-    return; // already gone or replaced: the next attempt sees what is there now
-  }
+  if (!(await moveAside(lock, aside))) return; // already gone or replaced: the next attempt sees what is there now
   const moved = await ownerOf(aside);
   // Judged on the copy that was moved: its owner, and — for a takeover — its own age.
   if (moved !== null && moved === owner && (options.onlyIfStale !== true || (await isOld(aside)))) {
@@ -151,4 +147,25 @@ export async function removeIfOwnedBy(lock: string, owner: string, options: { on
     return;
   }
   await fs.rename(aside, lock).catch(() => fs.rm(aside, { recursive: true, force: true }));
+}
+
+/** What Windows reports while another process has a file in the directory open for a moment — the
+ *  other holder reading `owner` between its attempts is enough. Not "gone": the lock is still there. */
+const MOVE_BUSY = new Set(["EPERM", "EBUSY", "EACCES"]);
+const MOVE_ATTEMPTS = 40;
+
+/** Whether the lock was moved aside. A busy answer is tried again: given up on at once, a release
+ *  left the lock in place, and every other holder waited out its attempts and failed (seen on Windows
+ *  with two holders racing). Any other failure means the lock is gone or was replaced. */
+async function moveAside(lock: string, aside: string): Promise<boolean> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await fs.rename(lock, aside);
+      return true;
+    } catch (err) {
+      const busy = err instanceof Error && "code" in err && MOVE_BUSY.has(String(err.code));
+      if (!busy || attempt >= MOVE_ATTEMPTS) return false;
+      await new Promise((resolve) => setTimeout(resolve, MARKS_LOCK_RETRY_MS));
+    }
+  }
 }
