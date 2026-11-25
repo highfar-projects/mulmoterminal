@@ -15,6 +15,9 @@ const emit = defineEmits<{ close: [] }>();
 const { t } = useI18n();
 
 const COPIED_NOTE_MS = 2500;
+// Every colour named: a <button> does not inherit the text colour, so one that names none is drawn in
+// the browser's own dark ink — unreadable on a dark theme's panel. The What's new dialog's button.
+const BUTTON = "cursor-pointer rounded-md border border-border bg-elevated px-3 py-1 font-sans text-[12px] text-fg hover:bg-input";
 const modalEl = ref<HTMLElement | null>(null);
 const box = ref<HTMLInputElement>();
 const note = ref<"copied" | "manual" | null>(null);
@@ -85,16 +88,10 @@ async function copy(sha256: string): Promise<void> {
         />
         <div class="flex items-center justify-end gap-2">
           <span role="status" class="mr-auto text-[12px] text-muted">{{ note ? t(`filesHash.${note}`) : "" }}</span>
-          <button
-            v-if="state.status === 'done'"
-            type="button"
-            data-testid="files-hash-copy"
-            class="rounded border border-border px-3 py-1 text-[12px] hover:bg-hover"
-            @click="copy(state.sha256)"
-          >
+          <button v-if="state.status === 'done'" type="button" data-testid="files-hash-copy" :class="BUTTON" @click="copy(state.sha256)">
             {{ t("filesHash.copy") }}
           </button>
-          <button type="button" class="rounded border border-border px-3 py-1 text-[12px] hover:bg-hover" @click="emit('close')">
+          <button type="button" :class="BUTTON" @click="emit('close')">
             {{ t("filesHash.close") }}
           </button>
         </div>
