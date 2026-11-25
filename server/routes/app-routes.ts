@@ -329,12 +329,9 @@ function mountIssueSessions(
   });
 }
 
-// Everything that must run before express.json, in this order. Its own function so mountAppRoutes
-// stays under the length limit with this fork's peer relay added to upstream's list.
+// What must run after the gates but before express.json, in this order. Its own function so
+// mountAppRoutes stays under the length limit with this fork's peer relay added to upstream's list.
 function mountAheadOfParsers(app: Express, deps: AppRouteDeps): void {
-  // FIRST, before any route, parser or static file (request-gates.ts).
-  mountRequestGates(app, deps);
-
   // A peer server's cells (common/peers.ts), relayed with their bodies untouched — so ahead of
   // every parser, right behind the gates.
   mountPeerHttpRelay(app, deps.isAllowedOrigin);
@@ -345,6 +342,8 @@ function mountAheadOfParsers(app: Express, deps: AppRouteDeps): void {
 }
 
 export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
+  // FIRST, before any route, parser or static file (request-gates.ts).
+  mountRequestGates(app, deps);
   mountAheadOfParsers(app, deps);
   const clientDir = deps.clientDir;
 
