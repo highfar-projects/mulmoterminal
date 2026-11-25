@@ -74,6 +74,25 @@ export async function bankText(query: string, text: string, keepalive = false, h
   }
 }
 
+export type FileHashOutcome = { status: "done"; sha256: string; size: number } | { status: "error"; message: string };
+
+// Long, because the server reads the WHOLE file: a multi-gigabyte image on a slow or network disk
+// takes minutes, and that read was going to succeed. Still bounded, as fetchWithTimeout asks.
+const FILE_HASH_TIMEOUT_MS = 10 * 60_000;
+
+/** A file's SHA-256, worked out by the server that has the file (fork-only). `signal` lets the dialog
+ *  that asked stop waiting when it is closed. */
+export async function fetchSha256(query: string, host: string | null = null, signal?: AbortSignal): Promise<FileHashOutcome> {
+  try {
+    const res = await fetchWithTimeout(peerApiPath(host, `/api/files/browse/sha256?${query}`), signal ? { signal } : {}, FILE_HASH_TIMEOUT_MS);
+    const data = await jsonBody(res);
+    if (res.ok && typeof data.sha256 === "string" && typeof data.size === "number") return { status: "done", sha256: data.sha256, size: data.size };
+    return { status: "error", message: typeof data.error === "string" && data.error.length > 0 ? data.error : `HTTP ${res.status}` };
+  } catch (e) {
+    return { status: "error", message: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 /** Hand a path to something on this machine that the browser cannot reach — the OS file manager
  *  (#2039) or the default application (#2038). One function for both, because the only thing that
  *  differs is the route and the words: `failure` is what the message NAMES, which is not always

@@ -16,6 +16,8 @@ import { useFilesReveal } from "../composables/useFilesReveal";
 import { useFilesPreviewWire } from "../composables/useFilesPreviewWire";
 import PreviewCodeBlockDialog from "./PreviewCodeBlockDialog.vue";
 import PreviewCopiedNotice from "./PreviewCopiedNotice.vue";
+import FilesHashDialog from "./FilesHashDialog.vue";
+import { useFileHash } from "../composables/useFileHash";
 import type { FilesPaneState } from "./filesPaneState";
 import { tabStripView, useFilesTabs } from "../composables/useFilesTabs";
 import { useCarriedView } from "../composables/useSessionViewMode";
@@ -236,6 +238,7 @@ async function openAsSpreadsheet(pathRel: string): Promise<void> {
 // this machine, and the Canvas card would be made and stored by this server for a session it does
 // not hold (common/peers.ts).
 const ACTIONS_NOT_ON_A_PEER = new Set<FilesRowAction["id"]>(["reveal", "open-canvas", "open-spreadsheet"]);
+const fileHash = useFileHash();
 
 function runRowAction(action: FilesRowAction): void {
   if (paneHost.value && ACTIONS_NOT_ON_A_PEER.has(action.id)) {
@@ -250,6 +253,8 @@ function runRowAction(action: FilesRowAction): void {
   // the local server does it (#2039) — through filesPaneApi, like every other request here.
   else if (action.id === "reveal") void file.reportFailure(askTheMachine("/api/files/reveal", action.pathAbs, `could not show ${action.pathAbs}`));
   else if (action.id === "insert-relative" || action.id === "insert-absolute") emit("insert-text", action.text);
+  // Asked of the server the directory is on, a peer included: the hash is of ITS file.
+  else if (action.id === "sha256") void fileHash.open(props.cwd, action.pathRel, paneHost.value);
   else if (isTreeOpAction(action)) void fileOps.run(action);
 }
 
@@ -694,5 +699,6 @@ defineExpose({
     <FilesRowMenuPanel ref="rowMenuPanel" :menu="rowMenu" @nav="rowMenuApi.onMenuNav" @pick="rowMenuApi.pick" />
     <PreviewCodeBlockDialog v-if="previewScroll.codeBlock?.shown.value" :lookup="previewScroll.codeBlock.shown.value" @close="previewScroll.codeBlock.close" />
     <PreviewCopiedNotice v-if="previewScroll.codeBlock?.copied.value" :notice="previewScroll.codeBlock.copied.value" />
+    <FilesHashDialog v-if="fileHash.shown.value" :state="fileHash.shown.value" @close="fileHash.close" />
   </div>
 </template>

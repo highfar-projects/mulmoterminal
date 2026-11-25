@@ -47,6 +47,7 @@ import { mountFilesTreeRoutes } from "./files-tree-routes.js";
 import { splitFrontmatter } from "@mulmoclaude/markdown-utils/markdown/frontmatter";
 import { MATH_STYLE, previewMath } from "./previewMath.js";
 import { mountFilesGitStatusRoute } from "./files-git-status.js";
+import { mountFileHashRoute } from "./files-hash-route.js";
 import { dirConfigDetail, dirConfigDirOf } from "../config/dir/dir-config.js";
 import { dirConfigSaveReport, type DirConfigSaveReport } from "../../common/dirConfigSaveReport.js";
 
@@ -636,6 +637,7 @@ export function mountFilesBrowseRoutes(app: Express, deps: BrowseDeps): void {
   });
 
   mountRenderedRoutes(app, defaultCwd);
+  mountFileHashRoute(app, { contained: (req, res) => containedFor(req, res, defaultCwd), recheck: (req) => recheckForRead(req, defaultCwd) });
   mountWriteRoute(app, deps);
   mountFilesTreeRoutes(app, { base: (cwd) => namedBase(typeof cwd === "string" ? cwd : null, defaultCwd, os.homedir()) });
   mountBackupRoute(app, deps);
