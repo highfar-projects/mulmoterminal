@@ -72,7 +72,7 @@ describe("the files tree's row menu", () => {
     rightClick(w.findAll('[data-testid="files-row"]')[0].element);
     await flushPromises();
 
-    expect(labels()).toEqual(["Open in a new tab", "Show in folder", "Insert relative path", "Insert absolute path"]);
+    expect(labels()).toEqual(["Open in a new tab", "Show in folder", "Get SHA-256 hash", "Insert relative path", "Insert absolute path"]);
     item("insert-relative")?.click();
     await flushPromises();
     expect(w.emitted("insert-text")).toEqual([["README.md "]]);
@@ -95,7 +95,7 @@ describe("the files tree's row menu", () => {
     rightClick(w.findAll('[data-testid="files-row"]')[0].element); // README.md
     await flushPromises();
 
-    expect(labels()).toEqual(["Open in a new tab", "Open in the Canvas", "Show in folder", "Insert relative path", "Insert absolute path"]);
+    expect(labels()).toEqual(["Open in a new tab", "Open in the Canvas", "Show in folder", "Get SHA-256 hash", "Insert relative path", "Insert absolute path"]);
     item("open-canvas")?.click();
     await flushPromises();
     expect(w.findComponent({ name: "FilesCanvasView" }).props("card")).toMatchObject({ toolName: "presentDocument", data: { docPath: "/proj/README.md" } });
@@ -121,7 +121,7 @@ describe("the files tree's row menu", () => {
     const event = rightClick(w.findAll('[data-testid="files-row"]')[0].element);
     await flushPromises();
 
-    expect(labels()).toEqual(["Open in a new tab", "Show in folder"]);
+    expect(labels()).toEqual(["Open in a new tab", "Show in folder", "Get SHA-256 hash"]);
     expect(event.defaultPrevented).toBe(true);
   });
 
@@ -130,7 +130,7 @@ describe("the files tree's row menu", () => {
     rightClick(w.findAll('[data-testid="files-row"]')[0].element);
     await flushPromises();
 
-    expect(labels()).toEqual(["Open in a new tab", "Show in folder", "Insert absolute path"]);
+    expect(labels()).toEqual(["Open in a new tab", "Show in folder", "Get SHA-256 hash", "Insert absolute path"]);
   });
 
   it("opens from the keyboard, on both spellings of the menu key", async () => {
@@ -162,6 +162,8 @@ describe("the files tree's row menu", () => {
     down();
     expect(document.activeElement).toBe(item("reveal"));
     down();
+    expect(document.activeElement).toBe(item("sha256"));
+    down();
     expect(document.activeElement).toBe(item("insert-relative"));
     down();
     expect(document.activeElement).toBe(item("insert-absolute"));
@@ -172,6 +174,7 @@ describe("the files tree's row menu", () => {
     down();
     expect(document.activeElement).toBe(item("open-tab")); // wraps
 
+    down();
     down();
     down();
     expect(document.activeElement).toBe(item("insert-relative"));

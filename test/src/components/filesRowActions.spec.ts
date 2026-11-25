@@ -16,12 +16,13 @@ type Target = Omit<Parameters<typeof filesRowActions>[0], "isDir"> & { isDir?: b
 const call = (t: Target) => filesRowActions({ isDir: false, ...t });
 // The new-tab entry is left out of `ids`: it leads every FILE row's menu, and the cases below are
 // about what follows it. Its own block pins where it goes and where it does not. So are the tree's
-// file operations (#2578), which close every menu and have a block of their own at the end.
+// file operations (#2578), which close every menu and have a block of their own at the end. And so is
+// the SHA-256 entry (fork-only), offered on every file row whatever the rest is; its block pins it.
 const FILE_OPS = ["new-file", "new-folder", "rename", "trash"];
 const ids = (t: Target) =>
   call(t)
     .map((a) => a.id)
-    .filter((id) => id !== "open-tab" && !FILE_OPS.includes(id));
+    .filter((id) => id !== "open-tab" && id !== "sha256" && !FILE_OPS.includes(id));
 // Narrowed rather than asserted: only the insert entries carry text, which is the whole point of
 // the union — the Canvas one has a path instead.
 const textOf = (id: string, t: Target) => {
@@ -247,7 +248,7 @@ describe("filesRowActions — opening a file in a new tab (#2267)", () => {
   });
 
   it("is offered with no terminal beside the pane — reading a file needs none", () => {
-    expect(allIds({ ...here, pathRel: "src/index.ts", terminal: null }).filter((id) => !FILE_OPS.includes(id))).toEqual(["open-tab", "reveal"]);
+    expect(allIds({ ...here, pathRel: "src/index.ts", terminal: null }).filter((id) => !FILE_OPS.includes(id))).toEqual(["open-tab", "reveal", "sha256"]);
   });
 
   it("is not offered on a folder, which has nothing to show in a tab", () => {
@@ -339,6 +340,29 @@ describe("filesRowActions — words", () => {
 
 // "Open as a spreadsheet" (CSV / TSV): a copy on the Canvas of the cell beside the pane, so it is
 // offered only where there is such a cell, and only on the files the table Preview reads.
+describe("filesRowActions — the SHA-256 entry (fork-only)", () => {
+  const here = { cwd: "/proj", terminal: { cwd: "/proj" }, canvas: null };
+  const allIds = (t: Target) => call(t).map((a) => a.id);
+
+  it("follows the file manager entry on a file row, carrying the row's relative path", () => {
+    const actions = call({ ...here, pathRel: "dist/app.zip" });
+    expect(allIds({ ...here, pathRel: "dist/app.zip" }).slice(0, 3)).toEqual(["open-tab", "reveal", "sha256"]);
+    expect(actions.find((a) => a.id === "sha256")).toEqual({ id: "sha256", labelKey: "filesRowMenu.sha256", icon: "fingerprint", pathRel: "dist/app.zip" });
+  });
+
+  it("is offered with no terminal beside the pane, which hashing does not need", () => {
+    expect(allIds({ ...here, pathRel: "dist/app.zip", terminal: null })).toContain("sha256");
+  });
+
+  it("is not offered on a folder, which has no single content to hash", () => {
+    expect(allIds({ ...here, pathRel: "dist", isDir: true })).not.toContain("sha256");
+  });
+
+  it("is not offered where no row path can be resolved", () => {
+    expect(allIds({ ...here, pathRel: "dist/app.zip", cwd: null })).toEqual([]);
+  });
+});
+
 describe("filesRowActions — the spreadsheet entry", () => {
   const inPane = { cwd: "/proj", terminal: { cwd: "/proj" }, canvas: { roots: { workspaces: ["/ws"], roots: [] } } };
 

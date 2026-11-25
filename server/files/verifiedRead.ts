@@ -3,6 +3,7 @@
 // between the check and the open is then caught before any of the outside file's bytes are read.
 // Two of the limits in verifiedWrite.ts's header hold here too: three swaps timed to the instant, and a
 // hard link being the same file.
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import { hasErrnoCode } from "../errors.js";
 import { isOpenedFileAt, isSameFile, NO_FOLLOW, openUnlessLink, type Recheck } from "./verifiedWrite.js";
@@ -42,6 +43,27 @@ export async function readVerifiedAsync(abs: string, recheck: Recheck): Promise<
   if (handle === null) return null;
   try {
     return isOpenedFileAt(await handle.stat({ bigint: true }), recheck()) ? await handle.readFile() : null;
+  } finally {
+    await handle.close();
+  }
+}
+
+/** The SHA-256 of `abs` and how many bytes went into it, or null when it escaped. Streamed, so a file
+ *  of any size is hashed without being held in memory. Throws what the open or the read throws. */
+export async function sha256VerifiedAsync(abs: string, recheck: Recheck): Promise<{ sha256: string; size: number } | null> {
+  const handle = await openHandleUnlessLink(abs);
+  if (handle === null) return null;
+  try {
+    if (!isOpenedFileAt(await handle.stat({ bigint: true }), recheck())) return null;
+    const hash = createHash("sha256");
+    let size = 0;
+    // No encoding is set, so every chunk is a Buffer; the stream types it `any`, hence the check.
+    for await (const chunk of handle.createReadStream({ autoClose: false })) {
+      if (!Buffer.isBuffer(chunk)) continue;
+      hash.update(chunk);
+      size += chunk.length;
+    }
+    return { sha256: hash.digest("hex"), size };
   } finally {
     await handle.close();
   }

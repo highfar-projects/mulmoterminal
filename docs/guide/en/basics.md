@@ -259,6 +259,11 @@ keyboard (arrows move between the items). Directories work too. The relative one
 the tree and the terminal are in the same directory, since that is when it means the same thing at
 both ends.
 
+A file row also offers **Get SHA-256 hash**. The server that has the file reads all of it and shows
+the digest in a dialog; **Copy** puts it on the clipboard, ready to compare with the one a download
+page publishes. The file is never downloaded to the browser, however large it is. Folders do not
+offer it.
+
 > **Status shows up as color.** A bluish border means **working** (thinking), **amber means awaiting input or a
 > permission** (Needs input), a **green ring + glow means a finished, unreviewed turn** (Done — review; the
 > thumbnails and roster rows use that same green), and neutral means idle. A sound plays too, so you know you've been **called without watching

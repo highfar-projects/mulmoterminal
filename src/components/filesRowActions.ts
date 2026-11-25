@@ -55,6 +55,11 @@ export type FilesRowAction =
       pathRel: string;
     })
   | (RowActionChrome & {
+      /** The file's SHA-256, worked out by the server that has it (fork-only). Relative, like a read. */
+      id: "sha256";
+      pathRel: string;
+    })
+  | (RowActionChrome & {
       id: "open-canvas";
       /** RELATIVE to the tree's root, like the tab it is opened in — the Canvas view resolves it
        *  against the pane's cwd, so an absolute one would be resolved twice. */
@@ -176,6 +181,8 @@ function viewActions({ pathRel, isDir, cwd, terminal, canvas }: FilesRowTarget):
     icon: REVEAL_ICON,
     pathAbs: absoluteUnder(cwd, pathRel),
   });
+  // Files only: a folder has no single content to fingerprint. Needs no terminal, like the reveal.
+  if (!isDir) actions.push({ id: "sha256", labelKey: "filesRowMenu.sha256", icon: "fingerprint", pathRel });
   if (terminal === null) return actions;
   // Only when a relative path means the same thing at the other end. The pane keeps the cell it
   // is on when a re-root could not be saved out of, so the tree and the terminal on screen can
