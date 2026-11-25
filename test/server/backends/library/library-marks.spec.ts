@@ -1,8 +1,8 @@
 // @vitest-environment node
 // Pins and names in the Library (#3329): the pure change, and the file — absent, corrupt, and two
 // changes arriving together.
-import { describe, it, expect, afterEach } from "vitest";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { describe, it, expect, afterEach, vi } from "vitest";
+import { mkdtempSync, promises as fs, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -145,6 +145,31 @@ describe("the cross-process lock", () => {
     expect(await tryAcquire(lock, "me")).toBe(true);
     await removeIfOwnedBy(lock, "me");
     expect(await tryAcquire(lock, "next")).toBe(true); // it was really released
+  });
+
+  // Windows answers EPERM while another holder has the lock's owner file open between its attempts.
+  // Given up on, the release left the lock behind and every other holder failed after its attempts.
+  it("releases its lock when moving it aside is refused for a moment", async () => {
+    const file = scratchFile();
+    const lock = `${file}.lock`;
+    mkdirSync(path.dirname(lock), { recursive: true });
+    expect(await tryAcquire(lock, "me")).toBe(true);
+    const realRename = fs.rename.bind(fs);
+    let refused = 0;
+    const rename = vi.spyOn(fs, "rename").mockImplementation(async (from, to) => {
+      if (from === lock && refused < 2) {
+        refused += 1;
+        throw Object.assign(new Error("EPERM: operation not permitted, rename"), { code: "EPERM" });
+      }
+      return realRename(from, to);
+    });
+    try {
+      await removeIfOwnedBy(lock, "me");
+    } finally {
+      rename.mockRestore();
+    }
+    expect(refused).toBe(2);
+    expect(existsSync(lock)).toBe(false);
   });
 
   it("does not take over a lock whose moved copy turns out to be young, even under the expected owner", async () => {
