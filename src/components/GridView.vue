@@ -5,6 +5,7 @@ import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } 
 import TerminalGrid from "./TerminalGrid.vue";
 import AppSettingsModal from "./AppSettingsModal.vue";
 import LaunchPanel from "./LaunchPanel.vue";
+import { loadGridState, saveGridState } from "../composables/gridLayoutMirror";
 import { cellForAgent, cellForPanelResume, cellForPanelStart, type PanelResume, type PanelStart } from "./launchCell";
 import AppToolbar from "./AppToolbar.vue";
 import GuideLinks from "./GuideLinks.vue";
@@ -14,7 +15,6 @@ import { rosterRow, type RosterLookups, type RowChrome } from "./rosterRow";
 import { markUnreadTarget } from "./markUnreadKey";
 import type { BundledSkillName } from "../../common/bundledSkills";
 import {
-  initialState,
   setSession,
   setCwd,
   setCellAgent,
@@ -42,8 +42,6 @@ import {
   countByStatus,
   zoomedUid,
   runningCount,
-  STATE_KEY,
-  LEGACY_KEY,
   type GridState,
   type Cell,
   type SortMode,
@@ -109,17 +107,10 @@ import { isFilesPaneAction } from "./filesPaneActions";
 // own specs, and overlayOrigin reads the same singleton for the same reason.
 const onTerminalsRoute = () => router.currentRoute.value.name === "terminals";
 
-const init = initialState(localStorage.getItem(STATE_KEY), localStorage.getItem(LEGACY_KEY));
-const state = ref<GridState>(init.state);
-const persist = () => localStorage.setItem(STATE_KEY, JSON.stringify(state.value));
-// Write the migrated state before dropping the legacy key, so a reload between
-// migration and the first change can't lose the sessions.
-if (init.migrated) {
-  persist();
-  localStorage.removeItem(LEGACY_KEY);
-}
-// Only the visible tab persists, and every tab absorbs what another one wrote (useGridTabSync).
-useGridTabSync(state, persist);
+const state = ref<GridState>(loadGridState());
+// Only the visible tab persists (to the browser and the server's copy, #3427), and every tab
+// absorbs what another one wrote (useGridTabSync).
+useGridTabSync(state, () => saveGridState(state.value));
 
 // Feed the tab-close guard: warn on close/reload while any cell runs a session or
 // command (counts every page, not just the mounted one).
@@ -462,11 +453,11 @@ onMounted(() => (offNewTerminal = registerNewTerminalHandler(openNewTerminal)));
 onBeforeUnmount(detachNewTerminal);
 
 // Server config: the default workspace dir + the auto-recorded dir presets + sound.
-const { defaultCwd, storiesRoots, home, presets, configUnavailable, launchers, customAgents, accounts, loadConfig, recordPreset, removePreset } =
+const { defaultCwd, storiesRoots, home, presets, configUnavailable, launchers, customAgents, accounts, loadConfig, recordPreset, removePreset, ...config } =
   useAppConfig();
 // Module state (the palette opens it on a section, #2450), owned by this view: the modal goes with it.
 const showSettings = settingsOpen;
-onMounted(loadConfig);
+onMounted(config.loadConfigThenPruneMissing);
 onBeforeUnmount(closeSettings);
 
 // Page Up / Page Down walk the zoom between terminals (#829). Listened for on `window` in the
@@ -939,6 +930,7 @@ onBeforeUnmount(detachSpawnedChat);
       :accounts="accounts"
       :open-session-ids="openSessionIds"
       :open-cwds="openCwds"
+      @opened="config.pruneMissingPresets"
       @start="onPanelStart"
       @resume="onPanelResume"
       @run="onPanelRun"
@@ -947,7 +939,7 @@ onBeforeUnmount(detachSpawnedChat);
       @retry-config="loadConfig"
       @close="closeLaunchPanel"
     />
-    <AppSettingsModal v-if="showSettings" :presets="presets" @launch-skill="launchSkill" @close="closeSettings" />
+    <AppSettingsModal v-if="showSettings" :presets="config.savedPresets.value" @launch-skill="launchSkill" @close="closeSettings" />
     <PrefixKeyHint :pending="keys.pending.value" />
     <FocusModeNotice />
   </div>

@@ -39,6 +39,17 @@ export interface IssueSessionSpawnDeps {
  *  server's; the other agents have no such mode to start in, and start as they always do. */
 export interface IssueSessionOptions {
   claudePermissionMode?: string;
+  /** Hand claude, codex or copilot the whole GUI MCP instead of the directory's groups (#3413). The
+   *  other agents read theirs from a file every session in the directory shares, and ignore it. */
+  allTools?: boolean;
+  /** Let codex's sandbox reach the network (a reviewer or an implementer, both of which talk to
+   *  GitHub). The other agents have no such sandbox switch, and ignore it. */
+  networkAccess?: boolean;
+  /** Never stop codex on an approval prompt (a session nobody is watching). The other agents ignore it. */
+  neverAsk?: boolean;
+  /** More paths codex's sandbox may write (the worktree's git metadata, for an implementer). The
+   *  other agents ignore it. */
+  writableRoots?: readonly string[];
 }
 
 /** `account` is an id `requestedIssueAccount` accepted for this agent, or null for the default login. */
@@ -57,6 +68,10 @@ interface SpawnRequest {
   seed: string;
   run: boolean;
   claudePermissionMode: string | undefined;
+  allTools: boolean;
+  networkAccess: boolean;
+  neverAsk: boolean;
+  writableRoots: readonly string[];
 }
 
 type AgentSpawn = (request: SpawnRequest, deps: IssueSessionSpawnDeps) => Promise<void>;
@@ -81,6 +96,18 @@ export function requestedIssueAccount(
   return typeof raw === "string" && accountsForAgent(accounts, agent).some((account) => account.id === raw) ? { ok: true, account: raw } : { ok: false };
 }
 
+/** A per-spawn agent's options: the directory's groups for a cell-shaped session, none when it
+ *  carries every tool and would only list them twice. */
+const perSpawnMcp = async (
+  deps: IssueSessionSpawnDeps,
+  cwd: string,
+  seed: string,
+  allTools: boolean,
+): Promise<{ mcpGroups: readonly ToolGroup[]; initialPrompt: string }> => ({
+  mcpGroups: allTools ? [] : await deps.groupsFor(cwd),
+  initialPrompt: seed,
+});
+
 const directoryGroupsSpawn =
   (pick: (deps: IssueSessionSpawnDeps) => SpawnAntigravityPty | SpawnGrokPty | SpawnMusePty): AgentSpawn =>
   async ({ sessionId, cwd, seed }, deps) => {
@@ -90,14 +117,19 @@ const directoryGroupsSpawn =
 // A Record over the agents, so hosting a new one is a type error here rather than an issue start
 // that silently spawns Claude under its name.
 const AGENT_SPAWN: Record<TerminalAgent, AgentSpawn> = {
-  claude: async ({ sessionId, cwd, seed, run, claudePermissionMode }, deps) => {
-    deps.spawnClaudePty(sessionId, null, null, issueSpawnOptions(cwd, seed, run, claudePermissionMode));
+  claude: async ({ sessionId, cwd, seed, run, claudePermissionMode, allTools }, deps) => {
+    deps.spawnClaudePty(sessionId, null, null, issueSpawnOptions(cwd, seed, run, claudePermissionMode, allTools));
   },
-  codex: async ({ sessionId, cwd, seed }, deps) => {
-    deps.spawnCodexPty(sessionId, null, null, cwd, false, { mcpGroups: await deps.groupsFor(cwd), initialPrompt: seed });
+  codex: async ({ sessionId, cwd, seed, allTools, networkAccess, neverAsk, writableRoots }, deps) => {
+    deps.spawnCodexPty(sessionId, null, null, cwd, allTools, {
+      ...(await perSpawnMcp(deps, cwd, seed, allTools)),
+      ...(networkAccess ? { networkAccess } : {}),
+      ...(neverAsk ? { neverAsk } : {}),
+      ...(writableRoots.length > 0 ? { writableRoots } : {}),
+    });
   },
-  copilot: async ({ sessionId, cwd, seed }, deps) => {
-    deps.spawnCopilotPty(sessionId, null, null, cwd, false, { mcpGroups: await deps.groupsFor(cwd), initialPrompt: seed });
+  copilot: async ({ sessionId, cwd, seed, allTools }, deps) => {
+    deps.spawnCopilotPty(sessionId, null, null, cwd, allTools, await perSpawnMcp(deps, cwd, seed, allTools));
   },
   // Cursor loads only servers it has APPROVED, and an unapproved one is silently absent, so the file
   // is written and approved before the spawn — as its cell does (ws-routes.ts).
@@ -119,7 +151,20 @@ export function createIssueSessionSpawner(deps: IssueSessionSpawnDeps): SpawnIss
     await deps.reserveWorktreeEnv(cwd);
     // Bound BEFORE the spawn: the spawn reads the binding to choose the login it runs under.
     if (account !== null && isAccountAgent(agent)) await deps.bindAccount(agent, sessionId, account);
-    await AGENT_SPAWN[agent]({ sessionId, cwd, seed, run, claudePermissionMode: options.claudePermissionMode }, deps);
+    await AGENT_SPAWN[agent](
+      {
+        sessionId,
+        cwd,
+        seed,
+        run,
+        claudePermissionMode: options.claudePermissionMode,
+        allTools: options.allTools === true,
+        networkAccess: options.networkAccess === true,
+        neverAsk: options.neverAsk === true,
+        writableRoots: options.writableRoots ?? [],
+      },
+      deps,
+    );
     // Only Claude can leave the seed as a draft; the rule is spawnModeFor's, not a second copy.
     return { sessionId, agent, seedRuns: spawnModeFor(agent, !run) !== "claude-draft" };
   };

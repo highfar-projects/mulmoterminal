@@ -29,6 +29,7 @@ import ServerStoppedOverlay from "./components/ServerStoppedOverlay.vue";
 import ServerRestartingOverlay from "./components/ServerRestartingOverlay.vue";
 import WhatsNewDialog from "./components/WhatsNewDialog.vue";
 import GridView from "./components/GridView.vue";
+import RestoreLayoutBar from "./components/RestoreLayoutBar.vue";
 import { useSessions } from "./composables/useSessions";
 import { useAppConfig } from "./composables/useAppConfig";
 import { useFaviconState } from "./composables/useFaviconState";
@@ -92,6 +93,8 @@ const { whatsNew, dismiss: dismissWhatsNew } = useWhatsNew(useI18n().locale.valu
 
 <template>
   <GridView />
+  <!-- The last layout, offered back when this browser came up without one (#3427). -->
+  <RestoreLayoutBar />
   <!-- The full-screen overlays, on TOP of the grid rather than instead of it. Each is route-driven
        and starts below the header (`top-10`), so the toolbar stays on screen and the view beneath
        one does not change while it is open (#1193). -->

@@ -1156,7 +1156,7 @@ The Settings modal (the gear button) persists per-user UI choices to `~/.mulmote
 
 | Field        | Meaning |
 | ------------ | ------- |
-| `cwdPresets` | Quick-pick directories offered when launching a terminal. |
+| `cwdPresets` | Quick-pick directories offered when launching a terminal. A deleted directory is hidden at once and dropped when a check at least a day later still finds it missing (when it was first seen is kept in `~/.mulmoterminal/missing-dirs.json`); one that could be on an unplugged drive (parent missing too or empty, a volume root, or a dangling symlink) is kept but hidden. |
 | `soundFile`  | Absolute path to a custom **attention sound**, the fallback for every kind. Empty/unset uses the built-in synthesized chime. |
 | `soundKinds` | Which moments beep — see [Notification sounds](#notification-sounds). Defaults to `["finished","waiting"]`; the other kinds are opt-in. |
 | `sounds`     | Per-kind sound: `{ "waiting": "preset:coin" }`. A `preset:<id>` reference or an absolute path; a kind with no entry falls back to `soundFile`. |
@@ -1915,9 +1915,11 @@ here disables the button and says why. Backed by `POST /api/issues/start`.
 **The board (experimental).** **Open the board** on `/github` goes to `/github/board`: per repo, one
 card per piece of work in five columns — To do, Implementing, In review (with the review round),
 Ready (QA) and Merged — joining each issue to the PR that closes it and to the live cells on its
-branch. An open PR's card also counts the codex cross-review verdicts posted as comments (a first line
-`CODEX VERDICT: LGTM (head <sha>)` or `CHANGES REQUESTED`, by the repo's owner, members or
-collaborators) and shows the newest, coloured only when the sha it names is the PR's head. Pressing a card opens a detail panel with the issue body, the PR's checks and reviews, and
+branch. An open PR's card also counts the cross-review verdicts posted as comments (a first line
+`CODEX VERDICT: LGTM (head <sha>)` or `REVIEW VERDICT: …`, or `CHANGES REQUESTED`, by the repo's
+owner, members or collaborators) and shows the newest, coloured only when the sha it names is the
+PR's head. When the repository declares `review` in its `.mulmoterminal.json`, a card whose head
+has the required LGTMs and whose CI passed is marked **Ready to merge**. Pressing a card opens a detail panel with the issue body, the PR's checks and reviews, and
 those cells (`GET /api/github/board/detail`); GitHub is a link inside it. A To do card's **▶** starts
 the issue as above but **sends the issue text at once** and stays on the board; the new cell joins
 the grid behind it, and the card moves to Implementing. The board keeps itself current while open: cells follow the same live `sessions` feed as the grid, a card whose cell is waiting for you gets an amber border, and the board reads itself again every minute while visible and a few seconds after one of its cells finishes a turn. Each cell in the detail panel can be answered there: its current screen (read by itself when the cell is waiting), a reply box that types one line and presses Enter — the phone's sanitized sender, which never clears what was already in the input box — and, when the question pane is switched on, Claude's question dialog as buttons. A permission prompt is answered with keys, so in the terminal. Backed by `GET /api/github/board`.
@@ -2566,7 +2568,7 @@ From a shell: `mulmoterminal room read <room>` · `room post <room> <text…> [-
 | Endpoint | Purpose |
 | -------- | ------- |
 | `POST /api/mcp/:sessionId` | Per-session GUI MCP server (Streamable HTTP; `GET`/`DELETE` → 405). |
-| `POST /api/plugin/:toolName` | GUI-plugin dispatch (incl. `spawnBackgroundChat`, `manageAccounting`, `presentHtml`). `spawnBackgroundChat` takes an optional `guiGroups` (claude, codex and copilot): a list of tool groups (`render`, `data`, `media`, `external`) the spawned session is limited to, `[]` for no GUI tool. The limit holds across a resume, including a codex resume opened by its rollout id. It is not a sandbox: the tools stay callable over HTTP. |
+| `POST /api/plugin/:toolName` | GUI-plugin dispatch (incl. `spawnBackgroundChat`, `manageAccounting`, `presentHtml`). `spawnBackgroundChat` takes an optional `guiGroups` (claude, codex and copilot): a list of tool groups (`render`, `data`, `media`, `external`) the spawned session is limited to, `[]` for no GUI tool. The limit holds across a resume, including a codex resume opened by its rollout id. It is not a sandbox: the tools stay callable over HTTP. Session-to-session tools: `sendToSession` / `waitForSessionReply` (message a session you started, then read its answer), `reviewSettings` (the repository's declared reviewer, the skill it follows, round limit and LGTMs needed), `requestReview` / `endReview` (run one review round of a PR in the reviewer session; when `reviewer` is left out, MulmoTerminal starts the repository's declared reviewer itself in a worktree of the PR's head and keeps it for later rounds; a codex reviewer never stops on an approval prompt, and sandbox refusals return as failures; close it after the merge), `startIssueSession` (start an implementer on an issue in its own worktree, up to the global limit; a codex implementer never stops on an approval prompt, and sandbox refusals return as failures). Details: [review loop](docs/guide/en/config.md#dir-review), [how many issues run at once](docs/guide/en/config.md#max-issue-sessions). |
 | `POST /api/session/:id/close` | End a session **and close the cell showing it**, as if its agent had exited (`/exit`) — the counterpart of `spawnBackgroundChat` for an agent that replaces its worker. Answers `{ ok, ended }`, where `ended` says whether the tmux session is really gone. The session is never adopted later as an unplaced cell. (`POST /api/session/:id/terminate` ends a session but leaves its cell showing `[session ended]`; a cell's own restart uses it.) |
 | `GET /api/agent/toolResults/:id` · `POST /api/agent/toolResult` | GUI-panel result history / persist. |
 | `GET /api/tools` · `GET /api/tool-calls/:id` | Available tools / tool-call history. |

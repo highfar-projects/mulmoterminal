@@ -67,6 +67,9 @@ import {
   resolveAddDirs,
 } from "../config-schema.js";
 
+import { dirReviewField } from "../review-schema.js";
+import { reviewSummary, type ReviewSettings } from "../../../common/reviewSettings.js";
+
 export const DIR_CONFIG_FILE = ".mulmoterminal.json";
 // The same settings for THIS checkout only (#1430). Several clones of one repository share a
 // project config and differ in nothing but their colours and grid rank, so the shared part lives
@@ -124,6 +127,9 @@ export interface DirConfig extends DirChrome {
   // this directory's own (host) path — see config-schema.ts's dirDevcontainerWorkspaceFolderField
   // for why a path an agent prints from inside the container needs this to resolve on the host.
   devcontainerWorkspaceFolder: string | null;
+  // How this repository wants its changes reviewed (#3407), defaults filled in; null when the file
+  // declares none or the block does not validate.
+  review: ReviewSettings | null;
 }
 
 // What the browser receives: the raw sound path stays server-side (streamed via
@@ -218,6 +224,7 @@ const EMPTY: DirConfig = {
   worktreeEnv: null,
   devcontainer: null,
   devcontainerWorkspaceFolder: null,
+  review: null,
 };
 
 /** Every layer as ONE object, the more specific winning per top-level key.
@@ -316,6 +323,7 @@ export function loadDirConfig(cwd: string): DirConfig {
       worktreeEnv: dirWorktreeEnvField.parse(raw.worktreeEnv),
       devcontainer: dirDevcontainerField.parse(raw.devcontainer),
       devcontainerWorkspaceFolder: dirDevcontainerWorkspaceFolderField.parse(raw.devcontainerWorkspaceFolder),
+      review: dirReviewField.parse(raw.review),
     };
   } catch {
     return EMPTY;
@@ -442,6 +450,7 @@ function dirConfigExtras(cwd: string): DirConfigExtras {
     worktreeEnv,
     devcontainer,
     devcontainerWorkspaceFolder,
+    review,
   } = loadDirConfig(cwd);
   return {
     provider,
@@ -459,6 +468,7 @@ function dirConfigExtras(cwd: string): DirConfigExtras {
     commandLabels: commands.map((command) => command.label),
     autoIcon: autoIconRef(cwd, icon),
     worktreeEnvNames: Object.keys(worktreeEnv ?? {}),
+    reviewSummary: review ? reviewSummary(review) : null,
   };
 }
 

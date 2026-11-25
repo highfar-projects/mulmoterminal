@@ -41,6 +41,7 @@ export const DIR_CONFIG_KEYS = [
   "worktreeEnv",
   "devcontainer",
   "devcontainerWorkspaceFolder",
+  "review",
 ] as const;
 
 export type DirConfigKey = (typeof DIR_CONFIG_KEYS)[number];
@@ -106,6 +107,8 @@ export interface DirConfigExtras {
   // The container-side path devcontainer mounted this directory at, when it differs from this
   // directory's own — see config-schema.ts's dirDevcontainerWorkspaceFolderField.
   devcontainerWorkspaceFolder: string | null;
+  // The `review` block in one line (#3407), defaults filled in; null when none was read.
+  reviewSummary: string | null;
 }
 
 export const EMPTY_DIR_CONFIG_EXTRAS: DirConfigExtras = {
@@ -124,6 +127,7 @@ export const EMPTY_DIR_CONFIG_EXTRAS: DirConfigExtras = {
   worktreeEnvNames: [],
   devcontainer: null,
   devcontainerWorkspaceFolder: null,
+  reviewSummary: null,
 };
 
 // "The loader kept nothing for this key" — null/undefined, but also the empty collections the
