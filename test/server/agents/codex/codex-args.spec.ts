@@ -1,11 +1,32 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { buildCodexArgs } from "../../../../server/agents/codex/codex-args.js";
+import { buildCodexArgs, CODEX_NETWORK_ACCESS, CODEX_NEVER_ASK, codexWritableRoots } from "../../../../server/agents/codex/codex-args.js";
 import { codexPermissionHookOverride } from "../../../../server/agents/codex/codex-hook.js";
 
 const base = { resume: null, model: null, guiMcpServers: [], permissionHook: false };
 
 describe("buildCodexArgs", () => {
+  it("lets the sandbox reach the network only when asked, ahead of the resume subcommand", () => {
+    expect(buildCodexArgs({ ...base, networkAccess: true, resume: "id1" })).toEqual(["-c", CODEX_NETWORK_ACCESS, "resume", "id1"]);
+    expect(CODEX_NETWORK_ACCESS).toBe("sandbox_workspace_write.network_access=true");
+    expect(buildCodexArgs({ ...base, networkAccess: false })).toEqual([]);
+  });
+
+  it("turns approval prompts off only when asked", () => {
+    expect(buildCodexArgs({ ...base, neverAsk: true, resume: "id1" })).toEqual(["-c", CODEX_NEVER_ASK, "resume", "id1"]);
+    expect(CODEX_NEVER_ASK).toBe('approval_policy="never"');
+    expect(buildCodexArgs({ ...base, neverAsk: false })).toEqual([]);
+  });
+
+  it("adds writable roots only when there are some, as a TOML array of strings", () => {
+    expect(buildCodexArgs({ ...base, writableRoots: ["/repo/.git/objects", "/repo/.git/refs"] })).toEqual([
+      "-c",
+      'sandbox_workspace_write.writable_roots=["/repo/.git/objects","/repo/.git/refs"]',
+    ]);
+    expect(buildCodexArgs({ ...base, writableRoots: [] })).toEqual([]);
+    expect(codexWritableRoots(["C:\\repo\\.git", 'a"b'])).toBe('sandbox_workspace_write.writable_roots=["C:\\\\repo\\\\.git","a\\"b"]');
+  });
+
   it("passes no id for a fresh session (codex mints its own)", () => {
     expect(buildCodexArgs({ ...base })).toEqual([]);
   });

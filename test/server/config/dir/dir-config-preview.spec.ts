@@ -48,6 +48,7 @@ const FIXTURES: Record<string, unknown> = {
   worktreeEnv: { PORT: { kind: "port", base: 3000 } },
   devcontainer: true,
   devcontainerWorkspaceFolder: "/workspaces/proj",
+  review: { reviewer: "codex" },
 };
 
 const dirs: string[] = [];

@@ -97,6 +97,55 @@ describe("createIssueSessionSpawner", () => {
     expect(calls[0].args).toEqual(["s-1", null, null, CWD, false, { mcpGroups: GROUPS, initialPrompt: SEED }]);
   });
 
+  // #3413: a session's implementer carries every tool, so the review tools reach it; the groups would only repeat them.
+  it("hands claude, codex and copilot every tool when asked, without the directory's groups", async () => {
+    const { spawn, calls, groupsFor } = setup();
+    await spawn("claude", CWD, SEED, true, null, { allTools: true });
+    await spawn("codex", CWD, SEED, true, null, { allTools: true });
+    await spawn("copilot", CWD, SEED, true, null, { allTools: true });
+    expect(calls.map((c) => c.args)).toEqual([
+      ["s-1", null, null, { cwd: CWD, attachGuiMcp: true, initialPrompt: SEED }],
+      ["s-1", null, null, CWD, true, { mcpGroups: [], initialPrompt: SEED }],
+      ["s-1", null, null, CWD, true, { mcpGroups: [], initialPrompt: SEED }],
+    ]);
+    expect(groupsFor).not.toHaveBeenCalled();
+  });
+
+  // A reviewer or an implementer talks to GitHub with gh, which codex's default sandbox cannot reach.
+  it("lets codex's sandbox reach the network only when asked, and changes nothing for the others", async () => {
+    const { spawn, calls } = setup();
+    await spawn("codex", CWD, SEED, true, null, { networkAccess: true });
+    await spawn("claude", CWD, SEED, true, null, { networkAccess: true });
+    await spawn("codex", CWD, SEED, true, null);
+    expect(calls.map((c) => c.args)).toEqual([
+      ["s-1", null, null, CWD, false, { mcpGroups: GROUPS, initialPrompt: SEED, networkAccess: true }],
+      ["s-1", null, null, { cwd: CWD, attachGuiMcp: false, initialPrompt: SEED }],
+      ["s-1", null, null, CWD, false, { mcpGroups: GROUPS, initialPrompt: SEED }],
+    ]);
+  });
+
+  it("turns codex's approval prompts off only when asked, and changes nothing for the others", async () => {
+    const { spawn, calls } = setup();
+    await spawn("codex", CWD, SEED, true, null, { neverAsk: true });
+    await spawn("claude", CWD, SEED, true, null, { neverAsk: true });
+    expect(calls.map((c) => c.args)).toEqual([
+      ["s-1", null, null, CWD, false, { mcpGroups: GROUPS, initialPrompt: SEED, neverAsk: true }],
+      ["s-1", null, null, { cwd: CWD, attachGuiMcp: false, initialPrompt: SEED }],
+    ]);
+  });
+
+  it("hands codex the extra writable roots, and nothing to the others or for an empty list", async () => {
+    const { spawn, calls } = setup();
+    await spawn("codex", CWD, SEED, true, null, { writableRoots: ["/repo/.git/objects"] });
+    await spawn("claude", CWD, SEED, true, null, { writableRoots: ["/repo/.git/objects"] });
+    await spawn("codex", CWD, SEED, true, null, { writableRoots: [] });
+    expect(calls.map((c) => c.args)).toEqual([
+      ["s-1", null, null, CWD, false, { mcpGroups: GROUPS, initialPrompt: SEED, writableRoots: ["/repo/.git/objects"] }],
+      ["s-1", null, null, { cwd: CWD, attachGuiMcp: false, initialPrompt: SEED }],
+      ["s-1", null, null, CWD, false, { mcpGroups: GROUPS, initialPrompt: SEED }],
+    ]);
+  });
+
   it.each(["antigravity", "grok", "muse"] as const)("gives %s the directory's groups", async (agent) => {
     const { spawn, calls } = setup();
     await spawn(agent, CWD, SEED, false, null);

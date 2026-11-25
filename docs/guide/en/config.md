@@ -177,7 +177,7 @@ Open it in the Files pane and the editor knows this file's keys: it offers them 
 
 To get to it from Settings: **Settings → Directory settings**, expand a directory, and press **Open in Files** beside its file — or, where it has none yet, **Create .mulmoterminal.json and open it**, which writes an empty `{}` first. Either one closes Settings and opens the file in the full-screen Files view.
 
-Or change it without opening the file: under the values, **Change here** has a row each for the name, the seven colours, the header's status style and its colour per status, the terminal theme and its palette, font size, font family, grid priority, the model its sessions start on, the closing-summary switch, extra directories (`addDirs`), the icon, the terminal background, the attention sounds, the header's buttons, chips and command-palette entries (the same editors as the global ones), the Skill menu, the Mulmo menu's decks and the per-worktree variables — every key the file can hold except `mobileFiles`, which is set in the file only. **This checkout only** moves a key into `.mulmoterminal.local.json`, and **Share** moves it back. From a terminal, the path menu (click the directory in its header) has **This directory's settings**, which opens Settings with that directory's row open. Setting any status colour here replaces the global set of status colours for that directory, as `headerStatusColors` in the file always has. The status colours and the palette are saved as a whole set, so an entry the app already ignores there (an unknown palette key, a value that is not a colour) is dropped by the next save from the form. A change is saved as soon as you leave the field (or pick the colour) and applies at once; **Use global** removes that key so the global setting applies again. Keys the form does not show are left as they are. A key `.mulmoterminal.local.json` already holds is written there, marked *this checkout only*.
+Or change it without opening the file: under the values, **Change here** has a row each for the name, the seven colours, the header's status style and its colour per status, the terminal theme and its palette, font size, font family, grid priority, the model its sessions start on, the closing-summary switch, extra directories (`addDirs`), the icon, the terminal background, the attention sounds, the header's buttons, chips and command-palette entries (the same editors as the global ones), the Skill menu, the Mulmo menu's decks and the per-worktree variables — every key the file can hold except `mobileFiles` and `review`, which are set in the file only. **This checkout only** moves a key into `.mulmoterminal.local.json`, and **Share** moves it back. From a terminal, the path menu (click the directory in its header) has **This directory's settings**, which opens Settings with that directory's row open. Setting any status colour here replaces the global set of status colours for that directory, as `headerStatusColors` in the file always has. The status colours and the palette are saved as a whole set, so an entry the app already ignores there (an unknown palette key, a value that is not a colour) is dropped by the next save from the form. A change is saved as soon as you leave the field (or pick the colour) and applies at once; **Use global** removes that key so the global setting applies again. Keys the form does not show are left as they are. A key `.mulmoterminal.local.json` already holds is written there, marked *this checkout only*.
 
 ### Which model to use
 
@@ -513,7 +513,7 @@ Now a new worktree is given its own copy, derived from the project's, written to
 repository committed and leaves the worktree's `git status` clean:
 
 - **The identity is copied as written** — `name`, `icon`, `theme`, `colors`, `fontSize`,
-  `fontFamily`, `provider`, `model`, `headerStatusTint`, `backgroundImage`. Same project, same terminal, same model. `icon` is carried as
+  `fontFamily`, `provider`, `model`, `headerStatusTint`, `backgroundImage`, [`review`](#dir-review). Same project, same terminal, same model. `icon` is carried as
   the path you typed rather than the file it resolved to, so a logo committed to the repository is
   found again inside the worktree; one that is gitignored simply doesn't appear there.
 - **The chrome colours are rotated a little around the colour wheel** — `badgeColor`,
@@ -696,6 +696,52 @@ included.
   if they are inside a declared directory.
 - A worktree does not inherit this key.
 
+### How this repository's PRs are reviewed (`review`) {#dir-review}
+
+Declares how a session that drives a review should treat this repository's pull requests. Nothing
+reviews automatically until the key is set; a session that drives a review reads it with the
+`reviewSettings` tool, given the repository as `owner/repo`.
+
+```json
+{ "review": { "reviewer": "codex", "maxRounds": 10, "requiredLgtm": 1, "skill": "mulmoterminal-review" } }
+```
+
+- **`reviewer`** — the agent that reviews: `claude`, `codex`, `antigravity`, `grok`, `copilot` or
+  `cursor`. Default `codex`. `muse` cannot be one yet: its replies cannot be read back.
+- **`maxRounds`** — how many review rounds before a person is asked, 1 to 50. Default 10.
+- **`requiredLgtm`** — how many LGTMs naming the PR's current head make it mergeable, 1 to 5.
+  Default 1. Every CI check passing is always required as well.
+- **`skill`** — the skill the reviewer is asked to follow for each round: a skill name, or
+  `plugin:name`. Default `mulmoterminal-review`, which ships with MulmoTerminal: one complete round
+  per request, every finding with its severity, every other place the same mistake appears and the
+  smallest fix, and what the reviewer could not run marked as unverified. Name your own to review
+  your way. Whatever the skill says, the reviewer is still asked to open its reply with the verdict
+  line and post it on the PR, because that is what the rounds are counted by.
+- Omit any field for its default; `"review": {}` takes all four defaults.
+- If any field is wrong (an agent this app does not run, a number out of range, a misspelt field name), the **whole key**
+  is ignored rather than falling back to a default reviewer, and Settings → Directory settings lists
+  it under *ignored*. Settings shows a valid one as **Review**.
+- The file is the only way to set it. It is read from the clone that work on the repository starts
+  in, and a worktree inherits it.
+
+With the key set, the session runs the loop through two tools. It calls `requestReview` with the
+repository and the PR number, and MulmoTerminal starts the reviewer itself: the declared agent, in a
+worktree of the PR's head under `~/.mulmoterminal/review-worktrees/` (never the author's checkout),
+as a cell you can see. A codex reviewer's sandbox may reach the network there, because it reads and
+comments on the PR with `gh`, and it never stops on an approval prompt: what its sandbox refuses comes
+back to it as a failure. A codex cell you open yourself keeps your own sandbox and approval settings. The same reviewer
+takes the PR's later rounds, its worktree moved to each new head, and a new one is started if it has
+stopped. (A session may still start a reviewer of its own with `spawnBackgroundChat` and name it as
+`reviewer`.) MulmoTerminal sends the reviewer the request, naming the `skill` to follow, waits for its answer, and types how
+the round ended into the calling session: the verdict, the rounds left, and whether the merge
+condition is met. When the reviewer stops on a question or a permission prompt mid-round, the calling session is told
+once, with the reviewer's cell, so it can tell you where to answer. It refuses a round past `maxRounds`, a second review of a head that had changes
+requested, and a reviewer that is not the declared agent. It never merges; the session does.
+`endReview` closes the reviewer once the PR is merged, and removes the worktree MulmoTerminal made. The reviewer is asked to open its reply, and
+the comment it posts on the PR, with `REVIEW VERDICT: LGTM (head <sha>)` or
+`REVIEW VERDICT: CHANGES REQUESTED (head <sha>)`, which the GitHub board counts like a
+`CODEX VERDICT:` line. The rounds are kept in memory, so a restart starts the count again.
+
 ### Closing summary for this directory (`appendSystemPrompt`)
 
 ```json
@@ -704,6 +750,37 @@ included.
 
 Whether this project's sessions are asked to end a reply with a summary. Omit it to follow the
 global setting, which is on. → [Turning off the closing summary](#append-system-prompt)
+
+## How many issues run at once (`maxIssueSessions`) {#max-issue-sessions}
+
+A session can hand issues to implementers of its own with the `startIssueSession` tool: each one
+gets the issue's worktree and a cell, and takes the issue to merge through the
+[review loop](#dir-review). A codex implementer's sandbox may reach the network, as a codex
+reviewer's does, because it reads the issue, pushes and opens the PR with `gh` and `git`. It may also
+write the worktree's git metadata in the clone it was cut from (its own git directory and the shared
+objects, refs and logs), so it can commit; never the clone's `config` or hooks, and nothing at all
+in a clone with `extensions.worktreeConfig` on, where git reads config from that git directory. Like the reviewer, it never stops on an approval
+prompt. `maxIssueSessions` in `~/.mulmoterminal/config.json` is how many of
+them may run at once, across every repository. A start past it is refused until one finishes.
+MulmoTerminal follows each one and types a `[startIssueSession]` line into the session that started
+it when its PR is merged or closed, when its session ends, and when it stops on the user (a question
+or a permission prompt) — as long as that session is still running; its implementers are followed
+either way, so their places come back. A merged or closed one no longer counts.
+
+When its PR is merged or closed, MulmoTerminal also closes the implementer: its reviewers (cell and
+worktree), its own cell, then its local worktree and local branch (the remote branch stays, so the PR still leads to
+it). A worktree with uncommitted changes or commits no remote has is kept, and the line says so. One
+whose session ended on its own is left for the starting session, which closes it with
+`closeIssueSession` — the only session allowed to. That tool refuses an implementer still at work
+unless it is passed `force: true`.
+
+```json
+{ "maxIssueSessions": 3 }
+```
+
+- 1 to 8. Default 2. Anything else is taken as the default, never as "no limit".
+- Each implementer starts a reviewer of its own, so the sessions running are double this.
+- There is no Settings control. **Reload config file** applies a change to the next start.
 
 ## Make your own colour scheme (`themes`) {#custom-themes}
 
@@ -2285,7 +2362,7 @@ What you write here appears in an empty cell's launcher under **OR RUN A SCRIPT*
 
 | Key | Role |
 |---|---|
-| `cwdPresets` | Working-directory chips in the launcher (`{ label, path }`; click to fill the field, the play icon to launch). Ordered by each directory's [`orderPriority`](#order-priority); the ones that declare none follow, in the order you last launched them |
+| `cwdPresets` | Working-directory chips in the launcher (`{ label, path }`; click to fill the field, the play icon to launch). Ordered by each directory's [`orderPriority`](#order-priority); the ones that declare none follow, in the order you last launched them. Saved directories are checked when the app loads and when the launcher opens. One that has been deleted (its parent folder still exists) is hidden at once and removed from the list when a check at least a day later still finds it missing; one that could be on an unplugged drive (its parent is missing too or empty, it is a volume's own folder such as `/Volumes/USB`, or it is a symlink to something missing) stays saved but is hidden until it is back |
 | `launchers` | The launch commands that appear under "OR LAUNCH" in a grid cell. Only what you add — a plain shell is already the launcher's **Shell** toggle |
 | `quickCommands` | Phrases the **phone** offers as chips on a session (`{ label, text, agents? }`). Tapping one fills the input box — it is not sent until you press send. `agents` scopes a chip to any of `SESSION_AGENTS` — `"claude"`, `"codex"`, `"antigravity"`, `"grok"`, `"muse"`, `"copilot"`, `"cursor"` / `"shell"`; omit it to offer the chip everywhere. Editable in Settings → **Phone quick commands** |
 | `prRepos` | The repos targeted by the cross-repo PR/Issue view. Editable in Settings → **Pull request repos**, where a save takes effect at once; a hand-edit applies on **Reload config file** or a restart (→ [GitHub](github.html#register)) |

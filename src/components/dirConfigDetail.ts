@@ -173,6 +173,15 @@ function extraRows(extras: Record<string, unknown>): DirConfigRow[] {
   if (commands.length) rows.push({ key: "commands", label: "Palette commands", value: commands.join(", "), color: null });
   const worktreeEnv = stringList(extras.worktreeEnvNames);
   if (worktreeEnv.length) rows.push({ key: "worktreeEnv", label: "Per-worktree env", value: worktreeEnv.join(", "), color: null });
+  rows.push(...devcontainerRows(extras));
+  const review = asString(extras.reviewSummary);
+  if (review) rows.push({ key: "review", label: "Review", value: review, color: null });
+  return rows;
+}
+
+// Fork-only rows, split out so extraRows stays under the complexity limit with upstream's rows added.
+function devcontainerRows(extras: Record<string, unknown>): DirConfigRow[] {
+  const rows: DirConfigRow[] = [];
   // Same reasoning as appendSystemPrompt above: only ever written `true` (see
   // config/devcontainer-flag.ts), but the TYPE check keeps this consistent with that row rather
   // than relying on the one value it happens to take today.
