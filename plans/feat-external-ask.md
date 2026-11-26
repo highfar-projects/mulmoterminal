@@ -119,7 +119,7 @@
 - `server/config/external-ask-files.ts` — 設定・token・送信記録のファイル
 - `server/session/transcript/external-ask-read.ts` — さかのぼり読み
 - `test/server/routes/externalAsk.spec.ts`、`test/server/routes/external-ask-routes.spec.ts`
-- `scripts/external-ask.mjs` — 手で試すための小さなクライアント。`--list` で宛先の一覧、`<session-id> <expected-cwd> "<text>"` で依頼を送って返事を表示する。Git Bash から POSIX のパスを渡すときは `MSYS_NO_PATHCONV=1` が要る
+- `scripts/external-ask.mjs` — 手で試すための小さなクライアント。`--list` で宛先の一覧、`<session-id> <expected-cwd> "<text>"` で依頼を送って返事を表示する。待つのは `--max-wait` 秒（既定 540）までで、終わらなければ終了コード 2 と askId を出し、`<session-id> --wait <askId>` で待ち直せる。Git Bash から POSIX のパスを渡すときは `MSYS_NO_PATHCONV=1` が要る
 
 ## 確かめたこと
 
