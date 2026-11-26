@@ -12,6 +12,7 @@ import { skillDocFile, type SkillDocSource } from "../backends/skills/skillCatal
 import {
   isBaselineFor,
   ladderAttempts,
+  improveAttempts,
   maxImproveCostUsd,
   maxLadderCostUsd,
   maxRunCostUsd,
@@ -23,7 +24,11 @@ import {
   type SkillEvalSet,
 } from "../../common/skillEval.js";
 import { isEditableSkill } from "../backends/skills/skillEdit.js";
+import type { LibraryCaller } from "../backends/library/library-service.js";
+import { sharedCaller } from "./library-routes.js";
+import { isPersonLanguage, PERSON_LANGUAGES, type PersonLanguage } from "../../common/blueprint/personLanguage.js";
 import { adoptCandidate } from "../backends/skillEval/evalAdopt.js";
+import { readEvalMarks } from "../backends/skillEval/evalMarks.js";
 import type { SpawnIssueSession } from "../session/spawn/issue-session-spawn.js";
 import { commandRunner, type AttemptDeps } from "../backends/skillEval/evalAttempt.js";
 import { runClaude } from "../backends/skillEval/runClaude.js";
@@ -32,6 +37,7 @@ import { activeRunId, effectiveStatus, startEvalRun, stopEvalRun } from "../back
 import { docSource } from "./skill-source-query.js";
 import { requestBody } from "./requestBody.js";
 import { homedir, tmpdir } from "node:os";
+import { authorWriteRules } from "../backends/skillEval/evalWriteRulesOnDisk.js";
 
 export const SKILL_EVALS_ROOT = path.join(MULMOTERMINAL_HOME, "skill-evals");
 
@@ -41,6 +47,8 @@ export interface SkillEvalRouteDeps {
   cwds?: () => Promise<string[]>;
   /** Starts the Claude cell that drafts a set with the user; without it, that answers 503. */
   spawnSession?: SpawnIssueSession;
+  /** The Library, for the conversations that ran a skill (#3470). Override the worker, for tests. */
+  library?: LibraryCaller;
 }
 
 const skillIdOf = (source: SkillDocSource, slug: string): string => (source.scope === "plugin" ? `${source.plugin}:${slug}` : slug);
@@ -85,15 +93,34 @@ interface Context {
   cwds: () => Promise<string[]>;
   attemptDeps: AttemptDeps;
   spawnSession: SpawnIssueSession | null;
+  library: LibraryCaller;
 }
 
 // Plan mode, as for the Library's promote: the skill shows its draft and writes nothing until the user
 // approves, and Claude Code holds that rather than the skill's own wording.
 const AUTHOR_PERMISSION_MODE = "plan";
 
-/** The first turn of the drafting cell: the skill's name, where its SKILL.md is, and the folder to save in. */
-export const authorTurn = (skill: ResolvedSkill): string =>
-  `/${SKILL_EVAL_AUTHOR_SKILL} skill ${JSON.stringify(skill.id)}, SKILL.md at ${JSON.stringify(skill.file)}, save in ${JSON.stringify(skill.evalDir)}`;
+/** The first turn of the drafting cell: the skill's name, where its SKILL.md is, the folder to save in, the
+ *  transcripts of conversations that ran it (#3470), and the language the user reads, from the screen (#3515). */
+export function authorTurn(skill: ResolvedSkill, conversations: readonly string[], language: PersonLanguage | null = null): string {
+  const parts = [
+    `/${SKILL_EVAL_AUTHOR_SKILL} skill ${JSON.stringify(skill.id)}, SKILL.md at ${JSON.stringify(skill.file)}, save in ${JSON.stringify(skill.evalDir)}`,
+  ];
+  if (conversations.length > 0) parts.push(`past conversations ${JSON.stringify(conversations)}`);
+  if (language !== null) parts.push(`reply in ${PERSON_LANGUAGES[language]}`);
+  return parts.join(", ");
+}
+
+/** The screen's language as the request gave it; none for a value this server does not know. */
+const languageOf = (body: Record<string, unknown>): PersonLanguage | null =>
+  typeof body.language === "string" && isPersonLanguage(body.language) ? body.language : null;
+
+/** The conversations that ran the skill, newest first; none when the Library cannot say, which only loses the hint. */
+async function conversationsOf(ctx: Context, skill: ResolvedSkill): Promise<string[]> {
+  const cwd = skill.source.scope === "project" ? skill.source.dir : null;
+  const paths = await ctx.library("skillConversations", [skill.id, cwd]).catch(() => null);
+  return Array.isArray(paths) ? paths.filter((entry): entry is string => typeof entry === "string") : [];
+}
 
 async function startAuthoring(ctx: Context, body: Record<string, unknown>, res: Response): Promise<void> {
   if (ctx.spawnSession === null) return fail(res, 503, "sessions cannot be started here");
@@ -102,23 +129,28 @@ async function startAuthoring(ctx: Context, body: Record<string, unknown>, res: 
   // A folder's skill is drafted in that folder; the user's and a plugin's anywhere, so the home.
   const cwd = skill.source.scope === "project" ? skill.source.dir : homedir();
   try {
-    const spawned = await ctx.spawnSession("claude", cwd, authorTurn(skill), true, null, { claudePermissionMode: AUTHOR_PERMISSION_MODE });
+    const turn = authorTurn(skill, await conversationsOf(ctx, skill), languageOf(body));
+    const options = { claudePermissionMode: AUTHOR_PERMISSION_MODE, claudeAllowedTools: await authorWriteRules(skill.evalDir, ctx.root) };
+    const spawned = await ctx.spawnSession("claude", cwd, turn, true, null, options);
     res.json({ chatId: spawned.sessionId, agent: spawned.agent });
   } catch (err) {
     fail(res, 500, err instanceof Error ? err.message : "the session could not be started");
   }
 }
 
-/** The run the next improvement of `skill` would be written from, if it has one. */
-async function baselineOf(skill: ResolvedSkill, setHash: string): Promise<SkillEvalRun | null> {
+const currentSkillHash = async (skill: ResolvedSkill): Promise<string | null> => {
   const skillText = await readFile(skill.file, "utf8").catch(() => null);
-  if (skillText === null) return null;
-  const skillHash = textHash(skillText);
+  return skillText === null ? null : textHash(skillText);
+};
+
+/** The run the next improvement of `skill` would be written from, if it has one. */
+async function baselineOf(skill: ResolvedSkill, setHash: string, skillHash: string | null): Promise<SkillEvalRun | null> {
+  if (skillHash === null) return null;
   return newestRunWhere(skill.evalDir, (run) => isBaselineFor(run, setHash, skillHash));
 }
 
 const estimateOf = (set: SkillEvalSet): NonNullable<SkillEvalOverview["estimate"]> => ({
-  ...{ attempts: plannedAttempts(set), maxCostUsd: maxRunCostUsd(set), maxImproveCostUsd: maxImproveCostUsd(set) },
+  ...{ attempts: plannedAttempts(set), maxCostUsd: maxRunCostUsd(set), improveAttempts: improveAttempts(set), maxImproveCostUsd: maxImproveCostUsd(set) },
   ...{ ladderAttempts: ladderAttempts(set), maxLadderCostUsd: maxLadderCostUsd(set) },
 });
 
@@ -127,11 +159,12 @@ async function overview(ctx: Context, query: Record<string, unknown>, res: Respo
   if (skill === null) return fail(res, 404, SKILL_NOT_FOUND);
   const read = await readEvalSet(skill.evalDir, skill.id);
   const set = read.kind === "ok" ? read.set : null;
+  const skillHash = await currentSkillHash(skill);
   res.json({
     ...{ skill: skill.id, dir: skill.evalDir, set, setHash: read.kind === "ok" ? read.hash : null, setError: read.kind === "invalid" ? read.error : null },
     estimate: set === null ? null : estimateOf(set),
     editable: isEditableSkill(skill.source, skill.slug),
-    baseline: read.kind === "ok" ? await baselineOf(skill, read.hash) : null,
+    ...{ skillHash, baseline: read.kind === "ok" ? await baselineOf(skill, read.hash, skillHash) : null },
     ...{ runs: (await listRuns(skill.evalDir)).map(runView), activeRunId: activeRunId(skill.evalDir) },
   });
 }
@@ -152,7 +185,7 @@ async function startRun(ctx: Context, body: Record<string, unknown>, res: Respon
   if (read.kind === "absent") return fail(res, 404, "no evaluation is set up for this skill");
   if (read.kind === "invalid") return fail(res, 400, read.error);
   if (mode === "ladder" && ladderAttempts(read.set) === 0) return fail(res, 400, "there is no task the skill should help with");
-  const improveFrom = improve ? await baselineOf(skill, read.hash) : null;
+  const improveFrom = improve ? await baselineOf(skill, read.hash, await currentSkillHash(skill)) : null;
   if (improve && improveFrom === null) return fail(res, 400, "measure the skill as it is now, with these tasks, first");
   const skillText = await readFile(skill.file, "utf8");
   const skillDir = path.dirname(skill.file);
@@ -191,8 +224,12 @@ export function mountSkillEvalRoutes(app: Express, deps: SkillEvalRouteDeps = {}
     cwds: deps.cwds ?? rememberedSessionCwds,
     attemptDeps: { claudeBin: claudeAdapter.bin(), runClaude, runCommand: commandRunner, tmpRoot: tmpdir(), now: Date.now, ...deps.attempt },
     spawnSession: deps.spawnSession ?? null,
+    library: deps.library ?? sharedCaller,
   };
   app.get("/api/skill-evals", (req, res) => overview(ctx, req.query, res));
+  app.get("/api/skill-evals/marks", async (_req, res) => {
+    res.json({ marks: await readEvalMarks(ctx.root, { cwds: await ctx.cwds() }) });
+  });
   app.get("/api/skill-evals/runs/:id", (req, res) => oneRun(ctx, req.query, req.params.id, res));
   app.post("/api/skill-evals/runs", (req, res) => startRun(ctx, requestBody(req.body), res, "measure"));
   app.post("/api/skill-evals/improve", (req, res) => startRun(ctx, requestBody(req.body), res, "improve"));

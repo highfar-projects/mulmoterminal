@@ -30,6 +30,8 @@ export interface SkillEvalSummary {
   gap: number | null;
   verdict: SkillEvalVerdict;
   fewCases: boolean;
+  /** Use tasks every attempt passed in both arms, the skill read each time: they cannot show what it does. */
+  passesEitherWay: string[];
   avoid: { attempts: number; invoked: number; passes: number; costUsd: number };
   gradingCostUsd: number;
 }
@@ -48,13 +50,13 @@ function armSummary(attempts: readonly SkillEvalAttempt[], counts: (a: SkillEval
   };
 }
 
-/** The no-skill pass rate of each round, and the distance between the highest and the lowest. */
-function roundSpread(without: readonly SkillEvalAttempt[]): number | null {
-  const rounds = [...new Set(without.map((a) => a.round))];
+/** The pass rate of each round, as `counts` says, and the distance between the highest and the lowest. */
+export function roundSpread(attempts: readonly SkillEvalAttempt[], counts: (a: SkillEvalAttempt) => boolean = (a) => a.pass): number | null {
+  const rounds = [...new Set(attempts.map((a) => a.round))];
   if (rounds.length < 2) return null;
   const rates = rounds.map((round) => {
-    const inRound = without.filter((a) => a.round === round);
-    return inRound.filter((a) => a.pass).length / inRound.length;
+    const inRound = attempts.filter((a) => a.round === round);
+    return inRound.filter(counts).length / inRound.length;
   });
   return Math.max(...rates) - Math.min(...rates);
 }
@@ -63,14 +65,37 @@ function roundSpread(without: readonly SkillEvalAttempt[]): number | null {
 // (0.6 - 0.4 is 0.19999999999999996): a gap within this of the threshold is AT the threshold.
 const RATE_EPSILON = 1e-9;
 
-function verdictOf(gap: number | null, spread: number | null, minimumGap: number): SkillEvalVerdict {
+/** A gap is evidence only when it is wider than the spread and at least `minimumGap`: one case's worth. */
+export function verdictOf(gap: number | null, spread: number | null, minimumGap: number): SkillEvalVerdict {
   if (gap === null || spread === null) return "pending";
   const size = Math.abs(gap);
   if (size <= spread + RATE_EPSILON || size < minimumGap - RATE_EPSILON) return "no-evidence";
   return gap > 0 ? "helps" : "hurts";
 }
 
+/** Every repeat of one case flipping: a smaller gap is a coin landing differently. */
+export const oneCaseWorth = (useCases: number): number => (useCases === 0 ? 1 : 1 / useCases);
+
 const ofArm = (attempts: readonly SkillEvalAttempt[], arm: SkillEvalArm): SkillEvalAttempt[] => attempts.filter((a) => a.arm === arm);
+
+/** The no-skill attempts of an improvement are its baseline's, copied in: still that task without the skill. */
+function passesEitherWay(
+  cases: readonly SkillEvalCase[],
+  useWith: readonly SkillEvalAttempt[],
+  useWithout: readonly SkillEvalAttempt[],
+  repeats: number,
+): string[] {
+  // Every round, not only the ones that ran: a stopped run has not shown "every time" yet.
+  const allPass = (attempts: readonly SkillEvalAttempt[], counts: (a: SkillEvalAttempt) => boolean): boolean =>
+    attempts.length > 0 && attempts.length >= repeats && attempts.every(counts);
+  return cases
+    .filter((c) => c.kind === "use")
+    .filter((c) => {
+      const ofCase = (attempts: readonly SkillEvalAttempt[]) => attempts.filter((a) => a.caseId === c.id);
+      return allPass(ofCase(useWith), (a) => a.pass && a.skillInvoked) && allPass(ofCase(useWithout), (a) => a.pass);
+    })
+    .map((c) => c.id);
+}
 
 function avoidSummary(avoid: readonly SkillEvalAttempt[]): SkillEvalSummary["avoid"] {
   return {
@@ -89,8 +114,7 @@ export function summarizeSkillEval(cases: readonly SkillEvalCase[], attempts: re
   const gap = withSkill.passRate === null || withoutSkill.passRate === null ? null : withSkill.passRate - withoutSkill.passRate;
   // A single round cannot disagree with itself, so there is nothing to hold the gap against.
   const spread = repeats < 2 && useWithout.length > 0 ? 0 : roundSpread(useWithout);
-  // One case's worth: every repeat of one case flipping. A smaller gap is a coin landing differently.
-  const minimumGap = useCases === 0 ? 1 : 1 / useCases;
+  const minimumGap = oneCaseWorth(useCases);
   return {
     with: withSkill,
     without: withoutSkill,
@@ -100,6 +124,7 @@ export function summarizeSkillEval(cases: readonly SkillEvalCase[], attempts: re
     gap,
     verdict: verdictOf(gap, spread, minimumGap),
     fewCases: useCases < SKILL_EVAL_FEW_CASES,
+    passesEitherWay: passesEitherWay(cases, useWith, useWithout, repeats),
     avoid: avoidSummary(ofArm(attempts, "with").filter((a) => kindOf.get(a.caseId) === "avoid")),
     gradingCostUsd: sum(attempts.map((a) => a.gradingCostUsd)),
   };

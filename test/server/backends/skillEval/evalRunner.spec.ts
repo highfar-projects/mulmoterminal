@@ -8,13 +8,15 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { ClaudeRunRequest, ClaudeRunResult } from "../../../../server/backends/skillEval/runClaude";
-import { judgeGrade, type AttemptDeps } from "../../../../server/backends/skillEval/evalAttempt";
-import { attemptOrder, startEvalRun, stopEvalRun } from "../../../../server/backends/skillEval/evalRunner";
+import { judgeApiError, judgeGrade, type AttemptDeps } from "../../../../server/backends/skillEval/evalAttempt";
+import { EVAL_CONCURRENCY, attemptOrder, startEvalRun, stopEvalRun } from "../../../../server/backends/skillEval/evalRunner";
 import { listRuns, readEvalSet, readRun, skillEvalFolder, textHash } from "../../../../server/backends/skillEval/evalStore";
-import { skillEvalSetSchema, type SkillEvalSet } from "../../../../common/skillEval";
+import { isBaselineFor, skillEvalSetSchema, type SkillEvalSet } from "../../../../common/skillEval";
 import { mountSkillEvalRoutes } from "../../../../server/routes/skill-eval-routes";
+import type { LibraryCaller } from "../../../../server/backends/library/library-service";
 import { jsonPost, routeCall } from "../../../helpers/routeCall";
 import { finishedSkillEvalRun } from "../../../helpers/finishedSkillEvalRun";
+import { authorWriteRules } from "../../../../server/backends/skillEval/evalWriteRulesOnDisk.js";
 
 const dirs: string[] = [];
 afterEach(() => dirs.splice(0).forEach((dir) => rmSync(dir, { recursive: true, force: true })));
@@ -193,6 +195,58 @@ describe("a skill evaluation run", () => {
     expect(calls).toBe(2);
   });
 
+  const UNREACHED = "Failed to authenticate: OAuth session expired and could not be refreshed";
+  const unreachedResult = { type: "result", subtype: "success", is_error: true, result: UNREACHED, terminal_reason: "api_error", total_cost_usd: 0 };
+
+  /** `deps`, except that the agent's (or the grader's) every run comes back without reaching the model. */
+  function unreachable(who: "agent" | "judge", calls: string[], failure: string | null = null): AttemptDeps {
+    const base = deps([], scratch());
+    return {
+      ...base,
+      runClaude: async (request) => {
+        const isJudge = request.args.includes("--json-schema");
+        calls.push(isJudge ? "judge" : "agent");
+        if (isJudge !== (who === "judge")) return base.runClaude(request);
+        return { stdout: isJudge ? JSON.stringify(unreachedResult) : stream([unreachedResult]), exitCode: 0, failure };
+      },
+    };
+  }
+
+  it("stops, and is no baseline, when the agent or the grader could not reach the model", async () => {
+    // Also when the run was then killed for its time: the error it printed says why it ended.
+    const cases = ["agent", "judge"].flatMap((who) => [null, "claude ran longer than 600000 ms"].map((failure) => ({ who, failure })));
+    for (const { who, failure } of cases) {
+      const { evalDir, skillDir } = setUp(SET);
+      const calls: string[] = [];
+      const started = await start(evalDir, skillDir, unreachable(who === "agent" ? "agent" : "judge", calls, failure));
+      await started?.done;
+      const run = await readRun(evalDir, started?.id ?? "");
+      if (run === null) throw new Error("no run");
+      expect(run).toMatchObject({ status: "interrupted", interruptedBy: UNREACHED });
+      expect(isBaselineFor(run, run.setHash, run.skillHash)).toBe(false);
+      // Only the attempts already in flight ran: no more were started after the first error.
+      expect(calls.filter((call) => call === who).length).toBeLessThanOrEqual(EVAL_CONCURRENCY);
+      expect(run.attempts.length).toBeLessThan(run.plannedAttempts);
+    }
+  });
+
+  it("still counts a run that ran out of budget as a failed attempt in a finished run", async () => {
+    const { evalDir, skillDir } = setUp(SET);
+    const overBudget: AttemptDeps = {
+      ...deps([], scratch()),
+      runClaude: async () => ({
+        stdout: stream([{ type: "result", subtype: "error_max_budget_usd", is_error: true, total_cost_usd: 0.3 }]),
+        exitCode: 0,
+        failure: null,
+      }),
+    };
+    const started = await start(evalDir, skillDir, overBudget);
+    await started?.done;
+    const run = await readRun(evalDir, started?.id ?? "");
+    expect(run?.status).toBe("done");
+    expect(run?.attempts.every((attempt) => !attempt.pass && attempt.error === "the run ended in an error")).toBe(true);
+  });
+
   it("orders attempts round by round", () => {
     const set: SkillEvalSet = skillEvalSetSchema.parse(SET);
     expect(attemptOrder(set).map((a) => `${a.evalCase.id}/${a.arm}/${String(a.round)}`)).toEqual([
@@ -207,6 +261,14 @@ describe("a skill evaluation run", () => {
       "judged/without/1",
       "other/with/1",
     ]);
+  });
+
+  it("reads the grader's answer as unreached only when claude says so", () => {
+    expect(judgeApiError(JSON.stringify(unreachedResult))).toBe(UNREACHED);
+    expect(judgeApiError(JSON.stringify({ total_cost_usd: 0.2, structured_output: { pass: true, reasons: [] } }))).toBeNull();
+    expect(judgeApiError("not json")).toBeNull();
+    expect(judgeApiError("[]")).toBeNull();
+    expect(judgeApiError("")).toBeNull();
   });
 
   it("fails a grade the grader did not give", () => {
@@ -300,6 +362,8 @@ describe("/api/skill-evals", () => {
       root,
       cwds: () => Promise.resolve([projectDir]),
       spawnSession: (...args) => (spawned.push(args), Promise.resolve({ sessionId: "s1", agent: "claude", seedRuns: true })),
+      // None here: the turn then names no past conversation. Never the real Library from a spec.
+      library: () => Promise.resolve([]),
     });
     const answer = await routeCall(server)("/api/skill-evals/author", jsonPost({ slug: "weekly", dir: projectDir }));
     expect(answer.body).toEqual({ chatId: "s1", agent: "claude" });
@@ -311,10 +375,55 @@ describe("/api/skill-evals", () => {
         `/mulmoterminal-skill-eval skill "weekly", SKILL.md at ${JSON.stringify(file)}, save in ${JSON.stringify(evalDir)}`,
         true,
         null,
-        { claudePermissionMode: "plan" },
+        // The save folder is allowed ahead of time, so accepting the plan with auto mode cannot refuse the save (#3507).
+        { claudePermissionMode: "plan", claudeAllowedTools: await authorWriteRules(evalDir, root) },
       ],
     ]);
     expect((await app(root, projectDir, [])("/api/skill-evals/author", jsonPost({ slug: "weekly", dir: projectDir }))).status).toBe(503);
+  });
+
+  it("asks the drafting cell to talk in the screen's language, and in none it does not know", async () => {
+    const { projectDir, root } = project(null);
+    const turns: string[] = [];
+    const server = express();
+    server.use(express.json());
+    mountSkillEvalRoutes(server, {
+      root,
+      cwds: () => Promise.resolve([projectDir]),
+      spawnSession: (_agent, _cwd, turn) => (turns.push(turn), Promise.resolve({ sessionId: "s1", agent: "claude", seedRuns: true })),
+      library: () => Promise.resolve(["/t/a.jsonl"]),
+    });
+    const author = (language: unknown) => routeCall(server)("/api/skill-evals/author", jsonPost({ slug: "weekly", dir: projectDir, language }));
+    await author("ja");
+    await author("zh-TW");
+    await author("xx");
+    await author(7);
+    expect(turns[0]).toMatch(/, past conversations \["\/t\/a\.jsonl"\], reply in Japanese$/);
+    expect(turns[1]).toMatch(/, reply in Traditional Chinese$/);
+    expect(turns.slice(2).map((turn) => turn.includes("reply in"))).toEqual([false, false]);
+  });
+
+  it("names the conversations that ran the skill in its own folder, and none when the Library cannot say", async () => {
+    const { projectDir, root } = project(null);
+    const turns: string[] = [];
+    const asked: unknown[][] = [];
+    const call = (library: LibraryCaller) => {
+      const server = express();
+      server.use(express.json());
+      mountSkillEvalRoutes(server, {
+        root,
+        cwds: () => Promise.resolve([projectDir]),
+        spawnSession: (_agent, _cwd, turn) => (turns.push(turn), Promise.resolve({ sessionId: "s1", agent: "claude", seedRuns: true })),
+        library,
+      });
+      return routeCall(server)("/api/skill-evals/author", jsonPost({ slug: "weekly", dir: projectDir }));
+    };
+    await call((method, args) => (asked.push([method, ...args]), Promise.resolve(["/t/a.jsonl", 7, "/t/b.jsonl"])));
+    expect(asked).toEqual([["skillConversations", "weekly", projectDir]]);
+    expect(turns[0]).toMatch(/, past conversations \["\/t\/a\.jsonl","\/t\/b\.jsonl"\]$/);
+    expect((await call(() => Promise.reject(new Error("the index is not ready")))).status).toBe(200);
+    expect((await call(() => Promise.resolve(null))).status).toBe(200);
+    expect(turns.slice(1).map((turn) => turn.includes("past conversations"))).toEqual([false, false]);
   });
 
   it("starts a run and serves it", async () => {

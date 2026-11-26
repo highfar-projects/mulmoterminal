@@ -35,9 +35,8 @@ const SESSION = "3d0f1a52-8c41-4b77-9f0e-21336c0a9e7b";
 // that file first is what lets this spec use the real hydration path instead of reaching into the
 // registry — and it means nothing is ever appended to the developer's own ~/.mulmoterminal.
 const scratchHome = takeScratchHome("mt-session-own-cwd-");
-// CLAUDE_CWD wins over HOME (config/env.ts), and a run inside a MulmoTerminal cell inherits the
-// server's own (bin/cli-args.js sets it), so it is cleared too — or the workspace is the host's.
-const previousClaudeCwd = process.env.CLAUDE_CWD;
+// A shell in a MulmoTerminal cell inherits the server's CLAUDE_CWD, which env.ts prefers over HOME.
+const REAL_CLAUDE_CWD = process.env.CLAUDE_CWD;
 delete process.env.CLAUDE_CWD;
 const OWN_CWD = path.join(scratchHome.path, "a-project");
 const WORKSPACE = path.join(scratchHome.path, "mulmoclaude");
@@ -51,8 +50,8 @@ const { lastPrompts, lastResponses } = await import("../../../server/session/reg
 const { forgetClearedTranscript, markTranscriptCleared } = await import("../../../server/session/transcript/cleared-transcripts.js");
 
 afterAll(() => {
+  if (REAL_CLAUDE_CWD !== undefined) process.env.CLAUDE_CWD = REAL_CLAUDE_CWD;
   scratchHome.release();
-  if (previousClaudeCwd !== undefined) process.env.CLAUDE_CWD = previousClaudeCwd;
 });
 
 const app = express();

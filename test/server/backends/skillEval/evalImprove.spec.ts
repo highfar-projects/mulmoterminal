@@ -10,7 +10,7 @@ import path from "node:path";
 import type { ClaudeRunRequest, ClaudeRunResult } from "../../../../server/backends/skillEval/runClaude";
 import type { AttemptDeps } from "../../../../server/backends/skillEval/evalAttempt";
 import { candidateDir, improvePrompt, improveReport } from "../../../../server/backends/skillEval/evalImprove";
-import { skillEvalFolder } from "../../../../server/backends/skillEval/evalStore";
+import { skillEvalFolder, textHash } from "../../../../server/backends/skillEval/evalStore";
 import { isBaselineFor, type SkillEvalAttempt, type SkillEvalRun } from "../../../../common/skillEval";
 import { mountSkillEvalRoutes } from "../../../../server/routes/skill-eval-routes";
 import { jsonPost, routeCall } from "../../../helpers/routeCall";
@@ -121,6 +121,19 @@ describe("improving a skill", () => {
     expect(readdirSync(env.tmpRoot)).toEqual([]);
   });
 
+  it("runs only the attempts with the skill, and takes the ones without it from the measurement", async () => {
+    const env = setUp();
+    const baseline = await measure(env, "/api/skill-evals/runs");
+    const asked = env.prompts.length;
+    const improved = await measure(env, "/api/skill-evals/improve");
+    // The writer, then the one attempt with the skill: nothing without it is run again.
+    expect(env.prompts.length - asked).toBe(2);
+    expect(improved?.plannedAttempts).toBe(1);
+    const without = baseline?.attempts.filter((a) => a.arm === "without") ?? [];
+    expect(improved?.attempts.filter((a) => a.arm === "without")).toEqual(without.map((a) => ({ ...a, reusedFrom: baseline?.id })));
+    expect(improved?.attempts.filter((a) => a.arm === "with").map((a) => a.reusedFrom)).toEqual([""]);
+  });
+
   it("ends the run with the reason when the writer changed nothing or failed", async () => {
     const unchanged = setUp(() => ({ stdout: stream([result("Nothing to do.", 0.2)]), exitCode: 0, failure: null }));
     await measure(unchanged, "/api/skill-evals/runs");
@@ -128,11 +141,19 @@ describe("improving a skill", () => {
       status: "interrupted",
       note: "the improvement changed nothing",
       improveCostUsd: 0.2,
+      // Nothing was written to set the runs without the skill beside, so none are copied in.
       attempts: [],
     });
     const broken = setUp(() => ({ stdout: "", exitCode: null, failure: "claude ran longer than 600000 ms" }));
     await measure(broken, "/api/skill-evals/runs");
     expect(await measure(broken, "/api/skill-evals/improve")).toMatchObject({ status: "interrupted", note: "claude ran longer than 600000 ms" });
+    // Even one that left an edit behind: a writer that could not reach the model wrote nothing to measure.
+    const unreached = setUp((cwd) => {
+      writeFileSync(path.join(cwd, "skill", "SKILL.md"), IMPROVED);
+      return { stdout: stream([{ ...result("Failed to authenticate", 0), terminal_reason: "api_error" }]), exitCode: 0, failure: null };
+    });
+    await measure(unreached, "/api/skill-evals/runs");
+    expect(await measure(unreached, "/api/skill-evals/improve")).toMatchObject({ status: "interrupted", note: "Failed to authenticate", attempts: [] });
   });
 
   it("adopts a measured improvement over the skill, keeping the text it replaced", async () => {
@@ -177,6 +198,32 @@ describe("improving a skill", () => {
     expect(readFileSync(path.join(env.skillDir, "SKILL.md"), "utf8")).toBe("edited by hand");
   });
 
+  it("keeps only the new SKILL.md, so what is measured is what adopting writes", async () => {
+    const env = setUp((cwd) => {
+      writeFileSync(path.join(cwd, "skill", "notes.md"), "changed by the writer");
+      return improvesIt(cwd);
+    });
+    writeFileSync(path.join(env.skillDir, "notes.md"), "the skill's own");
+    await measure(env, "/api/skill-evals/runs");
+    const improved = await measure(env, "/api/skill-evals/improve");
+    const kept = candidateDir(env.evalDir, improved?.id ?? "");
+    expect(readFileSync(path.join(kept, "SKILL.md"), "utf8")).toBe(IMPROVED);
+    expect(readFileSync(path.join(kept, "notes.md"), "utf8")).toBe("the skill's own");
+    expect(env.prompts.find((prompt) => prompt.includes("eval-report.md"))).toContain("Edit only ./skill/SKILL.md");
+  });
+
+  it("writes the next improvement from an adopted one's measurement, without measuring the skill again", async () => {
+    const env = setUp();
+    await measure(env, "/api/skill-evals/runs");
+    const improved = await measure(env, "/api/skill-evals/improve");
+    expect((await env.call("/api/skill-evals/adopt", jsonPost({ ...env.fields, runId: improved?.id }))).status).toBe(200);
+    const overview = await env.call(`/api/skill-evals?slug=weekly&dir=${encodeURIComponent(env.fields.dir)}`);
+    expect(overview.body).toMatchObject({ baseline: { id: improved?.id } });
+    const next = await env.call("/api/skill-evals/improve", jsonPost(env.fields));
+    expect(next.status).toBe(202);
+    expect((await finishedSkillEvalRun(env.evalDir, String(next.body.id)))?.baseRunId).toBe(improved?.id);
+  });
+
   it.skipIf(process.platform === "win32")("writes nothing through a linked SKILL.md, and keeps no link the writer made", async () => {
     const env = setUp((cwd) => {
       symlinkSync("/etc/hosts", path.join(cwd, "skill", "hosts"));
@@ -194,10 +241,26 @@ describe("improving a skill", () => {
     expect(existsSync(path.join(candidateDir(env.evalDir, improved?.id ?? ""), "hosts"))).toBe(false);
   });
 
+  it.skipIf(process.platform === "win32")("refuses an improvement whose SKILL.md the writer turned into a link", async () => {
+    const env = setUp((cwd) => {
+      const file = path.join(cwd, "skill", "SKILL.md");
+      unlinkSync(file);
+      symlinkSync("/etc/hosts", file);
+      return { stdout: stream([result("Linked it.", 0.2)]), exitCode: 0, failure: null };
+    });
+    await measure(env, "/api/skill-evals/runs");
+    expect(await measure(env, "/api/skill-evals/improve")).toMatchObject({ status: "interrupted", note: "the improvement left no SKILL.md", skillText: "" });
+  });
+
   it("finds the measurement to start from past the listed runs, and not once the skill was edited", async () => {
     const env = setUp();
     const baseline = await measure(env, "/api/skill-evals/runs");
-    const later = Array.from({ length: 25 }, (_, i) => ({ ...baseline, id: `1999999999${String(100 + i)}-aaaaaaaa`, candidateId: "x" }));
+    const later = Array.from({ length: 25 }, (_, i) => ({
+      ...baseline,
+      id: `1999999999${String(100 + i)}-aaaaaaaa`,
+      candidateId: "x",
+      skillHash: "not adopted",
+    }));
     later.forEach((laterRun) => writeFileSync(path.join(env.evalDir, "runs", `${laterRun.id}.json`), JSON.stringify(laterRun)));
     const query = `/api/skill-evals?slug=weekly&dir=${encodeURIComponent(env.fields.dir)}`;
     expect((await env.call(query)).body).toMatchObject({ baseline: { id: baseline?.id } });
@@ -208,17 +271,32 @@ describe("improving a skill", () => {
     expect((await env.call("/api/skill-evals/improve", jsonPost(env.fields))).status).toBe(400);
   });
 
+  it("stops taking a measurement as the starting point once a task's starting files change", async () => {
+    const env = setUp();
+    const filesDir = path.join(env.evalDir, "files", "plain");
+    mkdirSync(filesDir, { recursive: true });
+    writeFileSync(path.join(filesDir, "notes.md"), "Monday: met the team");
+    const baseline = await measure(env, "/api/skill-evals/runs");
+    const query = `/api/skill-evals?slug=weekly&dir=${encodeURIComponent(env.fields.dir)}`;
+    expect((await env.call(query)).body).toMatchObject({ baseline: { id: baseline?.id } });
+    writeFileSync(path.join(filesDir, "notes.md"), "Monday: met the client");
+    expect((await env.call(query)).body).toMatchObject({ baseline: null });
+    expect((await env.call("/api/skill-evals/improve", jsonPost(env.fields))).status).toBe(400);
+  });
+
   it("says whether the skill may be written over", async () => {
     const env = setUp();
     const overview = await env.call(`/api/skill-evals?slug=weekly&dir=${encodeURIComponent(env.fields.dir)}`);
-    expect(overview.body).toMatchObject({ editable: true, estimate: { maxImproveCostUsd: 1 + 2 * 0.5 } });
+    // The SKILL.md as it is now, by the hash every run records of the text it measured.
+    expect(overview.body).toMatchObject({ skillHash: textHash(ORIGINAL) });
+    expect(overview.body).toMatchObject({ editable: true, estimate: { improveAttempts: 1, maxImproveCostUsd: 1 + 0.5 } });
   });
 });
 
 describe("what the writer is given", () => {
   const attempt = (arm: "with" | "without", pass: boolean, extra: Partial<SkillEvalAttempt> = {}): SkillEvalAttempt => ({
     ...{ caseId: "plain", arm, round: 0, pass, skillInvoked: arm === "with", costUsd: 0, gradingCostUsd: 0, durationMs: 0 },
-    ...{ finalText: "", checkOutput: "", denied: [], error: null, model: "haiku" },
+    ...{ finalText: "", checkOutput: "", denied: [], error: null, model: "haiku", reusedFrom: "" },
     ...extra,
   });
   const run = (attempts: SkillEvalAttempt[], extra: Partial<SkillEvalRun> = {}): SkillEvalRun => ({
@@ -236,17 +314,25 @@ describe("what the writer is given", () => {
     expect(report).toContain("without skill, round 1: pass");
   });
 
-  it("tells the writer not to fit the test tasks, to stay short and to fix an unread description", () => {
+  it("tells the writer not to fit the test tasks, to keep what the failures do not touch, and to fix an unread description", () => {
     const prompt = improvePrompt();
     expect(prompt).toContain("Do NOT mention, quote or special-case the test tasks");
-    expect(prompt).toContain("Keep the body short");
+    expect(prompt).toContain("Keep what you add short");
+    // The tasks test part of what a skill is for: a rule they never exercise is not to be trimmed away.
+    expect(prompt).toContain("Do not delete, weaken or shorten any existing rule, step or check unless the report shows that exact one caused a failure");
+    // Nothing may tell the writer the opposite.
+    expect(prompt).not.toMatch(/\bremove\b|shorter skill|keep the body short/i);
+    expect(prompt).toContain("written in the language the skill is written in");
     expect(prompt).toContain("description");
   });
 
-  it("starts only from a finished measurement of the skill itself, as its text is now, on the current tasks", () => {
+  it("starts only from a finished measurement of the skill as its text is now, on the current tasks", () => {
     const measured = [attempt("with", true)];
     expect(isBaselineFor(run(measured), "s", "h")).toBe(true);
-    expect(isBaselineFor(run(measured, { candidateId: "b" }), "s", "h")).toBe(false);
+    // An improvement measured exactly the text adopting writes, so once adopted it is a measurement of the skill.
+    expect(isBaselineFor(run(measured, { candidateId: "b" }), "s", "h")).toBe(true);
+    expect(isBaselineFor(run(measured, { candidateId: "b", skillHash: "not adopted" }), "s", "h")).toBe(false);
+    expect(isBaselineFor(run(measured, { ladder: ["haiku"] }), "s", "h")).toBe(false);
     expect(isBaselineFor(run(measured, { setHash: "other" }), "s", "h")).toBe(false);
     expect(isBaselineFor(run(measured), "s", "edited")).toBe(false);
     expect(isBaselineFor(run(measured, { status: "stopped" }), "s", "h")).toBe(false);

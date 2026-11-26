@@ -133,6 +133,27 @@ async function staleOwnerOf(lock: string): Promise<string | null> {
   return owner !== null && (await isOld(lock)) ? owner : null;
 }
 
+/** What Windows answers, for a moment, to a rename of a directory while another process has a file in
+ *  it open — which every waiting holder does between its attempts, reading the lock's owner. Not "gone
+ *  or replaced": treating it so abandons a release, and the lock then stands until it counts as stale. */
+const LOCK_BUSY = new Set(["EPERM", "EBUSY", "EACCES"]);
+const MARKS_LOCK_MOVE_ATTEMPTS = 40;
+
+const isBusy = (err: unknown): boolean => err instanceof Error && "code" in err && LOCK_BUSY.has(String(err.code));
+
+/** Moves the lock aside, retrying while it is busy. False when it is gone, replaced, or stays busy. */
+async function moveAside(lock: string, aside: string): Promise<boolean> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await fs.rename(lock, aside);
+      return true;
+    } catch (err) {
+      if (!isBusy(err) || attempt >= MARKS_LOCK_MOVE_ATTEMPTS) return false;
+      await new Promise((resolve) => setTimeout(resolve, MARKS_LOCK_RETRY_MS));
+    }
+  }
+}
+
 /** Removes the lock only if `owner` still holds it: moved aside first (atomic), checked, and put back
  *  if it turned out to be someone else's. Used to release one's own lock and to take an abandoned one
  *  out of the way — in both, removing by path could delete a lock another holder has just made. Should
@@ -147,25 +168,4 @@ export async function removeIfOwnedBy(lock: string, owner: string, options: { on
     return;
   }
   await fs.rename(aside, lock).catch(() => fs.rm(aside, { recursive: true, force: true }));
-}
-
-/** What Windows reports while another process has a file in the directory open for a moment — the
- *  other holder reading `owner` between its attempts is enough. Not "gone": the lock is still there. */
-const MOVE_BUSY = new Set(["EPERM", "EBUSY", "EACCES"]);
-const MOVE_ATTEMPTS = 40;
-
-/** Whether the lock was moved aside. A busy answer is tried again: given up on at once, a release
- *  left the lock in place, and every other holder waited out its attempts and failed (seen on Windows
- *  with two holders racing). Any other failure means the lock is gone or was replaced. */
-async function moveAside(lock: string, aside: string): Promise<boolean> {
-  for (let attempt = 1; ; attempt += 1) {
-    try {
-      await fs.rename(lock, aside);
-      return true;
-    } catch (err) {
-      const busy = err instanceof Error && "code" in err && MOVE_BUSY.has(String(err.code));
-      if (!busy || attempt >= MOVE_ATTEMPTS) return false;
-      await new Promise((resolve) => setTimeout(resolve, MARKS_LOCK_RETRY_MS));
-    }
-  }
 }
