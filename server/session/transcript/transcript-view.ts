@@ -15,7 +15,7 @@
 // body there, it is rendered like any other prose.
 import { isRecord } from "../../../common/isRecord.js";
 import { describeValue, readString } from "../../../common/readString.js";
-import { userPromptText } from "./transcript.js";
+import { userRecordPrompt } from "./transcript.js";
 import type { TranscriptRow, TranscriptRowKind, TranscriptTurn, TranscriptView } from "../../../common/transcriptView.js";
 
 /** How many LOGICAL lines (newline-separated) the view carries before the oldest turns are dropped.
@@ -157,7 +157,8 @@ export function renderRecord(record: Record<string, unknown>): TranscriptRow[] {
 
 /** Where a turn starts: a non-sidechain `user` record whose content holds a real prompt.
  *
- *  `userPromptText` rather than a fresh predicate, because it already handles BOTH content shapes —
+ *  `userRecordPrompt` (which also turns away the harness's `isMeta` records) and through it
+ *  `userPromptText`, rather than a fresh predicate, because it already handles BOTH content shapes —
  *  and claude's ordinary prompts are the plain-string one. A predicate written as "has a text block"
  *  would miss them, fusing every exchange into one turn that the line budget can never evict.
  *
@@ -168,8 +169,8 @@ export function renderRecord(record: Record<string, unknown>): TranscriptRow[] {
  *  render rules read it only off a `text` one), and a turn that opens empty is a blank block on the
  *  phone that no budget can evict. One function answering both keeps the two from disagreeing. */
 export function turnBoundaryPrompt(record: Record<string, unknown>): string | null {
-  if (record.type !== "user" || record.isSidechain === true) return null;
-  return userPromptText(isRecord(record.message) ? record.message.content : undefined);
+  if (record.isSidechain === true) return null;
+  return userRecordPrompt(record);
 }
 
 export const isTurnBoundary = (record: Record<string, unknown>): boolean => turnBoundaryPrompt(record) !== null;
@@ -254,6 +255,10 @@ export function foldTranscriptView(scan: TranscriptScan, record: Record<string, 
   // the boundary predicate alone would still let its assistant records land as rows of whichever
   // turn happened to be open, attributing a sub-agent's work to the main conversation.
   if (record.isSidechain === true) return;
+  // The harness's own user-channel text (a skill's body, an image's description) is dropped whole for
+  // the same reason: it is not a prompt (see userRecordPrompt), and rendered as a row it would show
+  // a skill's instructions as something the user said. Fork-only fix.
+  if (record.isMeta === true) return;
   foldTurnRecord(scan, { prompt: turnBoundaryPrompt(record), at: rawTurnAt(record), rows: renderRecord(record) });
 }
 
