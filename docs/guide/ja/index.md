@@ -8,8 +8,8 @@ description: 複数の AI コーディングエージェントをブラウザの
 
 # MulmoTerminal ガイド（日本語）
 
-> **13.6.0 が出ました。** 各ターミナルに送るボタンが付き、最後の1往復を同じリポの別のエージェントの
-> ターミナルに貼り付けて、そちらへ移ります。Enter は自分で押します。[セットアップガイド](v13.6.0.html)
+> **13.8.1 が出ました。** スキルの評価を頼れるものにしました。作った課題が必ず保存され、点検項目は意味で
+> 採点し、改善案は試していない決まりを残します。使い方を順に説明するガイドも増えました。[セットアップガイド](v13.8.1.html)
 
 ## MulmoTerminal とは {#what-is}
 
@@ -295,8 +295,10 @@ npx mulmoterminal@latest    # → http://localhost:34567 が開く
 4. [応用編 — シナリオ別の使い方](scenarios.html)
 5. [機能一覧](features.html)（4 本柱で整理）
    - [全機能リスト](feature-list.html)（いまある機能をすべて、入った版つきで一行ずつ）
+   - [スキルは効いているか](skill-eval.html)（スキルありとなしで課題を解かせる、SKILL.md の改善案、足りるいちばん安いモデル）
 6. [どの coding agent を使うか](agents.html)（Claude Code・Codex・Antigravity・Grok・Muse・Copilot・Cursor。何が要るか、どう会話を再開するか）
 7. [git worktree で作業を分ける](worktree.html)（1 つのリポジトリを、ぶつからずに複数のエージェントで）
+   - [issue をエージェントに渡して merge まで](issue-to-merge.html)（一つでもいくつでも。実装、別のセッションでのレビュー、merge）
 8. [セル同士を会話させる](conversation.html)（1往復の受け渡し・円卓・部屋）
 9. [設定方法](config.html)（設定モーダル・`config.json`・`.mulmoterminal.json`・**DSL 拡張**）
    - [ヘッダーをカスタマイズする](header.html)（自分のボタンとチップを最初から）と、[ヘッダーのリファレンス](header-reference.html)（変数・`when`・マージ）

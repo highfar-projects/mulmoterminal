@@ -8,6 +8,154 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@13.8.1 — 2026-11-26
+
+> **Setup guide:** [13.8.1 — Skill evaluation you can rely on, and its guide](https://receptron.github.io/mulmoterminal/guide/en/v13.8.1.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v13.8.1.html))
+
+### Skill evaluation fixes (#3512, #3516, #3510, #3517, #3495, #3526)
+
+For #3507, #3514, #3509, #3515, #3491 and #3525.
+
+- A run whose agent or grader ends with `terminal_reason: "api_error"` (claude cannot reach the model, e.g. an expired login) stops the evaluation: it ends `interrupted` with claude's message as the reason and is not a baseline, instead of finishing `done` with every attempt failed.
+
+- The drafting cell is spawned with `--allowedTools` `Write` / `Edit` rules for its own evaluation folder, so accepting its plan with auto mode can no longer have Claude Code's classifier refuse the save. A rule is made only for a folder directly under the evaluations root, with no glob character, comma or parenthesis in its path, that is not a link elsewhere; a root behind a link is named both as written and as resolved. The bundled `mulmoterminal-skill-eval` skill saves with its file tool, not a shell command.
+- Rubric items are graded by what they mean, so a result saying the same thing in other words passes; drafting is told the same.
+- The improvement writer keeps rules its tasks do not exercise and writes its note in the skill's language.
+- The drafting cell's first turn carries the screen's locale (`reply in <language>`), checked against the blueprint language table.
+- A set's hash covers each task's starting files under `files/`, so editing one makes earlier measurements stop counting for the current tasks (baseline, list mark, next step, adopt, reused runs).
+
+### Library promote cells (#3521)
+
+For #3519.
+
+- The bundled `mulmoterminal-library` skill ends its plan by asking for **Yes, manually approve edits** and stops, naming what was and was not written, when a write is refused. Allow rules do not apply under `~/.claude`, so #3512's approach cannot cover these writes.
+
+### Windows file identity (#3497, #3500)
+
+For #3496 and #3498.
+
+- File-identity checks use bigint stats (`dev:ino:size:mtimeNs`), since a number `ino` loses the low bits of a Windows 64-bit id: memory Trash restore, a minted MulmoScript movie/PDF, a shared app's `app.json` before its rename, and the own-folder trust cache key.
+
+### Development and docs (#3501, #3508, #3502, #3494, #3505, #3492)
+
+For #3499, #3503, #3493, #3504 and #3489.
+
+- Under `yarn dev`, the backend redirects browser page requests to the Vite port instead of serving a stale `dist/`.
+- New guide page `skill-eval` (en / ja); the issue-to-merge page's screenshots are retaken from the current UI with a board card.
+- Test fixes: the MulmoScript watch spec stages and renames the plugin's own write; the containment property spec lists only inside its own tree; the own-cwd route spec clears an inherited `CLAUDE_CWD`.
+
+## mulmoterminal@13.8.0 — 2026-11-25
+
+> **Setup guide:** [13.8.0 — The issue-to-merge guide, and skill evaluation you can follow](https://receptron.github.io/mulmoterminal/guide/en/v13.8.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v13.8.0.html))
+
+### A guide page for issue to merge (#3487)
+
+For #3475.
+
+- New guide page `issue-to-merge` (en / ja): the roles, setup (`review`, a workspace cell, `gh`, `maxIssueSessions`, the clone being a launcher directory), handing over one issue or several, the lines each session receives, when the user is needed, codex's grants, cleanup and troubleshooting, with screenshots of a real run. Linked from the index, the feature reference and the two config sections.
+
+### Skill evaluation you can follow (#3476, #3477, #3478, #3479, #3480, #3481, #3482, #3484)
+
+For #3465, #3466, #3467, #3468, #3469, #3470 and #3472.
+
+- **Draft test tasks** hands the drafting cell the transcripts of the newest conversations that used the skill (`skillConversations` in the Library index; for a folder's skill, only conversations in that folder), and `mulmoterminal-skill-eval` drafts tasks from the user's real requests, stripped of names, paths and anything private, and says which came from them. With no Library answer, drafting is unchanged.
+
+- The Skills list marks each evaluated skill with the verdict on its current text and tasks (**helps**, **makes worse**, **no difference**, **no verdict**, **not measured**), and **Needs attention** narrows it to the ones not helping, not measured, or used without tasks. Marks come from `GET /api/skill-evals/marks`, which reads the evaluation folders rather than the catalog.
+- The evaluation panel picks one next step (draft, measure, improve, adopt, find the cheapest model, or nothing) from the overview, highlights its button and says why.
+- An improvement is shown as a diff against the SKILL.md it was written from, in the CodeMirror merge view the blueprint screen uses; the whole text stays one click away.
+- Earlier results show pass rates with and without the skill and open to their full result; a row that measured another SKILL.md is marked. `GET /api/skill-evals` returns `skillHash`.
+- An improvement run measures with the skill only and reuses the measurement's runs without it, marked `reusedFrom`; what a run spent counts only its own attempts.
+- The improvement writer may change only SKILL.md, and the improvement is measured as the skill's snapshot with that one file replaced, so **Adopt** installs what was measured. An adopted improvement's measurement is the baseline for the next one.
+
+### Codex grants survive a cold resume (#3471, #3474)
+
+For #3464 and #3473.
+
+- The sandbox grants a server-started codex gets (network, the worktree's git metadata, `approval_policy="never"`) are recorded per session id in `~/.mulmoterminal/codex-session-grants.jsonl` and applied again on every later spawn of that id, so a resumed implementer can still reach GitHub and commit. A conversation resumed under its rollout id inherits nothing.
+
+### Conversation pane in the app's language (#3483)
+
+For #3342.
+
+- The Conversation pane's title, speaker labels, status, paging and clipped-output notices are translated in all five locales.
+
+### Library marks lock on Windows (#3490)
+
+For #3488.
+
+- Releasing or taking over the lock on the Library's marks (pins and names) retries moving it aside while Windows answers `EPERM` / `EBUSY` / `EACCES`, instead of treating that as already gone and leaving the lock until it went stale.
+
+### Tests (#3486)
+
+For #3485.
+
+- Spawn specs wait for every session-state write queue before removing their temp `HOME`, which made them fail now and then with `ENOTEMPTY`.
+
+## mulmoterminal@13.7.0 — 2026-11-25
+
+> **Setup guide:** [13.7.0 — Hand an issue to an agent, and measure your skills](https://receptron.github.io/mulmoterminal/guide/en/v13.7.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v13.7.0.html))
+
+### Sessions that talk to the sessions they started (#3405, #3406)
+
+For #3404.
+
+- New host tools `sendToSession { session, message }` (types into a session the caller started and presses Enter) and `waitForSessionReply { session, waitSeconds? }` (waits for that session's answer to that exact send; each send is tagged so a repeated message is not matched to an older reply).
+- `spawnBackgroundChat` takes an `agent` and records the caller as the new session's parent; only the parent may address it. Its `hidden` description is corrected.
+- Sends are refused while a question dialog is open; a dialog that opens between paste and Enter is reported as text left in the input. Line breaks arrive as spaces. Parentage is kept in memory, so a restart forgets it.
+
+### A server-driven review loop (#3408, #3410, #3429, #3430, #3431, #3412, #3439)
+
+For #3407, #3409 and #3425.
+
+- `.mulmoterminal.json` accepts `review: { reviewer, maxRounds, requiredLgtm, skill }` (defaults codex, 10, 1, `mulmoterminal-review`). Any invalid field drops the whole block, so a typo never becomes a reviewer; muse cannot review because its replies cannot be read back. Worktrees inherit it. The `reviewSettings` tool and a Review row in Settings → Directory settings show it.
+- `requestReview { repo, pr, reviewer? }` runs one round: it checks the caller, the declaration, the PR and the round limit, sends the reviewer a request the server builds, and returns at once; in the background it reads the verdict (`REVIEW VERDICT:` as well as `CODEX VERDICT:`), re-reads the head and CI, and types the result into the author, including whether the merge condition is met. It never merges.
+- Without `reviewer`, MulmoTerminal starts the declared reviewer as a visible cell in a worktree detached at the PR head (`~/.mulmoterminal/review-worktrees/`), reuses it for later rounds and moves it to the new head. `endReview` closes the cell and removes the worktree.
+- The author is told once per round, with the reviewer's cell, when the reviewer stops on a question or permission prompt.
+- New bundled skill `mulmoterminal-review`: one complete round, every finding with severity, site, sibling sites and the smallest fix, UNVERIFIED for what could not be run, and the verdict line first.
+- The GitHub board's badge reads **Verdict N** instead of **Codex N**, and a card is marked **Ready to merge** when the repository declares `review`, the newest push has the required LGTMs and CI passed, by the same rule as `requestReview`.
+- This repository declares its own review settings.
+
+### Issue to merge, and dispatching issues (#3411, #3416, #3417, #3418, #3433, #3441, #3447)
+
+For #3409, #3413, #3428, #3440 and #3446.
+
+- New bundled skill `mulmoterminal-issue-to-merge`: read the issue, ask only what is open, implement on the worktree's branch, open a PR, run rounds through `requestReview`, and merge only once the merge condition is met with CI re-checked. The repository's own rules win over its defaults.
+- `startIssueSession { repo, issue, agent }` cuts the issue's worktree and starts an implementer (claude, codex or copilot) there as a visible cell running that skill. New global key `maxIssueSessions` (1–8, default 2) bounds them machine-wide.
+- A server watch types a `[startIssueSession]` line into the starter when the implementer's PR merges or closes, its session ends, or it stops on the user. `sendToSession`, the review request and queued deliveries now also hold while a permission prompt is open.
+- New bundled skill `mulmoterminal-dispatch-issues` hands the issues the user named to implementers until the limit refuses, starts the next as one merges, and tells the user about the rest; it never answers for an implementer and never merges.
+- `closeIssueSession { session, force? }` closes an implementer's review loops, its cell, and its local worktree and branch (kept, with the reason, when it holds uncommitted or unpushed work). The watch does this automatically once the PR merges or closes.
+- A cell the server asked to close leaves the grid instead of staying as `[session ended]`.
+- The watch ignores a PR from an earlier attempt that ended before this one started, and implementers keep the issue branch.
+
+### Codex started by the server runs unattended (#3452, #3455, #3461)
+
+For #3451, #3454 and #3459.
+
+- A codex implementer or reviewer started by MulmoTerminal gets sandbox network access, write access to its worktree's git metadata (not the clone's config or hooks), and `approval_policy="never"`, so a refusal returns to codex as a failure instead of a prompt nobody watches. Codex cells the user opens are unchanged.
+
+### Skill evaluation in the Skills viewer (#3442, #3443, #3450, #3456, #3460)
+
+For #3437, #3438, #3448, #3453 and #3458.
+
+- Each skill row shows how many Claude conversations used it, and the detail the last use, from the Library index (`GET /api/library/skill-usage`). No cost figure, since a conversation's cost is not the skill's share.
+- **Does it help?** runs each test task with and without the skill, isolated in a temp directory, and reports pass rate, cost per pass and a verdict that says "helps" or "hurts" only when the gap exceeds the no-skill spread. Data lives under `~/.mulmoterminal/skill-evals/<skill>/`. New bundled skill `mulmoterminal-skill-eval` drafts the tasks for the user to approve.
+- **Improve and measure** writes a candidate SKILL.md from the latest measurement and measures it on the same tasks; **Adopt** backs up the current one and installs it, refused if anything changed since. Plugin and bundled skills are view-only.
+- **Find the cheapest model** runs the tasks on a `ladder` of models, cheapest first, and stops at the first that passes everything. It writes nothing to config.
+- On Windows a briefly locked run record no longer ends a measurement; saves report whether they landed, the final one is retried, and an interrupted run says why.
+
+### Surviving a full disk (#3426, #3432, #3415)
+
+For #3424, #3427 and #3414.
+
+- An agent started under the exit recorder that leaves no record keeps its cell with a red banner, instead of tmux's exit 0 being read as a clean `/exit` that closed every cell.
+- The grid layout is mirrored to `~/.mulmoterminal/grid-layout.json`, and a grid that loads empty offers the saved cells in a Restore / Dismiss bar; nothing is written until the user answers, and cells another tab shows are left out.
+- Saved launcher directories are checked on load and when the launch panel opens: a deleted one is hidden at once and removed from `config.json` a day later; one that may only be unreachable is hidden until it is back. Settings still lists every saved entry.
+
+### Dependencies and docs (#3419, #3436, #3422, #3445, #3457, #3463)
+
+- Dependency update; jinglescript 1.5.1 renders files again, under the calling session's `jinglescript/` folder (#3435).
+- README's API table lists the new session, review and issue tools and the codex approval behaviour (#3421, #3444, #3449, #3462).
+
 ## mulmoterminal@13.6.0 — 2026-11-22
 
 > **Setup guide:** [13.6.0 — Send a turn to the terminal beside you](https://receptron.github.io/mulmoterminal/guide/en/v13.6.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v13.6.0.html))

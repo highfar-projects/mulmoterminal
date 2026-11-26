@@ -11,7 +11,8 @@ often each passes. Your job is the part only a person can approve: **which tasks
 passing.** You do not run anything here. The user presses **Measure** in the Skills screen for that.
 
 The user may not be an engineer. Talk about tasks and results, not about JSON or shells, unless they
-ask.
+ask. When the request says `reply in <language>`, that is the language their screen is in: use it
+from your first message on, the draft and the plan included, until they write in another.
 
 ## 1. Find the skill and read it
 
@@ -30,6 +31,9 @@ Draft **3 to 5 "use" tasks** and **exactly 1 "avoid" task**.
 
 - **use** — a request the skill should make better. Real, small, finishable in a few minutes by an
   agent working alone in an empty folder. Vary them: an easy one, a typical one, an awkward one.
+  Each should be one that an agent without the skill is likely to get wrong, because the result depends
+  on something the skill says: a task anyone passes either way cannot show what the skill does, and the
+  Skills screen will name it as one.
 - **avoid** — a request that looks a little like the skill's area but where using the skill would be
   wrong. It catches a skill that fires on everything.
 
@@ -42,6 +46,22 @@ exactly as it would when the user runs it. If the skill grants tools, say so to 
 Do NOT write the task so that it only makes sense with the skill ("follow the weekly-report format").
 Write what a person would actually ask. The skill's job is to make that request turn out better.
 
+### Start from what the user really asked
+
+The request may list **past conversations**: transcripts of the user's own recent conversations that
+ran this skill. When it does, draft the "use" tasks from them before inventing any — a task the user
+really asked tests the skill on its real work.
+
+- Each is a Claude Code transcript, one JSON object per line, and can be long. Search it for this
+  skill's name rather than reading it whole: the skill ran at a `Skill` tool call whose `input.skill`
+  is the name, or where the user typed `/name` (recorded as `<command-name>/name`). The request is the
+  user's message just before, or the arguments typed after `/name`.
+- Keep what was asked and drop everything private: names, paths, project and company details,
+  secrets, anything personal. Shrink it to something an agent can finish alone in an empty folder.
+- Never copy the conversation's files into `files/<id>/`. Write small made-up ones, as always.
+- When you show the draft, say which tasks came from their past requests, so they can check nothing
+  private is left in them.
+
 ## 3. Decide how each task is judged
 
 Each task gets one check, and the result is pass or fail — never a score.
@@ -52,6 +72,9 @@ Each task gets one check, and the result is pass or fail — never a score.
 - **rubric** — when it takes reading: tone, whether a summary is faithful, whether the three headings
   make sense. Write 2 to 5 short items, each one a yes/no question about the RESULT that a careful
   reader could answer from the files. Another AI checks every item against the files; all must hold.
+  Write each item so a good result passes however it is worded: ask for what it says or does, never for
+  the skill's own terms (a tier name, a process step, a label the skill introduces). A result made
+  without the skill uses other words, and an item that wants the skill's words fails it unfairly.
 
 Prefer a command where one is honest. A rubric item like "is good" is not a check.
 
@@ -69,7 +92,11 @@ MulmoTerminal shows the price limit before it starts. Ask them to approve, chang
 
 ## 5. Write the file
 
-Write `cases.json` in the folder the request gave:
+Write `cases.json` in the folder the request gave, **with your file-writing tool, never a shell command**
+(it creates the folders it needs). MulmoTerminal allows that tool in that folder ahead of time, so the save
+does not depend on a permission check; a shell command writing there is checked every time and can be
+refused, and one carrying JSON through a heredoc is refused outright. Write the files under `files/` the
+same way.
 
 ```json
 {
@@ -112,7 +139,8 @@ Write `cases.json` in the folder the request gave:
   example `["Bash(python3 *)"]`). At most 20 tasks.
 - A task's starting files go in `files/<id>/` in that folder — they are copied
   into the empty folder before the task runs. Write them yourself; keep them small and made up, never
-  copied from the user's real files.
+  copied from the user's real files. They are part of the tasks: changing one, like changing `cases.json`, means the
+  earlier results no longer count as measurements of these tasks, so tell the user they will need **Measure** again.
 
 Then tell the user it is saved, and that **Measure** on the skill in the Skills screen runs it. Say
 that with only a handful of tasks, a small difference will read as "no evidence of a difference" —
