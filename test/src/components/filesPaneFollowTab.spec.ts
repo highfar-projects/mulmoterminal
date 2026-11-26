@@ -81,6 +81,27 @@ describe("the Files tree follows the tab in front", () => {
     expect(rows(w)).toContain("docs/a.md");
     expect(scrolled).toContain("docs/a.md");
   });
+
+  // A path clicked in terminal output while no pane was open: the grid mounts the pane and opens the
+  // file one tick later (TerminalGrid's showClickedPath), while the pane is still starting. The file
+  // opened, and the tree stayed collapsed, because following only began once the start had finished.
+  it("follows a file the host opened while the pane was still starting", async () => {
+    // The root's listing is the slow part of a start (a big folder, a Windows disk): the file's own
+    // text arrives first.
+    const answer = globalThis.fetch;
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), "https://x");
+      if (url.pathname.includes("/list") && (url.searchParams.get("path") ?? "") === "") await new Promise((resolve) => setTimeout(resolve, 30));
+      return answer(input);
+    }) as unknown as typeof fetch;
+    const w = mount(FilesPane, { props: { cwd: "/proj" }, attachTo: document.body });
+    await (w.vm as unknown as { openFile: (p: string) => Promise<void> }).openFile("docs/deep/x.md");
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    await flushPromises();
+
+    expect(rows(w)).toEqual(["docs", "docs/deep", "docs/deep/x.md", "docs/a.md", "readme.md"]);
+    expect(scrolled).toContain("docs/deep/x.md");
+  });
 });
 
 // #3058. A directory with many files hid which one was open: the remembered scroll could leave its row
