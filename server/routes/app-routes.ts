@@ -61,6 +61,8 @@ import { fetchBranchPr } from "../git/pr-of-branch.js";
 import { deliverWhenFree, inputHeld, type DeliveryDeps } from "./deliverWhenFree.js";
 import { waitingOnPermission } from "./issueSessionWatch.js";
 import { mountTerminalReplyRoutes } from "./terminal-reply-routes.js";
+// Fork-only: a local program asking a session for something (plans/feat-external-ask.md).
+import { mountExternalAsk } from "./external-ask-wiring.js";
 import { randomUUID } from "node:crypto";
 import { mountSessionAskRoutes } from "./session-ask-routes.js";
 import { mountReviewSettingsRoute, reviewSettingsAnswer } from "./review-settings-route.js";
@@ -279,6 +281,7 @@ function mountReviewRoutes(app: Express, deps: AppRouteDeps): void {
     nonce: () => randomUUID().slice(0, ASK_NONCE_CHARS),
   };
   mountSessionAskRoutes(app, ask);
+  mountExternalAsk(app, ask.openQuestion);
   const loops = new Map<string, ReviewLoop>();
   const close = (session: string): boolean => endTmuxSession(tmuxRouteDeps(deps), session, true);
   const workspaces = reviewerWorkspaces(deps);
