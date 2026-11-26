@@ -42,9 +42,10 @@ export interface FilesReveal {
    *  folder clicked, which `stillShown` cannot tell from the move. */
   stopShowing: () => void;
   /** The remembered pane is back: from now on the tree follows the tab in front, and it is put on
-   *  that tab's row at once — the remembered scroll may have left the row off screen (#3058).
+   *  that tab's row at once — the remembered scroll may have left the row off screen (#3058). With
+   *  `openedDuringStart` (the host opened a file while the pane was starting) its folders open too.
    *  False, and nothing done, for a startup a reset has since made stale. */
-  followFrontTab: (startedAt: number) => boolean;
+  followFrontTab: (startedAt: number, openedDuringStart: boolean) => boolean;
   /** Which startup this is, for `followFrontTab`: a reset makes every earlier one stale. */
   startEpoch: () => number;
   /** The pane is re-rooting: a reveal in flight must not scroll the new tree to a row from the
@@ -69,7 +70,7 @@ function followsFrontTab(
   frontPath: () => string | null,
   showInTree: (pathRel: string) => Promise<void>,
   scrollToRow: (pathRel: string) => void,
-): { start: (startedAt: number) => boolean; stop: () => void; epoch: () => number } {
+): { start: (startedAt: number, openedDuringStart: boolean) => boolean; stop: () => void; epoch: () => number } {
   let following = false;
   // A startup still running when the pane re-rooted must not switch following on in the new root.
   let epoch = 0;
@@ -77,11 +78,15 @@ function followsFrontTab(
     if (pathRel && following) void showInTree(pathRel);
   });
   return {
-    start: (startedAt) => {
+    start: (startedAt, openedDuringStart) => {
       if (startedAt !== epoch) return false;
       following = true;
       const pathRel = frontPath();
-      if (pathRel) scrollToRow(pathRel);
+      // A file the host opened while the pane was starting — a path clicked in terminal output opens
+      // the pane and the file together — came to the front before following began, so the watch
+      // above let it pass. It is not where the reader left the tree, so its folders open too.
+      if (pathRel && openedDuringStart) void showInTree(pathRel);
+      else if (pathRel) scrollToRow(pathRel);
       return true;
     },
     stop: () => {

@@ -272,7 +272,7 @@ describe("following the tab in front", () => {
     const h = harness();
     await frontTo(h, "README.md");
     expect(h.scrolled).toEqual([]);
-    h.reveal.followFrontTab(h.reveal.startEpoch());
+    h.reveal.followFrontTab(h.reveal.startEpoch(), false);
     await frontTo(h, "src/deep/buried.ts");
     expect(h.scrolled).toEqual(["README.md", "src/deep/buried.ts"]);
   });
@@ -280,9 +280,20 @@ describe("following the tab in front", () => {
   it("brings the front row into view when following starts, without opening a folder", async () => {
     const h = harness();
     h.frontPath.value = "src/deep/buried.ts";
-    h.reveal.followFrontTab(h.reveal.startEpoch());
+    h.reveal.followFrontTab(h.reveal.startEpoch(), false);
     expect(h.scrolled).toEqual(["src/deep/buried.ts"]);
     expect(h.opened).toEqual([]);
+  });
+
+  // A path clicked in terminal output while no pane was open: the file came to the front while the
+  // pane was starting, so it is the user's ask rather than where they left the tree.
+  it("opens the front file's folders when the host opened it while the pane was starting", async () => {
+    const h = harness();
+    h.frontPath.value = "src/deep/buried.ts";
+    h.reveal.followFrontTab(h.reveal.startEpoch(), true);
+    await flushPromises();
+    expect(h.opened).toEqual(["src", "src/deep"]);
+    expect(h.scrolled).toEqual(["src/deep/buried.ts"]);
   });
 
   // #3238 (CodeRabbit on #3264). A file outside the root has no row here; coming to the front it
@@ -292,7 +303,7 @@ describe("following the tab in front", () => {
     let release = (): void => {};
     const holdDir = new Promise<void>((resolve) => (release = resolve));
     const h = harness({ holdDir });
-    h.reveal.followFrontTab(h.reveal.startEpoch());
+    h.reveal.followFrontTab(h.reveal.startEpoch(), false);
     await frontTo(h, "src/deep/buried.ts"); // held inside the first folder it opens
     await frontTo(h, "/elsewhere/report.md");
     release();
@@ -303,7 +314,7 @@ describe("following the tab in front", () => {
 
   it("stops following when the pane re-roots", async () => {
     const h = harness();
-    h.reveal.followFrontTab(h.reveal.startEpoch());
+    h.reveal.followFrontTab(h.reveal.startEpoch(), false);
     h.reveal.reset();
     await frontTo(h, "README.md");
     expect(h.scrolled).toEqual([]);
@@ -315,10 +326,10 @@ describe("following the tab in front", () => {
     const stale = h.reveal.startEpoch();
     h.reveal.reset();
     h.frontPath.value = "README.md";
-    expect(h.reveal.followFrontTab(stale)).toBe(false);
+    expect(h.reveal.followFrontTab(stale, false)).toBe(false);
     await frontTo(h, "src/deep/buried.ts");
     expect(h.scrolled).toEqual([]);
-    expect(h.reveal.followFrontTab(h.reveal.startEpoch())).toBe(true);
+    expect(h.reveal.followFrontTab(h.reveal.startEpoch(), false)).toBe(true);
   });
 
   describe("a folder the folder view moved to (#3134)", () => {

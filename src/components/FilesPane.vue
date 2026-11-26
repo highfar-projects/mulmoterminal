@@ -433,11 +433,23 @@ function teardown(): void {
 // it in the same breath (Codex on #2102).
 let started: Promise<void> = Promise.resolve();
 
+// How many files the host has asked this pane to open. A path clicked in terminal output while no pane
+// was open mounts the pane and opens the file one tick later, while the start is still running — and
+// following the front tab only begins once the start is done, so the tree would stay collapsed on a
+// file the user just asked for. Counted rather than read from the file's generation, which the
+// restore's own open moves too.
+let hostOpens = 0;
+const openFromHost = (pathRel: string, location: FileLocation | undefined, newTab: boolean): Promise<void> => {
+  hostOpens += 1;
+  return openFromTerminal(pathRel, location, newTab);
+};
+
 async function start(): Promise<void> {
   // The pane's switch, not a file's, so a file opened for this start keeps it as an open pane would.
   // Before any await: a start that a reload has since replaced must not reach it (#3122).
   sideBySide.switchedOn.value = props.initialState?.sideBySide === true;
   const reqIdAtStart = file.generation();
+  const hostOpensAtStart = hostOpens;
   const startedAt = startEpoch();
   await nextTick();
   if (editorHost.value) file.attach(editorHost.value);
@@ -446,7 +458,7 @@ async function start(): Promise<void> {
   void gitStatus.refresh();
   await tree.loadRoot();
   await restore(props.initialState ?? null, reqIdAtStart);
-  if (!followFrontTab(startedAt)) return;
+  if (!followFrontTab(startedAt, hostOpens !== hostOpensAtStart)) return;
   // An explicitly requested path wins over whatever was remembered — it is the more recent
   // intent (a clicked path in terminal output).
   if (props.requestedPath) void openRequested(requestedUnderRoot(props.requestedPath), props.requestedLocation ?? null);
@@ -509,9 +521,9 @@ defineExpose({
   // A page, an SVG or a table comes up drawn: a path clicked in terminal output to a chart is asking
   // to see the chart, and a CSV opened from there as a table before the pane took the click (#2559).
   // Markdown opens as it always has.
-  openFile: openFromTerminal,
+  openFile: openFromHost,
   /** A file in a given view and at a given line, for an agent's `showInPane` or a check item (#3022). */
-  showFile: showFileWith({ tabs, file, canvasMode, sideBySide, openAt: openFromTerminal }),
+  showFile: showFileWith({ tabs, file, canvasMode, sideBySide, openAt: openFromHost }),
   /** The `files-insert-selection` key (#2575), reached from the grid like the tab keys. */
   insertSelection,
   /** The `files-tab-*` keys (#2267), reached from the grid like the finder's. */
