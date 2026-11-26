@@ -14,6 +14,7 @@ import { transcriptIdOf } from "../session/transcript/cleared-transcripts.js";
 import { sessionTranscriptPage } from "../session/transcript/transcript-view-read.js";
 import { readExternalAnswer } from "../session/transcript/external-ask-read.js";
 import { currentBranch } from "../git/git-status.js";
+import { claudePeerName } from "../agents/claude/claude-peer-registry.js";
 import { mulmoterminalHome } from "../infra/fs/mulmoterminal-home.js";
 import { appendExternalAskLog, ensureExternalAskToken, readExternalAskSettings } from "../config/external-ask-files.js";
 import { waitingOnPermission } from "./issueSessionWatch.js";
@@ -40,6 +41,8 @@ export function mountExternalAsk(app: Express, openQuestion: (session: string) =
       };
     },
     branchOf: async (cwd) => (await currentBranch(cwd)).branch,
+    // As the cell's chip asks it (session-routes.ts): only a claude has a name there.
+    peerNameOf: async (id, agent) => (agent === "claude" ? await claudePeerName(id) : null),
     openQuestion,
     permissionPending: (id) => waitingOnPermission(lastHookEvent.get(id)),
     send: (id, text, options) => sendToSession(id, text, options),

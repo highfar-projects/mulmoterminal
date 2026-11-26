@@ -47,6 +47,9 @@ export interface ExternalAskRouteDeps {
   agentOf: (session: string) => string | null;
   describe: (session: string) => { memo: string | null; title: string; working: boolean; waiting: boolean };
   branchOf: (cwd: string) => Promise<string | null>;
+  /** What the other Claude Code sessions on this machine call it — the name on the cell's chip — or
+   *  null when it is not a claude or none answers to it. A label to choose by, not an address. */
+  peerNameOf: (session: string, agent: string) => Promise<string | null>;
   openQuestion: (session: string) => Promise<AskQuestionEvent | null>;
   permissionPending: (session: string) => boolean;
   /** Resolves once the Enter has gone out; rejects with InputBlockedError when `blocked` says no. */
@@ -91,12 +94,17 @@ function mountList(app: Express, deps: ExternalAskRouteDeps): void {
     if (settings === null) return;
     const sessions = await Promise.all(
       deps.liveSessions().map(async ({ id, agent, cwd }) => {
-        const [branch, question] = await Promise.all([deps.branchOf(cwd).catch(() => null), deps.openQuestion(id).catch(() => null)]);
+        const [branch, question, peerName] = await Promise.all([
+          deps.branchOf(cwd).catch(() => null),
+          deps.openQuestion(id).catch(() => null),
+          deps.peerNameOf(id, agent).catch(() => null),
+        ]);
         return {
           id,
           agent,
           cwd,
           branch,
+          peerName,
           ...deps.describe(id),
           questionOpen: question !== null,
           permissionPending: deps.permissionPending(id),
