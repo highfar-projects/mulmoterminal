@@ -36,6 +36,19 @@ export function userPromptText(content: unknown): string | null {
   return null;
 }
 
+// A real user prompt from a whole JSONL record, or null when the record is not one.
+//
+// `isMeta` is the harness marking a user-channel record as its own: the body of a skill the agent
+// invoked mid-turn ("Base directory for this skill: ..."), the description of a pasted image
+// ("[Image: ...]"). Measured across 67 transcripts on this machine, every non-sidechain `isMeta`
+// user record was one of those two, and none was typed by a person. Read as a prompt, a skill call
+// split the agent's turn in two, so the reply of the turn that asked was read as empty (fork-only
+// fix, plans/feat-external-ask.md).
+export function userRecordPrompt(o: Record<string, unknown>): string | null {
+  if (o.type !== "user" || o.isMeta === true) return null;
+  return userPromptText(isRecord(o.message) ? o.message.content : undefined);
+}
+
 // Parse a JSONL file into the objects on each non-blank, valid line.
 export function parseJsonl(raw: string): Record<string, unknown>[] {
   const out: Record<string, unknown>[] = [];
@@ -72,7 +85,7 @@ export const emptyPromptTrail = (): PromptTrail => ({ meaningful: null, latest: 
 
 export function foldPromptTrail(into: PromptTrail, o: Record<string, unknown>): void {
   if (o.type === "user") {
-    const prompt = userPromptText(isRecord(o.message) ? o.message.content : undefined);
+    const prompt = userRecordPrompt(o);
     if (!prompt) return;
     into.latest = prompt;
     if (!isTrivialPrompt(prompt)) into.meaningful = prompt;
@@ -156,7 +169,7 @@ function turnFromRecord(o: Record<string, unknown>): ConversationTurn | null {
   const message = isRecord(o.message) ? o.message : null;
   const content = message?.content;
   if (o.type === "user") {
-    const text = userPromptText(content);
+    const text = userRecordPrompt(o);
     return text ? { role: "user", text } : null;
   }
   if (o.type !== "assistant") return null;
@@ -418,7 +431,7 @@ export function currentTurnToolNamesFromParsed(records: Record<string, unknown>[
  *  longest single turn spans 3,615 records, so ANY fixed window would drop a turn's early edits and
  *  report `planning` for a turn that has already been implementing. */
 export function foldTurnToolNames(names: string[], o: Record<string, unknown>): void {
-  if (o.type === "user" && userPromptText(isRecord(o.message) ? o.message.content : undefined) !== null) {
+  if (userRecordPrompt(o) !== null) {
     names.length = 0; // a fresh user prompt starts a new turn
     return;
   }

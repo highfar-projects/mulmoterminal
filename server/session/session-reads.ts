@@ -16,7 +16,7 @@ import { isRecord } from "../../common/isRecord.js";
 import { hasErrnoCode } from "../errors.js";
 import {
   customTitleOfRecord,
-  userPromptText,
+  userRecordPrompt,
   latestMeaningfulUserPromptFromParsed,
   latestAssistantTextFromParsed,
   timelineEventsIn,
@@ -589,7 +589,7 @@ function foldTitleField(into: TitleFields, o: Record<string, unknown>): void {
   else if (o.type === "ai-title" && o.aiTitle) into.aiTitle = readString(o.aiTitle);
   else if (o.type === "last-prompt" && o.lastPrompt) into.lastPrompt = readString(o.lastPrompt);
   else if (o.type === "user" && into.firstUserMsg === null) {
-    into.firstUserMsg = userPromptText(isRecord(o.message) ? o.message.content : undefined);
+    into.firstUserMsg = userRecordPrompt(o);
   }
 }
 
