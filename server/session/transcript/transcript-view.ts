@@ -15,7 +15,8 @@
 // body there, it is rendered like any other prose.
 import { isRecord } from "../../../common/isRecord.js";
 import { describeValue, readString } from "../../../common/readString.js";
-import { userRecordPrompt } from "./transcript.js";
+import { turnOpeningPrompt, userPromptText } from "./transcript.js";
+import { emptyTurnBoundary, type TurnBoundaryState } from "./turn-boundary.js";
 import type { TranscriptRow, TranscriptRowKind, TranscriptTurn, TranscriptView } from "../../../common/transcriptView.js";
 
 /** How many LOGICAL lines (newline-separated) the view carries before the oldest turns are dropped.
@@ -120,6 +121,25 @@ export function toolResultRow(text: string): TranscriptRow {
   return { kind: "tool", text: lines.slice(0, TOOL_RESULT_MAX_LINES).join("\n"), clipped: true };
 }
 
+/** How much of a tool CALL's arguments is shown. Argument fields are unbounded — one measured at
+ *  4 KB of embedded shell — and a reader wants to know WHAT ran, not to re-read the invocation. */
+const CALL_ARGS_MAX_CHARS = 200;
+
+/** A tool call: the name, then the head of its arguments — one shape for every agent's calls. */
+export function toolCallRow(name: string, args: string): TranscriptRow {
+  const label = name.trim() || "(unnamed tool)";
+  const head = args.length > CALL_ARGS_MAX_CHARS ? `${args.slice(0, CALL_ARGS_MAX_CHARS)}…` : args;
+  return { kind: "tool", text: head === "" ? label : `${label} ${head}`, call: true };
+}
+
+/** An assistant step's prose, then one row per call — or one `unknown` row when the calls are not a list. */
+export function proseThenCallRows(content: unknown, calls: unknown, callRow: (call: unknown) => TranscriptRow): TranscriptRow[] {
+  const prose = readString(content).trim();
+  const rows: TranscriptRow[] = prose === "" ? [] : [{ kind: "assistant", text: prose }];
+  if (calls === undefined) return rows;
+  return [...rows, ...(Array.isArray(calls) ? calls.map(callRow) : [unknownRow(calls)])];
+}
+
 function renderBlock(part: unknown, speaker: TranscriptRowKind): TranscriptRow[] {
   if (!isRecord(part)) return [unknownRow(part)];
   switch (part.type) {
@@ -157,23 +177,28 @@ export function renderRecord(record: Record<string, unknown>): TranscriptRow[] {
 
 /** Where a turn starts: a non-sidechain `user` record whose content holds a real prompt.
  *
- *  `userRecordPrompt` (which also turns away the harness's `isMeta` records) and through it
- *  `userPromptText`, rather than a fresh predicate, because it already handles BOTH content shapes —
+ *  `userPromptText` rather than a fresh predicate, because it already handles BOTH content shapes —
  *  and claude's ordinary prompts are the plain-string one. A predicate written as "has a text block"
  *  would miss them, fusing every exchange into one turn that the line budget can never evict.
  *
- *  `promptId` is not used: measured, 114 records carried none.
+ *  Text written into a turn already open (a skill's body, an image note) does not open another: the
+ *  `promptId` rule in turn-boundary.ts, which holds only META records to the id.
  *
  *  Returns the PROMPT rather than a boolean, because the fold needs the text as well: a record can
  *  satisfy this predicate and render no rows (`userPromptText` reads `.text` off any block, while the
  *  render rules read it only off a `text` one), and a turn that opens empty is a blank block on the
  *  phone that no budget can evict. One function answering both keeps the two from disagreeing. */
-export function turnBoundaryPrompt(record: Record<string, unknown>): string | null {
+export function turnBoundaryPrompt(record: Record<string, unknown>, boundary: TurnBoundaryState = emptyTurnBoundary()): string | null {
   if (record.isSidechain === true) return null;
-  return userRecordPrompt(record);
+  return turnOpeningPrompt(boundary, record);
 }
 
 export const isTurnBoundary = (record: Record<string, unknown>): boolean => turnBoundaryPrompt(record) !== null;
+
+/** Claude Code's own UI does not show a meta record — and one that opens no turn is a skill's body or
+ *  an image note, which shown here reads as something the user said. */
+const isHiddenMeta = (record: Record<string, unknown>, prompt: string | null): boolean =>
+  record.isMeta === true && prompt === null && userPromptText(isRecord(record.message) ? record.message.content : undefined) !== null;
 
 /** How much of `timestamp` is carried as a turn's `at`. An ISO-8601 instant is 24 characters, 29
  *  with an offset; past 64 bytes it is not a timestamp, and this field is read by a machine — so an
@@ -249,17 +274,14 @@ export function foldTurnRecord(scan: TranscriptScan, record: TurnRecord): void {
   evictOldestTurns(scan);
 }
 
-/** Fold one of CLAUDE's records into the scan. */
-export function foldTranscriptView(scan: TranscriptScan, record: Record<string, unknown>): void {
+/** Fold one of CLAUDE's records into the scan. `boundary` lives as long as the scan does. */
+export function foldTranscriptView(scan: TranscriptScan, record: Record<string, unknown>, boundary: TurnBoundaryState): void {
   // A sub-agent's record is dropped whole — not merely disqualified as a boundary. Filtering it in
   // the boundary predicate alone would still let its assistant records land as rows of whichever
   // turn happened to be open, attributing a sub-agent's work to the main conversation.
   if (record.isSidechain === true) return;
-  // The harness's own user-channel text (a skill's body, an image's description) is dropped whole for
-  // the same reason: it is not a prompt (see userRecordPrompt), and rendered as a row it would show
-  // a skill's instructions as something the user said. Fork-only fix.
-  if (record.isMeta === true) return;
-  foldTurnRecord(scan, { prompt: turnBoundaryPrompt(record), at: rawTurnAt(record), rows: renderRecord(record) });
+  const prompt = turnBoundaryPrompt(record, boundary);
+  foldTurnRecord(scan, { prompt, at: rawTurnAt(record), rows: isHiddenMeta(record, prompt) ? [] : renderRecord(record) });
 }
 
 // Whole turns, oldest first — half a turn is not readable. Never the last one: decision 1 is that

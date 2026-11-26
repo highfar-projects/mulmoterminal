@@ -5,6 +5,7 @@
 import { isRecord } from "../../../common/isRecord.js";
 import { readString } from "../../../common/readString.js";
 import type { SessionContextInfo } from "../../../common/sessionContext.js";
+import { continuesTurn, emptyTurnBoundary, opensTurn, startsCommandTurn, type TurnBoundaryState } from "./turn-boundary.js";
 
 // Text the HARNESS put in the user channel, rather than something a person typed:
 // slash-command wrappers, bash input, and the notification a finished background task
@@ -24,30 +25,40 @@ const INJECTED_PROMPT_RE = /^\s*<(local-command|command-|bash-|task-notification
 
 export const isInjectedPrompt = (text: string): boolean => INJECTED_PROMPT_RE.test(text);
 
-// A real user prompt from a JSONL "user" line's content, or null if it's injected.
+// The text of a JSONL "user" line's content, injected or not, or null when there is none.
 // Content may be a plain string or an array of blocks (guard against null elements).
-export function userPromptText(content: unknown): string | null {
+function userText(content: unknown): string | null {
   // `x: unknown` is load-bearing: Array.isArray narrows `unknown` to `any[]`, and an `any`
   // element puts every read below back outside the type checker's reach.
   const text = Array.isArray(content) ? content.map((x: unknown) => (isRecord(x) ? readString(x.text) : readString(x))).join(" ") : content;
-  if (typeof text === "string" && text.trim() && !isInjectedPrompt(text)) {
-    return text.trim();
-  }
-  return null;
+  return typeof text === "string" && text.trim() ? text.trim() : null;
 }
 
-// A real user prompt from a whole JSONL record, or null when the record is not one.
-//
-// `isMeta` is the harness marking a user-channel record as its own: the body of a skill the agent
-// invoked mid-turn ("Base directory for this skill: ..."), the description of a pasted image
-// ("[Image: ...]"). Measured across 67 transcripts on this machine, every non-sidechain `isMeta`
-// user record was one of those two, and none was typed by a person. Read as a prompt, a skill call
-// split the agent's turn in two, so the reply of the turn that asked was read as empty (fork-only
-// fix, plans/feat-external-ask.md).
-export function userRecordPrompt(o: Record<string, unknown>): string | null {
-  if (o.type !== "user" || o.isMeta === true) return null;
-  return userPromptText(isRecord(o.message) ? o.message.content : undefined);
+// A real user prompt from a JSONL "user" line's content, or null if it's injected.
+export function userPromptText(content: unknown): string | null {
+  const text = userText(content);
+  return text !== null && !isInjectedPrompt(text) ? text : null;
 }
+
+const SLASH_COMMAND_RE = /^<command-/;
+
+/** The prompt a user record OPENS a turn with, or null: no prompt text, or text written into the
+ *  turn already open (a skill's body, an image note). Advances `state`, so take it once per record
+ *  and hand the answer to every rule that needs it. */
+export function turnOpeningPrompt(state: TurnBoundaryState, o: Record<string, unknown>): string | null {
+  if (o.type !== "user") return null;
+  const content = isRecord(o.message) ? o.message.content : undefined;
+  const text = userPromptText(content);
+  if (text === null) {
+    if (holdsToolResult(content)) continuesTurn(state, o);
+    else if (SLASH_COMMAND_RE.test(userText(content) ?? "")) startsCommandTurn(state);
+    return null;
+  }
+  return opensTurn(state, o) ? text : null;
+}
+
+const holdsToolResult = (content: unknown): boolean =>
+  Array.isArray(content) && content.some((block: unknown) => isRecord(block) && block.type === "tool_result");
 
 // Parse a JSONL file into the objects on each non-blank, valid line.
 export function parseJsonl(raw: string): Record<string, unknown>[] {
@@ -83,20 +94,19 @@ export interface PromptTrail {
 
 export const emptyPromptTrail = (): PromptTrail => ({ meaningful: null, latest: null, record: null });
 
-export function foldPromptTrail(into: PromptTrail, o: Record<string, unknown>): void {
-  if (o.type === "user") {
-    const prompt = userRecordPrompt(o);
-    if (!prompt) return;
-    into.latest = prompt;
-    if (!isTrivialPrompt(prompt)) into.meaningful = prompt;
+/** `opening` is `turnOpeningPrompt`'s answer for this record. */
+export function foldPromptTrail(into: PromptTrail, o: Record<string, unknown>, opening: string | null): void {
+  if (opening !== null) {
+    into.latest = opening;
+    if (!isTrivialPrompt(opening)) into.meaningful = opening;
   } else if (o.type === "last-prompt" && o.lastPrompt) {
     into.record = readString(o.lastPrompt);
   }
 }
 
-const promptTrailOf = (records: Record<string, unknown>[]): PromptTrail => {
+const promptTrailOf = (records: Record<string, unknown>[], boundary: TurnBoundaryState = emptyTurnBoundary()): PromptTrail => {
   const trail = emptyPromptTrail();
-  for (const o of records) foldPromptTrail(trail, o);
+  for (const o of records) foldPromptTrail(trail, o, turnOpeningPrompt(boundary, o));
   return trail;
 };
 
@@ -164,12 +174,12 @@ function assistantText(content: unknown): string | null {
 }
 
 // One record as a turn, or null when it carries no prose (a tool-only assistant record, a
-// slash-command wrapper).
-function turnFromRecord(o: Record<string, unknown>): ConversationTurn | null {
+// slash-command wrapper) or is text written into the turn already open.
+export function conversationTurnOf(boundary: TurnBoundaryState, o: Record<string, unknown>): ConversationTurn | null {
   const message = isRecord(o.message) ? o.message : null;
   const content = message?.content;
   if (o.type === "user") {
-    const text = userRecordPrompt(o);
+    const text = turnOpeningPrompt(boundary, o);
     return text ? { role: "user", text } : null;
   }
   if (o.type !== "assistant") return null;
@@ -179,7 +189,17 @@ function turnFromRecord(o: Record<string, unknown>): ConversationTurn | null {
 
 // Ordered user/assistant turns as plain text, skipping slash/local-command wrappers and
 // tool-only assistant turns. Feeds the header-title summarizer.
-export const conversationTurnsFromParsed = (records: Record<string, unknown>[]): ConversationTurn[] => records.flatMap((o) => turnFromRecord(o) ?? []);
+/** `boundary` defaults to a read from the file's start; a window that begins mid-file passes
+ *  `windowTurnBoundary()`. */
+export const conversationTurnsFromParsed = (records: Record<string, unknown>[], boundary: TurnBoundaryState = emptyTurnBoundary()): ConversationTurn[] => {
+  const turnOf = createConversationTurnScan(boundary);
+  return records.flatMap((o) => turnOf(o) ?? []);
+};
+
+/** The same rule for a caller fed one record at a time: the boundary needs the records before. */
+export function createConversationTurnScan(boundary: TurnBoundaryState = emptyTurnBoundary()): (o: Record<string, unknown>) => ConversationTurn | null {
+  return (o) => conversationTurnOf(boundary, o);
+}
 export const conversationTurnsFromJsonl = (raw: string): ConversationTurn[] => conversationTurnsFromParsed(parseJsonl(raw));
 
 // How many user turns the transcript holds, so the roster can tell whether a session has
@@ -303,8 +323,8 @@ export function preferredHeaderPrompt(current: string | null, incoming: string):
 // SUBSTANTIAL prompt, so a resumed session's header shows the task instead of a
 // one-word follow-up. Falls back to the latest prompt (then the record) if every
 // prompt is trivial.
-export function latestMeaningfulUserPromptFromParsed(records: Record<string, unknown>[]): string | null {
-  return meaningfulPromptOf(promptTrailOf(records));
+export function latestMeaningfulUserPromptFromParsed(records: Record<string, unknown>[], boundary?: TurnBoundaryState): string | null {
+  return meaningfulPromptOf(promptTrailOf(records, boundary));
 }
 
 /** The rule itself: the last substantial prompt, else the last prompt at all, else the record a
@@ -417,7 +437,7 @@ export function timelineEventsIn(o: Record<string, unknown>): TimelineEvent[] {
 // last-N window over the whole transcript) is what keeps a prior turn's Edit from leaking
 // into a new turn that's only reading, AND keeps the phase stable within a turn: an edit
 // early in the turn still reads as "implementing" even after many later verification reads.
-// A fresh user prompt resets; tool-result user turns don't (userPromptText is null for them).
+// A turn's opening prompt resets; tool results and text written mid-turn don't.
 // Reuses readSessionSummary's single parse.
 export function currentTurnToolNamesFromParsed(records: Record<string, unknown>[]): string[] {
   const scan = createCurrentTurnToolScan();
@@ -430,9 +450,9 @@ export function currentTurnToolNamesFromParsed(records: Record<string, unknown>[
  *  them with a window. That matters: measured across the eight largest transcripts here, the
  *  longest single turn spans 3,615 records, so ANY fixed window would drop a turn's early edits and
  *  report `planning` for a turn that has already been implementing. */
-export function foldTurnToolNames(names: string[], o: Record<string, unknown>): void {
-  if (userRecordPrompt(o) !== null) {
-    names.length = 0; // a fresh user prompt starts a new turn
+export function foldTurnToolNames(names: string[], o: Record<string, unknown>, opening: string | null): void {
+  if (opening !== null) {
+    names.length = 0;
     return;
   }
   if (o.type !== "assistant" || !isRecord(o.message) || !Array.isArray(o.message.content)) return;
@@ -443,8 +463,9 @@ export function foldTurnToolNames(names: string[], o: Record<string, unknown>): 
 
 export function createCurrentTurnToolScan() {
   const names: string[] = [];
+  const boundary = emptyTurnBoundary();
   return {
-    add: (o: Record<string, unknown>) => foldTurnToolNames(names, o),
+    add: (o: Record<string, unknown>) => foldTurnToolNames(names, o, turnOpeningPrompt(boundary, o)),
     names: (): string[] => names,
   };
 }

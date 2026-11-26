@@ -1,19 +1,16 @@
 // @vitest-environment node
 //
-// Fork-only: a user-channel record the harness marks `isMeta` — the body of a skill the agent invoked
+// Kept from the fork's own fix after upstream fixed the same thing its own way (#3546, #3550,
+// #3553): these pin the external-ask case against upstream's implementation. A user-channel record the harness marks `isMeta` — the body of a skill the agent invoked
 // mid-turn, the description of a pasted image — is not a prompt. Read as one, a skill call split the
 // agent's turn in two, and the reply of the turn that asked came back empty to an external ask
 // (plans/feat-external-ask.md). The records below are the shapes Claude Code writes.
 import { describe, it, expect } from "vitest";
 import { currentTurnReplyFromClaudeParsed, lastTurnFromClaudeParsed } from "../../../../server/session/transcript/last-turn.js";
-import {
-  conversationTurnsFromParsed,
-  currentTurnToolNamesFromParsed,
-  latestUserPromptFromParsed,
-  userRecordPrompt,
-} from "../../../../server/session/transcript/transcript.js";
+import { conversationTurnsFromParsed, currentTurnToolNamesFromParsed, latestUserPromptFromParsed } from "../../../../server/session/transcript/transcript.js";
 import { emptyTranscriptScan, foldTranscriptView, isTurnBoundary, transcriptViewOf } from "../../../../server/session/transcript/transcript-view.js";
 import { transcriptPrompts } from "../../../../server/session/transcript/prompt-history.js";
+import { emptyTurnBoundary } from "../../../../server/session/transcript/turn-boundary.js";
 
 const ASK = "Ask the hfgrid clone for its branch. [edgar 0123456789ab]";
 const REPLY = "hfgrid is on main.";
@@ -62,18 +59,6 @@ const turnWithSkill = () => [
   concluding(REPLY),
 ];
 
-describe("userRecordPrompt", () => {
-  it("is null for a record the harness marked isMeta", () => {
-    expect(userRecordPrompt(skillBody())).toBeNull();
-    expect(userRecordPrompt(imageNote())).toBeNull();
-  });
-
-  it("still reads an ordinary prompt", () => {
-    expect(userRecordPrompt(prompt(ASK))).toBe(ASK);
-    expect(userRecordPrompt({ ...prompt(ASK), isMeta: false })).toBe(ASK);
-  });
-});
-
 describe("a skill called mid-turn does not start a new turn", () => {
   it("leaves the last turn's prompt the one that asked, and its reply the answer", () => {
     expect(lastTurnFromClaudeParsed(turnWithSkill())).toEqual({ prompt: ASK, reply: REPLY });
@@ -86,7 +71,8 @@ describe("a skill called mid-turn does not start a new turn", () => {
 
   it("is one turn in the conversation view, opened by the ask and without the skill's body", () => {
     const scan = emptyTranscriptScan();
-    turnWithSkill().forEach((record) => foldTranscriptView(scan, record));
+    const boundary = emptyTurnBoundary();
+    turnWithSkill().forEach((record) => foldTranscriptView(scan, record, boundary));
     const view = transcriptViewOf(scan, false);
     if (view.status !== "ok") throw new Error("expected an ok view");
     expect(view.turns).toHaveLength(1);
