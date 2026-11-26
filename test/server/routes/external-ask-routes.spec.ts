@@ -56,7 +56,7 @@ let working = false;
 let live = [{ id: SESSION, agent: "claude", cwd: CWD }];
 let exists = true;
 
-function routes(): Record<string, Handler> {
+function routes(overrides: Partial<ExternalAskRouteDeps> = {}): Record<string, Handler> {
   const map: Record<string, Handler> = {};
   const app = {
     get: (path: string, handler: Handler) => (map[`GET ${path}`] = handler),
@@ -71,6 +71,7 @@ function routes(): Record<string, Handler> {
     agentOf: (id) => live.find((s) => s.id === id)?.agent ?? null,
     describe: () => ({ memo: "estimates", title: "estimates", working, waiting: false }),
     branchOf: async () => "main",
+    peerNameOf: async (_id, agent) => (agent === "claude" ? "clone-3f" : null),
     openQuestion,
     permissionPending: () => permission,
     send,
@@ -81,6 +82,7 @@ function routes(): Record<string, Handler> {
       clock += ms;
     },
     now: () => clock,
+    ...overrides,
   });
   return map;
 }
@@ -256,6 +258,7 @@ describe("GET /api/external/sessions", () => {
           agent: "claude",
           cwd: CWD,
           branch: "main",
+          peerName: "clone-3f",
           memo: "estimates",
           title: "estimates",
           working: false,
@@ -267,5 +270,22 @@ describe("GET /api/external/sessions", () => {
         },
       ],
     });
+  });
+
+  it("gives no peer name to an agent that has none, and none when looking it up fails", async () => {
+    live = [
+      { id: SESSION, agent: "shell", cwd: CWD },
+      { id: "1b7d2c1e-1111-4222-8333-944455556666", agent: "claude", cwd: CWD },
+    ];
+    const res = makeRes();
+    const failing = routes({
+      peerNameOf: async (_id, agent) => {
+        if (agent === "claude") throw new Error("registry unreadable");
+        return null;
+      },
+    });
+    await failing["GET /api/external/sessions"]?.(request({}), res);
+    const sessions = (res.payload as { sessions: { peerName: string | null }[] }).sessions;
+    expect(sessions.map((s) => s.peerName)).toEqual([null, null]);
   });
 });

@@ -37,9 +37,14 @@
 
 ```json
 { "sessions": [ { "id": "…", "agent": "claude", "cwd": "D:\\…\\clone-a", "branch": "main",
-  "memo": "見積もり担当", "title": "…", "working": false, "waiting": false,
+  "peerName": "clone-a-3f", "memo": "見積もり担当", "title": "…", "working": false, "waiting": false,
   "questionOpen": false, "permissionPending": false, "allowed": true, "replyReadable": true } ] }
 ```
+
+- `peerName` は、セルのチップに出る名前。同じマシンの他の Claude Code セッションが、このセッションに送るときに使う。
+  - Claude Code が `~/.claude/sessions/<pid>.json` に書いた名前を、チップと同じ処理（`claudePeerName`）で読んでいる。
+  - claude 以外のエージェントと、名前が見つからないセッションでは `null`。
+  - Claude Code の側で名前が変わることがある。宛先を選ぶ手がかりとして使い、送り先の確認には使わない。確認は `expectCwd` で行う。
 
 ### `POST /api/external/sessions/:sessionId/asks` — 依頼を送る
 
