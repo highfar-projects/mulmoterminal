@@ -12,7 +12,7 @@
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import CellPaneMenu from "./CellPaneMenu.vue";
-import { hasChoice, historyEntries, toolEntries, type CellPaneMenuId, type CellPaneMenuState } from "./cellPaneMenuEntries";
+import { actionsOnly, hasChoice, historyEntries, toolEntries, type CellPaneMenuId, type CellPaneMenuState } from "./cellPaneMenuEntries";
 import { CELL_BTN, CELL_BTN_ACTIVE, CELL_CLOSE_BTN } from "./cellChromeClasses";
 import type { RightPane } from "./gridCell";
 
@@ -64,6 +64,11 @@ const props = defineProps<{
   // Whether another terminal is there to talk to. Only TerminalCell passes it, and it binds
   // `open-talk` itself; it refreshes the answer on `tools-opening`.
   talkAvailable?: boolean;
+  // A remote cell (#3506): every pane reads this machine's copy of the session, which it has none of.
+  panesHidden?: boolean;
+  // Except its session's own panes, which a remote agent cell reads on its host: its history, its
+  // tool calls and its cards.
+  sessionOnHost?: boolean;
 }>();
 const emit = defineEmits<{
   (
@@ -97,7 +102,8 @@ const menuState = computed<CellPaneMenuState>(() => ({
   talkAvailable: !!props.talkAvailable,
 }));
 const history = computed(() => historyEntries(menuState.value, t));
-const tools = computed(() => toolEntries(menuState.value, t));
+const keptOnHost = computed<CellPaneMenuId[]>(() => (props.sessionOnHost ? ["tools", "canvas"] : []));
+const tools = computed(() => (props.panesHidden ? actionsOnly(toolEntries(menuState.value, t), keptOnHost.value) : toolEntries(menuState.value, t)));
 
 const PICK_EVENT = {
   prompts: "toggle-prompts",
@@ -122,7 +128,14 @@ const parkTitle = computed(() => (props.parked ? t("tips.cell.wake") : t("tips.c
 
 <template>
   <template v-if="!closeOnly">
-    <CellPaneMenu v-if="hasChoice(history)" icon="history" :label="t('cellMenu.history')" testid="cell-history-btn" :entries="history" @select="onPick" />
+    <CellPaneMenu
+      v-if="(!panesHidden || sessionOnHost) && hasChoice(history)"
+      icon="history"
+      :label="t('cellMenu.history')"
+      testid="cell-history-btn"
+      :entries="history"
+      @select="onPick"
+    />
     <CellPaneMenu
       v-if="hasChoice(tools)"
       icon="build"

@@ -108,47 +108,44 @@ const knownCwdOf = async (sessionId: string): Promise<string> => {
 
 export function initRemoteHost(deps: RemoteHostDeps): void {
   const { spawnClaudePty, toolStores } = deps;
-  initRemoteHostBackend(
-    {
-      workspace: CLAUDE_CWD,
-      spawnChat: (message) => spawnChat(spawnClaudePty, message),
-      spawnIssueSeed: (agent, cwd, seed, run) => spawnIssueSeed(deps.spawnIssueSession, agent, cwd, seed, run),
-      launchTerminal: (agent, sessionId) => launchTerminal(deps, agent, sessionId),
-      listTerminalSessions,
-      captureTerminalScreen: (sessionId) => captureTerminalScreen(sessionId, deps.outputBufferLimit),
-      // The phone's transcript view (#1751), through the picker's own cwd lookup — the transcript is
-      // per PROJECT, so the host's workspace would answer with another cell's session.
-      // `agentOf` is consulted only when no agent's log holds this session — it chooses between
-      // "nothing written" and "this agent's conversation is not readable here yet" (#1822), never
-      // which reader answers.
-      captureTerminalTranscript: (sessionId) => sessionTranscriptView(cwdOfSession(sessionId), sessionId, { agentOf: agentOfSession }),
-      listPastSessions: async (sessionId) => {
-        const cwd = await knownCwdOf(sessionId);
-        return { cwd, sessions: await listPastSessions(cwd) };
-      },
-      readPastTranscript: async (sessionId, pastSessionId, before) => pastTranscriptPage(await knownCwdOf(sessionId), pastSessionId, before),
-      writeToSession,
-      // The same two functions the browser's pane reaches through /api/question (#1685): one place
-      // decides whether a dialog is still open, and one place decides which bytes reach the PTY.
-      // DELIBERATELY not gated on `questionPaneEnabled`, unlike the browser's /api/question. That
-      // setting is about the PANE — a panel that types into the terminal you are sitting at, next to
-      // the dialog it is answering. The phone is the case where nobody is at that keyboard, which is
-      // the whole reason it exists, so it stays available. Do not "fix" the asymmetry.
-      openQuestion: async (id) => openQuestionOf(await toolStores.toolCallsStore.get(id), id),
-      answerQuestion: (id, toolUseId, picks, text) => answerQuestionOnHost(id, toolUseId, picks, (sid) => toolStores.toolCallsStore.get(sid), text),
-      // Whether the phone's typing may empty the input box before pasting, so only the phone's text
-      // is submitted (#572). The rule itself lives with the sender.
-      canClearBox: (sessionId) => canClearInputBox(ptys.get(sessionId)?.agent, activity.get(sessionId)?.working),
-      // The byte(s) that submit for this session (#772), resolved live from config so the phone's
-      // "send" commits the paste the same way the keyboard does. Scoped to the session's agent — the
-      // mapping is Claude's binding, so a shell/codex session in the picker keeps plain CR (same
-      // agent lookup as canClearBox above).
-      submitSequence: (sessionId) => submitSequenceForAgent(ptys.get(sessionId)?.agent, getTerminalSubmit()),
-      // Which agent the typed text is going to, for the completion-menu guard (#1142) — same lookup
-      // again, because that guard is Claude Code's behaviour and nobody else's.
-      sessionAgent: (sessionId) => ptys.get(sessionId)?.agent,
-      botJob: hostBotJobHandler(deps),
+  initRemoteHostBackend({
+    workspace: CLAUDE_CWD,
+    spawnChat: (message) => spawnChat(spawnClaudePty, message),
+    spawnIssueSeed: (agent, cwd, seed, run) => spawnIssueSeed(deps.spawnIssueSession, agent, cwd, seed, run),
+    launchTerminal: (agent, sessionId) => launchTerminal(deps, agent, sessionId),
+    listTerminalSessions,
+    captureTerminalScreen: (sessionId) => captureTerminalScreen(sessionId, deps.outputBufferLimit),
+    // The phone's transcript view (#1751), through the picker's own cwd lookup — the transcript is
+    // per PROJECT, so the host's workspace would answer with another cell's session.
+    // `agentOf` is consulted only when no agent's log holds this session — it chooses between
+    // "nothing written" and "this agent's conversation is not readable here yet" (#1822), never
+    // which reader answers.
+    captureTerminalTranscript: (sessionId) => sessionTranscriptView(cwdOfSession(sessionId), sessionId, { agentOf: agentOfSession }),
+    listPastSessions: async (sessionId) => {
+      const cwd = await knownCwdOf(sessionId);
+      return { cwd, sessions: await listPastSessions(cwd) };
     },
-    { isLocalSession: sessionExistsHere },
-  );
+    readPastTranscript: async (sessionId, pastSessionId, before) => pastTranscriptPage(await knownCwdOf(sessionId), pastSessionId, before),
+    writeToSession,
+    // The same two functions the browser's pane reaches through /api/question (#1685): one place
+    // decides whether a dialog is still open, and one place decides which bytes reach the PTY.
+    // DELIBERATELY not gated on `questionPaneEnabled`, unlike the browser's /api/question. That
+    // setting is about the PANE — a panel that types into the terminal you are sitting at, next to
+    // the dialog it is answering. The phone is the case where nobody is at that keyboard, which is
+    // the whole reason it exists, so it stays available. Do not "fix" the asymmetry.
+    openQuestion: async (id) => openQuestionOf(await toolStores.toolCallsStore.get(id), id),
+    answerQuestion: (id, toolUseId, picks, text) => answerQuestionOnHost(id, toolUseId, picks, (sid) => toolStores.toolCallsStore.get(sid), text),
+    // Whether the phone's typing may empty the input box before pasting, so only the phone's text
+    // is submitted (#572). The rule itself lives with the sender.
+    canClearBox: (sessionId) => canClearInputBox(ptys.get(sessionId)?.agent, activity.get(sessionId)?.working),
+    // The byte(s) that submit for this session (#772), resolved live from config so the phone's
+    // "send" commits the paste the same way the keyboard does. Scoped to the session's agent — the
+    // mapping is Claude's binding, so a shell/codex session in the picker keeps plain CR (same
+    // agent lookup as canClearBox above).
+    submitSequence: (sessionId) => submitSequenceForAgent(ptys.get(sessionId)?.agent, getTerminalSubmit()),
+    // Which agent the typed text is going to, for the completion-menu guard (#1142) — same lookup
+    // again, because that guard is Claude Code's behaviour and nobody else's.
+    sessionAgent: (sessionId) => ptys.get(sessionId)?.agent,
+    botJob: hostBotJobHandler(deps),
+  });
 }

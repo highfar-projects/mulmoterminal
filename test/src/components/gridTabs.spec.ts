@@ -694,6 +694,20 @@ describe("runCommand (script command cells)", () => {
   it("counts a command cell as running (toward the cap)", () => {
     expect(runningCount([cell(0, U(0)), cmdCell(1), cell(2)])).toBe(2);
   });
+  // #3506: the launch form that offered the script is this machine's, so it runs here.
+  it("runs on this machine even in a cell that was on a remote host", () => {
+    const s = runCommand(make([{ ...cell(0), remoteHost: "lx" }]), 0, CMD);
+    expect(s.cells[0].command).toEqual(CMD);
+    expect("remoteHost" in s.cells[0]).toBe(false);
+  });
+  it("runs a running cell's script on that cell's host, and here for a local one", () => {
+    const remote = runScriptInNewCell(make([{ ...cell(0, U(0)), remoteHost: "lx" }]), 0, CMD);
+    expect(remote.cells[1]).toMatchObject({ command: CMD, remoteHost: "lx" });
+    const local = runScriptInNewCell(make([cell(0, U(0))]), 0, CMD);
+    expect("remoteHost" in (local.cells[1] ?? {})).toBe(false);
+    const noOrigin = runScriptInNewCell(make([{ ...cell(0, U(0)), remoteHost: "lx" }]), -1, CMD);
+    expect("remoteHost" in (noOrigin.cells[1] ?? {})).toBe(false);
+  });
   it("switchPage keeps a trailing command cell (only abandons an empty launcher)", () => {
     const after = switchPage(make([...running(9), cmdCell(9)], { page: 1 }), 0);
     expect(after.cells).toHaveLength(10);
@@ -754,17 +768,6 @@ describe("setCellAgent and the custom-agent wrapper", () => {
     expect(parseGridState(JSON.stringify(dropped))?.cells[0].customAgent).toBeUndefined();
     const kept = setSession(setCellAgent(withWrapper(), 0, "claude", "kimi_k3"), 0, U(6));
     expect(parseGridState(JSON.stringify(kept))?.cells[0].customAgent).toBe("kimi_k3");
-  });
-});
-
-// A shell started on a PEER server (common/peers.ts) lives there: the cell has to say so, or a reload
-// reconnects its session id to this server. A launch here drops any peer the cell held before.
-describe("launchInCell on a peer", () => {
-  const L = { index: 0, label: "Shell", command: "zsh" };
-  it("records the peer the launcher runs on, and nothing for this server", () => {
-    expect(launchInCell(make([cell(0)]), 0, L, "/p", "win").cells[0].host).toBe("win");
-    const moved = launchInCell(make([{ ...cell(0), host: "win" }]), 0, L, "/p");
-    expect("host" in moved.cells[0]).toBe(false);
   });
 });
 
@@ -1353,28 +1356,6 @@ describe("setCellAgent and the account (#2215)", () => {
     const stored = JSON.parse(JSON.stringify(kept));
     stored.cells[0].account = "Not An Id";
     expect("account" in (parseGridState(JSON.stringify(stored))?.cells[0] ?? {})).toBe(false);
-  });
-});
-
-// The peer server a cell runs on (common/peers.ts): the session id names nothing on any other server,
-// so a reload must reconnect the cell to the same machine.
-describe("setCellAgent and the peer host", () => {
-  const launched = () => make([{ uid: 0, session: null, cwd: "/p", host: "win", autoStart: true }]);
-
-  it("keeps the peer the launch reports", () => {
-    expect(setCellAgent(launched(), 0, "claude", null, null, "win").cells[0].host).toBe("win");
-  });
-
-  it("drops it when the launch reports this server", () => {
-    expect("host" in setCellAgent(launched(), 0, "claude").cells[0]).toBe(false);
-  });
-
-  it("round-trips a valid peer through parseGridState and drops a malformed one", () => {
-    const kept = setSession(setCellAgent(launched(), 0, "claude", null, null, "win"), 0, U(7));
-    expect(parseGridState(JSON.stringify(kept))?.cells[0].host).toBe("win");
-    const stored = JSON.parse(JSON.stringify(kept));
-    stored.cells[0].host = "Not/A Peer";
-    expect("host" in (parseGridState(JSON.stringify(stored))?.cells[0] ?? {})).toBe(false);
   });
 });
 

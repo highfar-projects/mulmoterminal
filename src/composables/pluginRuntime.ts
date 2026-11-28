@@ -3,7 +3,7 @@
 // gui-chat-protocol's useRuntime() — dispatch / pubsub / locale / openUrl — which
 // requires a host to provide() one under PLUGIN_RUNTIME_KEY. MulmoTerminal had no
 // such provider; this is it, wired to MulmoTerminal's own transport:
-//   - dispatch  → POST /api/plugin/<toolName> (the same route the MCP broker uses;
+//   - dispatch  → POST /api/plugin/<toolName> on the card's host (the same route the MCP broker uses;
 //                 execute() routes by args.kind, so the View's dispatch and the
 //                 LLM tool-call share one endpoint).
 //   - pubsub    → the existing socket.io usePubSub, on `plugin:<scope>:<event>`
@@ -11,7 +11,7 @@
 //                 plugin:markdown:file:<path> — see server/backends/plugins/markdown.js).
 //   - locale    → the display language, as the plugins' table key (pluginLocale.ts).
 //   - openUrl   → scheme-allowlisted window.open.
-import { computed, defineComponent, h, markRaw, provide, ref, watchEffect, type Component, type Ref } from "vue";
+import { computed, defineComponent, h, inject, markRaw, provide, type Component, type InjectionKey, type Ref } from "vue";
 import { PLUGIN_RUNTIME_KEY, type BrowserPluginRuntime, type SubscribeOptions } from "gui-chat-protocol/vue";
 import { usePubSub } from "./usePubSub";
 import { i18n } from "../i18n";
@@ -19,10 +19,12 @@ import { pluginLocaleFor } from "../utils/pluginLocale";
 import { isOpenablePluginUrl } from "./pluginUrlPolicy";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { PLUGIN_DISPATCH_TIMEOUT_MS, pluginDispatchError } from "./pluginDispatchDeadline";
-import { usePaneHost } from "./paneHost";
-import { peerApiPath } from "../../common/peers";
-import { isRecord } from "../../common/isRecord";
-import { watchPeerImages } from "./peerImageSrc";
+import { isRemoteHost, pathOnHost } from "../components/remoteCell";
+
+/** The host a card's session runs on (#3506), read at each call: null for this machine. Provided by
+ *  the Canvas, so a view mounted anywhere else talks to this machine as before. */
+export const PLUGIN_HOST_KEY: InjectionKey<() => string | null> = Symbol("pluginHost");
+const ON_THIS_MACHINE = (): string | null => null;
 
 function pluginChannelName(scope: string, eventName: string): string {
   return `plugin:${scope}:${eventName}`;
@@ -39,15 +41,12 @@ function makeOpenUrl(scope: string): BrowserPluginRuntime["openUrl"] {
   };
 }
 
-// `host`: the server the view's pane is about (paneHost.ts) — a peer's file is read, written and
-// rendered by the peer's own route, since only that machine has the path. Read per request rather
-// than once, so a pane that moves to another cell's server does not keep posting to the old one.
-function makeDispatch(toolName: string, host: Readonly<Ref<string | null>>): BrowserPluginRuntime["dispatch"] {
-  const path = `/api/plugin/${encodeURIComponent(toolName)}`;
+function makeDispatch(toolName: string, host: () => string | null): BrowserPluginRuntime["dispatch"] {
+  const route = `/api/plugin/${encodeURIComponent(toolName)}`;
 
   async function request(args: object): Promise<unknown> {
     const res = await fetchWithTimeout(
-      peerApiPath(host.value, path),
+      pathOnHost(host(), route),
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -124,19 +123,21 @@ interface MakeRuntimeDeps {
   scope: string;
   /** Tool name the dispatch route resolves (e.g. "presentDocument"). */
   toolName: string;
-  /** The server the view is about (paneHost.ts); absent = this one. */
-  host?: Readonly<Ref<string | null>>;
+  /** The card's host; this machine when absent. */
+  host?: () => string | null;
 }
 
-const THIS_SERVER: Readonly<Ref<string | null>> = computed(() => null);
+// A remote host's file changes are announced on its own server, which this machine does not relay:
+// this machine's channel of the same name is about another file.
+const NO_CHANNEL = (): (() => void) => () => {};
 
 export function makeBrowserPluginRuntime(deps: MakeRuntimeDeps): BrowserPluginRuntime {
-  const { scope, toolName, host = THIS_SERVER } = deps;
-  // The file-change channels are the peer's too: its server is the one that sees the file change.
-  const { subscribe } = usePubSub(host.value);
+  const { scope, toolName, host = ON_THIS_MACHINE } = deps;
+  const { subscribe } = usePubSub();
+  const onChannel = (channel: string, handler: (data: unknown) => void): (() => void) => (isRemoteHost(host()) ? NO_CHANNEL() : subscribe(channel, handler));
   const tag = `[plugin/${scope}]`;
   return {
-    pubsub: { subscribe: makeSubscribe(scope, subscribe) },
+    pubsub: { subscribe: makeSubscribe(scope, onChannel) },
     locale: sharedLocale,
     log: {
       debug: (msg, data) => console.debug(tag, msg, data),
@@ -153,14 +154,6 @@ export function makeBrowserPluginRuntime(deps: MakeRuntimeDeps): BrowserPluginRu
   };
 }
 
-/** The file a card is about — `docPath` for a document, `filePath` for the others — or null. */
-function documentPathOf(selectedResult: unknown): string | null {
-  const data = isRecord(selectedResult) ? selectedResult.data : undefined;
-  if (!isRecord(data)) return null;
-  const path = data.docPath ?? data.filePath;
-  return typeof path === "string" ? path : null;
-}
-
 /** Wrap a plugin view so its descendants can call useRuntime(). Mirrors
  *  MulmoClaude's wrapWithScope — builds the runtime once and provides it under
  *  PLUGIN_RUNTIME_KEY; the PluginFrame Teleport preserves Vue context, so the
@@ -171,22 +164,9 @@ export function wrapWithPluginRuntime(scope: string, toolName: string, inner: Co
       name: `PluginRuntimeScope:${scope}`,
       inheritAttrs: false,
       setup(_props, { attrs, slots }) {
-        // A view inside a pane about a peer's cell is that peer's (paneHost.ts); elsewhere, this server.
-        const host = usePaneHost();
-        const runtime = makeBrowserPluginRuntime({ scope, toolName, host });
+        const runtime = makeBrowserPluginRuntime({ scope, toolName, host: inject(PLUGIN_HOST_KEY, ON_THIS_MACHINE) });
         provide(PLUGIN_RUNTIME_KEY, runtime);
-        // The images the view draws are built by the view itself, so on a peer they are corrected
-        // in its DOM (peerImageSrc.ts). `display: contents` keeps this box out of the layout.
-        const box = ref<HTMLElement | null>(null);
-        // Not a declared prop here, so `attrs` keeps the spelling the parent used — and every
-        // parent writes `:selected-result` in its template.
-        const docPath = (): string | null => documentPathOf(attrs["selected-result"] ?? attrs.selectedResult);
-        watchEffect((onCleanup) => {
-          const el = box.value;
-          const peer = host.value;
-          if (el && peer) onCleanup(watchPeerImages(el, peer, docPath));
-        });
-        return () => h("div", { ref: box, style: "display: contents" }, [h(inner, attrs, slots)]);
+        return () => h(inner, attrs, slots);
       },
     }),
   );

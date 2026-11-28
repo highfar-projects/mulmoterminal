@@ -4,7 +4,7 @@ nav_title: Feature list
 layout: default
 parent: English
 nav_order: 6.5
-as_of: 13.8.2
+as_of: 13.12.0
 description: "Every capability MulmoTerminal has today, one line each with the release it arrived in, grouped by area (as of 9.1.0)."
 ---
 
@@ -17,6 +17,9 @@ Every capability MulmoTerminal has as of 9.1.0, one line each, grouped by area. 
 {:toc}
 
 ## Grid and cells
+- Each collection or feed opened gets a screen tab of its own, named with its title and icon, right after the Collections or Feeds tab; opening it again switches to that tab (v13.12.0)
+- While a full-screen screen is open, a row of tabs under the toolbar lists every screen opened since the page loaded, Grid view first; a tab returns to its screen as it was left and its × forgets it (v13.11.0)
+- Rooms, the Library, Blueprints, Skills, Processes and Usage stay as they were left after the first open: search text, selection, scroll and the conversation being read come back, refreshed in the background (v13.11.0)
 - The grid layout is also kept on the server, and a grid that opens empty (lost browser storage, a full disk, another address) offers the last layout's terminals back in a bar with Restore and Dismiss (v13.7.0)
 - A launcher directory that was deleted is hidden at once and dropped from config.json a day later; one that may only be unreachable (an unmounted volume, a dangling link) stays saved but hidden until it is back (v13.7.0)
 - An agent that ended without leaving its exit record (a full disk) keeps its cell with a red line saying so, instead of being read as a clean exit (v13.7.0)
@@ -127,6 +130,7 @@ More: [Conversations](conversation.html)
 - The Library reports a memory also kept in another work copy of the same repository, says whether its text is the same, and can bring the copies into one with Add its text here and Write this text there (v13.3.0)
 - Under a memory's title, Written in names the conversation that last wrote it and opens it (v13.3.0)
 - A Library conversation can be promoted to a memory, a CLAUDE.md rule, a plan, an issue or a skill: a Claude cell opens in plan mode where it ran, and the bundled mulmoterminal-library skill writes nothing until you approve (v13.3.0)
+- Before drafting a CLAUDE.md rule, the mulmoterminal-library skill asks whether a structure, a type, a lint or CI check, or a test could hold it instead, and offers an issue for that check first (v13.12.0)
 - The Library's Repeats kind lists the instructions typed 3 times or more in 2 conversations or more in the last 90 days, and Make a rule / Make a skill turns one into a CLAUDE.md rule or a skill after your approval (v13.3.0)
 - The Library's Tools kind lists the instruction files Claude Code loads in a directory, in its order with their @path imports, says which paths each names that are not there, and shows the settings.json files laid over each other with the file that set each value (v13.3.0)
 - The Library's Storage kind shows what each entry of ~/.claude and each project takes on disk, largest first, with temp-directory projects marked and what cleanupPeriodDays is set to (v13.3.0)
@@ -286,6 +290,7 @@ More: [Worktrees](worktree.html)
 
 More: [Configuration](config.html)
 
+- The Library, Processes and Usage screens open from a key or header button (`screen-library`, `screen-processes`, `screen-usage`), and the Library from the command palette; `screen-toggle` goes back and forth between the last screen and where it was opened from (v13.11.0)
 - A confetti action, bound to a key or picked in the palette, throws a mixed show of crackers, fireworks, cherry petals, paper rain and balloons over the page; the styles and the events that set one off by themselves, such as a merged PR, are ticked in a Confetti box under Settings → Theme, which also has a Try it button (v9.4.0), or set in config (v9.3.0)
 - The Skills viewer opens from the command palette, and from a key or header button through the `screen-skills` action (v8.4.0)
 - The palette's > scope lists the acting terminal's Run-menu scripts and Skill-menu skills (v7.3.0)
@@ -339,6 +344,7 @@ More: [Configuration](config.html)
 - Settings gains controls for global keys that previously required hand-editing JSON (v4.5.0)
 - Settings sections have buttons launching the skill that writes that setting, confirming first since 4.7.5 (v2.8.0)
 - Custom colour schemes recolour the whole app; terminal ANSI colours in 4.27, a live colour picker in 7.2 (v2.5.2)
+- Built-in themes Okamoto Taro (dark, vermilion accent) and Pink (light) join Midnight, Nord, Daylight and Solarized Light (v13.10.0)
 - Settings → Directory settings shows effective values, their sources, and dropped or unread keys (v2.4.0)
 - orderPriority orders grid cells, and launcher chips follow it since 2.8 (v2.2.0)
 - fontFamily sets the terminal font, and the default stack includes CJK faces (v2.2.0)

@@ -38,7 +38,8 @@ import { createTranslationWorker } from "./session/scheduled/translation-worker.
 import { createTitleManager } from "./session/list/session-title.js";
 import { resolveSessionTitle } from "./config/header/header-title.js";
 import { mountTerminalWebSockets } from "./routes/ws-routes.js";
-import { attachPeerUpgradeRelay, configuredPeers } from "./infra/http/peer-proxy.js";
+import { configuredRemoteUpgrade } from "./backends/hostGateway/configuredRemoteUpgrade.js";
+import { configuredRemoteSessionsRelay, followRemoteSessionChannels } from "./backends/hostGateway/configuredRemoteSessionsRelay.js";
 import { createConnectionHandlers } from "./session/pty/pty-connection.js";
 import { createTmuxSizeSync } from "./session/pty/tmux-size-sync.js";
 import { createIssueSessionSpawner } from "./session/spawn/issue-session-spawn.js";
@@ -72,9 +73,6 @@ import { createCursorSpawner } from "./session/spawn/agents/spawn-cursor.js";
 import { currentHostId as currentRemoteHostId } from "./backends/remoteHost/index.js";
 import { initRemoteHost } from "./backends/remoteHost/hostBindings.js";
 import { createSessionActivityPublisher, firestoreSessionActivityStore } from "./backends/remoteHost/sessionActivity.js";
-import { startPeerEventRelay } from "./backends/remoteHost/peerEvents.js";
-import { PEER_PUSH_CHANNEL } from "./backends/remoteHost/peerProtocol.js";
-import { relayPeerPush, setPeerPushSink } from "./session/activity/task-push.js";
 import { createWorkPhaseTracker } from "./session/activity/work-phase-tracker.js";
 import { currentFirestore, currentUid } from "./backends/remoteHost/session.js";
 import { initWorkspaceSetup } from "./backends/workspaceSetup.js";
@@ -490,6 +488,9 @@ onPtyRegistered((sessionId, entry) => pubsub?.publish(PTY_OPENED_CHANNEL, { sess
 // WebSocket over it, only the hook's one-shot curl. Started down at the primary bind, with
 // announceListening (which now starts the loopback spares), rather than here — nothing about it
 // depends on `app` being ready any earlier than that.
+// The remote hosts' session rows onto this pub/sub (#3506), for the dots and sounds of remote cells.
+const remoteSessionsRelay = configuredRemoteSessionsRelay((channel, data) => pubsub?.publish(channel, data));
+followRemoteSessionChannels(pubsub, remoteSessionsRelay);
 
 // Every backend, in the order they need each other (backends/boot-backends.ts). `retain` is called
 // lazily because the registry it reaches is built further down — a feeds refresh cannot dispatch
@@ -512,20 +513,6 @@ initRemoteHost({
   subscriberCount: (channel) => pubsub?.subscriberCount(channel) ?? 0,
 });
 
-// The phone reaching a PEER's cells (backends/remoteHost/peerProtocol.ts). As a peer: hand what we
-// would push to whichever parent is listening. As a parent: send each peer's pushes under our own
-// channel, and mirror its sessions' status to the phone the same way ours are (#439).
-setPeerPushSink({
-  wanted: () => (pubsub?.subscriberCount(PEER_PUSH_CHANNEL) ?? 0) > 0,
-  publish: (event) => pubsub?.publish(PEER_PUSH_CHANNEL, event),
-});
-startPeerEventRelay({
-  peers: configuredPeers,
-  sessionsChannel: SESSIONS_CHANNEL,
-  onPush: (peer, event) => relayPeerPush(peer.label, event, String(process.env.CLIENT_PORT || PORT)),
-  onSessionStatus: (_peer, { id, working, waiting, event }) => sessionActivityPublisher.publish(id, { working, waiting, event }),
-});
-
 // Mount per-collection fs.watchers → completion bells via the notifier. After the
 // engine host + notifier are configured. Fire-and-forget + non-fatal: a watcher
 // failure must never abort startup.
@@ -544,10 +531,6 @@ startDecisionDigestSchedule();
 // and spawn a NEW chat seeded with the task's prompt (e.g. the workout-log weekly
 // nudge). Non-fatal: a scheduler failure must never abort startup.
 initScheduling({ spawnChat: scheduledSessions.spawnScheduledChat, projectRoots: () => listProjectRoots().map((project) => project.cwd) });
-
-// A peer server's terminal sockets, relayed byte for byte (infra/http/peer-proxy.ts). Its own
-// upgrade listener, which ignores every path that is not under /peer/.
-attachPeerUpgradeRelay(listeners, isAllowedOrigin);
 
 // The terminal WebSocket endpoints (routes/ws-routes.ts).
 mountTerminalWebSockets({
@@ -571,6 +554,13 @@ mountTerminalWebSockets({
   mcpConfigJson: (sessionId, host) => mcpConfigJson({ sessionId, host, port: PORT, userMcpServers: getUserMcpServers() }),
   guiMcpTools: GUI_MCP_TOOLS,
 });
+// Cells on another MulmoTerminal (#3506). Its own listener: ws-routes leaves `/remote/…` alone, as it does /ws/pubsub.
+const remoteUpgrade = configuredRemoteUpgrade(isAllowedOrigin);
+listeners.forEach((listener) =>
+  listener.on("upgrade", (req, socket, head) => {
+    remoteUpgrade(req, socket, head);
+  }),
+);
 
 // A bind failure (most often the port already in use) must not surface as an unhandled
 // 'error' event / stack trace — exit with a clear message and the code the launcher reads

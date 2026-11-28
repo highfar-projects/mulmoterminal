@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { peerApiPath } from "../../common/peers";
-import { usePaneHost } from "../composables/paneHost";
 // The session's own conversation, read as turns rather than as the screen (#2112).
 //
 // A claude cell runs on the alternate screen, so the terminal holds no scrollback worth scrolling:
@@ -20,10 +18,8 @@ import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
 import { clockLabel } from "./clockLabel";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
+import { transcriptPath } from "./remoteCell";
 import { useI18n } from "vue-i18n";
-
-// The server the pane's cell runs on (paneHost.ts): this one, or a peer it relays.
-const paneHost = usePaneHost();
 
 const { t } = useI18n();
 
@@ -35,6 +31,8 @@ const props = defineProps<{
    *  outlived a restart reports itself as `shell` (server/session/transcript/transcript-view-read.ts). So a
    *  wrong answer here mislabels a frame; it cannot show the wrong conversation. */
   agent?: string | null;
+  /** The remote host the session runs on (#3506), null or absent for this machine. */
+  host?: string | null;
   // Whether this pane currently covers the terminal area. Owned by the grid, shown here because the
   // button that flips it lives in this header — the same contract Tools and Prompts have.
   expanded?: boolean;
@@ -117,7 +115,7 @@ const url = (sessionId: string, before: string | null): string => {
   const params = new URLSearchParams({ session: sessionId });
   if (props.cwd) params.set("cwd", props.cwd);
   if (before !== null) params.set("before", before);
-  return peerApiPath(paneHost.value, `/api/transcript/view?${params.toString()}`);
+  return transcriptPath(props.host, "view", params);
 };
 
 /** The newest page and then enough older ones to fill the viewport — what "open this conversation"
@@ -270,7 +268,7 @@ function onScroll(): void {
 
 // One watch over the identity: the pane stays mounted while the grid walks the zoom from cell to
 // cell, so a changed session has to reload rather than keep another terminal's conversation.
-watch([() => props.sessionId, () => props.cwd], () => void reload(), { immediate: true });
+watch([() => props.sessionId, () => props.cwd, () => props.host], () => void reload(), { immediate: true });
 
 /** What to say when there are no turns. Each status is its own sentence — "nothing here" and "this
  *  agent's conversation has no reader yet" send a reader to two different places. */

@@ -123,7 +123,7 @@ describe("previewSrcFor", () => {
   // (#3238) — but nothing of the Markdown wire: a table has no script to report with, so no token.
   it("renders a CSV through the table route, themed and versioned", () => {
     const theme = { bg: "#1a1a2e", fg: "#e6e6f0", muted: "#a0a0b8", subtle: "#232342", border: "#33335a", link: "#4a8cff" };
-    const src = previewSrcFor("table", "/proj", "data/rows.csv", "v1", theme, { token: "token-1" });
+    const src = previewSrcFor("table", "/proj", "data/rows.csv", "v1", theme, "token-1");
     const [route, query] = src.split("?");
     expect(route).toBe("/api/files/browse/table");
     const params = new URLSearchParams(query);
@@ -139,7 +139,7 @@ describe("previewSrcFor", () => {
   // #3137. JSON through its own route, themed and versioned as a table is, with no token either.
   it("renders a JSON file through the json route, themed and versioned", () => {
     const theme = { bg: "#1a1a2e", fg: "#e6e6f0", muted: "#a0a0b8", subtle: "#232342", border: "#33335a", link: "#4a8cff" };
-    const src = previewSrcFor("json", "/proj", "data/x.json", "v1", theme, { token: "token-1" });
+    const src = previewSrcFor("json", "/proj", "data/x.json", "v1", theme, "token-1");
     const [route, query] = src.split("?");
     expect(route).toBe("/api/files/browse/json");
     const params = new URLSearchParams(query);

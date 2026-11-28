@@ -229,6 +229,7 @@ describe("screen rows", () => {
       "screen:blueprints",
       "screen:worklog",
       "screen:skills",
+      "screen:library",
       "screen:processes",
       "screen:usage",
     ]);
@@ -673,6 +674,13 @@ describe("reopen rows", () => {
     const twins = [CLOSED[0], { ...CLOSED[0], session: "s2" }];
     const keys = paletteRows("", {}, UNZOOMED, TEXT, { ...NONE, closedCells: twins }).map(rowKey);
     expect(keys).toEqual(expect.arrayContaining(["reopen:session::s1", "reopen:session::s2"]));
+  });
+
+  // #3506: a remote cell's row names its host, and is found by it.
+  it("names the host of a cell closed on a remote one", () => {
+    const remote = { ...CLOSED[1], remoteHost: "lx" };
+    const row = paletteRows("tools (lx)", {}, UNZOOMED, TEXT, { ...NONE, closedCells: [remote] }).find((candidate) => candidate.kind === "reopen");
+    expect(row && [rowKey(row), labelText(row)]).toEqual(["reopen:remote:lx:shell:/w/tools", "Reopen tools (lx)"]);
   });
 
   it("lists nothing when nothing was closed", () => {

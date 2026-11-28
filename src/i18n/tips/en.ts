@@ -1,7 +1,13 @@
+import { remoteLaunchEn } from "../remoteLaunch/en";
 // Hover tips and aria-labels, one section per surface. Kept in its own file per locale so the
 // bundles do not grow past the line limit; each bundle takes it as its `tips` section.
 export const tipsEn = {
   cell: {
+    remoteHost: "Runs on {host}. Its files open in the Files pane; its other panes and tools are not available here yet.",
+    remoteBrowseFiles: "{path}: browse its files",
+    remoteHostGone: "{host} is no longer in remoteHosts in config.json, so this terminal cannot connect. Close it, or add the host back and reload.",
+    remoteTunnelDown:
+      "Cannot reach {host}. Is its ssh tunnel (ssh -L) still running, and MulmoTerminal on {host}? This terminal reconnects by itself once it is back.",
     running: "Running…",
     finished: "Finished",
     exited: "Exited",
@@ -88,6 +94,7 @@ export const tipsEn = {
     },
   },
   launch: {
+    remote: remoteLaunchEn,
     cancel: "Cancel new terminal",
     chipRunning: "{path} — a session is already running here",
     chipWorkspace: "{path} — the workspace: every GUI tool is available here",
@@ -357,8 +364,6 @@ export const tipsEn = {
     noReport: "Claude usage unavailable — the last check got no answer. Retrying, less often each time.",
     trustPrompt: "Claude usage unavailable — the usage check is waiting on Claude Code's trust prompt. Run `claude` once in {folder} and accept it.",
     usageLimit: "Claude usage unavailable — this subscription is at its usage limit, so the check could not get an answer.",
-    peerGauge: "{peer}: {title}",
-    peer: "Usage on {peer}: that server runs on its own logins and token rotation, so these figures are its own.",
     accountTrustPrompt:
       "Claude usage unavailable — the usage check is waiting on Claude Code's trust prompt. Start a cell on this account in {folder} once and accept it.",
     accountNote: "{account}: {note}",

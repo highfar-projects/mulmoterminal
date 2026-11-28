@@ -1,16 +1,15 @@
 import { ref, shallowRef } from "vue";
-import { peerApiPath } from "../../common/peers";
-import { usePaneHost } from "./paneHost";
 import { isAccountId } from "../../common/agentAccounts";
 import type { PartialWorkerStatus } from "../../common/workerStatus";
 import type { PartialSessionOccupancy, SessionOccupancy } from "../../common/sessionOccupancy";
 import type { PartialSessionRunning } from "../../common/sessionRunning";
 import { isTerminalAgent, type TerminalAgent } from "../../common/sessionAgent";
-import { agentSessionListUrl } from "../../common/agentSessionList";
+import { AGENT_SESSION_LIST_PATHS, agentSessionListUrl } from "../../common/agentSessionList";
 import { isRecord, optionalBoolean } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
+import { dirAddressOf, dirApiUrl } from "./dirAddress";
 
 // What the launch form can offer for the directory currently in its field: the sessions that can
 // be resumed there, the script.json entries that can be run there, and the worktrees the
@@ -151,8 +150,6 @@ const isWorktree = (row: unknown): row is Worktree =>
 const dirOf = (value: unknown, fallback: string): string => (typeof value === "string" ? value : fallback);
 
 function useDirList<T>(url: (dir: string) => string, parse: (body: ListBody, dir: string) => T, empty: () => T) {
-  // The server the lists are about (paneHost.ts) — a peer's directory is listed by the peer.
-  const host = usePaneHost();
   // shallowRef, not ref: the list is always replaced wholesale, and a generic `ref<T>` would need
   // a cast back out of UnwrapRef.
   const value = shallowRef<T>(empty());
@@ -179,7 +176,7 @@ function useDirList<T>(url: (dir: string) => string, parse: (body: ListBody, dir
     loading.value = dir !== null;
     if (!dir) return;
     try {
-      const res = await fetchWithTimeout(peerApiPath(host.value, url(dir)));
+      const res = await fetchWithTimeout(url(dir));
       if (reqId !== req) return; // a newer request superseded this one
       const body: ListBody = res.ok ? await jsonBody(res) : {};
       if (reqId !== req) return; // re-check after awaiting the body
@@ -211,8 +208,9 @@ function useDirList<T>(url: (dir: string) => string, parse: (body: ListBody, dir
 export const useResumableSessions = () => {
   let agent: TerminalAgent = "claude";
   const list = useDirList<ResumableList>(
-    (dir) => agentSessionListUrl(agent, dir),
-    (body, dir) => ({ sessions: rowsOf(body.sessions, isResumableSession), cwd: dirOf(body.cwd, dir) }),
+    (dir) => dirApiUrl(dir, AGENT_SESSION_LIST_PATHS[agent]),
+    // The plain path even for a remote directory's key: it is what the session resumes in, on its host.
+    (body, dir) => ({ sessions: rowsOf(body.sessions, isResumableSession), cwd: dirOf(body.cwd, dirAddressOf(dir).cwd) }),
     () => ({ sessions: [], cwd: null }),
   );
   return {
@@ -228,8 +226,9 @@ export const useResumableSessions = () => {
 // terminal's Run menu offer the same list.
 export const useDirScripts = () =>
   useDirList<ScriptList>(
-    (dir) => `/api/scripts?cwd=${encodeURIComponent(dir)}`,
-    (body, dir) => ({ scripts: rowsOf(body.scripts, isRunnableScript), cwd: dirOf(body.cwd, dir) }),
+    (dir) => dirApiUrl(dir, "/api/scripts"),
+    // The plain path even for a remote directory's key: it is what a script runs in, on its host.
+    (body, dir) => ({ scripts: rowsOf(body.scripts, isRunnableScript), cwd: dirOf(body.cwd, dirAddressOf(dir).cwd) }),
     () => ({ scripts: [], cwd: null }),
   );
 
@@ -245,7 +244,7 @@ export const useDirLaunchConfigs = () =>
 // The skills a directory's session can run — the Skill menu's list, read for the command palette.
 export const useDirSkills = () =>
   useDirList<SkillList>(
-    (dir) => `/api/skills?cwd=${encodeURIComponent(dir)}`,
+    (dir) => dirApiUrl(dir, "/api/skills"),
     (body) => ({ skills: rowsOf(body.skills, isDiscoveredSkill) }),
     () => ({ skills: [] }),
   );
@@ -255,7 +254,7 @@ export const useDirSkills = () =>
 // clobbering each other. Managed by the server (/api/worktrees).
 export const useDirWorktrees = () =>
   useDirList<WorktreeList>(
-    (dir) => `/api/worktrees?cwd=${encodeURIComponent(dir)}`,
+    (dir) => dirApiUrl(dir, "/api/worktrees"),
     (body) => ({ isGit: !!body.isGit, worktrees: rowsOf(body.worktrees, isWorktree) }),
     () => ({ isGit: false, worktrees: [] }),
   );
@@ -269,6 +268,24 @@ export async function readResumableList(dir: string, agent: TerminalAgent): Prom
     if (!res.ok) return null;
     const body = await jsonBody(res);
     return isUnknownArray(body.sessions) ? { sessions: rowsOf(body.sessions, isResumableSession), cwd: dirOf(body.cwd, dir) } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Who holds one session and what runs it, as a list row would say — for a session the capped list
+ *  may not reach (#3343). Null when it could not be read: that proves nothing about who holds it. */
+export type SessionOccupancyAnswer = Pick<ResumableSession, "id" | "attached" | "runningKey">;
+
+const isOccupancyAnswer = (body: unknown, id: string): body is SessionOccupancyAnswer =>
+  isRecord(body) && body.id === id && typeof body.attached === "boolean" && (body.runningKey === null || typeof body.runningKey === "string");
+
+export async function readSessionOccupancy(id: string): Promise<SessionOccupancyAnswer | null> {
+  try {
+    const res = await fetchWithTimeout(`/api/sessions/occupancy?id=${encodeURIComponent(id)}`);
+    if (!res.ok) return null;
+    const body = await jsonBody(res);
+    return isOccupancyAnswer(body, id) ? body : null;
   } catch {
     return null;
   }

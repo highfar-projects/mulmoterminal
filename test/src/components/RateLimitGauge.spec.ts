@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import RateLimitGauge from "../../../src/components/RateLimitGauge.vue";
-import { peerHosts } from "../../../src/composables/peerHosts";
 
 // The note only reaches a user through the template, and the pure function that produces it can be
 // green while nothing renders it. #1011's whole point is that an absent Claude gauge must say why,
@@ -146,31 +145,5 @@ describe("RateLimitGauge beside rotation tokens", () => {
     expect(named).toEqual(["/login 5h 12%", "b 5h 12%"]);
     expect(wrapper.findAll('[data-testid="rate-limit-account"]')).toHaveLength(1);
     wrapper.unmount();
-  });
-
-  it("shows a peer's readings after its label, kept apart from this server's", async () => {
-    peerHosts.value = [{ id: "wsl", label: "WSL" }];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (url: string) => ({
-        ok: true,
-        json: async () => (String(url).startsWith("/peer/wsl/") ? body({ claude: limits }) : body({})),
-      })),
-    );
-    const wrapper = mount(RateLimitGauge);
-    await flushPromises();
-    expect(wrapper.get('[data-testid="rate-limit-peer"]').text()).toBe("WSL");
-    expect(wrapper.text()).toContain("5h 12%");
-    expect(wrapper.find('[role="img"]').attributes("data-tip")).toMatch(/^WSL: /);
-    wrapper.unmount();
-    peerHosts.value = [];
-  });
-
-  it("draws no peer label when the peer has nothing to show", async () => {
-    peerHosts.value = [{ id: "wsl", label: "WSL" }];
-    const wrapper = await showGauge(body({}));
-    expect(wrapper.find('[data-testid="rate-limit-peer"]').exists()).toBe(false);
-    wrapper.unmount();
-    peerHosts.value = [];
   });
 });

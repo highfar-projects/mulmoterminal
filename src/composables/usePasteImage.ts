@@ -18,7 +18,7 @@ interface PasteImageHandlers {
   sessionId: () => string | null;
   insertText: (text: string) => void;
   onError: (message: string) => void;
-  // The peer server the session runs on (common/peers.ts), or null for this one; absent = this one.
+  // The host the session runs on (#3506), or null for this machine: where the image is saved.
   host?: () => string | null;
 }
 
@@ -43,8 +43,7 @@ export function createImagePasteHandler({ sessionId, insertText, onError, host =
     // Through the BATCH helper rather than a bare upload, for its session rule: a saved path is
     // granted to one session by `--add-dir`, so a switch while the bytes are in flight must drop
     // the path rather than hand the new session one it was never granted and cannot read.
-    const peer = host();
-    void uploadDropBatch(session, [file], sessionId, (id, f) => uploadDroppedFile(id, f, peer)).then((outcome) => {
+    void uploadDropBatch(session, [file], sessionId, (id, image) => uploadDroppedFile(id, image, host())).then((outcome) => {
       if (outcome.kind === "inserted") return insertText(toInsertText(outcome.paths));
       onError(outcome.kind === "stale" ? PASTE_SESSION_CHANGED_EN : dropUploadErrorMessage(outcome.status));
     });

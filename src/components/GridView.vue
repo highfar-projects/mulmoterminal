@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import { peerApiPath, splitPeerDirKey } from "../../common/peers";
-import { watchSessionHosts } from "../composables/peerHosts";
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } from "vue";
 import TerminalGrid from "./TerminalGrid.vue";
 import AppSettingsModal from "./AppSettingsModal.vue";
 import LaunchPanel from "./LaunchPanel.vue";
 import { loadGridState, saveGridState } from "../composables/gridLayoutMirror";
-import { cellForAgent, cellForPanelResume, cellForPanelStart, type PanelResume, type PanelStart } from "./launchCell";
+import { cellForAgent, cellForPanelResume, cellForPanelStart, cellForRemoteResume, cellForRemoteStart, type PanelResume, type PanelStart } from "./launchCell";
+import type { RemoteResume, RemoteStart } from "./remoteLaunch";
 import AppToolbar from "./AppToolbar.vue";
 import GuideLinks from "./GuideLinks.vue";
 import { startCollectionChat } from "../composables/useChatLauncher";
@@ -45,11 +44,9 @@ import {
   type GridState,
   type Cell,
   type SortMode,
-  resolveCellStatus,
   MAX_TERMINALS,
-  cellDirKey,
 } from "./gridTabs";
-import { activityStatus, type AttentionStatus } from "./attentionStatus";
+import type { AttentionStatus } from "./attentionStatus";
 import { collectionTerminalClaim, publishGridSessions } from "../composables/collectionTerminalClaim";
 import { cellsToDisplay } from "./displayCells";
 import { terminalMove, type GridShortcut } from "../composables/gridShortcut";
@@ -70,7 +67,7 @@ import type { RunCommand } from "./runCommand";
 import { recordClosedCellOf } from "../composables/useRecentlyClosed";
 import { becameCiFailing, EMPTY_SESSION_META, isPrPhase, mergeSessionMeta, type PrPhase, type SessionMetaView } from "./rosterPhase";
 import { notifySound } from "../composables/notifySound";
-import { useGridActivity } from "../composables/useGridActivity";
+import { useGridCellStatus } from "../composables/useGridCellStatus";
 import { registerNewTerminalHandler, type NewTerminalRequest } from "../composables/useNewTerminal";
 import { useRosterPoll } from "../composables/useRosterPoll";
 import { useGridTabSync } from "../composables/useGridTabSync";
@@ -90,6 +87,7 @@ import { isRecord } from "../../common/isRecord";
 import { isDrawnResult } from "../utils/drawnResult";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 import { isFilesPaneAction } from "./filesPaneActions";
+import { actionAllowedOn, drawChannelOf, isRemoteHost, sessionDetailPath } from "./remoteCell";
 
 // The multi-terminal grid view, shown at /terminals. Leaving the grid is just a
 // route push from the shared toolbar (Chat / Collections / a favorite), so there's
@@ -124,36 +122,25 @@ watch(
 // pointer to the guide, cleared the moment any terminal starts.
 const noRunningTerminals = computed(() => runningCount(state.value.cells) === 0);
 
-// The "auto" order needs every cell's status, including cells on pages that aren't
-// mounted. useGridActivity tracks each cell session's live attention state by id —
-// including OFF-PAGE, dev-terminal cells that the /api/sessions list drops and its
-// limit would cap — so a waiting cell on any page floats forward. The per-cell
-// `statusByUid` (reported up while a cell is mounted) is the fallback for cells with
-// no session id (command cells) and a just-launched cell before its id arrives.
-const cellSessionIds = computed(() => state.value.cells.map((c) => c.session).filter((s): s is string => !!s));
-// Which peer each open session runs on, for the helpers handed a session id alone (peerHosts.ts).
-watchSessionHosts(() => state.value.cells);
-// A cell on a peer server (common/peers.ts) is asked about on that server.
-const { activity: gridActivity } = useGridActivity(cellSessionIds, (id) => state.value.cells.find((c) => c.session === id)?.host ?? null);
+// The cells this server can be asked about; a remote cell's session and cwd belong to another machine (remoteCell.ts).
+const localCells = computed(() => state.value.cells.filter((c) => !isRemoteHost(c.remoteHost)));
 const statusByUid = reactive<Record<number, AttentionStatus>>({});
 const onStatus = (uid: number, s: AttentionStatus) => (statusByUid[uid] = s);
 // Which cell the cursor is in, reported up from the grid. Un-zoomed this is the only notion of
 // "the terminal I am on", so the keyboard shortcuts rotate from it.
 const focusedCellUid = ref<number | null>(null);
-const sessionStatus = computed(() => {
-  const m = new Map<string, AttentionStatus>();
-  for (const [id, a] of gridActivity) m.set(id, activityStatus(a.working, a.waiting, a.event));
-  return m;
-});
-const statusForSort = computed<Record<number, AttentionStatus>>(() => resolveCellStatus(state.value.cells, sessionStatus.value, statusByUid));
+// The "auto" order needs every cell's status, including cells on pages that aren't mounted.
+const statusForSort = useGridCellStatus(
+  computed(() => state.value.cells),
+  localCells,
+  statusByUid,
+);
 // At-a-glance tally across ALL pages, for the toolbar summary.
 const statusCounts = computed(() => countByStatus(state.value.cells, statusForSort.value));
 const reorderable = computed(() => state.value.sortMode === "manual");
 // "priority" ranks cells by their directory's orderPriority, so like the status above it needs
 // a value for cells on pages that aren't mounted — hence the whole cwd set, not per-cell.
-// Keyed by `cellDirKey`, so a peer cell's directory is that machine's (common/peers.ts) and is read
-// from that server — the path alone would ask this one about a folder it may not even have.
-const cellCwds = computed(() => [...new Set(state.value.cells.map(cellDirKey).filter((c): c is string => !!c))]);
+const cellCwds = computed(() => [...new Set(localCells.value.map((c) => c.cwd).filter((c): c is string => !!c))]);
 const { priorities: priorityByCwd } = useDirPriorities(cellCwds);
 // In "auto" mode the whole list is attention-sorted; "priority" orders by each directory's
 // declared rank; "manual" keeps the hand-arranged order.
@@ -185,17 +172,14 @@ const sessionMeta = reactive(new Map<string, SessionMetaView>());
 // one goes out. Only the newest may be applied: an older one describes a moment already
 // overtaken, and its fields would put back what the newer answer replaced (#620).
 const latestMetaSeed = new Map<string, number>();
-async function seedMeta(id: string, cwd: string | null, agent: TerminalAgent, host: string | null) {
+async function seedMeta(id: string, cwd: string | null, agent: TerminalAgent, remoteHost: string | undefined) {
   const seed = (latestMetaSeed.get(id) ?? 0) + 1;
   latestMetaSeed.set(id, seed);
   try {
     // The agent names the LOG the row's prompt and reply are read from, not just the badges
     // (#2121): a codex cell's are in its rollout, and a request that omits this is answered from
     // claude's transcript — where that session has no file, so both lines read empty.
-    const params = new URLSearchParams({ agent });
-    if (cwd) params.set("cwd", cwd);
-    // Asked of the server the session runs on: a peer's transcript is on the peer (common/peers.ts).
-    const res = await fetchWithTimeout(peerApiPath(host, `/api/session/${id}?${params}`));
+    const res = await fetchWithTimeout(sessionDetailPath(id, agent, cwd, remoteHost));
     if (!res.ok || latestMetaSeed.get(id) !== seed) return;
     const d: unknown = await res.json();
     if (latestMetaSeed.get(id) !== seed) return;
@@ -207,26 +191,25 @@ async function seedMeta(id: string, cwd: string | null, agent: TerminalAgent, ho
 // `asTerminalAgent`, not `c.agent`: the field is absent for claude (the default is stored as the
 // absence of the key) and equally absent on a launcher cell, which is not an agent session at all —
 // both mean claude to this route, which is what they were already getting.
-const refreshAllMeta = () => state.value.cells.forEach((c) => c.session && void seedMeta(c.session, c.cwd, asTerminalAgent(c.agent), c.host ?? null));
+// A remote cell's detail comes through the gateway (#3506), so every cell is asked about here.
+const refreshAllMeta = () => state.value.cells.forEach((c) => c.session && void seedMeta(c.session, c.cwd, asTerminalAgent(c.agent), c.remoteHost));
 // The PR workflow phase per directory (GET /api/pr-phase), shown in the roster beside the
 // agent status. Keyed by cwd, not session — the phase is the branch's, so cells sharing a dir
 // share one fetch. Best-effort and cached server-side, so the roster poll can re-fetch cheaply.
 const phaseByCwd = reactive(new Map<string, PrPhase>());
 const latestPhaseSeed = new Map<string, number>();
-// `cwd` is a `cellDirKey`: the path on this server, or a peer's directory, asked of that peer.
 async function seedPhase(cwd: string) {
   const seed = (latestPhaseSeed.get(cwd) ?? 0) + 1;
   latestPhaseSeed.set(cwd, seed);
-  const at = splitPeerDirKey(cwd);
   try {
-    const res = await fetchWithTimeout(peerApiPath(at.host, `/api/pr-phase?cwd=${encodeURIComponent(at.cwd)}`), undefined, SLOW_COMMAND_TIMEOUT_MS);
+    const res = await fetchWithTimeout(`/api/pr-phase?cwd=${encodeURIComponent(cwd)}`, undefined, SLOW_COMMAND_TIMEOUT_MS);
     if (!res.ok || latestPhaseSeed.get(cwd) !== seed) return;
     const d: unknown = await res.json();
     if (latestPhaseSeed.get(cwd) !== seed) return;
     const phase = isRecord(d) ? d.phase : undefined;
     if (isPrPhase(phase)) {
       // Before the set, so the previous value is still the one to compare against.
-      if (becameCiFailing(phaseByCwd.get(cwd), phase)) notifySound("pr-ci-failed", at.cwd, at.host);
+      if (becameCiFailing(phaseByCwd.get(cwd), phase)) notifySound("pr-ci-failed", cwd);
       phaseByCwd.set(cwd, phase);
     }
   } catch {
@@ -251,7 +234,7 @@ async function seedChrome(cwd: string) {
   chromeByCwd.set(cwd, { headerColor: config.headerColor, headerTextColor: config.headerTextColor, iconUrl: config.iconUrl });
 }
 const refreshAllChrome = () => {
-  const cwds = new Set(state.value.cells.map(cellDirKey).filter((c): c is string => c !== null));
+  const cwds = new Set(localCells.value.map((c) => c.cwd).filter((c): c is string => c !== null));
   cwds.forEach((cwd) => void seedChrome(cwd));
 };
 // A user editing .mulmoterminal.json is announced on the dir-config channel; re-fetch that
@@ -269,7 +252,7 @@ onBeforeUnmount(unsubscribeDirConfig);
 
 const forgetClosedCells = () => {
   const sessions = new Set(state.value.cells.map((c) => c.session).filter((s): s is string => !!s));
-  const cwds = new Set(state.value.cells.map(cellDirKey).filter((c): c is string => c !== null));
+  const cwds = new Set(state.value.cells.map((c) => c.cwd).filter((c): c is string => c !== null));
   staleCacheKeys(sessionMeta.keys(), sessions).forEach((id) => {
     sessionMeta.delete(id);
     latestMetaSeed.delete(id);
@@ -299,7 +282,7 @@ watch(
 );
 
 const refreshAllPhases = () => {
-  const cwds = new Set(state.value.cells.map(cellDirKey).filter((c): c is string => c !== null));
+  const cwds = new Set(localCells.value.map((c) => c.cwd).filter((c): c is string => c !== null));
   cwds.forEach((cwd) => void seedPhase(cwd));
 };
 
@@ -321,14 +304,9 @@ const rosterLookups = (): RosterLookups => ({
   phase: (cwd) => phaseByCwd.get(cwd),
   status: (uid) => statusForSort.value[uid],
 });
-// A row asks its directory's chrome and phase by path; the maps are keyed by `cellDirKey`, so each
-// row is handed lookups that answer for ITS server (common/peers.ts).
 const listRows = computed(() => {
   const look = rosterLookups();
-  return orderedCells.value.map((c) => {
-    const key = cellDirKey(c);
-    return rosterRow(c, { ...look, chrome: () => (key ? chromeByCwd.get(key) : undefined), phase: () => (key ? phaseByCwd.get(key) : undefined) });
-  });
+  return orderedCells.value.map((c) => rosterRow(c, look));
 });
 // Session ids currently held by cells (across all pages — off-page cells stay
 // live as background PTYs). A launcher uses this to warn before resuming a
@@ -359,8 +337,7 @@ function onAddTerminal() {
 }
 const onSession = (uid: number, id: string) => (state.value = setSession(state.value, uid, id));
 const onCwd = (uid: number, cwd: string) => (state.value = setCwd(state.value, uid, cwd));
-const onAgent = (uid: number, report: AgentReport) =>
-  (state.value = setCellAgent(state.value, uid, report.agent, report.customAgent, report.account, report.host));
+const onAgent = (uid: number, report: AgentReport) => (state.value = setCellAgent(state.value, uid, report.agent, report.customAgent, report.account));
 const onPark = (uid: number, parked: boolean) => (state.value = setCellParked(state.value, uid, parked));
 // Pass the on-screen order so closing the zoomed cell stays zoomed on its filmstrip
 // neighbour (previous, or next when it was the first) instead of collapsing the grid.
@@ -380,7 +357,8 @@ const onClose = (uid: number) => {
     conn.terminate(slot);
     // Over HTTP as well, like TerminalCell.teardown: the WS `terminate` only reaches the server
     // while the socket it just closed was still open.
-    if (session) void fetchWithTimeout(peerApiPath(closing?.host, `/api/session/${encodeURIComponent(session)}/terminate`), { method: "POST" }).catch(() => {});
+    if (session && !isRemoteHost(closing?.remoteHost))
+      void fetchWithTimeout(`/api/session/${encodeURIComponent(session)}/terminate`, { method: "POST" }).catch(() => {});
   }
   state.value = closeCell(
     state.value,
@@ -398,7 +376,7 @@ const onRun = (uid: number, command: RunCommand) => (state.value = runCommand(st
 const onRunSpare = (uid: number, command: RunCommand) => (state.value = runScriptInNewCell(state.value, uid, command));
 // The empty cell launcher picked a program — a configured launch command, or the OS default
 // shell: turn it into a persistent launcher cell. Its session id arrives later via onSession.
-const onLaunch = (uid: number, pick: LaunchPick) => (state.value = launchInCell(state.value, uid, pick.launcher, pick.cwd, pick.host ?? null));
+const onLaunch = (uid: number, pick: LaunchPick) => (state.value = launchInCell(state.value, uid, pick.launcher, pick.cwd));
 const onMove = (uid: number, dir: -1 | 1) => (state.value = moveCell(state.value, uid, dir));
 // A roster row dragged by its header: an arbitrary slot rather than a step (#2126). Same flat list, so the
 // tiles re-order with it.
@@ -523,6 +501,14 @@ function runShortcut(shortcut: GridShortcut) {
   }
 }
 
+// The keyboard's twin of the header's check: a remote cell's directory is not one to open a local terminal in.
+function newTerminalFrom(origin: number | null) {
+  if (actionAllowedOn(state.value.cells, origin, "terminal-new-here")) toggleLaunchPanel(origin);
+}
+function newShellBeside(uid: number) {
+  if (actionAllowedOn(state.value.cells, uid, "terminal-new-adjacent")) state.value = insertCellAfter(state.value, uid, shellCell(adjacentCwd(uid)));
+}
+
 // The half that acts on a CELL rather than on the zoom. Its own function so neither grows past
 // what a reader can hold — and past what the complexity rule allows.
 function runCellShortcut(shortcut: GridShortcut, uid: number | null) {
@@ -536,7 +522,7 @@ function runCellShortcut(shortcut: GridShortcut, uid: number | null) {
     // No `uid !== null` guard, and so not in NEEDS_A_CURRENT_TERMINAL: with the panel over the
     // stage this works in every view mode, and with no cell to read it simply opens on the default
     // workspace instead of doing nothing.
-    toggleLaunchPanel(uid ?? focusedCellUid.value);
+    newTerminalFrom(uid ?? focusedCellUid.value);
   } else if (isGridCellShortcut(shortcut)) {
     // A pane, the timeline, talk, set aside, restart: the grid decides them for one cell, the same
     // way it does for that cell's header button. Un-zoomed they act on the cursor's cell.
@@ -545,7 +531,7 @@ function runCellShortcut(shortcut: GridShortcut, uid: number | null) {
   } else if (uid === null) {
     return; // everything below acts on one terminal, and there is none to name
   } else if (shortcut === "terminal-new-adjacent") {
-    state.value = insertCellAfter(state.value, uid, shellCell(adjacentCwd(uid)));
+    newShellBeside(uid);
   } else if (shortcut === "terminal-close") {
     if (!gridRef.value?.requestClose(uid)) onClose(uid);
   } else if (isFilesPaneAction(shortcut)) {
@@ -592,7 +578,8 @@ function toggleLaunchPanel(origin: number | null) {
 // The four things the form can ask for, each turned into a cell. The form itself is host-agnostic
 // (it emits intents and knows nothing about cells); placing one is this component's job, because
 // only it can page to the new cell — see placeCell.
-const placeFromPanel = (cell: Omit<Cell, "uid">) => {
+// Null is a remote start whose directory the remote could not use; it places nothing either.
+const placeFromPanel = (cell: Omit<Cell, "uid"> | null) => {
   // The empty launch cell `ensureEntry` keeps on a fresh grid renders the form and NOTHING else —
   // no header, so no close button. Launching from the panel puts a real cell beside it rather than
   // filling it, which would strand that tile for good. Dropped once the grid has something else.
@@ -604,7 +591,7 @@ const placeFromPanel = (cell: Omit<Cell, "uid">) => {
   // that `isOccupied` counts against the cap and that never opens a terminal. Reachable before
   // `/api/config` answers, when `defaultCwd` is still null (codex [P1], #1890). Refused here rather
   // than in each caller: this is the one place every panel launch passes through.
-  if (cell.autoStart && !cell.cwd) return;
+  if (!cell || (cell.autoStart && !cell.cwd)) return;
   const empty = state.value.cells.find((c) => !isOccupied(c));
   // Nothing placed: the grid filled up while the form was open. Leave the panel exactly as the user
   // left it rather than closing over work that produced no terminal.
@@ -618,8 +605,9 @@ const placeFromPanel = (cell: Omit<Cell, "uid">) => {
 const onPanelStart = (start: PanelStart) => placeFromPanel(cellForPanelStart(start, defaultCwd.value));
 const onPanelResume = (resume: PanelResume) => placeFromPanel(cellForPanelResume(resume));
 const onPanelRun = (command: RunCommand) => placeFromPanel({ session: null, cwd: null, command });
-const onPanelLaunch = (pick: LaunchPick) =>
-  placeFromPanel({ session: null, cwd: pick.cwd, launcher: pick.launcher, ...(pick.host ? { host: pick.host } : {}) });
+const onPanelLaunch = (pick: LaunchPick) => placeFromPanel({ session: null, cwd: pick.cwd, launcher: pick.launcher });
+const onPanelRemoteStart = (start: RemoteStart) => placeFromPanel(cellForRemoteStart(start));
+const onPanelRemoteResume = (resume: RemoteResume) => placeFromPanel(cellForRemoteResume(resume));
 useCaptureKeydown(onShortcutKey);
 
 // Launch a Settings skill in a new auto-running session and show it as a GRID CELL. The button was
@@ -788,36 +776,35 @@ onBeforeUnmount(() => {
 // nothing here is being read, and rearranging the grid they left would greet them on the way back
 // with a zoom they did not ask for. That drawing keeps the chip, which is where it was already.
 const drawnUnsubscribes = new Map<string, () => void>();
+const { subscribe: subscribeDrawn } = usePubSub();
 function stopWatchingDrawing(): void {
   for (const off of drawnUnsubscribes.values()) off();
   drawnUnsubscribes.clear();
 }
 watch(
-  // Keyed by the session ids themselves: cells come and go, and a cell gets its session id well
-  // after it appears (onSession), so watching the cell list alone would miss the moment a fresh
-  // terminal becomes subscribable.
-  [expandedUid, () => state.value.cells.map((c) => c.session ?? "").join(",")],
+  // Keyed by each cell's draw channel, which names its host as well as its session: cells come and
+  // go, and a cell gets its session id well after it appears (onSession), so watching the cell list
+  // alone would miss the moment a fresh terminal becomes subscribable.
+  [expandedUid, () => state.value.cells.map((c) => drawChannelOf(c) ?? "").join(",")],
   () => {
     // While something IS enlarged, TerminalGrid owns this. Nothing to watch for here.
     if (expandedUid.value !== null) return stopWatchingDrawing();
-    const live = new Set(state.value.cells.map((c) => c.session).filter((s): s is string => s !== null));
-    for (const [id, off] of drawnUnsubscribes) {
-      if (live.has(id)) continue;
+    const live = new Set(state.value.cells.flatMap((c) => drawChannelOf(c) ?? []));
+    for (const [channel, off] of drawnUnsubscribes) {
+      if (live.has(channel)) continue;
       off();
-      drawnUnsubscribes.delete(id);
+      drawnUnsubscribes.delete(channel);
     }
-    for (const id of live) {
-      if (drawnUnsubscribes.has(id)) continue;
-      // On the server the session runs on: a peer's cards are published on its own channel.
-      const host = state.value.cells.find((cell) => cell.session === id)?.host ?? null;
+    for (const channel of live) {
+      if (drawnUnsubscribes.has(channel)) continue;
       drawnUnsubscribes.set(
-        id,
-        usePubSub(host).subscribe(`session:${id}`, (data) => {
+        channel,
+        subscribeDrawn(channel, (data) => {
           // Re-checked at fire time, not just at subscribe time: a zoom or a route change between
           // the two is exactly the state this must not fight.
           if (expandedUid.value !== null || !onTerminalsRoute()) return;
           if (!isDrawnResult(data)) return;
-          const uid = state.value.cells.find((cell) => cell.session === id)?.uid;
+          const uid = state.value.cells.find((cell) => drawChannelOf(cell) === channel)?.uid;
           // Through the grid's own reveal (files-buffer flush included) rather than setting the
           // zoom and the pane from here, as placeChat does above and for the same reason.
           //
@@ -935,6 +922,8 @@ onBeforeUnmount(detachSpawnedChat);
       @resume="onPanelResume"
       @run="onPanelRun"
       @launch="onPanelLaunch"
+      @start-remote="onPanelRemoteStart"
+      @resume-remote="onPanelRemoteResume"
       @remove-preset="removePreset"
       @retry-config="loadConfig"
       @close="closeLaunchPanel"

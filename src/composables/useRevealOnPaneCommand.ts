@@ -5,7 +5,6 @@
 import { onBeforeUnmount, type Ref } from "vue";
 import { PANE_COMMAND_CHANNEL, isPaneCommand } from "../../common/paneCommand";
 import { usePubSub } from "./usePubSub";
-import { subscribeEveryPeer } from "./peerHosts";
 
 export interface RevealDeps {
   expandedUid: Ref<number | null>;
@@ -16,16 +15,10 @@ export interface RevealDeps {
 
 export function useRevealOnPaneCommand(deps: RevealDeps): void {
   const { subscribe } = usePubSub();
-  const onCommand = (data: unknown): void => {
+  const off = subscribe(PANE_COMMAND_CHANNEL, (data) => {
     if (!isPaneCommand(data) || deps.expandedUid.value !== null || !deps.onTerminalsRoute()) return;
     const uid = deps.uidOfSession(data.sessionId);
     if (uid !== undefined) deps.enlarge(uid);
-  };
-  const off = subscribe(PANE_COMMAND_CHANNEL, onCommand);
-  // An agent on a peer server asks on that server's channel (common/peers.ts).
-  const offPeers = subscribeEveryPeer(PANE_COMMAND_CHANNEL, (data) => onCommand(data));
-  onBeforeUnmount(() => {
-    off();
-    offPeers();
   });
+  onBeforeUnmount(off);
 }

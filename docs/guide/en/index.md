@@ -8,8 +8,9 @@ description: A browser-terminal cockpit for running several AI coding agents in 
 
 # MulmoTerminal Guide (English)
 
-> **13.8.2 is out.** A Claude conversation moved to the background with ← stays in the activity history
-> and conversation pane, and a skill call no longer splits a turn. [Setup guide](v13.8.2.html)
+> **13.12.0 is out.** Each collection and feed you open gets its own screen tab with its name and
+> icon, and the Library's Resume no longer takes over a conversation open elsewhere.
+> [Setup guide](v13.12.0.html)
 
 ## What is MulmoTerminal? {#what-is}
 

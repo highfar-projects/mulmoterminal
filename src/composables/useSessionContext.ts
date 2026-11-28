@@ -6,7 +6,6 @@ import type { TerminalAgent } from "../../common/sessionAgent";
 import type { SessionContextInfo } from "../../common/sessionContext";
 import { useAutoRefresh } from "./useAutoRefresh";
 import { jsonBody } from "../jsonBody";
-import { peerApiPath } from "../../common/peers";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 export type SessionContext = SessionContextInfo;
@@ -15,8 +14,7 @@ const isContext = (c: unknown): c is SessionContext => typeof c === "object" && 
 
 // `agent` because the model is read from that agent's own log (#1465); omitted means Claude,
 // which is what the route defaults to.
-// `host`: the peer server the session runs on (common/peers.ts); absent or null for this one.
-export function useSessionContext(sessionId: Ref<string | null>, cwd: Ref<string | null>, agent?: Ref<TerminalAgent>, host?: Ref<string | null>) {
+export function useSessionContext(sessionId: Ref<string | null>, cwd: Ref<string | null>, agent?: Ref<TerminalAgent>) {
   const context = ref<SessionContext | null>(null);
   let requestSeq = 0;
   // What `context` currently reflects — the session AND the agent it was read from, because the
@@ -43,7 +41,7 @@ export function useSessionContext(sessionId: Ref<string | null>, cwd: Ref<string
     if (cwd.value) params.set("cwd", cwd.value);
     const seq = ++requestSeq;
     try {
-      const res = await fetchWithTimeout(peerApiPath(host?.value, `/api/session/${id}?${params}`));
+      const res = await fetchWithTimeout(`/api/session/${id}?${params}`);
       if (seq !== requestSeq || !res.ok) return;
       const data = await jsonBody(res);
       // Guard against a stale response: the terminal may have switched session mid-flight.

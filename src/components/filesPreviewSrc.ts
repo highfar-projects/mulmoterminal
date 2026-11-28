@@ -5,12 +5,12 @@
 // the browser serving the rendering it already had (#2136).
 //
 // WHICH VIEW is up is a different question and lives in `filesPreviewMode.ts` (#2137).
-import { peerApiPath } from "../../common/peers";
 import { browseQuery } from "./filesPaneApi";
 import { MD_PREVIEW_EMBED_ON, MD_PREVIEW_EMBED_PARAM, MD_PREVIEW_TOKEN_PARAM } from "../../common/mdPreviewMessage";
 import type { PreviewTheme } from "../../common/previewTheme";
 import { filesPageUrl } from "../../common/filesPage";
 import type { FilePreviewKind } from "./filePreviewKind";
+import { bytesPath } from "./remoteCell";
 
 /** The version of the open file ON DISK, as the pane currently knows it.
  *
@@ -60,17 +60,14 @@ export function previewSrcFor(
   pathRel: string,
   version: string | null,
   theme: PreviewTheme | null,
-  // `token`: the Markdown wire's (#2515). `host`: the peer server the directory is on (common/peers.ts,
-  // paneHost.ts), null for this one — each document is then the PEER's, rendered by it and handed
-  // back through the relay.
-  { token = null, host = null }: { token?: string | null; host?: string | null } = {},
+  token: string | null = null,
 ): string {
-  if (kind === "markdown") return peerApiPath(host, `/api/files/browse/md?${previewQuery(cwd, pathRel, version, theme, token)}`);
-  if (kind === "svg") return rawFileSrc(cwd, pathRel, version, host);
-  if (kind === "table") return peerApiPath(host, `/api/files/browse/table?${renderedQuery(cwd, pathRel, version, theme)}`);
-  if (kind === "json") return peerApiPath(host, `/api/files/browse/json?${renderedQuery(cwd, pathRel, version, theme)}`);
+  if (kind === "markdown") return `/api/files/browse/md?${previewQuery(cwd, pathRel, version, theme, token)}`;
+  if (kind === "svg") return rawFileSrc(cwd, pathRel, version);
+  if (kind === "table") return `/api/files/browse/table?${renderedQuery(cwd, pathRel, version, theme)}`;
+  if (kind === "json") return `/api/files/browse/json?${renderedQuery(cwd, pathRel, version, theme)}`;
   if (!cwd) return "";
-  const page = peerApiPath(host, filesPageUrl(cwd, pathRel));
+  const page = filesPageUrl(cwd, pathRel);
   return version ? `${page}?v=${encodeURIComponent(version)}` : page;
 }
 
@@ -88,10 +85,10 @@ const TAB_ROUTE_BY_KIND: Partial<Record<FilePreviewKind, string>> = {
  *  a tab the pane opens must name the pane's own root. Only `cwd` and `path` ride on it: not `embed`,
  *  which asks for the toolbar-less document the iframe wants; not `v` or the theme, which exist to
  *  make the frame refetch; and never the token, which must not leave the frame's own URL. */
-export function previewTabUrl(kind: FilePreviewKind, cwd: string | null, pathRel: string, host: string | null = null): string | null {
+export function previewTabUrl(kind: FilePreviewKind, cwd: string | null, pathRel: string): string | null {
   const route = TAB_ROUTE_BY_KIND[kind];
   if (!route || !cwd) return null;
-  return peerApiPath(host, `${route}?${browseQuery(cwd, pathRel)}`);
+  return `${route}?${browseQuery(cwd, pathRel)}`;
 }
 
 /** The table and JSON routes' query: `v` and the theme for `previewQuery`'s reasons, and `embed`
@@ -106,9 +103,10 @@ function renderedQuery(cwd: string | null, pathRel: string, version: string | nu
   return params.toString();
 }
 
-/** The raw route's URL for the file — an SVG's Preview, and the picture a raster image shows as. */
+/** The raw route's URL for the file — an SVG's Preview, and the picture a raster image shows as;
+ *  through the byte proxy for a file on a remote host (#3506). */
 export function rawFileSrc(cwd: string | null, pathRel: string, version: string | null = null, host: string | null = null): string {
   const params = new URLSearchParams(browseQuery(cwd, pathRel));
   if (version) params.set("v", version);
-  return peerApiPath(host, `/api/files/raw?${params.toString()}`);
+  return bytesPath(host, `/api/files/raw?${params.toString()}`);
 }

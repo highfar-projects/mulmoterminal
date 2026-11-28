@@ -17,13 +17,13 @@ import { router } from "../../router";
 import { useEscapeToClose } from "../../composables/useEscapeToClose";
 import { isImeConfirming } from "../../composables/imeComposition";
 import { useLibraryData } from "../../composables/useLibraryData";
-import { readResumableList } from "../../composables/useDirLists";
+import { readResumableList, readSessionOccupancy } from "../../composables/useDirLists";
 import { openCellAt } from "../../composables/useNewTerminal";
 import { paletteTerminals } from "../../composables/commandPalette";
 import { cellForPanelResume } from "../launchCell";
 import { isEditableTarget } from "../../composables/gridShortcut";
 import { libraryKeyAction, movedFromGap, movedIndex } from "./libraryKeys";
-import { libraryResume, type LibraryResume } from "./libraryResume";
+import { libraryResume, needsOccupancy, type LibraryResume } from "./libraryResume";
 import { startPromote } from "./libraryPromoteStart";
 import type { PromoteTarget } from "../../../common/libraryPromote";
 import { conversationKey, groupConversations, listedInOrder } from "./libraryRows";
@@ -124,8 +124,7 @@ watch(
   isOpen,
   async (open) => {
     openings++;
-    chosenKey.value = null;
-    readerShown.value = false;
+    // The chosen conversation and the reader stay for the next opening, as the list does.
     notice.value = null;
     now.value = Date.now();
     runClock(open);
@@ -264,9 +263,10 @@ async function resumeConversation(conversation: LibraryConversation): Promise<vo
   const opening = openings;
   const key = conversationKey(conversation);
   const list = conversation.cwd === null ? null : await readResumableList(conversation.cwd, "claude");
+  const occupancy = needsOccupancy(conversation, list) ? await readSessionOccupancy(conversation.id) : null;
   // Closed (and maybe reopened), or moved to another conversation, while this checked: it stands down.
   if (opening !== openings || selectedKey.value !== key) return;
-  const decision = libraryResume(conversation, list, paletteTerminals.value?.openSessionIds() ?? []);
+  const decision = libraryResume(conversation, list, paletteTerminals.value?.openSessionIds() ?? [], occupancy);
   if (decision.kind !== "open") {
     notice.value = t(RESUME_REFUSALS[decision.kind]);
     return;
@@ -326,7 +326,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <FullScreenOverlay v-if="isOpen" :region-label="t('libraryView.region')" :close-label="t('libraryView.close')" @close="close">
+  <FullScreenOverlay :open="isOpen" :region-label="t('libraryView.region')" :close-label="t('libraryView.close')" @close="close">
     <template #header>
       <span class="font-sans text-[14px] font-[650] text-fg">{{ t("libraryView.title") }}</span>
       <span class="hidden font-sans text-[12px] text-dim sm:inline">{{ t(SHORTCUTS[kind]) }}</span>
@@ -336,6 +336,7 @@ onBeforeUnmount(() => {
       <div class="px-4 pb-2 pt-3">
         <label class="flex items-center gap-2 rounded-[6px] border border-border bg-base px-3 py-2 focus-within:border-accent">
           <span class="material-symbols-outlined text-[18px] text-dim">search</span>
+          <!-- Escape closes the screen; a search field's own Escape would also wipe what was typed. -->
           <input
             ref="searchField"
             v-model="query"
@@ -344,6 +345,7 @@ onBeforeUnmount(() => {
             :placeholder="searchLabel"
             :aria-label="searchLabel"
             class="min-w-0 flex-1 border-0 bg-transparent font-sans text-[14px] text-fg outline-none"
+            @keydown.esc.prevent
           />
           <kbd class="rounded border border-border px-1 font-sans text-[11px] text-dim">/</kbd>
         </label>

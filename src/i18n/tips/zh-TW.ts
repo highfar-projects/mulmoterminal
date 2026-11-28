@@ -1,7 +1,12 @@
+import { remoteLaunchZhTW } from "../remoteLaunch/zh-TW";
 import type { Messages } from "../messages";
 
 export const tipsZhTW: Messages["tips"] = {
   cell: {
+    remoteHost: "在 {host} 上執行。其檔案可在檔案面板中開啟；其他面板與工具暫時無法在這裡使用。",
+    remoteBrowseFiles: "{path}：瀏覽檔案",
+    remoteHostGone: "{host} 已不在 config.json 的 remoteHosts 中，因此此終端無法連線。請關閉它，或重新加入該主機後重新整理。",
+    remoteTunnelDown: "無法連線至 {host}。ssh 通道（ssh -L）與 {host} 上的 MulmoTerminal 是否仍在執行？恢復後會自動重新連線。",
     running: "執行中…",
     finished: "已完成",
     exited: "已結束",
@@ -88,6 +93,7 @@ export const tipsZhTW: Messages["tips"] = {
     },
   },
   launch: {
+    remote: remoteLaunchZhTW,
     cancel: "取消新終端機",
     chipRunning: "{path} — 此處已有工作階段在執行",
     chipWorkspace: "{path} — 工作區：此處可以使用所有 GUI 工具",
@@ -357,8 +363,6 @@ export const tipsZhTW: Messages["tips"] = {
     noReport: "無法顯示 Claude 用量 — 上次檢查沒有得到回應。將以逐漸拉長的間隔重試。",
     trustPrompt: "無法顯示 Claude 用量 — 用量檢查正在等待 Claude Code 的信任確認。請在 {folder} 中執行一次 `claude` 並接受。",
     usageLimit: "無法顯示 Claude 用量 — 此訂閱已達用量上限，檢查未能得到回應。",
-    peerGauge: "{peer}：{title}",
-    peer: "{peer} 的用量：該伺服器使用自己的登入和權杖輪換，因此這些數值屬於該伺服器。",
     accountTrustPrompt: "無法顯示 Claude 用量 — 用量檢查正在等待 Claude Code 的信任確認。請在 {folder} 中用此帳號啟動一次儲存格並接受。",
     accountNote: "{account}：{note}",
     resetsInDays: "{days}天{hours}小時{minutes}分鐘後重置",

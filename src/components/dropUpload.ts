@@ -7,7 +7,7 @@
 import { DROP_FILENAME_HEADER, MAX_DROP_BYTES, type DropUploadResponse } from "../../common/dropUpload";
 import { isRecord } from "../../common/isRecord";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
-import { peerApiPath } from "../../common/peers";
+import { sessionWritePath } from "./remoteCell";
 
 // Generous: this is a real upload of up to MAX_DROP_BYTES, possibly over a phone's connection.
 // Matched to the server's own ceiling for network mutations rather than a UI-scale timeout.
@@ -17,9 +17,8 @@ const FALLBACK_MIME = "application/octet-stream";
 
 export type DropUploadResult = { ok: true; path: string } | { ok: false; status: number | null };
 
-// `host`: the peer server the session runs on (common/peers.ts). The saved path names THAT machine's
-// disk, which is the only one the session can read.
-export const dropUploadUrl = (sessionId: string, host: string | null = null): string => peerApiPath(host, `/api/session/${encodeURIComponent(sessionId)}/drop`);
+/** Where a file is sent: this server, or the gateway for a session on a remote host (#3506). */
+export const dropUploadUrl = (sessionId: string, host: string | null = null): string => sessionWritePath(host, sessionId, "drop");
 
 /** The sentence to show when an upload did not happen. Keyed on status because the four cases
  *  need different actions from the user, and "it failed" tells them none of them. English —

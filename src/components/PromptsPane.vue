@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { peerApiPath } from "../../common/peers";
-import { usePaneHost } from "../composables/paneHost";
 // The prompts YOU sent this session, newest first — the mirror of the tools pane, which shows
 // what the agent then did with them (#1748).
 //
@@ -16,12 +14,11 @@ import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import type { TerminalAgent } from "../../common/sessionAgent";
 import { readPrompt, type PromptEntry } from "../../common/promptHistory";
 import { PROMPT_SUBMITTED_CHANNEL, isPromptSubmittedEvent } from "../../common/promptChannel";
+import { REMOTE_PROMPT_SUBMITTED_CHANNEL, parseRemotePromptSubmitted } from "../../common/remoteHosts";
+import { transcriptPath } from "./remoteCell";
 import { isTextSelected } from "./textSelected";
 import { clockLabel } from "./clockLabel";
 import { useI18n } from "vue-i18n";
-
-// The server the pane's cell runs on (paneHost.ts): this one, or a peer it relays.
-const paneHost = usePaneHost();
 
 const { t } = useI18n();
 
@@ -29,6 +26,8 @@ const props = defineProps<{
   sessionId: string | null;
   cwd: string | null;
   agent: TerminalAgent;
+  /** The remote host the session runs on (#3506), null or absent for this machine. */
+  host?: string | null;
   // Whether this pane currently covers the terminal area. Owned by the grid, shown here because
   // the button that flips it lives in this header — the same contract ToolsPane has.
   expanded?: boolean;
@@ -69,7 +68,7 @@ async function load(reset: boolean): Promise<void> {
   try {
     const params = new URLSearchParams({ session: sessionId, agent: props.agent });
     if (props.cwd) params.set("cwd", props.cwd);
-    const res = await fetchWithTimeout(peerApiPath(paneHost.value, `/api/transcript/prompts?${params.toString()}`));
+    const res = await fetchWithTimeout(transcriptPath(props.host, "prompts", params));
     if (!res.ok) throw new Error(String(res.status));
     const body = await jsonBody(res);
     if (my !== req) return; // superseded
@@ -108,24 +107,24 @@ function scheduleReload(): void {
   reloadTimer = window.setTimeout(() => void load(false), RELOAD_DELAY_MS);
 }
 
-// On the session's own server: a peer announces its prompts on its own channel. Re-subscribed when
-// the pane is walked to a cell on another server.
-const onPromptSubmitted = (data: unknown): void => {
-  if (isPromptSubmittedEvent(data) && data.sessionId === props.sessionId) scheduleReload();
-};
-let unsubscribe = usePubSub(paneHost.value).subscribe(PROMPT_SUBMITTED_CHANNEL, onPromptSubmitted);
-watch(paneHost, (host) => {
-  unsubscribe();
-  unsubscribe = usePubSub(host).subscribe(PROMPT_SUBMITTED_CHANNEL, onPromptSubmitted);
+const { subscribe } = usePubSub();
+const unsubscribeLocal = subscribe(PROMPT_SUBMITTED_CHANNEL, (data: unknown) => {
+  if (!props.host && isPromptSubmittedEvent(data) && data.sessionId === props.sessionId) scheduleReload();
+});
+// A remote session's prompts are announced by its host, relayed with the host's name (#3506).
+const unsubscribeRemote = subscribe(REMOTE_PROMPT_SUBMITTED_CHANNEL, (data: unknown) => {
+  const prompt = parseRemotePromptSubmitted(data);
+  if (prompt && props.host && prompt.host === props.host && prompt.sessionId === props.sessionId) scheduleReload();
 });
 
 // One watch over the identity: the pane stays mounted while the grid walks the zoom from cell to
 // cell, so a changed session/agent has to reload rather than keep another terminal's prompts.
-watch([() => props.sessionId, () => props.agent, () => props.cwd, paneHost], () => void load(true), { immediate: true });
+watch([() => props.sessionId, () => props.agent, () => props.cwd, () => props.host], () => void load(true), { immediate: true });
 
 onUnmounted(() => {
   window.clearTimeout(reloadTimer);
-  unsubscribe();
+  unsubscribeLocal();
+  unsubscribeRemote();
 });
 
 // The time is INSIDE the toggle, so a label naming only the action would replace it in the

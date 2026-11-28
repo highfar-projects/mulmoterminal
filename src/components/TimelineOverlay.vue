@@ -6,7 +6,7 @@ import { ref, watch, onUnmounted, nextTick } from "vue";
 import { modalKeydownHandler } from "../composables/useModalKeyboard";
 import { isRecord } from "../../common/isRecord";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
-import { peerApiPath } from "../../common/peers";
+import { transcriptPath } from "./remoteCell";
 import { useI18n } from "vue-i18n";
 
 const { t } = useI18n();
@@ -17,8 +17,7 @@ interface TimelineEvent {
   summary: string;
 }
 
-// `host`: the peer server the session runs on (common/peers.ts), whose transcript this is; absent or
-// null for this server.
+// `host`: the remote host the session runs on (#3506), null or absent for this machine.
 const props = defineProps<{ sessionId: string | null; cwd: string | null; open: boolean; host?: string | null }>();
 const emit = defineEmits<{ (e: "close"): void }>();
 
@@ -39,7 +38,7 @@ async function load(): Promise<void> {
   try {
     const params = new URLSearchParams({ session: props.sessionId });
     if (props.cwd) params.set("cwd", props.cwd);
-    const res = await fetchWithTimeout(peerApiPath(props.host, `/api/transcript/timeline?${params.toString()}`));
+    const res = await fetchWithTimeout(transcriptPath(props.host, "timeline", params));
     if (!res.ok) throw new Error(String(res.status));
     const data: unknown = await res.json();
     if (my !== req) return; // superseded by a newer open
@@ -76,7 +75,7 @@ const onKeydown = modalKeydownHandler({ modalEl, onClose: () => emit("close") })
 // shows a previous session's activity) — and manage the key listener + initial focus
 // only on the open transition.
 watch(
-  [() => props.open, () => props.sessionId, () => props.cwd],
+  [() => props.open, () => props.sessionId, () => props.cwd, () => props.host],
   (vals, oldVals) => {
     const open = vals[0];
     if (!open) {

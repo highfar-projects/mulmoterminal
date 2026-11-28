@@ -1,7 +1,12 @@
+import { remoteLaunchJa } from "../remoteLaunch/ja";
 import type { Messages } from "../messages";
 
 export const tipsJa: Messages["tips"] = {
   cell: {
+    remoteHost: "{host} で動いています。ファイルはファイル一覧で開けます。ほかのペインとツールはまだここでは使えません。",
+    remoteBrowseFiles: "{path}：ファイルを見る",
+    remoteHostGone: "{host} は config.json の remoteHosts から消えたので、この端末は接続できません。閉じるか、ホストを戻して再読み込みしてください。",
+    remoteTunnelDown: "{host} に届きません。ssh のトンネル（ssh -L）と {host} の MulmoTerminal は動いていますか？戻れば自動でつなぎ直します。",
     running: "実行中…",
     finished: "完了",
     exited: "終了",
@@ -90,6 +95,7 @@ export const tipsJa: Messages["tips"] = {
     },
   },
   launch: {
+    remote: remoteLaunchJa,
     cancel: "新しいターミナルを取り消す",
     chipRunning: "{path} — ここではすでにセッションが動いています",
     chipWorkspace: "{path} — ワークスペース：ここではすべての GUI ツールが使えます",
@@ -360,8 +366,6 @@ export const tipsJa: Messages["tips"] = {
     trustPrompt:
       "Claude の利用状況を表示できません — 利用状況の確認が Claude Code の信頼の確認で止まっています。{folder} で一度 `claude` を実行して承認してください。",
     usageLimit: "Claude の使用量を表示できません — このサブスクリプションは上限に達していて、確認が答えを得られませんでした。",
-    peerGauge: "{peer}: {title}",
-    peer: "{peer} の使用量: このサーバーは自分のログインとトークンローテーションで動くため、数値もそのサーバーのものです。",
     accountTrustPrompt:
       "Claude の利用状況を表示できません — 利用状況の確認が Claude Code の信頼の確認で止まっています。{folder} でこのアカウントのセルを一度起動して承認してください。",
     accountNote: "{account}: {note}",

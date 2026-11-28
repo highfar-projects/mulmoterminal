@@ -11,7 +11,7 @@ import { isRecord } from "../../common/isRecord";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { readDirConfigSaveReport, type DirConfigSaveReport } from "../../common/dirConfigSaveReport";
 import { isOutsidePath, outsideFileTarget } from "./filesOutsidePath";
-import { peerApiPath } from "../../common/peers";
+import { pathOnHost } from "./remoteCell";
 
 /** The `?cwd=&path=` every `/api/files/browse/*` route takes. `cwd` is omitted when the pane has
  *  no root of its own, which is how the server is told to use its default workspace.
@@ -28,6 +28,13 @@ export function browseQuery(cwd: string | null, pathRel: string): string {
   return params.toString();
 }
 
+/** A `/api/files/browse/*` route as this browser reaches it: this server's, or the gateway's for a
+ *  pane on a remote cell's host (`host`). */
+export function browseUrl(host: string | null, route: string, query: string): string {
+  const path = pathOnHost(host, `/api/files/browse/${route}`);
+  return `${path}?${query}`;
+}
+
 export type WriteOutcome =
   | { status: "saved"; version: string | null; dirConfig: DirConfigSaveReport | null }
   | { status: "conflict"; version: string | null }
@@ -36,12 +43,9 @@ export type WriteOutcome =
 /** One conditional write, reported as a value rather than through component state. Leaving has to
  *  keep working while the pane is being torn down, and anything read from a ref AFTER an await may
  *  already be gone by then. */
-//
-// `host` here and below: the peer server the pane's directory is on (common/peers.ts, paneHost.ts),
-// null for this one.
-export async function writeBuffer(query: string, text: string, base: string | null, keepalive = false, host: string | null = null): Promise<WriteOutcome> {
+export async function writeBuffer(host: string | null, query: string, text: string, base: string | null, keepalive = false): Promise<WriteOutcome> {
   try {
-    const res = await fetchWithTimeout(peerApiPath(host, `/api/files/browse/write?${query}`), {
+    const res = await fetchWithTimeout(browseUrl(host, "write", query), {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ text, baseVersion: base }),
@@ -58,9 +62,9 @@ export async function writeBuffer(query: string, text: string, base: string | nu
 }
 
 /** Hand a copy to the backup store — content that exists nowhere else once the editor is gone. */
-export async function bankText(query: string, text: string, keepalive = false, host: string | null = null): Promise<boolean> {
+export async function bankText(host: string | null, query: string, text: string, keepalive = false): Promise<boolean> {
   try {
-    const res = await fetchWithTimeout(peerApiPath(host, `/api/files/browse/backup?${query}`), {
+    const res = await fetchWithTimeout(browseUrl(host, "backup", query), {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ text }),
@@ -84,7 +88,7 @@ const FILE_HASH_TIMEOUT_MS = 10 * 60_000;
  *  that asked stop waiting when it is closed. */
 export async function fetchSha256(query: string, host: string | null = null, signal?: AbortSignal): Promise<FileHashOutcome> {
   try {
-    const res = await fetchWithTimeout(peerApiPath(host, `/api/files/browse/sha256?${query}`), signal ? { signal } : {}, FILE_HASH_TIMEOUT_MS);
+    const res = await fetchWithTimeout(browseUrl(host, "sha256", query), signal ? { signal } : {}, FILE_HASH_TIMEOUT_MS);
     const data = await jsonBody(res);
     if (res.ok && typeof data.sha256 === "string" && typeof data.size === "number") return { status: "done", sha256: data.sha256, size: data.size };
     return { status: "error", message: typeof data.error === "string" && data.error.length > 0 ? data.error : `HTTP ${res.status}` };

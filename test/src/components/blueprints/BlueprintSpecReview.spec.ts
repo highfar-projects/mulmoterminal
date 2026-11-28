@@ -2,6 +2,9 @@
 // read instead, and keeps only the conversation, where what the person sends changes those files.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
+import { mountUnderOverlay } from "../underOverlay";
+import { defineComponent, h, ref } from "vue";
+import { provideOverlayVisible } from "../../../../src/composables/overlayVisibility";
 
 const { loadSpec, sendSpecMessage } = vi.hoisted(() => ({ loadSpec: vi.fn(), sendSpecMessage: vi.fn() }));
 vi.mock("../../../../src/composables/blueprintsApi", () => ({ loadSpec, sendSpecMessage }));
@@ -97,5 +100,82 @@ describe("the specification panel", () => {
     await flushPromises();
     expect(wrapper.get('[data-testid="blueprint-revision-check-failed"]').text()).toContain("The check after the change did not pass");
     expect(wrapper.text()).toContain("outline.json: part 2 has no file");
+  });
+});
+
+// The Blueprints screen is kept while closed; the spec may have been edited in the meantime.
+describe("the spec shown again", () => {
+  it("reads the spec again each time the screen is shown", async () => {
+    loadSpec.mockReset();
+    loadSpec.mockResolvedValue(specView("# spec"));
+    const visible = ref(true);
+    const props = { runId: "run-00000001", revisionSessionId: null, chatCount: 0, projectDir: "/work/app", expectsSpec: true };
+    const Host = defineComponent({ setup: () => (provideOverlayVisible(visible), () => h(BlueprintSpecReview, props)) });
+    const wrapper = mount(Host);
+    await flushPromises();
+    visible.value = false;
+    await flushPromises();
+    visible.value = true;
+    await flushPromises();
+    expect(loadSpec).toHaveBeenCalledTimes(2);
+    wrapper.unmount();
+  });
+});
+
+describe("a reply landing while the screen is hidden", () => {
+  it("reads the spec on showing, not while hidden", async () => {
+    loadSpec.mockReset();
+    loadSpec.mockResolvedValue(specView("# spec"));
+    const chat = ref(0);
+    const { wrapper, visible } = mountUnderOverlay(BlueprintSpecReview, () => ({
+      runId: "run-00000001",
+      revisionSessionId: null,
+      chatCount: chat.value,
+      projectDir: "/work/app",
+      expectsSpec: true,
+    }));
+    await flushPromises();
+    visible.value = false;
+    await flushPromises();
+    loadSpec.mockClear();
+    chat.value = 1;
+    await flushPromises();
+    expect(loadSpec).not.toHaveBeenCalled();
+    visible.value = true;
+    await flushPromises();
+    expect(loadSpec).toHaveBeenCalledTimes(1);
+    wrapper.unmount();
+  });
+});
+
+describe("a failure shown under the spec", () => {
+  const props = (chatCount: number) => ({ runId: "run-00000001", revisionSessionId: null, chatCount, projectDir: "/work/app", expectsSpec: true });
+
+  it("goes once a later read works, when it was the read that failed", async () => {
+    loadSpec.mockReset();
+    loadSpec.mockResolvedValueOnce({ ok: false, error: "the spec could not be read" }).mockResolvedValue(specView("# spec"));
+    const { wrapper, showAgain } = mountUnderOverlay(BlueprintSpecReview, props(1));
+    await flushPromises();
+    expect(wrapper.get('[data-testid="blueprint-spec-error"]').text()).toContain("the spec could not be read");
+    await showAgain();
+    expect(wrapper.find('[data-testid="blueprint-spec-error"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("stays through a later read, when it was a send that failed", async () => {
+    loadSpec.mockReset();
+    loadSpec.mockResolvedValue(specView("# spec"));
+    sendSpecMessage.mockReset();
+    sendSpecMessage.mockResolvedValue({ ok: false, error: "the message could not be sent" });
+    const chat = ref(1);
+    const { wrapper } = mountUnderOverlay(BlueprintSpecReview, () => props(chat.value));
+    await flushPromises();
+    await wrapper.get('[data-testid="blueprint-spec-input"]').setValue("本の削除も");
+    await wrapper.get('[data-testid="blueprint-spec-send"]').trigger("submit");
+    await flushPromises();
+    chat.value = 2; // the run's poll sees the chat move, and the spec is read again
+    await flushPromises();
+    expect(wrapper.get('[data-testid="blueprint-spec-error"]').text()).toContain("the message could not be sent");
+    wrapper.unmount();
   });
 });

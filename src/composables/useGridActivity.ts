@@ -3,7 +3,6 @@ import { usePubSub } from "./usePubSub";
 import { parseSessionActivityPayload, readCellActivity, type CellActivity } from "./sessionActivity";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
-import { peerApiPath } from "../../common/peers";
 
 // Live attention state (working / waiting / event) for a set of grid cell sessions,
 // keyed by session id. Unlike the sidebar's /api/sessions list this includes
@@ -11,11 +10,7 @@ import { peerApiPath } from "../../common/peers";
 // (unmounted) cell still reports blocked/done — the fix for the grid's cross-page
 // attention routing. Seeded from /api/activity (current in-memory state) and kept
 // live from the "sessions" pub/sub payload.
-//
-// A cell on a PEER server (common/peers.ts) is that server's session: `hostOf` names the server for
-// each id, and both the seed and the stream are asked of it, through this server's relay. Absent,
-// every id is this server's — every caller that has no peer cells.
-export function useGridActivity(sessionIds: Ref<string[]>, hostOf: (id: string) => string | null = () => null) {
+export function useGridActivity(sessionIds: Ref<string[]>) {
   const activity = reactive(new Map<string, CellActivity>());
 
   // Non-null while a seed is in flight, keeping what the channel pushed meanwhile. /api/activity
@@ -43,18 +38,17 @@ export function useGridActivity(sessionIds: Ref<string[]>, hostOf: (id: string) 
     const pushed: unknown[] = [];
     pushedDuringSeed = pushed;
     try {
-      // One ask per server, all at once: each knows only its own sessions.
-      const answers = await Promise.all([...idsByHost(ids, hostOf)].map(([host, group]) => seedFrom(host, group)));
+      const res = await fetchWithTimeout(`/api/activity?ids=${encodeURIComponent(ids.join(","))}`);
       // Overtaken while we waited: this answer is older than what is on screen. Returning
       // also leaves the newer seed's record alone — it is the one that will replay.
-      if (seedId !== latestSeed) return;
+      if (seedId !== latestSeed || !res.ok) return;
       // Each row goes through the SAME reader the live channel uses; the seed used to take the
       // whole map as CellActivity on the strength of the annotation alone.
-      for (const data of answers) {
-        for (const [id, raw] of Object.entries(data)) {
-          const a = readCellActivity(raw);
-          if (a) activity.set(id, a);
-        }
+      const data = await jsonBody(res);
+      if (seedId !== latestSeed) return;
+      for (const [id, raw] of Object.entries(data)) {
+        const a = readCellActivity(raw);
+        if (a) activity.set(id, a);
       }
       // Stop recording before replaying, or each replayed update records itself again.
       if (pushedDuringSeed === pushed) pushedDuringSeed = null;
@@ -68,77 +62,21 @@ export function useGridActivity(sessionIds: Ref<string[]>, hostOf: (id: string) 
     }
   }
 
-  // One subscription per server holding a cell (see serverStreams below).
-  const streams = serverStreams(apply, () => void seed());
-  const syncStreams = (): void => streams.sync(sessionIds.value.map(hostOf));
-
-  let mounted = false;
+  const { subscribe, onReconnect } = usePubSub();
+  let unsubscribe: (() => void) | undefined;
+  let offReconnect: (() => void) | undefined;
   onMounted(() => {
-    mounted = true;
     void seed();
-    syncStreams();
+    unsubscribe = subscribe("sessions", apply);
+    // A dropped socket misses pushes; re-seed the authoritative state on reconnect.
+    offReconnect = onReconnect(() => void seed());
   });
   onUnmounted(() => {
-    mounted = false;
-    streams.stopAll();
+    unsubscribe?.();
+    offReconnect?.();
   });
-  // New cells (or a fresh session id after relaunch) need their current state seeded — and a cell on
-  // a peer not yet listened to needs that peer's stream.
-  watch(sessionIds, () => {
-    void seed();
-    if (mounted) syncStreams();
-  });
+  // New cells (or a fresh session id after relaunch) need their current state seeded.
+  watch(sessionIds, () => void seed());
 
   return { activity };
-}
-
-function idsByHost(ids: string[], hostOf: (id: string) => string | null): Map<string | null, string[]> {
-  const groups = new Map<string | null, string[]>();
-  for (const id of ids) {
-    const host = hostOf(id);
-    groups.set(host, [...(groups.get(host) ?? []), id]);
-  }
-  return groups;
-}
-
-/** One server's answer, or nothing: a server that cannot answer leaves its cells as they are, as a
- *  failed seed always has. */
-async function seedFrom(host: string | null, ids: string[]): Promise<Record<string, unknown>> {
-  try {
-    const res = await fetchWithTimeout(peerApiPath(host, `/api/activity?ids=${encodeURIComponent(ids.join(","))}`));
-    return res.ok ? await jsonBody(res) : {};
-  } catch {
-    return {};
-  }
-}
-
-/** The `sessions` stream of every server holding a cell — this server's always, as before, and each
- *  peer's while a cell runs there. Keyed by the peer id, "" for this server. */
-function serverStreams(onData: (data: unknown) => void, onReconnect: () => void) {
-  const streams = new Map<string, () => void>();
-  const open = (key: string): (() => void) => {
-    const pubsub = usePubSub(key || null);
-    const unsubscribe = pubsub.subscribe("sessions", onData);
-    // A dropped socket misses pushes; re-seed the authoritative state on reconnect.
-    const offReconnect = pubsub.onReconnect(onReconnect);
-    return () => {
-      unsubscribe();
-      offReconnect();
-    };
-  };
-  return {
-    sync(hosts: (string | null)[]): void {
-      const wanted = new Set<string>(["", ...hosts.filter((h): h is string => !!h)]);
-      for (const [key, stop] of streams) {
-        if (wanted.has(key)) continue;
-        stop();
-        streams.delete(key);
-      }
-      for (const key of wanted) if (!streams.has(key)) streams.set(key, open(key));
-    },
-    stopAll(): void {
-      for (const stop of streams.values()) stop();
-      streams.clear();
-    },
-  };
 }

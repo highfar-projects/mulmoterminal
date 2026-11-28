@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { peerApiPath } from "../../common/peers";
-import { usePaneHost } from "../composables/paneHost";
 import { ref, computed, watch, onUnmounted } from "vue";
 import { useToolCallFeed } from "../composables/useToolCallFeed";
 import type { ToolCall } from "./toolCall";
@@ -9,10 +7,8 @@ import { isRecord, optionalString } from "../../common/isRecord";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
+import { pathOnHost } from "./remoteCell";
 import { useI18n } from "vue-i18n";
-
-// The server the pane's cell runs on (paneHost.ts): this one, or a peer it relays.
-const paneHost = usePaneHost();
 
 const { t } = useI18n();
 
@@ -36,6 +32,8 @@ const isAvailableTool = (value: unknown): value is AvailableTool =>
 
 const props = defineProps<{
   sessionId: string | null;
+  /** The remote host the session runs on (#3506), null or absent for this machine. */
+  host?: string | null;
   // Whether this pane currently covers the terminal area. Owned by the grid (it is the grid's
   // layout that changes), shown here because the button that flips it lives in this header.
   expanded?: boolean;
@@ -104,7 +102,7 @@ type LoadReason = "selected" | "refreshed";
 
 async function loadAvailableTools(sessionId: string | null, reason: LoadReason = "selected") {
   const loadId = ++latestToolsLoad;
-  const url = peerApiPath(paneHost.value, sessionId ? `/api/tools?sessionId=${encodeURIComponent(sessionId)}` : "/api/tools");
+  const url = sessionId ? pathOnHost(props.host, `/api/tools?sessionId=${encodeURIComponent(sessionId)}`) : "/api/tools";
   // Overtaken: a load for another session (we switched away), or a newer load for this one.
   const overtaken = () => sessionId !== props.sessionId || loadId !== latestToolsLoad;
   toolsState.value = "loading";
@@ -150,8 +148,9 @@ watch(
 // pushed `groups`: the reply also carries the tool DESCRIPTIONS and `guiOnlyHistory`, which the push
 // does not, and the announcement for a single-view session carries no groups at all (see
 // mcp-routes.ts).
+// An announcement names a session on one host: this machine's, or a remote one's through the relay.
 onToolGroupsAnnounced((announcement) => {
-  if (announcement.sessionId === props.sessionId) void loadAvailableTools(props.sessionId, "refreshed");
+  if (announcement.host === (props.host ?? null) && announcement.sessionId === props.sessionId) void loadAvailableTools(props.sessionId, "refreshed");
 });
 
 function callKey(c: ToolCall, i: number): string {
@@ -164,7 +163,7 @@ useToolCallFeed(
   () => {
     expandedCalls.value = new Set();
   },
-  () => paneHost.value,
+  () => props.host ?? null,
 );
 
 function toggleTool(name: string) {

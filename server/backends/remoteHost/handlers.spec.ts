@@ -6,8 +6,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createRemoteHostHandlers } from "./handlers/index.js";
-import { PEER_COMMANDS } from "./peerProtocol.js";
-import { peerCommandTable } from "./peerSessions.js";
 import type { SessionScreen } from "./terminalScreen.js";
 import type { TranscriptView } from "../../../common/transcriptView.js";
 import { initCollectionsBackend } from "../collections/collections.js";
@@ -98,12 +96,6 @@ describe("createRemoteHostHandlers", () => {
   it("startChat rejects an empty message without spawning", async () => {
     await expect(handlers.startChat({ message: "   " })).rejects.toThrow(/message is required/);
     expect(spawned).toEqual([]);
-  });
-
-  // A relaying parent forwards these to this server (peerProtocol.ts); one missing from the table
-  // answers it 404 — `listSkills` did, while the parent's own wrapper already routed it here.
-  it("answers every peer command a relaying parent forwards", () => {
-    expect(Object.keys(peerCommandTable(handlers)).sort()).toEqual([...PEER_COMMANDS].sort());
   });
 
   it("serves the phone's file commands (#2911)", () => {

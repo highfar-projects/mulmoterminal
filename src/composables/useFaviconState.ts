@@ -7,10 +7,10 @@
 // lets a missed "closed" (e.g. one that happened while the socket was down) recover.
 import { computed, onUnmounted, ref, watch, type Ref } from "vue";
 import { usePubSub } from "./usePubSub";
-import { subscribeEveryPeer } from "./peerHosts";
 import { useDynamicFavicon } from "./useDynamicFavicon";
 import type { Session } from "./useSessions";
 import { isRecord } from "../../common/isRecord";
+import { parseRemoteSessionsMessage, REMOTE_SESSIONS_CHANNEL, remoteSessionKey } from "../../common/remoteHosts";
 
 export type FaviconState = "idle" | "working" | "attention";
 
@@ -43,26 +43,37 @@ const STATE_COLOR: Record<FaviconState, string> = {
   attention: "#e0a030", // amber — needs you
 };
 
+// The remote hosts' sessions (#3506), relayed by the server and kept apart from `live`, whose keys
+// are bare ids reconciled against this server's list. A resync drops the host's entries: the relay
+// lost or regained the remote, and what it last said may no longer hold. The next row puts it back.
+function useRemoteFaviconActivity(subscribe: ReturnType<typeof usePubSub>["subscribe"]): Ref<Map<string, Activity>> {
+  const remote = ref(new Map<string, Activity>());
+  const unsubscribe = subscribe(REMOTE_SESSIONS_CHANNEL, (data) => {
+    const message = parseRemoteSessionsMessage(data);
+    if (!message) return;
+    const next = new Map(remote.value);
+    if ("resync" in message) [...next.keys()].filter((key) => key.startsWith(remoteSessionKey(message.host, ""))).forEach((key) => next.delete(key));
+    else if (message.row.event === "closed") next.delete(remoteSessionKey(message.host, message.row.id));
+    else next.set(remoteSessionKey(message.host, message.row.id), { working: message.row.working, waiting: message.row.waiting });
+    remote.value = next;
+  });
+  onUnmounted(unsubscribe);
+  return remote;
+}
+
 export function useFaviconState(sessions: Ref<Session[]>): void {
   const live = ref(new Map<string, Activity>());
 
   const { subscribe } = usePubSub();
-  const onActivity = (d: unknown): void => {
+  const unsubscribe = subscribe("sessions", (d) => {
     if (!isActivityMsg(d)) return;
     const next = new Map(live.value);
     if (d.event === "closed") next.delete(d.id);
     else next.set(d.id, { working: d.working ?? false, waiting: d.waiting ?? false });
     live.value = next;
-  };
-  const unsubscribe = subscribe("sessions", onActivity);
-  // A peer server's sessions (common/peers.ts) light the tab too. They never appear in the list
-  // reconciled below — it is this server's — so, like a cross-dir grid id, each is pruned by its own
-  // "closed" event.
-  const unsubscribePeers = subscribeEveryPeer("sessions", (d) => onActivity(d));
-  onUnmounted(() => {
-    unsubscribe();
-    unsubscribePeers();
   });
+  onUnmounted(unsubscribe);
+  const remote = useRemoteFaviconActivity(subscribe);
 
   // Reconcile with the authoritative list: adopt its truth and drop default-project
   // ids it no longer reports (cross-dir grid ids never appear here, so they stay,
@@ -84,6 +95,6 @@ export function useFaviconState(sessions: Ref<Session[]>): void {
     { immediate: true },
   );
 
-  const color = computed(() => STATE_COLOR[deriveFaviconState(live.value.values())]);
+  const color = computed(() => STATE_COLOR[deriveFaviconState([...live.value.values(), ...remote.value.values()])]);
   useDynamicFavicon(color);
 }

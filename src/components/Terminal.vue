@@ -12,6 +12,8 @@ import { createImagePasteHandler } from "../composables/usePasteImage";
 import { translateUiSentence } from "../utils/translateUi";
 import { currentTermTheme, termThemeFor } from "../composables/useTheme";
 import { useDirConfig } from "../composables/useDirConfig";
+import { dirKeyOf } from "../composables/dirAddress";
+import { remoteHeaderEntries } from "./remoteHeaderButtons";
 import { useTerminalFontSize } from "../composables/useTerminalFontSize";
 import { globalFontFamily, withNarrowAmbiguous } from "../composables/terminalFontFamily";
 import { badgeStyleFor } from "./dirBadge";
@@ -44,6 +46,7 @@ import { runHeaderButton } from "../composables/useHeaderAction";
 import type { RunCommand } from "./runCommand";
 import type { LaunchChoice } from "./wsUrl";
 import { useI18n } from "vue-i18n";
+import { isRemoteHost, onThisMachine, REMOTE_CELL_DECLINE_EN } from "./remoteCell";
 
 const { t } = useI18n();
 
@@ -83,8 +86,8 @@ const props = defineProps<{
   customAgent?: string | null;
   // The account a new session starts on (#2215) — one of the user's second logins.
   account?: string | null;
-  // The peer server this terminal runs on (common/peers.ts), or null/absent for this one.
-  host?: string | null;
+  // The remote host this terminal runs on (#3506), or absent for this machine. See remoteCell.ts.
+  remoteHost?: string | null;
   // Provider/model picked in the launch form, for this session only (#584).
   launch?: LaunchChoice | null;
   runMenu?: boolean;
@@ -149,7 +152,7 @@ function currentTarget(): conn.ConnTarget {
     customAgent: props.customAgent ?? null,
     account: props.account ?? null,
     launch: props.launch ?? null,
-    host: props.host ?? null,
+    remoteHost: props.remoteHost ?? null,
   };
 }
 
@@ -188,18 +191,23 @@ function exitCopyMode() {
 // without a hint its palette would resolve only once the session reports back — a visible flash of
 // the app-wide theme first. Unlike the four style props this replaces, forgetting this one costs a
 // moment's delay, not a silently dead setting.
-const dirConfigCwd = computed(() => serverCwd.value ?? props.dirCwd ?? null);
-// The peer server this terminal runs on (common/peers.ts): every directory below is THAT machine's,
-// so everything read about it is read from that server.
-const peerHost = computed(() => props.host ?? null);
-const { config: dirConfig } = useDirConfig(dirConfigCwd, peerHost);
+// What this server may be asked about: nothing, for a terminal on another machine (remoteCell.ts).
+const localCwd = computed(() => onThisMachine(props.remoteHost, serverCwd.value));
+const localSession = computed(() => onThisMachine(props.remoteHost, props.sessionId));
+const isRemote = computed(() => isRemoteHost(props.remoteHost));
+// A remote cell's socket runs through a tunnel the user opened themselves, so "disconnected" alone
+// sends them looking at MulmoTerminal when the usual cause is that `ssh -L` has ended.
+const tunnelHint = computed(() => (isRemote.value && status.value === "disconnected" ? t("tips.cell.remoteTunnelDown", { host: props.remoteHost }) : null));
+const dirConfigCwd = computed(() => dirKeyOf(props.remoteHost, serverCwd.value ?? props.dirCwd ?? null));
+// This terminal's directory as the header, menus and git chip ask about it: on its host (dirAddress.ts).
+const menuDir = computed(() => dirKeyOf(props.remoteHost, serverCwd.value));
+const { config: dirConfig } = useDirConfig(dirConfigCwd);
 
 // The running model, so header buttons/chips can substitute `${model}`.
 const { context: sessionContext } = useSessionContext(
-  computed(() => props.sessionId),
-  serverCwd,
+  localSession,
+  localCwd,
   computed(() => props.agent ?? "claude"),
-  peerHost,
 );
 // What GET /api/header resolves for this terminal's directory: the user's configured action buttons
 // (or the built-in defaults), and the per-tree values the directory reserved (#1367).
@@ -214,17 +222,17 @@ const {
   commands: resolvedCommands,
   env: worktreeEnv,
 } = useHeaderButtons({
-  cwd: serverCwd,
-  session: computed(() => props.sessionId),
+  cwd: menuDir,
+  // A remote session is the remote's own to resolve buttons for, and the request goes there.
+  session: computed(() => props.sessionId ?? null),
   agent: computed(() => props.agent ?? "claude"),
   model: computed(() => sessionContext.value?.model ?? null),
-  host: peerHost,
 });
-// On a peer, only the buttons that type into the terminal: a `shell` button runs in a command cell
-// that THIS server resolves and starts, and an `open` one acts on this machine's files and windows —
-// both the wrong machine for a session that runs on the peer.
-const onPeer = (entries: HeaderEntry[]): HeaderEntry[] => (props.host ? entries.filter((e) => !isHeaderFolder(e) && e.run === "input") : entries);
-const headerButtons = computed(() => (props.command || props.launcher ? [] : onPeer(resolvedButtons.value)));
+function forThisCell(entries: HeaderEntry[]): HeaderEntry[] {
+  if (props.command || props.launcher) return [];
+  return isRemote.value ? remoteHeaderEntries(entries) : entries;
+}
+const headerButtons = computed(() => forThisCell(resolvedButtons.value));
 
 // `input`/`open` dispatch client-side. `shell` hands off to a command cell: the browser never holds the
 // command — it emits the button id + this session's context, and the server re-resolves it (see /ws/run).
@@ -249,10 +257,10 @@ function onHeaderButton(button: HeaderButton): void {
 // The command palette lists these and runs a pick through onHeaderButton, as the header does (#2465).
 usePaletteHeaderEntries(slotKey, {
   buttons: () => headerButtons.value,
-  commands: () => (props.command || props.launcher ? [] : onPeer(resolvedCommands.value)),
+  commands: () => forThisCell(resolvedCommands.value),
   run: onHeaderButton,
   // And the Run and Skill menus' entries, only where this terminal shows those menus (#2697).
-  menus: () => (props.runMenu ? { cwd: serverCwd.value, runScript: (command) => emit("run", command), runSkill: onSkill } : null),
+  menus: () => (props.runMenu ? { cwd: menuDir.value, runScript: (command) => emit("run", command), runSkill: onSkill } : null),
 });
 // A skill picked from the header Skill menu runs IN this session (not a spare cell
 // like a script): type its invocation and submit, exactly like a `run:"input"` button.
@@ -271,10 +279,8 @@ const { storiesRoots } = useAppConfig();
 // the menu offered — it is gated on `canOpenInCanvas` — but it is a refusal here rather than a
 // silence, because a click that was offered must never look ignored (#1941).
 async function onDeck(absolutePath: string): Promise<void> {
-  const session = props.sessionId;
-  if (!session) return void showHint(DECK_NO_SESSION_EN, DECK_ICON);
-  // The Canvas is this server's, and the deck a file on the peer's disk.
-  if (props.host) return void showHint(DECK_ON_PEER_EN, DECK_ICON);
+  const session = localSession.value;
+  if (!session) return void showHint(isRemote.value ? REMOTE_CELL_DECLINE_EN : DECK_NO_SESSION_EN, DECK_ICON);
   const result = await buildCanvasCard(absolutePath, storiesRootsFrom(storiesRoots.value));
   if (result.kind !== "card") return void showHint(result.kind === "refused" ? result.reason : DECK_UNSUPPORTED_EN, DECK_ICON);
   // Re-asked after the await, like every other late reply here: the cell can be handed a different
@@ -287,8 +293,8 @@ async function onDeck(absolutePath: string): Promise<void> {
 
 // Git status chip — single view only. In the grid the embedding TerminalCell shows
 // its own chip, so null the cwd here to skip redundant polling (status stays null).
-const gitCwd = computed(() => (props.devTerminal ? null : serverCwd.value));
-const { status: gitStatus } = useGitStatus(gitCwd, peerHost);
+const gitCwd = computed(() => (props.devTerminal ? null : menuDir.value));
+const { status: gitStatus } = useGitStatus(gitCwd);
 const dragOver = ref(false);
 const { fontSize } = useTerminalFontSize();
 
@@ -541,9 +547,9 @@ function onDrop(e: DragEvent) {
   const text = dropTextFromUriList(dt.getData("text/uri-list") || dt.getData("text/plain"));
   // The files are only read when the plan can use them: a path the browser gave settles a local drop,
   // as it always did (#2669).
-  // A peer cell counts as remote: the browser's path names the machine the BROWSER is on, and the
-  // session runs on the peer, where only an uploaded copy exists.
-  const remote = isRemoteServer() || !!props.host;
+  // A path the browser gave names a file on THIS machine, which a remote cell's agent cannot read,
+  // so a remote cell sends the bytes, as a page open from another machine does.
+  const remote = isRemoteServer() || isRemote.value;
   const files = text && !remote ? [] : Array.from(dt.files);
   const plan = dropPlan({ pathText: text, fileCount: files.length, remoteServer: remote });
   if (plan === "insert-path") insertText(text);
@@ -563,7 +569,6 @@ const DECK_ICON = "space_dashboard";
 const DECK_NO_SESSION_EN = "Start the terminal first — a deck is shown beside a running session.";
 const DECK_UNSUPPORTED_EN = "this server cannot show that deck — it is outside the directory it serves stories from";
 const DECK_SEED_FAILED_EN = "could not put the deck on the Canvas — the server did not accept it";
-const DECK_ON_PEER_EN = "A deck cannot be shown for a terminal on another server yet.";
 
 const DROP_NO_SESSION_EN = "Start the terminal first — there's no session yet to send the file to.";
 // A saved file belongs to the session it was uploaded for, which is the only one granted its
@@ -596,12 +601,11 @@ async function uploadAndInsert(files: File[]) {
   if (!session) return void showHint(DROP_NO_SESSION_EN);
   // Shown in English first and swapped when the (server-cached) translation lands, like the hint.
   void translateUiSentence(DROP_UPLOADING_EN, "mulmoterminal-ui").then((translated) => (dropUploadingText.value = translated));
-  const peer = props.host ?? null;
   const outcome = await uploadDropBatch(
     session,
     files,
     () => props.sessionId,
-    (id, file) => uploadDroppedFile(id, file, peer),
+    (id, file) => uploadDroppedFile(id, file, props.remoteHost ?? null),
   );
   if (outcome.kind === "stale") return void showHint(DROP_SESSION_CHANGED_EN);
   if (outcome.kind === "failed") return void showHint(dropUploadErrorMessage(outcome.status));
@@ -661,9 +665,9 @@ onUnmounted(() => clearTimeout(dropHintTimer));
 // reach this — the handler declines them and xterm's own paste handling runs as before.
 const onPaste = createImagePasteHandler({
   sessionId: () => props.sessionId ?? null,
-  host: () => props.host ?? null,
   insertText,
   onError: (message) => void showHint(message),
+  host: () => props.remoteHost ?? null,
 });
 
 onUnmounted(() => {
@@ -739,10 +743,11 @@ onUnmounted(() => {
       >
         <span class="material-symbols-outlined text-[18px]" aria-hidden="true">refresh</span>
       </button>
-      <RunMenu v-if="runMenu" :cwd="serverCwd" @run="(c) => emit('run', c)" />
-      <LaunchConfigMenu v-if="runMenu" :cwd="serverCwd" @run="(c) => emit('run', c)" />
-      <SkillMenu v-if="runMenu" :cwd="serverCwd" @skill="onSkill" />
-      <MulmoMenu v-if="runMenu" :cwd="serverCwd" @deck="onDeck" />
+      <LaunchConfigMenu v-if="runMenu && !isRemote" :cwd="serverCwd" @run="(c) => emit('run', c)" />
+      <span v-if="tunnelHint" data-testid="term-tunnel-hint" class="min-w-0 truncate text-[12px] text-secondary" :data-tip="tunnelHint">{{ tunnelHint }}</span>
+      <RunMenu v-if="runMenu" :cwd="menuDir" @run="(c) => emit('run', c)" />
+      <SkillMenu v-if="runMenu" :cwd="menuDir" @skill="onSkill" />
+      <MulmoMenu v-if="runMenu && !isRemote" :cwd="serverCwd" @deck="onDeck" />
       <!-- flex-none: the lead slot beside it now grows and truncates (a path), and without this the
            actions would shrink to make room and clip their own icons. -->
       <div class="ml-auto inline-flex flex-none items-center gap-1">

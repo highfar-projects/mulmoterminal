@@ -4,7 +4,7 @@
 //       `plugin` carrying a viewComponent. Shared VERBATIM with MulmoClaude.
 //   - local:    in-tree plugins under plugins/<name>/index.ts (REGISTRATION export).
 // Mirrors MulmoClaude's src/tools/index.ts getPlugin().
-import { defineComponent, h, markRaw, provide, type Component } from "vue";
+import { defineComponent, h, inject, markRaw, provide, type Component } from "vue";
 import config from "../plugins/plugins.json";
 import { plugin as markdownPlugin } from "@mulmoclaude/markdown-plugin/vue";
 import { plugin as formPlugin } from "@mulmoclaude/form-plugin/vue";
@@ -18,11 +18,19 @@ import { plugin as brepPlugin } from "@gui-chat-plugin/brep/vue";
 import { plugin as jingleScriptPlugin } from "@gui-chat-plugin/jinglescript/vue";
 import { plugin as spreadsheetPlugin } from "@gui-chat-plugin/spreadsheet/vue";
 import { AccountingView } from "@mulmoclaude/accounting-plugin/vue";
-import { wrapWithPluginRuntime } from "./composables/pluginRuntime";
+import { PLUGIN_HOST_KEY, wrapWithPluginRuntime } from "./composables/pluginRuntime";
 import CollectionCardView from "./components/CollectionCardView.vue";
 import { documentIdentity, filePathIdentity, collectionIdentity } from "./utils/canvasIdentity";
 import type { StoryRootDirs } from "./utils/canvasCardPath";
 import { CANVAS_CARD_HEIGHT_VAR } from "./composables/useCanvasCardHeight";
+import {
+  drawnAsIs,
+  htmlPageOnHost,
+  inlineChartsOnly,
+  mulmoScriptMediaPath,
+  type MulmoScriptMediaQuery,
+  type RemoteCardRule,
+} from "./components/remoteCanvasCards";
 // Import each package's compiled stylesheet as a STRING (?inline), not as a global
 // side-effect. GuiPanel injects it into a per-view Shadow DOM (see PluginFrame),
 // which encapsulates the plugin's Tailwind preflight so it can't clobber
@@ -59,9 +67,8 @@ import { MULMOSCRIPT_SCOPE } from "../common/fileChannel";
 // because aborting mid-body truncates the movie rather than failing the request.
 const MEDIA_FETCH_TIMEOUT_MS = 300_000;
 
-async function fetchMulmoMediaBlob(query: { moviePath?: string; pdfPath?: string }): Promise<Blob> {
-  const params = new URLSearchParams(query.pdfPath ? { pdfPath: query.pdfPath } : { moviePath: query.moviePath ?? "" });
-  const res = await fetchWithTimeout(`/api/mulmoscript/media?${params}`, undefined, MEDIA_FETCH_TIMEOUT_MS);
+async function fetchMulmoMediaBlob(host: string | null, query: MulmoScriptMediaQuery): Promise<Blob> {
+  const res = await fetchWithTimeout(mulmoScriptMediaPath(host, query), undefined, MEDIA_FETCH_TIMEOUT_MS);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.blob();
 }
@@ -69,13 +76,14 @@ async function fetchMulmoMediaBlob(query: { moviePath?: string; pdfPath?: string
 // Provide the mulmoscript package's host-adapter injection around its View.
 // MulmoTerminal has no per-session generation indicator, so only fetchMediaBlob
 // is supplied; chatSessionId degrades gracefully (no session tagging).
-function withMulmoScriptHostAdapter(inner: Component): Component {
-  const adapter: MulmoScriptHostAdapter = { fetchMediaBlob: fetchMulmoMediaBlob };
+export function withMulmoScriptHostAdapter(inner: Component): Component {
   return markRaw(
     defineComponent({
       name: "MulmoScriptHostAdapter",
       inheritAttrs: false,
       setup(_props, { attrs, slots }) {
+        const host = inject(PLUGIN_HOST_KEY, () => null);
+        const adapter: MulmoScriptHostAdapter = { fetchMediaBlob: (query) => fetchMulmoMediaBlob(host(), query) };
         provide(MULMOSCRIPT_HOST_ADAPTER_KEY, adapter);
         return () => h(inner, attrs, slots);
       },
@@ -131,6 +139,9 @@ interface Registration {
   // The View draws its own surface for `data-appearance` on <html>, so PluginFrame must not
   // force its light one under it. See PluginFrame's `followsAppearance` prop.
   followsAppearance?: boolean;
+  // How the card draws for a remote cell (#3506), whose files and plugin routes are on its host: the
+  // result to draw, or null to list the card by name. A tool without one is listed by name there.
+  onRemote?: RemoteCardRule;
 }
 
 // Statically-known packages, keyed by package name; the config gates which load.
@@ -152,11 +163,14 @@ const PACKAGES: Record<string, Registration> = {
     // Re-presenting one document supersedes the card showing its older state; inline markdown has
     // no path and stands alone. See canvasIdentity.ts.
     identityOf: documentIdentity,
+    // Its dispatch reads the document on the host; a picture it links stays this machine's.
+    onRemote: drawnAsIs,
   },
   "@mulmoclaude/form-plugin": {
     toolName: formPlugin.toolDefinition.name,
     viewComponent: viewOf("@mulmoclaude/form-plugin", formPlugin.viewComponent),
     css: formCss,
+    onRemote: drawnAsIs,
   },
   "@mulmoclaude/html-plugin": {
     toolName: htmlPlugin.toolDefinition.name,
@@ -171,11 +185,14 @@ const PACKAGES: Record<string, Registration> = {
     height: CANVAS_CARD_HEIGHT,
     // The page on disk, so only re-presenting the SAME page collapses. See canvasIdentity.ts.
     identityOf: filePathIdentity,
+    onRemote: htmlPageOnHost,
   },
   "@mulmochat-plugin/generate-image": {
     toolName: GenerateImagePlugin.plugin.toolDefinition.name,
     viewComponent: viewOf("@mulmochat-plugin/generate-image", GenerateImagePlugin.plugin.viewComponent),
     css: mulmochatPluginCss,
+    // The picture travels in the result, base64 (`imageData`).
+    onRemote: drawnAsIs,
   },
   "@mulmoclaude/chart-plugin": {
     toolName: chartPlugin.toolDefinition.name,
@@ -188,6 +205,7 @@ const PACKAGES: Record<string, Registration> = {
     css: chartCss,
     // From 4.4.0 its cards turn dark under a dark theme.
     followsAppearance: true,
+    onRemote: inlineChartsOnly,
   },
   "@gui-chat-plugin/shapescript": {
     toolName: shapeScriptPlugin.toolDefinition.name,
@@ -218,6 +236,7 @@ const PACKAGES: Record<string, Registration> = {
     // null here and keeps standing alone, which is correct: nothing identifies
     // it. See canvasIdentity.ts.
     identityOf: filePathIdentity,
+    onRemote: drawnAsIs,
   },
   "@gui-chat-plugin/brep": {
     toolName: brepPlugin.toolDefinition.name,
@@ -231,6 +250,7 @@ const PACKAGES: Record<string, Registration> = {
     // The View is the model at a height the user drags, over a part that scrolls, inside a
     // `height: 100%` column: without a definite frame it has nothing to divide.
     height: CANVAS_CARD_HEIGHT,
+    onRemote: drawnAsIs,
   },
   "@mulmoclaude/mulmoscript-plugin": {
     toolName: mulmoScriptPlugin.toolDefinition.name,
@@ -251,6 +271,8 @@ const PACKAGES: Record<string, Registration> = {
     // The story on disk (`stories/<name>.json`), so this collapses re-opens of ONE story rather
     // than distinct stories. See canvasIdentity.ts.
     identityOf: filePathIdentity,
+
+    onRemote: drawnAsIs,
   },
   "@gui-chat-plugin/jinglescript": {
     toolName: jingleScriptPlugin.toolDefinition.name,
@@ -260,6 +282,7 @@ const PACKAGES: Record<string, Registration> = {
     // therefore no card.
     viewComponent: viewOf("@gui-chat-plugin/jinglescript", jingleScriptPlugin.viewComponent),
     css: jingleScriptCss,
+    onRemote: drawnAsIs,
   },
   "@gui-chat-plugin/spreadsheet": {
     toolName: spreadsheetPlugin.toolDefinition.name,
@@ -274,6 +297,7 @@ const PACKAGES: Record<string, Registration> = {
     css: spreadsheetCss,
     // The grid scrolls inside an h-full column with the cell editor pinned below it.
     height: CANVAS_CARD_HEIGHT,
+    onRemote: drawnAsIs,
   },
   // Keyed by the plugins.json `packages` entry (the cfg.packages loop below looks up
   // PACKAGES[name]). The collection engine + presentCollection tool moved to

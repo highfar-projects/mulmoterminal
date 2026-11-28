@@ -55,11 +55,6 @@ import CellPathMenu from "./CellPathMenu.vue";
 import { registerCellAction } from "../composables/useCellAction";
 import type { CellSelfAction } from "../../common/headerActions";
 import { reapSessionOnServer, restartSession, switchTokenOnServer } from "../composables/restartSession";
-import { loadPeerConfig, loadPeerHosts, peerConfigs, peerHosts } from "../composables/peerHosts";
-import { TOKEN_ROTATION_OFF } from "../../common/tokenRotation";
-import { providePaneHost } from "../composables/paneHost";
-import PeerBadge from "./PeerBadge.vue";
-import { peerApiPath } from "../../common/peers";
 import { accountSwitchChoices } from "../composables/accountSwitchChoices";
 import { useAppConfig } from "../composables/useAppConfig";
 import { useRateLimits } from "../composables/useRateLimits";
@@ -102,6 +97,7 @@ import { handoffTargets, pullLastTurn, pullSinceRelay, slotLabel, type HandoffTa
 import { findPartner, isSendAction, runRelay, type RelayAction, type RelaySelf } from "../composables/useRelayActions";
 import { gridSessionJump } from "../composables/gridSessionJump";
 import { useRelayButton } from "../composables/useRelayButton";
+import { dirApiUrl, dirKeyOf } from "../composables/dirAddress";
 import { slotsChanged } from "../composables/slotsVersion";
 import { relayButtonLabel } from "../composables/relayButtonLabel";
 import { cellSendButton } from "../composables/cellSendButton";
@@ -121,6 +117,22 @@ import { beginDevcontainerOp, settleDevcontainerOp, devcontainerOpFor, onDevcont
 import { canStartTalk } from "./cellTalkStart";
 import { connView } from "../composables/useTerminalConnections";
 import type { SessionExit } from "../composables/serverMessage";
+import HostMark from "./HostMark.vue";
+import RemoteHostGone from "./RemoteHostGone.vue";
+import { useRemoteCellActivity } from "../composables/useRemoteCellActivity";
+import { useRemoteHostStatus } from "../composables/configuredRemoteHosts";
+import { mayConnect } from "./remoteHostStatus";
+import {
+  activityKeyOf,
+  cellActionAllowed,
+  isRemoteHost,
+  onThisMachine,
+  REMOTE_CELL_DECLINE_EN,
+  repoWritePath,
+  sessionChannelOf,
+  sessionDetailPath,
+  sessionWritePath,
+} from "./remoteCell";
 
 // How long a handoff failure stays on the cell before it clears itself.
 const ASK_MSG_MS = 4000;
@@ -159,9 +171,6 @@ const props = defineProps<
     // The account (second login) this cell's session runs on (#2215), restored with the cell or set
     // by the launch panel. Seeds `accountId` below.
     initialAccount?: string | null | undefined;
-    // The peer server this cell's session runs on (common/peers.ts), restored with the cell. Seeds
-    // `hostId` below.
-    initialHost?: string | null | undefined;
     // Start `initialAgent` in `initialCwd` on mount rather than opening the launcher form. Set by
     // the grid for a cell it already knows what to run — the phone's launch request (#831).
     autoStart?: boolean;
@@ -186,6 +195,8 @@ const props = defineProps<
     reorderable?: boolean;
     // Set aside by the user (#992): sunk out of the way, still connected, still holding history.
     parked?: boolean;
+    // The remote host this cell's terminal runs on (#3506), or null for this machine. See remoteCell.ts.
+    remoteHost?: string | null;
   }
 >();
 const emit = defineEmits<
@@ -218,15 +229,6 @@ const { chromeProps, chromeEvents } = cellChromeBinding(props, emit, () => void 
 // starts empty and lazy-launches when the user picks a dir and clicks Start.
 const launched = ref(props.initialSessionId !== null);
 const sessionId = ref<string | null>(props.initialSessionId);
-// The peer server the session runs on, or null for this one. Picked in the launch form; kept for the
-// life of the cell like the account, since the session id names nothing on any other server. Up
-// here because the activity and canvas subscriptions below are wired during setup, on the server
-// this names.
-const hostId = ref<string | null>(props.initialHost ?? null);
-loadPeerHosts();
-// Everything below that reads a server by injection — the launch form's lists above all — reads this
-// cell's (paneHost.ts).
-providePaneHost(hostId);
 // What the launch form's AGENT PICKER will start here. "shell" is one of its options and is a
 // LAUNCHER, not an agent: the parent replaces this cell with a launcher cell, so it never becomes
 // the `agent` below.
@@ -261,9 +263,16 @@ const connectKey = ref(0);
 
 // The directory this terminal runs in (shown in the header, sent to the server).
 const cwd = ref<string | null>(props.initialCwd ?? props.defaultCwd);
+// What this server may be asked about: the same values for a local cell, nothing for a remote one.
+const isRemote = isRemoteHost(props.remoteHost);
+const hostStatus = useRemoteHostStatus(props.remoteHost);
+const localCwd = computed(() => onThisMachine(props.remoteHost, cwd.value));
+// The reads a remote cell may make of its own directory, through the gateway (dirAddress.ts).
+const dirKey = computed(() => dirKeyOf(props.remoteHost, cwd.value));
+const localSession = computed(() => onThisMachine(props.remoteHost, sessionId.value));
 // Per-directory overrides (<cwd>/.mulmoterminal.json): pins this cell's terminal
 // palette and shows a project badge. Re-fetched when the effective cwd changes.
-const { config: dirConfig, cellStyle } = useCellChrome(cwd, hostId);
+const { config: dirConfig, cellStyle } = useCellChrome(dirKey);
 // The server's own answer for this cwd — hasConfig/enabled/containerName — read straight from
 // here rather than from `dirConfig.devcontainer`: that flag is this app's own read of the SAME
 // file (dir-config.ts), but a build triggered from the badge below (buildDevcontainerNow) writes
@@ -278,12 +287,13 @@ async function refreshDevcontainerInfo(dir: string | null): Promise<void> {
     devcontainerInfo.value = null;
     return;
   }
-  const status = await devcontainerStatus(dir, hostId.value);
+  const status = await devcontainerStatus(dir);
   // A stale response landing after cwd moved on must not overwrite whatever the newer request is
   // about to answer with.
-  if (cwd.value === dir) devcontainerInfo.value = status;
+  if (localCwd.value === dir) devcontainerInfo.value = status;
 }
-watch([cwd, hostId], ([dir]) => void refreshDevcontainerInfo(dir), { immediate: true });
+// Only a directory on this machine: a remote cell's container is its host's business.
+watch(localCwd, (dir) => void refreshDevcontainerInfo(dir), { immediate: true });
 const devcontainerName = computed(() => devcontainerInfo.value?.containerName ?? null);
 // Copying the name, not just showing it in the tooltip: reported live — a `docker exec`/`docker
 // logs` typed by hand is exactly the friction a click should remove, and the name is exactly
@@ -354,14 +364,14 @@ async function runDevcontainerBuild(rebuild: boolean, onDone: (ok: boolean) => v
   // Only a rebuild removes a container a session may be running in; the first build leaves this
   // session on the host where it started.
   if (rebuild) beginDevcontainerOp(dir);
-  const result = await buildDevcontainer(dir, { rebuild, host: hostId.value });
+  const result = await buildDevcontainer(dir, { rebuild });
   if (rebuild) settleDevcontainerOp(dir, result.ok);
   devcontainerBuilding.value = false;
   if (devcontainerBuildTimer) {
     clearInterval(devcontainerBuildTimer);
     devcontainerBuildTimer = null;
   }
-  await refreshDevcontainerInfo(cwd.value);
+  await refreshDevcontainerInfo(localCwd.value);
   if (!result.ok) window.alert(`Could not ${rebuild ? "rebuild" : "build"} the devcontainer.\n\n${result.message}`);
   else onDone(result.ok);
 }
@@ -418,10 +428,10 @@ async function stopDevcontainerNow(): Promise<void> {
   }
   devcontainerStopping.value = true;
   beginDevcontainerOp(dir);
-  const result = await stopDevcontainer(dir, hostId.value);
+  const result = await stopDevcontainer(dir);
   settleDevcontainerOp(dir, result.ok);
   devcontainerStopping.value = false;
-  await refreshDevcontainerInfo(cwd.value);
+  await refreshDevcontainerInfo(localCwd.value);
   if (!result.ok) window.alert(`Could not stop the devcontainer.\n\n${result.message}`);
 }
 // Personal-fork fix (server/config/devcontainer-claude-persistence.ts): a devcontainer.json that
@@ -442,9 +452,9 @@ async function fixClaudeJsonPersistenceNow(): Promise<void> {
     return;
   }
   devcontainerFixingPersistence.value = true;
-  const result = await fixClaudeJsonPersistence(dir, hostId.value);
+  const result = await fixClaudeJsonPersistence(dir);
   devcontainerFixingPersistence.value = false;
-  await refreshDevcontainerInfo(cwd.value);
+  await refreshDevcontainerInfo(localCwd.value);
   window.alert(result.ok ? `Fixed.\n\n${result.message}` : `Could not fix it.\n\n${result.message}`);
 }
 function onDevcontainerBadgeClick(): void {
@@ -457,13 +467,13 @@ function onDevcontainerBadgeClick(): void {
 const isWorkspace = computed(() => isSameDirPath(cwd.value, props.defaultCwd));
 // What this cell is working on (PR + issue), for the `work` chip. Same directory, same kind of
 // poll as the git status below.
-const { item: workItem, refresh: refreshWorkItem, commentFailure } = useWorkItem(cwd, hostId);
+const { item: workItem, refresh: refreshWorkItem, commentFailure } = useWorkItem(dirKey);
 // "issueWorkComments is on and the issue is NOT being updated" (#1369). Outside the chip loop for
 // the same reason as the tidy prompt below: it reports on a setting, not on the work.
 const workCommentNotice = computed(() => visibleWorkCommentFailure(commentFailure.value));
 // Live git status (branch/dirty/ahead·behind) for the header chip. `refreshGit`
 // is called alongside loadDiff() so a finished turn's changes show immediately.
-const { status: gitStatus, refresh: refreshGit } = useGitStatus(cwd, hostId);
+const { status: gitStatus, refresh: refreshGit } = useGitStatus(dirKey);
 // Activity timeline overlay (the header history button) — only meaningful for a Claude session.
 const timelineOpen = ref(false);
 // A small filmstrip thumbnail (some OTHER cell is zoomed): strip the header to the dir and close,
@@ -473,7 +483,8 @@ const filmstrip = computed(() => isThumbnail(props));
 // recent preset, then the server default. Both `presets` and `defaultCwd` arrive
 // async from /api/config, so the watcher upgrades a still-pristine field once they
 // load (cold-load / open-before-config) — it never clobbers the user's own edit.
-const dirInput = ref(preferredLaunchDir(props));
+// Never a remote cell's directory: the form lists sessions, scripts and worktrees for it from THIS server.
+const dirInput = ref(preferredLaunchDir({ ...props, initialCwd: onThisMachine(props.remoteHost, props.initialCwd ?? null) }));
 const dirTouched = ref(false); // true once the user types in / picks a dir
 // Typing, a preset chip and the folder picker all report the dir the same way, so the "the user
 // chose this one" flag is set in one place.
@@ -536,11 +547,10 @@ const context = ref<CellContext | null>(null);
 // (git/diff/ctx/usage) render in that order — others are hidden — and custom chips render as text. `dir`,
 // the project badge, the status dot/activity, and the row-2 tools timeline stay structural.
 const { chips: headerChips, env: worktreeEnv } = useHeaderButtons({
-  cwd,
-  session: sessionId,
+  cwd: localCwd,
+  session: localSession,
   agent,
   model: computed(() => context.value?.model ?? null),
-  host: hostId,
 });
 // `env` is in the defaults and costs nothing to a project that declares no `worktreeEnv`: the
 // chip renders nothing when there are no values, so this only shows up where it was asked for.
@@ -561,9 +571,7 @@ const cellChips = computed<CellChipView[]>(() => {
   return views;
 });
 
-// The pub/sub of the server this cell's session runs on: this one, or its peer (common/peers.ts),
-// whose `sessions` stream is the only one that knows the session at all.
-const cellPubSub = () => usePubSub(hostId.value);
+const { subscribe, onReconnect } = usePubSub();
 let unsubscribe: (() => void) | null = null;
 let offReconnect: (() => void) | null = null;
 
@@ -663,9 +671,8 @@ async function fetchSessionDetail(id: string): Promise<Record<string, unknown> |
   try {
     // The agent goes along because the two header badges are read from ITS log, not Claude's
     // (#1465) — and grok's is partitioned by directory, so the cwd is part of that lookup too.
-    const params = new URLSearchParams({ agent: agent.value });
-    if (cwd.value) params.set("cwd", cwd.value);
-    const res = await fetchWithTimeout(peerApiPath(hostId.value, `/api/session/${id}?${params}`));
+    // A remote cell asks the gateway, which reads the remote's own detail (#3506).
+    const res = await fetchWithTimeout(sessionDetailPath(id, agent.value, cwd.value, props.remoteHost));
     if (!res.ok) return null;
     const data = await jsonBody(res);
     return id === sessionId.value ? data : null;
@@ -758,20 +765,20 @@ async function refreshUsage() {
 const unseenCanvas = ref(0);
 let unsubscribeCanvas: (() => void) | undefined;
 
-function watchCanvasOutput(id: string | null) {
+function watchCanvasOutput(channel: string | null) {
   unsubscribeCanvas?.();
   unsubscribeCanvas = undefined;
   unseenCanvas.value = 0;
-  // Not on a peer yet: the Canvas pane reads this server's store, so a count here would open onto
-  // an empty pane. Comes with the per-cell features in a later stage (plans/feat-peer-hosts.md).
-  if (!id || hostId.value) return;
-  unsubscribeCanvas = cellPubSub().subscribe(`session:${id}`, () => {
+  if (!channel) return;
+  unsubscribeCanvas = subscribe(channel, () => {
     // Already looking at it: arrivals land in a pane the user can see, so nothing is unseen.
     if (props.paneShown && props.rightPane === "canvas") return;
     unseenCanvas.value += 1;
   });
 }
-watch([sessionId, hostId], () => watchCanvasOutput(sessionId.value), { immediate: true });
+// A remote cell's drawings arrive from its host through the relay (#3506).
+const canvasChannel = computed(() => (sessionId.value ? sessionChannelOf(props.remoteHost, sessionId.value) : null));
+watch(canvasChannel, watchCanvasOutput, { immediate: true });
 // Opening the pane on this cell clears the count — that IS having looked.
 watch(
   () => props.paneShown && props.rightPane === "canvas",
@@ -793,36 +800,26 @@ const UNTRACKED_BADGE_AGENTS = new Set(["antigravity", "grok", "muse"]);
 const UNTRACKED_BADGE_POLL_MS = 60_000;
 let badgePoll: ReturnType<typeof setInterval> | null = null;
 
-// Live activity for this cell's session, from the server it runs on. Re-wired when the cell's server
-// changes (a launch form switched to a peer), since the old stream will never mention the session.
-let activityWired = false;
-function wireActivity(): void {
-  unsubscribe?.();
-  offReconnect?.();
-  const pubsub = cellPubSub();
-  unsubscribe = pubsub.subscribe("sessions", (d) => {
-    if (!isActivityMsg(d) || d.id !== sessionId.value) return;
+// A remote cell's rows come from its host, relayed by the server (#3506); this server's own
+// `sessions` channel never names its session.
+if (isRemote && props.remoteHost) useRemoteCellActivity(props.remoteHost, sessionId, applyActivity);
+
+onMounted(() => {
+  unsubscribe = subscribe("sessions", (d) => {
+    if (isRemote || !isActivityMsg(d) || d.id !== sessionId.value) return;
     applyActivity(d);
     refreshBadgesIfModelUnknown();
   });
+  badgePoll = setInterval(() => {
+    if (UNTRACKED_BADGE_AGENTS.has(agent.value) && sessionId.value) void refreshUsage();
+  }, UNTRACKED_BADGE_POLL_MS);
   // A dropped socket misses the pushes sent while it was down, and this cell's status is
   // derived state that pub/sub only replays room membership for — not the missed events. So
   // on reconnect re-seed from the authoritative snapshot (guarded by activityGen), or a turn
   // that started during the outage stays showing idle until it ends.
-  offReconnect = pubsub.onReconnect(() => {
+  offReconnect = onReconnect(() => {
     if (sessionId.value) void loadInitial(sessionId.value);
   });
-  activityWired = true;
-}
-watch(hostId, () => {
-  if (activityWired) wireActivity();
-});
-
-onMounted(() => {
-  wireActivity();
-  badgePoll = setInterval(() => {
-    if (UNTRACKED_BADGE_AGENTS.has(agent.value) && sessionId.value) void refreshUsage();
-  }, UNTRACKED_BADGE_POLL_MS);
   if (sessionId.value) {
     void loadInitial(sessionId.value);
     void loadDiff(); // a resumed worktree cell shows its diff on restore
@@ -853,7 +850,7 @@ function launchIn(dir: string | null) {
   // BOTH halves. `agent` is "claude" for a custom pick, so reporting it alone reads to the grid as
   // "the user switched off the wrapper" — which is what silently dropped `customAgent` on the very
   // launch that was using it (codex + CodeRabbit, #1890).
-  emit("agent", { agent: agent.value, customAgent: customAgentId.value, account: accountId.value, host: hostId.value });
+  emit("agent", { agent: agent.value, customAgent: customAgentId.value, account: accountId.value });
   recordNextCwd = true;
   void loadDiff(); // no-op for a non-worktree dir
 }
@@ -869,34 +866,20 @@ const accountId = ref<string | null>(props.initialAccount ?? null);
 // subscription from the cell beside it, in the same home, so it wears the same mark an account does.
 const { tokenRotation } = useAppConfig();
 // Read, never started here: the toolbar gauge polls, and a cell must not add a probe per token (#2954).
-const { snapshot: rateLimitSnapshot, peerSnapshots: peerRateLimitSnapshots } = useRateLimits();
-// On a peer (common/peers.ts) every one of these is THAT server's: its accounts, its token rotation
-// and its usage readings. The switch itself already goes to the peer (switchTokenOnServer), which
-// moves the session to one of its own tokens — offering this server's would name ids it does not hold.
-watch(
-  hostId,
-  (id) => {
-    if (id) void loadPeerConfig(id);
-  },
-  { immediate: true },
-);
-const hostConfig = computed(() => (hostId.value ? (peerConfigs.value[hostId.value] ?? null) : null));
-const hostAccounts = computed(() => (hostId.value ? (hostConfig.value?.accounts ?? []) : (props.accounts ?? [])));
-const hostTokenRotation = computed(() => (hostId.value ? (hostConfig.value?.tokenRotation ?? TOKEN_ROTATION_OFF) : tokenRotation.value));
-const hostRateLimits = computed(() => (hostId.value ? (peerRateLimitSnapshots.value[hostId.value] ?? null) : rateLimitSnapshot.value));
+const { snapshot: rateLimitSnapshot } = useRateLimits();
 const cellCredential = ref<CellCredential | null>(null);
-const accountMarkLabel = computed(() => (accountId.value ? accountLabel(hostAccounts.value, accountId.value) : (cellCredential.value?.label ?? null)));
+const accountMarkLabel = computed(() => (accountId.value ? accountLabel(props.accounts ?? [], accountId.value) : (cellCredential.value?.label ?? null)));
 const accountMarkDetail = computed(() => (accountId.value ? null : (cellCredential.value?.detail ?? null)));
 // Only a cell rotation placed can be moved, and only to what the config offers (#2950).
 const accountMarkChoices = computed(() =>
-  accountId.value ? [] : accountSwitchChoices(hostTokenRotation.value, cellCredential.value?.id ?? null, hostRateLimits.value, Date.now()),
+  accountId.value || isRemote ? [] : accountSwitchChoices(tokenRotation.value, cellCredential.value?.id ?? null, rateLimitSnapshot.value, Date.now()),
 );
 
 // Start what the Agent Picker picked, in `dir`. EVERY launch in the form goes through here: the
 // picker decides for the dir field, for a preset chip, and for a worktree alike, and a rule
 // that has to hold at three call sites belongs in one of them.
 function startPickedAgent(dir: string | null) {
-  if (pickedAgent.value === "shell") emit("launch", { launcher: shellLauncher(), cwd: dir, ...(hostId.value ? { host: hostId.value } : {}) });
+  if (pickedAgent.value === "shell") emit("launch", { launcher: shellLauncher(), cwd: dir });
   else launchIn(dir);
 }
 
@@ -917,28 +900,14 @@ onMounted(() => {
 // endpoint against a real session. Both kinds of row send it — a worktree row, whose session may be
 // any agent, and a resume row, which since #1417 lists the PICKED agent's own conversations rather
 // than always Claude's. Absent (an older caller) leaves the pick alone.
-function resumeSession({
-  id,
-  cwd: dir,
-  agent: resumeAgent,
-  account,
-  host,
-}: {
-  id: string;
-  cwd: string | null;
-  agent?: TerminalAgent;
-  account?: string | null;
-  host?: string | null;
-}) {
+function resumeSession({ id, cwd: dir, agent: resumeAgent, account }: { id: string; cwd: string | null; agent?: TerminalAgent; account?: string | null }) {
   // The login the row was found under — what the server runs it on, whatever the picker said.
   accountId.value = account ?? null;
-  // And the server it was listed from: the form lists the picked server's sessions (common/peers.ts).
-  hostId.value = host ?? null;
   if (resumeAgent) {
     pickedAgent.value = resumeAgent;
     // A resumed session already exists; it was not started through a wrapper now, so the cell is
     // no longer running one whatever it was launched from.
-    emit("agent", { agent: resumeAgent, customAgent: null, account: accountId.value, host: hostId.value });
+    emit("agent", { agent: resumeAgent, customAgent: null, account: accountId.value });
   }
   cwd.value = dir;
   sessionId.value = id;
@@ -954,12 +923,9 @@ function onServerCwd(c: string) {
   cwd.value = c;
   // Only a user-initiated fresh launch records the dir as a preset chip — not a
   // reconnect/restore of an already-running session (see recordNextCwd).
-  // Never a peer's: the presets are THIS server's directories, and a path on another machine would
-  // become a chip that launches here, in a folder this server may not have (common/peers.ts).
-  if (recordNextCwd) {
-    recordNextCwd = false;
-    if (!hostId.value) emit("record-cwd", c);
-  }
+  // A remote directory is not one to offer for a launch on this machine.
+  if (recordNextCwd && !isRemote) emit("record-cwd", c);
+  recordNextCwd = false;
   emit("cwd", c);
 }
 
@@ -989,6 +955,10 @@ function refreshAskTargets() {
 // a collection pane remounts.
 const talkStartable = computed(() => canStartTalk({ sessionId: sessionId.value, sessionEnded: connView.get(`cell-${props.uid}`)?.sessionEnded ?? false }));
 const talkAvailable = computed(() => talkStartable.value && askTargets.value.length > 0);
+// An exchange and a round table wait on each seat's turn as this server sees it, so they seat only
+// this machine's terminals; a remote one is handed turns through the rows above them (#3506).
+const tableTargets = computed(() => (isRemote ? [] : askTargets.value.filter((target) => !target.source.host)));
+const exchangeable = (target: HandoffTarget): boolean => !isRemote && !target.source.host;
 
 function openAskMenu() {
   refreshAskTargets();
@@ -1022,23 +992,26 @@ async function askCell(target: HandoffTarget) {
 
 async function relayCell(target: HandoffTarget) {
   askMenuOpen.value = false;
-  const error = await pullSinceRelay(target, `cell-${props.uid}`, cwd.value);
+  const error = await pullSinceRelay(target, `cell-${props.uid}`, { cwd: cwd.value, host: props.remoteHost ?? null });
   if (error) showAskMsg(error);
 }
 
 // The send / bring cell actions (#3397). One partner in this directory or repo is acted on; several
 // open the Talk menu to choose; none says so. After a send the partner comes forward with the
 // keyboard, so the user reads what landed and presses Enter there.
-const relaySelf = (session: string): RelaySelf => ({ key: `cell-${props.uid}`, source: { sessionId: session, cwd: cwd.value, agent: agent.value } });
+const relaySelf = (session: string): RelaySelf => ({
+  key: `cell-${props.uid}`,
+  source: { sessionId: session, cwd: cwd.value, agent: agent.value, ...(isRemote ? { host: props.remoteHost } : {}) },
+});
 
 function relayHere(action: RelayAction): boolean {
-  if (!talkStartable.value || !sessionId.value) return false;
+  if (!cellActionAllowed(props.remoteHost, action) || !talkStartable.value || !sessionId.value) return false;
   void relayWithPartner(action, relaySelf(sessionId.value));
   return true;
 }
 
 async function relayWithPartner(action: RelayAction, self: RelaySelf) {
-  const pick = await findPartner(self.key, cwd.value, props.home);
+  const pick = await findPartner(self.key, cwd.value, props.home, undefined, props.remoteHost ?? null);
   if (pick.kind === "none") return showAskMsg("No other agent terminal in this directory or repo");
   if (pick.kind === "choose") return openAskMenu();
   await finishRelay(action, self, pick.partner);
@@ -1054,7 +1027,7 @@ async function finishRelay(action: RelayAction, self: RelaySelf, partner: Handof
 
 // The cell's own send button (#3399): shown, without any config, while this cell can send and some
 // partner is open, and named after the partner so the user learns the two can hand turns over.
-const livePartners = useRelayButton(() => `cell-${props.uid}`, cwd);
+const livePartners = useRelayButton(() => `cell-${props.uid}`, cwd, props.remoteHost ?? null);
 // This cell's part of what every cell's partner list reads: its session, directory and connection.
 watch([sessionId, cwd, () => connView.get(`cell-${props.uid}`)?.status], slotsChanged);
 onUnmounted(() => void nextTick(slotsChanged));
@@ -1170,7 +1143,7 @@ function teardown() {
   // Reap on the server over HTTP too — the WS `terminate` only reaches the server while
   // the socket is open, so a disconnected cell's close button would otherwise leave its tmux alive.
   // Not awaited, unlike the restart's: this cell is going back to its launch form either way.
-  if (id) void reapSessionOnServer(id, hostId.value);
+  if (id) void reapSessionOnServer(id, props.remoteHost ?? null);
   launched.value = false;
   recordNextCwd = false; // drop any pending fresh-launch record from a torn-down session
   sessionId.value = null;
@@ -1216,9 +1189,7 @@ function teardown() {
 const restarting = ref(false);
 const RESTART_FAILED_EN = "Couldn't end the old session, so nothing was restarted — try again, or close the cell.";
 async function restart(): Promise<void> {
-  // Ended where it runs: a peer's session is that server's to reap (common/peers.ts).
-  const host = hostId.value;
-  await restartWith((sessionToReap) => reapSessionOnServer(sessionToReap, host));
+  await restartWith((id) => reapSessionOnServer(id, props.remoteHost ?? null));
 }
 
 // Move the session to the subscription picked on the account mark (#2950): the restart, with the
@@ -1226,8 +1197,9 @@ async function restart(): Promise<void> {
 async function switchSubscription(tokenId: string): Promise<void> {
   const id = sessionId.value;
   if (!id) return;
-  const host = hostId.value;
-  await restartWith((sessionToReap) => switchTokenOnServer(sessionToReap, tokenId, host));
+  // The subscriptions are this machine's; a remote agent runs on the other machine's own login.
+  if (isRemote) return void termRef.value?.showHint(REMOTE_CELL_DECLINE_EN, "restart_alt");
+  await restartWith((sessionToReap) => switchTokenOnServer(sessionToReap, tokenId));
 }
 
 async function restartWith(reap: (sessionId: string) => Promise<boolean>): Promise<void> {
@@ -1293,7 +1265,8 @@ const SELF_ACTIONS: Record<CellSelfAction, () => boolean> = {
 // Every one of them but set-aside needs the terminal itself: on the launch form there is no session,
 // no prompt and no directory yet chosen, only the draft the form is showing. Stated as the rule
 // rather than per action, because checking each one separately missed two of them in review.
-const runCellAction = (action: CellSelfAction): boolean => (launched.value || action === "terminal-park") && SELF_ACTIONS[action]();
+const runCellAction = (action: CellSelfAction): boolean =>
+  (launched.value || action === "terminal-park") && cellActionAllowed(props.remoteHost, action) && SELF_ACTIONS[action]();
 
 function parkOrWake(): boolean {
   togglePark();
@@ -1481,7 +1454,7 @@ async function requestRemove(dir: string) {
   termRef.value?.terminate(); // free the worktree dir first (Windows locks a process's cwd)
   try {
     const res = await fetchWithTimeout(
-      peerApiPath(hostId.value, "/api/worktrees/remove"),
+      repoWritePath(props.remoteHost, "/api/worktrees/remove", dir),
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -1569,7 +1542,9 @@ const dotStatusClass = computed(() => (sunk.value ? SUNK_DOT_STATUS : DOT_STATUS
 // rather than a new element: it has to be legible in a filmstrip thumbnail, and the header track
 // is already full.
 const { isMissed, acknowledge: acknowledgeMissed } = useMissedAttention();
-const missedNotify = computed(() => isMissed(sessionId.value));
+// A remote session's mark is kept under its host as well, as the player records it (remoteAttention.ts).
+const attentionId = computed(() => activityKeyOf({ session: sessionId.value, remoteHost: props.remoteHost ?? undefined }));
+const missedNotify = computed(() => isMissed(attentionId.value));
 const dotMissedClass = computed(() => (missedNotify.value ? "ring-2 ring-amber ring-offset-2 ring-offset-[var(--cell-header-bg,var(--bg-panel))]" : ""));
 const statusLabel = computed(() => {
   const label = t(CELL_STATUS_KEY[status.value]);
@@ -1583,7 +1558,7 @@ const statusLabel = computed(() => {
 // be suppressed for the session the user is currently staring at. Either would otherwise leave a
 // ring pointing at the pane already on screen.
 watch(
-  () => [props.expanded, sessionId.value, missedNotify.value] as const,
+  () => [props.expanded, attentionId.value, missedNotify.value] as const,
   ([expanded, id, missed]) => {
     if (expanded && missed) acknowledgeMissed(id);
   },
@@ -1650,7 +1625,7 @@ async function saveMemo() {
   const previous = memo.value;
   memo.value = text || null;
   try {
-    const res = await fetchWithTimeout(peerApiPath(hostId.value, `/api/session/${encodeURIComponent(id)}/memo`), {
+    const res = await fetchWithTimeout(sessionWritePath(props.remoteHost, id, "memo"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
@@ -1719,11 +1694,7 @@ async function loadDiff() {
   }
   const reqId = ++diffReq;
   try {
-    const res = await fetchWithTimeout(
-      peerApiPath(hostId.value, `/api/worktrees/diff?cwd=${encodeURIComponent(cwd.value)}`),
-      undefined,
-      SLOW_COMMAND_TIMEOUT_MS,
-    );
+    const res = await fetchWithTimeout(dirApiUrl(dirKey.value ?? cwd.value, "/api/worktrees/diff"), undefined, SLOW_COMMAND_TIMEOUT_MS);
     if (reqId !== diffReq) return;
     const data = res.ok ? await jsonBody(res) : {};
     if (reqId !== diffReq) return;
@@ -1758,16 +1729,17 @@ function commitViaClaude() {
 const reasonOf = (data: Record<string, unknown>): string | null => (typeof data.reason === "string" ? data.reason : null);
 
 async function worktreeAction(endpoint: "push" | "pr"): Promise<Record<string, unknown> | null> {
-  if (!cwd.value || prBusy.value) return null;
+  const dir = cwd.value;
+  if (!dir || prBusy.value) return null;
   prBusy.value = true;
   prMsg.value = endpoint === "push" ? "Pushing…" : "Creating PR…";
   try {
     const res = await fetchWithTimeout(
-      peerApiPath(hostId.value, `/api/worktrees/${endpoint}`),
+      repoWritePath(props.remoteHost, `/api/worktrees/${endpoint}`, dir),
       {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ cwd: cwd.value }),
+        body: JSON.stringify({ cwd: dir }),
       },
       SLOW_COMMAND_TIMEOUT_MS,
     );
@@ -2002,7 +1974,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                  on the filmstrip thumbnail too (the CockpitHeader above), unlike the info chips
                  below, because it is identity rather than status. -->
             <CollectionMark :collection="collection" />
-            <PeerBadge v-if="launched && hostId" :host="hostId" />
+            <HostMark v-if="remoteHost" :host="remoteHost" />
             <AccountMark v-if="launched" :label="accountMarkLabel" :detail="accountMarkDetail" :choices="accountMarkChoices" @switch="switchSubscription" />
             <!-- The path is NOT here any more — it is the lead item on row 2 (see the
                `header-lead` template below). It had `min-w-[16ch]`, a floor of roughly a third of
@@ -2150,8 +2122,10 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
               v-bind="chromeProps"
               :can-park="true"
               :parked="parked"
+              :panes-hidden="isRemote"
+              :session-on-host="isRemote"
               :timeline-available="!!sessionId && agent === 'claude'"
-              :library-available="!!sessionId && agent === 'claude'"
+              :library-available="!!localSession && agent === 'claude'"
               :restart-available="launched && !!sessionId"
               :talk-available="talkAvailable"
               v-on="chromeEvents"
@@ -2232,6 +2206,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                       <span class="material-symbols-outlined" aria-hidden="true">forward_to_inbox</span>
                     </button>
                     <button
+                      v-if="exchangeable(target)"
                       type="button"
                       data-testid="cell-exchange-item"
                       :aria-label="t('tips.cell.exchangeTurnAria', { name: target.label })"
@@ -2246,8 +2221,8 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
                 </div>
                 <p v-if="!askTargets.length" class="m-0 px-2 py-1.5 font-sans text-[12px] text-dim">No other terminal to read</p>
                 <RoundTableMenu
-                  v-if="askTargets.length"
-                  :targets="askTargets"
+                  v-if="tableTargets.length"
+                  :targets="tableTargets"
                   :self-label="`#${uid}`"
                   :running="tableRunning"
                   :room="tableRoom"
@@ -2277,8 +2252,10 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
             </span>
           </span>
         </div>
-        <TimelineOverlay :session-id="sessionId" :cwd="cwd" :host="hostId" :open="timelineOpen" @close="timelineOpen = false" />
+        <TimelineOverlay :session-id="sessionId" :cwd="cwd" :host="remoteHost ?? null" :open="timelineOpen" @close="timelineOpen = false" />
+        <RemoteHostGone v-if="remoteHost && hostStatus === 'gone'" :host="remoteHost" />
         <TerminalView
+          v-else-if="mayConnect(hostStatus)"
           ref="termRef"
           class="cell-term"
           :class="CELL_TERM"
@@ -2289,14 +2266,14 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
           :agent="agent"
           :custom-agent="customAgentId"
           :account="accountId"
-          :host="hostId"
+          :remote-host="remoteHost ?? null"
           :launch="launchChoice"
           :hide-header="filmstrip"
           :expanded="expanded"
           :zoomed="zoomed"
           dev-terminal
-          :run-menu="!hostId"
-          :path-menu-picker="!filmstrip && !hostId"
+          run-menu
+          :path-menu-picker="!filmstrip"
           @session="onSession"
           @input="onTerminalInput"
           @cwd="onServerCwd"
@@ -2316,19 +2293,19 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
              literally the path's own click. Occasional navigations do not each deserve a permanent
              icon in a tiled cell. The menu itself is CellPathMenu, shared with every cell type. -->
           <template #header-lead>
-            <!-- On a peer, the place opens the Files pane — which reads the peer's directory (paneHost.ts)
-                 — and nothing more: the menu's other entries (reveal, insert, a shell here) act on THIS
-                 machine (common/peers.ts). -->
+            <!-- The menu's other items act on this machine, so a remote cell's path only opens its Files pane. -->
             <button
-              v-if="hostId"
+              v-if="isRemote"
               type="button"
-              data-testid="cell-peer-dir"
-              class="min-w-0 cursor-pointer truncate border-0 bg-transparent p-0 text-left font-mono text-[11px] text-dim hover:text-fg"
-              :class="DIR_TRUNCATE_FRONT"
-              :data-tip="t('pathMenu.browseFiles')"
+              data-testid="cell-dir"
+              class="cell-dir flex min-w-0 flex-auto cursor-pointer items-center border-0 bg-transparent p-0 text-left font-mono text-[11px]"
+              :class="CELL_HEADER_INK_DIM"
+              :data-tip="t('tips.cell.remoteBrowseFiles', { path: cwd ?? '' })"
               @click="emit('open-files')"
             >
-              {{ headerDir }}
+              <span class="min-w-0" :class="DIR_TRUNCATE_FRONT"
+                ><span class="cell-dir-path" :class="CELL_DIR_PATH">{{ headerDir }}</span></span
+              >
             </button>
             <CellPathMenu
               v-else
@@ -2342,7 +2319,7 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
             />
           </template>
           <template #header-actions>
-            <CopyCodeBlock v-if="sessionId && !hostId" ref="copyCodeRef" :class="CELL_BTN" :session-id="sessionId" :cwd="cwd" :agent="agent" />
+            <CopyCodeBlock v-if="sessionId" ref="copyCodeRef" :class="CELL_BTN" :session-id="sessionId" :cwd="cwd" :agent="agent" :host="remoteHost ?? null" />
             <button
               v-if="sendButton"
               type="button"
@@ -2359,7 +2336,6 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
             <!-- Row 2, away from close (#2353): the launch panel on this directory, with the agent to
                  pick — which the path menu's "New terminal here", a plain shell, cannot offer. -->
             <button
-              v-if="!hostId"
               class="cell-btn"
               :class="CELL_BTN"
               data-testid="cell-new-here-btn"
@@ -2517,15 +2493,12 @@ onUnmounted(() => document.removeEventListener("keydown", onDiffKey));
         :custom-agents="customAgents ?? []"
         :accounts="accounts ?? []"
         :account="accountId"
-        :peers="peerHosts"
-        :host="hostId"
         :open-session-ids="openSessionIds"
         :open-cwds="openCwds"
         @update:dir="onLaunchDir"
         @update:agent="choosePickedAgent"
         @update:choice="(value) => (launchChoice = value)"
         @update:account="(value) => (accountId = value)"
-        @update:host="(value) => (hostId = value)"
         @start="startPickedAgent"
         @resume="resumeSession"
         @run="(cmd) => emit('run', cmd)"

@@ -16,8 +16,6 @@ import type { NotifyKind } from "../../common/notifyKinds";
 export interface HeldBeep {
   kind: NotifyKind;
   cwd: string | null;
-  /** The peer server `cwd` is on (common/peers.ts); absent for this one. */
-  host?: string | null;
 }
 
 export interface BeepQueue {
