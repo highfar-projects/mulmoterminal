@@ -67,7 +67,7 @@ Paste this one line into PowerShell. Change `-Runtime` to suit.
 Save these three files into one folder:
 
 - [`mulmoterminal-launcher.ps1`](https://raw.githubusercontent.com/highfar-projects/mulmoterminal/main/tools/windows-launcher/mulmoterminal-launcher.ps1) — the launcher itself
-- [`ensure-peer.mjs`](https://raw.githubusercontent.com/highfar-projects/mulmoterminal/main/tools/windows-launcher/ensure-peer.mjs) — `both` uses it to add WSL to `peers`
+- [`ensure-peer.mjs`](https://raw.githubusercontent.com/highfar-projects/mulmoterminal/main/tools/windows-launcher/ensure-peer.mjs) — `both` uses it to add WSL to `remoteHosts`
 - [`launcher.config.example.json`](https://raw.githubusercontent.com/highfar-projects/mulmoterminal/main/tools/windows-launcher/launcher.config.example.json) — a sample of the settings file
 
 If you cloned the repository, or downloaded it with **Code → Download ZIP** and unpacked it, the
@@ -108,20 +108,23 @@ check what took effect (`-ShowConfig`) and how to uninstall (`-Uninstall`).
 ## How Windows + WSL2 fits together
 
 With `-Runtime both`, one Windows machine runs **two complete MulmoTerminal servers**, one per OS.
-The browser talks to only one of them. The Windows server **relays** the WSL one as a **peer**:
-`/peer/wsl/…` on the Windows server is `/…` on the WSL server, for ordinary requests and terminal
-connections alike.
+The browser talks to only one of them. The Windows server reaches the WSL one as a **remote host**,
+the feature upstream added in [#3506](https://github.com/receptron/mulmoterminal/issues/3506):
+`/remote/wsl/…` on the Windows server is forwarded to the WSL server.
+
+Until 2026-11-28 this fork had its own relay for this (`peers`, `/peer/wsl/…`). It was removed in
+favour of upstream's remote hosts, which do the same job and cover more of a cell.
 
 ```
 ┌──────────────────────────────┐   ┌──────────────────────────────────┐   ┌──────────────────────────────────┐
-│ Edge / Chrome app window      │   │ Windows server  :34568 (parent)  │   │ WSL2 server  :34567 (peer "wsl") │
+│ Edge / Chrome app window      │   │ Windows server  :34568 (parent)  │   │ WSL2 server  :34567 (host "wsl") │
 │                               │   │                                  │   │                                  │
 │ Windows cell ── /ws ──────────┼──►│ ws ─► node-pty ─► claude.exe     │   │                                  │
 │                               │   │       (psmux if installed)       │   │                                  │
-│ WSL cell ── /peer/wsl/ws ─────┼──►│ peer relay ── /ws ───────────────┼──►│ ws ─► node-pty ─► tmux ─► claude │
-│                               │   │  (HTTP + WS upgrade, piped       │   │                                  │
-│ /api/…, /ws/pubsub ───────────┼──►│   byte for byte)                 │   │                                  │
-│ /peer/wsl/api/…, …/ws/pubsub ─┼──►│ ─────────────────────────────────┼──►│ /api/…, /ws/pubsub               │
+│ WSL cell ── /remote/wsl/ws ───┼──►│ gateway ── /ws ──────────────────┼──►│ ws ─► node-pty ─► tmux ─► claude │
+│                               │   │  (terminals piped byte for byte, │   │                                  │
+│ /api/…, /ws/pubsub ───────────┼──►│   /api routes from a fixed table)│   │                                  │
+│ /remote/wsl/api/… ────────────┼──►│ ─────────────────────────────────┼──►│ /api/…                           │
 └──────────────────────────────┘   └──────────────────────────────────┘   └──────────────────────────────────┘
         ▲                                   ▲            own: ~/.mulmoterminal, ~/.claude, accounts,
         │ one window                        │                  token rotation, sessions, tmux
@@ -130,49 +133,45 @@ connections alike.
 
 ### The page stays on the Windows server
 
-The browser only ever opens the Windows server's address. The relay checks the request against the
-Windows server's own rules first, then hands it to WSL. Neither server has to loosen its checks to
-accept requests from the other. Terminal traffic is passed through unchanged, so every kind of cell
-(Claude, Codex, a launch command, …) works on WSL exactly as it does on Windows.
+The browser only ever opens the Windows server's address. The Windows server forwards a WSL cell's
+requests itself, so neither server has to loosen its checks to accept the other. Terminal traffic is
+passed through unchanged. Other requests cross only if they are in the gateway's table of routes
+(`common/remoteRoutes.ts`), each held to the cell's own directory; anything else is refused.
 
-### WSL is a peer because the config says so
+### WSL is a remote host because the config says so
 
 The Windows side's `~/.mulmoterminal/config.json` lists it. The launcher adds this entry the first
 time `both` runs (and makes a backup of the file before it does):
 
 ```json
-"peers": [{ "id": "wsl", "label": "WSL", "url": "http://127.0.0.1:34567" }]
+"remoteHosts": [{ "id": "wsl", "label": "WSL", "url": "http://127.0.0.1:34567" }]
 ```
 
-The browser names a peer by its id only, never by a URL, so no web page can point the relay
-somewhere else.
+- The URL must be a loopback address. WSL2 forwards its port to `127.0.0.1` on Windows, so no SSH
+  tunnel is needed here.
+- The browser names a host by its id only, never by a URL, so no web page can point the gateway
+  somewhere else.
+- The two servers must run the same major version, or the WSL cells say so instead of connecting.
+  The launcher runs the same package on both sides, so they normally match.
+- An older launcher wrote a `peers` entry instead. Nothing reads it any more; you can delete it.
 
 ### Every cell belongs to one server
 
-- The launch form's **Run on** picker chooses where a new cell runs. A WSL cell wears a **WSL**
-  badge in its header.
-- Everything about that cell is asked of the server it runs on: its terminal, transcript, resume
-  list, worktrees, memo and the questions it asks you. `/home/you/proj` on WSL and
-  `C:\Users\you\proj` are two different directories, and so is the same path on the two machines.
-- **Command cells** (Run-menu scripts, launch configs, configured launchers) run on the Windows
-  server only.
+- The launch panel's host picker chooses where a new cell runs. It appears only when
+  `remoteHosts` is set.
+- Everything about that cell is asked of the server it runs on: its terminal, status, Files pane,
+  git, transcript and the questions it asks you. `/home/you/proj` on WSL and `C:\Users\you\proj` are
+  two different directories, and so is the same path on the two machines.
+- What a WSL cell can and cannot do follows upstream's remote hosts. Upstream's plans list what is
+  not forwarded yet (for example the full-screen `/files` view and collections). This fork's own
+  additions that act on this machine (the launch-config menu, the devcontainer badge, external asks)
+  are not offered on a WSL cell.
 
 ### Nothing is shared between the two servers
 
 Each server has its own `~/.mulmoterminal/config.json`, its own `~/.claude` (log in to Claude Code
 on each side), its own [accounts](accounts.html) and [token rotation](token-rotation.html), and its
-own sessions and tmux server. The screen follows that:
-
-- When **Run on** is WSL, the launch form shows **WSL's** saved folders and accounts.
-- A WSL cell's account mark offers **WSL's** rotation tokens, with WSL's usage figures.
-- The header's usage gauge shows WSL's readings after a **WSL** label, for example
-  `WSL  /login 7d 26%  developer 5h 9% 7d 20%`. Hover over a figure to see whose it is.
-
-### Notifications reach the one window from both
-
-The page listens to both servers' activity, so the tab icon, the attention sound and the question
-pane cover WSL cells too. If WSL stops answering, its cells say the server is down instead of just
-looking slow.
+own sessions and tmux server.
 
 ### The launcher starts, restarts and stops both
 
@@ -186,7 +185,7 @@ looking slow.
 
 | What you see | What to do |
 | --- | --- |
-| No **Run on** picker in the launch form | The Windows side's `config.json` has no `peers`. Start once with `-Runtime both`, or add the entry above by hand |
-| WSL cells say the server is down | Right-click the tray icon → **ログを開く** (open log). The launcher's log records why WSL did not start (for example Node or Claude Code missing inside WSL) |
-| The usage gauge has no **WSL** section | WSL has nothing to show yet. Each server measures its own usage, so it appears once WSL has run Claude Code under a login |
+| No host picker in the launch panel | The Windows side's `config.json` has no `remoteHosts`. Start once with `-Runtime both` (with a launcher installed after 2026-11-28), or add the entry above by hand |
+| WSL cells say the host is unreachable | Right-click the tray icon → **ログを開く** (open log). The launcher's log records why WSL did not start (for example Node or Claude Code missing inside WSL) |
+| WSL cells report a version mismatch | The two servers run different major versions. Restart from the tray so both run `npx` again |
 | A WSL cell runs on a different subscription than expected | WSL uses its own `~/.claude` login and its own `tokenRotation`. Check WSL's `~/.mulmoterminal/config.json`, not the Windows one |

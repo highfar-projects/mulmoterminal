@@ -8,6 +8,110 @@ This file records **what changed and why**. For **how to actually use** a new fe
 
 Entries here are folded into the next release's heading when it ships.
 
+## mulmoterminal@13.12.0 — 2026-11-28
+
+> **Setup guide:** [13.12.0 — A tab for each collection and feed you open](https://receptron.github.io/mulmoterminal/guide/en/v13.12.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v13.12.0.html))
+
+### A tab per opened collection and feed, beside the index tab (#3600)
+
+Closes #3598. The screen tabs from #3578 keyed on the screen alone, so opening a second collection rewrote the one Collections tab. A tab now has a key: index routes and every other screen keep the screen, while `collectionDetail` / `feedDetail` are item tabs keyed by screen + project + slug (two projects' `/collections/tasks` are different collections, as in `pageKeyFor`). A new item tab goes after the last tab of its screen, an index tab before its screen's first item; revisiting a key moves that tab's path instead of adding one (`screenTabsModel.ts`). Item tabs take their title and icon from the list the index already reads (`/api/collections/list`, `/api/feeds`, with `?project=`) and show the slug until it answers (`screenTabItemLabels.ts`, `useScreenTabItemLabels.ts`): a list is read when a visit shows one of its tabs and on every visit until it has answered once; an answer replaces the previous one so renames and deletions arrive, a failed read keeps the last answer, and a visit during a read is owed one more read when it settles. Lookups use `Object.hasOwn`, so a slug such as `constructor` does not read the prototype. Rooms and Blueprints keep one tab each, since their sidebar would add a tab per click.
+
+### The Library asks whether a check can enforce a rule before drafting it (#3596)
+
+Closes #3595. Before the bundled `mulmoterminal-library` skill drafts a `CLAUDE.md` rule (`promote rule`, `repeat rule`, a tidy-up's `move`), it asks whether something that runs could hold it instead, strongest first: the structure, a type, a lint rule or CI check, a test, and the rule last. When one fits, the first candidate is an issue (or plan) for that check naming where it goes, the real mistake it must catch and what it must let through; the rule is offered only for what the check cannot hold. The Library entry in `features.md` (en/ja) says so.
+
+### Library Resume asks who holds a conversation the capped list does not reach (#3601)
+
+Closes #3343. Resume read `/api/sessions`, which is capped at the newest `SESSION_LIST_LIMIT` transcripts, and treated "not listed" as "free", so a conversation idle in another tab or device could be reopened by id and its original client sent `superseded`. `GET /api/sessions/occupancy?id=<id>` answers `attached` / `runningKey` for one id with no cap, built by the same `sessionOccupancyOf` as the list rows. The Library asks it only when the list was read and does not name the conversation (`needsOccupancy`); `libraryResume` refuses a held one, resumes a free one by `runningKey ?? id`, and resumes nothing on an unread answer or one about another id. The route is `NEVER_FORWARDED` for remote hosts.
+
+### A review finding holds the verdict only with evidence (#3591)
+
+Closes #3590. The bundled `mulmoterminal-review` skill gives a finding a sixth part, Evidence: a run (command and output), a static proof (the real entry point and caller and the code fact that makes the result wrong), or a quoted rule beside the contradicting line. A finding without it is reported as `UNVERIFIED` and counted as N, so it does not block LGTM; a REOPENING needs evidence too. `reviewPrompt()` in `server/routes/reviewLoop.ts` lists N beside P1/P2/P3, pinned by a spec.
+
+### Remote cells draw more Canvas cards from their host (#3592, #3597, #3599)
+
+Part of #3506, inactive unless remote hosts are configured. A remote cell's Canvas now draws documents (`presentDocument`), HTML pages (`presentHtml`), inline charts (`presentChart`), models (`presentShapeScript`), spreadsheets (`presentSpreadsheet`) and stories (`presentMulmoScript`) from the cell's host, read only. GuiPanel provides the card's host (`PLUGIN_HOST_KEY`) and the plugin runtime sends a remote card's dispatch to `/remote/<id>/api/plugin/<tool>`, opening none of this machine's `plugin:*:file:*` channels. The gateway forwards a plugin POST only when its `kind` is a listed read (`pluginReads` / `bodyKinds`), refusing saves, exports, generation, uploads and the agent's own call with 400; `kindFields` lists the fields a kind may carry, so a story's `save` that only reopens it passes and one carrying a script or beat does not. Movie and PDF bytes go through the byte proxy with the story's `root`.
+
+### A skill for verifying a change in a running MulmoTerminal (#3594)
+
+Closes #3593. Repo-local `.claude/skills/verify-mulmoterminal` with `scripts/verify-scratch.ts start | doctor | stop`: it starts the launcher from this checkout on a scratch HOME and explicit port, computes the tmux socket from that HOME with the server's own `homeScopeSuffix`, signals a process only once it is identified (recorded start time, command, log, instance entry, process group), and stops tmux only through the computed socket. `drive-shell.mjs` opens a Shell cell, types a marker and screenshots it. The decisions are in `scripts/verify-scratch-plan.ts`, pinned by a spec.
+
+## mulmoterminal@13.11.0 — 2026-11-28
+
+> **Setup guide:** [13.11.0 — Tabs for the screens you opened, and Japanese input that no longer doubles](https://receptron.github.io/mulmoterminal/guide/en/v13.11.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v13.11.0.html))
+
+### Feature-menu screens are kept after the first open (#3576)
+
+Part 1 of #3575. Rooms, Library, Blueprints, Skills, Processes and Usage are built on the first open and only hidden on close (`v-if="everOpened" v-show="open"`), so a reopen shows search text, selection, scroll and the conversation being read at once and re-reads in the background. `src/composables/overlayVisibility.ts` gives components under a kept screen `whileOverlayVisible` / `onOverlayShownAgain` (start and stop work, re-read on re-show) and `heldWhileClosed` (route-derived state does not switch while hidden); `overlayLastPlace.ts` returns a plain open of Rooms or Blueprints to the last place inside it. Every component under a kept screen re-reads when shown again, starts nothing while hidden, and drops an older answer arriving after a newer one. Also: Escape in the Library search no longer clears the field before the screen closes, `usage` joins `OVERLAY_ROUTES`, and a Blueprints answer typed for one step is cleared when the step changes.
+
+### Keys for the Library, Processes and Usage screens, and `screen-toggle` (#3577)
+
+Part 2 of #3575. New actions `screen-library`, `screen-processes` and `screen-usage` (keymap bindings and `run: "action"` header buttons; Library also gets a command-palette row), and `screen-toggle` (`src/composables/screenToggle.ts`): on a screen it goes back to where the screen was opened from, elsewhere to the screen opened last with its full path and query, and before any screen was opened it refuses. `useGridKeys` now leaves a keydown already `defaultPrevented`, which had made `screen-toggle` undo itself within one keypress. Labels in all five locales; `config.md` (en/ja) and the `mulmoterminal-keys` skill list the new actions.
+
+### Tabs for the screens opened so far (#3578)
+
+Part 3 of #3575. While a full-screen screen is in front, a strip of tabs under the toolbar lists every screen opened since the page loaded, Grid view first; a tab returns to its screen where it was left and × forgets it, the next (else previous, else the grid) coming to the front. `screenTabsModel.ts` is the pure model (a screen's sub-routes are one tab; the worklog is the Wiki's tab), `useScreenTabs.ts` records visits through `router.afterEach`, and `ScreenTabs.vue` draws them. Screen roots start at `top-(--screen-top)`, lowered by `:root:has([data-screen-tabs])`, so no screen knows about the strip. `returnToPlace` is shared by the tabs and `screen-toggle`.
+
+### Late review findings on the kept screens (#3587)
+
+Closes #3585. CodeRabbit findings on #3576 / #3577 that were merged without triage, checked against main and fixed with one spec each: Blueprints new build no longer puts a default back over a cleared answer and drops answers the new questions do not accept; the run view clears its draft when the question is asked again; spec review separates read and send errors; targets say so when a re-read fails over an empty list; skill eval and the Library list wait for an outstanding read before polling; Library marks and memory saves outdate stale reads; a skill removed during an edit is dropped when the edit ends; the Library changed-files diff stays until both sides answer. The guides and keys skill say `screen-toggle` single keys work on every screen, two-key sequences only on the grid.
+
+### A bare Cmd during an IME composition no longer sends the text twice (#3586)
+
+Closes #3584. xterm 6.0.0's `CompositionHelper.keydown` commits the open composition for any keydown outside keyCodes 20/229/16/17/18; Meta (91/93) is missing, so a Cmd press while composing sent the text once immediately and again on `compositionend` (xtermjs/xterm.js#6244, open upstream). A common trigger is Karabiner's "Cmd alone sends 英数/かな" rule. The terminal's custom key handler now asks `xtermImeKeyVerdict` (`src/composables/imeComposition.ts`) first: `false` for a composing `keydown` with `key === "Meta"` (`composingMeta.ts`), which xterm returns on before its composition helper runs, and `true` for the existing #1353 Safari confirmation. No `preventDefault`, so the IME still receives the key. Remove once an xterm release fixes the modifier list.
+
+### GridView.vue back under max-lines (#3589)
+
+Closes #3588. #3580 and #3581 each fit, but together put `src/components/GridView.vue` one code line over `max-lines`, so lint was red on main. The pure `drawChannelOf` helper moved beside `sessionChannelOf` in `src/components/remoteCell.ts`, unchanged, with a spec.
+
+### Remote hosts groundwork (#3562, #3567, #3568, #3571, #3572, #3573, #3574, #3579, #3580, #3581, #3582, #3583)
+
+For #3506, which is still open. Work toward a feature that is not ready yet; it is inactive unless configured and not documented yet.
+
+## mulmoterminal@13.10.0 — 2026-11-27
+
+> **Setup guide:** [13.10.0 — Two new themes, Okamoto Taro and Pink](https://receptron.github.io/mulmoterminal/guide/en/v13.10.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v13.10.0.html))
+
+### Built-in themes Okamoto Taro and Pink (#3570)
+
+Closes #3569. Two built-in themes join Midnight / Nord / Daylight / Solarized Light: `okamoto` (dark: near-black ground, vermilion accent, strong primary ANSI colours) and `pink` (light: pale pink ground, white panels, deep rose accent). Each has its id in `THEME_IDS` (`common/themeIds.ts`), a `THEMES` entry with all sixteen ANSI colours (`src/composables/useTheme.ts`), and a `:root[data-theme]` block with every token (`src/style.css`). Text, muted text, accent, and on-accent over both the accent and its hover clear 4.5:1, and so does every terminal foreground colour, ANSI black included, since xterm draws SGR 30 text in it.
+
+New tests: `test/scripts/style-theme-blocks.spec.ts` (every built-in has a complete stylesheet block), and in `useTheme.spec.ts` a palette sets none or all sixteen ANSI colours, and every terminal foreground colour clears 4.5:1 apart from a shrink-only list of what already fell short (twelve Solarized accents, Daylight's `brightCyan`).
+
+`okamoto` and `pink` become reserved, so a user-defined theme with either id is dropped on load, as `midnight` is. The Settings theme intro no longer counts the built-ins, in all five locales.
+
+## mulmoterminal@13.9.0 — 2026-11-27
+
+> **Setup guide:** [13.9.0 — Your own git commands no longer collide with MulmoTerminal](https://receptron.github.io/mulmoterminal/guide/en/v13.9.0.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v13.9.0.html))
+
+### Background git reads take no optional lock (#3564)
+
+Fixes #3556. `git status` refreshes a stale index and writes it back under `.git/index.lock`, and git does not wait for that lock, so a user's `git add` / `commit` / `switch` landing during one of the server's polls (dirty count, Files tree status, worktree checks) failed with `index.lock: File exists`. `git()` in `server/git/worktrees.ts` now spawns every child with `GIT_OPTIONAL_LOCKS=0` (`server/git/git-env.ts`), and so does the shared-app stamp in `server/backends/sharedApp/context.ts`. Only optional locks are dropped; the mandatory locks of real writes (`worktree add`, `checkout`, `fetch`, `update-ref`) are unchanged.
+
+### Files tree follows a file the host opened while the pane was starting (#3563)
+
+Fixes #3557. A path clicked in terminal output while the Files pane was closed opened the file but left the tree folded: the file came to the front while `start()` was still listing the root, so following only scrolled. `FilesPane.vue` records the path the host last asked for (`hostOpenedPath`), and `useFilesReveal` starts following with `showInTree` when the tab in front is that path; otherwise it scrolls only, as before.
+
+### Antigravity plan approval opens its own turn (#3560)
+
+Fixes #3559. Approving a plan in Antigravity's UI writes a `USER_INPUT` step with an empty `<USER_REQUEST>`. `antigravityPromptText` (now its own pure file) takes the first `<USER_REQUEST>` with text and falls back to what agy wrote outside its blocks, so the conversation view opens a turn at the approval and the last turn / finished-turn push carries it as the prompt.
+
+### Transcript turns in a mid-file read (#3554)
+
+Fixes #3553, follow-up to #3550. A read that starts partway through a Claude transcript (the conversation view's byte window and older pages, the latest-prompt, last-turn, current-turn-reply and prompt-history tails) begins with the open turn unknown (`windowTurnBoundary`): a submitted record (`promptSource`) opens a turn, an unsubmitted meta record opens none, and a `<command-…>` record ends the unknown state. Reads from the file's start keep the #3550 rule.
+
+### What's new dialog (#3566)
+
+For #3565. The dialog opens with "MulmoTerminal {version} is out!" and a short thank-you note asking users to spread the word, in all five locales.
+
+### Remote hosts groundwork (#3511, #3513, #3518, #3520, #3522, #3523, #3524, #3527, #3528, #3533, #3534, #3535, #3536, #3537, #3539, #3543, #3547, #3549, #3551, #3552, #3555, #3558)
+
+For #3506, which is still open. Work toward a feature that is not ready yet; it is inactive unless configured and not documented yet.
+
+### Dependencies (#3561)
+
+Library and tool versions updated.
+
 ## mulmoterminal@13.8.2 — 2026-11-26
 
 > **Setup guide:** [13.8.2 — A conversation moved to the background stays in view](https://receptron.github.io/mulmoterminal/guide/en/v13.8.2.html) ([日本語](https://receptron.github.io/mulmoterminal/guide/ja/v13.8.2.html))

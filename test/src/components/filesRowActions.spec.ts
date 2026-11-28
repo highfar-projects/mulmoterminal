@@ -393,3 +393,19 @@ describe("filesRowActions — the spreadsheet entry", () => {
     });
   });
 });
+
+// #3506. A root on a remote host: its rows still open, insert and change files there, but this
+// machine's file manager cannot show them, and the gallery lists and loads through this machine's routes.
+describe("filesRowActions — a root on a remote host", () => {
+  const remote = { cwd: "/srv/proj", terminal: { cwd: "/srv/proj" }, canvas: null, trash: true, onThisMachine: false };
+  it("offers no reveal on a file or a folder, and no gallery", () => {
+    expect(ids({ ...remote, pathRel: "a.md" })).toEqual(["insert-relative", "insert-absolute"]);
+    expect(ids({ ...remote, pathRel: "shots", isDir: true })).toEqual(["insert-relative", "insert-absolute"]);
+  });
+  it("keeps the new tab, the hash (fork-only, forwarded) and the file operations", () => {
+    expect(call({ ...remote, pathRel: "a.md" }).map((a) => a.id)).toEqual(["open-tab", "sha256", "insert-relative", "insert-absolute", ...FILE_OPS]);
+  });
+  it("offers both on this machine (control)", () => {
+    expect(ids({ ...remote, onThisMachine: true, pathRel: "shots", isDir: true })).toEqual(["open-gallery", "reveal", "insert-relative", "insert-absolute"]);
+  });
+});

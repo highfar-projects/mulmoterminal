@@ -10,6 +10,7 @@
 // process back, with the old config, and looks exactly like a restart that worked.
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 import { jsonBody } from "../jsonBody";
+import { sessionWritePath } from "../components/remoteCell";
 
 /** Everything the restart does to the world, injected so the ordering above can be tested. */
 export interface RestartSteps {
@@ -46,14 +47,14 @@ export async function restartSession(sessionId: string | null, steps: RestartSte
  *  Strictly `=== true`: an unreadable body parses to `{}`, and jsonBody's own warning is that a
  *  caller recording success must not take that for an answer. Unconfirmed here costs a retry; a
  *  false confirmation costs a restart that silently did not happen. */
-export async function reapSessionOnServer(sessionId: string): Promise<boolean> {
+export async function reapSessionOnServer(sessionId: string, host: string | null = null): Promise<boolean> {
   try {
     // DIVERGES FROM UPSTREAM (deliberate): SLOW_COMMAND_TIMEOUT_MS rather than the 8s default.
     // This tears down a pty AND its tmux session, and the deadline firing on a terminate that then
     // SUCCEEDS is the worst answer available here — it reads as reap-failed, so nothing reconnects
     // and the banner tells the user the old agent is still running when it is not. A genuinely hung
     // terminate only takes longer to report, which is the cheaper side to be wrong on.
-    const res = await fetchWithTimeout(`/api/session/${encodeURIComponent(sessionId)}/terminate`, { method: "POST" }, SLOW_COMMAND_TIMEOUT_MS);
+    const res = await fetchWithTimeout(sessionWritePath(host, sessionId, "terminate"), { method: "POST" }, SLOW_COMMAND_TIMEOUT_MS);
     if (!res.ok) {
       console.warn(`[restart] terminate ${sessionId} answered HTTP ${res.status}`);
       return false;

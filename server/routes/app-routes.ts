@@ -11,7 +11,11 @@
 import path from "node:path";
 import express, { type Express } from "express";
 import { mountAllRoutes } from "../infra/tools/plugins-registry.js";
-import { mountConfigRoutes } from "../config/config-routes.js";
+import { APP_CONFIG_FILE, mountConfigRoutes } from "../config/config-routes.js";
+import { getUpdateStatus } from "../config/update-status.js";
+import { loadRemoteHosts, mountRemoteHostsRoutes } from "../backends/hostGateway/remoteHostsRoutes.js";
+import { mountRemoteForwardRoutes, mountRemoteRawForwardRoutes } from "../backends/hostGateway/remoteForwardRoutes.js";
+import { mountRemoteBytesRoutes } from "../backends/hostGateway/remoteBytesRoutes.js";
 import { mountFilesBrowseRoutes } from "../files/files-browse.js";
 import { endTmuxSession, mountTmuxRoutes, type TmuxRouteDeps } from "../infra/process/tmux-routes.js";
 import { mountSwitchTokenRoutes } from "../infra/http/switch-token-routes.js";
@@ -344,21 +348,16 @@ function mountIssueSessions(
     closeFinished: async (entry) => closeSummary(entry, await closeImplementer(closeDeps, entry)),
   });
 }
-  
-// What must run after the gates but before express.json, in this order. Its own function so
-// mountAppRoutes stays under the length limit.
-function mountAheadOfParsers(app: Express, deps: AppRouteDeps): void {
-
-  // Ahead of express.json, carrying its own raw parser: a dropped file is bytes under its own
-  // content type, and a dropped .json would otherwise be parsed as a document rather than saved.
-  mountDropRoutes(app);
-}
 
 export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
   // FIRST, before any route, parser or static file (request-gates.ts).
   mountRequestGates(app, deps);
-  mountAheadOfParsers(app, deps);
   const clientDir = deps.clientDir;
+  // Ahead of express.json, carrying its own raw parser: a dropped file is bytes under its own
+  // content type, and a dropped .json would otherwise be parsed as a document rather than saved.
+  mountDropRoutes(app);
+  // The gateway's drop (#3506), at the same point for the same reason.
+  mountRemoteRawForwardRoutes(app, { remoteHosts: () => loadRemoteHosts(APP_CONFIG_FILE).hosts });
 
   app.use(express.json({ limit: "25mb" }));
 
@@ -495,6 +494,11 @@ export function mountAppRoutes(app: Express, deps: AppRouteDeps): void {
   // The dated release guides a user has not been shown since their last upgrade, recorded as
   // seen as they are answered (POST /api/whats-new).
   mountWhatsNewRoutes(app);
+
+  // The other MulmoTerminal servers this one forwards to over ssh tunnels (GET /api/remote-hosts).
+  mountRemoteHostsRoutes(app, { configFile: APP_CONFIG_FILE, localVersion: () => getUpdateStatus().version });
+  // ...as JSON, and their files and rendered documents as bytes, for a remote cell's Files pane Preview.
+  [mountRemoteForwardRoutes, mountRemoteBytesRoutes].forEach((mount) => mount(app, { remoteHosts: () => loadRemoteHosts(APP_CONFIG_FILE).hosts }));
 
   // Where this install keeps its docs and source, for the bundled help skill (GET /api/help/sources).
   mountHelpRoutes(app);

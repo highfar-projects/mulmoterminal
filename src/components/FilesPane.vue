@@ -50,8 +50,10 @@ import { menuAttrsFor, useFilesRowMenu } from "../composables/useFilesRowMenu";
 import { isTreeOpAction, useTreeFileOps } from "../composables/useTreeFileOps";
 import { focusTreeRow } from "./treeRowFocus";
 import { askTheMachine } from "./filesPaneApi";
+import { isRemoteHost } from "./remoteCell";
 import { selectionReferenceText } from "../composables/selectionReferenceText";
 import type { FileLocation } from "../composables/filePathLocation";
+import type { PaneTarget } from "../../common/paneCommand";
 import { useI18n } from "vue-i18n";
 import { useFileOutline } from "../composables/useFileOutline";
 import FilesOutlineMenu from "./FilesOutlineMenu.vue";
@@ -94,7 +96,13 @@ const props = defineProps<{
   // The session of the cell beside the pane, which the view a new file opens in is remembered by
   // (#3075). Absent where there is no cell — the full-screen view — and then every file opens on its editor.
   viewModeSession?: string | null;
+  // The remote host the root is on (#3506), or absent for this machine. Its files are read and
+  // written there; what this machine would do with them (the OS, the Canvas, pages and pictures) is not offered.
+  host?: string | null;
 }>();
+const host = (): string | null => props.host ?? null;
+const onRemote = computed(() => isRemoteHost(props.host));
+const canvasHere = computed(() => !!props.canvasTarget && !onRemote.value);
 const emit = defineEmits<{
   close: [];
   /** The close button was pressed. Carries the save, so a host can finish closing even if this pane
@@ -107,10 +115,10 @@ const emit = defineEmits<{
 
 // The tree is its own thing now (#2158): what has been read, what is expanded, what is on screen.
 // The markup for it stays here.
-const tree = useFilesTree(() => props.cwd);
+const tree = useFilesTree(() => props.cwd, host);
 // And so is the open file: the buffer, the editor it is shown in, the reader's place in it, and
 // every way it is written back. Destructured because the template names these directly.
-const file = useOpenFile(() => props.cwd);
+const file = useOpenFile(() => props.cwd, host);
 const { openPath, openName, dirty, editSeq, saving, fileError, unpreviewable, conflict, showPreview, previewKind, previewSrc, dirConfigReport } = file;
 // A file outside the root, open on its own (#3238): read and saved against its own directory by the
 // request builders, and offered nothing of the root's — no row in the tree, no History or Changes
@@ -118,11 +126,14 @@ const { openPath, openName, dirty, editSeq, saving, fileError, unpreviewable, co
 const outsideFile = computed(() => openPath.value !== null && isOutsidePath(openPath.value));
 const pathUnderRoot = computed(() => (outsideFile.value ? null : openPath.value));
 // The open file's Preview as a tab of its own, with the toolbar the pane has no need of (#3238).
-const previewTab = computed(() => (openPath.value && previewKind.value ? previewTabUrl(previewKind.value, props.cwd, openPath.value) : null));
+// A tab of its own is this server's page: a remote file's Preview stays in the pane (#3506).
+const previewTab = computed(() =>
+  openPath.value && previewKind.value && !onRemote.value ? previewTabUrl(previewKind.value, props.cwd, openPath.value) : null,
+);
 const openPreviewTab = (): void => {
   if (previewTab.value) window.open(previewTab.value, "_blank", "noopener,noreferrer");
 };
-const { mediaKind, mediaSrc } = openFileMedia(file, () => props.cwd);
+const { mediaKind, mediaSrc } = openFileMedia(file, () => props.cwd, host);
 const { flush, save, overwrite, discardAndReload, openInOs } = file;
 // Which files are open as tabs, and which is in front (#2267). Every open below goes through it, so
 // a path that already has a tab is brought forward rather than opened twice.
@@ -132,7 +143,7 @@ const tabs = useFilesTabs(file, carried.inherit, () => gallery.close());
 const gallery = useFilesGallery(() => props.cwd);
 // The folder the empty file area shows (#3120): the last one clicked in the tree. Read only while no
 // file is open and no gallery covers it — and only drawn then, so its tiles never play unseen.
-const folderShown = computed(() => !openPath.value && gallery.dir.value === null);
+const folderShown = computed(() => !onRemote.value && !openPath.value && gallery.dir.value === null);
 const folder = useFolderView(
   () => props.cwd,
   () => folderShown.value,
@@ -141,11 +152,19 @@ const folder = useFolderView(
 // root has no row, so nothing is marked while it is shown.
 const currentRowPath = computed(() => openPath.value ?? (folderShown.value && folder.dir.value ? folder.dir.value : null));
 const { openRequested, openFromTerminal } = useRequestedOpen(tabs, file, (pathRel) => canvasMode.hide(pathRel));
+// The file the host last asked for, so a startup can tell it from the remembered front tab (#3557).
+// Not the read generation: the restore's own open bumps that too, and its folders are the reader's
+// to keep closed. A path, not a flag: an open still in flight or declined leaves another tab in front.
+let hostOpenedPath: string | null = null;
+function openForHost(pathRel: string): string {
+  hostOpenedPath = pathRel;
+  return pathRel;
+}
 const strip = tabs.strip;
 const { showStrip, focusablePath, labels } = tabStripView(strip, openPath);
 const storiesRoots = computed<StoriesRoots>(() => props.storiesRoots ?? { workspaces: [], roots: [] });
 // The open file drawn by the Canvas's plugin view, in place of the editor (#3008).
-const canvasMode = useFilesCanvasMode({ enabled: () => !!props.canvasTarget, cwd: () => props.cwd, storiesRoots: () => storiesRoots.value, file, tabs });
+const canvasMode = useFilesCanvasMode({ enabled: () => canvasHere.value, cwd: () => props.cwd, storiesRoots: () => storiesRoots.value, file, tabs });
 const { active: showCanvas, card: canvasCard, openable: canvasOpenable } = canvasMode;
 
 const editorHost = ref<HTMLDivElement>();
@@ -193,8 +212,9 @@ const rowActionsFor = (node: TreeNode): FilesRowAction[] =>
     // The same pair the header's Canvas button is drawn from, so a row can never offer what that
     // button would refuse — `canvasTarget` is "there is a cell to put a Canvas beside" and the
     // overlay mount has none.
-    canvas: props.canvasTarget ? { roots: storiesRoots.value } : null,
+    canvas: canvasHere.value ? { roots: storiesRoots.value } : null,
     trash: fileOps.trash.value,
+    onThisMachine: !onRemote.value,
   });
 
 /** The @ button and key (#2575): the reference for the selection, at the terminal's prompt, not sent. */
@@ -242,8 +262,8 @@ function runRowAction(action: FilesRowAction): void {
   // the local server does it (#2039) — through filesPaneApi, like every other request here.
   else if (action.id === "reveal") void file.reportFailure(askTheMachine("/api/files/reveal", action.pathAbs, `could not show ${action.pathAbs}`));
   else if (action.id === "insert-relative" || action.id === "insert-absolute") emit("insert-text", action.text);
-  // Asked of the server the directory is on, a peer included: the hash is of ITS file.
-  else if (action.id === "sha256") void fileHash.open(props.cwd, action.pathRel, paneHost.value);
+  // Asked of the server the directory is on, a remote host included: the hash is of ITS file.
+  else if (action.id === "sha256") void fileHash.open(props.cwd, action.pathRel, host());
   else if (isTreeOpAction(action)) void fileOps.run(action);
 }
 
@@ -251,6 +271,7 @@ function runRowAction(action: FilesRowAction): void {
 const focusRow = (p: string) => focusTreeRow(treeEl.value, p);
 const fileOps = useTreeFileOps({
   cwd: () => props.cwd,
+  host,
   tree,
   tabs,
   file,
@@ -306,7 +327,7 @@ function focusAfterTabMove(): void {
 const treeEl = useTemplateRef<HTMLElement>("treeEl");
 
 // What git sees, the open file's changes against HEAD, and its earlier versions.
-const { gitStatus, git, head, showChanges, history } = useFilesPaneGit(() => props.cwd, { ...file, openPath: pathUnderRoot });
+const { gitStatus, git, head, showChanges, history } = useFilesPaneGit(() => props.cwd, { ...file, openPath: pathUnderRoot }, host);
 
 async function reloadTree(): Promise<void> {
   void gitStatus.refresh();
@@ -422,23 +443,12 @@ function teardown(): void {
 // it in the same breath (Codex on #2102).
 let started: Promise<void> = Promise.resolve();
 
-// How many files the host has asked this pane to open. A path clicked in terminal output while no pane
-// was open mounts the pane and opens the file one tick later, while the start is still running — and
-// following the front tab only begins once the start is done, so the tree would stay collapsed on a
-// file the user just asked for. Counted rather than read from the file's generation, which the
-// restore's own open moves too.
-let hostOpens = 0;
-const openFromHost = (pathRel: string, location: FileLocation | undefined, newTab: boolean): Promise<void> => {
-  hostOpens += 1;
-  return openFromTerminal(pathRel, location, newTab);
-};
-
 async function start(): Promise<void> {
   // The pane's switch, not a file's, so a file opened for this start keeps it as an open pane would.
   // Before any await: a start that a reload has since replaced must not reach it (#3122).
   sideBySide.switchedOn.value = props.initialState?.sideBySide === true;
   const reqIdAtStart = file.generation();
-  const hostOpensAtStart = hostOpens;
+  hostOpenedPath = null;
   const startedAt = startEpoch();
   await nextTick();
   if (editorHost.value) file.attach(editorHost.value);
@@ -447,11 +457,13 @@ async function start(): Promise<void> {
   void gitStatus.refresh();
   await tree.loadRoot();
   await restore(props.initialState ?? null, reqIdAtStart);
-  if (!followFrontTab(startedAt, hostOpens !== hostOpensAtStart)) return;
+  if (!followFrontTab(startedAt, hostOpenedPath)) return;
   // An explicitly requested path wins over whatever was remembered — it is the more recent
   // intent (a clicked path in terminal output).
   if (props.requestedPath) void openRequested(requestedUnderRoot(props.requestedPath), props.requestedLocation ?? null);
 }
+
+const showFile = showFileWith({ tabs, file, canvasMode, sideBySide, openAt: openFromTerminal });
 
 // A URL may spell a root file absolute; the pane reads an absolute tab path as a file OUTSIDE the
 // root (#3238), so one under it is put back relative first — and one written relative is left as
@@ -468,7 +480,7 @@ const restore = (state: FilesPaneState | null, reqIdAtStart: number): Promise<vo
 watch(
   () => JSON.stringify([props.requestedPath ?? null, props.requestedLocation ?? null]),
   () => {
-    if (props.requestedPath) void openRequested(requestedUnderRoot(props.requestedPath), props.requestedLocation ?? null);
+    if (props.requestedPath) void openRequested(openForHost(requestedUnderRoot(props.requestedPath)), props.requestedLocation ?? null);
   },
 );
 
@@ -510,9 +522,9 @@ defineExpose({
   // A page, an SVG or a table comes up drawn: a path clicked in terminal output to a chart is asking
   // to see the chart, and a CSV opened from there as a table before the pane took the click (#2559).
   // Markdown opens as it always has.
-  openFile: openFromHost,
+  openFile: (pathRel: string, location: FileLocation | undefined, newTab: boolean) => openFromTerminal(openForHost(pathRel), location, newTab),
   /** A file in a given view and at a given line, for an agent's `showInPane` or a check item (#3022). */
-  showFile: showFileWith({ tabs, file, canvasMode, sideBySide, openAt: openFromHost }),
+  showFile: (target: PaneTarget) => showFile({ ...target, path: openForHost(target.path) }),
   /** The `files-insert-selection` key (#2575), reached from the grid like the tab keys. */
   insertSelection,
   /** The `files-tab-*` keys (#2267), reached from the grid like the finder's. */
@@ -574,7 +586,7 @@ defineExpose({
       />
       <!-- Only in the right pane: this pane is also mounted full-screen by FilesOverlay, whose base
            is a query string, and the plugin views stay off that surface (docs/file-surfaces.md). -->
-      <FilesCanvasButton v-if="canvasTarget && canvasOpenable" :active="showCanvas" :disabled="saving" @toggle="carried.choose(() => canvasMode.toggle())" />
+      <FilesCanvasButton v-if="canvasHere && canvasOpenable" :active="showCanvas" :disabled="saving" @toggle="carried.choose(() => canvasMode.toggle())" />
       <FilesSaveButton v-if="openPath" :dirty="dirty" :saving="saving" @save="save" />
       <!-- Each panel's only entrance that needs no configuration: neither `files-find` nor
            `files-search` has a default binding, so without these the features are invisible to
@@ -659,7 +671,7 @@ defineExpose({
              that has content is an invitation to save, and saving is what destroyed it (#2038). -->
         <FilesUnpreviewable
           v-else-if="unpreviewable"
-          v-bind="{ kind: mediaKind, src: mediaSrc, name: openName, message: unpreviewable }"
+          v-bind="{ kind: mediaKind, src: mediaSrc, name: openName, message: unpreviewable, canOpen: !onRemote }"
           @open-in-os="openInOs"
         />
         <!-- `allow-scripts` and deliberately NOT `allow-same-origin`: the document renders a `.md`
@@ -695,8 +707,16 @@ defineExpose({
         />
       </section>
     </div>
-    <FileFinder v-if="finderOpen" :cwd="cwd" :seed="finderSeed" @pick="onFinderPick" @close="closeFinder" />
-    <FileSearch v-if="search.open.value" :cwd="cwd" :buffer="search.buffer.value" :seed="searchSeed" @pick="search.onPick" @close="search.close" />
+    <FileFinder v-if="finderOpen" :cwd="cwd" :host="host()" :seed="finderSeed" @pick="onFinderPick" @close="closeFinder" />
+    <FileSearch
+      v-if="search.open.value"
+      :cwd="cwd"
+      :host="host()"
+      :buffer="search.buffer.value"
+      :seed="searchSeed"
+      @pick="search.onPick"
+      @close="search.close"
+    />
     <FilesRowMenuPanel ref="rowMenuPanel" :menu="rowMenu" @nav="rowMenuApi.onMenuNav" @pick="rowMenuApi.pick" />
     <PreviewCodeBlockDialog v-if="previewScroll.codeBlock?.shown.value" :lookup="previewScroll.codeBlock.shown.value" @close="previewScroll.codeBlock.close" />
     <PreviewCopiedNotice v-if="previewScroll.codeBlock?.copied.value" :notice="previewScroll.codeBlock.copied.value" />

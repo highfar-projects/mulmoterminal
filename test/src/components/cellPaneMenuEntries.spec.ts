@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { hasChoice, historyEntries, toolEntries, type CellPaneMenuState } from "../../../src/components/cellPaneMenuEntries";
+import { actionsOnly, hasChoice, historyEntries, toolEntries, type CellPaneMenuState } from "../../../src/components/cellPaneMenuEntries";
 
 const t = (key: string) => key;
 const state = (over: Partial<CellPaneMenuState> = {}): CellPaneMenuState => ({
@@ -117,5 +117,23 @@ describe("hasChoice", () => {
     expect(hasChoice(canvasOnly)).toBe(false);
     expect(hasChoice(historyEntries(state(), t))).toBe(true);
     expect(hasChoice([])).toBe(false);
+  });
+});
+
+describe("actionsOnly", () => {
+  it("keeps talk and restart and drops every pane, with no separator above the first", () => {
+    const entries = actionsOnly(toolEntries(state({ talkAvailable: true, restartAvailable: true, collectionsAvailable: true }), t));
+    expect(ids(entries)).toEqual(["talk", "restart"]);
+    expect(entries.map((entry) => entry.separated)).toEqual([false, false]);
+  });
+  it("leaves nothing to choose when there is no action", () => {
+    expect(hasChoice(actionsOnly(toolEntries(state(), t)))).toBe(false);
+  });
+  // #3506. A remote agent cell still opens its tool calls, read on its host.
+  it("keeps the panes asked for, above the actions with the divider between", () => {
+    const entries = actionsOnly(toolEntries(state({ talkAvailable: true, restartAvailable: true }), t), ["tools"]);
+    expect(ids(entries)).toEqual(["tools", "talk", "restart"]);
+    expect(entries.map((entry) => entry.separated)).toEqual([false, true, false]);
+    expect(ids(actionsOnly(toolEntries(state(), t), ["tools"]))).toEqual(["tools"]);
   });
 });

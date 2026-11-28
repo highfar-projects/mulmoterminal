@@ -46,6 +46,7 @@ import { createPtySizeSender, type PtySizeSender } from "./ptyWidthSettle";
 import type { CanvasAddon } from "@xterm/addon-canvas";
 import "@xterm/xterm/css/xterm.css";
 import { connWsUrl, type ConnTargetUrlInput } from "../components/wsUrl";
+import { isRemoteHost } from "../components/remoteCell";
 import { connectionWillReturn, reconnectDelayMs, shouldReconnect } from "./reconnectPolicy";
 import type { RunCommand } from "../components/runCommand";
 import { readableSlot, type SlotCandidate, type SlotInfo } from "./readableSlot";
@@ -57,7 +58,7 @@ import { TERMINAL_FONT_SIZE_DEFAULT } from "../../common/terminalFontSize";
 import { NARROW_AMBIGUOUS_FAMILY, TERMINAL_FONT_FAMILY_DEFAULT } from "../../common/terminalFontFamily";
 import { getTerminalSubmitMode } from "./terminalSubmitMode";
 import { clipboardActionFor } from "../../common/terminalClipboard";
-import { isImeConfirming } from "./imeComposition";
+import { xtermImeKeyVerdict } from "./imeComposition";
 import { getActiveKeymap } from "./activeKeymap";
 import { wireCopyOnSelect } from "./terminalCopyOnSelect";
 import { forgetFilePathLinks, registerFilePathLinks } from "./terminalFileLinks";
@@ -70,7 +71,7 @@ export type ConnStatus = "connecting" | "connected" | "disconnected";
 // What the session STARTS as — the agent (absent = Claude), the provider/model pick (#584), the
 // custom agent (#1414) and the account (#2215) — is taken from the endpoint builder's own input, so
 // the two cannot disagree about a field the URL is built from.
-export interface ConnTarget extends Pick<ConnTargetUrlInput, "agent" | "launch" | "customAgent" | "account"> {
+export interface ConnTarget extends Pick<ConnTargetUrlInput, "agent" | "launch" | "customAgent" | "account" | "remoteHost"> {
   sessionId: string | null;
   cwd: string | null;
   devTerminal: boolean;
@@ -367,8 +368,9 @@ function wireTerminalInput(term: Terminal, c: Conn): void {
     // all three below would otherwise claim it. Each already refuses `e.isComposing`, which covers
     // Chrome and Firefox — this is the Safari case, where compositionend has already fired and the
     // flag is false by now (#1353). `true` hands the key back to xterm, which is what happens
-    // anyway when none of the three matches.
-    if (isImeConfirming(e)) return true;
+    // anyway when none of the three matches; `false` keeps one away from xterm's own IME handling.
+    const imeVerdict = xtermImeKeyVerdict(e);
+    if (imeVerdict !== undefined) return imeVerdict;
     if (clipboardActionFor(getActiveKeymap(), e, term.hasSelection())) return false;
     if (!onSend(e)) return false;
     // BEFORE the bytes, so the app is back at the bottom when the submit lands rather than
@@ -449,7 +451,8 @@ function buildTerminal(swallowedMouseModes: Set<number>, font: TerminalFont): Te
 
 // The wiring that needs the connection itself, so it is re-applied to every terminal a slot owns.
 function wireTerminalToConn(term: Terminal, c: Conn): void {
-  registerFilePathLinks(term, { cwd: () => c.knownCwd, session: () => c.knownSessionId });
+  // A path a remote terminal prints names a file on that machine, which only its Files pane reads.
+  registerFilePathLinks(term, { cwd: () => c.knownCwd, session: () => c.knownSessionId, host: isRemoteHost(c.target.remoteHost) ? c.target.remoteHost : null });
   wireTerminalInput(term, c);
   if (c.theme) term.options.theme = c.theme;
 }
@@ -882,11 +885,11 @@ const slotCandidate = (c: Conn): SlotCandidate => ({
   sessionId: c.knownSessionId,
   cwd: c.knownCwd ?? c.target.cwd,
   agent: c.target.agent ?? "claude",
+  host: isRemoteHost(c.target.remoteHost) ? c.target.remoteHost : null,
 });
 
-export function listSlots(): SlotInfo[] {
-  return [...conns.values()].map(slotCandidate).flatMap((candidate) => readableSlot(candidate) ?? []);
-}
+// A remote cell's conversation is read on its host, so its slot is listed with that host (#3506).
+export const listSlots = (): SlotInfo[] => [...conns.values()].flatMap((c) => readableSlot(slotCandidate(c)) ?? []);
 
 /** Whether the slot still exists at all. What a close path asks before cleaning up: a cell whose
  *  own teardown already ran (TerminalCell's close button) has no slot left, and cleaning up again

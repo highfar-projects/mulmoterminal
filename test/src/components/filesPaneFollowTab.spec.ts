@@ -82,24 +82,46 @@ describe("the Files tree follows the tab in front", () => {
     expect(scrolled).toContain("docs/a.md");
   });
 
-  // A path clicked in terminal output while no pane was open: the grid mounts the pane and opens the
-  // file one tick later (TerminalGrid's showClickedPath), while the pane is still starting. The file
-  // opened, and the tree stayed collapsed, because following only began once the start had finished.
-  it("follows a file the host opened while the pane was still starting", async () => {
-    // The root's listing is the slow part of a start (a big folder, a Windows disk): the file's own
-    // text arrives first.
-    const answer = globalThis.fetch;
+  // #3557. A path clicked in terminal output opens the pane and the file together, so the file comes
+  // to the front while the root is still being listed — before following starts.
+  const mountWithRootHeld = (): { w: VueWrapper; releaseRoot: () => void } => {
+    let releaseRoot = (): void => {};
+    const rootHeld = new Promise<void>((resolve) => (releaseRoot = resolve));
+    const serve = globalThis.fetch;
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input), "https://x");
-      if (url.pathname.includes("/list") && (url.searchParams.get("path") ?? "") === "") await new Promise((resolve) => setTimeout(resolve, 30));
-      return answer(input);
+      if (url.pathname.includes("/list") && (url.searchParams.get("path") ?? "") === "") await rootHeld;
+      return serve(input);
     }) as unknown as typeof fetch;
-    const w = mount(FilesPane, { props: { cwd: "/proj" }, attachTo: document.body });
-    await (w.vm as unknown as { openFile: (p: string) => Promise<void> }).openFile("docs/deep/x.md");
-    await new Promise((resolve) => setTimeout(resolve, 60));
+    const w = mount(FilesPane, { props: { cwd: "/proj", initialState: { tabs: [], activePath: null, expanded: [] } }, attachTo: document.body });
+    return { w, releaseRoot };
+  };
+  const rowsAfterRoot = async (w: VueWrapper, releaseRoot: () => void): Promise<string[]> => {
     await flushPromises();
+    releaseRoot();
+    await flushPromises();
+    return rows(w);
+  };
+  const SHOWN = ["docs", "docs/deep", "docs/deep/x.md", "docs/a.md", "readme.md"];
 
-    expect(rows(w)).toEqual(["docs", "docs/deep", "docs/deep/x.md", "docs/a.md", "readme.md"]);
+  it("follows a file the host opened while the pane was still starting", async () => {
+    const { w, releaseRoot } = mountWithRootHeld();
+    void (w.vm as unknown as { openFile: (p: string) => Promise<void> }).openFile("docs/deep/x.md");
+    expect(await rowsAfterRoot(w, releaseRoot)).toEqual(SHOWN);
+    expect(scrolled).toContain("docs/deep/x.md");
+  });
+
+  it("follows a file the route asked for while the pane was still starting", async () => {
+    const { w, releaseRoot } = mountWithRootHeld();
+    await w.setProps({ requestedPath: "docs/deep/x.md" });
+    expect(await rowsAfterRoot(w, releaseRoot)).toEqual(SHOWN);
+    expect(scrolled).toContain("docs/deep/x.md");
+  });
+
+  it("follows a file an agent showed while the pane was still starting", async () => {
+    const { w, releaseRoot } = mountWithRootHeld();
+    void (w.vm as unknown as { showFile: (t: { path: string; view: string }) => Promise<void> }).showFile({ path: "docs/deep/x.md", view: "editor" });
+    expect(await rowsAfterRoot(w, releaseRoot)).toEqual(SHOWN);
     expect(scrolled).toContain("docs/deep/x.md");
   });
 });

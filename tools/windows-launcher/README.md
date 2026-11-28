@@ -10,7 +10,7 @@ MulmoTerminal をコンソール窓なしで起動し、Edge か Chrome のア�
 | --- | --- | --- |
 | `windows` | MulmoTerminal | Windows 側だけ |
 | `wsl` | MulmoTerminal (WSL) | WSL2 の Linux 側だけ |
-| `both` | MulmoTerminal (Windows + WSL) | 両方。Windows 側の窓 1 つで、WSL 側のセルも開ける（peers 機能） |
+| `both` | MulmoTerminal (Windows + WSL) | 両方。Windows 側の窓 1 つで、WSL 側のセルも開ける（本家の remoteHosts 機能） |
 
 ## 入れる・更新する
 
@@ -35,7 +35,7 @@ PowerShell で次の 1 行を実行します。
 次の 3 つのファイルを、同じフォルダに保存します。
 
 - [`mulmoterminal-launcher.ps1`](https://raw.githubusercontent.com/highfar-projects/mulmoterminal/main/tools/windows-launcher/mulmoterminal-launcher.ps1) — ランチャー本体
-- [`ensure-peer.mjs`](https://raw.githubusercontent.com/highfar-projects/mulmoterminal/main/tools/windows-launcher/ensure-peer.mjs) — `both` で `peers` に WSL 側を足すのに使う
+- [`ensure-peer.mjs`](https://raw.githubusercontent.com/highfar-projects/mulmoterminal/main/tools/windows-launcher/ensure-peer.mjs) — `both` で `remoteHosts` に WSL 側を足すのに使う
 - [`launcher.config.example.json`](https://raw.githubusercontent.com/highfar-projects/mulmoterminal/main/tools/windows-launcher/launcher.config.example.json) — 設定ファイルの見本
 
 リポジトリを clone してあるか、GitHub の **Code → Download ZIP** で取って展開したなら、`tools\windows-launcher` フォルダにそろっています。
@@ -84,8 +84,8 @@ powershell -ExecutionPolicy Bypass -File .\mulmoterminal-launcher.ps1 -Install -
 | `WslDistro` | 空（既定のディストリビューション） | `wsl -l -v` で確認できる名前 |
 | `WslWorkDir` | `~` | WSL 側の作業フォルダ。無ければ作る |
 | `WslNodeVersion` | 空（ログインシェルの npx） | WSL 側の Volta で使う Node のバージョン |
-| `EnsurePeer` | `true` | `both` のとき、`~/.mulmoterminal/config.json` の `peers` に WSL 側が無ければ足す |
-| `PeerId` / `PeerLabel` | `wsl` / `WSL` | その peer の id と、画面に出る名前 |
+| `EnsurePeer` | `true` | `both` のとき、`~/.mulmoterminal/config.json` の `remoteHosts` に WSL 側が無ければ足す（以前の版が書いた `peers` は使われなくなったので、消してかまいません） |
+| `PeerId` / `PeerLabel` | `wsl` / `WSL` | その remoteHosts の項目の id と、画面に出る名前 |
 
 - 文字列の値では `%USERPROFILE%` のような環境変数が展開されます。
 - JSON にはコメントを書けません（Windows PowerShell 5.1 が読めないため）。

@@ -394,7 +394,7 @@ is the update. Add `-Ref <branch or tag>` to install from somewhere other than `
 **Code → Download ZIP**):
 
 - [`mulmoterminal-launcher.ps1`](https://raw.githubusercontent.com/highfar-projects/mulmoterminal/main/tools/windows-launcher/mulmoterminal-launcher.ps1)
-- [`ensure-peer.mjs`](https://raw.githubusercontent.com/highfar-projects/mulmoterminal/main/tools/windows-launcher/ensure-peer.mjs) — `both` uses it to add WSL to `peers`
+- [`ensure-peer.mjs`](https://raw.githubusercontent.com/highfar-projects/mulmoterminal/main/tools/windows-launcher/ensure-peer.mjs) — `both` uses it to add WSL to `remoteHosts`
 - [`launcher.config.example.json`](https://raw.githubusercontent.com/highfar-projects/mulmoterminal/main/tools/windows-launcher/launcher.config.example.json) — a sample of the settings file
 
 Then, in PowerShell in that folder:
@@ -716,50 +716,45 @@ The launcher detects it and prints the exact, OS-appropriate removal command; ru
 
 Started as `-Runtime both` by the [Start-menu launcher](#windows-the-start-menu-launcher), a Windows
 machine runs **two complete servers**, one per OS, and the browser talks to only one of them. The
-Windows server **relays** the WSL one as a **peer**: `/peer/wsl/…` on the Windows server is `/…` on
-the WSL server, for HTTP and WebSocket alike.
+Windows server reaches the WSL one as a **remote host** (upstream's
+[#3506](https://github.com/receptron/mulmoterminal/issues/3506)): `/remote/wsl/…` on the Windows
+server is forwarded to the WSL server. This fork's own relay (`peers`, `/peer/wsl/…`) did the same
+until 2026-11-28 and was removed in favour of upstream's.
 
 ```
 ┌──────────────────────────────┐   ┌──────────────────────────────────┐   ┌──────────────────────────────────┐
-│ Edge / Chrome app window      │   │ Windows server  :34568 (parent)  │   │ WSL2 server  :34567 (peer "wsl") │
+│ Edge / Chrome app window      │   │ Windows server  :34568 (parent)  │   │ WSL2 server  :34567 (host "wsl") │
 │                               │   │                                  │   │                                  │
 │ Windows cell ── /ws ──────────┼──►│ ws ─► node-pty ─► claude.exe     │   │                                  │
 │                               │   │       (psmux if installed)       │   │                                  │
-│ WSL cell ── /peer/wsl/ws ─────┼──►│ peer relay ── /ws ───────────────┼──►│ ws ─► node-pty ─► tmux ─► claude │
-│                               │   │  (HTTP + WS upgrade, piped       │   │                                  │
-│ /api/…, /ws/pubsub ───────────┼──►│   byte for byte)                 │   │                                  │
-│ /peer/wsl/api/…, …/ws/pubsub ─┼──►│ ─────────────────────────────────┼──►│ /api/…, /ws/pubsub               │
+│ WSL cell ── /remote/wsl/ws ───┼──►│ gateway ── /ws ──────────────────┼──►│ ws ─► node-pty ─► tmux ─► claude │
+│                               │   │  (terminals piped byte for byte, │   │                                  │
+│ /api/…, /ws/pubsub ───────────┼──►│   /api routes from a fixed table)│   │                                  │
+│ /remote/wsl/api/… ────────────┼──►│ ─────────────────────────────────┼──►│ /api/…                           │
 └──────────────────────────────┘   └──────────────────────────────────┘   └──────────────────────────────────┘
         ▲                                   ▲            own: ~/.mulmoterminal, ~/.claude, accounts,
         │ one window                        │                  token rotation, sessions, tmux
         └──── tray launcher (PowerShell) ───┴── starts / restarts / stops both ──► (WSL side via wsl.exe)
 ```
 
-- **The page stays same-origin with the Windows server.** The relay rewrites `Origin` / `Host` to
-  the peer's after applying the Windows server's own origin guard, so neither server relaxes its
-  check or speaks CORS (`server/infra/http/peer-proxy.ts`). WebSocket frames are not decoded, so
-  every terminal endpoint (`/ws`, `/ws/codex`, `/ws/launch`, …) works through it unchanged.
-- **A peer exists only because `~/.mulmoterminal/config.json` on the Windows side says so** —
-  the browser names it by id, never by URL. The launcher adds it for you (`EnsurePeer`):
+- **The page stays same-origin with the Windows server.** The gateway forwards a WSL cell's
+  terminals byte for byte and its `/api` requests only from a fixed table (`common/remoteRoutes.ts`),
+  each held to the cell's directory (`server/backends/hostGateway/`). This fork's own routes are
+  listed in the census as never forwarded, except the Files tree's SHA-256, which is.
+- **A remote host exists only because `~/.mulmoterminal/config.json` on the Windows side says so**,
+  with a loopback URL; the browser names it by id, never by URL. The launcher adds it for you
+  (`EnsurePeer`):
 
   ```json
-  "peers": [{ "id": "wsl", "label": "WSL", "url": "http://127.0.0.1:34567" }]
+  "remoteHosts": [{ "id": "wsl", "label": "WSL", "url": "http://127.0.0.1:34567" }]
   ```
 
-- **Every cell belongs to one server.** The launch form's **Run on** picker chooses it, and a peer
-  cell wears the peer's badge. Everything about that cell — its terminal, transcript, worktrees,
-  resume list, memo, question pane — is asked of the server it runs on (`peerApiPath`), and the
-  same path on the two machines is two different directories. Command cells (Run-menu scripts,
-  launch configs, configured launchers) run on the Windows server only.
+- **Every cell belongs to one server.** The launch panel's host picker chooses it. Everything about
+  that cell is asked of the server it runs on, and the same path on the two machines is two
+  different directories. What a WSL cell can do follows upstream's remote hosts.
 - **Nothing is shared between the two servers.** Each has its own `~/.mulmoterminal/config.json`,
   its own `~/.claude` (log in to Claude Code on each side), its own `accounts` and `tokenRotation`,
-  sessions and tmux server. The launch form shows the peer's saved folders and accounts when it is
-  picked, a peer cell's account mark offers the peer's tokens, and the header's usage gauge shows
-  the peer's readings after its label (`WSL 5h 12% 7d 26%`), each asked of that server.
-- **Activity and attention reach the one tab from both.** The page subscribes to `/ws/pubsub` on
-  each peer as well as its own, so the favicon, the attention sound and the working/waiting dots
-  cover WSL cells too. A peer that stops answering marks its cells as unreachable rather than
-  leaving them looking slow (`/api/peers/status`).
+  sessions and tmux server.
 - **Lifecycle is the launcher's.** It starts both (`npx` on Windows, `wsl.exe … npx` on the WSL
   side), stops both when the window has been closed for 15 seconds, and — since the browser's
   **Restart MulmoTerminal** reaches only the Windows server — restarts the WSL server too when the
@@ -1337,7 +1332,7 @@ malformed file is ignored.
   "cellBorderColor": "#2a2a4e",         // cell border color (hex #rrggbb)
   "dotColor": "#00e676",                // idle status dot (hex #rrggbb)
   "buttonColor": "#c7cdf0",             // header icon buttons (hex #rrggbb)
-  "theme": "nord",                      // terminal palette: midnight | nord | daylight | solarized
+  "theme": "nord",                      // terminal palette: midnight | nord | daylight | solarized | okamoto | pink
   "colors": { "background": "#190a23", "cursor": "#ff2e63" }, // per-key palette overrides
   "fontSize": 16,                       // terminal font size in px (8–32); overrides Settings
   "fontFamily": "'Cica', monospace",    // terminal font stack; overrides the global config
@@ -2309,7 +2304,7 @@ narrow and tall for one record you are discussing — and each position keeps it
   one it is, so an English browser silently turned Japanese dictation into English.
 - **Remote host** — link MulmoTerminal to the companion phone client (Google sign-in) to
   watch and start sessions from your phone.
-- **Themes** — four terminal palettes (midnight / nord / daylight / solarized), your pick
+- **Themes** — terminal palettes (midnight / nord / daylight / solarized / okamoto / pink), your pick
   remembered; a project's `.mulmoterminal.json` can override per directory.
 - **Editing niceties** — **Shift+Enter** inserts a newline in the prompt, and on macOS
   **Option** is treated as Meta so Claude's Alt-key bindings work. If your Claude Code is

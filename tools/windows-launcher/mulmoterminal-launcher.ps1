@@ -3,7 +3,7 @@
 # MulmoTerminal をコンソール窓なしで起動し、Edge か Chrome のアプリ窓で開く。
 # サーバーは Windows でも WSL2 の Linux 側でも動かせる。
 # 「両方」(-Runtime both) では Windows 側を親、WSL 側を子として両方を起動し、
-# 親の窓 1 つで WSL 側のセルも開ける（MulmoTerminal の peers 機能。親が /peer/wsl/... を中継する）。
+# 親の窓 1 つで WSL 側のセルも開ける（本家の remoteHosts 機能。親が /remote/wsl/... を中継する）。
 #
 #   入れ方・更新のしかたは同じフォルダの README.md を参照。GitHub から 1 行で入れられる（install.ps1）。
 #   手元のファイルから登録するとき:
@@ -32,8 +32,8 @@
 # - 停止はまず POST /api/shutdown（ブラウザの Stop ボタンと同じ正規の終了）。止まらないときだけ強制終了
 # - 別の方法で起動済みのサーバーは、使うだけで止めない（「両方」でも、片方だけ起動済みならそれを使う）
 # - 「両方」のとき、WSL 側が起動できなくても Windows 側はそのまま使える（通知で知らせる）
-# - 「両方」のとき、~/.mulmoterminal/config.json の peers に WSL の項目が無ければ足す（$EnsurePeer）。
-#   足すのは peers だけ。書き換える前に config.json.bak-peers（あれば -2, -3 ...）にコピーを取る
+# - 「両方」のとき、~/.mulmoterminal/config.json の remoteHosts に WSL の項目が無ければ足す（$EnsurePeer）。
+#   足すのは remoteHosts だけ。書き換える前に config.json.bak-hosts（あれば -2, -3 ...）にコピーを取る
 #
 # このファイルは UTF-8 (BOM 付き) で保存すること。Windows PowerShell 5.1 は BOM なしの UTF-8 を
 # Shift_JIS として読み、日本語の直後の改行や引用符を飲み込んで、行を黙って実行しなくなる。
@@ -65,8 +65,8 @@ $WslNodeVersion      = ''            # Linux 側の Volta で使う Node のバ�
 # フォーク版を GitHub から入れるには npm 11 以上が要る（Volta 既定の npm 10.2.1 では入らない）。
 
 # --- 両方のとき（-Runtime both） ---
-$EnsurePeer          = $true         # config.json の peers に WSL の項目が無ければ足す
-$PeerId              = 'wsl'         # 窓の中で /peer/<id>/... になる名前
+$EnsurePeer          = $true         # config.json の remoteHosts に WSL の項目が無ければ足す
+$PeerId              = 'wsl'         # 窓の中で /remote/<id>/... になる名前
 $PeerLabel           = 'WSL'         # セルの見出しのバッジと、起動フォームの「実行先」に出る名前
 # ==================================================================
 
@@ -418,25 +418,25 @@ foreach ($s in $servers | Where-Object { $_.Role -eq 'own' }) {
     }
 }
 
-# --- peers の設定（両方のとき） -------------------------------------------------------------------
-# 親の config.json の peers に、WSL 側のサーバーが無ければ足す。親は設定を読み直すたびに反映するので
+# --- remoteHosts の設定（両方のとき） -------------------------------------------------------------------
+# 親の config.json の remoteHosts に、WSL 側のサーバーが無ければ足す。親は設定を読み直すたびに反映するので
 # 再起動はいらない。JSON は node で読み書きする（PowerShell 5.1 の ConvertTo-Json は形を崩すため）。
 # 中身は同じフォルダの ensure-peer.mjs（-Install がこのファイルと一緒にコピーする）
 $script:peerNotice = $null
 function Confirm-PeerConfig {
     if ($Runtime -ne 'both' -or -not $EnsurePeer) { return }
     $nodeExe = Resolve-WindowsNode
-    if (-not $nodeExe) { $script:peerNotice = 'node が見つからないため、config.json の peers を確かめられませんでした。'; return }
+    if (-not $nodeExe) { $script:peerNotice = 'node が見つからないため、config.json の remoteHosts を確かめられませんでした。'; return }
     $js = Join-Path $PSScriptRoot 'ensure-peer.mjs'
-    if (-not (Test-Path $js)) { $script:peerNotice = "ensure-peer.mjs が $PSScriptRoot に無いため、config.json の peers を確かめられませんでした（-Install し直してください）。"; return }
+    if (-not (Test-Path $js)) { $script:peerNotice = "ensure-peer.mjs が $PSScriptRoot に無いため、config.json の remoteHosts を確かめられませんでした（-Install し直してください）。"; return }
     $config = Join-Path $env:USERPROFILE '.mulmoterminal\config.json'
     $peerUrl = "http://127.0.0.1:$WslPort"
     $result = (& $nodeExe $js $config $PeerId $PeerLabel $peerUrl 2>$null | Select-Object -Last 1)
     switch -Wildcard ("$result") {
         'present'   { }
-        'added*'    { $script:peerNotice = "config.json の peers に $PeerLabel（$peerUrl）を足しました。" }
-        'conflict*' { $script:peerNotice = "config.json の peers の '$PeerId' が別の URL（$($result.Substring(9))）を指しています。書き換えていません。" }
-        default     { $script:peerNotice = "config.json を読めなかったため、peers を足していません（$result）。" }
+        'added*'    { $script:peerNotice = "config.json の remoteHosts に $PeerLabel（$peerUrl）を足しました。" }
+        'conflict*' { $script:peerNotice = "config.json の remoteHosts の '$PeerId' が別の URL（$($result.Substring(9))）を指しています。書き換えていません。" }
+        default     { $script:peerNotice = "config.json を読めなかったため、remoteHosts を足していません（$result）。" }
     }
 }
 Confirm-PeerConfig

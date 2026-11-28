@@ -21,7 +21,7 @@ export function useLibraryMarks(isOpen: Ref<boolean>) {
   const loadFailed = ref(false);
   /** `reads` and `saves` number requests so a stale answer can tell it is stale; `applied` counts save
    *  answers shown, since a read begun before one of them is older than the screen. */
-  const seq = { reads: 0, saves: 0, applied: 0 };
+  const seq = { reads: 0, saves: 0, applied: 0, marksRead: false };
 
   async function readPinned(ids: readonly string[]): Promise<void> {
     const mine = ++seq.reads;
@@ -37,12 +37,10 @@ export function useLibraryMarks(isOpen: Ref<boolean>) {
     const read = await loadLibraryMarks();
     // A save sent or applied since this read began holds newer marks than the read does.
     if (mine !== seq.reads || seq.saves !== savesBefore || seq.applied !== appliedBefore) return;
-    loadFailed.value = read === null;
-    if (read === null) {
-      marks.value = emptyLibraryMarks();
-      pinned.value = [];
-      return;
-    }
+    // A failed re-read keeps the pins and names shown; with none read yet there are none, and it says so.
+    loadFailed.value = read === null && !seq.marksRead;
+    if (read === null) return;
+    seq.marksRead = true;
     marks.value = read;
     await readPinned(read.pinned);
   }
@@ -71,6 +69,7 @@ export function useLibraryMarks(isOpen: Ref<boolean>) {
     // back takes a round trip, and until then the list (and the selection on it) must not jump.
     if (conversation !== undefined && update.pinned !== undefined) pinned.value = pinnedAfter(pinned.value, conversation, update.pinned);
     marks.value = saved;
+    seq.marksRead = true; // the file as it now is: a later failed read keeps it, as it keeps a read one
     seq.applied++;
     loadFailed.value = false; // the answer is the file as it now is, so it can be read again
     // By what the answer says, not by what this change asked: a pin whose own answer was superseded

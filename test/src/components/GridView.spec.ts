@@ -687,6 +687,25 @@ describe("GridView keyboard shortcuts (#829)", () => {
     w.unmount();
   });
 
+  // #3506: what the remote form emits has to become a cell on that host, which the form's own specs stop short of.
+  it("places a remote start and a remote resume from the launch panel as cells on that host", async () => {
+    const w = await mountShortcutGrid(1, {}, { "terminal-new": "F7" });
+    await press("F7");
+    w.findComponent({ name: "LaunchPanel" }).vm.$emit("start-remote", { host: "lx", dir: "/srv/new", agent: "codex" });
+    await flushPromises();
+    await press("F7");
+    w.findComponent({ name: "LaunchPanel" }).vm.$emit("resume-remote", { host: "lx", id: uuid(7), cwd: "/srv/old", agent: "codex" });
+    await flushPromises();
+    const remote = gridOf(w)
+      .props("cells")
+      .filter((c: { remoteHost?: string }) => c.remoteHost === "lx");
+    expect(remote).toMatchObject([
+      { remoteHost: "lx", cwd: "/srv/new", agent: "codex", session: null },
+      { remoteHost: "lx", cwd: "/srv/old", agent: "codex", session: uuid(7) },
+    ]);
+    w.unmount();
+  });
+
   // #2311: moving a terminal from the keyboard (and so from the palette). It moves the cursor's cell
   // one place in manual order, and does nothing in auto / priority order, where the grid decides.
   it("moves the cursor's terminal one place with terminal-move-next / -prev, in manual order only", async () => {
@@ -1563,6 +1582,37 @@ describe("GridView roster metadata fetch (#2121)", () => {
     await flushPromises();
     expect(metaRequests()).toEqual([]);
     await router.push("/terminals");
+    w.unmount();
+  });
+});
+
+// #3506. With nothing enlarged the grid watches every cell's session for a drawing, on this machine's
+// channel; a remote cell's session is on its host, and that channel would name another.
+describe("GridView's drawing watch", () => {
+  it("joins this machine's session channel for a local cell, and the relay's for a remote one", async () => {
+    pubsub.reset();
+    localStorage.setItem(
+      "grid_v2",
+      JSON.stringify({
+        cells: [
+          { uid: 10, session: IDS.idleA, cwd: "/w" },
+          { uid: 11, session: IDS.idleB, cwd: "/srv/p", remoteHost: "lx" },
+        ],
+        expanded: null,
+        page: 0,
+      }),
+    );
+    const w = mount(GridView, { global: { stubs: { TerminalGrid: OrderStub, AppToolbar: ToolbarStub, SettingsModal: SettingsStub } } });
+    await flushPromises();
+    expect(
+      w
+        .findComponent(OrderStub)
+        .props("cells")
+        .map((c: { remoteHost?: string }) => c.remoteHost ?? null),
+    ).toEqual([null, "lx"]);
+    const channels = [...pubsub.handlers.keys()];
+    expect(channels).toContain(`session:${IDS.idleA}`);
+    expect(channels.filter((channel) => channel.includes(IDS.idleB))).toEqual([`remote:lx:session:${IDS.idleB}`]);
     w.unmount();
   });
 });

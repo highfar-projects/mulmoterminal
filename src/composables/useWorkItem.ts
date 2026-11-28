@@ -14,6 +14,8 @@ import { isIssueWorkCommentsEnabled } from "./issueWorkComments";
 import type { WorkCommentKind } from "../../common/workComment";
 import { isWorkCommentFailure, type WorkCommentFailure } from "../../common/workCommentFailure";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
+import { dirAddressOf, dirApiUrl } from "./dirAddress";
+import { repoWritePath } from "../components/remoteCell";
 import { fireConfettiForEvent } from "./useConfetti";
 
 const POLL_MS = 30_000;
@@ -87,10 +89,12 @@ export function workCommentToPost(before: WorkItem, now: WorkItem): WorkCommentK
 /** Why the issue could not be updated, or null — including when it WAS updated, when the server
  *  had nothing to add, and when the setting is off. Only a cause the server actually named makes
  *  a notice (#1369). */
-async function postWorkComment(cwd: string, item: WorkItem, kind: WorkCommentKind): Promise<WorkCommentFailure | null> {
+async function postWorkComment(dir: string, item: WorkItem, kind: WorkCommentKind): Promise<WorkCommentFailure | null> {
+  // A remote directory's issue is commented on by its host, which reads the repo there (#3506).
+  const { host, cwd } = dirAddressOf(dir);
   try {
     const res = await fetchWithTimeout(
-      "/api/work-comment",
+      repoWritePath(host, "/api/work-comment", cwd),
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -110,6 +114,7 @@ async function postWorkComment(cwd: string, item: WorkItem, kind: WorkCommentKin
   }
 }
 
+/** `cwd` is a directory key (dirAddress.ts): a remote one is read through the gateway. */
 export function useWorkItem(cwd: Ref<string | null>) {
   const item = ref<WorkItem>({ ...EMPTY_WORK_ITEM });
   // Why the last attempt to update the issue failed. Held rather than logged: the user turned the
@@ -130,7 +135,7 @@ export function useWorkItem(cwd: Ref<string | null>) {
       return;
     }
     try {
-      const res = await fetchWithTimeout(`/api/pr-phase?cwd=${encodeURIComponent(dir)}`, undefined, SLOW_COMMAND_TIMEOUT_MS);
+      const res = await fetchWithTimeout(dirApiUrl(dir, "/api/pr-phase"), undefined, SLOW_COMMAND_TIMEOUT_MS);
       if (!res.ok) return;
       const data: unknown = await res.json();
       if (my !== req) return;
