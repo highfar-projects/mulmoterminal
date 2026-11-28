@@ -10,8 +10,6 @@
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, type ComputedRef, type Ref, type ShallowRef } from "vue";
 import { createEditor, langKindForFilename, type CmEditor } from "../components/cmEditor";
 import { askTheMachine, bankText, browseQuery, writeBuffer } from "../components/filesPaneApi";
-import { peerApiPath } from "../../common/peers";
-import { usePaneHost } from "./paneHost";
 import type { DirConfigSaveReport } from "../../common/dirConfigSaveReport";
 import type { FilesTabState } from "../components/filesPaneState";
 import { restoresPreview, staysOnSameFile } from "../components/filesPreviewMode";
@@ -79,17 +77,12 @@ export interface OpenFileBuffer {
 
 interface OpenFileCtx extends OpenFileBuffer {
   cwd: () => string | null;
-  /** The peer server `cwd` is on (common/peers.ts, paneHost.ts), null for this one: every read,
-   *  write, backup and Preview below is asked of it. */
-  host: () => string | null;
   /** Which read is the current one. A box rather than a plain counter because the functions that
    *  bump it are module-level and have nothing to close over. */
   reqId: { n: number };
 }
 
 const qs = (ctx: OpenFileCtx, pathRel: string): string => browseQuery(ctx.cwd(), pathRel);
-
-const OPEN_ON_PEER_EN = "This file is on another server — it cannot be opened in an application on this machine.";
 
 // Every /api route answers a failure as `res.status(4xx).json({ error })`, so the reason a read
 // was refused is in the body — reporting only the status turns a fixable problem into a mystery.
@@ -112,8 +105,8 @@ async function flush(ctx: OpenFileCtx): Promise<boolean> {
   if (!ctx.dirty.value || !ctx.openPath.value || !editor) return true;
   const pathRel = ctx.openPath.value;
   const text = editor.getDoc();
-  const outcome = await writeBuffer(qs(ctx, pathRel), text, ctx.baseVersion.value, false, ctx.host());
-  if (outcome.status !== "saved" && !(await bankText(qs(ctx, pathRel), text, false, ctx.host()))) {
+  const outcome = await writeBuffer(qs(ctx, pathRel), text, ctx.baseVersion.value);
+  if (outcome.status !== "saved" && !(await bankText(qs(ctx, pathRel), text))) {
     ctx.fileError.value = outcome.status === "error" ? outcome.message : "could not save or back up this file";
     return false;
   }
@@ -170,7 +163,7 @@ async function loadFile(ctx: OpenFileCtx, pathRel: string, force: boolean, remem
 /** Read `pathRel` as text; returns how to adopt what came back, so the caller adopts it only if
  *  its read is still the current one. */
 async function readText(ctx: OpenFileCtx, pathRel: string): Promise<() => void> {
-  const res = await fetchWithTimeout(peerApiPath(ctx.host(), `/api/files/browse/text?${qs(ctx, pathRel)}`));
+  const res = await fetchWithTimeout(`/api/files/browse/text?${qs(ctx, pathRel)}`);
   const data = await jsonBody(res);
   // 415 and 413 are not failures: the file is not text, or too large to edit, and showing it as
   // text is what destroyed spreadsheets before this existed (#2038). Both still offer Open in OS.
@@ -186,7 +179,7 @@ const symlinkProblem = (key: "symlinkNotShown" | "missing", pathRel: string): st
  *  something to compare and does not rebuild it on every tick. Over the edit cap the version route
  *  answers 413 too; the file still shows, with no version — and that check then stands aside. */
 async function readMedia(ctx: OpenFileCtx, pathRel: string): Promise<() => void> {
-  const res = await fetchWithTimeout(peerApiPath(ctx.host(), `/api/files/browse/version?${qs(ctx, pathRel)}`));
+  const res = await fetchWithTimeout(`/api/files/browse/version?${qs(ctx, pathRel)}`);
   const data = await jsonBody(res);
   const grantPath = grantPathFor(res.status, data, pathRel);
   if (grantPath !== null) return await readGranted(ctx, pathRel, grantPath);
@@ -242,7 +235,7 @@ function applyRemembered(ctx: OpenFileCtx, remembered: FilesTabState): void {
     openPath: ctx.openPath.value,
     // Whether there is a Preview to LOAD, not only a kind: an HTML page with no root has no URL,
     // and coming back in a Preview that shows nothing leaves no button to leave it by.
-    previewable: previewSrcOf(ctx, ctx.cwd(), null, ctx.host()) !== "",
+    previewable: previewSrcOf(ctx, ctx.cwd()) !== "",
     unpreviewable: ctx.unpreviewable.value !== null,
   });
   if (remembered.path !== ctx.openPath.value || ctx.unpreviewable.value) return;
@@ -291,7 +284,7 @@ async function save(ctx: OpenFileCtx): Promise<void> {
   ctx.saving.value = true;
   ctx.fileError.value = null;
   const generation = ctx.reqId.n;
-  const outcome = await writeBuffer(qs(ctx, ctx.openPath.value), ctx.editor.value.getDoc(), ctx.baseVersion.value, false, ctx.host());
+  const outcome = await writeBuffer(qs(ctx, ctx.openPath.value), ctx.editor.value.getDoc(), ctx.baseVersion.value);
   ctx.saving.value = false;
   // Another document was read in while the write was out. What it learned — a version, a
   // conflict, an error — is about the one it saved, and applied to the new one it would become
@@ -342,7 +335,7 @@ async function discardAndReload(ctx: OpenFileCtx): Promise<void> {
   if (!ctx.openPath.value || !ctx.editor.value) return;
   // "Kept as a backup either way" is the promise the banner makes. If the store refuses it,
   // the honest answer is to keep the buffer rather than discard it anyway.
-  if (!(await bankText(qs(ctx, ctx.openPath.value), ctx.editor.value.getDoc(), false, ctx.host()))) {
+  if (!(await bankText(qs(ctx, ctx.openPath.value), ctx.editor.value.getDoc()))) {
     ctx.fileError.value = "could not back up your version — nothing was discarded";
     return;
   }
@@ -371,9 +364,6 @@ async function openInOs(ctx: OpenFileCtx): Promise<void> {
   const pathRel = ctx.openPath.value;
   const cwd = ctx.cwd();
   if (!pathRel || !cwd) return;
-  // The opener runs on the machine that serves it — on a peer that is not the one in front of the
-  // user, and the window would open where nobody is looking.
-  if (ctx.host()) return reportFailure(ctx, Promise.resolve(OPEN_ON_PEER_EN));
   await reportFailure(ctx, askTheMachine("/api/files/open", absoluteUnder(cwd, pathRel), `could not open ${pathRel}`));
 }
 
@@ -389,7 +379,7 @@ async function checkForExternalChange(ctx: OpenFileCtx): Promise<void> {
   if (!ctx.openPath.value || ctx.saving.value || ctx.conflict.value) return;
   const pathRel = ctx.openPath.value;
   try {
-    const res = await fetchWithTimeout(peerApiPath(ctx.host(), `/api/files/browse/version?${qs(ctx, pathRel)}`));
+    const res = await fetchWithTimeout(`/api/files/browse/version?${qs(ctx, pathRel)}`);
     if (!res.ok) return;
     const data = await jsonBody(res);
     const onDisk = typeof data.version === "string" ? data.version : null;
@@ -422,8 +412,8 @@ function onPageHide(ctx: OpenFileCtx): void {
   // Both, unconditionally: there is no awaiting an answer here, so the only way to honour
   // "your version is kept either way" is to bank it whether or not the write wins the race.
   // The cost is one redundant generation per tab-close with unsaved edits.
-  void bankText(qs(ctx, pathRel), text, true, ctx.host());
-  void writeBuffer(qs(ctx, pathRel), text, ctx.baseVersion.value, true, ctx.host());
+  void bankText(qs(ctx, pathRel), text, true);
+  void writeBuffer(qs(ctx, pathRel), text, ctx.baseVersion.value, true);
 }
 
 /** Leave the open file with nothing in its place — the last tab closing. Saved on the way out like
@@ -494,18 +484,18 @@ export interface OpenFile extends OpenFileBuffer {
 const previewTheme = computed(() => (activeThemeVars.value ? previewThemeFromVars(activeThemeVars.value) : null));
 
 /** The Preview frame's `src` for the open file, or "" when it has no Preview. */
-function previewSrcOf(buffer: OpenFileBuffer, cwd: string | null, token: string | null = null, host: string | null = null): string {
+function previewSrcOf(buffer: OpenFileBuffer, cwd: string | null, token: string | null = null): string {
   const kind = buffer.previewKind.value;
   const pathRel = buffer.openPath.value;
   if (!pathRel || !kind) return "";
-  return previewSrcFor(kind, cwd, pathRel, diskVersion(buffer.baseVersion.value, buffer.conflict.value), previewTheme.value, { token, host });
+  return previewSrcFor(kind, cwd, pathRel, diskVersion(buffer.baseVersion.value, buffer.conflict.value), previewTheme.value, token);
 }
 
 /** The Markdown Preview's document with a token of its own (#2515): a fresh one whenever the
  *  document does, which is exactly when the src would change anyway. */
-function previewOf(buffer: OpenFileBuffer, cwd: string | null, host: string | null): { src: string; token: string | null } {
+function previewOf(buffer: OpenFileBuffer, cwd: string | null): { src: string; token: string | null } {
   const token = buffer.previewKind.value === "markdown" ? crypto.randomUUID() : null;
-  return { src: previewSrcOf(buffer, cwd, token, host), token };
+  return { src: previewSrcOf(buffer, cwd, token), token };
 }
 
 /** The refs one open file is made of, empty. */
@@ -534,10 +524,8 @@ function newBuffer(): OpenFileBuffer {
 
 export function useOpenFile(cwd: () => string | null): OpenFile {
   const buffer = newBuffer();
-  const paneHost = usePaneHost();
-  const host = (): string | null => paneHost.value;
-  const ctx: OpenFileCtx = { ...buffer, cwd, host, reqId: { n: 0 } };
-  const preview = computed(() => previewOf(buffer, cwd(), host()));
+  const ctx: OpenFileCtx = { ...buffer, cwd, reqId: { n: 0 } };
+  const preview = computed(() => previewOf(buffer, cwd()));
 
   const pageHide = (): void => onPageHide(ctx);
   let stopWatchingExternal: (() => void) | null = null;
@@ -545,7 +533,6 @@ export function useOpenFile(cwd: () => string | null): OpenFile {
     window.addEventListener("pagehide", pageHide);
     stopWatchingExternal = watchExternalFileChanges({
       cwd,
-      host,
       openPath: () => ctx.openPath.value,
       docChannel: () => docChannel(ctx),
       recheck: () => void checkForExternalChange(ctx),
@@ -586,11 +573,10 @@ export function useOpenFile(cwd: () => string | null): OpenFile {
 
 /** A picture, PDF, video or sound: no text to edit, so the "not text" panel shows the file itself (#2269, #2674). */
 export function openFileMedia(file: Pick<OpenFile, "openPath" | "baseVersion" | "grantedMediaSrc">, cwd: () => string | null) {
-  const host = usePaneHost();
   const mediaKind = computed(() => (file.openPath.value ? fileMediaKind(file.openPath.value) : null));
   const mediaSrc = computed(() => {
     if (!file.openPath.value || !mediaKind.value) return "";
-    return file.grantedMediaSrc.value ?? rawFileSrc(cwd(), file.openPath.value, file.baseVersion.value, host.value);
+    return file.grantedMediaSrc.value ?? rawFileSrc(cwd(), file.openPath.value, file.baseVersion.value);
   });
   return { mediaKind, mediaSrc };
 }

@@ -196,17 +196,6 @@ file through a grant for that path (`src/composables/symlinkedMedia.ts`) — the
 the full-screen view with no `?cwd=` has no base of its own to rebuild one from.
 Any other refusal, or a text file, stays refused and says so.
 
-## A pane for a cell on a peer server
-
-A cell can run on another MulmoTerminal server that this one relays (`common/peers.ts`). Its right
-pane — Files, Canvas, Tools, Prompts, Transcript — is asked of THAT server, through
-`/peer/<id>/api/…` (`src/composables/paneHost.ts`). That is not a wider reach: who chose the path is
-the same user opening the pane on that cell, the root is that cell's directory, and every rule on
-this page is applied by the peer's own routes, since the relay only carries the request. A document
-the peer renders links back through the relay's prefix (`X-Forwarded-Prefix`,
-`server/infra/http/forwarded-prefix.ts`). Reveal, open in an application, and putting a file on the
-Canvas are withheld there: each acts on, or stores into, the server the browser is talking to.
-
 ## What to check before changing any of this
 
 - **Which surface are you in?** `canvas-target` distinguishes the two `FilesPane` mounts and is the

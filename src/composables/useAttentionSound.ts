@@ -1,7 +1,5 @@
 import { onUnmounted, watch, type Ref } from "vue";
 import { usePubSub } from "./usePubSub";
-import { subscribeEveryPeer } from "./peerHosts";
-import { peerApiPath } from "../../common/peers";
 import { notifyKindOf, isActivityMsg, type ActivityState } from "./notifyKind";
 import { NOTIFY_KINDS, type NotifyKind } from "../../common/notifyKinds";
 import { parsePresetRef } from "../../common/notifySounds";
@@ -205,17 +203,14 @@ export function globalSoundValue(kind: NotifyKind, config: SoundConfig): string 
 const SEP = "\u0000";
 // A directory's sound is resolved SERVER-side (its per-kind entry, then its all-kind one), so
 // the key is just what identifies the request.
-// A peer's directory is THAT machine's (common/peers.ts): its sound is resolved by that server, and
-// the same path on two machines is two different directories, so the host is part of the key.
-const dirKey = (cwd: string, kind: NotifyKind, host: string | null) => `dir${SEP}${host ?? ""}${SEP}${cwd}${SEP}${kind}`;
+const dirKey = (cwd: string, kind: NotifyKind) => `dir${SEP}${cwd}${SEP}${kind}`;
 // The global key is the RESOLVED VALUE and not the kind: the value already says which entry
 // won, so two kinds left on the same fallback file share one download and one decoded buffer
 // rather than fetching identical bytes once per kind. Picking a different sound changes the
 // value, which is what invalidates the cache.
 const globalKey = (value: string) => `app${SEP}${value}`;
 
-const dirUrl = (cwd: string, kind: NotifyKind, host: string | null) =>
-  peerApiPath(host, `/api/dir-sound?cwd=${encodeURIComponent(cwd)}&kind=${encodeURIComponent(kind)}`);
+const dirUrl = (cwd: string, kind: NotifyKind) => `/api/dir-sound?cwd=${encodeURIComponent(cwd)}&kind=${encodeURIComponent(kind)}`;
 
 // A preset is addressed DIRECTLY rather than through /api/sound?kind=. Same bytes either way,
 // but the preset route answers from the fixed catalog instead of the saved config — which is
@@ -230,15 +225,15 @@ const globalUrl = (kind: NotifyKind, value: string) => {
 // The sources to try for one beep, nearest first: the session directory's own sound, then the
 // user's global one. Each entry is a cache key plus where to fetch it; the caller plays the
 // first that is already decoded and starts loading the first that isn't.
-export function soundSources(kind: NotifyKind, cwd: string | null, config: SoundConfig, host: string | null = null): { key: string; url: string }[] {
-  const sources = cwd ? [{ key: dirKey(cwd, kind, host), url: dirUrl(cwd, kind, host) }] : [];
+export function soundSources(kind: NotifyKind, cwd: string | null, config: SoundConfig): { key: string; url: string }[] {
+  const sources = cwd ? [{ key: dirKey(cwd, kind), url: dirUrl(cwd, kind) }] : [];
   const value = globalSoundValue(kind, config);
   if (value) sources.push({ key: globalKey(value), url: globalUrl(kind, value) });
   return sources;
 }
 
-function playResolved(kind: NotifyKind, cwd: string | null, config: SoundConfig, host: string | null = null) {
-  for (const { key, url } of soundSources(kind, cwd, config, host)) {
+function playResolved(kind: NotifyKind, cwd: string | null, config: SoundConfig) {
+  for (const { key, url } of soundSources(kind, cwd, config)) {
     const buf = buffers.get(key);
     if (buf) return playBuffer(buf);
     if (buf === undefined) void loadBuffer(key, url);
@@ -257,13 +252,13 @@ const beepQueue = createBeepQueue();
  * yet and the beep is held for the unlock (see pendingBeep.ts) — the caller uses that to leave a
  * visible mark, since a beep the user never heard is a notification they never got.
  */
-export function playNotify(kind: NotifyKind, cwd: string | null, config: SoundConfig, host: string | null = null): boolean {
+export function playNotify(kind: NotifyKind, cwd: string | null, config: SoundConfig): boolean {
   const ctx = getCtx();
   if (shouldHoldBeep(ctx?.state ?? null)) {
-    beepQueue.hold({ kind, cwd, host });
+    beepQueue.hold({ kind, cwd });
     return false;
   }
-  playResolved(kind, cwd, config, host);
+  playResolved(kind, cwd, config);
   return true;
 }
 
@@ -313,12 +308,11 @@ export function useAttentionSound(enabled: Ref<boolean>, config: Ref<SoundConfig
   // just turned off is exactly the noise the setting exists to stop.
   const offResumed = onAudioResumed(() => {
     const held = beepQueue.take();
-    if (held && enabled.value && config.value.kinds.includes(held.kind)) playResolved(held.kind, held.cwd, config.value, held.host ?? null);
+    if (held && enabled.value && config.value.kinds.includes(held.kind)) playResolved(held.kind, held.cwd, config.value);
   });
   const prev = new Map<string, ActivityState>();
   const { subscribe } = usePubSub();
-  // `host` is the peer server the push came from (common/peers.ts), null for this one.
-  const onActivity = (d: unknown, host: string | null = null): void => {
+  const unsubscribe = subscribe("sessions", (d) => {
     if (!isActivityMsg(d)) return;
     // Asked BEFORE notifyKindOf, which is what records the session — a session already waiting
     // when the page loaded gets its first row swallowed as baseline, and that swallowed row is
@@ -327,16 +321,11 @@ export function useAttentionSound(enabled: Ref<boolean>, config: Ref<SoundConfig
     const kind = notifyKindOf(prev, d);
     if (kind === "finished") fireConfettiForEvent("turn-finished");
     const wanted = kind !== null && enabled.value && config.value.kinds.includes(kind) ? kind : null;
-    const sounded = wanted !== null && playNotify(wanted, d.cwd ?? null, config.value, host);
+    const sounded = wanted !== null && playNotify(wanted, d.cwd ?? null, config.value);
     applyMissedMark(d.id, missedMarkFor({ closed: d.event === "closed", firstSighting, waiting: d.waiting ?? false, suppressed: wanted !== null && !sounded }));
-  };
-  const unsubscribe = subscribe("sessions", (d) => onActivity(d));
-  // The peer servers' sessions sound too (common/peers.ts): a cell running there is one the user is
-  // waiting on from this tab all the same. Session ids are UUIDs, so one `prev` map serves them all.
-  const unsubscribePeers = subscribeEveryPeer("sessions", onActivity);
+  });
   onUnmounted(() => {
     unsubscribe();
-    unsubscribePeers();
     offResumed();
   });
 }

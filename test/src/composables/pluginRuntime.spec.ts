@@ -5,18 +5,10 @@
 // signature. What it did NOT do was call `parse`. These pin the behavior instead.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-const m = vi.hoisted(() => ({ subscribe: vi.fn(), pubsubHost: vi.fn() }));
-vi.mock("../../../src/composables/usePubSub", () => ({
-  usePubSub: (host: string | null = null) => {
-    m.pubsubHost(host);
-    return { subscribe: m.subscribe };
-  },
-}));
+const m = vi.hoisted(() => ({ subscribe: vi.fn() }));
+vi.mock("../../../src/composables/usePubSub", () => ({ usePubSub: () => ({ subscribe: m.subscribe }) }));
 
-import { defineComponent, h, nextTick, ref } from "vue";
-import { mount } from "@vue/test-utils";
-import { makeBrowserPluginRuntime, wrapWithPluginRuntime } from "../../../src/composables/pluginRuntime";
-import { providePaneHost } from "../../../src/composables/paneHost";
+import { makeBrowserPluginRuntime } from "../../../src/composables/pluginRuntime";
 import { PLUGIN_DISPATCH_TIMEOUT_MS } from "../../../src/composables/pluginDispatchDeadline";
 import { SLOW_COMMAND_TIMEOUT_MS } from "../../../src/utils/fetchWithTimeout";
 import { i18n } from "../../../src/i18n";
@@ -67,28 +59,6 @@ describe("makeBrowserPluginRuntime dispatch", () => {
     const parse = vi.fn((raw: unknown) => `parsed:${JSON.stringify(raw)}`);
     await expect(runtime().dispatch({ kind: "list" }, parse)).resolves.toBe('parsed:{"count":2}');
     expect(parse).toHaveBeenCalledOnce();
-  });
-
-  // A peer's file exists only on the peer, so a view in a pane about a peer cell must reach the
-  // peer's route through the relay. Posting to this server's own route answered "no file exists".
-  it("POSTs through the peer relay when the pane is about a peer's cell", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
-    vi.stubGlobal("fetch", fetchMock);
-
-    await makeBrowserPluginRuntime({ scope: "markdown", toolName: "presentDocument", host: ref("wsl") }).dispatch({ kind: "list" });
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("/peer/wsl/api/plugin/presentDocument");
-    expect(m.pubsubHost).toHaveBeenLastCalledWith("wsl");
-  });
-
-  it("follows the pane when it moves to another server", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
-    vi.stubGlobal("fetch", fetchMock);
-    const host = ref<string | null>("wsl");
-    const { dispatch } = makeBrowserPluginRuntime({ scope: "markdown", toolName: "presentDocument", host });
-
-    host.value = null;
-    await dispatch({ kind: "list" });
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/plugin/presentDocument");
   });
 
   it("throws with the route's status and body on a non-2xx response", async () => {
@@ -211,36 +181,6 @@ describe("makeBrowserPluginRuntime subscribe", () => {
     expect(seen).toEqual(["ok.md"]);
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
-  });
-});
-
-// The wrapper as the hosts use it: every parent passes the card as `:selected-result`, and the
-// wrapper does not declare it, so it arrives in `attrs` under THAT spelling. Reading only
-// `attrs.selectedResult` found no document, and a peer's images kept the slash markdown-utils drops.
-describe("wrapWithPluginRuntime on a peer's pane", () => {
-  const Inner = defineComponent({
-    props: { selectedResult: { type: Object, default: null } },
-    setup: () => () => h("img", { src: "/api/files/raw?path=home%2Fu%2Fws%2Fa.png" }),
-  });
-  const Host = (host: string | null) =>
-    defineComponent({
-      setup() {
-        providePaneHost(ref(host));
-        const View = wrapWithPluginRuntime("markdown", "presentDocument", Inner);
-        return () => h(View, { "selected-result": { toolName: "presentDocument", data: { markdown: "", docPath: "/home/u/ws/README.md" } } });
-      },
-    });
-
-  it("points the view's images at the peer, with the document's leading slash back", async () => {
-    const wrapper = mount(Host("wsl"));
-    await nextTick();
-    expect(wrapper.find("img").attributes("src")).toBe("/peer/wsl/api/files/raw?path=%2Fhome%2Fu%2Fws%2Fa.png");
-  });
-
-  it("leaves this server's views alone", async () => {
-    const wrapper = mount(Host(null));
-    await nextTick();
-    expect(wrapper.find("img").attributes("src")).toBe("/api/files/raw?path=home%2Fu%2Fws%2Fa.png");
   });
 });
 

@@ -49,19 +49,6 @@ describe("cells the launch panel places", () => {
     expect("account" in cellForPanelStart({ dir: "/p", pick: "claude", choice: null, account: null }, null)).toBe(false);
   });
 
-  // A session the panel listed from a peer (common/peers.ts) reconnects there.
-  it("puts a resumed row's peer on the cell, and nothing for this server's", () => {
-    expect(cellForPanelResume({ id: "s", cwd: "/p", host: "win" }).host).toBe("win");
-    expect("host" in cellForPanelResume({ id: "s", cwd: "/p" })).toBe(false);
-  });
-
-  // A cell without its peer connects to THIS server, in a directory that names the other machine.
-  it("carries the peer on a started cell only when one was picked", () => {
-    expect(cellForPanelStart({ dir: "/home/u", pick: "claude", choice: null, account: null, host: "wsl" }, null).host).toBe("wsl");
-    expect("host" in cellForPanelStart({ dir: "/p", pick: "claude", choice: null, account: null, host: null }, null)).toBe(false);
-    expect("host" in cellForPanelStart({ dir: "/p", pick: "claude", choice: null, account: null }, null)).toBe(false);
-  });
-
   it("carries the row's account on a resumed cell", () => {
     expect(cellForPanelResume({ id: "s", cwd: "/p", agent: "claude", account: "work" }).account).toBe("work");
     expect("account" in cellForPanelResume({ id: "s", cwd: "/p" })).toBe(false);

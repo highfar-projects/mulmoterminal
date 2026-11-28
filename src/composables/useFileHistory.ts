@@ -1,7 +1,5 @@
 // A file's history in the Files pane (#2574): the backups the store kept of it, compared with the
 // buffer through the same change marks HEAD uses, and restored as an edit the reader then saves.
-import { peerApiPath } from "../../common/peers";
-import { usePaneHost } from "./paneHost";
 import { computed, ref, watch, type ComputedRef, type Ref, type ShallowRef } from "vue";
 import type { CmEditor } from "../components/cmEditor";
 import { bankText, browseQuery } from "../components/filesPaneApi";
@@ -49,10 +47,9 @@ export interface FileHistory {
 export const backupTextFrom = (body: unknown): string | null => (isRecord(body) && typeof body.text === "string" ? body.text : null);
 
 /** The file's backups, newest first, or null when they could not be read. */
-// `host`: the peer server the file is on (common/peers.ts, paneHost.ts), null for this one.
-async function fetchBackups(query: string, host: string | null): Promise<BackupEntry[] | null> {
+async function fetchBackups(query: string): Promise<BackupEntry[] | null> {
   try {
-    const res = await fetchWithTimeout(peerApiPath(host, `/api/files/browse/backups?${query}`));
+    const res = await fetchWithTimeout(`/api/files/browse/backups?${query}`);
     return res.ok ? backupEntriesFrom(await jsonBody(res)) : null;
   } catch {
     return null;
@@ -60,9 +57,9 @@ async function fetchBackups(query: string, host: string | null): Promise<BackupE
 }
 
 /** One backup's text, or null when it could not be read. */
-async function fetchBackupText(query: string, id: string, host: string | null): Promise<string | null> {
+async function fetchBackupText(query: string, id: string): Promise<string | null> {
   try {
-    const res = await fetchWithTimeout(peerApiPath(host, `/api/files/browse/backup?${query}&id=${encodeURIComponent(id)}`));
+    const res = await fetchWithTimeout(`/api/files/browse/backup?${query}&id=${encodeURIComponent(id)}`);
     return res.ok ? backupTextFrom(await jsonBody(res)) : null;
   } catch {
     return null;
@@ -76,14 +73,14 @@ const sameText = (a: string, b: string): boolean => a.replace(/\r\n?/g, "\n") ==
  *  restoring must never be the step that loses them — and nothing happens if that fails. Everything
  *  is asked again after the bank's round trip: a save may have started, or another file be open in
  *  the same editor, and either would take the restored text somewhere it was not meant to go. */
-async function replaceBuffer(deps: FileHistoryDeps, pathRel: string, query: string, text: string, host: string | null): Promise<boolean> {
+async function replaceBuffer(deps: FileHistoryDeps, pathRel: string, query: string, text: string): Promise<boolean> {
   const editor = deps.editor.value;
   const stillHere = (): boolean => deps.editor.value === editor && deps.openPath.value === pathRel && !deps.saving.value;
   // A save in flight read the buffer before it went out and will mark it saved when it lands.
   if (!editor || !stillHere()) return false;
   const current = editor.getDoc();
   if (sameText(current, text)) return true;
-  if (deps.dirty.value && !(await bankText(query, current, false, host))) return false;
+  if (deps.dirty.value && !(await bankText(query, current))) return false;
   // Keys typed during the bank are not in the bank: stop rather than replace them.
   if (!stillHere() || editor.getDoc() !== current) return false;
   editor.replaceDoc(text);
@@ -112,7 +109,6 @@ function resetWhenDone(deps: FileHistoryDeps, state: HistoryState): { rememberCh
 }
 
 export function useFileHistory(deps: FileHistoryDeps): FileHistory {
-  const host = usePaneHost(); // the pane's server (common/peers.ts)
   const open = ref(false);
   const entries = ref<BackupEntry[]>([]);
   const failed = ref(false);
@@ -127,7 +123,7 @@ export function useFileHistory(deps: FileHistoryDeps): FileHistory {
     failed.value = false;
     const pathRel = deps.openPath.value;
     if (!open.value || !pathRel) return;
-    const listed = await fetchBackups(query(pathRel), host.value);
+    const listed = await fetchBackups(query(pathRel));
     if (deps.openPath.value !== pathRel) return;
     entries.value = listed ?? [];
     failed.value = listed === null;
@@ -139,7 +135,7 @@ export function useFileHistory(deps: FileHistoryDeps): FileHistory {
     if (comparing.value?.entry.id === entry.id) return comparing.value.text;
     const pathRel = deps.openPath.value;
     if (!pathRel) return null;
-    const text = await fetchBackupText(query(pathRel), entry.id, host.value);
+    const text = await fetchBackupText(query(pathRel), entry.id);
     if (deps.openPath.value !== pathRel) return null;
     failed.value = text === null;
     return text;
@@ -167,7 +163,7 @@ export function useFileHistory(deps: FileHistoryDeps): FileHistory {
       restoreFailed.value = true;
       return;
     }
-    const landed = await replaceBuffer(deps, pathRel, query(pathRel), text, host.value);
+    const landed = await replaceBuffer(deps, pathRel, query(pathRel), text);
     if (deps.openPath.value === pathRel) restoreFailed.value = !landed;
     if (!landed) return;
     await deps.head.stopComparing();

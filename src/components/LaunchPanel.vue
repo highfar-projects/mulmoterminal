@@ -13,24 +13,16 @@ import { launchAgentPick } from "../composables/launchAgentPick";
 // launch intents. Turning an intent into a cell is GridView's job, because only it can place one.
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import CellLaunchForm from "./CellLaunchForm.vue";
-import type { CustomAgent } from "../../common/customAgents";
+import type { AgentPick, CustomAgent } from "../../common/customAgents";
 import type { AgentAccount } from "../../common/agentAccounts";
 import type { CwdPreset } from "./presets";
 import type { Launcher, LaunchPick } from "./launchers";
 import type { LaunchChoice } from "./wsUrl";
 import type { RunCommand } from "./runCommand";
 import type { ResumeRequest } from "./resumeRequest";
-import type { PanelStart } from "./launchCell";
-import { loadPeerHosts, peerHosts } from "../composables/peerHosts";
-import { providePaneHost } from "../composables/paneHost";
 import { useI18n } from "vue-i18n";
 
 const { t } = useI18n();
-
-// The peer servers the "Run on" picker offers (common/peers.ts). This panel is where every new
-// session is started from since #1867, so a picker wired only into the in-cell form is one nobody
-// sees — which is how PR #8 first shipped.
-loadPeerHosts();
 
 const props = defineProps<{
   // The directory the form opens on: the cell the panel was opened from, or the default workspace
@@ -50,7 +42,7 @@ const emit = defineEmits<{
   // The Agent Picker's value and the model pick ride along, which the form's own `start` does not
   // carry: in a cell both WERE the cell's own state, and here the host has to be told. Dropping
   // `choice` is silent — the cell starts on the directory's default and nothing says the pick went.
-  (e: "start", value: PanelStart): void;
+  (e: "start", value: { dir: string | null; pick: AgentPick; choice: LaunchChoice | null; account: string | null }): void;
   (e: "resume", value: ResumeRequest): void;
   (e: "run", value: RunCommand): void;
   (e: "launch", value: LaunchPick): void;
@@ -83,11 +75,6 @@ watch(
 const { pick: pickedAgent, choose: choosePickedAgent } = launchAgentPick();
 const launchChoice = ref<LaunchChoice | null>(null);
 const account = ref<string | null>(null);
-// This server every time, like the agent: opening the panel from a peer cell is not a request to
-// start the next session there too.
-const host = ref<string | null>(null);
-// The launch form's lists are the picked server's (paneHost.ts).
-providePaneHost(host);
 
 const panel = ref<HTMLElement | null>(null);
 
@@ -154,8 +141,6 @@ onBeforeUnmount(() => {
       :custom-agents="customAgents ?? []"
       :accounts="accounts ?? []"
       :account="account"
-      :peers="peerHosts"
-      :host="host"
       :open-session-ids="openSessionIds"
       :open-cwds="openCwds"
       :cancellable="true"
@@ -163,8 +148,7 @@ onBeforeUnmount(() => {
       @update:agent="choosePickedAgent"
       @update:choice="(value) => (launchChoice = value)"
       @update:account="(value) => (account = value)"
-      @update:host="(value) => (host = value)"
-      @start="(value) => emit('start', { dir: value, pick: pickedAgent, choice: launchChoice, account, host })"
+      @start="(value) => emit('start', { dir: value, pick: pickedAgent, choice: launchChoice, account })"
       @resume="(value) => emit('resume', value)"
       @run="(value) => emit('run', value)"
       @launch="(value) => emit('launch', value)"

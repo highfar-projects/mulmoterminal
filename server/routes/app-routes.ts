@@ -161,7 +161,6 @@ import type { createCopilotSpawner } from "../session/spawn/agents/spawn-copilot
 import type { createCursorSpawner } from "../session/spawn/agents/spawn-cursor.js";
 import type { createTranslationWorker } from "../session/scheduled/translation-worker.js";
 import type { createTitleManager } from "../session/list/session-title.js";
-import { mountPeerHttpRelay } from "../infra/http/peer-proxy.js";
 import { tmuxHasSession, tmuxKillSession, tmuxPanePidsBySessionAsync } from "../infra/process/tmux.js";
 import { mountProcessRoutes } from "./process-routes.js";
 import { listProcessDetails } from "../infra/process/process-list.js";
@@ -345,13 +344,10 @@ function mountIssueSessions(
     closeFinished: async (entry) => closeSummary(entry, await closeImplementer(closeDeps, entry)),
   });
 }
-
+  
 // What must run after the gates but before express.json, in this order. Its own function so
-// mountAppRoutes stays under the length limit with this fork's peer relay added to upstream's list.
+// mountAppRoutes stays under the length limit.
 function mountAheadOfParsers(app: Express, deps: AppRouteDeps): void {
-  // A peer server's cells (common/peers.ts), relayed with their bodies untouched — so ahead of
-  // every parser, right behind the gates.
-  mountPeerHttpRelay(app, deps.isAllowedOrigin);
 
   // Ahead of express.json, carrying its own raw parser: a dropped file is bytes under its own
   // content type, and a dropped .json would otherwise be parsed as a document rather than saved.

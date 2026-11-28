@@ -7,7 +7,7 @@ import { FLIP_MS, shouldRefocusOnZoomChange } from "./cellFlip";
 import { isRemoteServer } from "../composables/remoteServer";
 import { terminalManagesAttention, terminalViewActive } from "./terminalViewActive";
 import { dragCarriesFiles, dropPlan, dropTextFromUriList, toInsertText } from "./dropPaths";
-import { dropUploadErrorMessage, uploadDropBatch, uploadDroppedFile } from "./dropUpload";
+import { dropUploadErrorMessage, uploadDropBatch } from "./dropUpload";
 import { createImagePasteHandler } from "../composables/usePasteImage";
 import { translateUiSentence } from "../utils/translateUi";
 import { currentTermTheme, termThemeFor } from "../composables/useTheme";
@@ -33,7 +33,7 @@ import { useAppConfig } from "../composables/useAppConfig";
 import { skillSeed } from "./skillSeed";
 import GitBranchChip from "./GitBranchChip.vue";
 import WorktreeEnvChip from "./WorktreeEnvChip.vue";
-import { useHeaderButtons, hasPickFileButton, isHeaderFolder, type HeaderButton, type HeaderEntry } from "../composables/useHeaderButtons";
+import { useHeaderButtons, hasPickFileButton, isHeaderFolder, type HeaderButton } from "../composables/useHeaderButtons";
 import { usePaletteHeaderEntries } from "../composables/paletteHeaderEntries";
 import { dropHintEnglish } from "./dropHint";
 import HeaderButtonFolder from "./HeaderButtonFolder.vue";
@@ -83,8 +83,6 @@ const props = defineProps<{
   customAgent?: string | null;
   // The account a new session starts on (#2215) — one of the user's second logins.
   account?: string | null;
-  // The peer server this terminal runs on (common/peers.ts), or null/absent for this one.
-  host?: string | null;
   // Provider/model picked in the launch form, for this session only (#584).
   launch?: LaunchChoice | null;
   runMenu?: boolean;
@@ -149,7 +147,6 @@ function currentTarget(): conn.ConnTarget {
     customAgent: props.customAgent ?? null,
     account: props.account ?? null,
     launch: props.launch ?? null,
-    host: props.host ?? null,
   };
 }
 
@@ -189,17 +186,13 @@ function exitCopyMode() {
 // the app-wide theme first. Unlike the four style props this replaces, forgetting this one costs a
 // moment's delay, not a silently dead setting.
 const dirConfigCwd = computed(() => serverCwd.value ?? props.dirCwd ?? null);
-// The peer server this terminal runs on (common/peers.ts): every directory below is THAT machine's,
-// so everything read about it is read from that server.
-const peerHost = computed(() => props.host ?? null);
-const { config: dirConfig } = useDirConfig(dirConfigCwd, peerHost);
+const { config: dirConfig } = useDirConfig(dirConfigCwd);
 
 // The running model, so header buttons/chips can substitute `${model}`.
 const { context: sessionContext } = useSessionContext(
   computed(() => props.sessionId),
   serverCwd,
   computed(() => props.agent ?? "claude"),
-  peerHost,
 );
 // What GET /api/header resolves for this terminal's directory: the user's configured action buttons
 // (or the built-in defaults), and the per-tree values the directory reserved (#1367).
@@ -218,13 +211,8 @@ const {
   session: computed(() => props.sessionId),
   agent: computed(() => props.agent ?? "claude"),
   model: computed(() => sessionContext.value?.model ?? null),
-  host: peerHost,
 });
-// On a peer, only the buttons that type into the terminal: a `shell` button runs in a command cell
-// that THIS server resolves and starts, and an `open` one acts on this machine's files and windows —
-// both the wrong machine for a session that runs on the peer.
-const onPeer = (entries: HeaderEntry[]): HeaderEntry[] => (props.host ? entries.filter((e) => !isHeaderFolder(e) && e.run === "input") : entries);
-const headerButtons = computed(() => (props.command || props.launcher ? [] : onPeer(resolvedButtons.value)));
+const headerButtons = computed(() => (props.command || props.launcher ? [] : resolvedButtons.value));
 
 // `input`/`open` dispatch client-side. `shell` hands off to a command cell: the browser never holds the
 // command — it emits the button id + this session's context, and the server re-resolves it (see /ws/run).
@@ -249,7 +237,7 @@ function onHeaderButton(button: HeaderButton): void {
 // The command palette lists these and runs a pick through onHeaderButton, as the header does (#2465).
 usePaletteHeaderEntries(slotKey, {
   buttons: () => headerButtons.value,
-  commands: () => (props.command || props.launcher ? [] : onPeer(resolvedCommands.value)),
+  commands: () => (props.command || props.launcher ? [] : resolvedCommands.value),
   run: onHeaderButton,
   // And the Run and Skill menus' entries, only where this terminal shows those menus (#2697).
   menus: () => (props.runMenu ? { cwd: serverCwd.value, runScript: (command) => emit("run", command), runSkill: onSkill } : null),
@@ -273,8 +261,6 @@ const { storiesRoots } = useAppConfig();
 async function onDeck(absolutePath: string): Promise<void> {
   const session = props.sessionId;
   if (!session) return void showHint(DECK_NO_SESSION_EN, DECK_ICON);
-  // The Canvas is this server's, and the deck a file on the peer's disk.
-  if (props.host) return void showHint(DECK_ON_PEER_EN, DECK_ICON);
   const result = await buildCanvasCard(absolutePath, storiesRootsFrom(storiesRoots.value));
   if (result.kind !== "card") return void showHint(result.kind === "refused" ? result.reason : DECK_UNSUPPORTED_EN, DECK_ICON);
   // Re-asked after the await, like every other late reply here: the cell can be handed a different
@@ -288,7 +274,7 @@ async function onDeck(absolutePath: string): Promise<void> {
 // Git status chip — single view only. In the grid the embedding TerminalCell shows
 // its own chip, so null the cwd here to skip redundant polling (status stays null).
 const gitCwd = computed(() => (props.devTerminal ? null : serverCwd.value));
-const { status: gitStatus } = useGitStatus(gitCwd, peerHost);
+const { status: gitStatus } = useGitStatus(gitCwd);
 const dragOver = ref(false);
 const { fontSize } = useTerminalFontSize();
 
@@ -541,9 +527,7 @@ function onDrop(e: DragEvent) {
   const text = dropTextFromUriList(dt.getData("text/uri-list") || dt.getData("text/plain"));
   // The files are only read when the plan can use them: a path the browser gave settles a local drop,
   // as it always did (#2669).
-  // A peer cell counts as remote: the browser's path names the machine the BROWSER is on, and the
-  // session runs on the peer, where only an uploaded copy exists.
-  const remote = isRemoteServer() || !!props.host;
+  const remote = isRemoteServer();
   const files = text && !remote ? [] : Array.from(dt.files);
   const plan = dropPlan({ pathText: text, fileCount: files.length, remoteServer: remote });
   if (plan === "insert-path") insertText(text);
@@ -563,7 +547,6 @@ const DECK_ICON = "space_dashboard";
 const DECK_NO_SESSION_EN = "Start the terminal first — a deck is shown beside a running session.";
 const DECK_UNSUPPORTED_EN = "this server cannot show that deck — it is outside the directory it serves stories from";
 const DECK_SEED_FAILED_EN = "could not put the deck on the Canvas — the server did not accept it";
-const DECK_ON_PEER_EN = "A deck cannot be shown for a terminal on another server yet.";
 
 const DROP_NO_SESSION_EN = "Start the terminal first — there's no session yet to send the file to.";
 // A saved file belongs to the session it was uploaded for, which is the only one granted its
@@ -596,13 +579,7 @@ async function uploadAndInsert(files: File[]) {
   if (!session) return void showHint(DROP_NO_SESSION_EN);
   // Shown in English first and swapped when the (server-cached) translation lands, like the hint.
   void translateUiSentence(DROP_UPLOADING_EN, "mulmoterminal-ui").then((translated) => (dropUploadingText.value = translated));
-  const peer = props.host ?? null;
-  const outcome = await uploadDropBatch(
-    session,
-    files,
-    () => props.sessionId,
-    (id, file) => uploadDroppedFile(id, file, peer),
-  );
+  const outcome = await uploadDropBatch(session, files, () => props.sessionId);
   if (outcome.kind === "stale") return void showHint(DROP_SESSION_CHANGED_EN);
   if (outcome.kind === "failed") return void showHint(dropUploadErrorMessage(outcome.status));
   insertText(toInsertText(outcome.paths));
@@ -661,7 +638,6 @@ onUnmounted(() => clearTimeout(dropHintTimer));
 // reach this — the handler declines them and xterm's own paste handling runs as before.
 const onPaste = createImagePasteHandler({
   sessionId: () => props.sessionId ?? null,
-  host: () => props.host ?? null,
   insertText,
   onError: (message) => void showHint(message),
 });

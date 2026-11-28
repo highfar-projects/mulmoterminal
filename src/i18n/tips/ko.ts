@@ -359,8 +359,6 @@ export const tipsKo: Messages["tips"] = {
     trustPrompt:
       "Claude 사용량을 표시할 수 없습니다 — 사용량 확인이 Claude Code의 신뢰 확인에서 멈춰 있습니다. {folder}에서 `claude`를 한 번 실행해 승인하세요.",
     usageLimit: "Claude 사용량을 표시할 수 없습니다 — 이 구독이 사용 한도에 도달해 확인이 응답을 받지 못했습니다.",
-    peerGauge: "{peer}: {title}",
-    peer: "{peer}의 사용량: 이 서버는 자체 로그인과 토큰 순환으로 동작하므로 수치도 그 서버의 것입니다.",
     accountTrustPrompt:
       "Claude 사용량을 표시할 수 없습니다 — 사용량 확인이 Claude Code의 신뢰 확인에서 멈춰 있습니다. {folder}에서 이 계정으로 셀을 한 번 시작해 승인하세요.",
     accountNote: "{account}: {note}",

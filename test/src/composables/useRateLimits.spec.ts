@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { useRateLimits } from "../../../src/composables/useRateLimits";
-import { peerHosts } from "../../../src/composables/peerHosts";
 
 // Every request here is one the server may answer by spending a Claude query on a probe, so a
 // leaked polling chain does not just waste a fetch — it quietly doubles the cost of the budget the
@@ -204,37 +203,5 @@ describe("useRateLimits polling lifecycle", () => {
     await vi.advanceTimersByTimeAsync(10_000);
     expect(fetchMock).toHaveBeenCalled();
     stop();
-  });
-
-  // A peer runs on its own logins (common/peers.ts): its windows are asked of IT, through the relay,
-  // and kept apart from this server's.
-  it("asks each peer through the relay and keeps its reading apart", async () => {
-    peerHosts.value = [{ id: "wsl", label: "WSL" }];
-    fetchMock.mockImplementation((url: string) =>
-      String(url).startsWith("/peer/wsl/")
-        ? respond({ claude: null, codex: null, probing: false, accounts: [{ id: "dev", label: "dev", agent: "claude", limits: null, rotation: true }] })
-        : respond(),
-    );
-    const { start, stop, snapshot, peerSnapshots } = useRateLimits();
-    start();
-    await vi.advanceTimersByTimeAsync(0);
-    expect(fetchMock.mock.calls.map(([url]) => String(url)).sort()).toEqual(["/api/rate-limits/refresh", "/peer/wsl/api/rate-limits/refresh"]);
-    expect(peerSnapshots.value.wsl?.accounts?.map((a) => a.id)).toEqual(["dev"]);
-    expect(snapshot.value?.accounts).toEqual([]);
-    stop();
-    peerHosts.value = [];
-  });
-
-  // The page reads the peer list in parallel with the first poll, so the list usually lands after it.
-  it("asks a peer that arrives after the poll started at once, and only once", async () => {
-    const { start, stop } = useRateLimits();
-    start();
-    await vi.advanceTimersByTimeAsync(0);
-    fetchMock.mockClear();
-    peerHosts.value = [{ id: "wsl", label: "WSL" }];
-    await vi.advanceTimersByTimeAsync(0);
-    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual(["/peer/wsl/api/rate-limits/refresh"]);
-    stop();
-    peerHosts.value = [];
   });
 });

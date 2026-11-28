@@ -26,7 +26,6 @@
 // (`cell-<uid>`), the single view's `single`, or an ephemeral id for command/Run
 // terminals (which are NOT persisted — their process is unresumable, so their slot
 // is released on unmount like before).
-import { peerWsHost } from "../../common/peers";
 import { reactive, watch } from "vue";
 import { credentialOf, forgetCredential, type CellCredential } from "./cellCredential";
 import { Terminal, type ITheme } from "@xterm/xterm";
@@ -80,10 +79,6 @@ export interface ConnTarget extends Pick<ConnTargetUrlInput, "agent" | "launch" 
   // (`{ shell: true }`, the header "new terminal" button). Unlike `command` this is a
   // PERSISTENT session — it reconnects on drop and reattaches by session id, like a Claude cell.
   launcher: { index: number } | { shell: true } | null;
-  // The PEER server this cell runs on (common/peers.ts), or null for this one. Every endpoint is
-  // reached through this server's relay at `/peer/<id>/…`, so it only changes the url's host part.
-  // Absent reads as this server, which is what every target from before peers existed means.
-  host?: string | null | undefined;
 }
 
 // The `terminalSubmit` mapping describes the user's CLAUDE binding, so it only applies to
@@ -591,7 +586,7 @@ function connect(c: Conn) {
   // live pty in step, but it arrives as a separate message, and a pty spawned before it lands draws
   // its first frame at the server's default (#1178). Callers fit before connecting, so by here
   // `term.cols/rows` is the real cell.
-  const url = connWsUrl(c.target, resumeId, peerWsHost(c.target.host, location.host), secure, { cols: c.term.cols, rows: c.term.rows });
+  const url = connWsUrl(c.target, resumeId, location.host, secure, { cols: c.term.cols, rows: c.term.rows });
   const sock = new WebSocket(url);
   c.ws = sock;
   // A width waiting to settle was meant for the socket being replaced; onopen sends the new one

@@ -62,9 +62,6 @@ import type { FileLocation } from "../composables/filePathLocation";
 import { paneCanShowClick, paneToOpenBeside } from "./paneClickTarget";
 import { onToolGroupsAnnounced } from "../composables/useToolGroupsAnnounce";
 import { usePubSub } from "../composables/usePubSub";
-import { providePaneHost } from "../composables/paneHost";
-import { subscribeEveryPeer } from "../composables/peerHosts";
-import { peerApiPath } from "../../common/peers";
 import { isDrawnResult } from "../utils/drawnResult";
 import { hasCanvasGroup, hasCollectionsGroup } from "../../common/toolGroups";
 import type { RightPane } from "./gridCell";
@@ -609,7 +606,7 @@ const mayHaveGainedACard = (): boolean => paneCellSessionId.value !== null && !c
 async function adoptStoredCard(): Promise<void> {
   const sessionId = paneCellSessionId.value;
   if (!sessionId) return;
-  const has = await hasStoredCard(sessionId, paneHost.value);
+  const has = await hasStoredCard(sessionId);
   // The zoom can walk while the ask is in flight; `canvasHasCard` is one flag for whichever cell
   // is enlarged, so a late answer must not speak for the cell that replaced it.
   if (sessionId === paneCellSessionId.value) canvasHasCard.value = has;
@@ -769,12 +766,6 @@ const storiesRoots = computed<StoriesRoots>(() => storiesRootsFrom(props.stories
 // The session of the cell the pane answers for — what Canvas and Tools read. Null for a cell with
 // no session yet (a launcher, a command cell), which both panes already render as empty.
 const paneCellSessionId = computed(() => cellOf(paneCellUid.value)?.session ?? null);
-// The server that cell runs on (common/peers.ts), for every pane below to ask (paneHost.ts). The
-// files pane is the one that can be left on another cell — declining a re-root keeps it on the cell
-// it was on — so while it is the pane, it is THAT cell's server; every other pane follows the cell
-// it answers for. One pane shows at a time, so one value serves.
-const paneHost = computed(() => cellOf(rightPane.value === "files" ? paneUid.value : paneCellUid.value)?.host ?? null);
-providePaneHost(paneHost);
 // The ENLARGED cell's session, which is not the same thing on the tiled grid: what opens the pane by
 // itself — a drawing, a question, an agent's showInPane — answers to this one only, so a cell whose
 // pane was closed long ago does not put one beside the tiles unasked.
@@ -807,8 +798,7 @@ watch(
     unsubscribeDrawn?.();
     unsubscribeDrawn = undefined;
     if (!sessionId) return;
-    // On the enlarged cell's own server (common/peers.ts).
-    unsubscribeDrawn = usePubSub(cellOf(props.expandedUid)?.host ?? null).subscribe(`session:${sessionId}`, (data) => {
+    unsubscribeDrawn = subscribeSession(`session:${sessionId}`, (data) => {
       if (rightPane.value === "canvas" || props.expandedUid === null) return;
       if (!isDrawnResult(data)) return;
       // Through openCanvasFor rather than setRightPane: the files pane has a buffer to flush on
@@ -843,7 +833,7 @@ const dropQuestion = (sessionId: string): void => {
   if (sessionId === paneCellSessionId.value && rightPane.value === "question") setRightPane(null, paneUid.value);
 };
 
-const onQuestion = (data: unknown): void => {
+const unsubscribeQuestion = subscribeSession(ASK_QUESTION_CHANNEL, (data) => {
   if (isAskQuestionEvent(data)) {
     questionBox.offer(data);
     answerFailure.value = null;
@@ -854,15 +844,8 @@ const onQuestion = (data: unknown): void => {
     return;
   }
   if (isAskQuestionDone(data) && questionBox.close(data)) dropQuestion(data.sessionId);
-};
-// This server's sessions, and every peer's (common/peers.ts): the events carry their session id, which
-// is all the box keys on.
-const unsubscribeQuestion = subscribeSession(ASK_QUESTION_CHANNEL, onQuestion);
-const unsubscribePeerQuestions = subscribeEveryPeer(ASK_QUESTION_CHANNEL, (data) => onQuestion(data));
-onBeforeUnmount(() => {
-  unsubscribeQuestion();
-  unsubscribePeerQuestions();
 });
+onBeforeUnmount(() => unsubscribeQuestion());
 
 // The question a session is blocked on, for a browser that was not listening when it arrived — a
 // reload or a socket reconnect between the question and its answer. The channel replays nothing,
@@ -945,18 +928,12 @@ const showPendingFile = (sessionId: string): void => {
   if (show) void showInFilesPane(show, show.cwd);
 };
 
-const onPaneCommand = (data: unknown): void => {
+const unsubscribePaneCommands = subscribeSession(PANE_COMMAND_CHANNEL, (data) => {
   if (!isPaneCommand(data)) return;
   paneCommands.offer(data);
   showPendingFile(data.sessionId);
-};
-// On every peer too, for an agent running there (common/peers.ts).
-const unsubscribePaneCommands = subscribeSession(PANE_COMMAND_CHANNEL, onPaneCommand);
-const unsubscribePeerPaneCommands = subscribeEveryPeer(PANE_COMMAND_CHANNEL, (data) => onPaneCommand(data));
-onBeforeUnmount(() => {
-  unsubscribePaneCommands();
-  unsubscribePeerPaneCommands();
 });
+onBeforeUnmount(() => unsubscribePaneCommands());
 
 watch(
   expandedSessionId,
@@ -1115,11 +1092,11 @@ watch(
     // Asked beside the tools question rather than folded into it: `/api/tools` answers what the
     // session CAN draw, this answers what it already HAS. A failure here leaves the flag false —
     // the tools answer still decides, exactly as before this existed.
-    void hasStoredCard(sessionId, paneHost.value).then((has) => {
+    void hasStoredCard(sessionId).then((has) => {
       if (sessionId === paneCellSessionId.value) canvasHasCard.value = has;
     });
     try {
-      const res = await fetchWithTimeout(peerApiPath(paneHost.value, `/api/tools?sessionId=${encodeURIComponent(sessionId)}`));
+      const res = await fetchWithTimeout(`/api/tools?sessionId=${encodeURIComponent(sessionId)}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const body = await jsonBody(res);
       // THROWN rather than read as "no groups": jsonBody answers {} for a body that is truncated
@@ -2085,11 +2062,8 @@ function onRosterDragLeave(event: DragEvent) {
           @pointerdown.prevent="onSplitterDown"
           @keydown="onSplitterKey"
         />
-        <!-- Keyed by its server: a pane moved to a cell on another server is a fresh mount, so nothing it
-             subscribed to or cached on the way in still points at the old one (paneHost.ts). -->
         <FilesPane
           v-if="rightPane === 'files'"
-          :key="`files:${paneHost ?? ''}`"
           ref="filesPane"
           :cwd="paneCwd"
           :initial-state="paneState"
@@ -2253,7 +2227,6 @@ function onRosterDragLeave(event: DragEvent) {
           :launcher="cell.launcher"
           :session="cell.session"
           :cwd="cell.cwd"
-          :host="cell.host ?? null"
           v-on="gridCellEvents(cell)"
           @session="(id) => emit('session', cell.uid, id)"
         />
@@ -2268,7 +2241,6 @@ function onRosterDragLeave(event: DragEvent) {
           :initial-agent="cell.agent"
           :initial-custom-agent="cell.customAgent"
           :initial-account="cell.account"
-          :initial-host="cell.host"
           :initial-launch-choice="cell.launchChoice"
           :auto-start="cell.autoStart === true"
           :presets="presets"

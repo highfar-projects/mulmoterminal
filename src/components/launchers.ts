@@ -14,6 +14,4 @@ export interface Launcher {
 export interface LaunchPick {
   launcher: CellLauncher;
   cwd: string | null;
-  /** The peer server to run it on (common/peers.ts), null/absent for this one. */
-  host?: string | null;
 }

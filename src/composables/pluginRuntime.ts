@@ -11,7 +11,7 @@
 //                 plugin:markdown:file:<path> — see server/backends/plugins/markdown.js).
 //   - locale    → the display language, as the plugins' table key (pluginLocale.ts).
 //   - openUrl   → scheme-allowlisted window.open.
-import { computed, defineComponent, h, markRaw, provide, ref, watchEffect, type Component, type Ref } from "vue";
+import { computed, defineComponent, h, markRaw, provide, type Component, type Ref } from "vue";
 import { PLUGIN_RUNTIME_KEY, type BrowserPluginRuntime, type SubscribeOptions } from "gui-chat-protocol/vue";
 import { usePubSub } from "./usePubSub";
 import { i18n } from "../i18n";
@@ -19,10 +19,6 @@ import { pluginLocaleFor } from "../utils/pluginLocale";
 import { isOpenablePluginUrl } from "./pluginUrlPolicy";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { PLUGIN_DISPATCH_TIMEOUT_MS, pluginDispatchError } from "./pluginDispatchDeadline";
-import { usePaneHost } from "./paneHost";
-import { peerApiPath } from "../../common/peers";
-import { isRecord } from "../../common/isRecord";
-import { watchPeerImages } from "./peerImageSrc";
 
 function pluginChannelName(scope: string, eventName: string): string {
   return `plugin:${scope}:${eventName}`;
@@ -39,15 +35,12 @@ function makeOpenUrl(scope: string): BrowserPluginRuntime["openUrl"] {
   };
 }
 
-// `host`: the server the view's pane is about (paneHost.ts) — a peer's file is read, written and
-// rendered by the peer's own route, since only that machine has the path. Read per request rather
-// than once, so a pane that moves to another cell's server does not keep posting to the old one.
-function makeDispatch(toolName: string, host: Readonly<Ref<string | null>>): BrowserPluginRuntime["dispatch"] {
-  const path = `/api/plugin/${encodeURIComponent(toolName)}`;
+function makeDispatch(toolName: string): BrowserPluginRuntime["dispatch"] {
+  const url = `/api/plugin/${encodeURIComponent(toolName)}`;
 
   async function request(args: object): Promise<unknown> {
     const res = await fetchWithTimeout(
-      peerApiPath(host.value, path),
+      url,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -124,16 +117,11 @@ interface MakeRuntimeDeps {
   scope: string;
   /** Tool name the dispatch route resolves (e.g. "presentDocument"). */
   toolName: string;
-  /** The server the view is about (paneHost.ts); absent = this one. */
-  host?: Readonly<Ref<string | null>>;
 }
 
-const THIS_SERVER: Readonly<Ref<string | null>> = computed(() => null);
-
 export function makeBrowserPluginRuntime(deps: MakeRuntimeDeps): BrowserPluginRuntime {
-  const { scope, toolName, host = THIS_SERVER } = deps;
-  // The file-change channels are the peer's too: its server is the one that sees the file change.
-  const { subscribe } = usePubSub(host.value);
+  const { scope, toolName } = deps;
+  const { subscribe } = usePubSub();
   const tag = `[plugin/${scope}]`;
   return {
     pubsub: { subscribe: makeSubscribe(scope, subscribe) },
@@ -145,20 +133,12 @@ export function makeBrowserPluginRuntime(deps: MakeRuntimeDeps): BrowserPluginRu
       error: (msg, data) => console.error(tag, msg, data),
     },
     openUrl: makeOpenUrl(scope),
-    dispatch: makeDispatch(toolName, host),
+    dispatch: makeDispatch(toolName),
     // `endpoints` is left OFF rather than set to undefined: the protocol spells it exact, so
     // the key holding undefined is a different type from no key. Every plugin here is the
     // single-dispatch shape, so there is no URL map to expose (MulmoClaude passes one through
     // for its multi-URL built-ins).
   };
-}
-
-/** The file a card is about — `docPath` for a document, `filePath` for the others — or null. */
-function documentPathOf(selectedResult: unknown): string | null {
-  const data = isRecord(selectedResult) ? selectedResult.data : undefined;
-  if (!isRecord(data)) return null;
-  const path = data.docPath ?? data.filePath;
-  return typeof path === "string" ? path : null;
 }
 
 /** Wrap a plugin view so its descendants can call useRuntime(). Mirrors
@@ -171,22 +151,9 @@ export function wrapWithPluginRuntime(scope: string, toolName: string, inner: Co
       name: `PluginRuntimeScope:${scope}`,
       inheritAttrs: false,
       setup(_props, { attrs, slots }) {
-        // A view inside a pane about a peer's cell is that peer's (paneHost.ts); elsewhere, this server.
-        const host = usePaneHost();
-        const runtime = makeBrowserPluginRuntime({ scope, toolName, host });
+        const runtime = makeBrowserPluginRuntime({ scope, toolName });
         provide(PLUGIN_RUNTIME_KEY, runtime);
-        // The images the view draws are built by the view itself, so on a peer they are corrected
-        // in its DOM (peerImageSrc.ts). `display: contents` keeps this box out of the layout.
-        const box = ref<HTMLElement | null>(null);
-        // Not a declared prop here, so `attrs` keeps the spelling the parent used — and every
-        // parent writes `:selected-result` in its template.
-        const docPath = (): string | null => documentPathOf(attrs["selected-result"] ?? attrs.selectedResult);
-        watchEffect((onCleanup) => {
-          const el = box.value;
-          const peer = host.value;
-          if (el && peer) onCleanup(watchPeerImages(el, peer, docPath));
-        });
-        return () => h("div", { ref: box, style: "display: contents" }, [h(inner, attrs, slots)]);
+        return () => h(inner, attrs, slots);
       },
     }),
   );

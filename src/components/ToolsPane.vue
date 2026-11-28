@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { peerApiPath } from "../../common/peers";
-import { usePaneHost } from "../composables/paneHost";
 import { ref, computed, watch, onUnmounted } from "vue";
 import { useToolCallFeed } from "../composables/useToolCallFeed";
 import type { ToolCall } from "./toolCall";
@@ -10,9 +8,6 @@ import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 import { useI18n } from "vue-i18n";
-
-// The server the pane's cell runs on (paneHost.ts): this one, or a peer it relays.
-const paneHost = usePaneHost();
 
 const { t } = useI18n();
 
@@ -104,7 +99,7 @@ type LoadReason = "selected" | "refreshed";
 
 async function loadAvailableTools(sessionId: string | null, reason: LoadReason = "selected") {
   const loadId = ++latestToolsLoad;
-  const url = peerApiPath(paneHost.value, sessionId ? `/api/tools?sessionId=${encodeURIComponent(sessionId)}` : "/api/tools");
+  const url = sessionId ? `/api/tools?sessionId=${encodeURIComponent(sessionId)}` : "/api/tools";
   // Overtaken: a load for another session (we switched away), or a newer load for this one.
   const overtaken = () => sessionId !== props.sessionId || loadId !== latestToolsLoad;
   toolsState.value = "loading";
@@ -164,7 +159,6 @@ useToolCallFeed(
   () => {
     expandedCalls.value = new Set();
   },
-  () => paneHost.value,
 );
 
 function toggleTool(name: string) {

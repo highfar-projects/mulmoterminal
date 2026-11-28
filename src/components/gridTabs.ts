@@ -1,5 +1,4 @@
 import type { RunCommand } from "./runCommand";
-import { isPeerId, peerDirKey } from "../../common/peers";
 import type { Translate } from "../i18n/translate";
 import type { LaunchChoice } from "./wsUrl";
 import { dirPriority } from "../../common/dirPriorityOrder";
@@ -67,9 +66,6 @@ export interface Cell {
   // Kept across a reload so the header can keep saying which login it is; the SERVER is what holds
   // the session to it, so a stale value here can mislabel a cell but never move its conversation.
   account?: string;
-  // The PEER server this cell runs on (common/peers.ts), or absent for this one. Kept across a
-  // reload because the session id alone names nothing here: the session lives on that server.
-  host?: string;
   // Set aside by the user: still connected and still holding its history, just sunk out of the
   // way (#992). Stored as the ABSENCE of the key when not parked, for the same reason `agent`
   // is — only an absent key survives the JSON a persisted cell round-trips.
@@ -150,14 +146,7 @@ export function setCwd(state: GridState, uid: number, cwd: string): GridState {
 export const storedCellAgent = (agent: TerminalAgent): Cell["agent"] => (agent === "claude" ? undefined : agent);
 
 // Record which agent a cell launched, so a reloaded cell reconnects to the right endpoint.
-export function setCellAgent(
-  state: GridState,
-  uid: number,
-  agent: TerminalAgent,
-  customAgent: string | null = null,
-  account: string | null = null,
-  host: string | null = null,
-): GridState {
+export function setCellAgent(state: GridState, uid: number, agent: TerminalAgent, customAgent: string | null = null, account: string | null = null): GridState {
   // Claude is the ABSENT case, so switching back to it removes the key rather than setting it
   // to undefined — a persisted cell round-trips through JSON, where only the former survives.
   //
@@ -168,14 +157,11 @@ export function setCellAgent(
   // reconnected as the built-in (codex + CodeRabbit, #1890).
   // `account` is replaced the same way, for the same reason: a launch on the default login reports
   // null, and keeping the previous value would label the new session with somebody else's login.
-  // `host` too: a launch on this server reports null, and keeping a peer would reconnect the new
-  // session to the wrong machine after a reload.
-  const applied = ({ agent: _previous, customAgent: _wrapper, account: _login, host: _machine, ...rest }: Cell): Cell => ({
+  const applied = ({ agent: _previous, customAgent: _wrapper, account: _login, ...rest }: Cell): Cell => ({
     ...rest,
     ...(agent === "claude" ? {} : { agent }),
     ...(customAgent === null ? {} : { customAgent }),
     ...(account === null ? {} : { account }),
-    ...(host === null ? {} : { host }),
   });
   return { ...state, cells: state.cells.map((c) => (c.uid === uid ? applied(c) : c)) };
 }
@@ -197,11 +183,8 @@ export function runCommand(state: GridState, uid: number, command: Cell["command
 // A cell launched a configured program (shell/codex/…): attach the launcher and its
 // directory, turning the launch cell into a persistent launcher terminal. Its session
 // id arrives later from the server (setSession), so it persists and reconnects.
-// `host`: the peer server it runs on (common/peers.ts), null for this one — replaced, not kept, since
-// the launch form decides it afresh for this launch.
-export function launchInCell(state: GridState, uid: number, launcher: CellLauncher, cwd: string | null, host: string | null = null): GridState {
-  const placed = ({ host: _previous, ...rest }: Cell): Cell => ({ ...rest, launcher, cwd, ...(host ? { host } : {}) });
-  return { ...state, cells: state.cells.map((c) => (c.uid === uid ? placed(c) : c)) };
+export function launchInCell(state: GridState, uid: number, launcher: CellLauncher, cwd: string | null): GridState {
+  return { ...state, cells: state.cells.map((c) => (c.uid === uid ? { ...c, launcher, cwd } : c)) };
 }
 
 // Insert a brand-new cell immediately AFTER the cell that triggered it, so the header
@@ -577,13 +560,7 @@ const RANK: Record<AttentionStatus, number> = { blocked: 0, done: 1, idle: 2, wo
 const LAUNCH_RANK = 4;
 const cellRank = (c: Cell, statusByUid: Record<number, AttentionStatus>): number => (isLaunchCell(c) ? LAUNCH_RANK : RANK[statusByUid[c.uid] ?? "idle"]);
 
-// Keyed like the map is built (cellDirKey): a peer cell's directory is that machine's, ranked by
-// THAT directory's config even when this server has a folder at the same path.
-/** The cell's directory as a lookup key across servers (common/peers.ts `peerDirKey`): the path
- *  itself for a cell on this server. Null for a cell with no directory. */
-export const cellDirKey = (c: Pick<Cell, "cwd" | "host">): string | null => (c.cwd ? peerDirKey(c.host, c.cwd) : null);
-
-const cellPriority = (c: Cell, priorityByCwd: Record<string, number>): number => dirPriority(cellDirKey(c), priorityByCwd);
+const cellPriority = (c: Cell, priorityByCwd: Record<string, number>): number => dirPriority(c.cwd, priorityByCwd);
 
 // Display order. "manual": the hand-arranged list as-is. "auto": a STABLE sort by
 // attention rank — equal-rank cells keep their manual order, so a status change
@@ -697,7 +674,6 @@ export function parseGridState(raw: string | null): GridState | null {
         ...(agent === undefined ? {} : { agent }),
         ...(isCustomAgentId(c.customAgent) ? { customAgent: c.customAgent } : {}),
         ...(isAccountId(c.account) ? { account: c.account } : {}),
-        ...(isPeerId(c.host) ? { host: c.host } : {}),
         ...(c.parked === true ? { parked: true as const } : {}),
       };
     });

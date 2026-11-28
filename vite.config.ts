@@ -66,12 +66,6 @@ export default defineConfig({
         target: `http://localhost:${BACKEND_PORT}`,
         changeOrigin: true,
       },
-      // A peer server's cells (common/peers.ts): HTTP and WebSocket both go to the backend, which
-      // relays them on. No changeOrigin — the backend's relay checks the page's own Origin first.
-      "/peer": {
-        target: `http://localhost:${BACKEND_PORT}`,
-        ws: true,
-      },
       // presentHtml page serving (the View's iframe src). Without this, the dev
       // Vite catch-all returns index.html instead of the HTML artifact.
       "/artifacts": {

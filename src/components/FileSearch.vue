@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { peerApiPath } from "../../common/peers";
-import { usePaneHost } from "../composables/paneHost";
 // Search the CONTENTS of the open directory (#2140) — the companion to FileFinder, which searches
 // their names, and deliberately a SEPARATE component rather than a mode of it.
 //
@@ -31,9 +29,6 @@ import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 import { useI18n } from "vue-i18n";
 import type { FilesPanelSeed } from "../composables/filesPanelSeed";
-
-// The server whose directory is searched (paneHost.ts): this one, or a peer it relays.
-const paneHost = usePaneHost();
 
 const { t } = useI18n();
 
@@ -137,11 +132,7 @@ async function runSearch(): Promise<void> {
     if (caseSensitive.value) params.set("case", "1");
     // NOT the default deadline: the route shells out to `git grep`, whose own cap on the server is
     // 10s. With the default the browser would give up first on a large repository, every time.
-    const res = await fetchWithTimeout(
-      peerApiPath(paneHost.value, `/api/files/browse/search?${params.toString()}`),
-      { signal: abort.signal },
-      SLOW_COMMAND_TIMEOUT_MS,
-    );
+    const res = await fetchWithTimeout(`/api/files/browse/search?${params.toString()}`, { signal: abort.signal }, SLOW_COMMAND_TIMEOUT_MS);
     const data = await jsonBody(res);
     if (seed !== latest) return;
     if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : `HTTP ${res.status}`);

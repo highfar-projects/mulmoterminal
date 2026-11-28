@@ -757,17 +757,6 @@ describe("setCellAgent and the custom-agent wrapper", () => {
   });
 });
 
-// A shell started on a PEER server (common/peers.ts) lives there: the cell has to say so, or a reload
-// reconnects its session id to this server. A launch here drops any peer the cell held before.
-describe("launchInCell on a peer", () => {
-  const L = { index: 0, label: "Shell", command: "zsh" };
-  it("records the peer the launcher runs on, and nothing for this server", () => {
-    expect(launchInCell(make([cell(0)]), 0, L, "/p", "win").cells[0].host).toBe("win");
-    const moved = launchInCell(make([{ ...cell(0), host: "win" }]), 0, L, "/p");
-    expect("host" in moved.cells[0]).toBe(false);
-  });
-});
-
 describe("launchInCell (persistent launcher cells)", () => {
   const L = { index: 1, label: "Shell" };
 
@@ -1353,28 +1342,6 @@ describe("setCellAgent and the account (#2215)", () => {
     const stored = JSON.parse(JSON.stringify(kept));
     stored.cells[0].account = "Not An Id";
     expect("account" in (parseGridState(JSON.stringify(stored))?.cells[0] ?? {})).toBe(false);
-  });
-});
-
-// The peer server a cell runs on (common/peers.ts): the session id names nothing on any other server,
-// so a reload must reconnect the cell to the same machine.
-describe("setCellAgent and the peer host", () => {
-  const launched = () => make([{ uid: 0, session: null, cwd: "/p", host: "win", autoStart: true }]);
-
-  it("keeps the peer the launch reports", () => {
-    expect(setCellAgent(launched(), 0, "claude", null, null, "win").cells[0].host).toBe("win");
-  });
-
-  it("drops it when the launch reports this server", () => {
-    expect("host" in setCellAgent(launched(), 0, "claude").cells[0]).toBe(false);
-  });
-
-  it("round-trips a valid peer through parseGridState and drops a malformed one", () => {
-    const kept = setSession(setCellAgent(launched(), 0, "claude", null, null, "win"), 0, U(7));
-    expect(parseGridState(JSON.stringify(kept))?.cells[0].host).toBe("win");
-    const stored = JSON.parse(JSON.stringify(kept));
-    stored.cells[0].host = "Not/A Peer";
-    expect("host" in (parseGridState(JSON.stringify(stored))?.cells[0] ?? {})).toBe(false);
   });
 });
 

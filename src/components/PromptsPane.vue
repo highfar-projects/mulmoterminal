@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { peerApiPath } from "../../common/peers";
-import { usePaneHost } from "../composables/paneHost";
 // The prompts YOU sent this session, newest first — the mirror of the tools pane, which shows
 // what the agent then did with them (#1748).
 //
@@ -19,9 +17,6 @@ import { PROMPT_SUBMITTED_CHANNEL, isPromptSubmittedEvent } from "../../common/p
 import { isTextSelected } from "./textSelected";
 import { clockLabel } from "./clockLabel";
 import { useI18n } from "vue-i18n";
-
-// The server the pane's cell runs on (paneHost.ts): this one, or a peer it relays.
-const paneHost = usePaneHost();
 
 const { t } = useI18n();
 
@@ -69,7 +64,7 @@ async function load(reset: boolean): Promise<void> {
   try {
     const params = new URLSearchParams({ session: sessionId, agent: props.agent });
     if (props.cwd) params.set("cwd", props.cwd);
-    const res = await fetchWithTimeout(peerApiPath(paneHost.value, `/api/transcript/prompts?${params.toString()}`));
+    const res = await fetchWithTimeout(`/api/transcript/prompts?${params.toString()}`);
     if (!res.ok) throw new Error(String(res.status));
     const body = await jsonBody(res);
     if (my !== req) return; // superseded
@@ -108,20 +103,14 @@ function scheduleReload(): void {
   reloadTimer = window.setTimeout(() => void load(false), RELOAD_DELAY_MS);
 }
 
-// On the session's own server: a peer announces its prompts on its own channel. Re-subscribed when
-// the pane is walked to a cell on another server.
-const onPromptSubmitted = (data: unknown): void => {
+const { subscribe } = usePubSub();
+const unsubscribe = subscribe(PROMPT_SUBMITTED_CHANNEL, (data: unknown) => {
   if (isPromptSubmittedEvent(data) && data.sessionId === props.sessionId) scheduleReload();
-};
-let unsubscribe = usePubSub(paneHost.value).subscribe(PROMPT_SUBMITTED_CHANNEL, onPromptSubmitted);
-watch(paneHost, (host) => {
-  unsubscribe();
-  unsubscribe = usePubSub(host).subscribe(PROMPT_SUBMITTED_CHANNEL, onPromptSubmitted);
 });
 
 // One watch over the identity: the pane stays mounted while the grid walks the zoom from cell to
 // cell, so a changed session/agent has to reload rather than keep another terminal's prompts.
-watch([() => props.sessionId, () => props.agent, () => props.cwd, paneHost], () => void load(true), { immediate: true });
+watch([() => props.sessionId, () => props.agent, () => props.cwd], () => void load(true), { immediate: true });
 
 onUnmounted(() => {
   window.clearTimeout(reloadTimer);

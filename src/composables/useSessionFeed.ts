@@ -7,13 +7,9 @@ import { mergeLiveIntoSnapshot } from "./liveMerge";
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
-import { peerApiPath } from "../../common/peers";
 
 interface SessionFeedOptions<T> {
   sessionId: () => string | null;
-  /** The peer server the session runs on (common/peers.ts, paneHost.ts), null for this one: the
-   *  history and the channel are both that server's. Absent = this server. */
-  host?: () => string | null;
   historyUrl: (id: string) => string;
   historyKey: string;
   channel: (id: string) => string;
@@ -78,7 +74,6 @@ const receiver =
 
 export function useSessionFeed<T>(items: Ref<T[]>, options: SessionFeedOptions<T>) {
   const { sessionId, historyUrl, historyKey, channel, identify, parse, onSessionChange, reconcile } = options;
-  const host = (): string | null => options.host?.() ?? null;
 
   // What the live channel delivered while a history request was in flight. The response is
   // authoritative as of when it was SENT, so these have to survive it (#620 F1).
@@ -113,7 +108,7 @@ export function useSessionFeed<T>(items: Ref<T[]>, options: SessionFeedOptions<T
     // switched away — nor an older response for the session they switched back to.
     const overtaken = () => id !== sessionId() || loadId !== latestLoad;
     try {
-      const res = await fetchWithTimeout(peerApiPath(host(), historyUrl(id)));
+      const res = await fetchWithTimeout(historyUrl(id));
       if (overtaken()) return;
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await jsonBody(res);
@@ -132,20 +127,19 @@ export function useSessionFeed<T>(items: Ref<T[]>, options: SessionFeedOptions<T
     }
   }
 
+  const { subscribe } = usePubSub();
   let unsubscribe: (() => void) | undefined;
 
   function subscribeTo(id: string | null) {
     unsubscribe?.();
     unsubscribe = undefined;
     if (!id) return;
-    unsubscribe = usePubSub(host()).subscribe(channel(id), receiver(parse, upsert));
+    unsubscribe = subscribe(channel(id), receiver(parse, upsert));
   }
 
-  // The session AND its server: the pane walks from a cell here to a cell on a peer, and the same
-  // session id never belongs to both, but a pane re-pointed at a new server must read it again.
   watch(
-    () => [sessionId(), host()] as const,
-    ([id]) => {
+    sessionId,
+    (id) => {
       onSessionChange?.();
       if (id) void loadHistory(id);
       else items.value = [];

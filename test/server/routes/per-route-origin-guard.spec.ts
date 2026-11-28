@@ -26,21 +26,11 @@ const SERVER_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "../.
 //   ws-routes.ts          a WebSocket upgrade is a raw IncomingMessage — no route, no method to
 //                         exempt, and a browser always sends Origin on a handshake
 //   pubsub.ts             socket.io's own handshake/CORS hooks, one of which is handed no request
-//   peer-proxy.ts         the peer relay: it REWRITES Origin to the peer's, so it must read the
-//                         browser's first, and half of it is a raw upgrade like ws-routes.ts. Its
-//                         safe-method rule is relayAllowed, which keeps the #1094 exemption (a GET
-//                         with no Origin passes) and is pinned in peer-proxy.spec.ts.
 //   external-ask-routes.ts  (fork-only) never ALLOWS by Origin: it refuses any request that carries
 //                         one, because its callers are local programs and never browser pages. A GET
 //                         without Origin passes, so the #1094 hazard (refusing an honest page's
 //                         same-origin GET by judging it) cannot arise there (plans/feat-external-ask.md).
-const ORIGIN_READERS = new Set([
-  "routes/same-origin-guard.ts",
-  "routes/ws-routes.ts",
-  "infra/async/pubsub.ts",
-  "infra/http/peer-proxy.ts",
-  "routes/external-ask-routes.ts",
-]);
+const ORIGIN_READERS = new Set(["routes/same-origin-guard.ts", "routes/ws-routes.ts", "infra/async/pubsub.ts", "routes/external-ask-routes.ts"]);
 
 // Every spelling of "read this request's Origin" Express offers.
 const READS_ORIGIN = /headers\.origin\b|headers\[["']origin["']\]|\.get\(["']origin["']\)/i;

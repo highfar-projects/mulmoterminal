@@ -2,15 +2,13 @@
 // has, or the server's own words for why not.
 import { jsonBody } from "../jsonBody";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
-import { peerApiPath } from "../../common/peers";
 
 export type TreeOpRoute = "create" | "rename" | "trash";
 export type TreeOpOutcome = { ok: true; path: string | null } | { ok: false; message: string };
 
-// `host` on both: the peer server the tree is on (common/peers.ts, paneHost.ts), null for this one.
-export async function treeOp(route: TreeOpRoute, query: string, body: Record<string, unknown>, host: string | null = null): Promise<TreeOpOutcome> {
+export async function treeOp(route: TreeOpRoute, query: string, body: Record<string, unknown>): Promise<TreeOpOutcome> {
   try {
-    const res = await fetchWithTimeout(peerApiPath(host, `/api/files/browse/${route}?${query}`), {
+    const res = await fetchWithTimeout(`/api/files/browse/${route}?${query}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -24,9 +22,9 @@ export async function treeOp(route: TreeOpRoute, query: string, body: Record<str
 }
 
 /** Whether this machine has a Trash the server knows. Where it does not, the tree offers no delete. */
-export async function trashAvailable(host: string | null = null): Promise<boolean> {
+export async function trashAvailable(): Promise<boolean> {
   try {
-    const data = await jsonBody(await fetchWithTimeout(peerApiPath(host, "/api/files/browse/trash")));
+    const data = await jsonBody(await fetchWithTimeout("/api/files/browse/trash"));
     return data.available === true;
   } catch {
     return false;

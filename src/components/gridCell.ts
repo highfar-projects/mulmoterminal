@@ -79,8 +79,6 @@ export interface AgentReport {
   customAgent: string | null;
   /** The account (second login) the session runs on, or null for the default (#2215). */
   account: string | null;
-  /** The peer server the session runs on (common/peers.ts), or null for this one. */
-  host: string | null;
 }
 
 export interface GridCellEmits {

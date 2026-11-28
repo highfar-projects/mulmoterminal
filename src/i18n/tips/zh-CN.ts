@@ -357,8 +357,6 @@ export const tipsZhCN: Messages["tips"] = {
     noReport: "无法显示 Claude 用量 — 上次检查没有得到回应。将以逐渐拉长的间隔重试。",
     trustPrompt: "无法显示 Claude 用量 — 用量检查正在等待 Claude Code 的信任确认。请在 {folder} 中运行一次 `claude` 并接受。",
     usageLimit: "无法显示 Claude 用量 — 该订阅已达到用量上限，检查未能得到回应。",
-    peerGauge: "{peer}：{title}",
-    peer: "{peer} 的用量：该服务器使用自己的登录和令牌轮换，因此这些数值属于该服务器。",
     accountTrustPrompt: "无法显示 Claude 用量 — 用量检查正在等待 Claude Code 的信任确认。请在 {folder} 中用此账号启动一次单元格并接受。",
     accountNote: "{account}：{note}",
     resetsInDays: "{days}天{hours}小时{minutes}分钟后重置",

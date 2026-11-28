@@ -1,8 +1,6 @@
 // The open file as HEAD has it, handed to the editor to mark changes against (#2497). Cleared the
 // moment another file is opened — marks against the previous file's HEAD would be wrong for a line
 // or two until the new one arrived — and read again when asked.
-import { peerApiPath } from "../../common/peers";
-import { usePaneHost } from "./paneHost";
 import { ref, watch, type Ref, type ShallowRef } from "vue";
 import type { CmEditor } from "../components/cmEditor";
 import { browseQuery } from "../components/filesPaneApi";
@@ -34,7 +32,6 @@ export interface FileHeadText {
 export const headTextFrom = (body: unknown): string | null => (isRecord(body) && typeof body.text === "string" ? body.text : null);
 
 export function useFileHeadText(deps: FileHeadTextDeps): FileHeadText {
-  const host = usePaneHost(); // the pane's server (common/peers.ts)
   const hasOriginal = ref(false);
   const comparingAt = ref<number | null>(null);
   let readId = 0;
@@ -61,7 +58,7 @@ export function useFileHeadText(deps: FileHeadTextDeps): FileHeadText {
     const pathRel = deps.openPath.value;
     if (!pathRel || deps.unpreviewable.value) return apply(null);
     try {
-      const res = await fetchWithTimeout(peerApiPath(host.value, `/api/files/browse/head?${browseQuery(deps.cwd(), pathRel)}`));
+      const res = await fetchWithTimeout(`/api/files/browse/head?${browseQuery(deps.cwd(), pathRel)}`);
       const text = res.ok ? headTextFrom(await jsonBody(res)) : null;
       if (id === readId && deps.openPath.value === pathRel) apply(text);
     } catch {

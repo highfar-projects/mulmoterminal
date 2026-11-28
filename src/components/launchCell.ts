@@ -53,8 +53,6 @@ export interface PanelStart {
   pick: AgentPick;
   choice: LaunchChoice | null;
   account: string | null;
-  /** The peer server the session runs on (common/peers.ts), or null/absent for this one. */
-  host?: string | null;
 }
 
 /** A listed session the launch panel resumes, with the login its row was found under (#2215). */
@@ -63,28 +61,21 @@ export interface PanelResume {
   cwd: string | null;
   agent?: TerminalAgent;
   account?: string | null;
-  /** The peer server the listed session runs on (common/peers.ts), null/absent for this one. */
-  host?: string | null;
 }
 
 // Only the keys that were decided: the cell round-trips through JSON, where an absent key and one
 // holding null are different things (see `setCellAgent`).
 const withAccount = (account: string | null | undefined) => (account ? { account } : {});
 
-// The model pick, the account and the peer ride on the cell, not on the launch call: what starts the
-// session is the cell MOUNTING, so anything the form decided has to be on the cell by then or it is
-// lost. The peer most of all — a cell without it connects to THIS server, in a directory that names
-// the other machine's disk.
-export const cellForPanelStart = ({ dir, pick, choice, account, host }: PanelStart, defaultCwd: string | null): Omit<Cell, "uid"> => ({
+// The model pick and the account ride on the cell, not on the launch call: what starts the session
+// is the cell MOUNTING, so anything the form decided has to be on the cell by then or it is lost.
+export const cellForPanelStart = ({ dir, pick, choice, account }: PanelStart, defaultCwd: string | null): Omit<Cell, "uid"> => ({
   ...cellForPick(dir ?? defaultCwd, pick),
   ...(choice ? { launchChoice: choice } : {}),
   ...withAccount(account),
-  ...(host ? { host } : {}),
 });
 
-export const cellForPanelResume = ({ id, cwd, agent, account, host }: PanelResume): Omit<Cell, "uid"> => ({
+export const cellForPanelResume = ({ id, cwd, agent, account }: PanelResume): Omit<Cell, "uid"> => ({
   ...sessionCell(id, cwd, agent ?? "claude"),
   ...withAccount(account),
-  // A session listed from a peer reconnects there (common/peers.ts).
-  ...(host ? { host } : {}),
 });

@@ -11,7 +11,6 @@ import { isRecord, optionalBoolean, optionalString } from "../../common/isRecord
 import { isUnknownArray } from "../../common/isUnknownArray";
 import { jsonBody } from "../jsonBody";
 import type { WorktreeEnvValue } from "../../common/worktreeEnv";
-import { peerApiPath } from "../../common/peers";
 import { fetchWithTimeout } from "../utils/fetchWithTimeout";
 
 export interface OpenTarget {
@@ -116,9 +115,6 @@ interface Params {
   session: Ref<string | null>;
   agent: Ref<TerminalAgent>;
   model?: Ref<string | null>;
-  // The peer server the directory is on (common/peers.ts); absent or null for this one. Its header
-  // is that server's, resolved from that machine's config files.
-  host?: Ref<string | null>;
 }
 
 export function useHeaderButtons(params: Params) {
@@ -143,7 +139,7 @@ export function useHeaderButtons(params: Params) {
     if (params.model?.value) query.set("model", params.model.value);
     const seq = ++requestSeq;
     try {
-      const res = await fetchWithTimeout(peerApiPath(params.host?.value, `/api/header?${query.toString()}`));
+      const res = await fetchWithTimeout(`/api/header?${query.toString()}`);
       if (seq !== requestSeq) return;
       const data = res.ok ? await jsonBody(res) : {};
       if (seq !== requestSeq) return;

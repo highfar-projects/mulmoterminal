@@ -360,8 +360,6 @@ export const tipsJa: Messages["tips"] = {
     trustPrompt:
       "Claude の利用状況を表示できません — 利用状況の確認が Claude Code の信頼の確認で止まっています。{folder} で一度 `claude` を実行して承認してください。",
     usageLimit: "Claude の使用量を表示できません — このサブスクリプションは上限に達していて、確認が答えを得られませんでした。",
-    peerGauge: "{peer}: {title}",
-    peer: "{peer} の使用量: このサーバーは自分のログインとトークンローテーションで動くため、数値もそのサーバーのものです。",
     accountTrustPrompt:
       "Claude の利用状況を表示できません — 利用状況の確認が Claude Code の信頼の確認で止まっています。{folder} でこのアカウントのセルを一度起動して承認してください。",
     accountNote: "{account}: {note}",

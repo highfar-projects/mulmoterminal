@@ -5,8 +5,6 @@
 // the conversation. The transcript stays on disk and the row can be resumed afterwards, which is
 // what the confirmation promises; the turn that was in flight is what is actually lost, which is
 // why it asks at all.
-import { peerApiPath } from "../../common/peers";
-import { usePaneHost } from "./paneHost";
 import { ref } from "vue";
 import { fetchWithTimeout, SLOW_COMMAND_TIMEOUT_MS } from "../utils/fetchWithTimeout";
 
@@ -26,8 +24,6 @@ export const stopSessionPrompt = (title: string): string =>
  * server's answer, and a row patched here would disagree with it the moment anything else changes.
  */
 export function useSessionStop(onStopped: () => Promise<void> | void) {
-  // The server the listed sessions run on (paneHost.ts): the launch form lists a peer's.
-  const host = usePaneHost();
   // The row being stopped, so its button can show the wait — and so a second click cannot fire a
   // second terminate at a key the first one is already killing.
   const stopping = ref<string | null>(null);
@@ -38,7 +34,7 @@ export function useSessionStop(onStopped: () => Promise<void> | void) {
     if (!window.confirm(stopSessionPrompt(row.title))) return;
     stopping.value = row.id;
     try {
-      await fetchWithTimeout(peerApiPath(host.value, `/api/session/${encodeURIComponent(key)}/terminate`), { method: "POST" }, SLOW_COMMAND_TIMEOUT_MS);
+      await fetchWithTimeout(`/api/session/${encodeURIComponent(key)}/terminate`, { method: "POST" }, SLOW_COMMAND_TIMEOUT_MS);
     } catch (err) {
       // Nothing to tell the user that the refreshed list will not: if the session survived, its row
       // still says `running` and the button is still there.
